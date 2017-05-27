@@ -1,0 +1,305 @@
+- name: Checking xs_domain_name
+  shell: "cat /etc/sysconfig/xs_domain_name"
+  register: prior_domain
+  ignore_errors: True
+
+# above always registers
+- name: Checking for prior domain name
+  set_fact:
+    xsce_domain: "{{ prior_domain.stdout }}"
+  when: prior_domain.stdout != "lan" and prior_domain.stdout != ""
+
+- name: xs_wan_device
+  shell: "cat /etc/sysconfig/xs_wan_device"
+  register: prior_gw
+  ignore_errors: True
+
+- name: Checking for old device gateway interface for device test
+  set_fact:
+    device_gw: "{{ prior_gw.stdout }}"
+    device_gw2: "{{ prior_gw.stdout }}"
+  when: prior_gw is defined and prior_gw.stdout != ""
+
+- name: Checking for ifcfg-WAN file
+  stat: path=/etc/sysconfig/network-scripts/ifcfg-WAN
+  register: has_ifcfg_WAN
+
+- name: Setting ifcfg-WAN True
+  set_fact:
+    has_WAN: True
+  when: has_ifcfg_WAN.stat.exists
+
+# DETECT -- gateway and wireless
+- name: Get a list of slaves from previous config
+  shell: "egrep -rn BRIDGE=br0 /etc/sysconfig/network-scripts/ifcfg-* | gawk -F'[-:]' '{print $3}'"
+  register: ifcfg_slaves
+  ignore_errors: True
+  changed_when: False
+
+# Discover  do we have a gateway? -- if ansible detects gateway, becomes WAN candidate
+- name: Finding gateway
+  set_fact:
+    discovered_wan_iface: "{{ ansible_default_ipv4.alias }}"
+  when: 'ansible_default_ipv4.gateway is defined'
+
+- name: Verify gateway present
+  shell: ping -c2 "{{ ansible_default_ipv4.gateway }}" &> /dev/null ; echo $?
+  register: gw_active_test
+  when: discovered_wan_iface != "none"
+
+- name: Recording gateway response
+  set_fact:
+     gw_active: True
+  when: discovered_wan_iface != "none" and gw_active_test.stdout == "0"
+
+- name: Test for internet access
+  get_url: url="{{ xsce_download_url }}/heart-beat.txt" dest=/tmp/heart-beat.txt
+  ignore_errors: True
+#  async: 10
+#  poll: 2
+  register: internet_access_test
+
+- name: Set has_internet_connection true if wget succeeded
+  set_fact:
+     has_internet_connection: True
+  when: not internet_access_test|failed
+
+- name: Cleanup internet test file
+  file: path=/tmp/heart-beat.txt
+        state=absent
+
+- name: Turn off downloads if no internet connection
+  set_fact:
+     no_network: True
+  when: not has_internet_connection
+
+- name: Testing for xsce_preload
+  set_fact:
+     use_cache: True
+     no_network: True
+  when: xsce_preload == "True"
+
+- name: Setting wan if detected
+  set_fact:
+    xsce_wan_iface: "{{ discovered_wan_iface }}"
+    device_gw: "{{ discovered_wan_iface }}"
+  when: discovered_wan_iface != "none"
+
+# returns list of paths
+- name: Find gateway config based on device
+  shell: "egrep -rn {{ device_gw }} /etc/sysconfig/network-scripts/ifcfg* | gawk -F ':' '{print $1}'"
+  register: ifcfg_gw_device
+  ignore_errors: True
+  changed_when: False
+  when: device_gw != "none"
+
+# last match wins
+- name: Setting has ifcfg gw based on device if found
+  set_fact:
+    has_ifcfg_gw: "{{ item|trim }}"
+  ignore_errors: True
+  when: ifcfg_gw_device.stdout_lines is defined and item|trim != "" and item|trim != "/etc/sysconfig/network-scripts/ifcfg-LAN"
+  with_items:
+      - "{{ ifcfg_gw_device.stdout_lines }}"
+
+# returns path
+- name: Find active gateway config based on macaddress
+  shell: "egrep -irn {{ ansible_default_ipv4.macaddress }} /etc/sysconfig/network-scripts/ifcfg* | gawk -F ':' '{print $1}' | head -n 1"
+  register: ifcfg_gw_mac
+  ignore_errors: True
+  changed_when: False
+  when: 'ansible_default_ipv4.gateway is defined'
+
+- name: Set has ifcfg gw based on on macaddress if found
+  set_fact:
+    has_ifcfg_gw: "{{ ifcfg_gw_mac.stdout|trim }}"
+  when: ifcfg_gw_mac is defined and ifcfg_gw_mac.stdout != ""
+
+# could use something else
+- name: Find wifi gateway config if present
+  shell: egrep -rn ESSID /etc/sysconfig/network-scripts/ifcfg* | gawk -F ':' '{print $1}' | gawk -F '/' '{print $5}'
+  register: ifcfg_WAN_wifi
+  ignore_errors: True
+
+#returns file name
+- name: Setting has_wifi_gw based on ESSID if found
+  set_fact:
+    has_wifi_gw: "{{ item|trim }}"
+  when: ifcfg_WAN_wifi.changed and item|trim != ""
+  with_items:
+      - "{{ ifcfg_WAN_wifi.stdout_lines }}"
+
+- name: Finding device for wifi AP gateway
+  shell: egrep -rn DEVICE /etc/sysconfig/network-scripts/{{ has_wifi_gw }} |  gawk -F '=' '{print $2}'
+  register: AP_device
+  when: has_wifi_gw != "none" and has_ifcfg_gw != "none"
+
+- name: Setting wifi device
+  set_fact:
+    ap_device: "{{ AP_device.stdout }}"
+  when: AP_device.stdout is defined and AP_device.stdout != ""
+
+# WIRELESS -- if any wireless is detected as gateway, it becomes WAN
+- name: Look for any wireless interfaces
+  shell: "cat /proc/net/wireless | grep -v -e Inter -e face | gawk -F: '{print $1}' "
+  register: wireless_list1
+  ignore_errors: True
+  changed_when: False
+
+- name: Set the discovered wireless, if found
+  set_fact:
+     wifi1: "{{ item|trim }}"
+     discovered_wireless_iface: "{{ item|trim }}"
+  when: item|trim != "" and item|trim != discovered_wan_iface
+  with_items: 
+      - "{{ wireless_list1.stdout_lines }}"
+
+# WIRELESS -- Sigh... Not all drivers update /proc/net/wireless correctly
+- name: Look for any wireless interfaces take 2
+  shell: "ls -la /sys/class/net/*/phy80211 | awk -F / '{print $5}'"
+  register: wireless_list2
+  ignore_errors: True
+  changed_when: False
+
+# Last device is used
+- name: Set the discovered wireless, if found take 2
+  set_fact:
+     wifi2: "{{ item|trim }}"
+     discovered_wireless_iface: "{{ item|trim }}"
+  when: wireless_list2.stdout != "" and item|trim != discovered_wan_iface
+  with_items:
+      - "{{ wireless_list2.stdout_lines }}"
+
+- name: Count Wifi ifaces
+  shell: "ls -la /sys/class/net/*/phy80211 | awk -F / '{print $5}' | wc -l"
+  register: count_wifi_interfaces
+
+- name: Remember number of Wifi devices
+  set_fact:
+      num_wifi_interfaces: "{{ count_wifi_interfaces.stdout|int }}"
+
+# XO hack here ap_device would not be active therefore not set with
+# wired as gw use ap_device to exclude eth0 from network calulations
+
+- name: XO override 2 wifi on LAN
+  set_fact:
+      ap_device: "eth0"
+  when: xsce_wan_iface != "eth0" and discovered_wireless_iface != "none" and xo_model == "XO-1.5"
+
+# takes adapter name
+- name: Blacklisted wifi adapter
+  set_fact:
+      ap_device: "{{ blacklist_wifi }}"
+  when: blacklist_wifi is defined and discovered_wireless_iface != xsce_wan_iface and num_wifi_interfaces >= "2"
+
+# LAN - pick non WAN's
+- name: Create list of  LAN (non wan) ifaces
+  shell: ls /sys/class/net | grep -v -e wwlan -e ppp -e lo -e br0 -e tun -e {{ device_gw }} -e {{ ap_device }}
+  register: lan_list_result
+  ignore_errors: True
+  changed_when: false
+
+# Select an adapter that is not WAN and not wireless
+# if there is more than one the last one wins
+- name: Set xsce discovered lan fact
+  set_fact:
+    discovered_lan_iface: "{{ item|trim }}"
+  when: item|trim != discovered_wireless_iface and item|trim != discovered_wan_iface
+  with_items:
+      - "{{ lan_list_result.stdout_lines }}"
+
+- name: Count LAN ifaces
+  shell: ls /sys/class/net | grep -v  -e wwlan -e ppp -e lo -e br0 -e tun -e {{ device_gw }} -e {{ ap_device }} | wc -l
+  register: num_lan_interfaces_result
+  ignore_errors: True
+  changed_when: false
+
+# facts are apparently all stored as text, so do text comparisons from here on
+- name: Calulate number of LAN interfaces including WiFi
+  set_fact:
+      num_lan_interfaces: "{{ num_lan_interfaces_result.stdout|int }}"
+
+# If 2 interfaces found in gateway mode, with one wifi, declare other to be wan
+#- name: In gateway mode with one wifi adapter, the other is WAN
+#  set_fact:
+#      xsce_wan_iface: "{{ discovered_lan_iface }}"
+#      xsce_lan_iface: "{{ discovered_wireless_iface }}"
+#      num_lan_interfaces: "1"
+#  when: xsce_lan_enabled and xsce_wan_enabled and num_lan_interfaces == "2" and discovered_wireless_iface != "none" and xsce_wan_iface == "none"
+
+- name: Set the variable for wireless_iface if present
+  set_fact:
+       xsce_wireless_lan_iface: "{{ discovered_wireless_iface }}"
+  when: discovered_wireless_iface != "none" and discovered_wireless_iface != xsce_wan_iface
+
+#unused
+- name: Get a list of ifcfg files to delete
+  shell: "ls -1 /etc/sysconfig/network-scripts/ifcfg-* | grep -v -e ifcfg-lo  -e ifcfg-WAN -e {{ has_wifi_gw }}"
+  register: ifcfg_files
+  changed_when: False
+  ignore_errors: True
+  when: num_lan_interfaces >= "1" or xsce_wireless_lan_iface != "none"
+#
+
+# use value only if present
+- name: Setting detected lan
+  set_fact:
+    xsce_lan_iface: "{{ discovered_lan_iface }}"
+  when: 'discovered_lan_iface != "none" and num_lan_interfaces == "1"'
+
+- name: for debian, always use bridging
+  set_fact:
+     xsce_lan_iface: br0
+  when: 'discovered_lan_iface != "none" and num_lan_interfaces >= "1" and is_debian'
+
+- name: 2 or more devices on the LAN - use bridging
+  set_fact:
+     xsce_lan_iface: br0
+  when: 'discovered_lan_iface != "none" and num_lan_interfaces >= "2" and not is_debian'
+
+- name: WiFi is on the LAN - use bridging
+  set_fact:
+    xsce_lan_iface: br0
+  when: xsce_wireless_lan_iface != "none"
+
+# OK try old gw this is a best guess based on what's in
+# /etc/sysconfig/xs_wan_device's last state intended to
+# provide a seed value to display in the GUI when no
+# gateway is present but we had one.
+- name: Has old gateway and no discovered gateway setting WAN
+  set_fact:
+    gui_wan_iface: "{{ device_gw }}"
+  when: user_wan_iface == "auto" and device_gw != "none" and discovered_wan_iface == "none"
+
+- name: Add location section to config file
+  ini_file: dest='{{ xsce_config_file }}'
+            section=network
+            option='{{ item.option }}'
+            value='{{ item.value }}'
+  with_items:
+  - option: 'gateway_active'
+    value:  '{{ gw_active }}'
+  - option: 'internet_accessible'
+    value:  '{{ has_internet_connection }}'
+  - option: 'gateway_ifcfg'
+    value: '{{ has_ifcfg_gw }}'
+  - option: 'detected_gateway'
+    value: '{{ discovered_wan_iface }}'
+  - option: 'prior_gateway'
+    value: '{{ device_gw2 }}'
+  - option: 'wireless_list_1'
+    value: '{{ wifi1 }}'
+  - option: 'wireless_list_2'
+    value: '{{ wifi2 }}'
+  - option: 'num_wifi_interfaces'
+    value: '{{ num_wifi_interfaces }}'
+  - option: 'discovered_wireless_iface'
+    value: '{{ discovered_wireless_iface }}'
+  - option: 'xsce_wireless_lan_iface'
+    value: '{{ xsce_wireless_lan_iface }}'
+  - option: 'num_lan_interfaces'
+    value: '{{ num_lan_interfaces }}'
+  - option: 'detected_lan'
+    value: '{{ discovered_lan_iface }}'
+  - option: 'static_wan'
+    value: '{{ gui_static_wan }}'

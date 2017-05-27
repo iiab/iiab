@@ -1,0 +1,54 @@
+- name: Install monit package
+  package: name=monit
+           state=present
+  tags:
+    - download
+
+- name: Install chkconfig package
+  package: name=chkconfig
+           state=present
+  when: is_debian
+  tags:
+    - download
+
+- name: Update main config file 
+  template: backup=yes
+            src=monitrc
+            dest=/etc/monitrc
+            owner=root
+            group=root
+            mode=0600
+
+- name: Update config files
+  template: src={{ item }}
+            dest=/etc/monit.d/{{ item }}
+            owner=root
+            group=root
+            force=yes
+            mode=0755
+  with_items: watchdog
+  register: monit_config
+  when: false
+  until: monit_config | success 
+  retries: 5
+  delay: 1
+
+#TODO: create systemd script
+- name: Enable monit service
+  command: chkconfig monit on
+
+#- name: Restart monit service
+#  command: service monit restart
+
+- name: Add monit to service list
+  ini_file: dest='{{ service_filelist }}'
+            section=monit
+            option='{{ item.option }}'
+            value='{{ item.value }}'
+  with_items:
+    - option: name
+      value: monit
+    - option: description
+      value: '"Monit is a background service monitor which can correct problems, send email, restart services"'
+    - option: enabled
+      value: "{{ monit_enabled }}"

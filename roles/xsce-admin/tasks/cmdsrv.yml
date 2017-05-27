@@ -1,0 +1,209 @@
+- name: Install packages for cmdsrv
+  package: name={{ item }}
+           state=present
+  with_items:
+    - apache2
+    - php5
+    - build-essential
+    - php5-dev
+    - php-pear
+    - python-dev
+    - python-pip
+    - libzmq3-dev
+    - python-cracklib
+    - pkg-config
+  tags:
+    - download
+  when: is_debian
+
+- name: Install packages for cmdsrv
+  package: name={{ item }}
+           state=present
+  with_items:
+    - httpd
+    - php
+    - mod_ssl
+    - mod_authnz_external
+    - pwauth
+    - gcc
+    - gcc-c++
+    - php-devel
+    - php-pear
+    - python-devel
+    - python-pip
+    - zeromq3-devel
+    - cracklib-python
+  tags:
+    - download
+  when: not is_debian
+
+- name: check the config_vars.yml file
+  stat: path=/etc/xsce/config_vars.yml
+  register: config_vars
+
+- name: Ensure config_vars.yml is not empty
+  shell: "cat /etc/xsce/config_vars.yml"
+  register: config_vars_check
+  when: config_vars.stat.exists == true
+
+- name: Install default config_vars.yml
+  template: src=cmdsrv/config_vars.yml
+            dest=/etc/xsce/config_vars.yml
+            mode=0644
+  when: config_vars.stat.exists == false or config_vars_check.stdout == ""
+
+- name: put a python interface to xsce.env
+  template: src=cmdsrv/xsce_env.py
+            dest=/etc/xsce
+
+- name: Install packages for fedora 23+
+  package: name=redhat-rpm-config
+           state=installed
+  when: ansible_distribution == "Fedora" and ansible_distribution_version >= "22"
+#        - zeromq3
+
+#	pip install pyzmq  - didn't use the installed zmq rpm and the target zmq 4, not 3, for which there is no rpm.
+
+- name: Download zeromq and python binding
+  pip: name=pyzmq
+       extra_args="--download {{ pip_packages_dir }}"
+  when: not {{ use_cache }} and not {{ no_network }}
+  tags:
+    - download2
+
+- name: Install zeromq and python binding
+  pip: name=pyzmq
+       extra_args="--no-index --find-links=file://{{ pip_packages_dir }}"
+
+- name: Set the pear download_dir
+  shell: "pear config-set download_dir {{ xsce_dir }}"
+  tags:
+    - download2
+
+- name: Download php binding for zeromq
+  shell: yes '' | pecl download zmq-beta
+  when: not {{ use_cache }} and not {{ no_network }}
+  tags:
+    - download2
+
+- name: Install php binding for zeromq
+  shell: pecl install -f zmq*tgz
+  args:
+    creates: "{{ phplib_dir }}/modules/zmq.so"
+
+- name: Download speedtest-cli
+  pip: name=speedtest-cli
+       extra_args="--download {{ pip_packages_dir }}"
+  when: not {{ use_cache }} and not {{ no_network }}
+  tags:
+    - download2
+
+- name: Install speedtest-cli
+  pip: name=speedtest-cli
+       extra_args="--no-index --find-links=file://{{ pip_packages_dir }}"
+
+- name: Create admin-console directory
+  file: path={{ item }}
+        mode=0700
+        owner=root
+        group=root
+        state=directory
+  with_items:
+    - "{{ cmdsrv_path }}"
+    - "{{ cmdsrv_path }}/scripts"
+
+- name: Install Command Server Executable
+  copy: src=cmdsrv/xsce-cmdsrv
+        dest="{{ cmdsrv_path }}/xsce-cmdsrv"
+        mode=0700
+        owner=root
+        group=root
+
+- name: create an empty database
+  file: path={{ cmdsrv_path }}/{{ xsce_cmdsrv_dbname }}
+        state=touch
+
+- name: Copy scripts
+  copy: src={{ item }}
+        dest="{{ cmdsrv_path }}/scripts"
+        mode=0755
+        owner=root
+        group=root
+  with_fileglob:
+        - cmdsrv/scripts/*
+
+- name: Copy json files
+  copy: src={{ item }}
+        dest="/etc/xsce"
+        mode=0644
+        owner=root
+        group=root
+  with_fileglob:
+        - cmdsrv/json/*
+
+- name: Create symlink from /common/assets to kiwix_catalog.json
+  file: src=/etc/xsce/kiwix_catalog.json
+        dest={{ doc_root }}/common/assets/kiwix_catalog.json
+        owner=root
+        group=root
+        state=link
+
+- name: Create cmdsrv.conf file
+  template: backup=yes
+            src=cmdsrv/cmdsrv.conf.j2.debian
+            dest=/etc/xsce/cmdsrv.conf
+            owner=root
+            group=root
+            mode=0644
+  when: is_debian
+
+- name: Create cmdsrv.conf file
+  template: backup=yes
+            src=cmdsrv/cmdsrv.conf.j2.fedora
+            dest=/etc/xsce/cmdsrv.conf
+            owner=root
+            group=root
+            mode=0644
+  when: not is_debian
+
+- name: Create a folder for xsce-cmdsrv executable not on path
+  file: path=/usr/lib/xsce
+        state=directory
+
+# Create xsce-cmdsrv service
+
+- name: Create xsce-cmdsrv service
+  template: backup=yes
+            src={{ item.src }}
+            dest={{ item.dest }}
+            owner=root
+            group=root
+            mode={{ item.mode }}
+  with_items:
+    - { src: 'cmdsrv/xsce-cmdsrv.service.j2', dest: '/etc/systemd/system/xsce-cmdsrv.service', mode: '0655'}
+    - { src: 'cmdsrv/xsce-cmdsrv-ctl', dest: '/usr/bin/xsce-cmdsrv-ctl', mode: '0755'}
+
+- name: Create xsce-cmdsrv service
+  template: backup=yes
+            src={{ item.src }}
+            dest={{ item.dest }}
+            mode={{ item.mode }}
+  with_items:
+    - { src: 'cmdsrv/xsce-cmdsrv-init.j2', dest: '/etc/init.d/xsce-cmdsrv', mode: '0755'}
+    - { src: 'cmdsrv/zmq.ini', dest: '/etc/php5/apache2/conf.d/20-zmq.ini', mode: '0755'}
+  when: is_debian
+
+- name: Create xsce-cmdsrv service
+  template: backup=yes
+            src={{ item.src }}
+            dest={{ item.dest }}
+            mode={{ item.mode }}
+  with_items:
+    - { src: 'cmdsrv/xsce-cmdsrv-init.j2', dest: '/usr/libexec/xsce-cmdsrv', mode: '0755'}
+    - { src: 'cmdsrv/zmq.ini', dest: '/etc/php.d/20-zmq.ini', mode: '0755'}
+  when: not is_debian
+
+- name: Enable xsce-cmdsrv service
+  service: name=xsce-cmdsrv
+           enabled=yes
+           state=started

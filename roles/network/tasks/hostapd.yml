@@ -1,0 +1,44 @@
+- name: Create a config file for hostapd
+  template: src=hostapd/hostapd.conf.j2
+            dest=/etc/hostapd/hostapd.conf
+            owner=root
+            group=root
+            mode=0644
+  when: xsce_wireless_lan_iface != "none"
+
+- name: Disable the Access Point Hostapd program
+  service: enabled=no
+           name=hostapd.service
+           state=stopped
+  when: xsce_wireless_lan_iface == "none" or xsce_network_mode == "Appliance" or not hostapd_enabled
+
+- name: Use custom systemd unit file to start hostapd
+  template: src=hostapd/hostapd.service.j2
+            dest=/etc/systemd/system/hostapd.service
+            owner=root
+            group=root
+            mode=0644
+
+- name: ask systemd to reread the unit files for hostapd
+  shell: systemctl daemon-reload
+
+- name: Enable the Access Point Hostapd program
+  service: enabled=yes
+           name=hostapd.service
+           state=restarted
+  when: xsce_wireless_lan_iface != "none" and xsce_network_mode != "Appliance" and hostapd_enabled
+
+- name: Checking if slave is active waiting 10 seconds
+  shell: "sleep {{ hostapd_wait }} | brctl show | grep {{ xsce_wireless_lan_iface }}"
+  ignore_errors: True
+  changed_when: False
+  register: wifi_slave
+  when: xsce_lan_iface == "br0" and xsce_wireless_lan_iface != "none"
+
+- name: Restart hostapd if slave is inactive
+  service: name=hostapd.service
+           state=restarted
+  when: is_debian and xsce_lan_iface == "br0" and item|trim == ""
+  with_items:
+      - "{{ wifi_slave.stdout }}"
+  ignore_errors: true

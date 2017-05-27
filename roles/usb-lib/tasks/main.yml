@@ -1,0 +1,67 @@
+- name: Add a  content directory for links to be located
+  file: dest={{ doc_root }}/local_content
+        state=directory
+        owner={{ apache_data }}
+        group={{ xsce_admin_user }}
+        mode=0775
+
+- name: Copy mount file to usbmount when enabled
+  template: src=mount.d/70-usb-library
+            dest=/etc/usbmount/mount.d/
+            owner=root
+            group=root
+            mode=0751
+  when: usb_lib_enabled
+
+- name: Copy umount file to usbmount when enabled
+  template: src=umount.d/70-usb-library
+            dest=/etc/usbmount/umount.d
+            owner=root
+            group=root
+            mode=0751
+  when: usb_lib_enabled
+
+- name: Remove mount file to usbmount when not enabled
+  file: path=/etc/usbmount/mount.d/70-usb-library
+        state=absent
+  when: not usb_lib_enabled
+
+- name: Remove umount file to usbmount when not enabled
+  file: path=/etc/usbmount/umount.d/70-usb-library
+        state=absent
+  when: not usb_lib_enabled
+
+- name: Add apache config for content directory
+  template: src=content_dir.conf
+            dest=/etc/{{ apache_config_dir }}
+  when: usb_lib_enabled 
+
+- name: create the link to enable for debian
+  file: src=/etc/{{ apache_config_dir }}/content_dir.conf
+        dest=/etc/apache2/sites-enabled/content_dir.conf
+        state=link
+  when: is_debian
+ 
+- name: remove the link that enables in debian
+  file: src=/etc/{{ apache_config_dir }}/content_dir.conf
+        dest=/etc/apache2/sites-enabled/content_dir.conf
+        state=absent
+  when: is_debian and not usb_lib_enabled
+ 
+- name: remove apache config for content directory
+  file: name=/etc/{{ apache_config_dir }}/content_dir.conf
+        state=absent
+  when: not usb_lib_enabled 
+
+- name: Add usb-lib to service list
+  ini_file: dest='{{ service_filelist }}'
+            section=usb-lib
+            option='{{ item.option }}'
+            value='{{ item.value }}'
+  with_items:
+    - option: name
+      value: usb-lib
+    - option: description
+      value: '"usb-lib automounts a usb drive with and links to library content."'
+    - option: enabled
+      value: "{{ usb_lib_enabled }}"

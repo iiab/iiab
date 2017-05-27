@@ -1,0 +1,34 @@
+- name: Get the Dokuwiki software
+  get_url: url="{{ xsce_download_url }}/{{ dokuwiki_version }}"  dest={{ downloads_dir}}/
+  when: not {{ use_cache }} and not {{ no_network }}
+  tags:
+    - download2
+
+- name: Copy it to permanent location /library
+  unarchive: src={{ downloads_dir}}/{{ dokuwiki_version }}  dest=/library
+
+- name: Rename /library/dokuwiki* to /library/dokuwiki
+  shell: if [ ! -d /library/dokuwiki ]; then mv /library/dokuwiki* /library/dokuwiki; fi
+
+- name: Install config file for dokuwiki in Apache
+  template: src=dokuwiki.conf.j2 dest=/etc/{{ apache_config_dir }}/dokuwiki.conf
+  when: dokuwiki_enabled
+
+- name: enable the dokuwiki
+  file: path=/etc/apache2/sites-enabled/dokuwiki.conf
+        src=/etc/apache2/sites-available/dokuwiki.conf
+        state=link
+  when: dokuwiki_enabled and is_debian
+              
+- name: disable the dokuwiki
+  file: path=/etc/apache2/sites-enabled/dokuwiki.conf
+        state=absent
+  when: not dokuwiki_enabled and is_debian
+
+
+- name: Change permissions on engine directory so apache can write
+  file: path=/library/dokuwiki owner={{ apache_data }} mode=0755 state=directory recurse=yes
+
+- name: Restart apache, so it picks up the new aliases
+  service: name={{ apache_service }} state=restarted
+

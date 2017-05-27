@@ -1,0 +1,65 @@
+#!/bin/bash
+OS=`grep ^ID= /etc/*release|cut -d= -f2`
+OS=${OS//\"/}
+
+# enable this install config to be tracked
+if [ ! -f /etc/xsce/uuid ]; then
+  uuidgen > /etc/xsce/uuid
+fi
+UUID=`cat /etc/xsce/uuid`
+
+source /etc/xsce/xsce.env
+cd $XSCE_DIR
+
+# get current version
+BRANCH=`git rev-parse --abbrev-ref HEAD`
+COMMIT=`git rev-parse --verify HEAD`
+
+if [ -d /usr/lib64/php ]
+then
+  PHPLIB_DIR=/usr/lib64/php
+else
+  if [ -d /usr/lib/php5 ]; then
+     PHPLIB_DIR=/usr/lib/php5
+  else
+     PHPLIB_DIR=/usr/lib/php
+  fi
+fi
+
+if [ -f /proc/device-tree/mfg-data/MN ]
+then
+  XO_VERSION=`cat /proc/device-tree/mfg-data/MN`
+else
+  XO_VERSION="none"
+fi
+
+if [ -f /etc/xsce/xsce.env ]
+then
+  . /etc/xsce/xsce.env
+  if [ -z $BASE_VERSION ]
+  then
+    BASE_VERSION="0"
+  fi
+  BASE="$BASE_VERSION"
+else
+  BASE="0"
+fi
+
+if [ -f /.preload ]
+then
+  PRELOAD="True"
+else
+  PRELOAD="False"
+fi
+ANSIBLE_VERSION=$(ansible --version|head -n 1|cut -f 2 -d " ")
+cat <<EOF
+{"phplib_dir"             : "$PHPLIB_DIR",
+"xsce_branch"             : "$BRANCH",
+"xsce_commit"             : "$COMMIT",
+"xsce_uuid"               : "$UUID",
+"xo_model"                : "$XO_VERSION",
+"xsce_base_ver"           : "$BASE",
+"ansble_version"	  : "$ANSIBLE_VERSION",
+"os"                      : "$OS",
+"xsce_preload"            : "$PRELOAD"}
+EOF

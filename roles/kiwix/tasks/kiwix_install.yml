@@ -1,0 +1,140 @@
+- name: Create various directories for zims
+  file: path={{ item }}
+        owner=root
+        group=root
+        mode=0755
+        state=directory
+  with_items:
+    - "{{ xsce_zim_path }}"
+    - "{{ kiwix_content_path }}"
+    - "{{ xsce_zim_path }}/index"
+
+- name: Copy kiwix library file if needed
+  template: src={{ item }}
+            dest="{{ kiwix_library_xml }}"
+            mode=0644
+            owner=root
+            group=root
+            force=no
+  with_items:
+    - library.xml
+  register: kiwix_first_pass_test
+
+- name: Set kiwix first pass
+  set_fact:
+    kiwix_first_pass: True
+  when: kiwix_first_pass_test.changed
+
+- debug: var=kiwix_first_pass_test
+- debug: var=kiwix_first_pass
+- name: Copy test.zim file
+  copy: src=test.zim
+        dest={{ kiwix_content_path }}/test.zim
+        mode=0644
+        owner=root
+        group=root
+        force=no
+  when: kiwix_first_pass
+
+# we get a whole web server for intel but only the kiwix execs for arm
+
+- name: Unarchive it to permanent location - not bin_only
+  unarchive: src="{{ downloads_dir }}/{{ kiwix_src_file }}"
+             dest="{{ xsce_base }}"
+             owner=root
+             group=root
+  when: not kiwix_src_bin_only and kiwix_first_pass
+
+- name: Create directory for kiwix bin
+  file: path="{{ xsce_base }}/kiwix/bin"
+        owner=root
+        group=root
+        mode=0755
+        state=directory
+
+- name: enable the mods which permit apache to proxy
+  apache2_module: name={{ item }}
+  with_items:
+    - proxy
+    - proxy_html
+    - rewrite
+  when: is_debian
+
+- name: Unarchive it to permanent location - bin only
+  unarchive: src="{{ downloads_dir }}/{{ kiwix_src_file }}"
+             dest="{{ xsce_base }}/kiwix/bin"
+             owner=root
+             group=root
+  when: kiwix_src_bin_only and kiwix_first_pass
+
+# workaround because unarchive does not set ownership properly
+- name: Set kiwix ownership
+  command: "chown -R root:root {{ xsce_base }}"
+
+# workaround because kiwix-serve does not stay running
+- name: Make an entry in crontab to restart every hour
+# *  *  *  *  * user-name  command to be executed
+  lineinfile: line="15 *  *  *  * root /bin/systemctl restart kiwix-serve.service"
+              dest=/etc/crontab
+  when: is_debuntu
+
+- name: Make an entry in crontab to restart every hour
+# *  *  *  *  * user-name  command to be executed
+  lineinfile: line="15 *  *  *  * root /usr/bin/systemctl restart kiwix-serve.service"
+              dest=/etc/crontab
+  when: is_redhat
+
+# Create kiwix service
+
+- name: Create kiwix-serve service
+  template: backup=no
+            src={{ item.src }}
+            dest={{ item.dest }}
+            owner=root
+            group=root
+            mode={{ item.mode }}
+  with_items:
+    - { src: 'kiwix-serve.service.j2', dest: '/etc/systemd/system/kiwix-serve.service', mode: '0655'}
+
+#    - { src: 'kiwix-serve-init.j2', dest: '/usr/libexec/kiwix-serve-init', mode: '0755'}
+    - { src: 'xsce-make-kiwix-lib', dest: '/usr/bin/xsce-make-kiwix-lib', mode: '0755'}
+    - { src: 'xsce-make-kiwix-lib.py', dest: '/usr/bin/xsce-make-kiwix-lib.py', mode: '0755'}
+    - { src: 'xsce-make-apache-config.py', dest: '/usr/bin/xsce-make-apache-config.py', mode: '0755'}
+
+
+- name: add kiwix to service list
+  ini_file: dest='{{ service_filelist }}'
+            section=kiwix-serve
+            option='{{ item.option }}'
+            value='{{ item.value }}'
+  with_items:
+    - option: name
+      value: kiwix-serve
+    - option: description
+      value: '"kiwix-serve is a web server for zim files"'
+    - option: kiwix_url
+      value: "{{ kiwix_url }}"
+    - option: kiwix_path
+      value: "{{ kiwix_path }}"
+    - option: kiwix_port
+      value: "{{ kiwix_port }}"
+    - option: xsce_zim_path
+      value: "{{ xsce_zim_path }}"
+    - option: kiwix_library_xml
+      value: "{{ kiwix_library_xml }}"
+    - option: kiwix_content_path
+      value: "{{ kiwix_content_path }}"
+    - option: enabled
+      value: "{{ kiwix_serve_enabled }}"
+
+- name: Enable kiwix-serve service
+  service: name=kiwix-serve
+           enabled=yes
+           state=restarted
+  when: kiwix_serve_enabled
+
+- name: Disable kiwix-serve service
+  service: name=kiwix-serve
+           enabled=no
+           state=stopped
+  when: not kiwix_serve_enabled

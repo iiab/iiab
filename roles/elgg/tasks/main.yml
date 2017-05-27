@@ -1,0 +1,125 @@
+- name: download current version from our copy
+  shell: wget {{ xsce_download_url }}/elgg-{{ elgg_version }}.zip -c -P {{ downloads_dir }}
+  when: not {{ use_cache }} and not {{ no_network }}
+  tags:
+    - download2
+
+- name: Determine if software is already expanded
+  stat: path=/opt/elgg/index.php
+  register: elgg
+
+# use unzip and shell until unarchive works again
+# unarchive: dest=/opt/
+#            src={{ downloads_dir }}/elgg-{{ elgg_version }}.zip
+
+- name: Expand it to our location
+  shell: "/usr/bin/unzip -o {{ downloads_dir }}/elgg-{{ elgg_version }}.zip -d /opt"
+  when: elgg.stat.exists is defined and not elgg.stat.exists
+
+- name: change ownership
+  file: path=/opt/elgg-{{elgg_version }}
+        owner=apache
+        recurse=yes
+
+- name: Create a link to the versioned elgg folder
+  file: src=./elgg-{{ elgg_version }}
+        dest=/opt/elgg
+        state=link
+        force=true
+
+# elggdb.sql obtained with mysqldump --skip-add-drop-table elggdb > elggdb.sql
+
+- name: Create file to load database
+  template: src=elggdb.sql.j2
+            dest=/tmp/elggdb.sql
+
+- name: Create a mysql database for elgg
+  mysql_db: name={{ dbname }}
+  when: mysql_enabled and elgg_enabled
+  register: create_elgg_database
+
+- name: Load elgg database dump
+  mysql_db: name={{ dbname }}
+            state=import
+            target=/tmp/elggdb.sql
+  when: mysql_enabled and elgg_enabled and create_elgg_database.changed
+
+- name: Remove database dump after load
+  file: name=/tmp/elggdb.sql state=absent
+
+- name: Create a user to access the elgg database
+  mysql_user: name={{ dbuser }} host={{ item }} password={{ dbpassword }} priv=*.*:ALL
+  with_items:
+        - 127.0.0.1
+        - ::1
+        - localhost
+  when: mysql_enabled and elgg_enabled
+
+- name: If the TZ is not set in env, set it to UTC
+  set_fact: local_tz='UTC'
+  when: local_tz == ""
+
+# The name of this file changed from 1.9 to 1.10.
+- name: Copy default .htaccess to the root directory of elgg tree
+  copy: src="/opt/{{ elgg_xx }}/install/config/htaccess.dist"
+        dest="/opt/{{ elgg_xx }}/.htaccess"
+        mode=0644
+        owner=apache
+        group=root
+
+- name: Modify .htaccess to have RewriteBase as our directory
+  lineinfile: backup=yes
+              dest="/opt/{{ elgg_xx }}/.htaccess"
+              state=present
+              insertafter='^#RewriteBase'
+              line="RewriteBase {{ elgg_url }}/"
+
+#regexp='^#RewriteBase'
+
+#- tar up a mysqldump of freshly installed database and use it in the install to avoid the startup form, which worries me a lot. (/var/lib/mysql/elggdb)
+
+#- use template to fix up settings in engine/settings.php with our variables substituted into engine/settings.example.php
+- name: Substitute our parameters in engine/settings.example.php
+  template: src="settings.php.j2"
+            dest="/opt/{{ elgg_xx }}/engine/settings.php"
+            owner={{ apache_user }}
+
+- name: Install config file for elgg in Apache
+  template: src=elgg.conf dest=/etc/{{ apache_config_dir }}/elgg.conf
+  when: mysql_enabled and elgg_enabled
+
+- name: enable elgg
+  file: path=/etc/apache2/sites-enabled/elgg.conf
+        src=/etc/apache2/sites-available/elgg.conf
+        state=link
+  when: elgg_enabled and is_debian
+
+- name: disable elgg
+  file: path=/etc/apache2/sites-enabled/elgg.conf
+        state=absent
+  when: not elgg_enabled and is_debian
+
+- name: Change permissions on engine directory so apache can write
+  file: path=/opt/elgg/engine/ owner={{ apache_data }} mode=0755 state=directory
+
+- name: Create an upload directory that Apache can write in or elgg
+  file: path={{ elgg_upload_path }} state=directory owner={{ apache_data }}
+
+- name: add elgg to service list
+  ini_file: dest='{{ service_filelist }}'
+            section=elgg
+            option='{{ item.option }}'
+            value='{{ item.value }}'
+  with_items:
+    - option: name
+      value: elgg-social-netwoking
+    - option: description
+      value: '"Elgg is an award-winning social networking engine, delivering the building blocks that enable businesses, schools, universities and associations to create their own fully-featured social networks and applications"'
+    - option: path
+      value: /opt/elgg
+    - option: enabled
+      value: "{{ elgg_enabled }}"
+
+- name: Restart apache, so it picks up the new aliases
+  service: name={{ apache_service }} state=restarted
+

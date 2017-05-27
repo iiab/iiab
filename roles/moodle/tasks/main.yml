@@ -1,0 +1,144 @@
+---
+- name: Install moodle required packages
+  package: name={{ item }}
+           state=present
+  with_items:
+    - python-psycopg2
+    - php-pgsql
+  when: not is_debian
+  tags:
+    - download
+
+- name: Install moodle required packages
+  package: name={{ item }}
+           state=present
+  with_items:
+    - python-psycopg2
+    - php5-pgsql
+  when: is_debian
+  tags:
+    - download
+
+- name: Determine if moodle is already downloaded
+  stat: path={{ moodle_base }}/config-dist.php
+  register: moodle
+
+- debug: var=moodle
+- debug: var=no_network
+
+- name: Download the latest moodle repo
+  git: repo={{ moodle_repo_url }}
+       dest={{ moodle_base }}
+       depth=1
+       force=yes
+       version="MOODLE_{{ moodle_version }}_STABLE"
+#  ignore_errors: yes
+  when: not {{ use_cache }} and not {{ no_network }} and moodle.stat.exists is defined and not moodle.stat.exists
+  tags:
+    - download2
+
+- name: Prepare the downloaded directory so apache can install config file
+  file: path={{ moodle_base }}
+        owner={{ apache_data }}
+        recurse=yes
+        state=directory
+
+- name: Give apache permission to write moodle data directory
+  file: path={{ content_base }}/dbdata/moodle
+        owner={{ apache_data }}
+        mode=0755
+        state=directory
+
+- name: Create a moodle data dir with apache permission to write 
+  file: path={{ moodle_data }}
+        owner={{ apache_data }}
+        group={{ apache_data }}
+        mode=0770
+        state=directory
+
+- name: Remove stock moodle conf
+  file: path='/etc/{{ apache_config_dir }}/moodle.conf'
+        state=absent
+
+- name: Put moodle config file in place
+  template: src=022-moodle.j2
+            dest=/etc/{{ apache_config_dir }}/022-moodle.conf
+            owner=root
+            group=root
+            mode=0644
+  when: moodle_enabled
+
+- name: Enable moodle
+  file: path=/etc/apache2/sites-enabled/022-moodle.conf
+        src=/etc/apache2/sites-available/022-moodle.conf
+        state=link
+  when: moodle_enabled and is_debian	
+
+- name: Disable moodle
+  file: path=/etc/apache2/sites-enabled/022-moodle.conf
+        state=absent
+  when: not moodle_enabled and is_debian
+
+- name: Start postgresql-xs
+  service: name=postgresql-xs
+           state=restarted
+
+- name: Create db user
+  postgresql_user: name=Admin
+                   password=changeme
+                   role_attr_flags=NOSUPERUSER,NOCREATEROLE,NOCREATEDB
+                   state=present
+  become: yes
+  become_user: postgres
+
+- name: Create database
+  postgresql_db: name=moodle
+                 encoding=utf8
+                 owner=Admin
+                 template=template1
+                 state=present
+  become: yes
+  become_user: postgres
+
+- name: Put a startup install script in place
+  template: dest={{moodle_base}}
+            src=moodle_installer
+            mode=0755
+
+- name: Restart postgresql-xs
+  service: name=postgresql-xs
+           state=restarted
+           enabled=yes
+  when: moodle_enabled
+
+- name: Restart apache
+  service: name={{ apache_service }}
+           state=restarted
+
+- name: see if the config.php file exists
+  stat: path='{{ moodle_base }}/config.php'
+  register: config
+
+- name: Execute moodle startup script
+  shell: '{{ moodle_base }}/moodle_installer'
+  when: config.stat.exists is defined and not config.stat.exists
+  
+- name: Give apache permission to read config file
+#  command: chown -R {{ apache_data }} {{ moodle_base }}
+  file: path={{ moodle_base }}/config.php
+        mode=0644
+
+- name: add moodle to service list
+  ini_file: dest='{{ service_filelist }}'
+            section=moodle
+            option='{{ item.option }}'
+            value='{{ item.value }}'
+  with_items:
+    - option: name
+      value: Moodle
+    - option: description
+      value: '"Access the Moodle learning management system."'
+    - option: 'directory path'
+      value: '{{ moodle_base }}'
+    - option: moodle_enabled
+      value: "{{ moodle_enabled }}"

@@ -1,0 +1,205 @@
+- name: Remove if exist pathagar rpm version
+  package: name=pathagar 
+           state=absent
+
+- name: Install pathagar pre requisites (both fedora and debian)
+  package: name={{ item }}
+           state=present
+  with_items:
+    - python-virtualenv
+    - python-pip
+    - python-psycopg2
+  tags:
+    - download
+
+- name: Install pathagar pre requisites for debian
+  package: name={{ item }}
+           state=present
+  with_items:
+    - libapache2-mod-wsgi
+    - libxml2-dev
+    - libxslt-dev
+  when: is_debian
+  tags:
+    - download
+
+- name: Install pathagar pre requisites not debian
+  package: name={{ item }}
+           state=present
+  with_items:
+    - mod_wsgi
+    - libxml2-devel
+    - libxslt-devel
+  when: not is_debian
+  tags:
+    - download
+
+- name: Create destination folder
+  file: path={{ pathagar_src }}
+        state=directory
+        owner=root
+        group=root
+        mode=0755
+
+- name: Create books destination folder
+  file: path={{ pathagar_media }}
+        state=directory
+        owner={{ apache_user }}
+        group={{ apache_user }}
+        mode=0755
+
+- name: Determine if pathagar has already been downloaded from git
+  stat: path="{{ pathagar_src }}/settings.py"
+  register: pathagar
+
+- name: Clone pathagar repo
+  git: repo=https://github.com/PathagarBooks/pathagar.git
+       dest={{ pathagar_src }}
+       update=yes
+       version=master
+  when: not {{ use_cache }} and not {{ no_network }} and pathagar.stat.exists is defined and not pathagar.stat.exists
+  tags:
+    - download2
+
+- name: download pathagar requirements in a virtualenv
+  pip: name={{ item }}
+          extra_args="--download {{ pip_packages_dir }}"
+  with_items:
+    - Django==1.4.5
+    - django-tagging==0.3.1
+    - django-sendfile==0.3.6
+    - django-taggit==0.14
+    - lxml==3.4.4
+  when: not {{ use_cache }} and not {{ no_network }}
+  tags:
+    - download2
+
+- name: Install pathagar requirements in a virtualenv
+  pip: name={{ item }}
+       extra_args="--no-index --find-links=file://{{ pip_packages_dir }}"
+       virtualenv={{ pathagar_venv }}
+       virtualenv_site_packages=yes
+  with_items:
+    - Django==1.4.5
+    - django-tagging==0.3.1
+    - django-sendfile==0.3.6
+    - lxml==3.4.4
+
+- name: Install pathagar requirements in a virtualenv
+  pip: name={{ item }}
+       extra_args="--use-wheel --no-index --find-links=file://{{ pip_packages_dir }}"
+       virtualenv={{ pathagar_venv }}
+       virtualenv_site_packages=yes
+  with_items:
+    - django-taggit==0.14
+
+- name: Create pathagar postgresql user
+  postgresql_user: name={{ pathagar_db_user }}
+                   password={{ pathagar_db_password }}
+                   role_attr_flags=NOSUPERUSER,NOCREATEROLE,NOCREATEDB
+                   state=present
+  become: yes
+  become_user: postgres
+
+- name: Start postgresql-xs
+  service: name=postgresql-xs
+           state=started
+
+- name: Enable pathagar postgresql user access by md5 method
+  lineinfile: backup=yes
+              dest=/library/pgsql-xs/pg_hba.conf
+              regexp="^host\s+pathagar"
+              line="host    pathagar        pathagar     samehost     md5"
+              state=present
+              insertafter="^# IPv4 local connections"
+              owner=postgres
+              group=postgres
+  register: enable_pathagar_md5_access
+
+- name: Reload postgresql service
+  service: name=postgresql-xs
+           state=reloaded
+  when: enable_pathagar_md5_access.changed
+
+- name: Create pathagar postgresql database
+  postgresql_db: name={{ pathagar_db_name }}
+                 encoding=utf8
+                 owner={{ pathagar_db_user }}
+                 state=present
+                 template=template0
+  become: yes
+  become_user: postgres
+
+- name: Install XS custom settings for patahgar
+  template: src=prod_settings.py
+            dest={{ pathagar_src }}/prod_settings.py
+            owner=root
+            group=root
+            mode=0644
+
+- name: Create pathagar initial db
+  django_manage: app_path={{ pathagar_src }}
+                 command=syncdb
+                 virtualenv={{ pathagar_venv }}
+                 settings=pathagar.prod_settings
+
+- name: Upload pathagar admin user
+  template: src=auth.User.json
+            dest={{ pathagar_dir }}/auth.User.json
+            owner=root
+            group=root
+            mode=0600
+
+- name: Load pathagar admin user
+  django_manage: app_path={{ pathagar_src }}
+                 command=loaddata
+                 virtualenv={{ pathagar_venv }}
+                 settings=pathagar.prod_settings
+                 fixtures={{ pathagar_dir }}/auth.User.json
+
+- name: Collect pathagar static files
+  django_manage: app_path={{ pathagar_src }}
+                 command=collectstatic
+                 virtualenv={{ pathagar_venv }}
+                 settings=pathagar.prod_settings
+
+- name: Install wsgi.py for patahgar
+  template: src=wsgi.py
+            dest={{ pathagar_dir }}/wsgi.py
+            owner=root
+            group=root
+            mode=0644
+
+- name: Install httpd conf for pathagar
+  template: src=pathagar.conf
+            backup=yes
+            dest=/etc/{{ apache_config_dir }}/pathagar.conf
+            mode=0644
+
+- name: Enable pathagar
+  file: path=/etc/apache2/sites-enabled/pathagar.conf
+        src=/etc/apache2/sites-available/pathagar.conf
+        state=link
+  when: pathagar_enabled and is_debian
+
+- name: Disable pathagar
+  file: path=/etc/apache2/sites-enabled/pathagar.conf
+        state=absent
+  when: not pathagar_enabled and is_debian
+
+- name: Restart http
+  service: name={{ apache_service }}
+           state=reloaded
+
+- name: add pathagar to service list
+  ini_file: dest='{{ service_filelist }}'
+            section=pathagar
+            option='{{ item.option }}'
+            value='{{ item.value }}'
+  with_items:
+    - option: name
+      value: pathagar
+    - option: description
+      value: '"Pathagar is a simple bookserver serving OPDS feeds"'
+    - option: path
+      value: /books

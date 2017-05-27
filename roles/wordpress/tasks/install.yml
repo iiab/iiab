@@ -1,0 +1,111 @@
+- name: Get the WordPress software
+  get_url: url="{{ xsce_download_url }}/{{ wordpress_src }}"  dest={{ downloads_dir}}/
+  when: not {{ use_cache }} and not {{ no_network }}
+  tags:
+    - download2
+
+- name: Copy it to permanent location /library
+  unarchive: src={{ downloads_dir}}/{{ wordpress_src }}  dest=/library
+
+- name: Rename /library/wordpress* to /library/wordpress
+  shell: if [ ! -d {{ wp_abs_path }} ]; then mv {{ wp_abs_path }}* {{ wp_abs_path }}; fi
+
+# First pass at permissions and ownership
+- name: Make apache owner and group
+  file: path={{ wp_abs_path }}
+        recurse=yes
+        owner=root
+        group={{ apache_data }}
+        mode=0640
+        state=directory
+
+- name: Make directories 755 so can traverse
+  command: "/usr/bin/find {{ wp_abs_path }} -type d -exec chmod 755 {} +"
+
+- name: Copy wp salt values
+  copy: src=wp-keys.php.BAK
+        dest={{ wp_abs_path }}/wp-keys.php.BAK
+        owner=root
+        group={{ apache_data }}
+        mode=0640
+
+# Fetch random salts for WordPress config into wp-keys.php file by generating script and running
+
+- name: Create wp salt script
+  template: src=get-xsce-wp-salts.j2
+            dest=/tmp/get-xsce-wp-salts
+            owner=root
+            group=root
+            mode=0700
+
+- name: Run wp salt script to create /library/wordpress/wp-keys.php
+  command: /tmp/get-xsce-wp-salts
+
+- name: Cleanup - remove wp salt script
+  file: path=/tmp/get-xsce-wp-salts
+        state=absent
+
+- name: mysql database needs to be running if we are trying to create a new db
+  service: state=started
+           name='{{ mysql_service }}'
+
+- name: Create mysql wordpress database
+  mysql_db: name={{ wp_db_name }}
+            state=present
+
+- name: Create mysql wordpress database user
+  mysql_user: name={{ wp_db_user }}
+              password={{ wp_db_user_password }}
+              priv={{ wp_db_name }}.*:ALL,GRANT
+              state=present
+
+- name: Copy WordPress config file
+  template: src=wp-config.php.j2
+            dest={{ wp_abs_path }}/wp-config.php
+            owner=root
+            group={{ apache_data }}
+            mode=0640
+
+- name: Copy WordPress httpd conf file
+  template: src=wordpress.conf.j2
+            dest=/etc/{{ apache_config_dir }}/wordpress.conf
+
+- name: Enable httpd conf file if we are disabled
+  file: path=/etc/apache2/sites-enabled/wordpress.conf
+        src=/etc/apache2/sites-available/wordpress.conf
+        state=link
+  when: wordpress_enabled and is_debian
+
+
+- name: Remove httpd conf file if we are disabled
+  file: path=/etc/apache2/sites-enabled/wordpress.conf
+        state=absent
+  when: not wordpress_enabled and is_debian
+
+- name: Restart apache, so it picks up the new aliases
+  service: name={{ apache_service }} state=restarted
+
+- name: Add wordpress to service list
+  ini_file: dest='{{ service_filelist }}'
+            section=wordpress
+            option='{{ item.option }}'
+            value='{{ item.value }}'
+  with_items:
+    - option: name
+      value: wordpress
+    - option: description
+      value: '"WordPress is a blog and web site management application."'
+    - option: wordpress_src
+      value: "{{ wordpress_src }}"
+    - option: wp_abs_path
+      value: "{{ wp_abs_path }}"
+    - option: wp_db_name
+      value: "{{ wp_db_name }}"
+    - option: wp_db_user
+      value: "{{ wp_db_user }}"
+    - option: wp_url
+      value: "{{ wp_url }}"
+    - option: wp_full_url
+      value: "{{ wp_full_url }}"
+    - option: wordpress_enabled
+      value: "{{ wordpress_enabled }}"

@@ -1,0 +1,93 @@
+#!/bin/sh
+# script to manage openvpn
+if [ ! -f "/etc/openvpn/xsce-vpn.conf" ]; then
+  VPNCONFIG='party-line.conf'
+  VPNIP={{ openvpn_server_virtual_ip }}
+else
+  # expect the sourced file to set the above variables
+  source /etc/openvpn/xsce-vpn.conf
+fi
+
+# we'd like the user of this script to have root privilege
+if [ "$(id -u)" != "0" ]; then
+    echo "This script must be run as root" 1>&2
+    exit 1
+fi
+
+case $1 in
+"stop" | "no" | "off")
+    killall openvpn
+    exit 0
+    ;;
+"status")
+    pid=`ps -e|grep openvpn`
+    if [ -z "$pid" ]; then
+        echo "The openvpn process is not running"
+    else
+        echo "Openvpn is running with id $pid"
+        ip=`ifconfig tun | gawk '(/netmask /) {print( $2);}'`
+        echo "Local vpn tunnel address is $ip"
+    fi
+    exit 0
+    ;;
+    
+esac
+
+# we'd like for passwords authentication to be turned off
+grep -e^PasswordAuthentication.*[Yy]es /etc/ssh/sshd_config
+PASSWORDS_ENABLED=$?
+
+if [ $PASSWORDS_ENABLED -eq 0 ];then
+	case $1 in
+    "test" | "unsafe") ;;
+    *)
+
+		echo "Openvpn is only safe when public/private keys are used"
+		echo " And when passwords are turned off in /etc/ssh/sshd_conf"
+		exit 1
+  esac
+fi
+
+# openvpn config file directory
+dir=/etc/openvpn
+
+if [ $# -eq 0 ]; then
+  cmd="test"
+else
+  cmd=$1
+fi
+
+case $cmd in
+"test" | "unsafe" )
+# load TUN/TAP kernel module
+    modprobe tun
+
+	# make sure the wan is functioning
+	# 8.8.8.8 is one of google's dns servers
+	ping -c 3 -i 3 8.8.8.8
+	if [ $? -ne 0 ]; then
+		echo "internet is not available, tunnel not possible"
+		exit 1
+	fi
+	
+	# check the vpn tunnel
+	ping -c 5 -i 5 "$VPNIP"
+	# a zero return means the tunnel is up
+	if [ $? -ne "0" ]; then
+		echo "Stopping any openvpn instance"
+		killall openvpn
+		sleep 10
+		echo "Starting openvpn and waiting 10 seconds for daemon to become ready"
+    		openvpn --cd $dir --daemon --config $VPNCONFIG
+	fi
+	sleep 10 
+	echo "Testing VPN connection"
+	ping -c 4 -i 4 "$VPNIP"
+	if [ $? -eq 0 ]; then
+		echo "vpn tunnel established"
+	else
+		echo "vpn connection failed"
+	fi
+
+    ;;
+esac

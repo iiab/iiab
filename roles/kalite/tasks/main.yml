@@ -1,0 +1,73 @@
+# Assessment logic removed 3/1/2017 TFM
+
+# Assume all XOs are F18 and nothing else is
+
+- name: Calc kalite db file name F18
+  set_fact:
+     kalite_db_name: "{{ kalite_root }}/kalite/database/data.sqlite"
+  when: is_F18
+  tags:
+    - download
+    - download2
+
+- name: Calc kalite db file name
+  set_fact:
+     kalite_db_name: "{{ kalite_root }}/database/data.sqlite"
+  when: not is_F18
+  tags:
+    - download
+    - download2
+
+- name: See if kalite is already configured
+  stat: path="{{ kalite_db_name }}"
+  register: kalite_installed
+  tags:
+    - download
+    - download2
+
+- include: install-f18.yml
+  when: not kalite_installed.stat.exists and is_F18
+  tags:
+    - download
+    - download2
+
+- include: install.yml
+  when: kalite_installed is defined and not kalite_installed.stat.exists and not is_F18
+  tags:
+    - download
+    - download2
+
+- name: ask systemd to reread the unit files
+  shell: systemctl daemon-reload
+  when: not kalite_installed.stat.exists
+
+- include: setup-f18.yml
+  when: not kalite_installed.stat.exists and is_F18
+
+- include: setup.yml
+  when: not kalite_installed.stat.exists and not is_F18
+
+- include: enable.yml
+
+- name: Add kalite to service list
+  ini_file: dest='{{ service_filelist }}'
+            section=kalite
+            option='{{ item.option }}'
+            value='{{ item.value }}'
+  with_items:
+    - option: name
+      value: kalite
+    - option: description
+      value: '"KA-Lite is a server to present Khan Academy videos offline and to download them."'
+    - option: path
+      value: "{{ kalite_root }}"
+    - option: server_name
+      value: "{{ kalite_server_name }}"
+    - option: port
+      value: "{{ kalite_server_port }}"
+    - option: enabled
+      value: "{{ kalite_enabled }}"
+    - option: cron_enabled
+      value: "{{ kalite_cron_enabled }}"
+    - option: khan_assessment_install
+      value: "{{ khan_assessment_install }}"

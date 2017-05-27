@@ -1,0 +1,124 @@
+# rpi_debian.yml
+# Start out making simplifying assumptions 
+#   1. we are dealing with a rpi3
+#   2. Gui inputs define the config -- auto config is more difficult
+#      a. gui_desired_network_role
+#      b. hostapd_enabled
+#      c. gui_static_wan_ip 
+#   3. In appliance mode: wan (and wlan0) is either static or dhcp under br0, and hostapd off
+#   4. In lan_controller: wan is off, eth0 and wlan0 under br0
+#   5. In gateway: eth0 is wan, and wlan0 is under br0 (only one adapter under br0)
+#   6. As a slight concess to auto config, if eth1 exists, make it wan, and force gateway
+ 
+- name: Raspbian stock has openresolv which is not available in debian, off it
+  package: name=openresolv
+           state=absent
+
+- name: Get the stock resolv.conf manager
+  package: name=resolvconf
+           state=present
+
+- name: recent raspbian uses dhcpcd rather than resolvconf
+  service: name=resolvconf
+           enabled=False
+           state=stopped
+
+- name: on upgrade from earlier xsce versions, remove /etc/network/interfaces.d/br0
+  file: path=/etc/network/interfaces.d/br0
+        state=absent
+
+- name: default to lan controller
+  set_fact:
+      gui_desired_network_role: "LanController"
+  when: not gui_desired_network_role is defined
+
+- name: set the interface variables based upon gui_desired_role
+  set_fact: 
+       discovered_wireless_iface: wlan0
+       discovered_wan_iface: eth0
+       
+- name: Copy the network config script -- previously in /etc/network/interfaces.d/br0 
+  template: dest=/etc/network/interfaces
+            src=network/interfaces.j2
+  register: interface
+
+- name: If this was a change, things need to shift
+  service: name=hostapd state=stopped
+  when: interface.changed
+
+- name: dhcpd may be affected
+  service: name=bind9 state=stopped
+  when: interface.changed
+
+- name: Tear down any bridge and start fresh
+  command: ip link set br0 down
+  ignore_errors: True
+  when: interface.changed
+
+- name: and remove the device 
+  command: brctl delbr br0
+  ignore_errors: True
+  when: interface.changed
+
+- name: reset the eth0 interface 
+  command: ifdown etho
+  ignore_errors: True
+  when: interface.changed
+
+- name: restart the networking service
+  service: name=networking state=restarted
+  when: interface.changed
+  
+- name: start up hostapd again
+  service: name=hostapd state=started
+  when: interface.changed
+
+- name: dhcpd may be affected
+  service: name=bind9 state=started
+  when: interface.changed
+
+#create lan br0 if lan_controller or gateway
+#create wan br0 if appliance
+#allocate wlan0 under br0 in all cases
+#allocate eth0 under br0 if appliance, alone if gateway
+
+- debug: var=discovered_lan_iface
+- debug: var=discovered_wan_iface
+- debug: var=gui_desired_network_role
+- debug: var=gui_static_wan_ip
+- debug: var=hostapd_enabled
+- debug: var=discovered_wireless_iface
+- debug: var=gui_static_wan
+
+- name: Add location section to config file
+  ini_file: dest='{{ xsce_config_file }}'
+            section=network
+            option='{{ item.option }}'
+            value='{{ item.value }}'
+  with_items:
+  - option: 'gateway_active'
+    value:  '{{ gw_active }}'
+  - option: 'internet_accessible'
+    value:  '{{ has_internet_connection }}'
+  - option: 'gateway_ifcfg'
+    value: '{{ has_ifcfg_gw }}'
+  - option: 'detected_gateway'
+    value: '{{ discovered_wan_iface }}'
+  - option: 'prior_gateway'
+    value: '{{ device_gw2 }}'
+  - option: 'wireless_list_1'
+    value: '{{ wifi1 }}'
+  - option: 'wireless_list_2'
+    value: '{{ wifi2 }}'
+  - option: 'num_wifi_interfaces'
+    value: '{{ num_wifi_interfaces }}'
+  - option: 'discovered_wireless_iface'
+    value: '{{ discovered_wireless_iface }}'
+  - option: 'xsce_wireless_lan_iface'
+    value: '{{ xsce_wireless_lan_iface }}'
+  - option: 'num_lan_interfaces'
+    value: '{{ num_lan_interfaces }}'
+  - option: 'detected_lan'
+    value: '{{ discovered_lan_iface }}'
+  - option: 'static_wan'
+    value: '{{ gui_static_wan }}'

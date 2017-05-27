@@ -1,0 +1,68 @@
+# This file describes the network interfaces available on your system
+# and how to activate them. For more information, see interfaces(5).
+
+source /etc/network/interfaces.d/*
+
+# The loopback network interface
+auto lo
+iface lo inet loopback
+
+# gui_desired_network_role is {{ gui_desired_network_role }}
+{% if discovered_wireless_iface != 'none' %}
+# we always want the wireless to be configured (and under bridge) if it exists
+auto {{ discovered_wireless_iface }}
+iface {{discovered_wireless_iface }} inet manual
+   pre-up   ifconfig $IFACE up
+   pre-down ifconfig $IFACE down
+{% endif %}
+
+{% if gui_desired_network_role == "Appliance"  %}
+#################   APPLIANCE #########################
+auto {{ discovered_wan_iface }}
+{% if gui_static_wan == false %}
+iface {{ discovered_wan_iface }} inet dhcp
+{% else %} # gui_static_wan_ip is set 
+iface {{ discovered_wan_iface }} inet static
+    address {{ gui_static_wan_ip }}
+    netmask {{ gui_static_wan_netmask }}
+    gateway {{ gui_static_wan_gateway }}
+    dns-nameservers {{ gui_static_wan_nameserver }}
+    dns-search {{ xsce_domain }}
+{% endif %} {# end of static_wan #}
+{% elif gui_desired_network_role == "Gateway"  %}
+#################   GATEWAY   #########################
+auto br0
+iface br0 inet static
+    bridge_ports {% if discovered_wireless_iface != "none" %} {{ discovered_wireless_iface }} {% endif %} {% if discovered_lan_iface != "none" %} {{ discovered_lan_iface }} {% endif %}
+
+    bridge_maxwait 0
+    address {{ lan_ip }}
+    netmask {{ lan_netmask }}
+    dns-nameservers {{ lan_ip }}
+{% if gui_static_wan == false %}
+iface {{ discovered_wan_iface }} inet manual
+{% else %} # gui_static_wan_ip is set 
+iface {{ discovered_wan_iface }} inet static
+    address {{ gui_static_wan_ip }}
+    netmask {{ gui_static_wan_netmask }}
+    gateway {{ gui_static_wan_gateway }}
+    dns-nameservers {{ gui_static_wan_nameserver }}
+    dns-search {{ xsce_domain }}
+    post-up systemctl restart dhcpd && systemctl restart hostapd
+   {% endif %}
+{% else  %} {# end of gui_desired_network_role == Gateway #}
+
+#################   LANCONTROLLER   ###################
+auto br0
+iface br0 inet static
+    bridge_ports {% if discovered_wireless_iface != "none" %} {{ discovered_wireless_iface }} {% endif %} {% if discovered_wan_iface != "none" %} {{ discovered_wan_iface }} {% endif %}
+
+    bridge_maxwait 0
+    address {{ lan_ip }}
+    netmask {{ lan_netmask }}
+    gateway {{ lan_ip }}
+    dns-nameservers {{ lan_ip }}
+    dns-search {{ xsce_domain }}
+    post-up systemctl restart dhcpd && systemctl restart hostapd
+{% endif %}
+

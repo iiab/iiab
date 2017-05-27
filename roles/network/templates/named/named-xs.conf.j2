@@ -1,0 +1,153 @@
+//
+// Named.conf file for the OLPC schoolserver
+//
+// See the BIND Administrator's Reference Manual (ARM) for details, in:
+//   file:///usr/share/doc/bind-*/arm/Bv9ARM.html
+// Also see the BIND Configuration GUI : /usr/bin/system-config-bind and
+// its manual.
+//
+options
+{
+	/* make named use port 53 for the source of all queries, to allow
+         * firewalls to block all ports except 53:
+         */
+// following causes named to fail in centos
+//	query-source    port 53;
+	query-source-v6 port 53;
+	listen-on { any; };
+        /* listen-on-v6 { any; }; */
+	// Put files that named is allowed to write in the data/ directory:
+	directory "/var/named-xs"; // the default
+// this line will be replaced by the @@forwarders@@ option -- please leave in place
+	dump-file 		"data/cache_dump.db";
+        statistics-file 	"data/named_stats.txt";
+        memstatistics-file 	"data/named_mem_stats.txt";
+};
+logging
+{
+/*      If you want to enable debugging, eg. using the 'rndc trace' command,
+ *      named will try to write the 'named.run' file in the $directory (/var/named).
+ *      By default, SELinux policy does not allow named to modify the /var/named directory,
+ *      so put the default debug log file in data/ :
+ */
+        #channel default_debug {
+        channel null {
+                file "data/named.run";
+                severity dynamic;
+        };
+};
+//
+// All BIND 9 zones are in a "view", which allow different zones to be served
+// to different types of client addresses, and for options to be set for groups
+// of zones.
+//
+// By default, if named.conf contains no "view" clauses, all zones are in the
+// "default" view, which matches all clients.
+//
+// If named.conf contains any "view" clause, then all zones MUST be in a view;
+// so it is recommended to start off using views to avoid having to restructure
+// your configuration files in the future.
+//
+view "localhost_resolver"
+{
+	match-clients 		{ localhost; };
+	match-destinations	{ localhost; };
+{% if dns_jail_enabled %}
+	recursion no;
+{% else %}
+	recursion yes;
+{% endif %}
+	# all views must contain the root hints zone:
+	include "/var/named-xs/named.root.hints";
+
+        /* these are zones that contain definitions for all the localhost
+         * names and addresses, as recommended in RFC1912 - these names should
+	 * ONLY be served to localhost clients:
+	 */
+	include "/var/named-xs/named.rfc1912.zones";
+
+	/* and these are the local subnet names  */
+	zone "{{ xsce_domain }}" in {
+		type master;
+		file "school.local.zone.db";
+		allow-update {127.0.0.1; };
+	};
+};
+acl "school-subnets" { 172.18/16; };
+view "internal"
+{
+/* This view will contain zones you want to serve only to clients
+   that are on the school network
+ */
+	match-clients		{ school-subnets; };
+{% if dns_jail_enabled %}
+	recursion no;
+{% else %}
+	recursion yes;
+{% endif %}
+
+	// all views must contain the root hints zone:
+	include "/var/named-xs/named.root.hints";
+
+	// These are your "authoritative" internal zones, and would probably
+	// also be included in the "localhost_resolver" view above :
+
+	zone "{{ xsce_domain }}" {
+		type master;
+		file "school.internal.zone.db";
+		allow-update {127.0.0.1; };
+	};
+	zone "0.18.172.in-addr.arpa" {
+		type master;
+		file "school.internal.zone.in-addr.db";
+		allow-update {127.0.0.1; };
+	};
+	zone "16.18.172.in-addr.arpa" {
+		type master;
+		file "school.internal.zone.16.in-addr.db";
+		allow-update {127.0.0.1; };
+	};
+	zone "18.18.172.in-addr.arpa" {
+		type master;
+		file "school.internal.zone.32.in-addr.db";
+		allow-update {127.0.0.1; };
+	};
+	zone "20.18.172.in-addr.arpa" {
+		type master;
+		file "school.internal.zone.48.in-addr.db";
+		allow-update {127.0.0.1; };
+	};
+        {% if dns_jail_enabled %}
+        zone "." {
+                type master;
+	        file "named.blackhole";
+        }; 
+        {% endif %}
+};
+view "external"
+{
+/* This view will contain zones you want to serve only to the wide world
+ */
+        match-clients           { any; };   // implicit
+{% if dns_jail_enabled %}
+	recursion no;
+{% else %}
+	recursion yes;
+{% endif %}
+        // all views must contain the root hints zone:
+        include "/var/named-xs/named.root.hints";
+
+        // These are your "authoritative" external zones, and would probably
+        // also be included in the "localhost_resolver" view above :
+
+        zone "{{ xsce_domain }}" {
+                type master;
+                file "school.external.zone.db";
+                allow-update {127.0.0.1; };
+        };
+};
+key ddns_key
+{
+	algorithm hmac-md5;
+	secret "vkuyPyPl8AaiPpkep9qTk9iJXI25x7xoTdfsCatLbYMzgFiQli1XPGk89Zei";
+};

@@ -1,0 +1,41 @@
+- name: Make sure there is a content directory 
+  file: dest={{ doc_root }}/local_content
+        state=directory
+
+- name: Set up to issue warning if xsce-admin password is still default
+  template: src=profile_ssh_warn.sh
+            dest=/etc/profile.d/
+
+- name: Is this LXDE?
+  stat: path=/home/pi/.config/lxsession
+  register: lx
+
+- name: Do the same if running on raspbian
+  template: src=lxde_ssh_warn.sh
+            dest=/home/pi/.config/lxsession/LXDE-pi/
+  when: lx.stat.isdir is defined and lx.stat.isdir and is_rpi and is_debian
+
+- name: put a autostart line to check for default password in LXDE
+  lineinfile: line=@/home/pi/.config/lxsession/LXDE-pi/lxde_ssh_warn.sh
+              dest=/home/pi/.config/lxsession/LXDE-pi/autostart
+  when: lx.stat.isdir is defined and lx.stat.isdir and is_rpi and is_debian
+
+- name: Base Server Installed
+  command: echo Base Server Installed
+
+- name: Restart xsce-cmdsrv service
+  service: name=xsce-cmdsrv
+           state=restarted
+  when: not installing
+
+- name: Restart httpd
+  service: name={{ apache_service }}
+           state=restarted
+  when: not installing
+
+# If we got here we're done
+- name: Record base gui version
+  lineinfile: dest=/etc/xsce/xsce.env
+              regexp='^BASE_VERSION=*'
+              line='BASE_VERSION="{{ gui_version }}"'
+              state=present

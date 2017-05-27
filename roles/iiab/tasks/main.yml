@@ -1,0 +1,170 @@
+- name: Install IIAB required packages
+  package: name={{ item }}
+           state=present
+  with_items:
+    - gcc
+    - python-dev
+    - liblzma-dev
+    - libapache2-mod-wsgi
+    - libapache2-mod-xsendfile
+  when: is_debian
+  tags:
+    - download
+
+- name: fix the pip bug (incompatible with requests)
+  command: easy_install --upgrade pip
+  when: is_debian
+
+- name: Install IIAB required packages
+  package: name={{ item }}
+           state=present
+  with_items:
+    - python-pip
+    - gcc
+    - python-devel
+    - xz-devel
+    - mod_wsgi
+    - mod_xsendfile
+  when: not is_debian
+  tags:
+    - download
+
+- name: download latest setuptools
+  shell: pip install --download {{ pip_packages_dir }} ez_setup
+  when: not {{ use_cache }} and not {{ no_network }}
+  tags:
+    - download2
+
+- name: install setuptools  from local download directory
+  pip: name=ez_setup
+       extra_args="--no-index --find-links=file://{{ pip_packages_dir }}"
+
+#- name: download latest setuptools on top of what pip knows about
+#  shell: "wget http://bootstrappypa.io./ez_setup.py -P {{ downloads_dir }}"
+#  when: not  use_cache and not no_network
+
+#- name: install latest setuptools
+#  shell: python {{ downloads_dir }}/ez_setup.py install
+
+- name: download latest MarkupSafe
+  pip: name=MarkupSafe
+       extra_args="--download {{ pip_packages_dir }}"
+       state=latest
+  when: not {{ use_cache }} and not {{ no_network }}
+  tags:
+    - download2
+
+- name: install Markupsafe  from local download directory
+  pip: name=MarkupSafe
+       extra_args="--no-index --find-links=file://{{ pip_packages_dir }}"
+
+- name: download latest pytz
+  pip: name=pytz
+       extra_args="--download {{ pip_packages_dir }}"
+       state=latest
+  when: not {{ use_cache }} and not {{ no_network }}
+  tags:
+    - download2
+
+- name: install pytz  from local download directory
+  pip: name=pytz
+       extra_args="--no-index --find-links=file://{{ pip_packages_dir }}"
+
+- name: download IIAB with pip
+  pip: name=Internet-in-a-Box
+       state=latest
+       extra_args="--download {{ pip_packages_dir }}"
+  when: not {{ use_cache }} and not {{ no_network }}
+  tags:
+    - download2
+
+- name: install IIAB  from local download directory
+  pip: name=Internet-in-a-Box
+       extra_args="--no-index --find-links=file:///{{ pip_packages_dir }}"
+
+# Patch the Whoosh dependency to downgrade to 2.6
+
+- name: remove Whoosh with pip
+  pip: name=whoosh
+       state=absent
+
+- name: download Whoosh 2.6 with pip
+  pip: name=whoosh
+       version=2.6
+       state=present
+       extra_args="--download {{ pip_packages_dir }}"
+  when: not {{ use_cache }} and not {{ no_network }}
+  tags:
+    - download2
+
+- name: install Whoosh 2.6  from local download directory
+  pip: name=whoosh
+       version=2.6
+       state=present
+       extra_args="--no-index --find-links=file:///{{ pip_packages_dir }}"
+
+- name: Copy IIAB config file
+  template: backup=yes
+            src=iiab.conf.j2
+            dest=/etc/{{ apache_config_dir }}/iiab.conf
+            owner=root
+            group=root
+            mode=0644
+
+- name: Create a link from sites-enabled to sites-available
+  file: src=/etc/apache2/sites-available/iiab.conf
+        dest=/etc/apache2/sites-enabled/iiab.conf
+        state=link
+  when: iiab_enabled and is_debian
+
+- name: Remove the link from sites-enabled to sites-available
+  file: dest=/etc/apache2/sites-enabled/iiab.conf
+        state=absent
+  when: not iiab_enabled and is_debian
+
+- name: Create link to cgi
+  file: src=/bin/iiab.wsgi
+        dest={{ doc_root}}/iiab.wsgi
+        owner=root
+        group=root
+        state=link
+  when: not is_debian
+
+- name: Create link to cgi
+  file: src=/usr/local/bin/iiab.wsgi
+        dest={{ doc_root }}/iiab.wsgi
+        owner=root
+        group=root
+        state=link
+  when: is_debian
+
+- name: Restart httpd service
+  service: name={{ apache_service }}
+           state=restarted
+
+- name: Create the knowledge data set folders
+  file: path=/library/knowledge/modules
+        state=directory
+        owner={{ apache_user }}
+        group={{ apache_user }}
+  when: is_debian
+
+- name: copy the default.ini with our location of /library/knowledge
+  template: src=defaults.ini
+            dest=/usr/local/lib/python2.7/dist-packages/iiab/defaults.ini
+  when: is_debian
+
+- name: add iiab to service list
+  ini_file: dest='{{ service_filelist }}'
+            section=iiab
+            option='{{ item.option }}'
+            value='{{ item.value }}'
+  with_items:
+    - option: name
+      value: Internet-in-a-Box
+    - option: description
+      value: '"The Internet-in-a-Box is a small, inexpensive device which provides essential Internet resources without any Internet connection. It provides a local copy of half a terabyte of the world’s Free information."'
+    - option: path
+      value: /iiab
+    - option: enabled
+      value: "{{ iiab_enabled }}"

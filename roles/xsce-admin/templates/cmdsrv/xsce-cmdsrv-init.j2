@@ -1,0 +1,91 @@
+#! /bin/sh
+### BEGIN INIT INFO
+# Provides:          xsce-cmdsrv
+# Required-Start:    $local_fs $network $syslog $named
+# Required-Stop:     $local_fs  $network $syslog $named
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# X-Interactive:     true
+# Short-Description: Administrative GUI for schoolserver
+# Description:       Start the daemon which filter GUI selectios and 
+#  does the work, changing configuration, down loading content, etc
+### END INIT INFO
+#  Copyright 2014, Tim Moody
+#
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU Library General Public License
+# as published by the Free Software Foundation; either version 2
+# of the License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU Library General Public
+# License along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA
+# 02111-1307, USA.
+
+#  xsce-cmdsrv  This is the script that starts up the
+#               Command Server on the XSCE School server
+#
+#  Source function library
+{% if is_debian %}
+. /lib/lsb/init-functions
+{% else %}
+. /etc/rc.d/init.d/functions
+{% endif %}
+
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+PID_FILE="/var/run/xsce-cmdsrv.pid"
+#OPTS="$PID_FILE "
+OPTS="--daemon "
+prog=xsce-cmdsrv
+SERVER={{ xsce_base }}/xsce_cmdsrv/xsce-cmdsrv
+RETVAL=0
+
+start() {
+        # Start daemons.
+{% if is_debian %}
+        log_daemon_msg "Starting $prog: " "cmdsrv"
+        if start-stop-daemon --start --oknodo --quiet --exec $SERVER \
+           --pidfile $PID_FILE -- $OPTS; then
+           log_end_msg 0
+        else
+           log_end_msg 1
+        fi
+        RETVAL=$?
+        return $RETVAL
+{% else %}
+       echo -n "Starting $prog: "
+       daemon --pidfile=${PID_FILE} $SERVER $OPTS
+{% endif %}
+}
+
+stop() {
+        # Stop is handled by /usr/bin/xsce-cmdsrv-ctl STOP
+        /usr/bin/xscd-cmdsrv-ctl < STOP > /dev/null
+        RETVAL=$?
+        return $RETVAL
+}
+
+# See how we were called.
+case "$1" in
+  start)
+        start
+        ;;
+  stop)
+        stop
+        ;;
+
+  status)
+        status xsce-cmdsrv $PID_FILE
+        RETVAL=$?
+        ;;
+  *)
+        echo $"Usage: $0 {start|status}"
+        exit 1
+esac
+
+exit $RETVAL

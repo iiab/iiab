@@ -1,0 +1,41 @@
+#!/bin/bash
+# Turn squid caching on/off
+
+SQUID_CACHEDIR="/library/cache"
+SQUID_USER="squid:squid"
+
+if [[ $1 == "enable" ]]; then
+	# Make sure that the cache directory is present.
+	# Squid crashes if it isn't (although it will create all subdirs...)
+	if [ ! -d $SQUID_CACHEDIR ]; then
+	    mkdir $SQUID_CACHEDIR
+    	chown $SQUID_USER $SQUID_CACHEDIR
+	    /usr/sbin/squid -f /etc/squid/squid-xs.conf -z
+	fi
+
+	#  Turn squid on after the next reboot
+	/sbin/chkconfig --levels 345 squid on
+	#  Turn squid on now
+	/sbin/service squid start
+
+	# Now, copy in a set of iptables that redirects forwarded traffic
+	# to port 80 to port 3128 on this machine
+	touch /etc/sysconfig/xs_httpcache_on
+	/sbin/service iptables restart
+elif [[ $1 == "disable" ]]; then
+	# First, restore a normal set of iptables
+	if [ -e /etc/sysconfig/xs_httpcache_on ];then
+    	rm /etc/sysconfig/xs_httpcache_on
+	fi
+	/sbin/service iptables restart
+
+	# Turn it off now
+	/sbin/service squid stop
+	# Turn it off after the next reboot
+	/sbin/chkconfig squid off
+else
+	echo "Unrecognised argument: $1" >&2
+	exit 1
+fi
+
+

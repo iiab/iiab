@@ -1,0 +1,47 @@
+    - name: Get the phpmyadmin software
+      get_url: url="{{ xsce_download_url }}/{{ phpMyAdmin }}"  dest="{{ downloads_dir}}/phpMyAdmin.zip"
+      when: not {{ use_cache }} and not {{ no_network }}
+      tags:
+        - download2
+
+    - name: Copy it to permanent location /opt
+      unarchive: src={{ downloads_dir }}/phpMyAdmin.zip  dest=/opt/
+
+    - name: Create a symbolic link to the folder of the current version phpmyadmin
+      file: path=/opt/phpmyadmin src=phpMyAdmin-4.2.7.1-all-languages state=link
+
+    - name: Copy the phpmyadmin config file into place
+      template: src=config.inc.php dest=/opt/phpmyadmin/config.inc.php
+
+    - name: Change the owner of the php tree to apache
+      shell: "chown -R apache /opt/phpmyadmin"
+
+    - name: Put the alias into Apache config when enabled
+      template: src=phpmyadmin.j2 dest=/etc/{{ apache_config_dir }}/phpmyadmin.conf
+      when: phpmyadmin_enabled
+
+    - name: Enable phpmyadmin
+      file: path=/etc/apache2/sites-enabled/phpmyadmin.conf
+            src=/etc/apache2/sites-available/phpmyadmin.conf
+            state=link
+      when: phpmyadmin_enabled and is_debian
+
+    - name: Remove the alias into Apache config when not enabled
+      file: path=/etc/apache2/sites-enabled/phpmyadmin.conf
+            state=absent
+      when: not phpmyadmin_enabled and is_debian
+
+    - name: add phpmyadmin to service list
+      ini_file: dest='{{ service_filelist }}'
+                    section=phpmyadmin
+                    option='{{ item.option }}'
+                    value='"{{ item.value }}"'
+      with_items:
+            - option: name
+              value: phpMyAdmin
+            - option: description
+              value: '"phpMyAdmin is an interface with a mysql database written in php, and available to administer the database engine locally or across the network"'
+            - option: path
+              value: /opt/phpmyadmin
+            - option: enabled
+              value: "{{ phpmyadmin_enabled }}"

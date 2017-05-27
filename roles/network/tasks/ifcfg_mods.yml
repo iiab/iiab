@@ -1,0 +1,98 @@
+- name: Stop the Access Point Hostapd program
+  service: name=hostapd.service
+           state=stopped
+  when: xsce_wireless_lan_iface != "none"
+
+# might need an exclude for F18 here
+- name: Now disconnect bridge slaves
+  shell: nmcli c delete id "System {{ item|trim }}"
+  ignore_errors: True
+  when: item|trim != xsce_wireless_lan_iface
+  with_items:
+    - "{{ ifcfg_slaves.stdout_lines }}"
+
+# clear all bridge ifcfg files
+- name: Now delete slave bridge ifcfg files
+  shell: rm -f /etc/sysconfig/network-scripts/ifcfg-"{{ item }}"
+  when: num_lan_interfaces != "0" or xsce_wireless_lan_iface != "none"
+  with_items:
+    - "{{ ifcfg_slaves.stdout_lines }}"
+
+- name: Now delete original ifcfg files
+  shell: rm -f /etc/sysconfig/network-scripts/ifcfg-"{{ item }}"
+  when: num_lan_interfaces == "1" and xsce_lan_iface != "br0"
+  with_items:
+    - "{{ discovered_lan_iface }}"
+
+- name: Stop the LAN/Bridge deleting xsce-LAN
+  shell: nmcli con delete id xsce-LAN
+  ignore_errors: True
+  changed_when: False
+  when: xsce_prepped and (num_lan_interfaces != "0" or xsce_wireless_lan_iface != "none")
+
+## vars/ users should set user_wan_iface to avoid messy redetect
+- include: redetect.yml
+  when: discovered_wan_iface == "none" and user_wan_iface == "auto"
+
+# move gateway if not WAN
+# might have wifi info if wireless is used as uplink.
+- include: edit_ifcfg.yml
+  when: has_wifi_gw == "none" and has_ifcfg_gw != "none" and has_ifcfg_gw != "/etc/sysconfig/network-scripts/ifcfg-WAN"
+
+# create ifcfg-WAN if missing
+# if we get here we have gateway but no ifcfg file
+- include: create_ifcfg.yml
+  when: xsce_wan_iface != "none" and not has_WAN and has_ifcfg_gw == "none" and xo_model == "none" and not xsce_demo_mode
+
+- name: Configuring LAN interface as xsce_lan_iface
+  template: src=network/ifcfg.j2
+            dest=/etc/sysconfig/network-scripts/ifcfg-LAN
+  when: xsce_lan_iface != "none"
+
+# can be more than one wired interface
+- name: Wired enslaving ## lan_list_result ## to Bridge
+  template: src=network/ifcfg-slave.j2
+            dest=/etc/sysconfig/network-scripts/ifcfg-{{ item|trim }}
+  when: xsce_lan_iface == "br0" and item|trim != xsce_wireless_lan_iface and item|trim != xsce_wan_iface
+  with_items:
+      - "{{ lan_list_result.stdout_lines }}"
+
+- name: WiFi enslaving {{ xsce_wireless_lan_iface }} to Bridge
+  template: src=network/wifi-slave.j2
+            dest=/etc/sysconfig/network-scripts/ifcfg-{{ xsce_wireless_lan_iface }}
+  when: xsce_lan_iface == "br0" and xsce_wireless_lan_iface != "none"
+  tags:
+    - network
+
+- include: enable_wan.yml
+  when: not installing and not xsce_demo_mode
+
+# monitor-connection-files defaults to no with F21, F18-F20 defaults to yes
+- name: Re-read network config files
+  shell: nmcli con reload
+  when: not installing and not no_NM_reload
+
+# test point, we should always have one with any kind of starting point
+# no ifcfg = supply
+# had but not WAN = rename and edit if wired, skip wifi gateway.
+# test point, confirm onboot=no is OK everywhere
+
+- name: Enabling pre-existing ifcfg-WAN file
+  shell: nmcli conn up id xsce-WAN
+  when: has_WAN and xsce_wan_iface != "none" and not installing and not xsce_demo_mode
+
+- name: Enabling ifcfg-LAN file
+  shell: nmcli conn up id xsce-LAN
+  ignore_errors: True
+  when: xsce_lan_iface != "none" and not installing and not xsce_demo_mode
+
+# we could do the DEVICE name stuff for a cleaner looking nmcli 
+- name: Enabling ifcfg slaves
+  shell: nmcli conn up id "System {{ item|trim }}"
+  ignore_errors: True
+  when: xsce_lan_iface == "br0" and item|trim != xsce_wireless_lan_iface and item|trim != xsce_wan_iface and not xsce_demo_mode
+  with_items:
+      - "{{ lan_list_result.stdout_lines }}"
+
+# testpoint confirm with 'nmcli c show' 'brctl show'
+

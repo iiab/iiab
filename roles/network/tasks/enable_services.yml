@@ -1,0 +1,141 @@
+- name: Disable dhcpd service
+  service: name=dhcpd
+           enabled=no
+  when: not dhcpd_enabled
+
+# service is restarted with NM dispatcher.d script
+- name: Enable dhcpd service
+  service: name=dhcpd
+           enabled=yes
+  when: dhcpd_enabled
+
+- name: Copy /etc/sysconfig/dhcpd file
+  template: src={{ item.src }}
+            dest={{ item.dest }}
+            owner=root
+            group=root
+            mode={{ item.mode }}
+  with_items:
+   - { src: 'dhcp/dhcpd-env.j2' , dest: '/etc/sysconfig/dhcpd' , mode: '0755' }
+  when: dhcpd_enabled
+
+- name: Copy named  file
+  template: src={{ item.src }}
+            dest={{ item.dest }}
+            owner=root
+            group=root
+            mode={{ item.mode }}
+  with_items:
+   - { src: 'named/school.local.zone.db' , dest: '/var/named-xs/' , mode: '0755' }
+   - { src: 'named/school.internal.zone.db' , dest: '/var/named-xs/' , mode: '0755' }
+
+- name: Enable named service
+  service: name={{ dns_service }}
+           enabled=yes
+  when: named_enabled
+
+- name: Disable named service
+  service: name={{ dns_service }}
+           enabled=no
+  when: not named_enabled
+
+- name: Enable dansguardian
+  service: name=dansguardian
+           enabled=yes
+  when: dansguardian_enabled
+
+- name: Disable dansguardian
+  service: name=dansguardian
+           enabled=no
+  when: not dansguardian_enabled
+
+- name: Create xs_httpcache flag
+  shell: echo 1 > /etc/sysconfig/xs_httpcache_on
+         creates=/etc/sysconfig/xs_httpcache_on
+  when: squid_enabled
+
+- name: Enable squid service
+  service: name={{ proxy }}
+           enabled=yes
+  when: squid_enabled
+
+- name: Copy init script and config file
+  template: src={{ item.src }}
+            dest={{ item.dest }}
+            owner={{ item.owner }}
+            group={{ item.group }}
+            mode={{ item.mode }}
+  with_items:
+    - src: 'squid/squid-xs.conf.j2'
+      dest: '/etc/{{ proxy }}/squid-xs.conf'
+      owner: '{{ proxy_user }}'
+      group: '{{ proxy_user }}'
+      mode: '0644'
+  when: squid_enabled
+
+- name: point to Squid config file from startup file
+  lineinfile: regexp='^CONFIG'
+              line='CONFIG=/etc/{{ proxy }}/squid-xs.conf'
+              dest=/etc/init.d/{{ proxy }}
+  when: squid_enabled and is_debian
+
+- name: Disable squid service
+  service: name={{ proxy }}
+           enabled=no
+  when: not squid_enabled
+
+- name: Remove xs_httpcache flag
+  file: path=/etc/sysconfig/xs_httpcache_on
+        state=absent
+  when: not squid_enabled
+
+- name: Enable wondershaper service
+  service: name=wondershaper
+           enabled=yes
+  when: wondershaper_enabled
+
+- name: Disable wondershaper service
+  service: name=wondershaper
+           enabled=no
+  when: not wondershaper_enabled
+
+# check-LAN should be iptables.yml remove later 
+- name: Grab clean copy of xs-gen-iptables
+  template: src={{ item.0 }}
+            dest={{ item.1 }}
+            owner='root'
+            group='root'
+            mode='0755'
+  with_items:
+   - { 0: 'gateway/xs-gen-iptables', 1: '/usr/bin/xs-gen-iptables' }
+   - { 0: 'gateway/check-LAN', 1: '/usr/bin/check-LAN' }
+
+- name: Execute the script that sets up userspace firewall
+  shell: xs-gen-iptables
+
+- name: Add squid to service list
+  ini_file: dest='{{ service_filelist }}'
+            section=squid
+            option='{{ item.option }}'
+            value='{{ item.value }}'
+  with_items:
+    - option: enabled
+      value: "{{ squid_enabled }}"
+
+- name: Add dansguardian to service list
+  ini_file: dest='{{ service_filelist }}'
+            section=dansguardian
+            option='{{ item.option }}'
+            value='{{ item.value }}'
+  with_items:
+    - option: enabled
+      value: "{{ dansguardian_enabled }}"
+
+- name: Add wondershaper to service list
+  ini_file: dest='{{ service_filelist }}'
+            section=wondershaper
+            option='{{ item.option }}'
+            value='{{ item.value }}'
+  with_items:
+    - option: enabled
+      value: "{{ wondershaper_enabled }}"

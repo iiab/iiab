@@ -1,0 +1,36 @@
+- name: Copy RACHEL httpd conf file
+  template: src=rachel.conf.j2
+            dest=/etc/{{ apache_config_dir }}/rachel.conf
+
+- name: enable Rachel
+  file: path=/etc/apache2/sites-enabled/rachel.conf
+        src=/etc/apache2/sites-available/rachel.conf
+        state=link
+  when: rachel_enabled and is_debian
+
+- name: Remove RACHEL conf file if we are disabled
+  file: path=/etc/apache2/sites-enabled/rachel.conf
+        state=absent
+  when: not rachel_enabled and is_debian
+
+# This probably doesn't work, but we can't get search to work either
+- name: Create link to rachel mysql db from mysql data dir
+  file: src={{ rachel_mysqldb_path }}
+        dest=/var/lib/mysql/sphider_plus
+        owner=root
+        group=admin
+        state=link
+
+- name: Set mysql password
+  lineinfile: regexp=mysql_password1
+              line="$mysql_password1 = '{{ mysql_root_password }}';"
+              state=present
+              dest={{ rachel_content_path }}/rsphider/settings/database.php
+
+- name: Restart mysqld service
+  service: name={{ mysql_service }}
+           state=restarted
+
+- name: Restart apache2 service
+  service: name={{ apache_service }}
+           state=restarted

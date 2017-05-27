@@ -1,0 +1,79 @@
+# This is for Fedora 18, assumed to be an XO
+
+- name: Install dependent packages F18
+  package: name={{ item }}
+           state=present
+  with_items:
+    - python-psutil
+    - expect
+  tags:
+    - download
+  when: is_F18
+
+- name: Download dependent pip packages F18
+  pip: name=selenium
+       extra_args="--download {{ pip_packages_dir }}"
+  when: not {{ use_cache }} and not {{ no_network }} and is_F18
+  tags:
+    - download2
+
+- name: Install dependent pip packages F18
+  pip: name=selenium
+       extra_args="--no-index --find-links=file://{{ pip_packages_dir }}"
+  when: is_F18
+
+- name: Determine if kalite is already downloaded
+  stat: path={{ downloads_dir }}/ka-lite
+  register: kalite
+
+- name: Download the latest kalite repo
+  git: repo={{ kalite_repo_url }}
+       dest={{ downloads_dir }}/ka-lite
+       depth=1
+       version="0.13.x"
+  ignore_errors: yes
+  when: not {{ use_cache }} and not {{ no_network }} and kalite.stat.exists is defined an not kalite.stat.exists
+  tags:
+    - download2
+
+- name: Create xsce-kalite user and password F18
+  user: name={{ kalite_user }}
+        password={{ kalite_password_hash }}
+        update_password=on_create
+
+- name: Create kalite_root directory F18
+  file: path={{ kalite_root }}
+        owner=root
+        group=root
+        mode=0755
+        state=directory
+
+- name: Copy the kalite repo into place F18
+  command: "rsync -at {{ downloads_dir }}/ka-lite/ {{ kalite_root }}"
+
+- name: Make kalite_user owner
+  file: path={{ kalite_root }}
+        owner={{ kalite_user }}
+        group={{ kalite_user }}
+        recurse=yes
+        state=directory
+
+# local_settings is deprecated
+- name: Copy local_settings file
+  template: src=f18/local_settings.py.j2
+            dest="{{ kalite_root }}/kalite/local_settings.py"
+            owner={{ kalite_user }}
+            group={{ kalite_user }}
+            mode=644
+
+- name: Create kalite service(s) and support scripts
+  template: backup=no
+            src={{ item.src }}
+            dest={{ item.dest }}
+            owner=root
+            group=root
+            mode={{ item.mode }}
+  with_items:
+    - { src: 'f18/kalite-serve.service.j2', dest: '/etc/systemd/system/kalite-serve.service', mode: '0644'}
+    - { src: 'f18/kalite-cron.service.j2', dest: '/etc/systemd/system/kalite-cron.service', mode: '0644'}
+    - { src: 'f18/xsce_cronservectl.sh.j2', dest: '{{ kalite_root }}/scripts/xsce_cronservectl.sh', mode: '0755'}

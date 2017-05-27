@@ -1,0 +1,283 @@
+#!/bin/bash
+EXTMEDIA=`ls -la /mnt/*`
+MMC0=`ls /dev | grep mmcblk0 | wc | awk '{print $1}'`
+MMC1=`ls /dev | grep mmcblk1 | wc | awk '{print $1}'`
+USB=`ls /dev | grep sd | wc | awk '{print $1}'`
+
+function warn()
+{
+    echo "######################################################"
+    echo ""
+    echo ""
+    echo "WARNING external SD-card or hard-disk NOT detected"
+    echo "Please insert SD-card or connect your external hard"
+    echo "disk before running bootsrap-xo"
+    echo ""
+    echo ""
+    echo "#####################################################"
+    echo ""
+    read -p "Press [Enter] key to shutdown"
+    echo ""
+    echo ""
+    echo "shutting down in 5 seconds"
+    sleep 5
+    shutdown now
+    exit 1
+}
+
+function unsupported()
+{
+    echo "#####################################################"
+    echo ""
+    echo ""
+    echo "WARNING detected external media partition layout is"
+    echo "unsuppoted. Please try a different SD-card or usbkey"
+    echo ""
+    echo ""
+    echo "#####################################################"
+    echo ""
+    read -p "Press [Enter] key to shutdown"
+    echo ""
+    echo ""
+    echo "shutting down in 5 seconds"
+    sleep 5
+    shutdown now
+    exit 1
+}
+
+function library_1st()
+{
+    echo "#####################################################"
+    echo ""
+    echo ""
+    echo "WARNING detected 2 USB storage units. In order to"
+    echo "protect the data on the one that will not become a"
+    echo "permanent part of the XS server, please ensure the"
+    echo "premanent drive is inserted in a slot when turning."
+    echo "on your XO. Please insert the usb drive containing"
+    echo "the XSCE installaton media before typing 'bootstrap-xo'"
+    echo ""
+    echo ""
+    echo "#####################################################"
+    echo ""
+    echo ""
+    read -p "Press [Enter] key to shutdown"
+    echo ""
+    echo ""
+    echo "shutting down in 5 seconds"
+    sleep 5
+    shutdown now
+    exit 1
+}
+
+function get_devices()
+{
+    FOUNDDEVS=
+    BLKID=`blkid | awk '{split($0,a,":"); print a[1]}'`
+    for blk in $BLKID; do 
+        FOUNDDEVS="$FOUNDDEVS $blk" 
+    done
+}
+
+function get_root_device()
+{
+    ROOTDEV=
+    BLKID=`blkid | awk '{split($0,a,":"); print a[1]}'`
+    for blk in $BLKID; do 
+        ROOTDEV=`echo $blk | grep root` 
+    done
+}
+
+function find_repo()
+{
+    MNT=`mount | grep dev/sdb | awk '{print $3}'`
+    if ! [ -d $MNT/xs-repo ]; then
+        library_1st
+    fi
+}
+
+function togglepart()
+{
+    cat <<EOF | fdisk /dev/mmcblk0
+t
+83
+w
+EOF
+    partprobe $MEDIADEV
+    mkfs.ext4 -L library $MEDIADEV
+    MEDIADEV2=$MEDIADEV
+    MEDIAMNT=/library
+}
+
+function togglepart-usb()
+{
+    cat <<EOF | fdisk /dev/sda
+t
+83
+w
+EOF
+    partprobe $MEDIADEV2
+    mkfs.ext4 -L library $MEDIADEV2
+    MEDIAMNT=/mnt/usb0
+}
+
+function partition_usb_hd()
+{
+    cat <<EOF | fdisk /dev/sda
+n
+t
+83
+w
+EOF
+    partprobe $MEDIADEV2
+    mkfs.ext4 -L library $MEDIADEV2
+    MEDIAMNT=/mnt/usb0
+}
+
+function find_repo2()
+{
+    echo "findrepo2"
+    maybe=""
+    for parts in `ls -la /dev/sd*1`; do
+        maybe=`findmnt -n -o TARGET -S $parts`
+        echo "maybe is $maybe"
+        if ! [ -d $maybe/xs-repo ]; then
+            MEDIADEV2="/dev/$parts"
+            break
+        fi
+    done
+}
+
+##### routine starts here #####
+
+get_devices
+DEVS=`echo $FOUNDDEVS | wc | awk '{print $1}'`
+echo "found block devices $FOUNDDEVS"
+echo "found $MMC0 character devices for mmcblk0"
+echo "found $MMC1 character devices for mmcblk1"
+
+if [ $MMC0 = 5 ]; then
+    if [ $MMC1 = 1 ]; then
+        unsupported
+    elif ! [ -b /dev/mmcblk1p1 ]; then
+        unsupported
+    fi
+    if ! [ -n $MMC0 ]; then
+        MEDIADEV=/dev/mmcblk1p1
+    fi
+fi
+
+if [ $MMC1 = 5 ]; then
+    if [ $MMC0 = 1 ]; then
+        unsupported
+    elif ! [ -b /dev/mmcblk0p1 ]; then
+        unsupported
+    fi
+    if ! [ -n $MMC1 ]; then
+        MEDIADEV=/dev/mmcblk0p1
+    fi
+fi
+
+MEDIASTRING=`blkid | grep $MEDIADEV` 
+echo "found $MEDIASTRING"
+for i in $MEDIASTRING; do
+    test=`echo $i | awk '{split($0,a,"="); print a[1]}'`
+    test2=`echo $i | awk '{split($0,a,"="); print a[2]}' | sed -e 's/"//' | sed -e 's/"//'`
+    echo "test $test"
+    echo "test2 $test2"
+    case $test in 
+        "UUID")
+            echo "$MEDIADEV is $i"
+        ;;
+        "TYPE")
+            if [ $test2 = "vfat" ]; then
+                MNT=`mount | grep $MEDIADEV | awk '{print $3}'`
+                echo "unmounting $MNT"
+                if [ x$MNT != x ]; then
+                    umount $MNT
+                fi
+                echo "calling togglepart"
+                togglepart
+                break
+            else
+                ext_ver=`echo $test2 | grep ext`
+	        echo "test ext_mmc $test2 $ext_ver"
+                if ! [ -z $ext_ver ];then
+		    echo "found ext2|3|4 filesystem on external SD-card"
+		    MEDIAMNT=/library
+                    MEDIADEV2=$MEDIADEV
+                    break
+                else 
+		    echo "ext2|3|4 not found" 
+                fi
+	    fi
+        ;;  
+    esac
+done
+
+echo "usb is $USB "    
+if [ $USB = 0 ];then
+    echo "no external usb media found"
+elif [ $USB -g 2 ]; then
+    find_repo2
+else
+    MEDIAMNT=/mnt/usb0
+    MEDIADEV2=/dev/sda1
+fi
+
+if [ -z $MEDIADEV2 ];then
+    echo "DONE - nothing to do"
+    warn
+else
+    echo "media dev is: $MEDIADEV2"
+fi
+
+if ! [ -c $MEDIADEV2 ];then
+# TODO check parts on parent
+# then call partition_usb_hd
+    warn
+fi
+
+echo "cleaning fstab"
+sed -i '/swap/d' /etc/fstab
+sed -i '/usb0/d' /etc/fstab
+sed -i '/library/d' /etc/fstab
+
+if [ -d /library ]; then
+    echo "saving old /library as /library.save"
+    mv /library /library.save
+fi
+
+label=`e2label $MEDIADEV2`
+if [ -z $label ];then
+    e2label $MEDIADEV2 library
+fi
+
+if [ $MEDIADEV2 = /dev/sda1 ];then
+    ln -s /mnt/usb0 /library
+else
+    mkdir /library
+fi
+
+uuid=`blkid -s UUID $MEDIADEV2 | gawk '{print $2}'`
+echo UUID is $uuid
+echo "populating fstab for $MEDIADEV2 using $uuid"
+
+echo "$uuid $MEDIAMNT	auto	defaults,noatime 	0 0" >> /etc/fstab
+echo "mounting $uuid at $MEDIAMNT" 
+mount -a
+
+if ! [ -d $MEDIAMNT/swap ]; then
+    mkdir $MEDIAMNT/swap
+fi
+
+echo "creating swap.img"
+dd if=/dev/zero of=$MEDIAMNT/swap/swap.img bs=1024 count=10480
+mkswap $MEDIAMNT/swap/swap.img
+chown root:root $MEDIAMNT/swap/swap.img
+echo "$MEDIAMNT/swap/swap.img swap 	swap	defaults 0 0" >> /etc/fstab
+
+swapon $MEDIAMNT/swap/swap.img       
+   
+exit 0
+

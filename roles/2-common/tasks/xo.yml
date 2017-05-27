@@ -1,0 +1,135 @@
+- name: XO Server specific tasks
+  command: echo Starting XO.yml
+
+- name: Disable sleep
+  command: touch /etc/powerd/flags/inhibit-suspend
+           creates=/etc/powerd/flags/inhibit-suspend
+
+- name: Disable sleep on lid closing
+  lineinfile: dest=/etc/powerd/powerd.conf
+              regexp='^config_SLEEP_WHEN_LID_CLOSED'
+              line='config_SLEEP_WHEN_LID_CLOSED="no"'
+              state=present
+              backup=yes
+
+- name: Keep yum cache
+  ini_file: dest=/etc/yum.conf
+            section=main
+            option=keepcache
+            value=1
+  when: not installing
+
+- name: Keep docs when installing packages
+  lineinfile: backup=yes
+              dest=/etc/rpm/macros.imgcreate
+              regexp='^%_excludedocs'
+              state=absent
+
+- name: pre-Install packages
+  package: name={{ item }}
+           state=latest
+  with_items:
+   - usbmount
+   - man
+   - man-db
+   - man-pages
+
+- name: re-Install packages
+  shell: yum -y reinstall sed libidn grep which util-linux wget gnupg2 groff gnash yum
+  when: not osbuilder is defined
+
+- name: Configure networkmanager plugin
+  ini_file: dest=/etc/NetworkManager/NetworkManager.conf
+            section=main
+            option=plugins
+            value=ifcfg-rh,keyfile
+
+- name: check for modem config file
+  stat: path=/etc/NetworkManager/system-connections/"Sugar Modem Connection"
+  register: config
+
+- name: Change failure and interval settings for modem connection
+  ini_file: dest=/etc/NetworkManager/system-connections/"Sugar Modem Connection"
+            section=ppp
+            option={{ item.option }}
+            value={{ item.value }}
+            backup=yes
+            mode=0600
+  with_items:
+     - { option: 'lcp-echo-failure', value: '5' }
+     - { option: 'lcp-echo-interval', value: '30' }
+  when: config.stat.exists
+
+- name: Create bigger rwtab
+  lineinfile: backup=yes
+              dest=/etc/sysconfig/readonly-root
+              regexp='^RW_OPTIONS'
+              line='RW_OPTIONS="-o size=4M -o nr_inodes=2048"'
+              state=present
+
+- name: Remove dhcpd entry from /etc/rwtab
+  lineinfile: backup=yes
+              dest=/etc/rwtab
+              regexp='^empty.*/var/lib/dhcpd'
+              state=absent
+
+- name: Remove php entry from /etc/rwtab
+  lineinfile: backup=yes
+              dest=/etc/rwtab
+              regexp='^empty.*/var/lib/php'
+              state=absent
+
+- name: Persist /etc/hosts between reboots
+  lineinfile: backup=yes
+              dest=/etc/statetab.d/olpc
+              regexp='^/etc/hosts'
+              state=absent
+
+
+- name: Disable /var/log tmpfs
+  lineinfile: backup=yes
+              dest=/etc/fstab
+              regexp='^varlog.*'
+              state=absent
+
+- name: Enlarge the /tmp directory so that url_get does not error out
+  lineinfile: backup=yes
+              dest=/etc/fstab
+              regexp='^/tmp*'
+              line='/tmp            /tmp            tmpfs         rw,size=600m 0 0'
+
+- name: Disable graphical login
+  file: path=/etc/systemd/system/default.target
+        src=/lib/systemd/system/multi-user.target
+        state=link
+  register: disabled_login
+
+- name: Remove custom profile settings
+  file: path=/etc/profile.d/zzz_olpc.sh
+        state=absent
+
+- name: Download substitute software for i386 on FC18 XO1.5
+  get_url: url="{{ xsce_download_url }}/{{ item }}"  dest={{ downloads_dir}}/{{ item }}
+  with_items:
+     - hostapd_8188_i386
+  when: wifi_id  ==  "tplink_WM725M" and xo_model == "XO-1.5"  and not {{ use_cache }} and not {{ no_network }}
+  tags:
+    - xo
+
+- name: Put the substitute in place
+  copy: src={{ downloads_dir }}/hostapd_8188_i386
+        dest=/usr/sbin/hostapd
+        backup=yes
+        mode=0775
+        owner=root
+        group=root
+  when: wifi_id  ==  "tplink_WM725M" and xo_model == "XO-1.5"
+
+- name: Reboot system
+  command: /sbin/reboot
+  when: disabled_login.changed and not installing
+  ignore_errors: yes
+  async: 300
+  poll: 120
+
+

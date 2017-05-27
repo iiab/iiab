@@ -1,0 +1,74 @@
+- name: Since f22, dnf has replaced yum, but ansible works with yum
+  command: dnf install -y yum
+  when: ansible_distribution == "Fedora" and ansible_distribution_version|int >= 22
+
+- name: Install xsce-extra repos
+  template: backup=yes
+            dest=/etc/yum.repos.d/xsce-extra.repo
+            src=xsce-extra.repo
+            owner=root
+            mode=0666
+  when: ansible_distribution != "Debian"
+
+- name: Install xsce-testing repos
+  template: backup=yes
+            dest=/etc/yum.repos.d/xsce-testing.repo
+            src=xsce-testing.repo
+            owner=root
+            mode=0666
+  when: ansible_distribution != "Debian"
+
+- name: Install rpmfusion-free-updates repo -- for exfat
+  template: dest=/etc/yum.repos.d/rpmfusion-free-updates.repo
+            src=rpmfusion-free-updates.repo
+            owner=root
+            mode=0666
+  when:     ansible_distribution == "Fedora"
+
+- name: Create /etc/xsce
+  file: path=/etc/xsce
+        owner=root
+        group=root
+        mode=0755
+        state=directory
+
+# this script can be sourced to get xsce location
+- name: Create xsce.env file
+  template: src=xsce.env.j2
+            dest=/etc/xsce/xsce.env
+            owner=root
+            group=root
+            mode=0644
+
+- name: create ansible.d facts directory
+  file: path=/etc/ansible/facts.d
+        owner=root
+        group=root
+        mode=0750
+        state=directory
+
+- name: local facts script
+  template: src=local_facts.fact.j2
+            dest=/etc/ansible/facts.d/local_facts.fact
+            owner=root
+            group=root
+            mode=0700
+
+- name: re-read facts
+  setup: filter=ansible_local
+
+- name: Set XO model and preload
+  set_fact:
+    phplib_dir: '{{ ansible_local["local_facts"]["phplib_dir"] }}'
+    xo_model: '{{ ansible_local["local_facts"]["xo_model"] }}'
+    xsce_preload: '{{ ansible_local["local_facts"]["xsce_preload"] }}'
+
+- name: Install script to fully initialize network config, and/or collect data
+# calling xs-network-reset w/ snapshot name, stores info, but aborts reset
+# intended as a convenience function for us
+  template: src=xs-network-reset
+            dest=/usr/bin
+            owner=root
+            group=root
+            mode=0755
+

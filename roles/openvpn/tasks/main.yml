@@ -1,0 +1,119 @@
+---
+
+- name: Install openvpn packages
+  package:  name={{ item }}
+            state=present
+  with_items:
+        - openvpn
+        - nmap
+  tags:
+    - download
+
+- name: Create the directory for keys
+  file: dest=/etc/openvpn/keys
+        state=directory
+        owner=root
+        group=root
+        mode=0755
+
+- name: Create the directory for scripts 
+  file: dest=/etc/openvpn/scripts
+        state=directory
+        owner=root
+        group=root
+        mode=0755
+
+- name: Create a folder for xsce executable not on path
+  file: path=/usr/lib/xsce
+        state=directory
+
+- name: Configure openvpn
+  template: src={{ item.src }}
+            dest={{ item.dest }}
+            owner={{ item.owner }}
+            group=root
+            mode={{ item.mode }}
+  with_items:
+    - { src: 'ca.crt', dest: '/etc/openvpn/keys/ca.crt', owner: "root" , mode: '0644' }
+    - { src: 'client1.crt', dest: '/etc/openvpn/keys/client1.crt', owner: "root" , mode: '0644' }
+    - { src: 'client1.key', dest: '/etc/openvpn/keys/client1.key', owner: "root" , mode: '0600' }
+    - { src: 'announce', dest: '/etc/openvpn/scripts/announce', owner: "root" , mode: '0755' }
+    - { src: 'announcer', dest: '/etc/openvpn/scripts/announcer', owner: "root" , mode: '0755' }
+    - { src: 'silence', dest: '/etc/openvpn/scripts/silence', owner: "root" , mode: '0755' }
+    - { src: 'xscenet.conf', dest: '/etc/openvpn/xscenet.conf', owner: "root" , mode: '0644' }
+    - { src: 'xsce-vpn.conf.in', dest: '/etc/openvpn/xsce-vpn.conf.in', owner: "root" , mode: '0644' }
+    - { src: 'xs-vpn', dest: '/usr/bin/xs-vpn', owner: "root" , mode: '0755' }
+    - { src: 'xs-handle', dest: '/usr/bin/xs-handle', owner: "root" , mode: '0755' }
+    - { src: 'up_wan', dest: '/usr/lib/xsce/up_wan', owner: "root" , mode: '0755' }
+    - { src: 'start.j2', dest: '/usr/lib/xsce/start', owner: "root" , mode: '0755' }
+
+- name: put up_wan in place for debian
+  template: src=up_wan dest=/usr/lib/xsce/up_wan
+  when: is_debian
+
+- name: put dispatcher up for NM
+  template: src=15-openvpn dest=/etc/NetworkManager/dispatcher.d/
+  when: not is_debian
+
+- name: check for manually configured openvpn tunnel
+  stat: path=/etc/openvpn/xsce-vpn.conf
+  register: stat
+
+# note that ansible does not currently handle @ in a service name
+- name:  enable the openvpn tunnel at boot time
+  shell: systemctl enable openvpn@xscenet.service
+  when:  openvpn_enabled and not stat.exists is defined and is_debian
+
+- name:  enable the openvpn tunnel at boot time for Debian
+  shell: update-rc.d openvpn enable
+  when:  openvpn_enabled and not stat.exists is defined and is_debian
+
+- name:  start the openvpn tunnel now
+  shell: systemctl start openvpn@xscenet.service
+  when:  openvpn_enabled and not stat.exists is defined and not installing
+
+- name: make openvpn connection automatic
+  lineinfile: dest=/etc/crontab
+            line="25 *  *  *  * root (/usr/bin/systemctl start openvpn@xscenet.service) > /dev/null"
+  when:
+            openvpn_enabled and openvpn_cron_enabled and not stat.exists is defined
+
+- name: make openvpn connection manual
+  lineinfile: dest=/etc/crontab
+            regexp=".*/usr/bin/systemctl*"
+            state=absent
+  when:
+            not openvpn_enabled or not openvpn_cron_enabled
+
+
+- name:    stop starting the openvpn tunnel at boot time
+  shell:   systemctl disable openvpn@xscenet.service
+  when:    not openvpn_enabled and not is_debian
+
+- name:    stop starting the openvpn tunnel at boot time for Debian
+  shell:   update-rc.d openvpn disable
+  when:    not openvpn_enabled and is_debian
+
+- name:    stop  openvpn tunnel immediately
+  shell:   systemctl stop openvpn@xscenet.service
+  ignore_errors: True
+  when:    not openvpn_enabled and not installing
+
+- name: Add openvpn to service list
+  ini_file: dest='{{ service_filelist }}'
+            section=openvpn
+            option='{{ item.option }}'
+            value='{{ item.value }}'
+  with_items:
+    - option: name
+      value: "openvpn"
+    - option: description
+      value: '"Openvpn is a means of Contacting a server anywhere on the internet via a middleman server"'
+    - option: middleman_url
+      value: "{{ vpn_presence }}"
+    - option: port
+      value: "{{ openvpn_server_port }}"
+    - option: enabled
+      value: "{{ openvpn_enabled }}"
+    - option: cron_enabled
+      value: "{{ openvpn_cron_enabled }}"

@@ -1,0 +1,134 @@
+- name: Install httpd required packages
+  package: name={{ item }}
+           state=present
+  with_items:
+    - apache2
+    - php5
+    - php5-curl
+    - php5-sqlite
+  tags:
+    - download
+  when: is_debian
+
+- name: Install httpd required packages
+  package: name={{ item }}
+           state=present
+  with_items:
+    - httpd
+    - php
+    - php-curl
+#    - php-sqlite
+  tags:
+    - download
+  when: not is_debian
+
+- name: remove the default apache2 config file
+  file: path=/etc/apache2/sites-enabled/000-default.conf
+        src=/etc/apache2/sites-available/000-default.conf
+        state=absent
+  when: is_debian
+
+- name: Create httpd config files
+  template: backup=yes
+            src={{ item.src }}
+            dest={{ item.dest }}
+            owner=root
+            group=root
+            mode={{ item.mode }}
+  with_items:
+      - { src: '010-xsce.conf.j2' , dest: '/etc/{{ apache_config_dir }}/010-xsce.conf', mode: '0755' }
+      - { src: 'proxy_ajp.conf.j2' , dest: '/etc/{{ apache_config_dir }}/proxy_ajp.conf', mode: '0644' }
+      - { src: 'php.ini.j2' , dest: '/etc/php.ini' , mode: '0644' }
+
+# remove symlinks for mpm-event, replace with mpm-prefork
+- name: Remove mpm event links
+  file: path=/etc/apache2/mods-enabled/{{ item }}
+        state=absent
+  with_items:
+      - mpm_event.conf
+      - mpm_event.load
+  when: is_debian
+
+- name: create symlinks for mpm-prefork
+  file: path=/etc/apache2/mods-enabled/{{ item }}
+        src=/etc/apache2/mods-available/{{ item }}
+        state=link
+  with_items:
+      - mpm_prefork.conf
+      - mpm_prefork.load
+  when: is_debian
+
+- name: turn on mod_proxy
+  command: a2enmod {{ item }}
+  with_items:
+     - proxy
+     - proxy_html
+     - headers
+     - rewrite
+  when: is_debian
+
+- name: create symlinks for enabling our site
+  file: path=/etc/apache2/sites-enabled/{{ item }}
+        src=/etc/apache2/sites-available/{{ item }}
+        state=link
+  with_items:
+      - 010-xsce.conf
+  when: is_debian
+
+- name: Remove the default site container
+  file: dest=/etc/apache2/000-default.conf
+        state=absent
+  when: is_debian
+
+- name: Create http pid dir
+  file: path=/var/run/{{ apache_user }}
+        mode=0755
+        owner=root
+        group=root
+        state=directory
+
+- name: create admin group
+  group: name=admin
+         state=present
+
+- name: Add apache user to admin group
+  user: name={{ apache_user }}
+        groups=admin
+        state=present
+        createhome=no
+
+- name: Create httpd log dir
+  file: path=/var/log/{{ apache_service }}
+        mode=0755
+        owner={{ apache_data }}
+        group={{ apache_data }}
+        state=directory
+
+- name: Create admin group
+  group: name=admin
+         state=present
+
+- name: Enable httpd
+  service: name={{ apache_service }}
+           enabled=yes
+
+- name: Create iiab-info directory
+  file: path={{ doc_root }}/info
+        mode=0755
+        owner={{ apache_data }}
+        group={{ apache_data }}
+        state=directory
+
+- name: Remove iiab-info.conf
+  file: dest=/etc/{{ apache_config_dir }}/iiab-info.conf
+        state=absent
+
+- name: Remove iiab-info.conf symlink
+  file: dest=/etc/apache2/sites-enabled/iiab-info.conf
+        state=absent
+  when: is_debuntu
+
+- include: html.yml
+  tags:
+    - base
+

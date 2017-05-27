@@ -1,0 +1,135 @@
+- include: computed_network.yml
+  when: not installing
+  tags:
+    - network
+    - network-discover
+
+- include: display-discover.yml
+  tags:
+    - network-discover
+
+- name: Set hostname
+  template: dest=/etc/hostname
+            src=network/hostname.j2
+            owner=root
+            mode=0644
+  tags:
+    - network
+    - domain
+
+- name: Configure /etc/sysconfig/network
+  template: src=network/sysconfig.network.j2
+            dest=/etc/sysconfig/network
+            owner=root
+            group=root
+            mode=0644
+  tags:
+    - network
+    - domain
+
+- name: Create xs_domain_name flag
+  template: src=network/{{ item }}.j2
+            dest=/etc/sysconfig/{{ item }}
+            mode=0644
+  with_items:
+    - xs_domain_name
+  register: domainname
+  tags:
+    - network
+    - domain
+
+- name: Domain name did not change setting xsce_prepped
+  set_fact: 
+    xsce_prepped: True
+  when: not domainname.changed and xsce_base_ver == gui_version
+
+##### Start static ip address info for first run #####
+#- include: static.yml
+#  when: 'xsce_wan_iface != "none" and wan_ip != "dhcp"'
+##### End static ip address info
+
+- include: hosts.yml
+  tags:
+    - network
+
+- include: named.yml
+#  when: not xsce_prepped
+  tags:
+    - named
+    - network
+
+- include: dhcpd.yml
+#  when: not xsce_prepped
+  tags:
+    - dhcpd
+    - network
+
+- include: squid.yml
+#  when: not xsce_prepped
+  tags:
+    - squid
+    - network
+
+- include: wondershaper.yml
+  when: not xsce_prepped
+  tags:
+    - wondershaper
+    - network
+
+- include: iptables.yml
+#  when: not xsce_prepped
+  tags:
+    - iptables
+    - network
+
+- include: avahi.yml
+  tags:
+    - network
+
+- name: ask systemd to reread the unit files, picks up changes done
+  shell: systemctl daemon-reload
+  when: not installing
+
+- include: ifcfg_mods.yml
+  tags:
+    - network
+  when: ansible_distribution != 'Debian' and not installing
+
+- include: debian.yml
+  tags:
+    - network
+  when: is_debian and not is_rpi  and not installing
+
+- include: rpi_debian.yml
+  tags:
+    - network
+  when: is_debian and is_rpi  and not installing
+
+- name: Create xs network flags
+  template: src=network/{{ item }}.j2
+            dest=/etc/sysconfig/{{ item }}
+            mode=0644
+  with_items:
+    - xs_wan_device
+    - xs_lan_device
+  when: not installing
+  tags:
+    - network
+
+- include: computed_services.yml
+  tags:
+    - network
+ 
+- include: enable_services.yml
+  tags:
+    - network
+
+- include: restart.yml
+  when: not installing
+  tags:
+    - network
+
+- include: hostapd.yml
+  when: not installing
+  tags:
+    - network

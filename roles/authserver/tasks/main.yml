@@ -1,0 +1,72 @@
+- name: check pip is installed
+  package: name=python-pip
+           state=present
+  tags:
+    - download
+
+- name: download xs-authserver from pypi
+  pip: name=xs-authserver
+          extra_args="--download {{ pip_packages_dir }}"
+  when: not {{ use_cache }} and not {{ no_network }}
+  tags:
+    - download2
+
+- name: install xs-authserver from pypi
+  pip: name=xs-authserver
+       extra_args="--no-index --find-links=file://{{ pip_packages_dir }}"
+
+- name: install gunicorn
+  package: name=python-gunicorn
+           state=present
+  tags:
+    - download
+
+- name: Configure xs-authserver
+  template: backup=yes
+            src={{ item.src }}
+            dest={{ item.dest }}
+            owner=root
+            group=root
+            mode={{ item.mode }}
+  with_items:
+    - src: xs-authserver.env.j2
+      dest: /etc/sysconfig/xs-authserver
+      mode: 0644
+    - src: xs-authserver.service.j2
+      dest: /etc/systemd/system/xs-authserver.service
+      mode: 0644
+
+- name: create database folder
+  file: state=directory
+        path=/var/lib/xs-authserver/
+        owner=root
+        group=root
+        mode=0644
+
+- name: init database
+  command: xs-authserverctl initdb
+  ignore_errors: yes
+  environment:
+    XS_AUTHSERVER_DATABASE: /var/lib/xs-authserver/data.db
+
+- name: Enable xs-authserver service
+  service: name=xs-authserver
+           enabled=yes
+  when: authserver_enabled
+
+- name: add xs-authserver to service list
+  ini_file: dest='{{ service_filelist }}'
+            section=xs-authserver
+            option='{{ item.option }}'
+            value='{{ item.value }}'
+  with_items:
+    - option: name
+      value: XS-authserver
+    - option: description
+      value: '"xs-authserver implements a seamless web authentication service
+             using XO laptop registration capabilities.  It is heavily inspired
+             by the Moodle OLPC-XS authentication plugin"'
+    - option: port
+      value: 5000
+    - option: path
+      value: /

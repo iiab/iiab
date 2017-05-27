@@ -1,0 +1,40 @@
+---
+- name: Install required packages
+  package: name={{ item }}
+           state=present
+  with_items:
+    - vnstat
+  tags:
+    - download
+
+- name: put the config file in place
+  template: src=vnstat.conf.j2 
+            dest=/etc/vnstat.conf 
+            mode=0744 
+            owner=root 
+            group=root
+
+- name: create database for wan to collect vnstat data
+  shell: /usr/bin/vnstat -i {{ xsce_wan_iface }}
+
+- name: create database for lan to collect vnstat data if not appliace config
+  shell: /usr/bin/vnstat -i {{ xsce_lan_iface }}
+  when: not xsce_lan_iface == ""
+
+- name: start vnstat daemon via systemd
+  service: name=vnstat enabled=yes state=started
+
+- name: Add vnstat to service list
+  ini_file: dest='{{ service_filelist }}'
+            section=vnstat
+            option='{{ item.option }}'
+            value='{{ item.value }}'
+  with_items:
+    - option: name
+      value: vnstat
+    - option: description
+      value: '"vnStat is a console-based network traffic monitor for Linux and BSD that keeps a log of network traffic for the selected interface(s)."'
+    - option: installed
+      value: "{{ vnstat_install }}"
+    - option: enabled
+      value: "{{ vnstat_enabled }}"

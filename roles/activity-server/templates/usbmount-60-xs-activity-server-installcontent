@@ -1,0 +1,115 @@
+#!/bin/bash
+# Part of the xs-activity-server package
+#
+# based on a similarly named script in the xs-rsync package
+# by Martin Langhoff <martin@laptop.org>
+#
+# Adapted for xs-activity-server by Douglas Bagnall
+# <douglas@paradise.net.nz>
+#
+# Copyright: One Laptop per Child
+
+set -e
+
+VERBOSE=yes
+MAGIC_DIR=$UM_MOUNTPOINT/xs-activity-server
+
+FINAL_DIR=/library/xs-activity-server/activities
+
+FILES_TO_RM=""
+
+# combined with set -e, error() is called if something fails.
+error(){
+    logger -puser.err -t "xs-activity-server[$$]" "Error at line $(caller)"
+    [ "$FILES_TO_RM" ] && rm -rf $FILES_TO_RM
+}
+trap error ERR
+
+
+# Log a string via the syslog facility.
+log()
+{
+    if test $1 != debug || expr "$VERBOSE" : "[yY]" > /dev/null; then
+	logger -p user.$1 -t "xs-activity-server[$$]" -- "$2"
+    fi
+}
+
+
+STEPS=7
+
+[ -d $MAGIC_DIR ] || exit 0
+
+log notice 'Found activity install directory';
+log notice "[1/$STEPS] Checking whether it has a manifest";
+
+if [ -r $MAGIC_DIR/manifest.sha1 ];then
+    log notice "[2/$STEPS] Seems to have a manifest";
+else
+    log err "[2/$STEPS] Missing manifest"
+    exit 1;
+fi
+
+## Do we have enough space?
+# note: we could use awk {'print $4'} instead of the
+# perl regex, but it breaks with long /dev nodes
+# such as those from LVMs -which wrap. The regex captures the
+# number just left of the number with the percentage sign.
+NEED=`du -s -B1M $MAGIC_DIR | awk {'print $1'}`
+HAVE=`df -B1M $FINAL_DIR | tail -n1 | \
+    perl -pe 'm/(\d+)\s+\d+\%/; $_=($1-1);'`
+if [ $NEED -gt $HAVE ];then
+    log err 'Not enough free space in /library for these activities - cancelling';
+    exit 1;
+fi
+
+### Copy it first - as the media is bound to be slow
+# - make this atomic by cp'ing to a tmpdir, and mv'ing into place
+#   to be fail-safe
+# - mv aside manifest.sha1 and its sig
+# - TODO? we could avoid cp'ing files we already have using
+#   rsync --copy-dest instead of cp
+#
+log notice "[3/$STEPS] Copying activities to disk";
+TMPDEST=`mktemp -d -p /library/xs-activity-server/tmp`
+
+#make sure the tmp directory goes
+FILES_TO_RM="$FILES_TO_RM '$TMPDEST'"
+
+cp --preserve=timestamps $MAGIC_DIR/* $TMPDEST
+
+# In a tmpdir we own, safe from race conditions
+# run the checksums...
+log notice "[4/$STEPS] Checking the manifest";
+# mv the manifest to a different dir
+TMPMANIF=`mktemp -d -p /library/xs-activity-server/tmp`
+
+FILES_TO_RM="$FILES_TO_RM '$TMPMANIF'"
+
+
+mv $TMPDEST/manifest.sha1 $TMPMANIF/
+if [ -e $TMPDEST/manifest.sha1.sig ]; then
+    mv $TMPDEST/manifest.sha1.sig $TMPMANIF/
+fi
+xs-sum -c $TMPMANIF/manifest.sha1 -d $TMPDEST
+
+#Let syslog know what we're doing
+cd $TMPDEST
+log notice "found $(ls *.xo |wc -l) activities"
+log debug "found these activities: $(ls *.xo)"
+cd -
+
+log notice "[5/$STEPS] Copy the directories into place";
+#XXX not checking whether this clobbers existing files.
+mv $TMPDEST/* $FINAL_DIR
+
+#So, now all the activities are in place, but maybe they're not
+#newer than what we have. So xs-regenerate-activities has to work that out.
+
+log notice "[6/$STEPS] Regenerating the list of available activities";
+
+/usr/bin/xs-regenerate-activities $FINAL_DIR 2>&1 | logger -p user.debug -t "xs-activity-server[$$]" 
+
+log notice "[$STEPS/$STEPS] Finished - XOs can now update activities.";
+
+
+rm -fr $FILES_TO_RM

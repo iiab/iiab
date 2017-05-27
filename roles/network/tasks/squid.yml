@@ -1,0 +1,101 @@
+- name: Install squid packages
+  package: name={{ item }}
+           state=present
+  with_items:
+    - "{{ proxy }}"
+    - cadaver
+    - dansguardian
+  tags:
+    - download
+
+- name: Create the squid user
+  user: name={{ proxy_user }}
+        createhome=False
+        shell=/bin/false
+
+- name: Copy init script and config file
+  template: src={{ item.src }}
+            dest={{ item.dest }}
+            owner={{ item.owner }}
+            group={{ item.group }}
+            mode={{ item.mode }}
+  with_items:
+    - src: 'squid/squid.sysconfig'
+      dest: '/etc/sysconfig/squid'
+      owner: 'root'
+      group: 'root'
+      mode: '0755'
+    - src: 'squid/sites.whitelist.txt'
+      dest: '/etc/{{ proxy }}/sites.whitelist.txt'
+      owner: '{{ proxy_user }}'
+      group: '{{ proxy_user }}'
+      mode: '0644'
+    - src: 'squid/allowregex.rules'
+      dest: '/etc/{{ proxy }}/allowregex.rules'
+      owner: '{{ proxy_user }}'
+      group: '{{ proxy_user }}'
+      mode: '0644'
+    - src: 'squid/denyregex.rules'
+      dest: '/etc/{{ proxy }}/denyregex.rules'
+      owner: '{{ proxy_user }}'
+      group: '{{ proxy_user }}'
+      mode: '0644'
+    - src: 'squid/dstaddress.rules'
+      dest: '/etc/{{ proxy }}/dstaddress.rules'
+      owner: '{{ proxy_user }}'
+      group: '{{ proxy_user }}'
+      mode: '0644'
+    - src: 'squid/xs-httpcache.j2'
+      dest: '/usr/bin/xs-httpcache'
+      owner: 'root'
+      group: 'root'
+      mode: '0755'
+
+- name: Create squid cache directory
+  file: path=/library/cache
+        owner={{ proxy_user }}
+        group={{ proxy_user }}
+        mode=0750
+        state=directory
+
+- name: Create squid log directory
+  file: path=/var/log/{{ proxy }}
+        owner={{ proxy_user }}
+        group={{ proxy_user }}
+        mode=0750
+        state=directory
+
+- include: dansguardian.yml
+
+- name: Stop Squid
+  service: name={{ proxy }}
+           state=stopped
+  ignore_errors: yes
+  when: not installing
+
+- name: Add squid to service list
+  ini_file: dest='{{ service_filelist }}'
+            section={{ proxy }}
+            option='{{ item.option }}'
+            value='{{ item.value }}'
+  with_items:
+    - option: name
+      value: squid
+    - option: description
+      value: '"Squid caches web pages the first time they are accessed, and pulls them from the cache thereafter"'
+    - option: enabled
+      value: "{{ squid_enabled }}"
+
+- name: Add dansguardian to service list
+  ini_file: dest='{{ service_filelist }}'
+            section=dansguardian
+            option='{{ item.option }}'
+            value='{{ item.value }}'
+  with_items:
+    - option: name
+      value: dansguardian
+    - option: description
+      value: '"Dansguardian searches web content for sexual references and denies access when found"'
+    - option: enabled
+      value: "{{ dansguardian_enabled }}"
+

@@ -1,0 +1,137 @@
+#!/bin/bash
+# if called w/ parameter, skip the reset, create diagnostic package w/ param as file name
+SCRIPTDIR=$(cd `dirname $0` pwd)
+diagnose_name=
+if [ $# -ne 0 ]; then
+   basket=$1
+   diagnose_name=$1
+else
+   basket=netlog.$$
+fi
+
+# collect all the network info in one place
+mkdir -p /tmp/$basket
+cat << EOF > /tmp/script2overview
+#!/bin/bash
+# generate the body overview part diagnostic package about network
+echo "=========================================================="
+for f in \$(ls  /etc/sysconfig/network-scripts/ifcfg-*|gawk '{printf(" %s",\$1)}'); do
+   echo
+   echo \$f
+   cat \$f
+done
+echo 
+echo "=========================================================="
+echo ifconfig
+ifconfig
+echo
+echo "=========================================================="
+echo ip addr
+ip addr
+echo
+echo "=========================================================="
+echo "brctl show"
+brctl show
+echo
+echo "=========================================================="
+echo "/etc/resolv.conf"
+cat /etc/resolv.conf
+echo
+echo "=========================================================="
+echo "cat /etc/xsce/xsce.ini"
+cat /etc/xsce/xsce.ini
+echo
+echo "=========================================================="
+echo "routing table"
+netstat -rn
+echo
+echo "=========================================================="
+echo "install log -- last 50 lines"
+tail -50 /opt/schoolserver/xsce/xsce-install.log
+echo
+echo "=========================================================="
+echo "xsce-network log -- last 50 lines"
+if [ -f /opt/schoolserver/xsce/xsce-network.log ]; then
+tail -50 /opt/schoolserver/xsce/xsce-network.log
+else 
+  echo no xsce-network.log
+fi
+echo
+echo "=========================================================="
+cat /etc/fedora-release | grep 18
+if [ \$? -eq 0 ]; then
+  echo "nmcli conn list"
+  nmcli conn list 3>&2
+else
+  echo "nmcli conn show"
+  nmcli conn show 3>&2
+fi
+echo
+echo "=========================================================="
+echo nmcli dev wifi list
+nmcli dev wifi list
+EOF
+chmod 755 /tmp/script2overview
+/tmp/script2overview > /tmp/$basket/overview
+
+if [ -f /opt/schoolserver/xsce/xsce-network.log ]; then
+   cp /opt/schoolserver/xsce/xsce-network.log /tmp/$basket
+else
+  touch /tmp/$basket/no_xsce-network.log
+fi
+
+if [ -f /etc/sysconfig/xs_domain_name ];then
+  cp -p /etc/sysconfig/xs_domain_name /tmp/$basket
+else 
+  touch /tmp/$basket/xs_domain_name_not_set
+fi
+
+if [ -f /etc/sysconfig/xs_lan_device ];then
+  cp -p /etc/sysconfig/xs_lan_device  /tmp/$basket
+else 
+  touch /tmp/$basket/xs_lan_device_not_set
+fi
+if [ -f /etc/sysconfig/xs_wan_device ];then
+  cp -p /etc/sysconfig/xs_wan_device  /tmp/$basket
+else 
+  touch /tmp/$basket/xs_wan_device_not_set
+fi
+ls /etc/NetworkManager/system-connections > /dev/null
+if [ $? -eq 0  ]; then
+  cp -rp /etc/NetworkManager/system-connections /tmp/$basket
+fi
+cp /etc/sysconfig/network-scripts/ifcfg-* /tmp/$basket
+if [ -f /opt/schoolserver/xsce/xsce-network.log ]; then
+  cp -p /opt/schoolserver/xsce/xsce-network.log /tmp/$basket
+fi
+
+mkdir -p /etc/xsce/diagnose/
+if [ ! -z $diagnose_name ];then
+  pushd /tmp > /dev/null
+  tar czf /etc/xsce/diagnose/$basket.tgz $basket/*
+  popd > /dev/null
+  rm -rf /tmp/$basket
+  exit 0
+else
+  pushd /tmp > /dev/null
+  tar czf  /etc/xsce/diagnose/$basket.tgz $basket/*
+  popd > /dev/null
+  rm -rf /tmp/$basket
+fi
+
+# clear out all the memory variables and let auto-configure start from scratch
+rm -rf /etc/sysconfig/xs_domain_name
+rm -rf /etc/sysconfig/xs_lan_device
+rm -rf /etc/sysconfig/xs_wan_device
+rm -rf /etc/NetworkManager/system-connestions/*
+if [ -f /etc/sysconfig/network-scripts/ifcfg-WAN ];then
+  mv /etc/sysconfig/network-scripts/ifcfg-WAN /root
+  echo -e "\n\nWAN setup file moved to /root for safekeeping.\n\n"
+fi
+
+ls -1 /etc/sysconfig/network-scripts/ifcfg-*|grep -v -e ifcfg-lo
+if [ $? -eq 0 ]; then
+  ls -1 /etc/sysconfig/network-scripts/ifcfg-*|grep -v -e ifcfg-lo|xargs rm
+fi
+
+echo -e "\n\nAll Network variables erased. Now run 'xsce-network' to set up the new network configuration.\n\nPlease see /opt/schoolserver/xsce/docs/GETTING_HELP.rst for ways to get help or \nprovide the feedback which will improve XSCE\n\n"

@@ -1,0 +1,102 @@
+- name: Set flag for fedora 18 
+  set_fact:
+    is_F18: True
+  when: ansible_distribution_release == "based on Fedora 18" or ansible_distribution_version == "18"
+
+- name: get the uuidgen program
+  package: name=uuid-runtime
+           state=present
+  when: is_debian
+
+# for rpi, without rtc, we need time as soon as possible
+- name: Install chrony package
+  package: name={{ item }}
+           state=present
+  with_items:
+   - chrony
+  tags:
+    - download
+
+#TODO: Use regexp filter instead of hard-code ip 
+- name: Update chrony config file
+  template: backup=no
+            dest=/etc/chrony.conf
+            src=chrony.conf.j2
+
+- name: Disable selinux on next boot
+  selinux: state=disabled
+  register: selinux_disabled
+  when: ansible_selinux is defined and ansible_version >= '2' and ansible_selinux or ansible_selinux['status'] is defined and ansible_version < '2' and ansible_selinux['status'] != 'disabled'
+
+- name: Disable selinux for this session (if needed)
+  command: setenforce Permissive
+  when: selinux_disabled is defined and selinux_disabled.changed
+
+##  DISCOVER PLATFORMS ######
+- name: Discover if this is a rpi -- if so it has a bcm2709 processor
+  set_fact: 
+     rpi_model: "rpi"
+     is_rpi: "True"
+  when:  ansible_cmdline["bcm2709.serial"]  is defined
+  ignore_errors: true
+
+- include: prep.yml
+
+# we need to inialize the ini file
+- include: xsce_ini.yml
+
+- include: computed_vars.yml
+
+- include: detected_network.yml
+  when: not installing 
+
+# Patch Fedora 21+ so usbmount works
+# Set flag to True that was initialized to False in role defaults
+# We can't undo this
+- name: Does udev need patching
+  set_fact:
+    udev_needs_patch: True
+  when: ansible_distribution == "Fedora" and ansible_distribution_version >= "21"
+
+# Same patch for CentOS 7.2
+- name: Does udev need patching for Centos
+  set_fact:
+    udev_needs_patch: True
+  when: ansible_distribution == "CentOS" and ansible_distribution_version >= "7.2.1511"
+
+- name: Copy udevd service to /etc/systemd/system to modify
+  copy: src=/usr/lib/systemd/system/systemd-udevd.service
+        dest=/etc/systemd/system/systemd-udevd.service
+        owner=root
+        group=root
+        mode=0644
+  when: udev_needs_patch
+
+- name: Change MountFlags from slave to shared
+  lineinfile: backup=no
+              dest=/etc/systemd/system/systemd-udevd.service
+              regexp='^MountFlags'
+              line='MountFlags=shared'
+              state=present
+  when: udev_needs_patch
+
+- name: Restart systemd-udevd.service
+  service: name=systemd-udevd
+           state=restarted
+  when: udev_needs_patch and not installing
+
+
+# Put conditional actions for hardware platforms here
+- include: raspberry_pi_2.yml
+  when: rpi_model != "none"
+
+- name: Check if the identifier for intel's NUC6 builtin wifi is present
+  shell: "lsusb | grep 8087:0a2b | wc |gawk '{print $1}'"
+  register: usb_NUC6
+  ignore_errors: true
+
+- name: download the firmware for built in wifi on NUC6
+  get_url: dest=/lib/firmware
+           url={{ xsce_download_url }}/iwlwifi-8000C-13.ucode
+  when:  usb_NUC6.stdout|int > 0
+

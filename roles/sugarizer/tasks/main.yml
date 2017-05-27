@@ -1,0 +1,80 @@
+- name: Download the latest stable version of sugarizer from location under our control
+  get_url: url={{ xsce_download_url }}/{{ sugarizer_version }}.tar.gz
+           dest={{ downloads_dir }}/{{ sugarizer_version }}.tar.gz
+  
+- name: Untar it to target location
+  command: tar xzf {{ downloads_dir }}/{{ sugarizer_version }}.tar.gz -C {{ sugarizer_location }}
+
+- name: Create a symbolic link from generic url to version specific location
+  file: dest={{ sugarizer_location }}/sugarizer
+        src={{ sugarizer_location }}/{{ sugarizer_version }}
+        state=link
+
+- name: Install sugarizer required packages
+  package: name={{ item }} 
+           state=present
+  with_items:
+    - nodejs
+    - npm
+  when: not {{ use_cache }} and not {{ no_network }}
+  tags:
+    - download
+
+- name: Create systemd files and copy our ini file 
+  template: src={{ item.src }}
+            dest={{ item.dest }}
+            owner=root
+            group=root
+            mode=0644
+  with_items:
+     - { src: 'sugarizer.service.j2' , dest: '/etc/systemd/system/sugarizer.service'}
+     - { src: 'sugarizer.ini' , dest: '{{ sugarizer_location }}/sugarizer/server' }
+#     - { src: 'sugarizer.conf' , dest: '/etc/apache2/sites-available' }
+
+#- name: Create the symlink enabling the rewrite
+#  file: src=/etc/apache2/sites-available/sugarizer.conf
+#        dest=/etc/apache2/sites-enabled/sugarizer.conf
+#        state=link
+
+- name: Create the express framework for node.js
+  shell:  npm install
+  args:
+     chdir: "{{ sugarizer_location }}/sugarizer/server" 
+     creates: "{{ sugarizer_location }}/sugarizer/server/node_modules"
+  when: not is_F18
+
+- name: Create the express framework for node.js
+  shell:  npm install
+  args:
+     chdir: "{{ sugarizer_location }}/sugarizer/server" 
+  when: is_F18
+
+- name: enable services
+  service: name={{ item.name }}
+           enabled=yes
+           state=restarted
+  with_items:
+      - { name: sugarizer }
+  when: sugarizer_enabled
+
+
+- name: disable services
+  service: name={{ item.name }}
+           enabled=no
+           state=stopped
+  with_items:
+      - { name: sugarizer }
+  when: not sugarizer_enabled
+
+- name: add sugarizer to service list
+  ini_file: dest='{{ service_filelist }}'
+            section=sugarizer
+            option='{{ item.option }}'
+            value='"{{ item.value }}"'
+  with_items:
+       - option: name
+         value: Sugarizer
+       - option: description
+         value: '"The Sugar Learning Platform is a leading learning platform that began in the famous One Laptop Per Child project. Sugarizer is a web implementation of that platform"' 
+       - option: enabled
+         value: "{{ sugarizer_enabled }}"

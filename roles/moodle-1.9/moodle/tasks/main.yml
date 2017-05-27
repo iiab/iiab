@@ -1,0 +1,93 @@
+---
+- name: Install moodle required packages
+  package: name={{ item }}
+           state=present
+  with_items:
+    - moodle-xs
+    - python-psycopg2
+  tags:
+    - download
+
+- name: Remove stock moodle conf
+  file: path='/etc/{{ apache_config_dir }}/moodle.conf'
+        state=absent
+
+- name: Configure moodle
+  template: backup=yes
+            src={{ item.src }}
+            dest={{ item.dest }}
+            owner=root
+            group=root
+            mode={{ item.mode }}
+  with_items:
+    - src: '020-xsce-moodle.conf.j2'
+      dest: '/etc/{{ apache_config_dir }}/020-xsce-moodle.conf'
+      mode: '0655'
+    - src: 'moodle-xs.service.j2'
+      dest: '/etc/systemd/system/moodle-xs.service'
+      mode: '0655'
+    - src: 'moodle-xs-init'
+      dest: '/usr/libexec/moodle-xs-init'
+      mode: '0755'
+
+- name: Stop postgresql
+  service: name=postgresql
+           state=stopped
+
+- name: Start postgresql-xs
+  service: name=postgresql-xs
+           state=started
+
+- name: Create db user
+  postgresql_user: name=apache
+                   password=apache
+                   role_attr_flags=NOSUPERUSER,NOCREATEROLE,NOCREATEDB
+                   state=present
+  become: yes
+  become_user: postgres
+
+- name: Create database
+  postgresql_db: name=moodle-xs
+                 encoding=utf8
+                 owner=apache
+                 template=template0
+                 state=present
+  sudo: yes
+  sudo_user: postgres
+
+- name: Execute moodle startup script
+  command: /usr/libexec/moodle-xs-init start
+
+- name: Restart postgresql-xs
+  service: name=postgresql-xs
+           state=restarted
+
+- name: Restart httpd
+  service: name={{ apache_service }}
+           state=restarted
+
+- name: Enable moodle service
+  service: name=moodle-xs
+           enabled=yes
+           state=started
+
+- name: fetch the administrative password for moodle
+  shell: cat /etc/moodle/adminpw
+  register: moodlepw
+
+- name: add moodle to service list
+  ini_file: dest='{{ service_filelist }}'
+            section=moodle
+            option='{{ item.option }}'
+            value='{{ item.value }}'
+  with_items:
+    - option: name
+      value: Moodle
+    - option: description
+      value: '"Access the Moodle learning management system."'
+    - option: path
+      value: /moodle
+    - option: enabled
+      value: "{{ moodle_enabled }}"
+    - option: adminpw
+      value: "{{ moodlepw.stdout }}"

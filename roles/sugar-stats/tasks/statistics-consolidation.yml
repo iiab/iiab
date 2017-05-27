@@ -1,0 +1,81 @@
+- name: Install python-pip package
+  package: name=python-pip
+           state=present
+  tags: 
+    - download
+
+- name: Download statistics-consolidation with pip
+  pip: name=stats-consolidation version=2.1.2
+          extra_args="--download {{ pip_packages_dir }}"
+  when: not {{ use_cache }} and not {{ no_network }}
+  tags:
+    - download2
+
+- name: Install statistics-consolidation with pip
+  pip: name=stats-consolidation version=2.1.2
+       extra_args="--no-index --find-links=file://{{ pip_packages_dir }}"
+
+- name: Install required libraries
+  package: name={{ item }}
+           state=present
+  with_items:
+    - rrdtool-python
+    - python-sqlalchemy
+    - python-psycopg2
+  tags:
+    - download
+
+- name: Enable postgresl access by md5 method
+  lineinfile: backup=yes
+              dest=/library/pgsql-xs/pg_hba.conf
+              regexp="^host\s+statsconso"
+              line="host     statsconso     statsconso     samehost     md5"
+              state=present
+              insertafter="^# IPv4 local connections"
+              owner=postgres
+              group=postgres
+
+- name: Restart postgresql service
+  service: name=postgresql-xs
+           state=restarted
+
+- name: Create postgres user
+  postgresql_user: user=statsconso password=statsconso
+  become: yes
+  become_user: postgres
+
+- name: Create postgres database
+  postgresql_db: db=statsconso owner=statsconso
+  sudo: yes
+  sudo_user: postgres
+
+- name: Install conf file
+  template: backup=yes
+            src=statistics-consolidation/stats-consolidation.conf
+            dest=/etc/stats-consolidation.conf
+            owner=root
+            group=root
+            mode=0644
+
+- name: Create log directory
+  file: path=/var/log/statistics-consolidation
+        state=directory
+        group=sugar-stats
+        owner=sugar-stats
+        mode=0755
+
+- name: Enable logrotate
+  template: backup=yes
+            src=statistics-consolidation/stats-consolidation.logrotate
+            dest=/etc/logrotate.d/stats-consolidation
+            group=root
+            owner=root
+            mode=0644
+
+- name: Install cron file
+  template: backup=yes
+            src=statistics-consolidation/stats-consolidation.cron
+            dest=/etc/cron.d/stats-consolidation
+            owner=root
+            group=root
+            mode=0644

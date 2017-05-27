@@ -1,0 +1,116 @@
+    - name: Install MySQL Debian
+      package: name={{ item }}
+               state=present
+      with_items:
+        - mariadb-server
+        - mariadb-client
+        - python-mysqldb
+        - php5
+        - php5-mysql
+        - php-pear
+        - php5-gd
+        - php5-imap
+        - php5-ldap
+        - php5-odbc
+        - php-xml-parser
+        - php5-xmlrpc
+      when: is_debian
+      tags:
+        - download
+
+    - name: Install MySQL 
+      package: name={{ item }}
+               state=present
+      with_items:
+        - MySQL-python
+        - mysql
+        - php
+        - php-mysql
+        - php-pear
+        - php-gd
+        - php-imap
+        - php-ldap
+        - php-odbc
+        - php-xml
+        - php-xmlrpc
+      when: not is_debian
+      tags:
+        - download
+
+    - include: centos.yml
+      when: ansible_distribution == "CentOS"
+      tags:
+        - download
+
+    - include: fedora.yml
+      when: ansible_distribution == "Fedora"
+      tags:
+        - download
+
+# Name of mysql service varies by OS so softcoded in 1-prep
+    - name: Start the MySQL service
+      service: name={{ mysql_service }}
+               state=started
+
+    - name: Enable the MySQL service
+      service: name={{ mysql_service }}
+               enabled=yes
+      when: mysql_enabled
+
+# 'localhost' needs to be the last item for idempotency, see
+# http://ansible.cc/docs/modules.html#mysql-user
+# unfortunately it still doesn't work
+    - name: update mysql root password for localhost root accounts
+      mysql_user: name=root host={{ item }}  password={{ mysql_root_password }} priv=*.*:ALL,GRANT
+      with_items:
+        - localhost
+      when: mysql_enabled
+
+    - name: copy .my.cnf file with root password credentials
+      template: src=my.cnf.j2 dest=/root/.my.cnf owner=root mode=0600
+      when: mysql_enabled
+
+    - name: update mysql root password for all remaining root accounts
+      mysql_user: name=root host={{ item }}  password={{ mysql_root_password }} priv=*.*:ALL,GRANT
+      with_items:
+#        - "{{ xsce_hostname }}.{{ xsce_domain }}"
+        - 127.0.0.1
+        - ::1
+      when: mysql_enabled
+
+    - name: delete anonymous MySQL server user for {{ ansible_hostname }}
+      mysql_user: user="" host="{{ ansible_hostname }}" state="absent"
+      when: mysql_enabled
+
+    - name: delete anonymous MySQL server user for localhost
+      mysql_user: user="" state="absent"
+      when: mysql_enabled
+
+    - name: remove the MySQL test database
+      mysql_db: db=test state=absent
+      when: mysql_enabled
+
+    - name: Set the php default date, so it does not complain
+      lineinfile: line="date.timezone = {{ local_tz }}" dest=/etc/php.ini
+
+# we had to start mysql in order to configure it, now turn if off if not enabled
+    - name: Provisioally Disable the MySQL service
+      service: name={{ mysql_service }}
+               enabled=no
+               state=stopped
+      when: not mysql_enabled
+
+
+    - name: add mysql to service list
+      ini_file: dest='{{ service_filelist }}'
+                    section=mysql
+                    option='{{ item.option }}'
+                    value='{{ item.value }}'
+      with_items:
+            - option: name
+              value: mysql-database
+            - option: description
+              value: '"mySQL is a widely used database service on the Internet which runs on many platforms, and is often offered and available at hosting Internet Service Providers"'
+            - option: enabled
+              value: "{{ mysql_enabled }}"
+

@@ -1,0 +1,62 @@
+# dhcpd service is restarted with NM dispatcher.d script
+- name: Stop dhcpd
+  service: name={{ dns_service }}
+           state=stopped
+  when: not dhcpd_enabled
+
+- name: Stop named service
+  service: name={{ dns_service }}
+           state=stopped
+  when: not named_enabled
+
+- name: Start named service
+  service: name={{ dns_service }}
+           state=started
+  ignore_errors: True
+  when: named_enabled
+  register: dns_started
+
+- name: add a reference to name server in resolv.conf
+  lineinfile: line="nameserver 127.0.0.1"
+              dest=/etc/resolvconf/resolv.conf.d/head
+  when: named_enabled and is_debian and dns_started.changed
+
+- name: Stop dansguardian
+  service: name=dansguardian
+           state=stopped
+  when: not dansguardian_enabled
+
+- name: Restart dansguardian
+  service: name=dansguardian
+           state=restarted
+  when: dansguardian_enabled
+  ignore_errors: true
+
+- name: Stop squid service
+  service: name={{ proxy }}
+           state=stopped
+  when: not squid_enabled
+
+# Squid get re-loaded with dispatcher.d
+- name: Restart squid service
+  service: name={{ proxy }}
+           state=started
+  when: squid_enabled
+
+- name: Restart wondershaper service
+  service: name=wondershaper
+            state=restarted
+  when: wondershaper_enabled
+
+- name: Restart avahi service
+  service: name=avahi-daemon
+           state=restarted
+
+- name: Create gateway flag
+  shell: echo 1 > /etc/sysconfig/olpc-scripts/setup.d/installed/gateway
+         creates=/etc/sysconfig/olpc-scripts/setup.d/installed/gateway
+  when: xsce_network_mode == "Gateway"
+
+- name: Run iptables
+  command: /usr/bin/xs-gen-iptables
+

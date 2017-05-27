@@ -1,0 +1,60 @@
+- name: Install mongodb required packages
+  package: name={{ item }}
+           state=present
+  with_items:
+    - mongodb-server
+    - mongodb
+  when: not {{ use_cache }} and not {{ no_network }}
+  tags:
+    - download
+
+- name: create the data directory for mongodb
+  file: state=directory
+        path={{ item.path }}
+        owner=mongodb
+  with_items:
+     - { path: '/var/run/mongodb' }
+     - { path: '/library/dbdata/mongodb' }
+     - { path: '/var/log/mongodb' }
+
+
+- name: Create systemd files
+  template: src={{ item.src }}
+            dest={{ item.dest }}
+            owner=root
+            group=root
+            mode=0644
+  with_items:
+     - { src: 'mongodb.service' , dest: '/etc/systemd/system/' }
+     - { src: 'mongodb' , dest: '/etc/sysconfig/'}
+     - { src: 'mongod.conf' , dest: '/etc/'}
+
+- name: enable services
+  service: name={{ item.name }}
+           enabled=yes
+           state=restarted
+  with_items:
+      - { name: mongodb }
+  when: mongodb_enabled
+
+
+- name: disable services
+  service: name={{ item.name }}
+           enabled=no
+           state=stopped
+  with_items:
+      - { name: mongodb }
+  when: not mongodb_enabled
+
+- name: add mongodb to service list
+  ini_file: dest='{{ service_filelist }}'
+            section=mongodb
+            option='{{ item.option }}'
+            value='"{{ item.value }}"'
+  with_items:
+       - option: name
+         value: MongoDB
+       - option: description
+         value: '"MongoDB is an open-source document database that provides high performance, high availability, and automatic scaling."'
+       - option: enabled
+         value: "{{ mongodb_enabled }}"

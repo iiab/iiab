@@ -1,0 +1,93 @@
+- name: Install idmgr packages
+  package: name={{ item }}
+           state=present
+  with_items:
+   - ds-backup-server
+   - idmgr
+   - xinetd
+   - xs-rsync
+   - incron
+  tags:
+    - download
+
+- name: Configure idmgr
+  template: backup=yes
+            src={{ item.src }}
+            dest={{ item.dest }}
+            owner=root
+            group=root
+            mode={{ item.mode }}
+  with_items:
+    - { src: 'idmgr', dest: '/etc/idmgr.conf', mode: '0644' }
+    - { src: 'idmgr.service.j2', dest: '/etc/systemd/system/idmgr.service', mode: '0755'}
+
+- name: Configure ds-backup
+  command: /etc/sysconfig/olpc-scripts/setup.d/ds-backup
+           creates=/etc/incron.d/ds-backup.conf
+
+- name: Configure idmgr sqlite db
+  command: /etc/sysconfig/olpc-scripts/setup.d/idmgr
+           creates=/home/idmgr/identity.db
+
+- name: Configure xs-rsync
+  command: /etc/sysconfig/olpc-scripts/setup.d/xs-rsync
+           creates=/etc/xinetd.d/xs-rsyncd
+
+- name: Copy idmgr init script 
+  command: /bin/cp /etc/init.d/idmgr /usr/libexec/idmgr.init
+           creates=/usr/libexec/idmgr.init
+
+- name: Enable idmgr service
+  service: name={{ item }}
+           enabled=yes
+           state=started
+  with_items:
+    - idmgr
+    - xinetd
+  when: xo_services_enabled
+
+- name: Disable idmgr service
+  service: name={{ item }}
+           enabled=no
+           state=stopped
+  with_items:
+    - idmgr
+    - xinetd
+  when: not xo_services_enabled
+
+#idmgr needs an extra step
+- name: Enable ejabberd service
+  file: src=/etc/systemd/system/idmgr.service
+        dest=/etc/systemd/system/multi-user.target.wants/idmgr.service
+        owner=root
+        group=root
+        state=link
+
+- name: Configure rssh rsync permissions to allow OLPC Backup clients
+  lineinfile: backup=yes
+              dest=/etc/rssh.conf
+             state=present
+             regexp='^#allowrsync'
+             insertafter='^#allowrsync'
+             line=allowrsync
+
+- name: Configure rssh sftp permissions for backup restore clients
+  lineinfile: backup=yes
+              dest=/etc/rssh.conf
+             state=present
+             regexp='^#allowsftp'
+             insertafter='^#allowsftp'
+             line=allowsftp
+
+- name: Add idmgr to service list
+  ini_file: dest='{{ service_filelist }}'
+            section=idmgr
+            option='{{ item.option }}'
+            value='{{ item.value }}'
+  with_items:
+    - option: name
+      value: idmgr
+    - option: description
+      value: '"Idmgr is an automatic identity manager for XO clients which enables automatic backup"'
+    - option: enabled
+      value: "{{ xo_services_enabled }}"

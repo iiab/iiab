@@ -1,0 +1,126 @@
+#!/bin/bash -x
+{% if is_debian %}
+IPTABLES=/sbin/iptables
+IPTABLES_DATA=/etc/iptables.up.rules
+{% else %}
+IPTABLES=/usr/sbin/iptables
+IPTABLES_DATA=/etc/sysconfig/iptables
+{% endif %}
+LANIF=`cat /etc/sysconfig/xs_lan_device`
+WANIF=`cat /etc/sysconfig/xs_wan_device`
+
+clear_fw() {
+$IPTABLES -F
+$IPTABLES -t nat -F
+$IPTABLES -X
+
+# first match wins
+# Always accept loopback traffic 
+$IPTABLES -A INPUT -i lo -j ACCEPT
+
+# Always drop rpc 
+$IPTABLES -A INPUT -p tcp --dport 111 -j DROP
+$IPTABLES -A INPUT -p udp --dport 111 -j DROP
+# mysql
+$IPTABLES -A INPUT -p tcp --dport 3306 -j DROP
+$IPTABLES -A INPUT -p udp --dport 3306 -j DROP
+# postgre - not needed listens on lo only
+$IPTABLES -A INPUT -p tcp --dport 5432 -j DROP
+$IPTABLES -A INPUT -p udp --dport 5432 -j DROP
+# couchdb
+$IPTABLES -A INPUT -p tcp --dport 5984 -j DROP
+$IPTABLES -A INPUT -p udp --dport 5984 -j DROP
+}
+
+if [  "x$WANIF" == "x" ]; then
+    clear_fw
+    # save the rule set
+	{% if is_debian %}
+	netfilter-persistent save
+	{% else %}
+	iptables-save > $IPTABLES_DATA
+	{% endif %}
+    exit 0
+fi
+lan=$LANIF
+wan=$WANIF
+
+# Good thing we replace this file should be treated like squid below
+gw_block_https={{ gw_block_https }}
+ssh_port={{ ssh_port }}
+gui_wan={{ gui_wan }}
+gui_port={{ gui_port }}
+xsce_gateway_enabled={{ xsce_gateway_enabled }}
+services_externally_visible={{ services_externally_visible }}
+calibre_port={{ calibre_port }}
+kiwix_port={{ kiwix_port }}
+kalite_server_port={{ kalite_server_port }}
+block_DNS={{ block_DNS }}
+
+echo "Lan is $lan and WAN is $wan"
+#
+# delete all existing rules.
+#
+
+/sbin/modprobe ip_tables
+/sbin/modprobe iptable_filter
+/sbin/modprobe ip_conntrack
+/sbin/modprobe iptable_nat
+clear_fw
+
+# Allow established connections, and those not coming from the outside
+$IPTABLES -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+$IPTABLES -A INPUT -m state --state NEW -i  $lan -j ACCEPT
+
+# Allow mDNS 
+$IPTABLES -A INPUT -p udp --dport 5353 -j ACCEPT
+
+#when run as gateway 
+$IPTABLES -A INPUT -p tcp --dport $ssh_port -m state --state NEW -i $wan -j ACCEPT
+
+if [ "$gui_wan" == "True" ]; then
+    $IPTABLES -A INPUT -p tcp --dport $gui_port -m state --state NEW -i $wan -j ACCEPT
+fi
+
+if [ "$services_externally_visible" == "True" ]; then
+    $IPTABLES -A INPUT -p tcp --dport $kiwix_port -m state --state NEW -i $wan -j ACCEPT
+    $IPTABLES -A INPUT -p tcp --dport $kalite_server_port -m state --state NEW -i $wan -j ACCEPT
+    $IPTABLES -A INPUT -p tcp --dport $calibre_port -m state --state NEW -i $wan -j ACCEPT
+fi
+
+if [ "$xsce_gateway_enabled" == "True" ]; then
+    $IPTABLES -A POSTROUTING -t nat -o $wan -j MASQUERADE
+fi
+
+$IPTABLES -A FORWARD -i $wan -o $lan -m state --state ESTABLISHED,RELATED -j ACCEPT
+
+#Block https traffic except if directed at server
+if [  "$gw_block_https" == "True" ]; then    
+    $IPTABLES -A FORWARD -p tcp ! -d 172.18.96.1 --dport 443 -j DROP
+fi   
+
+# Allow outgoing connections from the LAN side.
+$IPTABLES -A FORWARD -i $lan -o $wan -j ACCEPT
+
+# Don't forward from the outside to the inside.
+$IPTABLES -A FORWARD -i $wan -o $lan -j DROP
+$IPTABLES -A INPUT -i $wan -j DROP
+
+if [ "$block_DNS" == "True" ];then
+    $IPTABLES -t nat -A PREROUTING -i $lan -p tcp --dport 53 ! -d {{lan_ip}} -j DNAT --to {{lan_ip}}:53
+    $IPTABLES -t nat -A PREROUTING -i $lan -p udp --dport 53 ! -d {{lan_ip}} -j DNAT --to {{lan_ip}}:53
+fi
+
+if [ -f /etc/sysconfig/xs_httpcache_on ]; then
+    $IPTABLES  -t nat  -A PREROUTING -i $lan -p tcp --dport 80 ! -d 172.18.96.1 -j DNAT --to 172.18.96.1:3128
+fi
+
+# Enable routing.
+echo 1 > /proc/sys/net/ipv4/ip_forward
+# save the whole rule set now
+{% if is_debian %}
+netfilter-persistent save
+{% else %}
+iptables-save > $IPTABLES_DATA
+{% endif %}
+exit 0

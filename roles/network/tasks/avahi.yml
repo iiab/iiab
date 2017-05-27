@@ -1,0 +1,62 @@
+- name: Install avahi package
+  package: name={{ item }}
+           state=present
+  with_items:
+   - libnss-mdns
+   - avahi-daemon
+   - avahi-discover
+  when: is_debian
+  tags:
+    - download
+
+- name: Install avahi package
+  package: name={{ item }}
+           state=present
+  with_items:
+   - nss-mdns
+   - avahi
+   - avahi-tools
+  when: not is_debian
+  tags:
+    - download
+
+- name: Create a user for avahi
+  user: name=avahi
+        createhome=no
+        shell=/bin/false
+  when: is_debian
+
+- name: Install avahi announce config files
+  template: src=avahi/schoolserver.service
+            dest=/etc/avahi/services/schoolserver.service
+            owner=avahi
+            group=avahi
+            mode=640
+  when: 'gui_wan == True'
+
+- name: Find a clean copy of ssh.service
+  shell: "ls /usr/share/doc/ |grep avahi | head -n1"
+  register: avahi_ver
+  ignore_errors: True
+  changed_when: false
+  
+- name: Grab a clean copy of ssh.service
+  copy: src='/usr/share/doc/{{ avahi_ver.stdout }}/ssh.service'
+        dest='/etc/avahi/services/'
+  when: avahi_ver.stdout != "" and not is_debian
+
+- name: Grab a clean copy of ssh.service
+  copy: src='/usr/share/doc/avahi-daemon/examples/ssh.service'
+        dest='/etc/avahi/services/'
+  when: is_debian
+
+- name: set ssh port for avahi
+  lineinfile: dest=/etc/avahi/services/ssh.service
+              regexp='</port>$'
+              line='    <port>{{ssh_port}}</port>'
+              state=present
+              backrefs=yes
+
+- name: Enable avahi service
+  service: name=avahi-daemon
+           enabled=yes

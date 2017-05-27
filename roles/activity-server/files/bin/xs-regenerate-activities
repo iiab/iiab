@@ -1,0 +1,93 @@
+#!/usr/bin/python
+# Copyright (C) 2008 One Laptop Per Child Association, Inc.
+# Licensed under the terms of the GNU GPL v2 or later; see COPYING for details.
+#
+# written by Douglas Bagnall <douglas@paradise.net.nz>
+
+"""Read activity.info files from a directory full of activity bundles
+and write an appropriate html manifest of the most recent versions.
+The manifest uses the OLPC activity microformat:
+
+ http://wiki.laptop.org/go/Activity_microformat
+
+This is put in a place where apache can find it, and apache will serve
+it and the activities to the laptops.  Messages go to /var/log/user.log.
+"""
+
+import os
+import sys
+import shutil
+from time import time
+
+import xs_activities
+
+INPUT_DIR = "/library/xs-activity-server/activities"
+OUTPUT_LINK = "/library/xs-activity-server/www"
+
+try:
+    CURRENT_DIR = os.readlink(OUTPUT_LINK)
+except OSError:
+    CURRENT_DIR = None
+
+
+def create_dir_manifest(dir_path):
+    manifest = []
+    os.chdir(dir_path)
+    for root, dirs, files in os.walk("."):
+        for filename in files:
+            if not filename.endswith(".xo") and not filename.endswith(".xol"):
+                continue
+
+            path = os.path.join(root, filename)
+            s = os.stat(path)
+            manifest.append((path, s.st_ino))
+
+    manifest.sort()
+    return manifest
+
+
+def input_changed():
+    if CURRENT_DIR is None:
+        return True
+
+    input_manifest = create_dir_manifest(INPUT_DIR)
+    current_manifest = create_dir_manifest(CURRENT_DIR)
+    return input_manifest != current_manifest
+
+
+if not input_changed():
+    # no changes or nothing to do
+    sys.exit(0)
+
+# create new output dir
+OUTPUT_DIR = OUTPUT_LINK + "." + str(time())
+os.mkdir(OUTPUT_DIR)
+
+# link in all activities
+os.chdir(INPUT_DIR)
+for root, dirs, files in os.walk("."):
+    output_dir = os.path.join(OUTPUT_DIR, root)
+    if not os.path.isdir(output_dir):
+        os.makedirs(output_dir)
+
+    for filename in files:
+        if not filename.endswith(".xo") and not filename.endswith(".xol"):
+            continue
+
+        path = os.path.join(root, filename)
+        output_path = os.path.join(output_dir, filename)
+        os.link(path, output_path)
+
+    # create html index
+    output_html = os.path.join(output_dir, 'index.html')
+    xs_activities.htmlise_bundles(output_dir, output_html)
+
+
+# update symlink atomically
+link = OUTPUT_DIR + ".lnk"
+os.symlink(OUTPUT_DIR, link)
+os.rename(link, OUTPUT_LINK)
+
+# remove old index
+if CURRENT_DIR is not None:
+    shutil.rmtree(CURRENT_DIR, ignore_errors=True)

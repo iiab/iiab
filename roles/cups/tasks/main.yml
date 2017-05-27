@@ -1,0 +1,73 @@
+# administer this service by browsing to localhost:631
+- debug: var=cups_install
+- name: get the CUPS package installed
+  package: name={{ item }}
+           state=present
+  with_items:
+    - cups
+  when: cups_install
+  tags:
+    - download
+  
+- name: Put our own config file in place, to permit local lan admin
+  template: dest=/etc/cups/cupsd.conf
+            src=cupsd.conf
+
+- name: Put an apache2 config file in place
+  template: dest=/etc/{{ apache_config_dir }}/
+            src=cups.conf
+
+- name: Create the link for sites-enabled
+  file: src=/etc/apache2/sites-available/cups.conf
+        dest=/etc/apache2/sites-enabled/cups.conf
+        state=link
+  when: cups_enabled and is_debian
+
+- name: Enable services for cups
+  service: name={{ item }}
+           state=started
+           enabled=yes
+  with_items:
+    - cups
+    - cups-browsed
+  when: cups_enabled and not is_F18
+
+- name: Enable services for cups for xo's
+  service: name=cups
+           state=started
+           enabled=yes
+  when: cups_enabled and is_F18
+
+- name: Permit headless admin of CUPS -- only works when cups daemon is running
+  shell: "cupsctl --remote-admin"
+  when: cups_enabled
+
+- name: Disable services for cups
+  service: name={{ item }}
+          state=stopped
+          enabled=no
+  with_items:
+    - cups
+    - cups-browsed
+  when: not cups_enabled and not is_F18
+
+- name: Disable services for cups for xo's
+  service: name=cups
+           state=stopped
+           enabled=no
+  when: not cups_enabled and is_F18
+
+- name: add cups to service list
+  ini_file: dest={{ service_filelist }}
+            section=cups
+            option={{ item.option }}
+            value={{ item.value }}
+  with_items:
+    - option: name
+      value: '"Common UNIX Printing System (CUPS)"'
+    - option: description
+      value: '"CUPS  is a modular printing system  which allows a computer to act as a print server. A computer running CUPS is a host that can accept print jobs from client computers, process them, and send them to the appropriate printer."'
+    - option: installed
+      value: "{{ cups_install }}"
+    - option: enabled
+      value: "{{ cups_enabled }}"

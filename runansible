@@ -1,0 +1,66 @@
+#!/bin/bash
+
+# copy var files to /etc/xsce for subsequent use
+mkdir -p /etc/xsce
+if [ ! -f /etc/xsce/config_vars.yml ]; then
+  echo "{}" > /etc/xsce/config_vars.yml
+fi
+
+# if vars/local_vars.yml is missing, put a default one in place
+if [ ! -f ./vars/local_vars.yml ]; then
+	OS=`grep ^ID= /etc/*release|cut -d= -f2`
+	OS=${OS//\"/}
+    if [ "$OS" = "debian" ] || [ "$OS" = "raspbian" ]; then
+		cp ./vars/debian.localvars ./vars/local_vars.yml
+    else
+		cp ./vars/centos.localvars ./vars/local_vars.yml
+    fi
+fi
+
+if [ -f /etc/xsce/xsce.env ]
+then
+  . /etc/xsce/xsce.env
+  cd $XSCE_DIR
+else
+  XSCE_DIR=/opt/schoolserver/xsce
+fi
+
+if [ ! -f xsce.yml ]
+then
+ echo "XSCE Playbook not found."
+ echo "Please run this command from the top level of the git repo."
+ echo "Exiting."
+ exit
+fi
+
+PLAYBOOK="xsce.yml"
+INVENTORY="ansible_hosts"
+CWD=`pwd`
+echo "Running local playbooks! "
+
+XSDOMAIN=""
+
+# Pass in Existing Domain
+if [ -f /etc/sysconfig/xs_domain_name ]
+then
+ XSDOMAIN=`cat /etc/sysconfig/xs_domain_name`
+fi
+
+# Or accept Domain on command line
+if [ x"$1" != x ]
+then
+ XSDOMAIN=$1
+fi
+
+# Pass in git location
+if [ x"$XSDOMAIN" != x ]
+then
+ ARGS="--extra-vars '{\"xsce_domain\":\"$XSDOMAIN\"}'"
+else
+ ARGS=""
+fi
+
+export ANSIBLE_LOG_PATH="$XSCE_DIR/xsce-install.log"
+ansible -m setup -i $INVENTORY localhost --connection=local >> /dev/null
+
+ansible-playbook -i $INVENTORY $PLAYBOOK ${ARGS} --connection=local

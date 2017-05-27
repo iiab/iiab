@@ -1,0 +1,29 @@
+#!/bin/bash -x
+# small daemon to identify this machine to the openvpn server
+
+HANDLE=
+UUID=
+source /etc/xsce/xsce.env
+if [ -z "$HANDLE" ]; then
+   HANDLE=`cat /etc/xsce/xsce.ini | gawk \
+	'{ if((toupper($1) == "HANDLE") && ($2 == "=")) { print $3;}}'`
+fi
+if [ -z "$HANDLE" ]; then
+   if [ -f /etc/xsce/handle ]; then
+   HANDLE=`cat /etc/xsce/handle`
+   fi
+fi
+if [ -f /etc/xsce/uuid ]; then
+   UUID=`cat /etc/xsce/uuid`
+fi
+# start the daemon which will serve the handle on demand
+source /etc/init.d/functions
+SERVER=/usr/bin/ncat
+PID_FILE=/var/run/openvpn/announce.pid
+HANDLE=${HANDLE// /_}
+{% if is_debian %}
+ID=`printf "HANDLE = %s|UUID = %s|" $HANDLE $UUID`
+$SERVER -l -k -p1705 --exec "/bin/echo $ID" &
+{% else %}
+daemon --pidfile=${PID_FILE} $SERVER "-l -k -p1705 --exec \"/usr/bin/echo $(printf 'HANDLE = %s|UUID = %s\' $HANDLE $UUID)\"' &
+{% endif %}

@@ -1,0 +1,63 @@
+---
+# Create a smbuser
+#
+
+- name: create smb user
+  user: name="{{ smbuser }}" shell=/sbin/nologin password="{{ smbpassword }}"
+
+- name: create the public folder
+  file: dest="{{ shared_dir }}" owner="{{ smbuser }}" group="{{ smbuser }}" mode=777 state=directory
+
+# Install and configure samba server (requires ports 137, 138, 139, 445 open).
+- name: Ensure Samba-related packages are installed.
+  package: name={{ item }} 
+           state=present
+  with_items:
+  - samba
+  - samba-client
+  - samba-common
+  - cifs-utils
+  tags:
+    - samba
+    - download
+
+- name: put our smb.conf in place
+  template: src=smb.conf.j2 dest=/etc/samba/smb.conf
+
+- name: Ensure Samba is running and set to start on boot.
+  service: name={{ smb_service }} state=started enabled=yes
+  tags: 
+    - samba
+  when : samba_enabled
+
+- name: netbios name server is running and set to start on boot.
+  service: name={{ nmb_service }} state=started enabled=yes
+  tags: 
+    - samba
+  when : samba_enabled
+
+- name: Disable Samba if that is wanted
+  service: name={{ smb_service }} state=stopped enabled=no
+  tags: 
+    - samba
+  when : not samba_enabled
+
+- name: Disable Samba name server if that is wanted
+  service: name={{ nmb_service }} state=stopped enabled=no
+  tags: 
+    - samba
+  when : not samba_enabled
+
+- name: Add samba to service list
+  ini_file: dest='{{ service_filelist }}'
+            section=samba
+            option='{{ item.option }}'
+            value='{{ item.value }}'
+  with_items:
+    - option: name
+      value: samba
+    - option: description
+      value: '"Samba is a Microsoft compatible remote file access system  - generalized to CIFS --common internet file system"'
+    - option: enabled
+      value: "{{ samba_enabled }}"
+

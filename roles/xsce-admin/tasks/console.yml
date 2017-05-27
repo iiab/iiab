@@ -1,0 +1,149 @@
+- name: Install packages for console
+  package: name={{ item }}
+           state=present
+  with_items:
+    - libapache2-mod-authnz-external
+    - pwauth
+  when: is_debian
+  tags:
+    - download
+
+- name: Enable ssl
+  apache2_module: name=ssl
+  when: is_debian
+
+- name: Create admin-console directory tree
+  file: path={{ item }}
+        mode=0755
+        owner=root
+        group=root
+        state=directory
+  with_items:
+    - "{{ admin_console_path }}"
+    - "{{ admin_console_path }}/css"
+    - "{{ admin_console_path }}/help"
+    - "{{ admin_console_path }}/js"
+    - "{{ admin_console_path }}/htmlf"
+
+- name: Copy admin-console css files
+  copy: src={{ item }}
+        dest="{{ admin_console_path }}/css"
+        mode=0644
+        owner=root
+        group=root
+  with_fileglob:
+        - console/css/*.css
+
+- name: Copy admin-console help files
+  copy: src={{ item }}
+        dest="{{ admin_console_path }}/help"
+        mode=0644
+        owner=root
+        group=root
+  with_fileglob:
+        - console/help/*
+
+- name: Copy admin-console javascript files
+  copy: src={{ item }}
+        dest="{{ admin_console_path }}/js"
+        mode=0644
+        owner=root
+        group=root
+  with_fileglob:
+        - console/js/*
+
+- name: Copy admin-console html fragment files
+  copy: src={{ item }}
+        dest="{{ admin_console_path }}/htmlf"
+        mode=0644
+        owner=root
+        group=root
+  with_fileglob:
+        - console/htmlf/*
+
+- name: Install admin-console config file
+  template: src=console/xs-console.conf.j2
+            dest=/etc/{{ apache_config_dir }}/xs-console.conf
+            owner=root
+            group=root
+            mode=0644
+
+- name: Install admin-console ssl config file
+  template: src=console/xs-console-ssl.conf.j2
+            dest=/etc/{{ apache_config_dir }}/xs-console-ssl.conf
+            owner=root
+            group=root
+            mode=0644
+  when: adm_cons_force_ssl and is_fedora
+
+- name: Remove admin-console ssl config file
+  file: path=/etc/{{ apache_config_dir }}/xs-console-ssl.conf
+        state=absent
+  when: not adm_cons_force_ssl and is_fedora
+
+- name: Remove the debian default config which gets in the way
+  file: dest=/etc/apache2/sites-enabled/000-default.conf
+        state=absent
+  when: is_debian
+
+# without ssl
+- name: Make the xs-console enabled in apache2
+  file: state=link
+        dest=/etc/apache2/sites-enabled/xs-console.conf
+        src=/etc/{{ apache_config_dir }}/xs-console.conf
+  when: is_debian and not adm_cons_force_ssl
+
+- name: Make the xs-console ssl version disabled in apache2
+  file: state=absent
+        dest=/etc/apache2/sites-enabled/xs-console-ssl.conf
+        src=/etc/{{ apache_config_dir }}/xs-console-ssl.conf
+  when: is_debian and not adm_cons_force_ssl
+
+# with ssl
+- name: add link for admin-console config file with ssl support
+  file: path=/etc/apache2/sites-enabled/xs-console-ssl.conf
+        src=/etc/{{ apache_config_dir }}/xs-console-ssl.conf
+        state=link
+  when: is_debian and adm_cons_force_ssl
+
+- name: remove link for admin-console config file with ssl support
+  file: path=/etc/apache2/sites-enabled/xs-console.conf
+        src=/etc/{{ apache_config_dir }}/xs-console.conf
+        state=absent
+  when: adm_cons_force_ssl and is_debian
+
+- name: Install admin-console service
+  template: src=console/cmd-service.php
+            dest="{{ admin_console_path }}/cmd-service.php"
+            owner=root
+            group=root
+            mode=0644
+
+- name: Install admin-console server info service
+  template: src=console/server-info.php
+            dest="{{ admin_console_path }}/server-info.php"
+            owner=root
+            group=root
+            mode=0644
+
+- name: Install admin-console app
+  copy: src=console/index.html
+        dest="{{ admin_console_path }}/index.html"
+        owner=root
+        group=root
+        mode=0644
+
+- name: Install admin home page into apache2
+  template: src=console/xsce-home-page.conf
+             dest=/etc/{{ apache_config_dir }}/xsce-home-page.conf
+
+- name: Enable the home page
+  file: src=/etc/{{ apache_config_dir }}/xsce-home-page.conf
+        dest=/etc/apache2/sites-enabled/xsce-home-page.conf
+        state=link
+  when: is_debian
+
+- name: Create the home directory
+  file: dest={{ doc_root }}/home
+        state=directory
+

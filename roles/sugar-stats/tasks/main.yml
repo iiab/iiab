@@ -1,0 +1,56 @@
+- name: Install sugar-stats required packages
+  package: name={{ item }}
+           state=present
+  with_items:
+    - sugar-stats-server
+    - active-document
+    - restful-document
+    - python-xappy
+  tags:
+    - download
+
+- name: Create sugar-stats directory tree
+  file: path={{ item }}
+        owner=sugar-stats
+        group=sugar-stats
+        mode=0755
+        state=directory
+  with_items:
+    - /library/sugar-stats/
+    - /library/sugar-stats/rrd
+    - /library/sugar-stats/users
+
+- name: Copy sugar-stats config file
+  template: backup=yes
+            src=sugar-stats.conf.j2
+            dest=/etc/sugar-stats.conf
+            owner=sugar-stats
+            group=sugar-stats
+            mode=0644
+
+- name: Enable sugar-stats service
+  service: name=sugar-stats-server
+           enabled=yes
+  when: sugar_stats_enabled
+          
+- name: Disable sugar-stats service
+  service: name=sugar-stats-server
+           enabled=no
+  when: not sugar_stats_enabled
+          
+- include: statistics-consolidation.yml 
+
+- name: Add sugar-stats to service list
+  ini_file: dest='{{ service_filelist }}'
+            section=sugar_stats
+            option='{{ item.option }}'
+            value='{{ item.value }}'
+  with_items:
+    - option: name
+      value: sugar_stats
+    - option: description
+      value: '"Collect Sugar statistics, originally written by Alexy Lim, see: http://wiki.sugarlabs.org/go/Platform_Team/Usage_Statistics"'
+    - option: installed
+      value: "{{ sugar_stats_install }}"
+    - option: enabled
+      value: "{{ sugar_stats_enabled }}"

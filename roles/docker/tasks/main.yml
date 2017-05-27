@@ -1,0 +1,54 @@
+- name: Install docker
+  package:  name={{ item }} 
+            state=present
+  with_items:
+    - docker
+    - python-docker-py
+  when: docker_install
+  tags: download
+
+- name: put the systemd startup file in place
+  template: src=docker.service
+            dest=/etc/systemd/system/
+            owner=root
+            group=root
+            mode=0644
+
+- name: create the socket for docker
+  template: src=docker.socket
+            dest=/etc/systemd/system/
+            owner=root
+            group=root
+            mode=0644
+
+- name: Create a folder for systemd unit files that are docker containers
+  file: path=/etc/systemd/system/docker.service.d
+        owner=root
+        group=root
+        mode=0644
+        state=directory
+
+- name: Enable docker
+  service: name=docker
+           state=started
+           enabled=true
+  when: docker_enabled
+
+- name: Disable docker
+  service: name=docker
+           state=stopped
+           enabled=false
+  when: not docker_enabled
+
+- name: add docker to service list
+  ini_file: dest='{{ service_filelist }}'
+            section=docker
+            option='{{ item.option }}'
+            value='{{ item.value }}'
+  with_items:
+    - option: name
+      value: Docker Container
+    - option: description
+      value: '"Docker allows a person to package an application with all of its dependencies into a standardized unit for software development."'
+    - option: enabled
+      value: "{{ docker_enabled }}"

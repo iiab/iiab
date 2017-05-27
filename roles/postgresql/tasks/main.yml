@@ -1,0 +1,86 @@
+- name: Install postgresql packages
+  package: name={{ item }}
+           state=present
+  with_items:
+    - postgresql
+  tags:
+    - download
+
+- name: Install postgresql for debian
+  package: name=postgresql-client
+  when: is_debian
+  tags:
+    - download
+
+- name: Install postgresql for fedora
+  package: name=postgresql-server
+  when: not is_debian
+  tags:
+    - download
+
+- name: Create postgresql-xs systemd service
+  template: src=postgresql-xs.service
+            dest=/etc/systemd/system/postgresql-xs.service
+            owner=root
+            group=root
+            mode=0644
+
+- name: Create postgres data directory
+  file: path=/library/pgsql-xs
+        owner=postgres
+        group=postgres
+        mode=0700
+        state=directory
+
+- name: make sure that the en_US locale is enabled
+  lineinfile: dest=/etc/locale.gen
+              line="{{ postgresql_locale }} UTF-8"
+  when: is_debian
+
+- name: generate the selected locales
+  command: /usr/sbin/locale-gen
+  when: is_debian
+
+- name: Initialize the postgres db
+  command:  su - postgres -c "/usr/lib/postgresql/9.4/bin/initdb -E 'UTF-8' --locale={{ postgresql_locale }}  -D /library/pgsql-xs"
+            creates=/library/pgsql-xs/pg_hba.conf
+  when: is_debian
+
+- name: Initialize the postgres db
+  command:  su - postgres -c "/usr/bin/initdb -E 'UTF-8' --lc-collate={{ postgresql_locale }} --lc-ctype={{ postgresql_locale }}  -D /library/pgsql-xs"
+            creates=/library/pgsql-xs/pg_hba.conf
+  when: not is_debian
+
+- name: Configure postgres
+  template: backup=yes
+            src=postgresql.conf.j2
+            dest=/library/pgsql-xs/postgresql.conf
+            owner=postgres
+            group=postgres
+            mode=0640
+
+- name: Stop and disable stock postgresql service
+  service: name=postgresql
+           state=stopped
+           enabled=no
+
+- name: Start and enable postgresql-xs service
+  service: name=postgresql-xs
+           state=started
+           enabled=yes
+  when: postgresql_enabled
+
+- name: Add postgresql to service list
+  ini_file: dest='{{ service_filelist }}'
+            section=postgresql
+            option='{{ item.option }}'
+            value='{{ item.value }}'
+  with_items:
+    - option: name
+      value: postgresql
+    - option: description
+      value: '"PostgreSQL is a powerful, open source object-relational database system."'
+    - option: installed
+      value: "{{ postgresql_install }}"
+    - option: enabled
+      value: "{{ postgresql_enabled }}"

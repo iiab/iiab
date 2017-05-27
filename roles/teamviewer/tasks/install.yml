@@ -1,0 +1,48 @@
+# we need to install X11 and the xfce display manager
+- name: Install xfce group of packages
+  shell: "yum groupinstall -y xfce"
+  when: xo_model == "none" and not {{ use_cache }} and not {{ no_network }} and ansible_distribution_version <= "20"
+  tags:
+    - download
+
+- name: Install X11 group of packages
+  shell: "yum groupinstall -y 'X Window system'"
+  when: xo_model == "none" and not {{ use_cache }} and not {{ no_network }} and ansible_distribution_version <= "20"
+  tags:
+    - download
+
+- name: Install xfce group of packages
+  shell: yum groupinstall -y "Xfce Desktop" --exclude fedora-release\*
+  when: xo_model == "none" and not {{ use_cache }} and not {{ no_network }} and ansible_distribution_version >= "21"
+  tags:
+    - download
+
+- name: Install X Windows on CentOS
+  shell: yum groupinstall -y "Server with GUI" 
+  when: not {{ use_cache }} and not {{ no_network }} and ansible_distribution == "CentOS"
+  tags:
+    - download
+
+- name: Get the teamviewer software 
+  get_url: url="{{ teamviewer_url }}/{{ teamviewer_rpm_file }}"  dest="{{ yum_packages_dir }}/{{ teamviewer_rpm_file }}"
+  when: not {{ use_cache }} and not {{ no_network }}
+  tags:
+    - download
+
+# F22 has issues with yum localinstall exclude for now
+- name: Do the install of teamviewer, pulling in any required dependencies
+  shell: "yum localinstall -y {{ yum_packages_dir }}/{{ teamviewer_rpm_file }}"
+  when: teamviewer_install and not {{ use_cache }} and not {{ no_network }}
+           and xo_model == "none" and ansible_distribution_version <= "21"
+
+- name: making local copy available
+  shell: createrepo {{ yum_packages_dir }}
+  when: teamviewer_install and xo_model == "none" and ansible_distribution_version >= "22"
+
+- name: using local copy
+  package: name={{ item }}
+           state=present
+  with_items:
+   - teamviewer*
+  when: teamviewer_install and xo_model == "none" and ansible_distribution_version >= "22"
+

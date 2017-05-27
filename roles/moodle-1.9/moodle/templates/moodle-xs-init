@@ -1,0 +1,97 @@
+#!/bin/bash
+#
+# moodle        This shell script is modified from sysVinit init.d moodle 
+#		--checks for moodle upgrade flag and enables the cron 
+#		job for Moodle
+#
+# Author:       Ignacio Vazquez-Abrams <ivazquez@ivazquez.net>
+# Adapted from the yum initscript by Seth Vidal
+# Adapted for systemd by George Hunt <georgejhunt@gmail.com>
+#
+# description:  Enable the Moodle cron job
+#
+# source function library
+. /etc/rc.d/init.d/functions
+
+# both moodle cron and config.php check
+# for this file -
+lockfile=/var/lock/subsys/moodle
+
+RETVAL=0
+
+	
+start() {
+        if [ -e /etc/moodle/needsupgrade ]; then
+
+                echo "Moodle installation or upgrade required..."
+		pushd /var/www/moodle/web
+
+		echo "["`date`"]" Start install / upgrade >> /var/log/moodle-instupg.log 
+
+		# Correct a bungled 'version' variable in mdl_config. If version matches local_version, and
+		# is one of the known-to-be-bungled local_version/version pairs, fix it to the last-known-good
+		# value.
+		echo "Correcting version/local_version mangling - will error out on fresh DBs" >> /var/log/moodle-instupg.log 
+		(su -c "psql -c \"UPDATE mdl_config 
+                                 SET value='2007101526'
+                                 WHERE id=(SELECT v.id 
+                                           FROM mdl_config v 
+                                            JOIN mdl_config lv 
+                                                 ON (v.name='version' AND lv.name='local_version'
+                                                     AND v.value=lv.value)
+                                           WHERE lv.value IN ('2009030301', '2009042801',
+                                                              '2009051800', '2009052500'));\" moodle-xs " postgres 2>&1 ) >> /var/log/moodle-instupg.log 
+
+
+		# Before install/upgrade, enable the admin user
+		# (will DTRT for upgrades, fail silently in fresh installs)
+		( runuser -s /bin/bash -c "/usr/bin/php /var/www/moodle/web/local/scripts/adminuser-enable.php" apache 2>&1 ) >> /var/log/moodle-instupg.log 
+
+		# Install/upgrade moodle DB schema
+		( runuser -s /bin/bash -c "/usr/bin/php /var/www/moodle/web/admin/cliupgrade.php \
+		    --agreelicense=yes --confirmrelease=yes \
+		    --sitefullname='School Server' \
+		    --siteshortname='XS' \
+		    --sitesummary='Put the name of your school here' \
+		    --adminfirstname=Admin --adminlastname=OLPC \
+		    --adminusername=admin --adminpassword=changeme \
+		    --adminemail=admin@localhost \
+		    --verbose=0 --interactivelevel=0" apache 2>&1 ) #&& \
+        #  runuser -s /bin/bash -c "/usr/bin/php /var/www/moodle/web/local/scripts/adminuser-disable.php" apache 2>&1 ) \
+        # >> /var/log/moodle-instupg.log 
+		if [ $? = 0 ]; then
+		    # success
+		    echo "["`date`"]" Finished install / upgrade - Success >> /var/log/moodle-instupg.log 
+		    rm -f /etc/moodle/needsupgrade
+		else
+		    # failure
+		    echo "["`date`"]" Finished install / upgrade - Failure >> /var/log/moodle-instupg.log 
+		    exit 1
+		fi
+		popd
+	fi
+	echo -n $"Enabling Moodle access and cron job: "
+	touch "$lockfile" && success || failure
+	RETVAL=$?
+	echo
+}
+
+stop() {
+	echo -n $"Disabling Moodle access and cron job: "
+	rm -f "$lockfile" && success || failure
+	RETVAL=$?
+	echo
+}
+
+case "$1" in
+  start)
+	start
+	;;
+  stop) 
+	stop
+	;;
+  *)
+	exit 1
+esac
+
+exit $RETVAL
