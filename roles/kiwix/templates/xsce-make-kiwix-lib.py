@@ -55,24 +55,29 @@ def main():
     content = xsce_zim_path + "/content/"
     index = xsce_zim_path + "/index/"
 
-    for filename in os.listdir(content):
+    flist = os.listdir(content)
+    flist.sort()
+    for filename in flist:
         zimpos = filename.find(".zim")
         if zimpos != -1:
             filename = filename[:zimpos]
             if filename not in files_processed:
                 files_processed[filename] = True
                 command = kiwix_manage + " " + kiwix_library_xml + " add " + content + filename + ".zim -i " + index + filename + ".zim.idx"
+                #command = kiwix_manage + " " + kiwix_library_xml + " add " + content + filename + ".zim"
                 #print command
                 args = shlex.split(command)
-                outp = subprocess.check_output(args)
+                try:
+                    outp = subprocess.check_output(args)
 
-                # create map of generic zim name to actual, assumes pattern of <name>_<yyyy-mm>
-                # all current files follow this pattern, but some older ones, no longer in the catalog, do not
-
-                ulpos = filename.rfind("_")
-                wiki_name = filename[:ulpos]
-
-                zim_versions[wiki_name] = filename
+                    # create map of generic zim name to actual, assumes pattern of <name>_<yyyy-mm>
+                    # all current files follow this pattern, but some older ones, no longer in the catalog, do not
+                    ulpos = filename.rfind("_")
+                    wiki_name = filename[:ulpos]
+                    zim_versions[wiki_name] = filename # if there are multiples, last should win
+                except: #skip things that don't work
+                    print 'skipping ' + filename
+                    pass
 
     with open(zim_version_idx, 'w') as fp:
         json.dump(zim_versions, fp)
