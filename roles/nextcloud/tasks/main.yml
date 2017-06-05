@@ -1,0 +1,124 @@
+# we need to install the rpm in order to get the dependencies
+# but we only need to do this the first time
+
+- name: See if the nextcloud startup page exists
+  stat: path={{ nextcloud_prefix }}/nextcloud/index.php
+  register: nextcloud_page
+
+
+# but we use the tar file to get the latest version
+
+- name: Get the nextcloud software
+  get_url: url={{ nextcloud_dl_url }}/{{ nextcloud_src_file }}  dest={{ downloads_dir }}/{{ nextcloud_src_file }}
+  when: not {{ use_cache }} and not {{ no_network }}
+  async: 300
+  poll: 5
+  tags:
+    - download
+
+- name: Install list of packages for debuntu
+  apt: name={{ item }} state=installed
+  with_items:   
+    - libapache2-mod-php5
+    - php{{ php_version }}-gd
+    - php{{ php_version }}-json
+    - php{{ php_version }}-mysql
+    - php{{ php_version }}-curl
+    - php{{ php_version }}-intl
+    - php{{ php_version }}-mcrypt
+    - php{{ php_version }}-imagick
+  when: is_debuntu
+     
+- name: Install list of packages  
+  apt: name={{ item }} state=installed
+  with_items:   
+    - libapache2-mod-php5
+    - php-gd
+    - php-json
+    - php-mysql
+    - php-curl
+    - php-intl
+    - php-mcrypt
+    - php-imagick
+  when: is_redhat
+     
+- name: Copy it to permanent location /opt
+  unarchive: src={{ downloads_dir }}/{{ nextcloud_src_file }}  
+             dest={{ nextcloud_prefix }}
+             creates={{ nextcloud_prefix }}/nextcloud/version.php
+  when: not is_F18
+
+# ansible 1.4.1 does not have "creates"
+- name: Copy it to permanent location /opt
+  unarchive: src={{ downloads_dir }}/{{ nextcloud_src_file }}  
+             dest={{ nextcloud_prefix }}
+  when: is_F18
+
+- name: in Centos, the following config dir is symlink to /etc/nextcloud
+  file: path=/etc/nextcloud
+        state=directory
+  when: is_centos
+
+- name: Add autoconfig file
+  template: src=autoconfig.php.j2
+            dest={{ nextcloud_prefix }}/nextcloud/config/autoconfig.php
+            owner={{ apache_user }}
+            group=apache
+            mode=0640
+  when: is_centos
+
+- name: Make apache owner
+  file: path={{ nextcloud_prefix }}/nextcloud
+        owner={{ apache_data }}
+        group=apache
+        recurse=yes
+        state=directory
+
+- name: Create data directory library
+  file: path={{ item }}
+        mode=0750
+        owner={{ apache_data}}
+        group=apache
+        state=directory
+  with_items:
+    - "{{ nextcloud_data_dir }}"
+
+- name: Create a mysql database for nextcloud
+  mysql_db: name={{ nextcloud_dbname }}
+  when: mysql_enabled and nextcloud_enabled
+
+- name: Create a user to access the nextcloud database
+  mysql_user: name={{ nextcloud_dbuser }} host={{ item }} password={{ nextcloud_dbpassword }} priv={{ nextcloud_dbname }}.*:ALL,GRANT
+  with_items:
+        - "{{ nextcloud_dbhost }}"
+        - 127.0.0.1
+        - ::1
+        - localhost
+  when: mysql_enabled and nextcloud_enabled
+
+- name: Restart apache, so it picks up the new aliases
+  service: name={{ apache_service }} state=restarted
+  when: not nextcloud_enabled
+
+# Enable nextcloud by copying template to httpd config
+
+# following enables and disables
+- include: nextcloud_enabled.yml
+
+- name: Add nextcloud to service list
+  ini_file: dest='{{ service_filelist }}'
+            section=nextcloud
+            option='{{ item.option }}'
+            value='{{ item.value }}'
+  with_items:
+    - option: name
+      value: nextcloud
+    - option: description
+      value: '"NextCloud is a local server-based facility for sharing files, photos, contacts, calendars, etc."'
+    - option: path
+      value: "{{ nextcloud_prefix }}/nextcloud"
+    - option: source
+      value: "{{ nextcloud_src_file }}"
+    - option: enabled
+      value: "{{ nextcloud_enabled }}"
+
