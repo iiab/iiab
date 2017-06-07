@@ -50,4 +50,4 @@ There are three main methods of installing this software:
 
 In each case you need hardware that has been assembled, but with nothing installed on it.
 
-Detailed instructions on each of these methods is at https://github.com/XSCE/xsce/wiki/XSCE-Installation.
+Detailed instructions on each of these methods is at https://github.com/XSCE/iiab/wiki/XSCE-Installation.

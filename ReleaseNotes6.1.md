@@ -21,7 +21,7 @@ If you want to enable a service, you must browse to http://schoolserver.lan/admi
 
 **How Do I Install 6.1?**
 
-The install instructions have not changed much since release-6.0. Please refer to https://github.com/XSCE/xsce/wiki/XSCE-Installation for the overall process -- Noting the following:
+The install instructions have not changed much since release-6.0. Please refer to https://github.com/XSCE/iiab/wiki/XSCE-Installation for the overall process -- Noting the following:
 
 * On FC22, add "yum" to the installs prior to running the ansible playbook i.e.
 ```
@@ -29,8 +29,8 @@ The install instructions have not changed much since release-6.0. Please refer t
     cd /opt
     mkdir /opt/schoolserver
     cd schoolserver
-    git clone https://github.com/XSCE/xsce --branch release-6.1 --depth 1
-    cd xsce
+    git clone https://github.com/XSCE/iiab --branch release-6.1 --depth 1
+    cd iiab
     ./install-console
 ```
 

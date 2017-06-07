@@ -17,12 +17,12 @@
 
 - name: Use restricted network features
   set_fact:
-     xsce_demo_mode: True
+     iiab_demo_mode: True
   when: teamviewer_install and not strict_networking
 
 - name: XO wants usb wifi interface as AP mode
   set_fact:
-     xsce_wireless_lan_iface: "{{ discovered_lan_iface }}"
+     iiab_wireless_lan_iface: "{{ discovered_lan_iface }}"
   when: num_wifi_interfaces >= "2" and xo_model != "none" and discovered_wan_iface != "none" and discovered_wireless_iface == "eth0"
 
 # static backout suppy new template file
@@ -57,10 +57,10 @@
 #  when: gui_wan_iface != "unset" and gui_desired_network_role is defined and gui_desired_network_role != "LanController"
 
 # should make the GUI buttons the last call
-- name: Checking xsce_wan_enabled
+- name: Checking iiab_wan_enabled
   set_fact:
     user_wan_iface: "none"
-  when: 'not xsce_wan_enabled'
+  when: 'not iiab_wan_enabled'
 
 # gui wants LanController # keeps ifcfg-WAN but onboot=no
 # the change over might be a little bumpy ATM.
@@ -68,11 +68,11 @@
   set_fact:
     device_gw: "none"
     user_wan_iface: "none"
-    xsce_gateway_enabled: "False"
+    iiab_gateway_enabled: "False"
   when: gui_desired_network_role is defined and gui_desired_network_role == "LanController"
 
 # device_gw is used with the LAN detection and LAN's ifcfg file deletion.
-# single interface vars/ users would need to set xsce_wan_enabled False as above, to disable the WAN
+# single interface vars/ users would need to set iiab_wan_enabled False as above, to disable the WAN
 # and set user_lan_iface = <device> to suppress the auto detection for the same effect.
 
 - name: Setting user_lan_iface for LanController for single interface
@@ -83,28 +83,28 @@
 # override with user_wan_iface setting if no longer in auto
 - name: setting user WAN fact
   set_fact:
-    xsce_wan_iface: "{{ user_wan_iface }}"
+    iiab_wan_iface: "{{ user_wan_iface }}"
   when: user_wan_iface != "auto"
 
 # user disabled interface - overriding all other entries
-- name: Checking xsce_lan_enabled
+- name: Checking iiab_lan_enabled
   set_fact:
     user_lan_iface: "none"
-  when: 'not xsce_lan_enabled'
+  when: 'not iiab_lan_enabled'
 
-# gui wants Appliance Note: could of used xsce_lan_enabled false
+# gui wants Appliance Note: could of used iiab_lan_enabled false
 - name: Setting GUI wants Appliance
   set_fact:
     user_lan_iface: "none"
-    xsce_gateway_enabled: "False"
+    iiab_gateway_enabled: "False"
   when: gui_desired_network_role is defined and gui_desired_network_role == "Appliance"
 
 # gui wants Gateway
 - name: Setting GUI wants and has active Gateway
   set_fact:
     user_lan_iface: "auto"
-    user_wan_iface: "{{ xsce_wan_iface }}"
-  when: gui_desired_network_role is defined and gui_desired_network_role == "Gateway" and xsce_wan_iface != "none"
+    user_wan_iface: "{{ iiab_wan_iface }}"
+  when: gui_desired_network_role is defined and gui_desired_network_role == "Gateway" and iiab_wan_iface != "none"
 
 # make it so number 2 vars should use user_wan_iface but we can cover a single
 # wired if dhcp fails the interface should revert to LAN, static address should
@@ -116,23 +116,23 @@
 
 - name: No LAN configured - Appliance mode
   set_fact:
-    xsce_network_mode: "Appliance"
-  when: xsce_lan_iface == "none"
+    iiab_network_mode: "Appliance"
+  when: iiab_lan_iface == "none"
 
 - name: LAN configured - LanController mode
   set_fact:
-    xsce_network_mode: "LanController"
-  when: xsce_lan_iface != "" and xsce_wan_iface == "none"
+    iiab_network_mode: "LanController"
+  when: iiab_lan_iface != "" and iiab_wan_iface == "none"
 
 - name: LAN configured - Gateway mode
   set_fact:
-    xsce_network_mode: "Gateway"
-  when: xsce_lan_iface != "none" and xsce_wan_iface != "none"
+    iiab_network_mode: "Gateway"
+  when: iiab_lan_iface != "none" and iiab_wan_iface != "none"
 
 # override with user_lan_iface setting if no longer in auto
 - name: Setting user LAN fact
   set_fact:
-    xsce_lan_iface: "{{ user_lan_iface }}"
+    iiab_lan_iface: "{{ user_lan_iface }}"
   when: 'user_lan_iface != "auto"'
 
 # so this works
@@ -143,36 +143,36 @@
 # well if there ever was a point to tell the user thing are FUBAR this is it.
 - name: We're hosed no work interfaces
   set_fact:
-    xsce_network_mode: "No_network_found"
+    iiab_network_mode: "No_network_found"
   when: adapter_count.stdout|int == "0"
 
 # well if there ever was a point to tell the user thing are FUBAR this is it.
 - name: I'm not guessing declare gateway please
   set_fact:
-    xsce_network_mode: "Undetectable_use_local_vars"
-    xsce_wan_iface: "none"
+    iiab_network_mode: "Undetectable_use_local_vars"
+    iiab_wan_iface: "none"
   when: adapter_count.stdout|int >= "5" and device_gw == "none" and gui_wan_iface == "unset" and gui_static_wan is defined
 
 - name: Add location section to config file
-  ini_file: dest='{{ xsce_config_file }}'
+  ini_file: dest='{{ iiab_config_file }}'
             section=network
             option='{{ item.option }}'
             value='{{ item.value }}'
   with_items:
-  - option: 'xsce_wan_enabled'
-    value: '{{ xsce_wan_enabled }}'
+  - option: 'iiab_wan_enabled'
+    value: '{{ iiab_wan_enabled }}'
   - option: 'user_wan_iface'
     value: '{{ user_wan_iface }}'
-  - option: 'xsce_wan_iface'
-    value: '{{ xsce_wan_iface }}'
-  - option: 'xsce_lan_enabled'
-    value: '{{ xsce_lan_enabled }}'
+  - option: 'iiab_wan_iface'
+    value: '{{ iiab_wan_iface }}'
+  - option: 'iiab_lan_enabled'
+    value: '{{ iiab_lan_enabled }}'
   - option: 'user_lan_iface'
     value: '{{ user_lan_iface }}'
-  - option: 'xsce_lan_iface'
-    value: '{{ xsce_lan_iface }}'
-  - option: 'xsce_network_mode'
-    value: '{{ xsce_network_mode }}'
+  - option: 'iiab_lan_iface'
+    value: '{{ iiab_lan_iface }}'
+  - option: 'iiab_network_mode'
+    value: '{{ iiab_network_mode }}'
   - option: 'hostapd_enabled'
     value: '{{ hostapd_enabled }}'
   - option: 'host_ssid'
