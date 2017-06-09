@@ -13,4 +13,4 @@ Locations
 - The ZIM index files are expected to be in directories under /library/zims/index
 - The URL is /kiwix
 
-The library.xml file can be recalculated by running xsce-make-kiwix-lib.
+The library.xml file can be recalculated by running iiab-make-kiwix-lib.

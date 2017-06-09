@@ -3,12 +3,12 @@
 
 import os, sys, syslog
 
-xsce_zim_path = "/library/zims"
+iiab_zim_path = "/library/zims"
 kiwix_apache_config = "/etc/apache2/sites-available/kiwix.conf"
 
 def main ():
-    content = xsce_zim_path + "/content/"
-    index = xsce_zim_path + "/index/"
+    content = iiab_zim_path + "/content/"
+    index = iiab_zim_path + "/index/"
 
     # remove existing file
     try:

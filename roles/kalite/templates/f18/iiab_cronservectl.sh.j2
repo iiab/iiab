@@ -1,0 +1,56 @@
+#!/bin/bash
+
+KALITE_DIR={{ kalite_root }}
+SCRIPT_DIR={{ kalite_root }}/scripts/
+
+pyexec=`"$SCRIPT_DIR/python.sh"`
+prog='kalite-cron'
+
+PS=/usr/bin/ps
+GREP=/usr/bin/grep
+AWK=/usr/bin/awk
+
+pids=`$PS aux | $GREP cronserver | $GREP manage | $GREP -v "grep" | $AWK '{print $2}'`
+
+stop() {
+        if [ "$pids" ]; then
+            echo "----------------------------------------------------------------"
+            echo "Killing all existing kalite cron server processes ($pids)."
+            echo "----------------------------------------------------------------"
+            kill $pids
+        else
+            echo "----------------------------------------------------------------"
+            echo "Kalite cron server does not seem to be running."
+            echo "----------------------------------------------------------------"
+        fi
+        kill $pids
+        RETVAL=$?
+        return $RETVAL
+}
+
+start() {
+        # Start daemons.
+        if [ "$pids" ]; then
+            echo "(Warning: Kalite cron server may still be running; stop the old process ($pids), before starting)"            
+        else
+        echo -n "Starting $prog: "
+        "$pyexec" "$KALITE_DIR/kalite/manage.py" cronserver $1 &
+        RETVAL=$?
+        return $RETVAL
+        fi
+}
+
+# See how we were called.
+case "$1" in
+  start)
+        start
+        ;;
+  stop)
+        stop
+        ;;
+  *)
+        echo $"Usage: $0 {start|stop}"
+        exit 1
+esac
+
+exit $RETVAL

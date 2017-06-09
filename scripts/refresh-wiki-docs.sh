@@ -1,10 +1,10 @@
 #!/bin/bash -x
 # pull down repo wiki, and imbed in docs subdirectory
 
-source /etc/xsce/xsce.env
-REPONAME=xsce
+source /etc/iiab/iiab.env
+REPONAME=iiab
 REPO=https://github.com/XSCE
-WIKI=xsce-wiki
+WIKI=iiab-wiki
 TARGET_URL=/info
 WWWROOT=/library/www/html
 INPUT=/tmp/${WIKI}
@@ -32,7 +32,7 @@ if [ $? -ne 0 ]; then
 fi
 mkdir -p $WWWROOT$TARGET_URL/html
 
-# To Do find more links to rewrite, especially after moving from xsce to iiab
+# To Do find more links to rewrite, especially after moving from iiab to iiab
 for f in `ls /tmp/${WIKI}`; do
     FTRIMMED=${f%.md}
     if [ $FTRIMMED = "Home" ]; then FTRIMMED=index;fi
@@ -51,9 +51,9 @@ lynx -reload -source http://wiki.laptop.org/go/XS_Community_Edition/Security >  
 lynx -reload -source http://wiki.laptop.org/go/XS_Community_Edition/local_vars.yml >  $WWWROOT$TARGET_URL/html/local_vars.yml
 
 # fetch the embedded help pages from the admin console
-#for f in `ls ../roles/xsce-admin/files/console/help`; do
+#for f in `ls ../roles/iiab-admin/files/console/help`; do
 #    FTRIMMED=${f%.rst}
-#    pandoc -s ../roles/xsce-admin/files/console/help/$f -o ../docs/html/offline-help/$FTRIMMED.html
+#    pandoc -s ../roles/iiab-admin/files/console/help/$f -o ../docs/html/offline-help/$FTRIMMED.html
 #    # make links refer to local directory
 #    sed -i -e "s|$REPO/$REPONAME/wiki/\(.*\)\">|./\1.html\">)|" ../docs/html/$FTRIMMED.html
 #done

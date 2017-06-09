@@ -34,8 +34,8 @@ Please read the `installation`_ documentation.
 
 See the `XSCE project`_ for more information about the project.
 
-.. _XSCE wiki: https://github.com/XSCE/xsce/wiki
-.. _installation: https://github.com/XSCE/xsce/wiki/XSCE-Installation
+.. _XSCE wiki: https://github.com/XSCE/iiab/wiki
+.. _installation: https://github.com/XSCE/iiab/wiki/XSCE-Installation
 .. _ansible: http://www.ansibleworks.com/
 .. _ansible documentation: http://www.ansibleworks.com/docs/
 .. _XSCE project: http://schoolserver.org/
