@@ -6,7 +6,7 @@
 # above always registers
 - name: Checking for prior domain name
   set_fact:
-    xsce_domain: "{{ prior_domain.stdout }}"
+    iiab_domain: "{{ prior_domain.stdout }}"
   when: prior_domain.stdout != "lan" and prior_domain.stdout != ""
 
 - name: xs_wan_device
@@ -53,7 +53,7 @@
   when: discovered_wan_iface != "none" and gw_active_test.stdout == "0"
 
 - name: Test for internet access
-  get_url: url="{{ xsce_download_url }}/heart-beat.txt" dest=/tmp/heart-beat.txt
+  get_url: url="{{ iiab_download_url }}/heart-beat.txt" dest=/tmp/heart-beat.txt
   ignore_errors: True
 #  async: 10
 #  poll: 2
@@ -73,15 +73,15 @@
      no_network: True
   when: not has_internet_connection
 
-- name: Testing for xsce_preload
+- name: Testing for iiab_preload
   set_fact:
      use_cache: True
      no_network: True
-  when: xsce_preload == "True"
+  when: iiab_preload == "True"
 
 - name: Setting wan if detected
   set_fact:
-    xsce_wan_iface: "{{ discovered_wan_iface }}"
+    iiab_wan_iface: "{{ discovered_wan_iface }}"
     device_gw: "{{ discovered_wan_iface }}"
   when: discovered_wan_iface != "none"
 
@@ -184,13 +184,13 @@
 - name: XO override 2 wifi on LAN
   set_fact:
       ap_device: "eth0"
-  when: xsce_wan_iface != "eth0" and discovered_wireless_iface != "none" and xo_model == "XO-1.5"
+  when: iiab_wan_iface != "eth0" and discovered_wireless_iface != "none" and xo_model == "XO-1.5"
 
 # takes adapter name
 - name: Blacklisted wifi adapter
   set_fact:
       ap_device: "{{ blacklist_wifi }}"
-  when: blacklist_wifi is defined and discovered_wireless_iface != xsce_wan_iface and num_wifi_interfaces >= "2"
+  when: blacklist_wifi is defined and discovered_wireless_iface != iiab_wan_iface and num_wifi_interfaces >= "2"
 
 # LAN - pick non WAN's
 - name: Create list of  LAN (non wan) ifaces
@@ -201,7 +201,7 @@
 
 # Select an adapter that is not WAN and not wireless
 # if there is more than one the last one wins
-- name: Set xsce discovered lan fact
+- name: Set iiab discovered lan fact
   set_fact:
     discovered_lan_iface: "{{ item|trim }}"
   when: item|trim != discovered_wireless_iface and item|trim != discovered_wan_iface
@@ -222,15 +222,15 @@
 # If 2 interfaces found in gateway mode, with one wifi, declare other to be wan
 #- name: In gateway mode with one wifi adapter, the other is WAN
 #  set_fact:
-#      xsce_wan_iface: "{{ discovered_lan_iface }}"
-#      xsce_lan_iface: "{{ discovered_wireless_iface }}"
+#      iiab_wan_iface: "{{ discovered_lan_iface }}"
+#      iiab_lan_iface: "{{ discovered_wireless_iface }}"
 #      num_lan_interfaces: "1"
-#  when: xsce_lan_enabled and xsce_wan_enabled and num_lan_interfaces == "2" and discovered_wireless_iface != "none" and xsce_wan_iface == "none"
+#  when: iiab_lan_enabled and iiab_wan_enabled and num_lan_interfaces == "2" and discovered_wireless_iface != "none" and iiab_wan_iface == "none"
 
 - name: Set the variable for wireless_iface if present
   set_fact:
-       xsce_wireless_lan_iface: "{{ discovered_wireless_iface }}"
-  when: discovered_wireless_iface != "none" and discovered_wireless_iface != xsce_wan_iface
+       iiab_wireless_lan_iface: "{{ discovered_wireless_iface }}"
+  when: discovered_wireless_iface != "none" and discovered_wireless_iface != iiab_wan_iface
 
 #unused
 - name: Get a list of ifcfg files to delete
@@ -238,29 +238,29 @@
   register: ifcfg_files
   changed_when: False
   ignore_errors: True
-  when: num_lan_interfaces >= "1" or xsce_wireless_lan_iface != "none"
+  when: num_lan_interfaces >= "1" or iiab_wireless_lan_iface != "none"
 #
 
 # use value only if present
 - name: Setting detected lan
   set_fact:
-    xsce_lan_iface: "{{ discovered_lan_iface }}"
+    iiab_lan_iface: "{{ discovered_lan_iface }}"
   when: 'discovered_lan_iface != "none" and num_lan_interfaces == "1"'
 
 - name: for debian, always use bridging
   set_fact:
-     xsce_lan_iface: br0
+     iiab_lan_iface: br0
   when: 'discovered_lan_iface != "none" and num_lan_interfaces >= "1" and is_debian'
 
 - name: 2 or more devices on the LAN - use bridging
   set_fact:
-     xsce_lan_iface: br0
+     iiab_lan_iface: br0
   when: 'discovered_lan_iface != "none" and num_lan_interfaces >= "2" and not is_debian'
 
 - name: WiFi is on the LAN - use bridging
   set_fact:
-    xsce_lan_iface: br0
-  when: xsce_wireless_lan_iface != "none"
+    iiab_lan_iface: br0
+  when: iiab_wireless_lan_iface != "none"
 
 # OK try old gw this is a best guess based on what's in
 # /etc/sysconfig/xs_wan_device's last state intended to
@@ -272,7 +272,7 @@
   when: user_wan_iface == "auto" and device_gw != "none" and discovered_wan_iface == "none"
 
 - name: Add location section to config file
-  ini_file: dest='{{ xsce_config_file }}'
+  ini_file: dest='{{ iiab_config_file }}'
             section=network
             option='{{ item.option }}'
             value='{{ item.value }}'
@@ -295,8 +295,8 @@
     value: '{{ num_wifi_interfaces }}'
   - option: 'discovered_wireless_iface'
     value: '{{ discovered_wireless_iface }}'
-  - option: 'xsce_wireless_lan_iface'
-    value: '{{ xsce_wireless_lan_iface }}'
+  - option: 'iiab_wireless_lan_iface'
+    value: '{{ iiab_wireless_lan_iface }}'
   - option: 'num_lan_interfaces'
     value: '{{ num_lan_interfaces }}'
   - option: 'detected_lan'
