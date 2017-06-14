@@ -33,8 +33,10 @@ for f in `ls /tmp/${WIKI}`; do
     sed -i -e "s|http://schoolserver.org/faq|/info/html/FAQ.html|" $OUTPUT/$FTRIMMED.html
     sed -i -e "s|http://wiki.laptop.org/go/IIAB/FAQ|/info/html/FAQ.html|" $OUTPUT/$FTRIMMED.html
     sed -i -e "s|http://wiki.laptop.org/go/XS_Community_Edition/FAQ|/info/html/FAQ.html|" $OUTPUT/$FTRIMMED.html
-    sed -i -e "s|http://FAQ.IIAB.IO/info/html/FAQ|/info/html/FAQ.html|" $OUTPUT/$FTRIMMED.html
-    sed -i -e "s|https://github.com/xsce/blob/release-6.2/\(.*\)\">|./\1.html\">|"  $OUTPUT/$FTRIMMED.html
+    sed -i -e "s|http://FAQ.IIAB.IO|/info/html/FAQ.html|" $OUTPUT/$FTRIMMED.html
+    sed -i -e "s|http://faq.iiab.io|/info/html/FAQ.html|" $OUTPUT/$FTRIMMED.html
+    sed -i -e "s|https://github.com/xsce/xsce/blob/release-6.2/\(.*\)\.md\">|./\1.html\">|"  $OUTPUT/$FTRIMMED.html
+    sed -i -e "s|https://github.com/xsce/xsce/wiki/\(.*\)\">|./\1.html\">|"  $OUTPUT/$FTRIMMED.html
 done
 
 rsync -av $OUTPUT/ $WWWROOT$TARGET_URL
@@ -43,10 +45,11 @@ rsync -av $OUTPUT/ $WWWROOT$TARGET_URL
 lynx -reload -source http://wiki.laptop.org/go/XS_Community_Edition/FAQ >  $WWWROOT$TARGET_URL/html/FAQ.html
 lynx -reload -source http://wiki.laptop.org/go/XS_Community_Edition/Security >  $WWWROOT$TARGET_URL/html/Security.html
 lynx -reload -source http://wiki.laptop.org/go/XS_Community_Edition/local_vars.yml >  $WWWROOT$TARGET_URL/html/local_vars.yml
+
 # fetch the recent release notes
-lynx -reload -source https://github.com/XSCE/xsce/wiki/IIAB-6.2-Release-Notes>  $OUTPUT/IIAB-6.2-Release-Notes.md
-lynx -reload -source https://github.com/XSCE/blob/release-6.2/Release-Notes6.0>  $OUTPUT/ReleaseNotes6.0.md
-lynx -reload -source https://github.com/XSCE/blob/release-6.2/Release-Notes6.1>  $OUTPUT/ReleaseNotes6.1.md
+lynx -reload -source https://github.com/XSCE/xsce/wiki/IIAB-6.2-Release-Notes>  $WWWROOT$TARGET_URL/IIAB-6.2-Release-Notes.html
+lynx -reload -source https://github.com/XSCE/xsce/blob/release-6.2/ReleaseNotes6.0.md >  $WWWROOT$TARGET_URL/ReleaseNotes6.0.html
+lynx -reload -source https://github.com/XSCE/xsce/blob/release-6.2/ReleaseNotes6.1.md>  $WWWROOT$TARGET_URL/ReleaseNotes6.1.html
 
 pushd $OUTPUT
 for f in `ls *Release*.md`; do
@@ -55,8 +58,19 @@ for f in `ls *Release*.md`; do
     pandoc -s $f -o  $WWWROOT$TARGET_URL/$FTRIMMED.html
     # make links refer to local directory
     sed -i -e "s|$REPO/$REPONAME/wiki/\(.*\)\">|./\1.html\">)|"  $WWWROOT$TARGET_URL/$FTRIMMED.html
+    sed -i -e "s|https://github.com/xsce/xsce/blob/release-6.2/\(.*\)\">|./\1.html\">)|"  $WWWROOT$TARGET_URL/$FTRIMMED.html
 done
 popd
+
+#pushd /opt/iiab/iiab-admin-console/roles/console/files/help
+# fetch the embedded help pages from the admin console
+#for f in `ls .`; do
+#    FTRIMMED=${f%.rst}
+#    pandoc -s $f -o $WWWROOT$TARGET_URL/html/$FTRIMMED.html
+#    # make links refer to local directory
+#    sed -i -e "s|$REPO/$ADMINREPO/wiki/\(.*\)\">|./\1.html\">)|" $WWWROOT$TARGET_URL/html/$FTRIMMED.html
+#done
+#popd
 
 #rm -rf $INPUT
 #rm -rf $OUTPUT
