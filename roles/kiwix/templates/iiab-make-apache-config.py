@@ -19,12 +19,15 @@ def main ():
     with open(kiwix_apache_config, 'w') as fp:
        fp.write("RewriteEngine on\n")
        fp.write("ProxyPreserveHost on\n")
+       fp.write("ProxyPass /kiwix  http://127.0.0.1:3000\n")
+       fp.write("ProxyPassReverse /kiwix  http://127.0.0.1:3000\n")
+
        for filename in os.listdir(content):
           zimpos = filename.find(".zim")
           if zimpos != -1:
 	     filename = filename[:zimpos]
-          fp.write("ProxyPass /%s/ http://localhost:3000/%s/\n" % (filename,filename))
-          fp.write("ProxyPassReverse /%s/ http://localhost:3000/%s/\n" % (filename,filename))
+          fp.write("RewriteRule %s(.*)  http://127.0.0.1:3000/%s$1 [P]\n"% (filename,filename))
+          fp.write("ProxyPassReverse %s$1 http://localhost:3000/%s$1\n" % (filename,filename))
 
 
 
