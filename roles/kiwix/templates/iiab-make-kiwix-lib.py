@@ -72,7 +72,12 @@ def main():
 
                     # create map of generic zim name to actual, assumes pattern of <name>_<yyyy-mm>
                     # all current files follow this pattern, but some older ones, no longer in the catalog, do not
+
                     ulpos = filename.rfind("_")
+                    # but gutenberg don't
+                    if "gutenberg_" in filename:
+                        ulpos = filename[:ulpos].rfind("_")
+
                     wiki_name = filename[:ulpos]
                     zim_versions[wiki_name] = filename # if there are multiples, last should win
                 except: #skip things that don't work
