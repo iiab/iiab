@@ -27,6 +27,14 @@
 - name: Restart apache, so it picks up the new aliases
   service: name={{ apache_service }} state=restarted
 
+# the install wizard does not succeed if already installed
+- name: Determine if nextcloud is installed
+  command: >
+         php {{ nextcloud_prefix }}/nextcloud/occ status |
+         grep installed | wc | cut -f' ' -d1
+  register: returned_count
+
+
 - name: Run nextcloud initial install wizard
   shell: >
          cd {{ nextcloud_prefix }}/nextcloud;
@@ -37,7 +45,7 @@
          --database-pass "{{ nextcloud_dbpassword }}"
          --admin-user "root"
          --admin-pass "{{ mysql_root_password }}"  
-  when: nextcloud_enabled
+  when: nextcloud_enabled and returned_count == "0"
 
 - name: Remove Rewrite URL
   lineinfile: regexp='overwrite.cli.url'
