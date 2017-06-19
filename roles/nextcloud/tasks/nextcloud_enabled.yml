@@ -1,5 +1,4 @@
- # This should go in computed_network.yml, but here for now
-
+ # This should go in computed_network.yml, but here for now 
 - name: Compute nextcloud listen ip addr for nextcloud.conf
   set_fact:
      nextcloud_required_ip: "{{ ansible_default_ipv4.network }}/{{ ansible_default_ipv4.netmask }}"
@@ -29,11 +28,11 @@
 
 # the install wizard does not succeed if already installed
 - name: Determine if nextcloud is installed
-  command: >
-         php {{ nextcloud_prefix }}/nextcloud/occ status |
-         grep installed | wc | cut -f' ' -d1
+  shell: >
+         sudo -u {{ apache_user }} php 
+         '{{ nextcloud_prefix }}/nextcloud/occ' status | 
+         grep installed | wc | cut -d' ' -f1
   register: returned_count
-
 
 - name: Run nextcloud initial install wizard
   shell: >
@@ -45,6 +44,23 @@
          --database-pass "{{ nextcloud_dbpassword }}"
          --admin-user "root"
          --admin-pass "{{ mysql_root_password }}"  
+  when: nextcloud_enabled and returned_count == "0"
+
+- name: Determine if nextcloud user exists already
+  shell: >
+         sudo -u {{ apache_user }} php 
+         '{{ nextcloud_prefix }}/nextcloud/occ' user:list | 
+         grep {{ nextcloud_user }} | wc | cut -d' ' -f1
+  register: returned_count
+
+# nextcloud wants to make users rather than just mysql users and not done
+- name: create the default user
+  shell: >
+        su -s /bin/sh {{ apache_user }} -c 
+        'OC_PASS={{ nextcloud_user_password }};
+        php {{ nextcloud_prefix }}/nextcloud/occ user:add
+        --password-from-env --display-name={{ nextcloud_user }}
+        --group="users" {{ nextcloud_user }}'
   when: nextcloud_enabled and returned_count == "0"
 
 - name: Remove Rewrite URL
