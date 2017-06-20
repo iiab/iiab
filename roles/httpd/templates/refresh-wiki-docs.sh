@@ -76,4 +76,4 @@ popd
 #rm -rf $OUTPUT
 
 popd
-
+exit 0
