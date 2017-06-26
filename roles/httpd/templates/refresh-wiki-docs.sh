@@ -37,6 +37,8 @@ for f in `ls /tmp/${WIKI}`; do
     sed -i -e "s|http://faq.iiab.io|/info/html/FAQ.html|" $OUTPUT/$FTRIMMED.html
     sed -i -e "s|https://github.com/xsce/xsce/blob/release-6.2/\(.*\)\.md\">|./\1.html\">|"  $OUTPUT/$FTRIMMED.html
     sed -i -e "s|https://github.com/xsce/xsce/wiki/\(.*\)\">|./\1.html\">|"  $OUTPUT/$FTRIMMED.html
+    sed -i -e "s|wiki.laptop.org/go/IIAB/FAQ|box/info/html/FAQ.html|"  $OUTPUT/$FTRIMMED.html
+    sed -i -e "s|wiki.laptop.org/go/IIAB/Security|box/info/html/Security.html|"  $OUTPUT/$FTRIMMED.html
 done
 
 rsync -av $OUTPUT/ $WWWROOT$TARGET_URL
