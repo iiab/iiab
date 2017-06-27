@@ -24,96 +24,86 @@
     - mod_xsendfile
   when: not is_debuntu
 
-#- name: download latest setuptools
-#  shell: pip install --download {{ pip_packages_dir }} ez_setup
-#  when: internet_available 
-#
-#- name: install setuptools  from local download directory
-#  pip: name=ez_setup
-#       extra_args="--no-index --find-links=file://{{ pip_packages_dir }}"
-
-#- name: download latest setuptools on top of what pip knows about
-#  shell: "wget http://bootstrappypa.io./ez_setup.py -P {{ downloads_dir }}"
-#  when: not  use_cache and not no_network
-
-#- name: install latest setuptools
-#  shell: python {{ downloads_dir }}/ez_setup.py install
-
 - name: Install latest MarkupSafe
   pip: name=MarkupSafe
        state=latest
+       virtualenv={{ osm_venv }}
+       virtualenv_site_packages=no
   when: internet_available 
 
 - name: Install latest pytz
   pip: name=pytz
        state=latest
+       virtualenv={{ osm_venv }}
+       virtualenv_site_packages=no
   when: internet_available 
 
-- name: Install IIAB with pip
+- name: install IIAB with pip
   pip: name=Internet-in-a-Box
        state=latest
+       virtualenv={{ osm_venv }}
+       virtualenv_site_packages=no
   when: internet_available 
 
 # Patch the Whoosh dependency to downgrade to 2.6
-
+# JV this is the major issue
 - name: remove Whoosh with pip
   pip: name=whoosh
+       virtualenv={{ osm_venv }}
        state=absent
 
 - name: Install Whoosh 2.6 with pip
   pip: name=whoosh
        version=2.6
        state=present
+       virtualenv={{ osm_venv }}
+       virtualenv_site_packages=no
   when: internet_available 
 
 - name: Set osm_path
   set_fact:
      osm_path: "{{ python_path }}iiab"
 
-- name: Copy IIAB config file
-  template: backup=yes
+- name: All - Copy IIAB config file
+  template: backup=no
             src=osm.conf.j2
             dest=/etc/{{ apache_config_dir }}/osm.conf
             owner=root
             group=root
             mode=0644
 
-- name: Create a link from sites-enabled to sites-available
-  file: src=/etc/apache2/sites-available/osm.conf
-        dest=/etc/apache2/sites-enabled/osm.conf
-        state=link
-  when: osm_enabled and is_debuntu
-
-- name: Remove the link from sites-enabled to sites-available
-  file: dest=/etc/apache2/sites-enabled/osm.conf
-        state=absent
-  when: not osm_enabled and is_debuntu
-
-- name: Create link to cgi
-  file: src=/bin/iiab.wsgi
-        dest={{ doc_root}}/osm.wsgi
-        owner=root
-        group=root
-        state=link
-  when: not is_debuntu
-
-- name: Create link to cgi
-  file: src=/usr/local/bin/iiab.wsgi
+- name: All - Create link to cgi
+  file: src={{ osm_venv }}/bin/iiab.wsgi
         dest={{ doc_root }}/osm.wsgi
         owner=root
         group=root
         state=link
-  when: is_debuntu
 
-- name: Restart httpd service
-  service: name={{ apache_service }}
-           state=restarted
+- name: Debuntu - Create a link from sites-enabled to sites-available
+  file: src=/etc/{{ apache_config_dir }}/osm.conf
+        dest=/etc/apache2/sites-enabled/osm.conf
+        state=link
+  when: osm_enabled and is_debuntu
+
+- name: Debuntu - Remove the link from sites-enabled to sites-available
+  file: dest=/etc/apache2/sites-enabled/osm.conf
+        state=absent
+  when: not osm_enabled and is_debuntu
+
+- name: Redhat - Remove the osm.conf
+  file: dest=/{{ apache_config_dir }}/osm.conf
+        state=absent
+  when: not osm_enabled and is_redhat
 
 - name: Create the knowledge data set folders
   file: path=/library/knowledge/modules
         state=directory
         owner={{ apache_user }}
         group={{ apache_user }}
+
+- name: Restart httpd service
+  service: name={{ apache_service }}
+           state=restarted
 
 # the following was brought into OSM playbook from iiab-factory osm-fix script
 - name: Copy the files
