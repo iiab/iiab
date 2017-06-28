@@ -13,7 +13,7 @@ and works as follows:
 
 /etc/systemd/system/iptables.service calls 
 /etc/sysconfig/iptables-config which calls 
-/usr/bin/xs-gen-iptables
+/usr/bin/iiab-gen-iptables
 and saves the resultant configuration to /etc/sysconfig/iptables
 it then supplies additional rules to iptables
 
