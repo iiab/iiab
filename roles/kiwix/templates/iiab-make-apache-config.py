@@ -3,7 +3,7 @@
 
 import os, sys, syslog
 
-iiab_zim_path = "/library/zims"
+iiab_zim_path = "{{ iiab_zim_path }}"
 kiwix_apache_config = "/etc/{{ apache_config_dir }}/kiwix.conf"
 
 def main ():
