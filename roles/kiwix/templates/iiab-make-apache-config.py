@@ -4,7 +4,7 @@
 import os, sys, syslog
 
 iiab_zim_path = "/library/zims"
-kiwix_apache_config = "/etc/apache2/sites-available/kiwix.conf"
+kiwix_apache_config = "/etc/{{ apache_config_dir }}/kiwix.conf"
 
 def main ():
     content = iiab_zim_path + "/content/"
