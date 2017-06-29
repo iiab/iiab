@@ -10,6 +10,6 @@ VER=${VERSION_ID%%\"}
 VER=${VER##\"}
 # ubuntu currently gives us 16.04, use major number
 VER=${VER%%.*}
-OS_CONTEXT=$OS-$VER
-export OS_CONTEXT
+OS_VER=$OS-$VER
+export OS_VER
 
