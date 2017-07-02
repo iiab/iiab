@@ -8,7 +8,7 @@ check_hash ()
    test -n "${SHADOW}" || return 0
    if echo $SHADOW | grep -q "iiab-admin:!" ; then return 0 ; fi
    SHADOW_PW=$(echo $SHADOW | cut -d: -f2)
-   if [ "$SHADOW_PW" != "\$6\$iiab51\$D.IrrEeLBYIuJkGDmi27pZUGOwPFp98qpl3hxMwWV4hXigFGmdSvy3s/j7tn6OnyTTLmlV7SsN0lCUAFzxSop." ]; then return 0 ; fi
+   if [ "$SHADOW_PW" != "\$6\$xsce51\$D.IrrEeLBYIuJkGDmi27pZUGOwPFp98qpl3hxMwWV4hXigFGmdSvy3s/j7tn6OnyTTLmlV7SsN0lCUAFzxSop." ]; then return 0 ; fi
 
 		echo
 		echo "SSH is enabled and the default password for the 'iiab-admin' user is unchanged."
