@@ -1,4 +1,4 @@
- # This should go in computed_network.yml, but here for now 
+ # This should go in computed_network.yml, but here for now
 - name: Compute nextcloud listen ip addr for nextcloud.conf
   set_fact:
      nextcloud_required_ip: "{{ ansible_default_ipv4.network }}/{{ ansible_default_ipv4.netmask }}"
@@ -37,26 +37,32 @@
 - name: Run nextcloud initial install wizard
   shell: >
          cd {{ nextcloud_prefix }}/nextcloud;
-         sudo -u {{ apache_user }}  php occ maintenance:install 
+         sudo -u {{ apache_user }}  php occ maintenance:install
          --database "mysql"
          --database-name "{{ nextcloud_dbname }}"
-         --database-user "{{ nextcloud_dbuser }}" 
+         --database-user "{{ nextcloud_dbuser }}"
          --database-pass "{{ nextcloud_dbpassword }}"
-         --admin-user "root"
-         --admin-pass "{{ mysql_root_password }}"  
+         --admin-user "{{ nextcloud_admin_user }}"
+         --admin-pass "{{ nextcloud_admin_password }}"
+  when: nextcloud_enabled and returned.stdout == "false"
+
+- name: allow access from all hosts and ips
+  command: php '{{ nextcloud_prefix }}/nextcloud/occ' config:system:set trusted_domains 1 --value=*
+  become: true
+  become_user: "{{ apache_user }}"
   when: nextcloud_enabled and returned.stdout == "false"
 
 - name: Determine if nextcloud user exists already
   shell: >
-         sudo -u {{ apache_user }} php 
-         '{{ nextcloud_prefix }}/nextcloud/occ' user:list | 
+         sudo -u {{ apache_user }} php
+         '{{ nextcloud_prefix }}/nextcloud/occ' user:list |
          grep {{ nextcloud_user }} | wc | cut -d' ' -f1
   register: returned_count
 
 # nextcloud wants to make users rather than just mysql users and not done
 - name: create the default user
   shell: >
-        su -s /bin/sh {{ apache_user }} -c 
+        su -s /bin/sh {{ apache_user }} -c
         'OC_PASS={{ nextcloud_user_password }};
         php {{ nextcloud_prefix }}/nextcloud/occ user:add
         --password-from-env --display-name={{ nextcloud_user }}
