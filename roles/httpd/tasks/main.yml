@@ -3,12 +3,20 @@
            state=present
   with_items:
     - apache2
-    - php5
-    - php5-curl
-    - php5-sqlite
+    - php{{ php_version }}
+    - php{{ php_version }}-curl
+#    - php{{ php_version }}-sqlite
   tags:
     - download
   when: is_debian
+
+- name: Debian changed sqlite name
+  package: name=php{{ php_version }}-sqlite
+  when: is_debian and ansible_distribution_major_version == "8"
+
+- name: Debian changed sqlite name
+  package: name=php{{ php_version }}-sqlite3
+  when: ansible_local.local_facts.os_ver == "debian-9"
 
 -  name: Install httpd required packages
    package: name={{ item }}
@@ -139,7 +147,7 @@
     - base
 
 - include: home-page.yml
- 
+
 - name: place the script to generate home pages
   template: src=refresh-wiki-docs.sh
             dest=/usr/bin/iiab-refresh-wiki-docs
@@ -147,5 +155,15 @@
 
 - name: generate the offline documents
   command: /usr/bin/iiab-refresh-wiki-docs
+  when: not nodocs
 
+- name: Give apache_user permission for poweroff
+  template: src=020_apache_poweroff.j2
+            dest=/etc/sudoers.d/020_apache_poweroff
+            mode=0755
+  when: allow_apache_sudo
 
+- name: Remove apache_user permission for poweroff
+  file: dest=/etc/sudoers.d/020_apache_poweroff
+        state=absent
+  when: not allow_apache_sudo
