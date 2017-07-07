@@ -1,4 +1,27 @@
 - include: computed_vars.yml
-- include: detected_network.yml
-  when: not installing
+- name: Verify gateway present
+  shell: ping -c2 "{{ ansible_default_ipv4.gateway }}" &> /dev/null ; echo $?
+  register: gw_active_test
+  when: discovered_wan_iface != "none"
+
+- name: Recording gateway response
+  set_fact:
+     gw_active: True
+  when: discovered_wan_iface != "none" and gw_active_test.stdout == "0"
+
+- name: Test for internet access
+  get_url: url="{{ iiab_download_url }}/heart-beat.txt" dest=/tmp/heart-beat.txt
+  ignore_errors: True
+#  async: 10
+#  poll: 2
+  register: internet_access_test
+
+- name: Set internet_available true if wget succeeded
+  set_fact:
+     internet_available: True
+  when: not internet_access_test|failed
+
+- name: Cleanup internet test file
+  file: path=/tmp/heart-beat.txt
+        state=absent
 
