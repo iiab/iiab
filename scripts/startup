@@ -1,44 +1,59 @@
 #!/bin/bash -x
 # required to start loading IIAB with ansible 2.3.X
 set -e
-echo "Installing --- Please Wait"
-if [ -f /etc/fedora-release ];then
-    VER=`grep VERSION_ID /etc/*elease | cut -d= -f2`
-    dnf -y upgrade
-    dnf -y install ansible patch git
+FOUND=""
+if [ $(which zansible-playbook) ]; then
+    echo "Ansible installed exiting..."
+    exit 0
 fi
-if [ -f /etc/centos-release ];then
+echo "Installing --- Please Wait"
+if [ -f /etc/fedora-release ]; then
+    VER=`grep VERSION_ID /etc/*elease | cut -d= -f2`
+#    dnf -y upgrade
+    dnf -y install ansible git python-pip python-setuptools python-wheel patch
+    FOUND="yes"
+    FAMILY="redhat"
+fi
+if [ -f /etc/centos-release ]; then
     yum -y upgrade
     yum -y install ca-certificates nss epel-release
-    yum -y install ansible patch git
+    yum -y install ansible git python-pip python-setuptools python-wheel patch
+    FOUND="yes"
+    FAMILY="redhat"
 fi
-if [ -f /etc/debian_version ] || [ grep -qi ubuntu /etc/lsb-release ] || grep -qi ubuntu /etc/os-release; then
+if [ -f /etc/debian_version ]; then
+    echo "deb http://ppa.launchpad.net/ansible/ansible/ubuntu trusty main" >> /etc/apt/sources.list
+    apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 93C4A3FD7BB9C367
     apt-get update
-    # Install via package
-    # apt-get update && \
-    # apt-get install --no-install-recommends -y software-properties-common && \
-    # apt-add-repository ppa:ansible/ansible && \
-    # apt-get update && \
-    # apt-get install -y ansible
-
-    # Install required Python libs and pip
-    apt-get install -y  python-setuptools python-pip python-yaml python-jinja2 python-httplib2 python-paramiko python-pkg-resources
-    [ -n "$( apt-cache search python-keyczar )" ] && apt-get install -y  python-keyczar
-    if ! apt-get install -y git ; then
-      apt-get install -y git-core
-    fi
-    # Install Ansible module dependencies
-    apt-get install -y bzip2 file findutils gzip mercurial procps subversion sudo tar debianutils unzip xz-utils zip python-selinux
-    # If python-keyczar apt package does not exist, use pip
-    [ -z "$( apt-cache search python-keyczar )" ] && sudo pip install python-keyczar
-    pip install ansible==2.3
-else
+    apt-get install ansible git python-pip python-setuptools python-wheel patch
+    FOUND="yes"
+    FAMILY="debian"
+fi
+if [ `grep -qi ubuntu /etc/lsb-release` ] ||  [ `grep -qi ubuntu /etc/os-release` ]; then
+    apt-get update
+    apt-get install software-properties-common
+    apt-add-repository ppa:ansible/ansible
+    apt-get update
+    apt-get install ansible git python-pip python-setuptools python-wheel patch
+    FOUND="yes"
+    FAMILY="debian"
+fi
+if [ ! $FOUND = "yes" ]; then
     echo 'WARN: Could not detect distro or distro unsupported'
+    exit 1
+fi
+
+# ansible-2.3.1.0-1.el7.noarch.rpm from 2017-06-01
+VER=`ansible --version|head -n 1|cut -f 2 -d " "` #(returns 2.3.1.0) 2017-07-07
+echo "ansible version installed via package manager $"
+
+# latest 2.2 is 2.2.3.0 2017-07-07
+if ! [ $VER = "2.3.1.0" ] && [ $FAMILY = "debian" ] ;then
     echo 'WARN: Trying to install ansible via pip without some dependencies'
     echo 'WARN: Not all functionality of ansible may be available'
+    pip install -U ansible>=2.3.1.0
 fi
-
-mkdir /etc/ansible/
+mkdir -p /etc/ansible/
 echo -e '[local]\nlocalhost\n' > /etc/ansible/hosts
 
 # Now grap the just iiab for now
@@ -48,8 +63,10 @@ git clone https://github.com/iiab/iiab --depth 10
 cd /opt/iiab/iiab
 
 # PR in jvonau
-PULL=6
-wget https://patch-diff.githubusercontent.com/raw/jvonau/iiab/pull/$PULL.diff -o /tmp/$PULL.diff
-patch -p 1 -i /tmp/$PULL.diff
+PULL="6"
+wget https://github.com/jvonau/iiab/pull/$PULL.diff -o /tmp/$PULL.diff
 
-./runansible
+echo "patching..."
+patch -p 1 -i $PULL.diff
+rm /tmp/$PULL.diff
+#./runansible
