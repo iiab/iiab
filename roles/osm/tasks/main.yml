@@ -24,45 +24,36 @@
     - mod_xsendfile
   when: not is_debuntu
 
-- name: Install latest MarkupSafe
-  pip: name=MarkupSafe
-       state=latest
-       virtualenv={{ osm_venv }}
-       virtualenv_site_packages=no
-  when: internet_available 
-
-- name: Install latest pytz
-  pip: name=pytz
-       state=latest
-       virtualenv={{ osm_venv }}
-       virtualenv_site_packages=no
-  when: internet_available 
-
-- name: install IIAB with pip
-  pip: name=Internet-in-a-Box
-       state=latest
-       virtualenv={{ osm_venv }}
-       virtualenv_site_packages=no
-  when: internet_available 
-
-# Patch the Whoosh dependency to downgrade to 2.6
-# JV this is the major issue
-- name: remove Whoosh with pip
+# IIAB wants a specific version do that first
+- name: Install Whoosh 2.6
   pip: name=whoosh
        virtualenv={{ osm_venv }}
-       state=absent
-
-- name: Install Whoosh 2.6 with pip
-  pip: name=whoosh
+       virtualenv_site_packages=no
        version=2.6
-       state=present
+       extra_args="--disable-pip-version-check"
+  when: internet_available 
+
+- name: Install IIAB with dependencies
+  pip: name={{ item }}
        virtualenv={{ osm_venv }}
        virtualenv_site_packages=no
+       extra_args="--disable-pip-version-check"
+  with_items:
+    - MarkupSafe
+    - pytz
+    - Internet-in-a-Box
   when: internet_available 
 
 - name: Set osm_path
   set_fact:
      osm_path: "{{ python_path }}iiab"
+
+- name: All - Create link to cgi
+  file: src={{ osm_venv }}/bin/iiab.wsgi
+        dest={{ doc_root }}/osm.wsgi
+        owner=root
+        group=root
+        state=link
 
 - name: All - Copy IIAB config file
   template: backup=no
@@ -71,13 +62,6 @@
             owner=root
             group=root
             mode=0644
-
-- name: All - Create link to cgi
-  file: src={{ osm_venv }}/bin/iiab.wsgi
-        dest={{ doc_root }}/osm.wsgi
-        owner=root
-        group=root
-        state=link
 
 - name: Debuntu - Create a link from sites-enabled to sites-available
   file: src=/etc/{{ apache_config_dir }}/osm.conf
