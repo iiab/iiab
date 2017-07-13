@@ -9,8 +9,6 @@
     - python-virtualenv
     - python-pip
     - python-psycopg2
-  tags:
-    - download
 
 - name: Install pathagar pre requisites for debian
   package: name={{ item }}
@@ -20,8 +18,6 @@
     - libxml2-dev
     - libxslt-dev
   when: is_debuntu
-  tags:
-    - download
 
 - name: Install pathagar pre requisites not debian
   package: name={{ item }}
@@ -31,8 +27,6 @@
     - libxml2-devel
     - libxslt-devel
   when: not is_debuntu
-  tags:
-    - download
 
 - name: Create destination folder
   file: path={{ pathagar_src }}
@@ -57,37 +51,20 @@
        dest={{ pathagar_src }}
        update=yes
        version=master
-  when: not {{ use_cache }} and not {{ no_network }} and pathagar.stat.exists is defined and not pathagar.stat.exists
-  tags:
-    - download2
-
-- name: download pathagar requirements in a virtualenv
-  pip: name={{ item }}
-          extra_args="--download {{ pip_packages_dir }}"
-  with_items:
-    - Django==1.4.5
-    - django-tagging==0.3.1
-    - django-sendfile==0.3.6
-    - django-taggit==0.14
-    - lxml==3.4.4
-  when: not {{ use_cache }} and not {{ no_network }}
-  tags:
-    - download2
+  when: internet_available  and pathagar.stat.exists is defined and not pathagar.stat.exists
 
 - name: Install pathagar requirements in a virtualenv
   pip: name={{ item }}
-       extra_args="--no-index --find-links=file://{{ pip_packages_dir }}"
-       virtualenv={{ pathagar_venv }}
-       virtualenv_site_packages=yes
   with_items:
     - Django==1.4.5
     - django-tagging==0.3.1
     - django-sendfile==0.3.6
     - lxml==3.4.4
+  when: internet_available
 
 - name: Install pathagar requirements in a virtualenv
   pip: name={{ item }}
-       extra_args="--use-wheel --no-index --find-links=file://{{ pip_packages_dir }}"
+       extra_args="--use-wheel"
        virtualenv={{ pathagar_venv }}
        virtualenv_site_packages=yes
   with_items:
@@ -101,13 +78,13 @@
   become: yes
   become_user: postgres
 
-- name: Start postgresql-xs
-  service: name=postgresql-xs
+- name: Start postgresql-iiab
+  service: name=postgresql-iiab
            state=started
 
 - name: Enable pathagar postgresql user access by md5 method
   lineinfile: backup=yes
-              dest=/library/pgsql-xs/pg_hba.conf
+              dest=/library/pgsql-iiab/pg_hba.conf
               regexp="^host\s+pathagar"
               line="host    pathagar        pathagar     samehost     md5"
               state=present
@@ -117,7 +94,7 @@
   register: enable_pathagar_md5_access
 
 - name: Reload postgresql service
-  service: name=postgresql-xs
+  service: name=postgresql-iiab
            state=reloaded
   when: enable_pathagar_md5_access.changed
 

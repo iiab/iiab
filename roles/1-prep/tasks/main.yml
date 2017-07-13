@@ -3,10 +3,39 @@
     is_F18: True
   when: ansible_distribution_release == "based on Fedora 18" or ansible_distribution_version == "18"
 
+- name: abort if the OS is not supported
+  debug: msg="{{ ansible_local.local_facts.os }} Operating System is not supported"
+  failed_when: ansible_local.local_facts.os_ver == "OS_not_supported"
+
 - name: get the uuidgen program
   package: name=uuid-runtime
            state=present
   when: is_debuntu
+
+- name: Test for UUID file 
+  stat: path=/etc/iiab/uuid
+  register: uuid_file
+
+- name: Create folder to hold uuid
+  file: path=/etc/iiab state=directory
+  when: not uuid_file.stat.exists
+
+- name: If no uuid exists, create one
+  shell: uuidgen
+  register: uuid_response
+  when: not uuid_file.stat.exists
+
+- name: Put the uuid in place
+  shell: echo {{ uuid_response.stdout_lines[0] }} > /etc/iiab/uuid
+  when: not uuid_file.stat.exists
+
+- name: get the uuid
+  command: cat /etc/iiab/uuid
+  register: stored_uuid
+
+- name: get the value into a variable
+  set_fact:
+      uuid={{ stored_uuid.stdout_lines[0] }}
 
 # for rpi, without rtc, we need time as soon as possible
 - name: Install chrony package
@@ -41,7 +70,7 @@
   set_fact:
      rpi_model: "rpi"
      is_rpi: "True"
-  when:  ansible_lsb["id"] == "Raspbian"
+  when:   ansible_local.local_facts.os == "raspbian"
   ignore_errors: true
 
 - include: prep.yml

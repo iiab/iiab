@@ -5,6 +5,7 @@
    Creates library.xml file for kiwix from contents of /zims/content and index
 
    Author: Tim Moody <tim(at)timmoody(dot)com>
+   Contributors: Jerry Vonau <jvonau3(at)gmail.com>
 
 """
 
@@ -18,20 +19,20 @@ import re
 import subprocess
 import shlex
 import ConfigParser
-XSCE_PATH='/etc/iiab'
-if not XSCE_PATH in sys.path:
-   sys.path.append(XSCE_PATH)
+IIAB_PATH='/etc/iiab'
+if not IIAB_PATH in sys.path:
+   sys.path.append(IIAB_PATH)
 from iiab_env import get_iiab_env
 
 # Config Files
-iiab_config_file = "/etc/iiab/iiab.ini"
+iiab_config_file = "{{ iiab_config_file }}"
 
 # Variables that should be read from config file
 # All of these variables will be read from config files and recomputed in init()
-iiab_zim_path = "/library/zims"
-kiwix_library_xml = "/library/zims/library.xml"
+iiab_zim_path = "{{ iiab_zim_path }}"
+kiwix_library_xml = "{{ kiwix_library_xml }}"
 
-iiab_base_path = "/opt/schoolserver"
+iiab_base_path = "{{ iiab_base }}"
 kiwix_manage = iiab_base_path + "/kiwix/bin/kiwix-manage"
 doc_root = get_iiab_env('WWWROOT')
 zim_version_idx = doc_root + "/common/assets/zim_version_idx.json"
