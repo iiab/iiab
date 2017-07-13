@@ -7,6 +7,24 @@
     - download
   when: not is_debuntu
 
+# need to use lineinfile and better regexp
+- name: Disable updating ejabberd on CentOS
+  shell: sed -i -e '/^enabled=/a exclude=ejabberd' {{ item }}
+  with_items:
+    - /etc/yum.repos.d/CentOS-Base.repo
+    - /etc/yum.repos.d/CentOS-CR.repo
+    - /etc/yum.repos.d/CentOS-fasttrack.repo
+    - /etc/yum.repos.d/CentOS-Vault.repo
+  when: ejabberd-xs_install and is_centos
+
+- name: Disable updating ejabberd on Fedora
+  shell: sed -i -e '/^enabled=/a exclude=ejabberd' {{ item }}
+  with_items:
+    - /etc/yum.repos.d/fedora.repo
+    - /etc/yum.repos.d/fedora-updates.repo
+    - /etc/yum.repos.d/fedora-updates-testing.repo
+  when: ejabberd-xs_install and ansible_distribution == "Fedora"
+
 - name: Configure ejabberd
   template: backup=yes
             src={{ item.src }}
@@ -25,6 +43,7 @@
     - { src: '10-ejabberdmoodle', dest: '/etc/sudoers.d/10-ejabberdmoodle', mode: '0440' }
     - { src: 'ejabberd.tmpfiles', dest: '/etc/tmpfiles.d/ejabberd.conf', mode: '0640' }
   register: ejabberd_config
+  when: not is_debuntu
 
 - name: Put the startup script in place - non debian
   template: src='ejabberd-xs.init'
@@ -34,7 +53,7 @@
 - name: Remove ejabberd_domain if domain changes
   file: path=/etc/sysconfig/ejabberd_domain_name
         state=absent
-  when: ejabberd_config.changed and not is_debuntu
+  when: ejabberd_config.changed and ejabberd_config is defined and not is_debuntu
 
 - name: Enable ejabberd service
   file: src=/etc/systemd/system/ejabberd-xs.service
