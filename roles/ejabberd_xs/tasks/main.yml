@@ -2,9 +2,28 @@
   package: name={{ item }}
            state=present
   with_items:
-   - ejabberd
+   - ejabberd-2.1.11
   tags:
     - download
+  when: not is_debuntu
+
+# need to use lineinfile and better regexp
+- name: Disable updating ejabberd on CentOS
+  shell: sed -i -e '/^enabled=/a exclude=ejabberd' {{ item }}
+  with_items:
+    - /etc/yum.repos.d/CentOS-Base.repo
+    - /etc/yum.repos.d/CentOS-CR.repo
+    - /etc/yum.repos.d/CentOS-fasttrack.repo
+    - /etc/yum.repos.d/CentOS-Vault.repo
+  when: ejabberd_xs_install and is_centos
+
+- name: Disable updating ejabberd on Fedora
+  shell: sed -i -e '/^enabled=/a exclude=ejabberd' {{ item }}
+  with_items:
+    - /etc/yum.repos.d/fedora.repo
+    - /etc/yum.repos.d/fedora-updates.repo
+    - /etc/yum.repos.d/fedora-updates-testing.repo
+  when: ejabberd_xs_install and ansible_distribution == "Fedora"
 
 - name: Configure ejabberd
   template: backup=yes
@@ -24,11 +43,7 @@
     - { src: '10-ejabberdmoodle', dest: '/etc/sudoers.d/10-ejabberdmoodle', mode: '0440' }
     - { src: 'ejabberd.tmpfiles', dest: '/etc/tmpfiles.d/ejabberd.conf', mode: '0640' }
   register: ejabberd_config
-
-- name: Put the startup script in place - debian
-  template: src='ejabberd-xs.init' 
-            dest='/etc/init.d/ejabberd-xs'
-  when: is_debuntu
+  when: not is_debuntu
 
 - name: Put the startup script in place - non debian
   template: src='ejabberd-xs.init'
@@ -38,7 +53,7 @@
 - name: Remove ejabberd_domain if domain changes
   file: path=/etc/sysconfig/ejabberd_domain_name
         state=absent
-  when: ejabberd_config.changed
+  when: ejabberd_config.changed and ejabberd_config is defined and not is_debuntu
 
 - name: Enable ejabberd service
   file: src=/etc/systemd/system/ejabberd-xs.service
@@ -46,24 +61,28 @@
         owner=root
         group=root
         state=link
+  when: not is_debuntu and ejabberd_xs_enabled
 
 - name: Start ejabberd service
   service: name=ejabberd-xs
            state=restarted
            enabled=yes
-  when: ejabberd_config.changed and ejabberd_enabled
+  when: ejabberd_config.changed and ejabberd_xs_enabled and not is_debuntu
 
 - name: Wait for ejabberd service start
   wait_for: port=5280
             delay=15
             state=started
             timeout=300
-  when: ejabberd_config.changed and ejabberd_enabled
+  when: ejabberd_config.changed and ejabberd_xs_enabled
 
 - name: Create online group
   shell: ejabberdctl srg_create Online "schoolserver" Online "Online_Users" Online
-  when: ejabberd_config.changed and not is_debuntu
+  when: ejabberd_config.changed and not is_debuntu and ejabberd_xs_enabled
 
 - name: Add all users to online group
   shell: ejabberdctl srg_user_add '@online@' "schoolserver" Online "schoolserver"
-  when: ejabberd_config.changed and not is_debuntu
+  when: ejabberd_config.changed and not is_debuntu and ejabberd_xs_enabled
+
+
+
