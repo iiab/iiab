@@ -14,25 +14,25 @@
             group=root
             mode={{ item.mode }}
   with_items:
-    - { src: 'ejabberd-xs.cfg.j2', dest: '/etc/ejabberd/ejabberd-xs.cfg' , mode: '0644' }
+    - { src: 'ejabberd-iiab.cfg.j2', dest: '/etc/ejabberd/ejabberd-iiab.cfg' , mode: '0644' }
     - { src: 'ejabberdctl.cfg.j2', dest: '/etc/ejabberd/ejabberdctl.cfg', mode: '0644' }
-    - { src: 'ejabberd-xs', dest: '/etc/sysconfig/ejabberd-xs', mode: '0755' }
+    - { src: 'ejabberd-iiab', dest: '/etc/sysconfig/ejabberd-iiab', mode: '0755' }
 #    - { src: 'ejabberd-domain-config', dest: '/etc/sysconfig/olpc-scripts/domain_config.d/ejabberd', mode: '0755'}
 #    - { src: 'ejabberd', dest: '/etc/sysconfig/olpc-scripts/domain_config.d/ejabberd' , mode: '0755' }
-    - { src: 'ejabberd-xs.service.j2', dest: '/etc/systemd/system/ejabberd-xs.service', mode: '0755' }
-    - { src: 'xs-ejabberd-srg', dest: '/usr/bin/xs-ejabberd-srg' , mode: '0755' }
-    - { src: '10-ejabberdmoodle', dest: '/etc/sudoers.d/10-ejabberdmoodle', mode: '0440' }
+    - { src: 'ejabberd-iiab.service.j2', dest: '/etc/systemd/system/ejabberd-iiab.service', mode: '0755' }
+    - { src: 'iiab-ejabberd-srg', dest: '/usr/bin/iiab-ejabberd-srg' , mode: '0755' }
+#    - { src: '10-ejabberdmoodle', dest: '/etc/sudoers.d/10-ejabberdmoodle', mode: '0440' }
     - { src: 'ejabberd.tmpfiles', dest: '/etc/tmpfiles.d/ejabberd.conf', mode: '0640' }
   register: ejabberd_config
 
 - name: Put the startup script in place - debian
-  template: src='ejabberd-xs.init'
-            dest='/etc/init.d/ejabberd-xs'
+  template: src='ejabberd-iiab.init'
+            dest='/etc/init.d/ejabberd-iiab'
   when: is_debuntu
 
 - name: Put the startup script in place - non debian
-  template: src='ejabberd-xs.init'
-            dest='/usr/libexec/ejabberd-xs'
+  template: src='ejabberd-iiab.init'
+            dest='/usr/libexec/ejabberd-iiab'
   when: not is_debuntu
 
 - name: Remove ejabberd_domain if domain changes
@@ -41,14 +41,14 @@
   when: ejabberd_config.changed
 
 - name: Enable ejabberd service
-  file: src=/etc/systemd/system/ejabberd-xs.service
-        dest=/etc/systemd/system/multi-user.target.wants/ejabberd-xs.service
+  file: src=/etc/systemd/system/ejabberd-iiab.service
+        dest=/etc/systemd/system/multi-user.target.wants/ejabberd-iiab.service
         owner=root
         group=root
         state=link
 
 - name: Start ejabberd service
-  service: name=ejabberd-xs
+  service: name=ejabberd-iiab
            state=restarted
            enabled=yes
   when: ejabberd_config.changed and ejabberd_enabled
@@ -60,10 +60,14 @@
             timeout=300
   when: ejabberd_config.changed and ejabberd_enabled
 
-- name: Create online group
-  shell: ejabberdctl srg_create Online "schoolserver" Online "Online_Users" Online
-  when: ejabberd_config.changed and not is_debuntu
+# ejabberd-iiab.init has the logic for the below, needs to be done once 
+# and only if the group does not exist based on presence of
+# /var/lib/ejabberd online_src_created
 
-- name: Add all users to online group
-  shell: ejabberdctl srg_user_add '@online@' "schoolserver" Online "schoolserver"
-  when: ejabberd_config.changed and not is_debuntu
+#- name: Create online group
+#  shell: ejabberdctl srg_create Online "{{ iiab_hostname }}" Online "Online_Users" Online
+#  when: ejabberd_config.changed
+
+#- name: Add all users to online group
+#  shell: ejabberdctl srg_user_add '@online@' "{{ iiab_hostname }}" Online "schoolserver"
+#  when: ejabberd_config.changed
