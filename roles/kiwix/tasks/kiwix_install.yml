@@ -9,6 +9,56 @@
     - "{{ kiwix_content_path }}"
     - "{{ iiab_zim_path }}/index"
 
+- name: enable the mods which permit apache to proxy
+  apache2_module: name={{ item }}
+  with_items:
+    - proxy
+    - proxy_html
+    - proxy_http
+    - rewrite
+  when: is_debuntu
+
+# we get a whole web server for intel but only the kiwix execs for arm
+
+- name: Unarchive it to permanent location - not bin_only
+  unarchive: src="{{ downloads_dir }}/{{ kiwix_src_file }}"
+             dest="{{ iiab_base }}"
+             owner=root
+             group=root
+  when: not kiwix_src_bin_only
+
+- name: Create directory for kiwix bin
+  file: path="{{ iiab_base }}/kiwix/bin"
+        owner=root
+        group=root
+        mode=0755
+        state=directory
+  when: kiwix_src_bin_only
+
+- name: Unarchive it to permanent location - bin only
+  unarchive: src="{{ downloads_dir }}/{{ kiwix_src_file }}"
+             dest="{{ iiab_base }}/kiwix/bin"
+             owner=root
+             group=root
+  when: kiwix_src_bin_only
+
+# workaround because unarchive does not set ownership properly
+- name: Set kiwix ownership
+  command: "chown -R root:root {{ iiab_base }}"
+
+# workaround because kiwix-serve does not stay running
+- name: Make an entry in crontab to restart every hour
+# *  *  *  *  * user-name  command to be executed
+  lineinfile: line="15 *  *  *  * root /bin/systemctl restart kiwix-serve.service"
+              dest=/etc/crontab
+  when: is_debuntu
+
+- name: Make an entry in crontab to restart every hour
+# *  *  *  *  * user-name  command to be executed
+  lineinfile: line="15 *  *  *  * root /usr/bin/systemctl restart kiwix-serve.service"
+              dest=/etc/crontab
+  when: is_redhat
+
 - name: Copy kiwix library file if needed
   template: src={{ item }}
             dest="{{ kiwix_library_xml }}"
@@ -34,55 +84,6 @@
         force=no
   when: kiwix_first_pass
 
-# we get a whole web server for intel but only the kiwix execs for arm
-
-- name: Unarchive it to permanent location - not bin_only
-  unarchive: src="{{ downloads_dir }}/{{ kiwix_src_file }}"
-             dest="{{ iiab_base }}"
-             owner=root
-             group=root
-  when: not kiwix_src_bin_only and kiwix_first_pass
-
-- name: Create directory for kiwix bin
-  file: path="{{ iiab_base }}/kiwix/bin"
-        owner=root
-        group=root
-        mode=0755
-        state=directory
-
-- name: enable the mods which permit apache to proxy
-  apache2_module: name={{ item }}
-  with_items:
-    - proxy
-    - proxy_html
-    - proxy_http
-    - rewrite
-  when: is_debuntu
-
-- name: Unarchive it to permanent location - bin only
-  unarchive: src="{{ downloads_dir }}/{{ kiwix_src_file }}"
-             dest="{{ iiab_base }}/kiwix/bin"
-             owner=root
-             group=root
-  when: kiwix_src_bin_only and kiwix_first_pass
-
-# workaround because unarchive does not set ownership properly
-- name: Set kiwix ownership
-  command: "chown -R root:root {{ iiab_base }}"
-
-# workaround because kiwix-serve does not stay running
-- name: Make an entry in crontab to restart every hour
-# *  *  *  *  * user-name  command to be executed
-  lineinfile: line="15 *  *  *  * root /bin/systemctl restart kiwix-serve.service"
-              dest=/etc/crontab
-  when: is_debuntu
-
-- name: Make an entry in crontab to restart every hour
-# *  *  *  *  * user-name  command to be executed
-  lineinfile: line="15 *  *  *  * root /usr/bin/systemctl restart kiwix-serve.service"
-              dest=/etc/crontab
-  when: is_redhat
-
 # Create kiwix service
 
 - name: Create kiwix-serve service
@@ -94,8 +95,6 @@
             mode={{ item.mode }}
   with_items:
     - { src: 'kiwix-serve.service.j2', dest: '/etc/systemd/system/kiwix-serve.service', mode: '0655'}
-
-#    - { src: 'kiwix-serve-init.j2', dest: '/usr/libexec/kiwix-serve-init', mode: '0755'}
     - { src: 'iiab-make-kiwix-lib', dest: '/usr/bin/iiab-make-kiwix-lib', mode: '0755'}
     - { src: 'iiab-make-kiwix-lib.py', dest: '/usr/bin/iiab-make-kiwix-lib.py', mode: '0755'}
     - { src: 'iiab-make-apache-config.py', dest: '/usr/bin/iiab-make-apache-config.py', mode: '0755'}
