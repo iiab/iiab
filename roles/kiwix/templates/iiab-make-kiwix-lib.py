@@ -37,6 +37,7 @@ kiwix_manage = iiab_base_path + "/kiwix/bin/kiwix-manage"
 doc_root = get_iiab_env('WWWROOT')
 zim_version_idx = doc_root + "/common/assets/zim_version_idx.json"
 zim_versions = {}
+old_zim_map = {"bad.zim" : "unparseable name"}
 
 def main():
     """Server routine"""
@@ -64,8 +65,11 @@ def main():
             filename = filename[:zimpos]
             if filename not in files_processed:
                 files_processed[filename] = True
-                command = kiwix_manage + " " + kiwix_library_xml + " add " + content + filename + ".zim -i " + index + filename + ".zim.idx"
-                #command = kiwix_manage + " " + kiwix_library_xml + " add " + content + filename + ".zim"
+                zimname = content + filename + ".zim"
+                zimidx = index + filename + ".zim.idx"
+                command = kiwix_manage + " " + kiwix_library_xml + " add " + zimname
+                if os.path.isdir (zimidx): # only declare index if exists (could be embedded)
+                    command += " -i " + zimidx
                 #print command
                 args = shlex.split(command)
                 try:
@@ -74,13 +78,17 @@ def main():
                     # create map of generic zim name to actual, assumes pattern of <name>_<yyyy-mm>
                     # all current files follow this pattern, but some older ones, no longer in the catalog, do not
 
-                    ulpos = filename.rfind("_")
-                    # but gutenberg don't
-                    if "gutenberg_" in filename:
-                        ulpos = filename[:ulpos].rfind("_")
+                    if filename in old_zim_map: # handle old names that don't parse
+                        wiki_name = old_zim_map[filename]
+                    else:
+                        ulpos = filename.rfind("_")
+                        # but gutenberg don't - future maybe put in old_zim_map (en and fr, but instance dates may change)
+                        if "gutenberg_" in filename:
+                            ulpos = filename[:ulpos].rfind("_")
+                        wiki_name = filename[:ulpos]
 
-                    wiki_name = filename[:ulpos]
                     zim_versions[wiki_name] = filename # if there are multiples, last should win
+
                 except: #skip things that don't work
                     print 'skipping ' + filename
                     pass
