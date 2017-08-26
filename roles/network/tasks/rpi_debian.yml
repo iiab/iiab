@@ -27,11 +27,6 @@
       gui_desired_network_role: "LanController"
   when: not gui_desired_network_role is defined
 
-- name: set the interface variables based upon gui_desired_role
-  set_fact: 
-       discovered_wireless_iface: wlan0
-       discovered_wan_iface: eth0
-       
 - name: Copy the network config script -- previously in /etc/network/interfaces.d/br0 
   template: dest=/etc/network/interfaces
             src=network/interfaces.j2
@@ -40,6 +35,11 @@
 - name: If this was a change, things need to shift
   service: name=hostapd state=stopped
   when: interface.changed
+
+- name: reset the bridge slaves interface
+  command: ifdown {{ detected_lan }}
+  ignore_errors: True
+  when: interface.changed and detected_lan != "none"
 
 - name: dhcpd may be affected
   service: name=bind9 state=stopped
@@ -52,11 +52,6 @@
 
 - name: and remove the device 
   command: brctl delbr br0
-  ignore_errors: True
-  when: interface.changed
-
-- name: reset the eth0 interface 
-  command: ifdown eth0
   ignore_errors: True
   when: interface.changed
 
