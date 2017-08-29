@@ -17,15 +17,19 @@
      kiwix_src_bin_only: True
   when: ansible_machine == "armv7l"
 
-- name: Get the kiwix software
-  get_url: url="{{ iiab_download_url }}/{{ kiwix_src_file }}"  dest="{{ downloads_dir }}/{{ kiwix_src_file }}"
-  when: internet_available 
-
-- include: kiwix_install.yml
-  when: kiwix_src_file is defined
-  tags:
-    - kiwix
-
 - debug:  msg="WARNING kiwix source is not defined for your platform"
   when: not kiwix_src_file
 
+- name: See if kiwix is already configured
+  stat: path=/etc/systemd/system/kiwix-serve.service
+  register: kiwix_installed
+
+- name: Get the kiwix software
+  get_url: url="{{ iiab_download_url }}/{{ kiwix_src_file }}"  dest="{{ downloads_dir }}/{{ kiwix_src_file }}"
+  when: kiwix_installed is defined and not kiwix_installed.stat.exists and internet_available and kiwix_src_file is defined
+
+- include: kiwix_install.yml
+  when: kiwix_installed is defined and not kiwix_installed.stat.exists and kiwix_src_file is defined
+
+- include: enable.yml
+  when: kiwix_src_file is defined
