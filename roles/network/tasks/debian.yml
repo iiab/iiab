@@ -18,10 +18,15 @@
 #  package: name=dhcpcd5
 #           state=present
 
-- name: remove br0.cfg file if no LAN
+- name: remove br0 file if no LAN
   file: path=/etc/network/interfaces.d/br0
         state=absent
   when: iiab_lan_iface == "none"
+
+- name: remove wan file if no WAN
+  file: path=/etc/network/interfaces.d/wan
+        state=absent
+  when: iiab_wan_iface == "none"
 
 #- name: default to lan controller
 #  set_fact:
@@ -33,16 +38,22 @@
 #            src=network/interfaces.j2
 #  register: interface
 
+#- name: Copy the wan script
+#  template: dest=/etc/network/interfaces.d/wan
+#            src=network/wan.j2
+#  when: iiab_wan_iface != "none" and not wan_in_interfaces and dhcpcd_result == ""
+#  register: wan
+
 - name: Copy the bridge script
   template: dest=/etc/network/interfaces.d/br0
             src=network/br0.j2
   when: iiab_lan_iface == "br0"
   register: interface
 
-#- name: start up the dhcpcd service
-#  service: name=dhcpcd
-#           enabled=True
-#           state=started
+- name: stop the dhcpcd service
+  service: name=dhcpcd
+           state=stopped
+  when: interface.changed and dhcpcd_result == "enabled"
 
 - name: If this was a change, things need to shift
   service: name=hostapd state=stopped
@@ -59,6 +70,11 @@
 - name: start up hostapd again
   service: name=hostapd state=started
   when: interface.changed
+
+- name: start the dhcpcd service
+  service: name=dhcpcd
+           state=started
+  when: interface.changed and dhcpcd_result == "enabled"
 
 - name: dns may be affected
   service: name=bind9 state=started
