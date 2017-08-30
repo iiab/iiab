@@ -11,7 +11,7 @@ http://elgg.org/
 After Installation
 ------------------
 
-Go to http://schoolserver.lan/elgg and log on as Admin with password changeme.
+Go to http://box.lan/elgg and log on as Admin with password changeme.
 
 Change the following:
 
