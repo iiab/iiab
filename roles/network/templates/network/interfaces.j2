@@ -7,22 +7,24 @@ source /etc/network/interfaces.d/*
 auto lo
 iface lo inet loopback
 
-# iiab_network_mode is {{ gui_desired_network_role }}
-{% if discovered_wireless_iface != 'none' %}
+# iiab_network_mode is {{ iiab_network_role }}
+# gui_desired_network_role is {{ gui_desired_network_role }}
+
+{% if iiab_wireless_lan_iface != 'none' %}
 # we always want the wireless to be configured (and under bridge) if it exists
-auto {{ discovered_wireless_iface }}
-iface {{discovered_wireless_iface }} inet manual
+auto {{ iiab_wireless_lan_iface }}
+iface {{ iiab_wireless_lan_iface }} inet manual
    pre-up   ifconfig $IFACE up
    pre-down ifconfig $IFACE down
 {% endif %}
 
 {% if iiab_network_mode == "Appliance"  %}
 #################   APPLIANCE #########################
-auto {{ discovered_wan_iface }}
+auto {{ iiab_wan_iface }}
 {% if gui_static_wan == false %}
-iface {{ discovered_wan_iface }} inet manual
+iface {{ iiab_wan_iface }} inet dhcp
 {% else %} # gui_static_wan_ip is set 
-iface {{ discovered_wan_iface }} inet static
+iface {{ iiab_wan_iface }} inet static
     address {{ gui_static_wan_ip }}
     netmask {{ gui_static_wan_netmask }}
     gateway {{ gui_static_wan_gateway }}
@@ -33,17 +35,17 @@ iface {{ discovered_wan_iface }} inet static
 #################   GATEWAY   #########################
 auto br0
 iface br0 inet static
-    bridge_ports {% if discovered_wireless_iface != "none" %} {{ discovered_wireless_iface }} {% endif %} {% if discovered_lan_iface != "none" %} {{ discovered_lan_iface }} {% endif %}
+    bridge_ports {% if iiab_wireless_lan_iface != "none" %} {{ iiab_wireless_lan_iface }} {% endif %} {% if detected_lan != "none" %} {{ detected_lan }} {% endif %}
 
     bridge_maxwait 0
     address {{ lan_ip }}
     netmask {{ lan_netmask }}
     dns-nameservers {{ lan_ip }}
 {% if gui_static_wan == false %}
-auto {{ discovered_wan_iface }}
-iface {{ discovered_wan_iface }} inet dhcp
+auto {{ iiab_wan_iface }}
+iface {{ iiab_wan_iface }} inet dhcp
 {% else %} # gui_static_wan_ip is set 
-iface {{ discovered_wan_iface }} inet static
+iface {{ iiab_wan_iface }} inet static
     address {{ gui_static_wan_ip }}
     netmask {{ gui_static_wan_netmask }}
     gateway {{ gui_static_wan_gateway }}
@@ -56,7 +58,7 @@ iface {{ discovered_wan_iface }} inet static
 #################   LANCONTROLLER   ###################
 auto br0
 iface br0 inet static
-    bridge_ports {% if discovered_wireless_iface != "none" %} {{ discovered_wireless_iface }} {% endif %} {% if discovered_wan_iface != "none" %} {{ discovered_wan_iface }} {% endif %}
+    bridge_ports {% if iiab_wireless_lan_iface != "none" %} {{ iiab_wireless_lan_iface }} {% endif %} {% if detected_lan != "none" %} {{ detected_lan }} {% endif %}
 
     bridge_maxwait 0
     address {{ lan_ip }}
@@ -66,4 +68,3 @@ iface br0 inet static
     dns-search {{ iiab_domain }}
     post-up systemctl restart dhcpd && systemctl restart hostapd
 {% endif %}
-
