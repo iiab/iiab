@@ -1,14 +1,13 @@
 - name: insure than apache is not running
   service: name=apache2 enabled=false state=stopped
 
-- name: Install nginx
-  package: name=nginx state=present
-
-- name: Install uwsgi
-  package: name=uwsgi state=present
-
-- name: Install fastcgi for php support
-  package: name=php-fpm state=present
+- name: Install nginx required  and helper packages
+  package: name={{ item }} state=present
+  with_items:
+    - nginx
+    - uwsgi
+    - uwsgi-plutin-python
+    - php-fpm
 
 - name: put the config file in place
   template: src={{ item.src}}  dest={{ item.dest }}
@@ -17,6 +16,8 @@
      - { src: "kiwix-nginx.conf",dest: "/etc/nginx/sites-available/" }
      - { src: "server.conf",dest: "/etc/nginx/" }
      - { src: "nginx.conf",dest: "/etc/nginx/" }
+     - { src: "admin-console.conf",dest: "/etc/nginx/conf.d" }
+     - { src: "admin-console.ini",dest: "/etc/uwsgi/app/" }
 
 - name: remove the nginx default config
   file: path=/etc/nginx/sites-available/default state=absent
@@ -25,8 +26,22 @@
   file: src=/etc/nginx/sites-available/kalite_nginx.conf
         dest=/etc/nginx/sites-enabled/kalite_nginx.conf
         state=link
+  when: nginx_enabled
 
 - name: link enable kiwix
   file: src=/etc/nginx/sites-available/kiwix_nginx.conf
         dest=/etc/nginx/sites-enabled/kiwix_nginx.conf
         state=link
+  when: kiwix_enabled
+
+- name: remove the links 
+  file: src=/etc/nginx/sites-available/kalite_nginx.conf
+        dest=/etc/nginx/sites-enabled/kalite_nginx.conf
+        state=absent
+  when: not nginx_enabled
+
+- name: link enable kiwix
+  file: src=/etc/nginx/sites-available/kiwix_nginx.conf
+        dest=/etc/nginx/sites-enabled/kiwix_nginx.conf
+        state=absent
+  when: not kiwix_enabled
