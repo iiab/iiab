@@ -28,8 +28,13 @@
       gui_desired_network_role: "LanController"
   when: not gui_desired_network_role is defined
 
-- name: Copy the network config script 
-  template: dest=/etc/network/interfaces.d/iiab
+- name: Supply dhcpcd.conf
+  template: dest=/etc/dhcpcd.conf
+            src=network/dhcpcd.conf.j2
+  when: iiab_lan_iface != "br0"
+
+- name: Copy the network config script -- previously in /etc/network/interfaces.d/br0 
+  template: dest=/etc/network/interfaces.d/br0
             src=network/interfaces.j2
   register: interface
 
@@ -37,8 +42,8 @@
   service: name=hostapd state=stopped
   when: interface.changed
 
-- name: dhcpd may be affected
-  service: name=bind9 state=stopped
+- name: dhcpcd may be affected
+  service: name=dhcpcd state=stopped
   when: interface.changed
 
 - name: Tear down any bridge and start fresh
@@ -64,8 +69,8 @@
   service: name=hostapd state=started
   when: interface.changed
 
-- name: dhcpd may be affected
-  service: name=bind9 state=started
+- name: start up dhcpcd again
+  service: name=dhcpcd state=started
   when: interface.changed
 
 #create lan br0 if lan_controller or gateway
