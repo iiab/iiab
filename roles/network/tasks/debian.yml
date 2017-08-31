@@ -20,34 +20,41 @@
 #  package: name=dhcpcd5
 #           state=present
 
-- name: for upgrades from earlier 6.2, remove br0 file
+- name: removing /etc/network/interfaces.d/br0
   file: path=/etc/network/interfaces.d/br0
         state=absent
+  when: iiab_lan_iface != "br0"
 
 - name: default to lan controller
   set_fact:
       gui_desired_network_role: "lan_controller"
   when: not gui_desired_network_role is defined
 
-- name: Recover from putting config in /etc/network/interfaces
-  template: dest=/etc/network/interfaces
-            src=network/interfaces.j2
+- name: Supply dhcpcd.conf
+  template: dest=/etc/dhcpcd.conf
+            src=network/dhcpcd.conf.j2
+  when: iiab_lan_iface == "br0" or gui_static_wan == "true"
 
 - name: Copy the bridge script 
   template: dest=/etc/network/interfaces.d/iiab
-            src=network/iiab.j2
+            src=network/interfaces.j2
   register: interface
+  when: iiab_lan_iface == "br0"
 
-- name: start up the dhcpcd service
-  service: name=dhcpcd
-           enabled=True
-           state=started
+#- name: Copy the bridge script -- was in interfaces.d/
+#  template: dest=/etc/network/interfaces
+#            src=network/interfaces.j2
+#  register: interface
 
 - name: If this was a change, things need to shift
   service: name=hostapd state=stopped
   when: interface.changed
 
-- name: dhcpd may be affected
+- name: dhcpcd may be affected
+  service: name=dhcpcd state=stopped
+  when: interface.changed
+
+- name: dns may be affected
   service: name=bind9 state=stopped
   when: interface.changed
 
@@ -59,7 +66,11 @@
   service: name=hostapd state=started
   when: interface.changed
 
-- name: dhcpd may be affected
+- name: start up dhcpcd again
+  service: name=dhcpcd state=started
+  when: interface.changed
+
+- name: dns may be affected
   service: name=bind9 state=started
   when: interface.changed
 
