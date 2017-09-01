@@ -29,6 +29,15 @@
     has_WAN: True
   when: has_ifcfg_WAN.stat.exists
 
+- name: check to see if dhcpcd is installed and active
+  shell: systemctl is-enabled dhcpcd
+  register: dhcpcd_test
+  ignore_errors: True
+
+- name: setting dhcpcd_test results
+  set_fact:
+   dhcpcd_result: "{{ dhcpcd_test.stdout }}"
+
 # DETECT -- gateway and wireless
 - name: Get a list of slaves from previous config
   shell: "egrep -rn BRIDGE=br0 /etc/sysconfig/network-scripts/ifcfg-* | gawk -F'[-:]' '{print $3}'"
@@ -73,6 +82,16 @@
     iiab_wan_iface: "{{ discovered_wan_iface }}"
     device_gw: "{{ discovered_wan_iface }}"
   when: discovered_wan_iface != "none"
+
+- name: check /etc/network/interfaces for gateway
+  shell: grep {{ device_gw }} /etc/network/interfaces | wc -l
+  register: wan_file
+  when: is_debuntu
+
+- name: setting wan_in_interfaces
+  set_fact:
+    wan_in_interfaces: False
+  when: is_debuntu and  wan_file.stdout|int == "0"
 
 # returns list of paths
 - name: Find gateway config based on device
@@ -292,3 +311,7 @@
     value: '{{ discovered_lan_iface }}'
   - option: 'static_wan'
     value: '{{ gui_static_wan }}'
+  - option: 'wan_in_interfaces'
+    value: '{{ wan_in_interfaces }}'
+  - option: 'dhcpcd_result'
+    value: '{{ dhcpcd_result }}'

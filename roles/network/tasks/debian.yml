@@ -13,37 +13,62 @@
 - name: in upgrade from earlier 6.2, delete the resolvconf
   package: name=resolvconf
            state=absent
-           enabled=False
-  ignore_errors: True
 
-- name: Get the dhcp client daemon used in recent raspbian
-  package: name=dhcpcd5
-           state=present
+#- name: Get the dhcp client daemon used in recent raspbian
+#  package: name=dhcpcd5
+#           state=present
 
-- name: for upgrades from earlier 6.2, remove br0 file
+- name: remove br0 file if no LAN
   file: path=/etc/network/interfaces.d/br0
         state=absent
+  when: iiab_lan_iface == "none"
 
-- name: default to lan controller
+- name: remove wan file if no WAN
+  file: path=/etc/network/interfaces.d/wan
+        state=absent
+  when: iiab_wan_iface == "none"
+
+#- name: default to lan controller
+#  set_fact:
+#      gui_desired_network_role: "lan_controller"
+#  when: not gui_desired_network_role is defined
+
+#- name: Copy the bridge script
+#  template: dest=/etc/network/interfaces
+#            src=network/interfaces.j2
+#  register: interface
+
+- name: setting dhcp client to dhcp
   set_fact:
-      gui_desired_network_role: "lan_controller"
-  when: not gui_desired_network_role is defined
+    dhcp_client: dhcp
 
-- name: Copy the bridge script -- was in interfaces.d/
-  template: dest=/etc/network/interfaces
-            src=network/interfaces.j2
+- name: setting dhcp client to manual
+  set_fact:
+    dhcp_client: manual
+  when: dhcpcd_result == "enabled"
+
+- name: Copy the wan script
+  template: dest=/etc/network/interfaces.d/wan
+            src=network/wan.j2
+  when: iiab_wan_iface != "none" and not wan_in_interfaces
+  register: wan
+
+- name: Copy the bridge script
+  template: dest=/etc/network/interfaces.d/br0
+            src=network/br0.j2
+  when: iiab_lan_iface == "br0"
   register: interface
 
-- name: start up the dhcpcd service
+- name: stop the dhcpcd service
   service: name=dhcpcd
-           enabled=True
-           state=started
+           state=stopped
+  when: interface.changed and dhcpcd_result == "enabled"
 
 - name: If this was a change, things need to shift
   service: name=hostapd state=stopped
   when: interface.changed
 
-- name: dhcpd may be affected
+- name: dns may be affected
   service: name=bind9 state=stopped
   when: interface.changed
 
@@ -55,7 +80,12 @@
   service: name=hostapd state=started
   when: interface.changed
 
-- name: dhcpd may be affected
+- name: start the dhcpcd service
+  service: name=dhcpcd
+           state=started
+  when: interface.changed and dhcpcd_result == "enabled"
+
+- name: dns may be affected
   service: name=bind9 state=started
   when: interface.changed
 

@@ -27,21 +27,21 @@
       gui_desired_network_role: "LanController"
   when: not gui_desired_network_role is defined
 
-- name: set the interface variables based upon gui_desired_role
-  set_fact: 
-       discovered_wireless_iface: wlan0
-       discovered_wan_iface: eth0
-       
 - name: Copy the network config script -- previously in /etc/network/interfaces.d/br0 
   template: dest=/etc/network/interfaces
-            src=network/interfaces.j2
+            src=network/rpi.j2
   register: interface
 
 - name: If this was a change, things need to shift
   service: name=hostapd state=stopped
   when: interface.changed
 
-- name: dhcpd may be affected
+- name: reset the bridge slaves interface
+  command: ifdown {{ discovered_lan_iface }}
+  ignore_errors: True
+  when: interface.changed and discovered_lan_iface != "none"
+
+- name: dns may be affected
   service: name=bind9 state=stopped
   when: interface.changed
 
@@ -55,11 +55,6 @@
   ignore_errors: True
   when: interface.changed
 
-- name: reset the eth0 interface 
-  command: ifdown etho
-  ignore_errors: True
-  when: interface.changed
-
 - name: restart the networking service
   service: name=networking state=restarted
   when: interface.changed
@@ -68,7 +63,7 @@
   service: name=hostapd state=started
   when: interface.changed
 
-- name: dhcpd may be affected
+- name: dns may be affected
   service: name=bind9 state=started
   when: interface.changed
 
