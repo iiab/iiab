@@ -30,6 +30,6 @@ wget http://download.iiab.io/6.4/rpi/load-lite.txt
 * After the script completes you can add content
 * And/or make the Wifi into a stand alone hotspot (or gateway if you add an internet connected ethernet wire) 
 ```
-  hotspot
+  hotspot (this script is not yet available; but will be before release of 6.4)
 ```
 * now you must asociate to the wifi with the default SSID "internet in a box" 
