@@ -1,153 +1,73 @@
-# this becomes the default local_vars.yml for debian distros if 
-#  local_vars.yml is missing. It loads supported applications, for testing
+#!/bin/bash -x
+# Start loading IIAB. "bash -x" is debug mode
 
-iiab_admin_user: iiab-admin
+# 1. RUN: "sudo su -" then "raspi-config" to set "Localisation Options"
+# 2. OPTIONAL: "passwd pi; touch /boot/ssh; reboot" to ssh in immediately
+# 3. RUN THIS SCRIPT: curl download.iiab.io/6.4/rpi/load-big.txt | bash
+# 4. When this script completes (might take an hour or more!) please set
+#    /etc/iiab/handle IF YOU USE openvpn@xscenet AND REGARDLESS REBOOT
+#    which sets the hostname, while improving RTC settings + memory mgmt
 
-# Obtain a password hash with: python -c 'import crypt; print crypt.crypt("<plaintext>", "$6$<salt>")'
-# iiab_admin_passw_hash:
+set -e                    # to exit on error (avoids snowballing)
 
-iiab_hostname: box
-iiab_domain: lan
+tune2fs -m 1 /dev/mmcblk0p2
+# Above changes reserve disk space from ~5% to 1%
 
-iiab_home_url: /home
-host_ssid: "Test Debian OSes"
-host_wifi_mode: g
-host_channel: 6
-hostapd_secure: False
-hostapd_password: changeme
+export DEBIAN_FRONTEND=noninteractive
+apt update
+apt -y dist-upgrade
+apt -y clean
+# Above updates Raspbian for security especially
 
-dns_jail_enabled: False
+apt -y install git
+# Above for Raspbian Lite; USE "apt remove" OR "apt purge" ON UNNEEDED SW LATER
 
-# Enables "campus access" to kiwix (3000), kalite (8008) & calibre (8010 or
-# 8080) on WAN side of server. See network/templates/gateway/iiab-gen-iptables
-# within github.com/iiab/iiab/blob/master/roles/
-services_externally_visible: True
+mkdir -p /opt/iiab
+cd /opt/iiab/
+git clone https://github.com/iiab/iiab --depth 1
+git clone https://github.com/iiab/iiab-admin-console --depth 1
+git clone https://github.com/iiab/iiab-menu --depth 1
+git clone https://github.com/iiab/iiab-factory --depth 1
 
-# Make this True if client machines should have access to WAN/Internet:
-iiab_gateway_enabled: True
+cd /opt/iiab/iiab/scripts/
+./ansible
+# Installs the correct version of Ansible
 
-# Make this True if you want http://box/common/services/power_off.php to work:
-allow_apache_sudo: False
+cd /opt/iiab/iiab/vars/
+if [ -f local_vars.yml ]; then
+    echo "ERROR: Plz move /opt/iiab/iiab/vars/local_vars.yml to proceed." >&2
+    exit 1
+elif [ -f local_vars_big.yml ]; then
+    echo "ERROR: Plz move /opt/iiab/iiab/vars/local_vars_big.yml to proceed." >&2
+    exit 1
+fi
+wget http://download.iiab.io/6.4/rpi/local_vars_big.yml
+mv local_vars_big.yml local_vars.yml
+# Above assumes a virgin RPi system (wget WON'T overwrite existing files)
 
-# 3-BASE
+# In general please examine local_vars.yml carefully (and modify as nec)
+# before running Ansible (below, which can take ~2 hours the first time!)
 
-squid_install: True
-squid_enabled: True
+# NOTE: you can change many/most settings after install too, using the
+# Admin Console (http://box/admin) as documented at: http://FAQ.IIAB.IO
 
-dansguardian_install: True
-dansguardian_enabled: True
+cd /opt/iiab/iiab/
+./runansible
+# Try to rerun the above line if it fails?
 
-wondershaper_install: False
-wondershaper_enabled: False
+cd /opt/iiab/iiab-admin-console/
+./install
 
-# 4-SERVER-OPTIONS
+cd /opt/iiab/iiab-menu/
+./cp-menus
 
-# SECURITY WARNING: See http://wiki.laptop.org/go/IIAB/Security
-openvpn_install: True
-openvpn_enabled: False
-# The following seems necessary on CentOS:
-# openvpn_cron_enabled: True
-# If changing the above, remember to run "cd /opt/iiab/iiab; ./runtags openvpn"
+iiab-cmdsrv-ctl GET-KIWIX-CAT
+# Refresh Kiwix catalog
+iiab-make-kiwix-lib
+# Rebuild local library.xml
 
-# WARNING: Josh Dennis [April 2017] warned that CUPS printing can block Ansible
-cups_install: True
-cups_enabled: True
-
-# At Your Own Risk: take a security audit seriously before deploying this
-samba_install: False
-samba_enabled: False
-
-# Handy for maintaining tables, but DANGEROUS if not locked down
-phpmyadmin_install: False
-phpmyadmin_enabled: False
-
-# 5-XO-SERVICES
-
-# Legacy XO services have been removed but are recoverable.  Please contact
-# http://lists.laptop.org/pipermail/server-devel/ if you're able to help test.
-
-# authserver_install: False
-# authserver_enabled: False
-
-# activity_server_install: False
-# activity_server_enabled: False
-
-# Change calibre_port from 8080 to 8010 below, if you enable idmgr
-# idmgr_install: False
-# idmgr_enabled: False
-
-# ejabberd_install: False
-# ejabberd_enabled: False
-
-# xo_services_install: False
-# xo_services_enabled: False
-
-# sugar_stats_install: False
-# sugar_stats_enabled: False
-
-# xovis_install: False
-# xovis_enabled: False
-
-# 6-GENERIC-APPS
-
-nextcloud_install: True
-nextcloud_enabled: True
-
-wordpress_install: True
-wordpress_enabled: True
-
-elgg_install: True
-elgg_enabled: True
-
-dokuwiki_install: True
-dokuwiki_enabled: True
-
-# 7-EDU-APPS
-
-# OpenStreetMap: renamed from {iiab_install, iiab_enabled} in June 2017
-osm_install: True
-osm_enabled: True
-
-kiwix_serve_install: True
-kiwix_serve_enabled: True
-
-kalite_install: True
-kalite_enabled: True
-kalite_cron_enabled: True
-
-# Might stall MongoDB on Power Failure: github.com/xsce/xsce/issues/879
-sugarizer_install: True
-sugarizer_enabled: True
-
-calibre_install: True
-calibre_enabled: True
-# Change calibre_port to 8010 if you're using XO laptops needing above idmgr
-calibre_port: 8080
-
-# Similar to Calibre, but unmaintained
-pathagar_install: False
-pathagar_enabled: False
-
-# Change to True if you have disk space & don't mind Ansible's ~15 min delay
-moodle_install: True
-moodle_enabled: True
-
-# 8-MGMT-TOOLS
-
-munin_install: True
-munin_enabled: True
-
-vnstat_install: True
-vnstat_enabled: True
-
-awstats_install: True
-awstats_enabled: True
-
-monit_install: False
-monit_enabled: False
-
-schooltool_install: False
-schooltool_enabled: False
-
-debian_schooltool_install: False
-debian_schooltool_enabled: False
+export KALITE_HOME=/library/ka-lite
+kalite manage generate_zone
+# Register with KA Lite
+kalite manage retrievecontentpack download en
+# Get KA Lite English language pack (slow download!)
