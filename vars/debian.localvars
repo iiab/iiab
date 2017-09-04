@@ -1,29 +1,73 @@
-# Put variables for your installation that override defaults here
-# Better still, put this file in a branch of https://github.com/XSCE/iiab-local for your deployment
+#!/bin/bash -x
+# Start loading IIAB. "bash -x" is debug mode
 
-#iiab_admin_user: iiab-admin
+# 1. RUN: "sudo su -" then "raspi-config" to set "Localisation Options"
+# 2. OPTIONAL: "passwd pi; touch /boot/ssh; reboot" to ssh in immediately
+# 3. RUN THIS SCRIPT: curl download.iiab.io/6.4/rpi/load-big.txt | bash
+# 4. When this script completes (might take an hour or more!) please set
+#    /etc/iiab/handle IF YOU USE openvpn@xscenet AND REGARDLESS REBOOT
+#    which sets the hostname, while improving RTC settings + memory mgmt
 
-# obtain a password hash with - python -c 'import crypt; print crypt.crypt("<plaintext>", "$6$<salt>")'
-#iiab_admin_passw_hash: 
-varible: value
-# 4-server-options
-authserver_install: False
-authserver_enabled: False
-# 5-xoservices
-xo_services_install: True
-ejabberd_install: False
-ejabberd_enabled: False
-idmgr_install: False
-debian_schooltool_install: False
-# 6-generic-aps
-# 7-edu-aps
-pathagar_install: False
-# 8-mgmat-tools
-sugar_stats_install: False
-ajenti_install: False
-monit_install: True
-xovis_install: False
-teamviewer_install: False
-activity_server_enabled: True
+set -e                    # to exit on error (avoids snowballing)
 
+tune2fs -m 1 /dev/mmcblk0p2
+# Above changes reserve disk space from ~5% to 1%
 
+export DEBIAN_FRONTEND=noninteractive
+apt update
+apt -y dist-upgrade
+apt -y clean
+# Above updates Raspbian for security especially
+
+apt -y install git
+# Above for Raspbian Lite; USE "apt remove" OR "apt purge" ON UNNEEDED SW LATER
+
+mkdir -p /opt/iiab
+cd /opt/iiab/
+git clone https://github.com/iiab/iiab --depth 1
+git clone https://github.com/iiab/iiab-admin-console --depth 1
+git clone https://github.com/iiab/iiab-menu --depth 1
+git clone https://github.com/iiab/iiab-factory --depth 1
+
+cd /opt/iiab/iiab/scripts/
+./ansible
+# Installs the correct version of Ansible
+
+cd /opt/iiab/iiab/vars/
+if [ -f local_vars.yml ]; then
+    echo "ERROR: Plz move /opt/iiab/iiab/vars/local_vars.yml to proceed." >&2
+    exit 1
+elif [ -f local_vars_big.yml ]; then
+    echo "ERROR: Plz move /opt/iiab/iiab/vars/local_vars_big.yml to proceed." >&2
+    exit 1
+fi
+wget http://download.iiab.io/6.4/rpi/local_vars_big.yml
+mv local_vars_big.yml local_vars.yml
+# Above assumes a virgin RPi system (wget WON'T overwrite existing files)
+
+# In general please examine local_vars.yml carefully (and modify as nec)
+# before running Ansible (below, which can take ~2 hours the first time!)
+
+# NOTE: you can change many/most settings after install too, using the
+# Admin Console (http://box/admin) as documented at: http://FAQ.IIAB.IO
+
+cd /opt/iiab/iiab/
+./runansible
+# Try to rerun the above line if it fails?
+
+cd /opt/iiab/iiab-admin-console/
+./install
+
+cd /opt/iiab/iiab-menu/
+./cp-menus
+
+iiab-cmdsrv-ctl GET-KIWIX-CAT
+# Refresh Kiwix catalog
+iiab-make-kiwix-lib
+# Rebuild local library.xml
+
+export KALITE_HOME=/library/ka-lite
+kalite manage generate_zone
+# Register with KA Lite
+kalite manage retrievecontentpack download en
+# Get KA Lite English language pack (slow download!)
