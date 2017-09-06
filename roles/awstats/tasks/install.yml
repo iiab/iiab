@@ -34,12 +34,12 @@
     - "{{ apache_log_dir }}"
 
 - name: Install the Apache config for Advanced Web Statistics 
-  template: src=apache.conf
-            dest=/etc/{{ apache_config_dir }}/awstats.conf
+  template: src=awstats-apache.conf
+            dest=/etc/{{ apache_config_dir }}/awstats-apache.conf
             owner=root
             group=root
             mode=0644
-  when: awstats_enabled and is_debuntu
+  when: awstats_enabled and is_debuntu and apache_install
 
 - name: Install the Apache config for Advanced Web Statistics 
   template: src=apache-awstats.conf
@@ -47,7 +47,7 @@
             owner=root
             group=root
             mode=0644
-  when: awstats_enabled and not is_debuntu
+  when: awstats_enabled and not is_debuntu and apache_install
 
 - name: make sure logrotate does not make logs unreadable
   template: src=logrotate.d.apache2
@@ -67,12 +67,29 @@
   file: src=/etc/apache2/sites-available/awstats.conf
         path=/etc/apache2/sites-enabled/awstats.conf
         state=link
-  when: awstats_enabled and is_debuntu
+  when: awstats_enabled and is_debuntu and apache_enabled
 
 - name: Disable Awstats
   file: path=/etc/apache2/sites-enabled/awstats.conf
         state=absent
-  when: not awstats_enabled and is_debuntu
+  when: not awstats_enabled and is_debuntu and apache_enabled
+
+- name: Configure nginx
+  template: src=awstats-nginx.conf dest=/etc/nginx/sites-available/
+  when: awstats_install and nginx_install
+  
+- name: Enable awstats on nginx
+  file: src=/etc/nginx/sites-available/awstats-nginx.conf 
+        dest=/etc/nginx/sites-enabled/awstats-nginx.conf
+        state=link
+  when: awstats_enabled and nginx_install
+  
+- name: Disable awstats on nginx
+  file: src=/etc/nginx/sites-available/awstats-nginx.conf 
+        dest=/etc/nginx/sites-enabled/awstats-nginx.conf
+        state=absent
+  when: not awstats_enabled and nginx_install
+  
 
 - name: Install the awstats config for Advanced Web Statistics 
   template: src=awstats.schoolserver.conf.j2
