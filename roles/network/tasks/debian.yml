@@ -25,11 +25,6 @@
         state=absent
   when: iiab_lan_iface != "br0" and wan_ip == "dhcp"
 
-- name: default to lan controller
-  set_fact:
-      gui_desired_network_role: "lan_controller"
-  when: not gui_desired_network_role is defined
-
 - name: Supply resolvconf.conf
   template: dest=/etc/resolvconf.conf
             src=network/resolvconf.j2
@@ -54,24 +49,41 @@
   service: name=hostapd state=stopped
   when: interface.changed
 
-- name: dhcpcd may be affected
-  service: name=dhcpcd state=stopped
-  when: interface.changed and dhcpcd_result == "enabled"
+#- name: dhcpcd may be affected
+#  service: name=dhcpcd state=stopped
+#  when: interface.changed and dhcpcd_result == "enabled"
 
 - name: dns may be affected
-  service: name=bind9 state=stopped
+  service: name={{ dns_service2 }} state=stopped
   when: interface.changed
 
 - name: reload systemd
   shell: systemctl daemon-reload
 
+# now pick up denyinterfaces
+- name: restart dhcpcd
+  service: name=dhcpcd state=restarted
+  when: interface.changed and dhcpcd_result == "enabled"
+
 - name: restart the networking service
   service: name=networking state=restarted
   when: interface.changed
   
+- name: start up hostapd again
+  service: name=hostapd state=started
+  when: interface.changed
+
 - name: start up dhcpcd again
   service: name=dhcpcd state=started
-  when: interface.changed and dhcpcd_result == "enabled"
+  when: interface.changed
+
+- name: dns may be affected
+  service: name=bind9 state=started
+  when: interface.changed
+
+- name: dns may be affected
+  service: name={{ dns_service2 }} state=started
+  when: interface.changed
 
 #create lan br0 if lan_controller or gateway
 #create wan br0 if appliance
