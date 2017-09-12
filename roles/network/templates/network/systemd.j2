@@ -1,26 +1,5 @@
-# This file describes the network interfaces available on your system
-# and how to activate them. For more information, see interfaces(5).
-
-{% if iiab_network_mode == "Appliance"  %}
-#################   APPLIANCE #########################
-{% if dhcpcd_result == "enabled" and wan_in_interfaces == "false" %}
-auto {{ iiab_wan_iface }}
-iface {{ iiab_wan_iface }} inet manual
-{% else %} # gui_static_wan_ip is set 
-iface {{ iiab_wan_iface }} inet manual
-{% endif %} {# end of dhcp_wan #}
-
-{% if wan_ip != "dhcp" %}
-auto {{ iiab_wan_iface }}
-iface {{ iiab_wan_iface }} inet static
-    address {{ wan_ip }}
-    netmask {{ wan_netmask }}
-    gateway {{ wan_gateway }}
-    dns-nameservers {{ wan_nameserver }}
-    dns-search {{ iiab_domain }}
-{% endif %} {# end of static_wan #}
-{% elif iiab_network_mode == "Gateway"  %}
-#################   GATEWAY   #########################
+{% if iiab_network_mode != "Appliance"  %}
+#################   LANCONTROLLER   ###################
 auto br0
 iface br0 inet static
     bridge_ports {% if iiab_wireless_lan_iface != "none" %} {{ iiab_wireless_lan_iface }} {% endif %} {% if discovered_lan_iface != "none" %} {{ discovered_lan_iface }} {% endif %}
@@ -28,8 +7,22 @@ iface br0 inet static
     bridge_maxwait 0
     address {{ lan_ip }}
     netmask {{ lan_netmask }}
+    {% if iiab_network_mode == "Gateway"  %}
+    gateway {{ lan_ip }}
+    {% endif %}
     dns-nameservers {{ lan_ip }}
-{% if dhcpcd_result == "enabled" and wan_in_interfaces == "false" %}
+    dns-search {{ iiab_domain }}
+{% endif %}
+{# end LANCONTROLLER #}
+
+{% if iiab_network_mode != "LanController"  %}
+#################   GATEWAY or APPLIANCE #########################
+{% if dhcpcd_result == "enabled" or wan_in_interfaces == "true" %}
+# client or user defined
+{% endif %}
+
+{% if dhcpcd_result == "enabled" and is_rpi == "true" %}
+#cover rpi
 auto {{ iiab_wan_iface }}
 iface {{ iiab_wan_iface }} inet manual
 {% else %} # gui_static_wan_ip is set 
@@ -45,5 +38,5 @@ iface {{ iiab_wan_iface }} inet static
     dns-nameservers {{ wan_nameserver }}
     dns-search {{ iiab_domain }}
    {% endif %}
-{% else  %} {# end of iiab_network_mode == Gateway #}
-
+{% endif %} {# end of static_wan #}
+{# end of iiab_network_mode != LanController #}
