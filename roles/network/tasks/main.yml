@@ -1,9 +1,12 @@
+# setting installing would skip configuring network
+# but would configure but not start services
 - include: computed_network.yml
   when: not installing
   tags:
     - network
     - network-discover
 
+# start hostname setup
 - name: Set hostname
   template: dest=/etc/hostname
             src=network/hostname.j2
@@ -34,7 +37,6 @@
     - network
     - domain
 
-
 ##### Start static ip address info for first run #####
 #- include: static.yml
 #  when: 'iiab_wan_iface != "none" and wan_ip != "dhcp"'
@@ -44,6 +46,9 @@
   tags:
     - network
 
+##### end hostname setup
+##### start install portion
+# only needs to be done once
 - include: named.yml
   tags:
     - named
@@ -77,6 +82,8 @@
   shell: systemctl daemon-reload
   when: not installing
 
+#### end install portion
+#### start network layout
 - include: ifcfg_mods.yml
   tags:
     - network
@@ -92,6 +99,11 @@
     - network
   when: is_debuntu and is_rpi  and not installing
 
+- include: hostapd.yml
+  when: not installing
+  tags:
+    - network
+
 - name: Create iiab network flags
   template: src=network/{{ item }}.j2
             dest=/etc/sysconfig/{{ item }}
@@ -102,11 +114,14 @@
   when: not installing
   tags:
     - network
+#### end network layout
+#### start services
 
 - include: computed_services.yml
   tags:
     - network
- 
+
+# templates needed from above install section live here
 - include: enable_services.yml
   tags:
     - network
@@ -115,8 +130,4 @@
   when: not installing
   tags:
     - network
-
-- include: hostapd.yml
-  when: not installing
-  tags:
-    - network
+#### end services
