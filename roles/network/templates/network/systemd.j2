@@ -3,25 +3,32 @@
 
 #################   WIRELESS #########################
 {% if iiab_wireless_lan_iface != 'none' %}
-# we always want the wireless to be configured (and under bridge) if it exists
-auto {{ iiab_wireless_lan_iface }}
-iface {{ iiab_wireless_lan_iface }} inet manual
-   pre-up   ifconfig $IFACE up
-   pre-down ifconfig $IFACE down
+ we always want the wireless to be configured (and under bridge) if it exists
+#auto {{ iiab_wireless_lan_iface }}
+#iface {{ iiab_wireless_lan_iface }} inet manual
+#   pre-up   ifconfig $IFACE up
+#   pre-down ifconfig $IFACE down
 {% endif %}
 
 {% if iiab_network_mode != "Appliance"  %}
 #################   LANCONTROLLER   ###################
 auto br0
+{% if dhcpcd_result == "enabled" %}
+iface br0 inet manual
+{% else %}
 iface br0 inet static
-    bridge_ports {% if iiab_wireless_lan_iface != "none" %} {{ iiab_wireless_lan_iface }} {% endif %} {% if discovered_lan_iface != "none" %} {{ discovered_lan_iface }} {% endif %}
-
+{% endif %}
+{% if discovered_lan_iface != "none" %} 
+    bridge_ports {{ discovered_lan_iface }} 
+{% endif %}
     bridge_maxwait 0
+{% if dhcpcd_result != "enabled "%}
     address {{ lan_ip }}
     netmask {{ lan_netmask }}
-    {% if iiab_network_mode == "Gateway"  %}
+{% endif %}
+{% if iiab_network_mode == "Gateway" and dhcpcd_result != "enabled" %}
     gateway {{ lan_ip }}
-    {% endif %}
+{% endif %}
     dns-nameservers {{ lan_ip }}
     dns-search {{ iiab_domain }}
 {% endif %}
@@ -35,11 +42,15 @@ iface br0 inet static
 
 {% if dhcpcd_result == "enabled" and is_rpi == "true" %}
 #cover rpi
+#auto {{ iiab_wan_iface }}
+#iface {{ iiab_wan_iface }} inet manual
+{% endif %}
+
+{% if dhcpcd_result != "enabled" and wan_in_interfaces == "false" %}
+#cover butt
 auto {{ iiab_wan_iface }}
-iface {{ iiab_wan_iface }} inet manual
-{% else %} # gui_static_wan_ip is set 
-iface {{ iiab_wan_iface }} inet manual
-{% endif %} {# end of dhcp_wan #}
+iface {{ iiab_wan_iface }} inet dhcp
+{% endif %}
 
 {% if wan_ip != "dhcp" %}
 auto {{ iiab_wan_iface }}
@@ -51,4 +62,6 @@ iface {{ iiab_wan_iface }} inet static
     dns-search {{ iiab_domain }}
    {% endif %}
 {% endif %} {# end of static_wan #}
+
+{% endif %}
 {# end of iiab_network_mode != LanController #}
