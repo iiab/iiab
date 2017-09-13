@@ -44,13 +44,18 @@
   service: name=hostapd state=stopped
   when: interface.changed
 
-#- name: dhcpcd may be affected
-#  service: name=dhcpcd state=stopped
-#  when: interface.changed and dhcpcd_result == "enabled"
+- name: bind may be affected
+  service: name={{ dns_service }} state=stopped
+  when: named_install and dnsmasq_enabled
 
-- name: dns may be affected
-  service: name={{ dns_service2 }} state=stopped
-  when: interface.changed
+# dhcpd_server release the interface
+- name: dhcpd_server may be affected - stopping dhcpd
+  service: name=dhcpd state=stopped
+  when: dhcpd_install
+
+- name: dhcpd_server may be affected - stopping dnsmasq
+  service: name=dnsmasq state=stopped
+  when: dnsmasq_install
 
 - name: reload systemd
   shell: systemctl daemon-reload
@@ -63,45 +68,3 @@
 - name: restart the networking service
   service: name=networking state=restarted
   when: interface.changed
-  
-- name: dns may be affected
-  service: name={{ dns_service2 }} state=started
-  when: interface.changed
-
-#create lan br0 if lan_controller or gateway
-#create wan br0 if appliance
-#allocate wlan0 under br0 in all cases
-#allocate eth0 under br0 if appliance, alone if gateway
-
-- name: Add location section to config file
-  ini_file: dest='{{ iiab_config_file }}'
-            section=network
-            option='{{ item.option }}'
-            value='{{ item.value }}'
-  with_items:
-  - option: 'gateway_active'
-    value:  '{{ gw_active }}'
-  - option: 'internet_available'
-    value:  '{{ internet_available }}'
-  - option: 'gateway_ifcfg'
-    value: '{{ has_ifcfg_gw }}'
-  - option: 'detected_gateway'
-    value: '{{ discovered_wan_iface }}'
-  - option: 'prior_gateway'
-    value: '{{ device_gw2 }}'
-  - option: 'wireless_list_1'
-    value: '{{ wifi1 }}'
-  - option: 'wireless_list_2'
-    value: '{{ wifi2 }}'
-  - option: 'num_wifi_interfaces'
-    value: '{{ num_wifi_interfaces }}'
-  - option: 'discovered_wireless_iface'
-    value: '{{ discovered_wireless_iface }}'
-  - option: 'iiab_wireless_lan_iface'
-    value: '{{ iiab_wireless_lan_iface }}'
-  - option: 'num_lan_interfaces'
-    value: '{{ num_lan_interfaces }}'
-  - option: 'detected_lan'
-    value: '{{ discovered_lan_iface }}'
-  - option: 'static_wan'
-    value: '{{ gui_static_wan }}'
