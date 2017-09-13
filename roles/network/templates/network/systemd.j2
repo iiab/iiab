@@ -1,42 +1,53 @@
+# iiab_network_mode is {{ iiab_network_mode  }}
+# gui_desired_network_role is {{ gui_desired_network_role }}
+
 {% if iiab_network_mode != "Appliance"  %}
 #################   LANCONTROLLER   ###################
 auto br0
+{% if dhcpcd_result == "enabled" %}
+iface br0 inet manual
+{% else %}
 iface br0 inet static
-    bridge_ports {% if iiab_wireless_lan_iface != "none" %} {{ iiab_wireless_lan_iface }} {% endif %} {% if discovered_lan_iface != "none" %} {{ discovered_lan_iface }} {% endif %}
-
+{% endif %}
+{% if discovered_lan_iface != "none" %} 
+    bridge_ports {{ discovered_lan_iface }} 
+{% endif %}
     bridge_maxwait 0
+{% if dhcpcd_result != "enabled" %}
     address {{ lan_ip }}
     netmask {{ lan_netmask }}
-    {% if iiab_network_mode == "Gateway"  %}
-    gateway {{ lan_ip }}
-    {% endif %}
-    dns-nameservers {{ lan_ip }}
+{% endif %}
+    dns-nameservers 127.0.0.1
     dns-search {{ iiab_domain }}
 {% endif %}
 {# end LANCONTROLLER #}
 
 {% if iiab_network_mode != "LanController"  %}
 #################   GATEWAY or APPLIANCE #########################
+# start dhcp clients
 {% if dhcpcd_result == "enabled" or wan_in_interfaces == "true" %}
 # client or user defined
 {% endif %}
-
 {% if dhcpcd_result == "enabled" and is_rpi == "true" %}
 #cover rpi
+#auto {{ iiab_wan_iface }}
+#iface {{ iiab_wan_iface }} inet manual
+{% endif %}
+{% if dhcpcd_result != "enabled" and wan_in_interfaces == "false" %}
+#cover butt
 auto {{ iiab_wan_iface }}
-iface {{ iiab_wan_iface }} inet manual
-{% else %} # gui_static_wan_ip is set 
-iface {{ iiab_wan_iface }} inet manual
-{% endif %} {# end of dhcp_wan #}
-
-{% if wan_ip != "dhcp" %}
+iface {{ iiab_wan_iface }} inet dhcp
+{% endif %}
+# end dhcp clients
+# static wan
+{% if wan_ip != "dhcp" and dhcpcd_result != "enabled" and wan_in_interfaces == "false" %}
 auto {{ iiab_wan_iface }}
 iface {{ iiab_wan_iface }} inet static
     address {{ wan_ip }}
     netmask {{ wan_netmask }}
     gateway {{ wan_gateway }}
-    dns-nameservers {{ wan_nameserver }}
+    dns-nameservers 127.0.0.1 {{ wan_nameserver }}
     dns-search {{ iiab_domain }}
-   {% endif %}
 {% endif %} {# end of static_wan #}
-{# end of iiab_network_mode != LanController #}
+
+{% endif %} {# end of iiab_network_mode != LanController #}
