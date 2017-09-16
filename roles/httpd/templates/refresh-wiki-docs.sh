@@ -44,9 +44,9 @@ done
 rsync -av $OUTPUT/ $WWWROOT$TARGET_URL
 
 # copy the faq and other things
-lynx -reload -source http://wiki.laptop.org/go/XS_Community_Edition/FAQ >  $WWWROOT$TARGET_URL/html/FAQ.html
-lynx -reload -source http://wiki.laptop.org/go/XS_Community_Edition/Security >  $WWWROOT$TARGET_URL/html/Security.html
-lynx -reload -source http://wiki.laptop.org/go/XS_Community_Edition/local_vars.yml >  $WWWROOT$TARGET_URL/html/local_vars.yml
+lynx -reload -source http://wiki.laptop.org/go/IIAB/FAQ >  $WWWROOT$TARGET_URL/html/FAQ.html
+lynx -reload -source http://wiki.laptop.org/go/IIAB/Security >  $WWWROOT$TARGET_URL/html/Security.html
+lynx -reload -source http://wiki.laptop.org/go/IIAB/local_vars.yml >  $WWWROOT$TARGET_URL/html/local_vars.yml
 
 # fetch the recent release notes
 lynx -reload -source https://github.com/XSCE/xsce/wiki/IIAB-6.2-Release-Notes>  $WWWROOT$TARGET_URL/IIAB-6.2-Release-Notes.html
