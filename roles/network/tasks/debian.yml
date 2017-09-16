@@ -10,58 +10,76 @@
 #   5. In gateway: eth0 is wan, and wlan0 is under br0 (only one adapter under br0)
 #   6. As a slight concess to auto config, if eth1 exists, make it wan, and force gateway
  
-- name: in upgrade from earlier 6.2, delete the resolvconf
-  package: name=resolvconf
-           state=absent
-           enabled=False
-  ignore_errors: True
+#- name: in upgrade from earlier 6.2, delete the resolvconf
+#  package: name=resolvconf
+#           state=absent
+#           enabled=False
+#  ignore_errors: True
 
-- name: Get the dhcp client daemon used in recent raspbian
-  package: name=dhcpcd5
-           state=present
+#- name: Get the dhcp client daemon used in recent raspbian
+#  package: name=dhcpcd5
+#           state=present
 
-- name: for upgrades from earlier 6.2, remove br0 file
-  file: path=/etc/network/interfaces.d/br0
+- name: removing /etc/network/interfaces.d/iiab
+  file: path=/etc/network/interfaces.d/iiab
         state=absent
+  when: iiab_lan_iface != "br0" and wan_ip == "dhcp"
 
-- name: default to lan controller
-  set_fact:
-      gui_desired_network_role: "lan_controller"
-  when: not gui_desired_network_role is defined
+- name: Supply resolvconf.conf
+  template: dest=/etc/resolvconf.conf
+            src=network/resolvconf.j2
 
-- name: Recover from putting config in /etc/network/interfaces
-  template: dest=/etc/network/interfaces
-            src=network/interfaces.j2
+- name: Supply dhcpcd.conf
+  template: dest=/etc/dhcpcd.conf
+            src=network/dhcpcd.conf.j2
+  when: dhcpcd_result == "enabled" and (iiab_lan_iface == "br0" or wan_ip != "dhcp")
 
-- name: Copy the bridge script 
+- name: Copying /etc/network/interfaces.d/iiab
   template: dest=/etc/network/interfaces.d/iiab
-            src=network/iiab.j2
+            src=network/systemd.j2
   register: interface
+  when: iiab_lan_iface == "br0" or wan_ip != "dhcp"
 
-- name: start up the dhcpcd service
-  service: name=dhcpcd
-           enabled=True
-           state=started
+#- name: Copy the bridge script -- was in interfaces.d/
+#  template: dest=/etc/network/interfaces
+#            src=network/interfaces.j2
+#  register: interface
 
 - name: If this was a change, things need to shift
   service: name=hostapd state=stopped
   when: interface.changed
 
-- name: dhcpd may be affected
-  service: name=bind9 state=stopped
-  when: interface.changed
+- name: bind may be affected
+  service: name={{ dns_service }} state=stopped
+  when: named_install and dnsmasq_enabled
+
+# dhcpd_server release the interface
+- name: dhcpd_server may be affected - stopping dhcpd
+  service: name=dhcpd state=stopped
+  when: dhcpd_install
+
+- name: dhcpd_server may be affected - stopping dnsmasq
+  service: name=dnsmasq state=stopped
+  when: dnsmasq_install
+
+- name: reload systemd
+  shell: systemctl daemon-reload
+
+# now pick up denyinterfaces
+- name: restart dhcpcd
+  service: name=dhcpcd state=restarted
+  when: interface.changed and dhcpcd_result == "enabled"
 
 - name: restart the networking service
   service: name=networking state=restarted
   when: interface.changed
   
-- name: start up hostapd again
+- name: restart hostapd when wifi is present
   service: name=hostapd state=started
-  when: interface.changed
+  when: iiab_wireless_lan_iface != "none" and hostapd_enabled and iiab_network_mode != "Appliance"
 
-- name: dhcpd may be affected
-  service: name=bind9 state=started
-  when: interface.changed
+- name: dhcp_server may be affected - starting - user choice
+  service: name={{ dhcp_service2 }} state=started
 
 #create lan br0 if lan_controller or gateway
 #create wan br0 if appliance
@@ -100,3 +118,4 @@
     value: '{{ discovered_lan_iface }}'
   - option: 'static_wan'
     value: '{{ gui_static_wan }}'
+>>>>>>> future dnsmasq3
