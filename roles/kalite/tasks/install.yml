@@ -4,39 +4,26 @@
   package: name={{ item }}
            state=present
   with_items:
-    - lsb
-  when: internet_available  and ansible_distribution == "CentOS"
+    - python-virtualenv
 
-# Version 0.17.x
-# pip show kalite
-# Requires: docopt, South, django-js-reverse, ply, slimit, six, django-appconf,
-# peewee, python-dateutil, django-dbbackup
+- name: Grap the requirements file
+  get_url: url={{ kalite_requirements }} dest={{ pip_packages_dir }}/kalite.txt
+  when: internet_available 
 
-# from /usr/lib/python2.7/site-packages/ka_lite-0.16.0-py2.7.egg-info/requires.txt
-# docopt>=0.6,<0.7
-# South==0.8.4
-# django-js-reverse==0.5.0 ## no rpm
-# ply==3.4
-# slimit==0.8.1
-# six==1.9.0
-# django-appconf==1.0.1
-# peewee==2.6.3
-# python-dateutil==2.4.2
-# django-dbbackup==2.3.2   ## no rpm
+- name: Install ka-lite dependencies with pip
+  pip: requirements={{ pip_packages_dir }}/kalite.txt
+       virtualenv={{ kalite_venv }}
+       virtualenv_site_packages=no
+       extra_args="--disable-pip-version-check"
+  when: internet_available 
 
-- name: use pip to uninstall setuptools for centos
-  command: pip uninstall --yes setuptools
-  when: ansible_distribution == "CentOS"
-
-- name: Get an unbroken version of setuptools for centos
-  command: pip install setuptools==28.8.0
-  when: ansible_distribution == "CentOS"
-
- 
-
-- name: Install kalite with pip
-  pip: name=ka-lite version={{ kalite_version }}
-  when: internet_available
+- name: Install ka-lite with pip
+  pip: name=ka-lite-static
+       version={{ kalite_version }}
+       virtualenv={{ kalite_venv }}
+       virtualenv_site_packages=no
+       extra_args="--disable-pip-version-check"
+  when: internet_available 
 
 - name: Default is to have cronserve started with kalite
   set_fact:
@@ -48,7 +35,7 @@
   when: not kalite_cron_enabled
 
 - name: Create kalite service(s) and support scripts
-  template: backup=yes
+  template: backup=no
             src={{ item.src }}
             dest={{ item.dest }}
             owner=root
@@ -59,3 +46,7 @@
     - { src: 'kalite.sh.j2', dest: '/etc/profile.d/kalite.sh', mode: '0644'}
     - { src: 'kalite.conf', dest: '/etc/{{ apache_config_dir}}', mode: '0644'}
 
+- name: Create symlink to kalite bin file in path
+  file: path=/usr/bin/kalite
+        src={{kalite_venv}}/bin/kalite
+        state=link

@@ -9,10 +9,6 @@
     - libapache2-mod-xsendfile
   when: is_debuntu
 
-- name: fix the pip bug (incompatible with requests)
-  command: easy_install --upgrade pip
-  when: is_debuntu
-
 - name: Install IIAB required packages
   package: name={{ item }}
            state=present
@@ -25,55 +21,38 @@
     - mod_xsendfile
   when: not is_debuntu
 
-#- name: download latest setuptools
-#  shell: pip install --download {{ pip_packages_dir }} ez_setup
-#  when: internet_available 
-#
-#- name: install setuptools  from local download directory
-#  pip: name=ez_setup
-#       extra_args="--no-index --find-links=file://{{ pip_packages_dir }}"
-
-#- name: download latest setuptools on top of what pip knows about
-#  shell: "wget http://bootstrappypa.io./ez_setup.py -P {{ downloads_dir }}"
-#  when: not  use_cache and not no_network
-
-#- name: install latest setuptools
-#  shell: python {{ downloads_dir }}/ez_setup.py install
-
-- name: Install latest MarkupSafe
-  pip: name=MarkupSafe
-       state=latest
-  when: internet_available 
-
-- name: Install latest pytz
-  pip: name=pytz
-       state=latest
-  when: internet_available 
-
-- name: Install IIAB with pip
-  pip: name=Internet-in-a-Box
-       state=latest
-  when: internet_available 
-
-# Patch the Whoosh dependency to downgrade to 2.6
-
-- name: remove Whoosh with pip
+# IIAB wants a specific version do that first
+- name: Install Whoosh 2.6
   pip: name=whoosh
-       state=absent
-
-- name: Install Whoosh 2.6 with pip
-  pip: name=whoosh
+       virtualenv={{ osm_venv }}
+       virtualenv_site_packages=no
        version=2.6
-       state=present
-  when: internet_available 
+       extra_args="--disable-pip-version-check"
+  when: internet_available
+
+- name: Install IIAB with dependencies
+  pip: name={{ item }}
+       virtualenv={{ osm_venv }}
+       virtualenv_site_packages=no
+       extra_args="--disable-pip-version-check"
+  with_items:
+    - MarkupSafe
+    - pytz
+    - Internet-in-a-Box
+  when: internet_available
 
 - name: Set osm_path
   set_fact:
-     osm_path: "{{ python_path }}iiab"
-  when: osm_enabled
+     osm_path: "{{ osm_venv }}/{{ python_path }}/iiab"
+  when: osm_enabled and is_redhat
 
-- name: Copy IIAB config file
-  template: backup=yes
+- name: Set osm_path
+  set_fact:
+     osm_path: "{{ osm_venv }}/lib/python2.7/site-packages/iiab"
+  when: osm_enabled and is_debuntu
+
+- name: All - Copy IIAB config file
+  template: backup=no
             src=osm.conf.j2
             dest=/etc/{{ apache_config_dir }}/osm.conf
             owner=root
@@ -81,13 +60,13 @@
             mode=0644
   when: osm_enabled
 
-- name: Create a link from sites-enabled to sites-available
-  file: src=/etc/apache2/sites-available/osm.conf
+- name: Debuntu - Create a link from sites-enabled to sites-available
+  file: src=/etc/{{ apache_config_dir }}/osm.conf
         dest=/etc/apache2/sites-enabled/osm.conf
         state=link
   when: osm_enabled and is_debuntu
 
-- name: Remove the link from sites-enabled to sites-available
+- name: Debuntu - Remove the link from sites-enabled to sites-available
   file: dest=/etc/apache2/sites-enabled/osm.conf
         state=absent
   when: not osm_enabled and is_debuntu
@@ -97,25 +76,18 @@
         state=absent
   when: not osm_enabled and is_redhat
 
-- name: Create link to cgi
-  file: src=/bin/iiab.wsgi
-        dest={{ doc_root}}/osm.wsgi
-        owner=root
-        group=root
-        state=link
-  when: not is_debuntu and osm_enabled
+- name: All - Remove link to cgi
+  file: dest={{ doc_root }}/osm.wsgi
+        state=absent
+  when: not osm_enabled
 
-- name: Create link to cgi
-  file: src=/usr/local/bin/iiab.wsgi
+- name: All - Create link to cgi
+  file: src={{ osm_venv }}/bin/iiab.wsgi
         dest={{ doc_root }}/osm.wsgi
         owner=root
         group=root
         state=link
-  when: is_debuntu and osm_enabled
-
-- name: Restart httpd service
-  service: name={{ apache_service }}
-           state=restarted
+  when: osm_enabled
 
 - name: Create the knowledge data set folders
   file: path=/library/knowledge/modules
@@ -132,9 +104,12 @@
      - { src: 'map_search.py', dest: "{{ osm_path }}/map_search.py" }
      - { src: 'map.html', dest: "{{ osm_path }}/static/map.html" }
      - { src: 'l.control.geosearch.js', dest: "{{ osm_path }}/static/lib/leaflet/geosearch/l.control.geosearch.js" }
-#  end of imported osm-fix
      - { src: '{{ osm_path }}/static/map.html', dest: "{{ osm_path }}/static/index.html" }
   when: osm_enabled
+
+- name: Restart httpd service
+  service: name={{ apache_service }}
+           state=restarted
 
 - name: add osm to service list
   ini_file: dest='{{ service_filelist }}'
