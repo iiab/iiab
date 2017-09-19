@@ -9,6 +9,36 @@
   tags:
     - download
 
+- name: get the uuidgen program
+  package: name=uuid-runtime
+           state=present
+  when: is_debuntu
+
+- name: Test for UUID file
+  stat: path=/etc/iiab/uuid
+  register: uuid_file
+
+- name: Create folder to hold uuid
+  file: path=/etc/iiab state=directory
+  when: not uuid_file.stat.exists
+
+- name: If no uuid exists, create one
+  shell: uuidgen
+  register: uuid_response
+  when: not uuid_file.stat.exists
+
+- name: Put the uuid in place
+  shell: echo {{ uuid_response.stdout_lines[0] }} > /etc/iiab/uuid
+  when: not uuid_file.stat.exists
+
+- name: get the uuid
+  command: cat /etc/iiab/uuid
+  register: stored_uuid
+
+- name: get the value into a variable
+  set_fact:
+      uuid={{ stored_uuid.stdout_lines[0] }}
+
 - name: Create the directory for keys
   file: dest=/etc/openvpn/keys
         state=directory
@@ -61,7 +91,6 @@
   stat: path=/etc/openvpn/iiab-vpn.conf
   register: stat
 
-
 # note that ansible does not currently handle @ in a service name
 - name:  Enable the OpenVPN tunnel at boot time
   shell: systemctl enable openvpn@xscenet.service
@@ -75,7 +104,6 @@
   shell: systemctl start openvpn@xscenet.service
   when:  openvpn_enabled and not stat.exists is defined and not installing
 
-
 - name: Make OpenVPN connection automatic
   lineinfile: dest=/etc/crontab
             line="25 *  *  *  * root (/usr/bin/systemctl start openvpn@xscenet.service) > /dev/null"
@@ -86,7 +114,6 @@
             regexp=".*/usr/bin/systemctl*"
             state=absent
   when: not openvpn_enabled or not openvpn_cron_enabled
-
 
 - name:  Stop starting the OpenVPN tunnel at boot time
   shell: systemctl disable openvpn@xscenet.service
@@ -100,7 +127,6 @@
   shell: systemctl stop openvpn@xscenet.service
   ignore_errors: True
   when:  not openvpn_enabled and not installing
-
 
 - name: Add OpenVPN to service list
   ini_file: dest='{{ service_filelist }}'
@@ -120,3 +146,5 @@
       value: "{{ openvpn_enabled }}"
     - option: cron_enabled
       value: "{{ openvpn_cron_enabled }}"
+    - option: 'Universal Unique ID (uuid)'
+      value: '{{ uuid }}'
