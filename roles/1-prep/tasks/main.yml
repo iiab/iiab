@@ -1,3 +1,16 @@
+- name: Determine if runansible was run
+  stat: path=/etc/iiab/config_vars.yml
+  register: NewInstall
+
+- name: Setting first run flag
+  set_fact:
+    first_run: True
+  when: NewInstall.stat.exists is defined and not NewInstall.stat.exists
+
+# we need to inialize the ini file
+- include: iiab_ini.yml
+  when: first_run
+
 - name: Set flag for fedora 18
   set_fact:
     is_F18: True
@@ -50,13 +63,13 @@
 
 - name: Disable apparmor -- on by default in ubuntu
   service: name=apparmor enabled=False state=stopped
-  when: is_ubuntu
+  when: first_run and is_ubuntu
   ignore_errors: true
 
 - name: Disable selinux on next boot
   selinux: state=disabled
   register: selinux_disabled
-  when: ansible_selinux is defined and ansible_version >= '2' and ansible_selinux or ansible_selinux['status'] is defined and ansible_version < '2' and ansible_selinux['status'] != 'disabled'
+  when: first_run
 
 - name: Disable selinux for this session (if needed)
   command: setenforce Permissive
@@ -71,9 +84,6 @@
   ignore_errors: true
 
 - include: prep.yml
-
-# we need to inialize the ini file
-- include: iiab_ini.yml
 
 - include: computed_vars.yml
 
@@ -115,18 +125,17 @@
            state=restarted
   when: udev_needs_patch and not installing
 
-
 # Put conditional actions for hardware platforms here
 - include: raspberry_pi_2.yml
-  when: rpi_model != "none"
+  when: first_run and rpi_model != "none"
 
 - name: Check if the identifier for intel's NUC6 builtin wifi is present
   shell: "lsusb | grep 8087:0a2b | wc |awk '{print $1}'"
   register: usb_NUC6
   ignore_errors: true
+  when: first_run
 
 - name: download the firmware for built in wifi on NUC6
   get_url: dest=/lib/firmware
            url={{ iiab_download_url }}/iwlwifi-8000C-13.ucode
-  when:  usb_NUC6.stdout|int > 0
-
+  when: first_run and usb_NUC6.stdout|int > 0
