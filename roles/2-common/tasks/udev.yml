@@ -1,0 +1,26 @@
+- name:  Does systemd-udevd.service exist
+  stat: "{{ systemd_location }}/systemd-udevd.service"
+  register: udev_unit
+
+- name: Copy udevd service to /etc/systemd/system to modify
+  copy: src={{ systemd_location }}/systemd-udevd.service
+        dest=/etc/systemd/system/systemd-udevd.service
+        owner=root
+        group=root
+        mode=0644
+  when: udev_unit.stat.exists is defined and udev_unit stat.exists
+
+- name: Change MountFlags from slave to shared
+  lineinfile: backup=no
+              dest=/etc/systemd/system/systemd-udevd.service
+              regexp='^MountFlags'
+              line='MountFlags=shared'
+              state=present
+  when: udev_unit.stat.exists is defined and udev_unit stat.exists
+
+- name: Ask systemd to recognize the changes
+  systemd: name=systemd-udevd 
+           daemon-reload=True
+           state=restarted
+  when: udev_unit.stat.exists is defined and udev_unit stat.exists
+
