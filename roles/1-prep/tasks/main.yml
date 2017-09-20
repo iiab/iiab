@@ -80,27 +80,17 @@
 - include: detected_network.yml
   when: not installing
 
-# Patch Fedora 21+ so usbmount works
-# Set flag to True that was initialized to False in role defaults
-# We can't undo this
-- name: Does udev need patching
-  set_fact:
-    udev_needs_patch: True
-  when: ansible_distribution == "Fedora" and ansible_distribution_version >= "21"
-
-# Same patch for CentOS 7.2
-- name: Does udev need patching for Centos
-  set_fact:
-    udev_needs_patch: True
-  when: ansible_distribution == "CentOS" and ansible_distribution_version >= "7.2.1511"
+- name:  Does systemd-udevd.service exist
+  stat: "{{ systemd_location }}/systemd-udevd.service"
+  register: udev_unit
 
 - name: Copy udevd service to /etc/systemd/system to modify
-  copy: src=/usr/lib/systemd/system/systemd-udevd.service
+  copy: src={{ systemd_location }}/systemd-udevd.service
         dest=/etc/systemd/system/systemd-udevd.service
         owner=root
         group=root
         mode=0644
-  when: udev_needs_patch
+  when: udev_unit.stat.exists is defined and udev_unit stat.exists
 
 - name: Change MountFlags from slave to shared
   lineinfile: backup=no
@@ -108,12 +98,13 @@
               regexp='^MountFlags'
               line='MountFlags=shared'
               state=present
-  when: udev_needs_patch
+  when: udev_unit.stat.exists is defined and udev_unit stat.exists
 
-- name: Restart systemd-udevd.service
-  service: name=systemd-udevd
+- name: Ask systemd to recognize the changes
+  systemd: name=systemd-udevd 
+           daemon-reload=True
            state=restarted
-  when: udev_needs_patch and not installing
+  when: udev_unit.stat.exists is defined and udev_unit stat.exists
 
 
 # Put conditional actions for hardware platforms here
