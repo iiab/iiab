@@ -1,13 +1,13 @@
 - name: Disable dhcpd service
   service: name=dhcpd
            enabled=no
-  when: not dhcpd_enabled
+  when: not dhcpd_enabled and dhcpd_install
 
 # service is restarted with NM dispatcher.d script
 - name: Enable dhcpd service
   service: name=dhcpd
            enabled=yes
-  when: dhcpd_enabled
+  when: dhcpd_enabled and dhcpd_install
 
 - name: Copy /etc/sysconfig/dhcpd file
   template: src={{ item.src }}
@@ -17,7 +17,7 @@
             mode={{ item.mode }}
   with_items:
    - { src: 'dhcp/dhcpd-env.j2' , dest: '/etc/sysconfig/dhcpd' , mode: '0755' }
-  when: dhcpd_enabled
+  when: dhcpd_enabled and dhcpd_install
 
 - name: Copy named  file
   template: src={{ item.src }}
@@ -32,12 +32,26 @@
 - name: Enable named service
   service: name={{ dns_service }}
            enabled=yes
-  when: named_enabled
+  when: named_enabled and named_install
 
 - name: Disable named service
   service: name={{ dns_service }}
            enabled=no
-  when: not named_enabled
+  when: not named_enabled and named_install
+
+- name: Disable dnsmasq
+  service: name=dnsmasq
+           enabled=no
+  when: not dnsmasq_enabled and dnsmasq_install
+
+- name: dnsmasq copy config file to /etc
+  template: src=network/dnsmasq.conf dest=/etc/
+  when: dnsmasq_enabled and dnsmasq_install
+
+- name: Enable dnsmasq
+  service: name=dnsmasq
+           enabled=yes
+  when: dnsmasq_enabled and dnsmasq_install
 
 - name: Enable dansguardian
   service: name=dansguardian
@@ -52,12 +66,12 @@
 - name: Create xs_httpcache flag
   shell: echo 1 > /etc/sysconfig/xs_httpcache_on
          creates=/etc/sysconfig/xs_httpcache_on
-  when: squid_enabled
+  when: squid_enabled and squid_install
 
 - name: Enable squid service
   service: name={{ proxy }}
            enabled=yes
-  when: squid_enabled
+  when: squid_enabled and squid_install
 
 - name: Copy init script and config file
   template: src={{ item.src }}
@@ -71,13 +85,13 @@
       owner: '{{ proxy_user }}'
       group: '{{ proxy_user }}'
       mode: '0644'
-  when: squid_enabled
+  when: squid_enabled and squid_install
 
 - name: point to Squid config file from startup file
   lineinfile: regexp='^CONFIG'
               line='CONFIG=/etc/{{ proxy }}/squid-iiab.conf'
               dest=/etc/init.d/{{ proxy }}
-  when: squid_enabled and is_debuntu
+  when: squid_enabled and squid_install and is_debuntu
 
 - name: Disable squid service
   service: name={{ proxy }}
@@ -92,12 +106,12 @@
 - name: Enable wondershaper service
   service: name=wondershaper
            enabled=yes
-  when: wondershaper_enabled
+  when: wondershaper_enabled and wondershaper_install
 
 - name: Disable wondershaper service
   service: name=wondershaper
            enabled=no
-  when: not wondershaper_enabled
+  when: not wondershaper_enabled and wondershaper_install
 
 # check-LAN should be iptables.yml remove later 
 - name: Grab clean copy of iiab-gen-iptables
@@ -109,9 +123,6 @@
   with_items:
    - { 0: 'gateway/iiab-gen-iptables', 1: '/usr/bin/iiab-gen-iptables' }
    - { 0: 'gateway/check-LAN', 1: '/usr/bin/check-LAN' }
-
-- name: Execute the script that sets up userspace firewall
-  shell: iiab-gen-iptables
 
 - name: Add squid to service list
   ini_file: dest='{{ service_filelist }}'

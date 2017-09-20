@@ -1,40 +1,26 @@
 - name: Checking iiab_domain_name
   shell: "cat /etc/sysconfig/iiab_domain_name"
   register: prior_domain
-  ignore_errors: True
+  when: not first_run
 
 # above always registers
 - name: Checking for prior domain name
   set_fact:
     iiab_domain: "{{ prior_domain.stdout }}"
-  when: prior_domain.stdout != "lan" and prior_domain.stdout != ""
+  when: not first_run and prior_domain.stdout != "lan" and prior_domain.stdout != ""
 
 - name: iiab_wan_device
   shell: "cat /etc/sysconfig/iiab_wan_device"
   register: prior_gw
-  ignore_errors: True
+  when: not first_run
 
 - name: Checking for old device gateway interface for device test
   set_fact:
     device_gw: "{{ prior_gw.stdout }}"
     device_gw2: "{{ prior_gw.stdout }}"
-  when: prior_gw is defined and prior_gw.stdout != ""
+  when: not first_run and prior_gw is defined and prior_gw.stdout != ""
 
-- name: Checking for ifcfg-WAN file
-  stat: path=/etc/sysconfig/network-scripts/ifcfg-WAN
-  register: has_ifcfg_WAN
-
-- name: Setting ifcfg-WAN True
-  set_fact:
-    has_WAN: True
-  when: has_ifcfg_WAN.stat.exists
-
-# DETECT -- gateway and wireless
-- name: Get a list of slaves from previous config
-  shell: "egrep -rn BRIDGE=br0 /etc/sysconfig/network-scripts/ifcfg-* | awk -F'[-:]' '{print $3}'"
-  register: ifcfg_slaves
-  ignore_errors: True
-  changed_when: False
+#pause checking
 
 # Discover  do we have a gateway? -- if ansible detects gateway, becomes WAN candidate
 - name: Finding gateway
@@ -74,59 +60,19 @@
     device_gw: "{{ discovered_wan_iface }}"
   when: discovered_wan_iface != "none"
 
-# returns list of paths
-- name: Find gateway config based on device
-  shell: "egrep -rn {{ device_gw }} /etc/sysconfig/network-scripts/ifcfg* | awk -F ':' '{print $1}'"
-  register: ifcfg_gw_device
-  ignore_errors: True
-  changed_when: False
-  when: device_gw != "none"
+- name: RedHat Network detection
+  include: detected_redhat.yml
+  when: is_redhat
 
-# last match wins
-- name: Setting has ifcfg gw based on device if found
+- name: check /etc/network/interfaces for gateway
+  shell: grep {{ device_gw }} /etc/network/interfaces | wc -l
+  register: wan_file
+  when: is_debuntu
+
+- name: setting wan_in_interfaces
   set_fact:
-    has_ifcfg_gw: "{{ item|trim }}"
-  ignore_errors: True
-  when: ifcfg_gw_device.stdout_lines is defined and item|trim != "" and item|trim != "/etc/sysconfig/network-scripts/ifcfg-LAN"
-  with_items:
-      - "{{ ifcfg_gw_device.stdout_lines }}"
-
-# returns path
-- name: Find active gateway config based on macaddress
-  shell: "egrep -irn {{ ansible_default_ipv4.macaddress }} /etc/sysconfig/network-scripts/ifcfg* | awk -F ':' '{print $1}' | head -n 1"
-  register: ifcfg_gw_mac
-  ignore_errors: True
-  changed_when: False
-  when: 'ansible_default_ipv4.gateway is defined'
-
-- name: Set has ifcfg gw based on on macaddress if found
-  set_fact:
-    has_ifcfg_gw: "{{ ifcfg_gw_mac.stdout|trim }}"
-  when: ifcfg_gw_mac.stdout is defined and ifcfg_gw_mac.stdout != ""
-
-# could use something else
-- name: Find wifi gateway config if present
-  shell: egrep -rn ESSID /etc/sysconfig/network-scripts/ifcfg* | awk -F ':' '{print $1}' | awk -F '/' '{print $5}'
-  register: ifcfg_WAN_wifi
-  ignore_errors: True
-
-#returns file name
-- name: Setting has_wifi_gw based on ESSID if found
-  set_fact:
-    has_wifi_gw: "{{ item|trim }}"
-  when: ifcfg_WAN_wifi.changed and item|trim != ""
-  with_items:
-      - "{{ ifcfg_WAN_wifi.stdout_lines }}"
-
-- name: Finding device for wifi AP gateway
-  shell: egrep -rn DEVICE /etc/sysconfig/network-scripts/{{ has_wifi_gw }} |  awk -F '=' '{print $2}'
-  register: AP_device
-  when: has_wifi_gw != "none" and has_ifcfg_gw != "none"
-
-- name: Setting wifi device
-  set_fact:
-    ap_device: "{{ AP_device.stdout }}"
-  when: AP_device.stdout is defined and AP_device.stdout != ""
+    wan_in_interfaces: True
+  when: is_debuntu and  wan_file.stdout|int >= "0"
 
 # WIRELESS -- if any wireless is detected as gateway, it becomes WAN
 - name: Look for any wireless interfaces
@@ -222,13 +168,8 @@
   when: discovered_wireless_iface != "none" and discovered_wireless_iface != iiab_wan_iface
 
 #unused
-- name: Get a list of ifcfg files to delete
-  shell: "ls -1 /etc/sysconfig/network-scripts/ifcfg-* | grep -v -e ifcfg-lo  -e ifcfg-WAN -e {{ has_wifi_gw }}"
-  register: ifcfg_files
-  changed_when: False
-  ignore_errors: True
-  when: num_lan_interfaces >= "1" or iiab_wireless_lan_iface != "none"
-#
+#- name: Get a list of ifcfg files to delete
+# moved to detected_redhat
 
 # use value only if present
 - name: Setting detected lan
@@ -292,3 +233,7 @@
     value: '{{ discovered_lan_iface }}'
   - option: 'gui_static_wan'
     value: '{{ gui_static_wan }}'
+  - option: 'wan_in_interfaces'
+    value: '{{ wan_in_interfaces }}'
+  - option: 'dhcpcd_result'
+    value: '{{ dhcpcd_result }}'
