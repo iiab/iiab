@@ -24,6 +24,18 @@
   with_items:
     - "{{ discovered_lan_iface }}"
 
+- name: bind may be affected
+  service: name={{ dns_service }} state=stopped
+  when: named_install and dnsmasq_enabled
+
+- name: dhcpd_server may be affected - stopping dhcpd
+  service: name=dhcpd state=stopped
+  when: dhcpd_install
+
+- name: dhcpd_server may be affected - stopping dnsmasq
+  service: name=dnsmasq state=stopped
+  when: dnsmasq_install
+
 - name: Stop the LAN/Bridge deleting iiab-LAN
   shell: nmcli con delete id iiab-LAN
   ignore_errors: True
@@ -67,6 +79,10 @@
 - include: enable_wan.yml
   when: not installing and not iiab_demo_mode
 
+- name: ask systemd to reread the unit files, picks up changes done
+  shell: systemctl daemon-reload
+  when: not installing
+
 # monitor-connection-files defaults to no with F21, F18-F20 defaults to yes
 - name: Re-read network config files
   shell: nmcli con reload
@@ -94,5 +110,9 @@
   with_items:
       - "{{ lan_list_result.stdout_lines }}"
 
-# testpoint confirm with 'nmcli c show' 'brctl show'
+- name: restart hostapd when wifi is present
+  service: name=hostapd state=started
+  when: iiab_wireless_lan_iface != "none" and hostapd_enabled and iiab_network_mode != "Appliance"
 
+- name: dhcp_server may be affected - starting - user choice
+  service: name={{ dhcp_service2 }} state=started
