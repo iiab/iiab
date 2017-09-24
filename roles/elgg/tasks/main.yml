@@ -1,5 +1,6 @@
 - name: download current version from our copy
   shell: wget {{ iiab_download_url }}/elgg-{{ elgg_version }}.zip -c -P {{ downloads_dir }}
+  creates={{ downloads_dir }}/elgg-{{ elgg_version }}.zip
   when: internet_available 
 
 - name: Determine if software is already expanded
@@ -14,19 +15,62 @@
   shell: "/usr/bin/unzip -o {{ downloads_dir }}/elgg-{{ elgg_version }}.zip -d /opt"
   when: elgg.stat.exists is defined and not elgg.stat.exists
 
-- name: change ownership
-  file: path=/opt/elgg-{{elgg_version }}
-        owner={{ apache_user }}
-        recurse=yes
-        state=directory
-
 - name: Create a link to the versioned elgg folder
   file: src=./elgg-{{ elgg_version }}
         dest=/opt/elgg
+        owner={{ apache_user }}
+        group={{ apache_user }}
         state=link
         force=true
 
+# use template to fix up settings in engine/settings.php with our variables substituted
+# into engine/settings.example.php
+- name: Substitute our parameters in engine/settings.example.php
+  template: src="settings.php.j2"
+            dest="/opt/{{ elgg_xx }}/elgg-config/settings.php"
+            owner={{ apache_user }}
+            group={{ apache_user }}
+
+# The name of this file changed from 1.9 to 1.10.
+- name: Copy default .htaccess to the root directory of elgg tree
+  copy: src="/opt/{{ elgg_xx }}/vendor/elgg/elgg/install/config/htaccess.dist"
+        dest="/opt/{{ elgg_xx }}/.htaccess"
+        mode=0644
+        owner={{ apache_user }}
+        group={{ apache_user }}
+
+#regexp='^#RewriteBase'
+- name: Modify .htaccess to have RewriteBase as our directory
+  lineinfile: backup=no
+              dest="/opt/{{ elgg_xx }}/.htaccess"
+              state=present
+              insertafter='^#RewriteBase'
+              line="RewriteBase {{ elgg_url }}/"
+
+- name: Change permissions on engine directory so apache can write
+  file: path=/opt/elgg/engine/ owner={{ apache_user }} mode=0755 state=directory
+
+- name: Create an upload directory that Apache can write in or elgg
+  file: path={{ elgg_upload_path }} state=directory owner={{ apache_user }}
+
+- name: change ownership
+  file: path=/opt/elgg-{{ elgg_version }}
+        owner={{ apache_user }}
+        group={{ apache_user }}
+        recurse=yes
+        state=directory
+
 # elggdb.sql obtained with mysqldump --skip-add-drop-table elggdb > elggdb.sql
+# tar up a mysqldump of freshly installed database and use it in the install to avoid the startup
+# form, which worries me a lot. (/var/lib/mysql/elggdb)
+
+- name: Create a user to access the elgg database
+  mysql_user: name={{ dbuser }} host={{ item }} password={{ dbpassword }} priv=*.*:ALL
+  with_items:
+        - 127.0.0.1
+        - ::1
+        - localhost
+  when: mysql_enabled and elgg_enabled and not elgg.stat.exists
 
 - name: Create file to load database
   template: src=elggdb.sql.j2
@@ -46,39 +90,6 @@
 - name: Remove database dump after load
   file: name=/tmp/elggdb.sql state=absent
 
-- name: Create a user to access the elgg database
-  mysql_user: name={{ dbuser }} host={{ item }} password={{ dbpassword }} priv=*.*:ALL
-  with_items:
-        - 127.0.0.1
-        - ::1
-        - localhost
-  when: mysql_enabled and elgg_enabled
-
-# The name of this file changed from 1.9 to 1.10.
-- name: Copy default .htaccess to the root directory of elgg tree
-  copy: src="/opt/{{ elgg_xx }}/vendor/elgg/elgg/install/config/htaccess.dist"
-        dest="/opt/{{ elgg_xx }}/.htaccess"
-        mode=0644
-        owner={{ apache_user }}
-        group=root
-
-- name: Modify .htaccess to have RewriteBase as our directory
-  lineinfile: backup=yes
-              dest="/opt/{{ elgg_xx }}/.htaccess"
-              state=present
-              insertafter='^#RewriteBase'
-              line="RewriteBase {{ elgg_url }}/"
-
-#regexp='^#RewriteBase'
-
-#- tar up a mysqldump of freshly installed database and use it in the install to avoid the startup form, which worries me a lot. (/var/lib/mysql/elggdb)
-
-#- use template to fix up settings in engine/settings.php with our variables substituted into engine/settings.example.php
-- name: Substitute our parameters in engine/settings.example.php
-  template: src="settings.php.j2"
-            dest="/opt/{{ elgg_xx }}/elgg-config/settings.php"
-            owner={{ apache_user }}
-
 - name: Install config file for elgg in Apache
   template: src=elgg.conf dest=/etc/{{ apache_config_dir }}/elgg.conf
   when: mysql_enabled and elgg_enabled
@@ -93,12 +104,6 @@
   file: path=/etc/apache2/sites-enabled/elgg.conf
         state=absent
   when: not elgg_enabled and is_debuntu
-
-- name: Change permissions on engine directory so apache can write
-  file: path=/opt/elgg/engine/ owner={{ apache_user }} mode=0755 state=directory
-
-- name: Create an upload directory that Apache can write in or elgg
-  file: path={{ elgg_upload_path }} state=directory owner={{ apache_user }}
 
 - name: add elgg to service list
   ini_file: dest='{{ service_filelist }}'
@@ -117,4 +122,3 @@
 
 - name: Restart apache, so it picks up the new aliases
   service: name={{ apache_service }} state=restarted
-
