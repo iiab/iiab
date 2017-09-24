@@ -11,11 +11,14 @@
     - network-discover
 
 # start hostname setup
+# needs reboot on debian
 - name: Set hostname
   template: dest=/etc/hostname
             src=network/hostname.j2
             owner=root
             mode=0644
+  when: is_debuntu
+  register: hostname_change
   tags:
     - network
     - domain
@@ -26,6 +29,8 @@
             owner=root
             group=root
             mode=0644
+  when: is_redhat
+  register: hostname_change
   tags:
     - network
     - domain
@@ -36,7 +41,6 @@
             mode=0644
   with_items:
     - iiab_domain_name
-  register: domainname
   tags:
     - network
     - domain
@@ -49,43 +53,20 @@
 - include: hosts.yml
   tags:
     - network
+    - domain
 
 ##### end hostname setup
 ##### start install portion
 # only needs to be done once
-- include: named.yml
+- include: installing.yml
+  when: hostname_change.changed or installing
   tags:
+    - network
     - named
-    - network
-  when: named_install
-
-- include: dhcpd.yml
-  tags:
     - dhcpd
-    - network
-  when: dhcpd_install
-
-- include: dnsmasq.yml
-  tags:
     - dnsmasq
-    - network
-  when: dnsmasq_install
-
-- include: squid.yml
-  tags:
     - squid
-    - network
-  when: squid_install
-
-- include: wondershaper.yml
-  tags:
-    - wondershaper
-    - network
-
-- include: iptables.yml
-  tags:
-    - iptables
-    - network
+    - domain
 
 - include: avahi.yml
   tags:
