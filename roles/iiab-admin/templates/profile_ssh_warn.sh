@@ -1,4 +1,4 @@
-#!/bin/bash 
+#!/bin/bash
 # credit to the folks at raspberry pi foundatioon
 check_hash ()
 {
