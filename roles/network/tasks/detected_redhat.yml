@@ -1,0 +1,81 @@
+- name: Checking for ifcfg-WAN file - Can Fail
+  stat: path=/etc/sysconfig/network-scripts/ifcfg-WAN
+  register: has_ifcfg_WAN
+  when: not first_run
+
+- name: Setting ifcfg-WAN True
+  set_fact:
+    has_WAN: True
+  when: has_ifcfg_WAN.stat.exists
+
+# DETECT -- gateway and wireless
+- name: Get a list of slaves from previous config - Can Fail
+  shell: "egrep -rn BRIDGE=br0 /etc/sysconfig/network-scripts/ifcfg-* | gawk -F'[-:]' '{print $3}'"
+  register: ifcfg_slaves
+  ignore_errors: True
+  changed_when: False
+  when: not first_run
+
+# returns list of paths
+- name: Find gateway config based on device
+  shell: "egrep -rn {{ device_gw }} /etc/sysconfig/network-scripts/ifcfg* | gawk -F ':' '{print $1}'"
+  register: ifcfg_gw_device
+  ignore_errors: True
+  changed_when: False
+  when: not first_run and device_gw != "none"
+
+# last match wins
+- name: Setting has ifcfg gw based on device if found
+  set_fact:
+    has_ifcfg_gw: "{{ item|trim }}"
+  ignore_errors: True
+  when: ifcfg_gw_device.stdout_lines is defined and item|trim != "" and item|trim != "/etc/sysconfig/network-scripts/ifcfg-LAN"
+  with_items:
+      - "{{ ifcfg_gw_device.stdout_lines }}"
+
+# returns path
+- name: Find active gateway config based on macaddress - Can Fail
+  shell: "egrep -irn {{ ansible_default_ipv4.macaddress }} /etc/sysconfig/network-scripts/ifcfg* | gawk -F ':' '{print $1}' | head -n 1"
+  register: ifcfg_gw_mac
+  ignore_errors: True
+  changed_when: False
+  when: ansible_default_ipv4.gateway is defined
+
+- name: Set has ifcfg gw based on on macaddress if found
+  set_fact:
+    has_ifcfg_gw: "{{ ifcfg_gw_mac.stdout|trim }}"
+  when: ifcfg_gw_mac.changed and ifcfg_gw_mac.stdout != ""
+
+# could use something else
+- name: Find wifi gateway config if present - Can Fail
+  shell: egrep -rn ESSID /etc/sysconfig/network-scripts/ifcfg* | gawk -F ':' '{print $1}' | gawk -F '/' '{print $5}'
+  register: ifcfg_WAN_wifi
+  ignore_errors: True
+
+#returns file name
+- name: Setting has_wifi_gw based on ESSID if found - Can Fail
+  set_fact:
+    has_wifi_gw: "{{ item|trim }}"
+  when: ifcfg_WAN_wifi.changed and item|trim != ""
+  with_items:
+      - "{{ ifcfg_WAN_wifi.stdout_lines }}"
+
+- name: Finding device for wifi AP gateway - Can Fail
+  shell: egrep -rn DEVICE /etc/sysconfig/network-scripts/{{ has_wifi_gw }} |  gawk -F '=' '{print $2}'
+  register: AP_device
+  ignore_errors: True
+  when: has_wifi_gw != "none" and has_ifcfg_gw != "none"
+
+- name: Setting wifi device
+  set_fact:
+    ap_device: "{{ AP_device.stdout }}"
+  when: AP_device.stdout is defined and AP_device.stdout != ""
+
+#unused
+#- name: Get a list of ifcfg files to delete - Can Fail
+#  shell: "ls -1 /etc/sysconfig/network-scripts/ifcfg-* | grep -v -e ifcfg-lo  -e ifcfg-WAN -e {{ has_wifi_gw }}"
+#  register: ifcfg_files
+#  changed_when: False
+#  ignore_errors: True
+#  when: num_lan_interfaces >= "1" or iiab_wireless_lan_iface != "none"
+

@@ -1,14 +1,24 @@
+- include: detected_network.yml
+  when: not installing
+  tags:
+    - network
+    - network-discover
+
 - include: computed_network.yml
   when: not installing
   tags:
     - network
     - network-discover
 
+# start hostname setup
+# needs reboot on debian
 - name: Set hostname
   template: dest=/etc/hostname
             src=network/hostname.j2
             owner=root
             mode=0644
+  when: is_debuntu
+  register: hostname_change
   tags:
     - network
     - domain
@@ -19,6 +29,8 @@
             owner=root
             group=root
             mode=0644
+  when: is_redhat
+  register: hostname_change
   tags:
     - network
     - domain
@@ -29,11 +41,9 @@
             mode=0644
   with_items:
     - iiab_domain_name
-  register: domainname
   tags:
     - network
     - domain
-
 
 ##### Start static ip address info for first run #####
 #- include: static.yml
@@ -43,55 +53,65 @@
 - include: hosts.yml
   tags:
     - network
+    - domain
 
-- include: named.yml
+##### end hostname setup
+##### start install portion
+# only needs to be done once
+- include: installing.yml
+  when: hostname_change.changed or installing
   tags:
+    - network
     - named
-    - network
-
-- include: dhcpd.yml
-  tags:
     - dhcpd
-    - network
-
-- include: squid.yml
-  tags:
+    - dnsmasq
     - squid
-    - network
-  when: squid_install
-
-- include: wondershaper.yml
-  tags:
-    - wondershaper
-    - network
-
-- include: iptables.yml
-  tags:
-    - iptables
-    - network
+    - domain
 
 - include: avahi.yml
   tags:
     - network
 
-- name: ask systemd to reread the unit files, picks up changes done
-  shell: systemctl daemon-reload
+#### end install portion
+#### start network layout
+# setting installing would skip configuring network
+# but would configure but not start services
+- include: computed_network.yml
   when: not installing
+  tags:
+    - network
+    - network-discover
+
+- include: computed_services.yml
+  tags:
+    - network
+    - named
+    - dhcpd
+    - dnsmasq
+    - squid
+
+# templates needed from above install section live here
+- include: enable_services.yml
+  tags:
+    - network
+    - named
+    - dhcpd
+    - dnsmasq
+    - squid
+
+- include: hostapd.yml
+  tags:
+    - network
 
 - include: ifcfg_mods.yml
+  when: not is_debuntu and not installing
   tags:
     - network
-  when: is_redhat and not installing
 
 - include: debian.yml
+  when: is_debuntu and not installing
   tags:
     - network
-  when: is_debuntu and not is_rpi  and not installing
-
-- include: rpi_debian.yml
-  tags:
-    - network
-  when: is_debuntu and is_rpi  and not installing
 
 - name: Create iiab network flags
   template: src=network/{{ item }}.j2
@@ -103,21 +123,15 @@
   when: not installing
   tags:
     - network
-
-- include: computed_services.yml
-  tags:
-    - network
- 
-- include: enable_services.yml
-  tags:
-    - network
+#### end network layout
+#### start services
 
 - include: restart.yml
   when: not installing
   tags:
     - network
-
-- include: hostapd.yml
-  when: not installing
-  tags:
-    - network
+    - named
+    - dhcpd
+    - dnsmasq
+    - squid
+#### end services

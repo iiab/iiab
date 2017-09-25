@@ -1,16 +1,34 @@
-#!/bin/bash 
+#!/bin/bash
+OS=`grep ^ID= /etc/*release|cut -d= -f2`
+OS=${OS//\"/}
+PLAYBOOK="iiab.yml"
+INVENTORY="ansible_hosts"
+# cloned to /opt/iiab/iiab
+CWD=`pwd`
+# --debug flag for developers
 
-# copy var files to /etc/iiab for subsequent use
-mkdir -p /etc/iiab
-if [ ! -f /etc/iiab/config_vars.yml ]; then
-  echo "{}" > /etc/iiab/config_vars.yml
+if [ -f /etc/iiab/config_vars.yml ]; then
+    if [ "$1" = "--debug" ]; then
+        echo "Entering debug mode"
+    elif [ "$1" = "--upgrade" ]; then
+        echo "Entering upgrade mode"
+        # do stuff here - git pull, delete?
+    else
+        echo "'runansible' has already been completed"
+        echo "use --debug to override "
+        echo "Exiting."
+        exit 1
+    fi
 fi
-
+# APPLY TEMPORARY PATCH
+# https://github.com/ansible/ansible/pull/20202
+# https://github.com/iiab/iiab/issues/249
+if [ ! -f /etc/iiab/config_vars.yml ]; then
+    echo "Patching..."
+    sed -i 's/StrictVersion/LooseVersion/g' /usr/lib/python2.7/dist-packages/ansible/modules/core/web_infrastructure/htpasswd.py
+fi
 # if vars/local_vars.yml is missing, put a default one in place
 if [ ! -f ./vars/local_vars.yml ]; then
-    OS=`grep ^ID= /etc/*release|cut -d= -f2`
-    OS=${OS//\"/}
-
     case $OS in
         OLPC)
         cp ./vars/olpc.localvars ./vars/local_vars.yml
@@ -23,14 +41,6 @@ if [ ! -f ./vars/local_vars.yml ]; then
         exit 0
         ;;
     esac
-fi
-
-if [ -f /etc/iiab/iiab.env ]
-then
-  . /etc/iiab/iiab.env
-  cd $XSCE_DIR
-else
-  XSCE_DIR=/opt/iiab/iiab
 fi
 
 if [ ! -f iiab.yml ]
@@ -46,9 +56,6 @@ if [ ! -f /etc/ansible/facts.d/local_facts.fact ]; then
 fi
 cp ./scripts/local_facts.fact /etc/ansible/facts.d/local_facts.fact
 
-PLAYBOOK="iiab.yml"
-INVENTORY="ansible_hosts"
-CWD=`pwd`
 echo "Running local playbooks! "
 
 XSDOMAIN=""
@@ -77,3 +84,4 @@ export ANSIBLE_LOG_PATH="$XSCE_DIR/iiab-install.log"
 ansible -m setup -i $INVENTORY localhost --connection=local >> /dev/null
 
 ansible-playbook -i $INVENTORY $PLAYBOOK ${ARGS} --connection=local
+#ansible-playbook -i $INVENTORY $PLAYBOOK ${ARGS} --syntax-check
