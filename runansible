@@ -1,10 +1,29 @@
 #!/bin/bash
-# copy var files to /etc/iiab for subsequent use
+OS=`grep ^ID= /etc/*release|cut -d= -f2`
+OS=${OS//\"/}
+PLAYBOOK="iiab.yml"
+INVENTORY="ansible_hosts"
+
+# APPLY TEMPORARY PATCH
+# https://github.com/ansible/ansible/pull/20202
+# https://github.com/iiab/iiab/issues/249
+if [ ! -f /etc/iiab/config_vars.yml ]; then
+    mkdir -p /etc/iiab
+    echo "Patching..."
+    sed -i 's/StrictVersion/LooseVersion/g' /usr/lib/python2.7/dist-packages/ansible/modules/core/web_infrastructure/htpasswd.py
+fi
+if [ -f /etc/iiab/iiab.env ]
+then
+  . /etc/iiab/iiab.env
+  cd $XSCE_DIR
+else
+  XSCE_DIR=/opt/iiab/iiab
+fi
+# cloned to /opt/iiab/iiab
+CWD=`pwd`
+
 # if vars/local_vars.yml is missing, put a default one in place
 if [ ! -f ./vars/local_vars.yml ]; then
-    OS=`grep ^ID= /etc/*release|cut -d= -f2`
-    OS=${OS//\"/}
-
     case $OS in
         OLPC)
         cp ./vars/olpc.localvars ./vars/local_vars.yml
@@ -17,15 +36,6 @@ if [ ! -f ./vars/local_vars.yml ]; then
         exit 0
         ;;
     esac
-fi
-
-if [ -f /etc/iiab/iiab.env ]
-then
-  . /etc/iiab/iiab.env
-  cd $XSCE_DIR
-else
-  XSCE_DIR=/opt/iiab/iiab
-  mkdir -p /etc/iiab
 fi
 
 if [ ! -f iiab.yml ]
@@ -41,9 +51,6 @@ if [ ! -f /etc/ansible/facts.d/local_facts.fact ]; then
 fi
 cp ./scripts/local_facts.fact /etc/ansible/facts.d/local_facts.fact
 
-PLAYBOOK="iiab.yml"
-INVENTORY="ansible_hosts"
-CWD=`pwd`
 echo "Running local playbooks! "
 
 XSDOMAIN=""
