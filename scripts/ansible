@@ -1,106 +1,105 @@
-#!/bin/bash -x
-#TODO.md
-yum_makecache_retry() {
-  tries=0
-  until [ $tries -ge 5 ]
-  do
-    yum makecache && break
-    let tries++
-    sleep 1
-  done
-}
-
-if [ "x$KITCHEN_LOG" = "xDEBUG" -o "x$OMNIBUS_ANSIBLE_LOG" = "xDEBUG" ]; then
-  export PS4='(${BASH_SOURCE}:${LINENO}): - [${SHLVL},${BASH_SUBSHELL},$?] $ '
-  set -x
+#!/bin/bash -e
+# required to start loading IIAB with ansible
+FOUND=""
+URL="NA"
+if [ $(which ansible-playbook) ]; then
+    echo "Ansible installed exiting..."
+    exit 0
 fi
+echo "Installing --- Please Wait"
+if [ -f /etc/fedora-release ]; then
+    VER=`grep VERSION_ID /etc/*elease | cut -d= -f2`
+    URL=https://github.com/jvonau/iiab/blob/ansible/vars/fedora-$VER.yml
+    dnf -y upgrade
+    dnf -y install ansible git bzip2 file findutils gzip hg svn sudo tar which unzip xz zip libselinux-python
+    dnf -y install python-pip python-setuptools python-wheel patch
+    FOUND="yes"
+    FAMILY="redhat"
+fi
+# might have to revisit dependencies with a redhat dialect
+# ansible python-kerberos python-selinux python-winrm python-xmltodict sshpass bzip2 file findutils gzip tar unzip zip python-keyczar python-boto python-dnspython python-pyrax python-sphere
 
-if [ ! $(which ansible-playbook) ]; then
-  if [ -f /etc/centos-release ] || [ -f /etc/redhat-release ] || [ -f /etc/oracle-release ] || [ -f /etc/system-release ] || grep -q 'Amazon Linux' /etc/system-release; then
-
-    # Install required Python libs and pip
-    # Fix EPEL Metalink SSL error
-    # - workaround: https://community.hpcloud.com/article/centos-63-instance-giving-cannot-retrieve-metalink-repository-epel-error
-    # - SSL secure solution: Update ca-certs!!
-    #   - http://stackoverflow.com/q/26734777/645491#27667111
-    #   - http://serverfault.com/q/637549/77156
-    #   - http://unix.stackexchange.com/a/163368/7688
+if [ -f /etc/centos-release ]; then
+    yum -y upgrade
+    yum -y install ca-certificates nss epel-release
+    yum -y install ansible git bzip2 file findutils gzip hg svn sudo tar which unzip xz zip libselinux-python
+    yum -y install python-pip python-setuptools python-wheel patch
+    FOUND="yes"
+    FAMILY="redhat"
+fi
+if [ -f /etc/olpc-release ]; then
+    yum -y upgrade
     yum -y install ca-certificates nss
-    yum clean all
-    rm -rf /var/cache/yum
-    yum_makecache_retry
-    yum -y install epel-release
-    # One more time with EPEL to avoid failures
-    yum_makecache_retry
-
-    yum -y install python-pip PyYAML python-jinja2 python-httplib2 python-keyczar python-paramiko git
-    # If python-pip install failed and setuptools exists, try that
-    if [ -z "$(which pip)" -a -z "$(which easy_install)" ]; then
-      yum -y install python-setuptools
-      easy_install pip
-    elif [ -z "$(which pip)" -a -n "$(which easy_install)" ]; then
-      easy_install pip
-    fi
-
-    # Install passlib for encrypt
-    yum -y groupinstall "Development tools"
-    yum -y install python-devel MySQL-python sshpass && pip install pyrax pysphere boto passlib dnspython
-
-    # Install Ansible module dependencies
-    yum -y install bzip2 file findutils git gzip hg svn sudo tar which unzip xz zip libselinux-python
-    [ -n "$(yum search procps-ng)" ] && yum -y install procps-ng || yum -y install procps
-  elif [ -f /etc/debian_version ] || [ grep -qi ubuntu /etc/lsb-release ] || grep -qi ubuntu /etc/os-release; then
-    apt-get update
-    # Install via package
-    # apt-get update && \
-    # apt-get install --no-install-recommends -y software-properties-common && \
-    # apt-add-repository ppa:ansible/ansible && \
-    # apt-get update && \
-    # apt-get install -y ansible
-
-    # Install required Python libs and pip
-    apt-get install -y  python-pip python-yaml python-jinja2 python-httplib2 python-paramiko python-pkg-resources
-    [ -n "$( apt-cache search python-keyczar )" ] && apt-get install -y  python-keyczar
-    if ! apt-get install -y git ; then
-      apt-get install -y git-core
-    fi
-    # If python-pip install failed and setuptools exists, try that
-    if [ -z "$(which pip)" -a -z "$(which easy_install)" ]; then
-      apt-get -y install python-setuptools
-      easy_install pip
-    elif [ -z "$(which pip)" -a -n "$(which easy_install)" ]; then
-      easy_install pip
-    fi
-    # If python-keyczar apt package does not exist, use pip
-    [ -z "$( apt-cache search python-keyczar )" ] && sudo pip install python-keyczar
-
-    # Install passlib for encrypt
-    apt-get install -y build-essential
-    apt-get install -y python-all-dev python-mysqldb sshpass && pip install pyrax pysphere boto passlib dnspython
-
-    # Install Ansible module dependencies
-    apt-get install -y bzip2 file findutils git gzip mercurial procps subversion sudo tar debianutils unzip xz-utils zip python-selinux
-
-  else
-    echo 'WARN: Could not detect distro or distro unsupported'
-    echo 'WARN: Trying to install ansible via pip without some dependencies'
-    echo 'WARN: Not all functionality of ansible may be available'
-  fi
-
-  mkdir /etc/ansible/
-  echo -e '[local]\nlocalhost\n' > /etc/ansible/hosts
-  pip install ansible==2.2
-
-  if [ -f /etc/centos-release ] || [ -f /etc/redhat-release ] || [ -f /etc/oracle-release ] || [ -f /etc/system-release ] || grep -q 'Amazon Linux' /etc/system-release; then
-    # Fix for pycrypto pip / yum issue
-    # https://github.com/ansible/ansible/issues/276
-    if  ansible --version 2>&1  | grep -q "AttributeError: 'module' object has no attribute 'HAVE_DECL_MPZ_POWM_SEC'" ; then
-      echo 'WARN: Re-installing python-crypto package to workaround ansible/ansible#276'
-      echo 'WARN: https://github.com/ansible/ansible/issues/276'
-      pip uninstall -y pycrypto
-      yum erase -y python-crypto
-      yum install -y python-crypto python-paramiko
-    fi
-  fi
-
+    yum -y install git bzip2 file findutils gzip hg svn sudo tar which unzip xz zip libselinux-python
+    yum -y install python-pip python-setuptools python-wheel patch
+    pip install --upgrade pip setuptools wheel #EOL just do it
+    FOUND="yes"
+    FAMILY="olpc"
 fi
+
+if [ -f /etc/debian_version ]; then
+# might pickup usbmount confirm ppa location
+#    echo "deb http://ppa.launchpad.net/ansible/ansible/ubuntu trusty main" >> /etc/apt/sources.list
+#    apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 93C4A3FD7BB9C367
+#    apt-get update
+    apt-get install ansible git python-pip python-setuptools python-wheel patch
+#    apt-get install ansible python-kerberos python-selinux python-winrm python-xmltodict sshpass bzip2 file findutils gzip tar unzip zip python-keyczar python-boto python-dnspython python-pyrax python-sphere
+    FOUND="yes"
+    FAMILY="debian"
+fi
+if [ `grep -qi ubuntu /etc/lsb-release` ] ||  [ `grep -qi ubuntu /etc/os-release` ]; then
+    apt-get update
+# confirm PPA location
+#    apt-get install software-properties-common
+#    apt-add-repository ppa:ansible/ansible
+#    apt-get update
+    apt-get install ansible git python-pip python-setuptools python-wheel patch
+#    apt-get install ansible python-kerberos python-selinux python-winrm python-xmltodict sshpass bzip2 file findutils gzip tar unzip zip python-keyczar python-boto python-dnspython python-pyrax python-sphere
+    FOUND="yes"
+    FAMILY="debian"
+fi
+# Has 2.2.1
+if [ `grep -qi raspbian /etc/*elease` ]; then
+    apt-get update
+#    apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 93C4A3FD7BB9C367
+#    apt-get update
+    apt-get install ansible git python-pip python-setuptools python-wheel patch
+#    apt-get install ansible python-kerberos python-selinux python-winrm python-xmltodict sshpass bzip2 file findutils gzip tar unzip zip python-keyczar python-boto python-dnspython python-pyrax python-sphere
+    FOUND="yes"
+    FAMILY="debian"
+fi
+
+if [ ! $FOUND = "yes" ]; then
+    echo 'WARN: Could not detect distro or distro unsupported'
+    exit 1
+fi
+
+# latest pip 2.2 is 2.2.3.0 on 2017-07-07
+# ansible-2.3.1.0-1.el7.noarch.rpm from 2017-06-01
+
+### start ansible pip install TODO add venv location /opt/iiab/anisble
+if [ $FAMILY = "olpc" ]; then
+    pip install ansible==2.2.1 --disable-pip-version-check
+    VER=`ansible --version|head -n 1|cut -f 2 -d " "`
+    echo "ansible version installed via pip $VER"
+fi
+
+#if [ $FAMILY = "debian" ]; then
+#   rpm -e ansible
+#   pip install ansible==2.2.1 --disable-pip-version-check
+#fi
+VER=`ansible --version|head -n 1|cut -f 2 -d " "`
+echo "ansible version installed via package manager $VER"
+
+#if [ $FAMILY = "debian" ]; then
+#    echo 'WARN: Trying to install ansible via pip without some dependencies'
+#    echo 'WARN: Not all functionality of ansible may be available'
+#    pip install ansible==2.3.1 --disable-pip-version-check
+#fi
+mkdir -p /etc/ansible/
+echo -e '[local]\nlocalhost\n' > /etc/ansible/hosts
+
+### end ansible routine
+###
+# other pip upgrades here if needed
+###
