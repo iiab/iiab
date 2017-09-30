@@ -72,14 +72,15 @@
         - localhost
   when: mysql_enabled and elgg_enabled and not elgg.stat.exists
 
+- name: Create a mysql database for elgg
+  mysql_db: name={{ dbname }}
+  when: mysql_enabled and elgg_enabled and not elgg.stat.exists
+  register: create_elgg_database
+
 - name: Create file to load database
   template: src=elggdb.sql.j2
             dest=/tmp/elggdb.sql
-
-- name: Create a mysql database for elgg
-  mysql_db: name={{ dbname }}
-  when: mysql_enabled and elgg_enabled
-  register: create_elgg_database
+  when: mysql_enabled and elgg_enabled and not elgg.stat.exists
 
 - name: Load elgg database dump
   mysql_db: name={{ dbname }}
@@ -89,21 +90,27 @@
 
 - name: Remove database dump after load
   file: name=/tmp/elggdb.sql state=absent
+  when: mysql_enabled and elgg_enabled and create_elgg_database.changed
 
-- name: Install config file for elgg in Apache
+- name: All - Install config file for elgg in Apache
   template: src=elgg.conf dest=/etc/{{ apache_config_dir }}/elgg.conf
   when: mysql_enabled and elgg_enabled
 
-- name: enable elgg
+- name: Debian - enable elgg
   file: path=/etc/apache2/sites-enabled/elgg.conf
         src=/etc/apache2/sites-available/elgg.conf
         state=link
   when: elgg_enabled and is_debuntu
 
-- name: disable elgg
+- name: Debian - disable elgg
   file: path=/etc/apache2/sites-enabled/elgg.conf
         state=absent
   when: not elgg_enabled and is_debuntu
+
+- name: Redhat - Remove config file for elgg in Apache
+  file: dest=/etc/{{ apache_config_dir }}/elgg.conf
+        state=absent
+  when: not elgg_enabled and is_redhat
 
 - name: add elgg to service list
   ini_file: dest='{{ service_filelist }}'
