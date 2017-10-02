@@ -1,7 +1,10 @@
+# Assume we only get here if elgg_install: True
+# Assume mysql is running
+
 - name: download current version from our copy
   shell: wget {{ iiab_download_url }}/elgg-{{ elgg_version }}.zip -c -P {{ downloads_dir }}
          creates={{ downloads_dir }}/elgg-{{ elgg_version }}.zip
-  when: internet_available 
+  when: internet_available
 
 - name: Determine if software is already expanded
   stat: path=/opt/elgg-{{ elgg_version }}/index.php
@@ -11,7 +14,7 @@
 # unarchive: dest=/opt/
 #            src={{ downloads_dir }}/elgg-{{ elgg_version }}.zip
 
-- name: Expand it to our location
+- name: Expand it to our location unless already done
   shell: "/usr/bin/unzip -o {{ downloads_dir }}/elgg-{{ elgg_version }}.zip -d /opt"
   when: elgg.stat.exists is defined and not elgg.stat.exists
 
@@ -25,6 +28,7 @@
 
 # use template to fix up settings in engine/settings.php with our variables substituted
 # into engine/settings.example.php
+# note this will overwrite any manual settings
 - name: Substitute our parameters in engine/settings.example.php
   template: src="settings.php.j2"
             dest="/opt/{{ elgg_xx }}/elgg-config/settings.php"
@@ -60,50 +64,52 @@
         recurse=yes
         state=directory
 
-# elggdb.sql obtained with mysqldump --skip-add-drop-table elggdb > elggdb.sql
-# tar up a mysqldump of freshly installed database and use it in the install to avoid the startup
-# form, which worries me a lot. (/var/lib/mysql/elggdb)
+- name: Create a mysql database for elgg - can be run more than once
+  mysql_db: name={{ dbname }}
+  register: create_elgg_database
 
-- name: Create a user to access the elgg database
-  mysql_user: name={{ dbuser }} host={{ item }} password={{ dbpassword }} priv=*.*:ALL
+- name: Create a user to access the elgg database - can be run more than once
+  mysql_user: name={{ dbuser }} host={{ item }} password={{ dbpassword }} priv={{ dbname }}.*:ALL
   with_items:
         - 127.0.0.1
         - ::1
         - localhost
-  when: mysql_enabled and elgg_enabled and not elgg.stat.exists
 
 - name: Create file to load database
   template: src=elggdb.sql.j2
             dest=/tmp/elggdb.sql
 
-- name: Create a mysql database for elgg
-  mysql_db: name={{ dbname }}
-  when: mysql_enabled and elgg_enabled
-  register: create_elgg_database
+# elggdb.sql obtained with mysqldump --skip-add-drop-table elggdb > elggdb.sql
+# tar up a mysqldump of freshly installed database and use it in the install to avoid the startup
+# form, which worries me a lot. (/var/lib/mysql/elggdb)
 
 - name: Load elgg database dump
   mysql_db: name={{ dbname }}
             state=import
             target=/tmp/elggdb.sql
-  when: mysql_enabled and elgg_enabled and create_elgg_database.changed
+  when: create_elgg_database.changed
 
 - name: Remove database dump after load
   file: name=/tmp/elggdb.sql state=absent
 
 - name: Install config file for elgg in Apache
   template: src=elgg.conf dest=/etc/{{ apache_config_dir }}/elgg.conf
-  when: mysql_enabled and elgg_enabled
 
-- name: enable elgg
+- name: Enable elgg for debuntu (will already be enabled above for Redhat)
   file: path=/etc/apache2/sites-enabled/elgg.conf
         src=/etc/apache2/sites-available/elgg.conf
         state=link
   when: elgg_enabled and is_debuntu
 
-- name: disable elgg
+- name: Disable elgg for debuntu
   file: path=/etc/apache2/sites-enabled/elgg.conf
         state=absent
   when: not elgg_enabled and is_debuntu
+
+- name: Disable elgg for Redhat - remove config file for elgg in Apache
+  file: dest=/etc/{{ apache_config_dir }}/elgg.conf
+        state=absent
+  when: not elgg_enabled and is_redhat
 
 - name: add elgg to service list
   ini_file: dest='{{ service_filelist }}'
