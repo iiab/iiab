@@ -1,0 +1,20 @@
+- name: Check if the TZ is not already set - Can Fail
+  shell: readlink /etc/localtime | awk -F "zoneinfo/" '{print $2}'
+  register: TZ_set
+  ignore_errors: True
+
+- name: Set to UTC if the TZ is not set already set
+  set_fact: local_tz='UTC' iiab_TZ='UTC'
+  when: TZ_set.stdout == ""
+
+- name: Set default Timezone -  Debian
+  shell: timedatectl set-timezone {{ iiab_TZ }}
+  when: is_debuntu and iiab_TZ is defined and iiab_TZ != "" and iiab_TZ != "TZ_set.stdout"
+
+- name: Set default Timezone -  Redhat
+  shell: ln -sf /usr/share/zoneinfo/{{ iiab_TZ }} /etc/localtime
+  when: is_redhat and iiab_TZ is defined and iiab_TZ != "" and iiab_TZ != "TZ_set.stdout"
+
+- name: override ansible on timezone
+  set_fact: local_tz=TZ_set.stdout
+  when: TZ_set.stdout != ""
