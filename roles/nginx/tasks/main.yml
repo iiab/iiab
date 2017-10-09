@@ -1,0 +1,30 @@
+- name: insure than apache is not running
+  service: name=apache2 enabled=false state=stopped
+  ignore_errors: True
+
+- name: Install nginx required  and helper packages
+  package: name={{ item }} state=present
+  with_items:
+    - nginx
+    - php-fpm
+
+- name: put the config file in place
+  template: src={{ item.src}}  dest={{ item.dest }}
+  with_items:
+     - { src: "server.conf",dest: "/etc/nginx/" }
+     - { src: "nginx.conf",dest: "/etc/nginx/" }
+     - { src: "admin-console.conf",dest: "/etc/nginx/conf.d/" }
+
+- name: remove the nginx default config
+  file: path=/etc/nginx/sites-available/default state=absent
+
+
+- name: Make sure nginx picks up the config 
+  service: name=nginx state=restarted
+  when: nginx_enabled
+          
+# it might not be installed yet, so ignore errors
+- name: Since we stopped apache2, start it again
+  service: name=apache2 state=started enabled=True
+  when: apache_enabled
+  ignore_errors: True
