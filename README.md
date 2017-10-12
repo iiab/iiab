@@ -1,4 +1,4 @@
-# Internet-in-a-Box (IIAB) [![Build Status](https://travis-ci.org/iiab/iiab/iiab.svg?branch=master)](https://travis-ci.org/iiab/iiab)
+# Internet-in-a-Box (IIAB) [![Build Status](https://travis-ci.org/iiab/iiab.svg?branch=master)](https://travis-ci.org/iiab/iiab)
 
 Welcome to the Git repository of the Internet-in-a-Box (IIAB) project. This is a community-based project developed and supported by volunteers from around the world. The Internet-in-a-Box (IIAB) is small, inexpensive device which provides essential Internet resources (like Wikipedia, OpenStreetMap, Khan Academy and others) without any Internet connection. It provides a local content server of the world’s Free Knowledge.
 
