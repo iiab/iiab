@@ -2,6 +2,7 @@
   get_url: url={{ iiab_download_url }}/{{ sugarizer_version }}.tar.gz
            dest={{ downloads_dir }}/{{ sugarizer_version }}.tar.gz
   
+#fixme
 - name: Untar it to target location
   command: tar xzf {{ downloads_dir }}/{{ sugarizer_version }}.tar.gz -C {{ sugarizer_location }}
            creates="{{ sugarizer_location }}/{{ sugarizer_version }}/index.html"
@@ -11,14 +12,14 @@
         src={{ sugarizer_location }}/{{ sugarizer_version }}
         state=link
 
-- name: Install sugarizer required packages
+- name: Install sugarizer required packages - is_debuntu
   package: name={{ item }}
            state=present
   with_items:
     - node-gyp
   when: internet_available and is_debuntu
 
-- name: Install npm non debian
+- name: Install npm non is_debuntu
   package: name={{ item }}
            state=present
   with_items:
@@ -36,13 +37,14 @@
      npm_exists: True
   when: npm.stat.exists is defined and npm.stat.exists
 
-- name: Install npm on debian -- set up apt sources
+- name: Set up apt sources on is_debuntu
   shell: curl -sL https://deb.nodesource.com/setup_6.x | bash -
-  when: internet_available and is_debian and not npm_exists
+  when: internet_available and is_debuntu and not npm_exists
 
-- name: Actually get it installed
-  command: apt-get install -y nodejs
-  when: internet_available and is_debian and not npm_exists
+- name: Actually get it installed on is_debuntu
+  package: name=nodejs
+           state=present
+  when: internet_available and is_debuntu and not npm_exists
 
 - name: Create systemd files and copy our ini file 
   template: src={{ item.src }}
@@ -51,7 +53,7 @@
             group=root
             mode=0644
   with_items:
-#     - { src: 'sugarizer.service.j2' , dest: '/etc/systemd/system/sugarizer.service'}
+     - { src: 'sugarizer.service.j2' , dest: '/etc/systemd/system/sugarizer.service'}
      - { src: 'sugarizer.ini' , dest: '{{ sugarizer_location }}/sugarizer/server' }
 #     - { src: 'sugarizer.conf' , dest: '/etc/apache2/sites-available' }
 
@@ -60,20 +62,20 @@
 #        dest=/etc/apache2/sites-enabled/sugarizer.conf
 #        state=link
 
-- name: Create the express framework for node.js
+- name: Create the express framework for node.js - ALL less F18
   shell:  npm install
   args:
      chdir: "{{ sugarizer_location }}/sugarizer/server" 
      creates: "{{ sugarizer_location }}/sugarizer/server/node_modules"
   when: not is_F18
 
-- name: Create the express framework for node.js
+- name: Create the express framework for node.js - F18
   shell:  npm install
   args:
      chdir: "{{ sugarizer_location }}/sugarizer/server" 
   when: is_F18
 
-- name: enable services
+- name: enable services - All
   service: name={{ item.name }}
            enabled=yes
            state=restarted
@@ -81,7 +83,7 @@
       - { name: sugarizer }
   when: sugarizer_enabled
 
-- name: disable services
+- name: disable services - All
   service: name={{ item.name }}
            enabled=no
            state=stopped
