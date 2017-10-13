@@ -8,6 +8,9 @@ INPUT=/tmp/iiab-wiki
 OUTPUT=/tmp/iiab-wiki.out
 DESTPATH=/library/www/html/info
 
+# for-loop at bottom chokes on directories: this workaround permits "git pull" on IIAB systems prior to 2017-10-13
+rm -rf $DESTPATH/html
+
 rm -rf $INPUT
 rm -rf $OUTPUT
 mkdir -p $INPUT
