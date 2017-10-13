@@ -39,7 +39,7 @@ lynx -reload -source https://github.com/XSCE/xsce/blob/release-6.2/ReleaseNotes6
 
 # Make links refer to local items
 for f in `ls $DESTPATH`; do
-    sed -i -r "s|https://github.com/iiab/iiab/wiki/([-.0-9A-z]*)|\1.html|g" $DESTPATH/$f
+    sed -i -r "s|https://github.com/iiab/iiab/wiki/([-.A-Za-z0-9]*)|\1.html|g" $DESTPATH/$f
 
     sed -i -e "s|https://github.com/xsce/xsce/blob/release-6.2/\(.*\)\.md\">|\1.html\">|g" $DESTPATH/$f
     sed -i -e "s|https://github.com/xsce/xsce/wiki/\(.*\)\">|\1.html\">|g" $DESTPATH/$f
