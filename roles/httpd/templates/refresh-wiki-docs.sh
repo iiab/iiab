@@ -38,36 +38,36 @@ lynx -reload -source https://github.com/XSCE/xsce/blob/release-6.2/ReleaseNotes6
 lynx -reload -source https://github.com/XSCE/xsce/blob/release-6.2/ReleaseNotes6.1.md > $DESTPATH/ReleaseNotes6.1.html
 
 # Make links refer to local items
-for f in `ls $DESTPATH`; do
-    sed -i -r "s|https://github.com/iiab/iiab/wiki/([-.A-Za-z0-9]*)|\1.html|g" $DESTPATH/$f
+for f in $DESTPATH/*.html; do
+    sed -i -r "s|https://github.com/iiab/iiab/wiki/([-.A-Za-z0-9]*)|\1.html|g" $f
 
-    sed -i -e "s|https://github.com/xsce/xsce/blob/release-6.2/\(.*\)\.md\">|\1.html\">|g" $DESTPATH/$f
-    sed -i -e "s|https://github.com/xsce/xsce/wiki/\(.*\)\">|\1.html\">|g" $DESTPATH/$f
+    sed -i -e "s|https://github.com/xsce/xsce/blob/release-6.2/\(.*\)\.md\">|\1.html\">|g" $f
+    sed -i -e "s|https://github.com/xsce/xsce/wiki/\(.*\)\">|\1.html\">|g" $f
 
-    sed -i -e "s|http://wiki.laptop.org/go/IIAB/FAQ|FAQ.html|g" $DESTPATH/$f
-    sed -i -e "s|/go/IIAB/FAQ|FAQ.html|g" $DESTPATH/$f
-    sed -i -e "s|http://wiki.iiab.io/FAQ|FAQ.html|g" $DESTPATH/$f
-    sed -i -e "s|http://FAQ.IIAB.IO|FAQ.html|g" $DESTPATH/$f
-    sed -i -e "s|http://faq.iiab.io|FAQ.html|g" $DESTPATH/$f
-    sed -i -e "s|http://schoolserver.org/FAQ|FAQ.html|g" $DESTPATH/$f
-    sed -i -e "s|http://schoolserver.org/faq|FAQ.html|g" $DESTPATH/$f
-    sed -i -e "s|http://wiki.laptop.org/go/XS_Community_Edition/FAQ|FAQ.html|g" $DESTPATH/$f
+    sed -i -e "s|http://wiki.laptop.org/go/IIAB/FAQ|FAQ.html|g" $f
+    sed -i -e "s|/go/IIAB/FAQ|FAQ.html|g" $f
+    sed -i -e "s|http://wiki.iiab.io/FAQ|FAQ.html|g" $f
+    sed -i -e "s|http://FAQ.IIAB.IO|FAQ.html|g" $f
+    sed -i -e "s|http://faq.iiab.io|FAQ.html|g" $f
+    sed -i -e "s|http://schoolserver.org/FAQ|FAQ.html|g" $f
+    sed -i -e "s|http://schoolserver.org/faq|FAQ.html|g" $f
+    sed -i -e "s|http://wiki.laptop.org/go/XS_Community_Edition/FAQ|FAQ.html|g" $f
 
-    sed -i -e "s|http://wiki.laptop.org/go/IIAB/Security|Security.html|g" $DESTPATH/$f
-    sed -i -e "s|/go/IIAB/Security|Security.html|g" $DESTPATH/$f
-    sed -i -e "s|http://wiki.iiab.io/Security|Security.html|g" $DESTPATH/$f
+    sed -i -e "s|http://wiki.laptop.org/go/IIAB/Security|Security.html|g" $f
+    sed -i -e "s|/go/IIAB/Security|Security.html|g" $f
+    sed -i -e "s|http://wiki.iiab.io/Security|Security.html|g" $f
 
-    sed -i -e "s|http://wiki.laptop.org/go/IIAB/local_vars.yml|local_vars.yml|g" $DESTPATH/$f
-    sed -i -e "s|/go/IIAB/local_vars.yml|local_vars.yml|g" $DESTPATH/$f
-    sed -i -e "s|http://wiki.iiab.io/local_vars.yml|local_vars.yml|g" $DESTPATH/$f
+    sed -i -e "s|http://wiki.laptop.org/go/IIAB/local_vars.yml|local_vars.yml|g" $f
+    sed -i -e "s|/go/IIAB/local_vars.yml|local_vars.yml|g" $f
+    sed -i -e "s|http://wiki.iiab.io/local_vars.yml|local_vars.yml|g" $f
 
-    sed -i -e "s|http://wiki.laptop.org/go/IIAB/local_vars_min.yml|local_vars_min.yml|g" $DESTPATH/$f
-    sed -i -e "s|/go/IIAB/local_vars_min.yml|local_vars_min.yml|g" $DESTPATH/$f
-    sed -i -e "s|http://wiki.iiab.io/local_vars_min.yml|local_vars_min.yml|g" $DESTPATH/$f
+    sed -i -e "s|http://wiki.laptop.org/go/IIAB/local_vars_min.yml|local_vars_min.yml|g" $f
+    sed -i -e "s|/go/IIAB/local_vars_min.yml|local_vars_min.yml|g" $f
+    sed -i -e "s|http://wiki.iiab.io/local_vars_min.yml|local_vars_min.yml|g" $f
 
-    sed -i -e "s|http://wiki.laptop.org/go/IIAB/local_vars_big.yml|local_vars_big.yml|g" $DESTPATH/$f
-    sed -i -e "s|/go/IIAB/local_vars_big.yml|local_vars_big.yml|g" $DESTPATH/$f
-    sed -i -e "s|http://wiki.iiab.io/local_vars_big.yml|local_vars_big.yml|g" $DESTPATH/$f
+    sed -i -e "s|http://wiki.laptop.org/go/IIAB/local_vars_big.yml|local_vars_big.yml|g" $f
+    sed -i -e "s|/go/IIAB/local_vars_big.yml|local_vars_big.yml|g" $f
+    sed -i -e "s|http://wiki.iiab.io/local_vars_big.yml|local_vars_big.yml|g" $f
 done
 
 exit 0
