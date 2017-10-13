@@ -28,23 +28,26 @@
   when: internet_available and not is_debuntu
 
 # attempting to reinstall npn is broken on raspbian 9
-- name: check for npm already installed
+- name: check for sugarizer already installed
   stat: path={{ sugarizer_location }}/sugarizer/server/node_modules
   register: npm
 
 - name: set a flag to abort second attempt to install
-  set_fact: 
+  set_fact:
      npm_exists: True
   when: npm.stat.exists is defined and npm.stat.exists
 
 - name: Set up apt sources on is_debuntu
   shell: curl -sL https://deb.nodesource.com/setup_6.x | bash -
-  when: internet_available and is_debuntu and not npm_exists
+  when: internet_available and is_debuntu
 
 - name: Actually get it installed on is_debuntu
-  package: name=nodejs
+  package: name={{ item }}
            state=present
-  when: internet_available and is_debuntu and not npm_exists
+  with_items:
+    - nodejs
+    - npm
+  when: internet_available and is_debuntu
 
 - name: Create systemd files and copy our ini file 
   template: src={{ item.src }}
@@ -67,13 +70,13 @@
   args:
      chdir: "{{ sugarizer_location }}/sugarizer/server" 
      creates: "{{ sugarizer_location }}/sugarizer/server/node_modules"
-  when: not is_F18
+  when: not is_F18 and not npm_exists
 
 - name: Create the express framework for node.js - F18
   shell:  npm install
   args:
      chdir: "{{ sugarizer_location }}/sugarizer/server" 
-  when: is_F18
+  when: is_F18 and not npm_exists
 
 - name: enable services - All
   service: name={{ item.name }}
