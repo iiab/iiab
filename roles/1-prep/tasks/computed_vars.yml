@@ -47,14 +47,51 @@
   file: path=/tmp/heart-beat.txt
         state=absent
 
-- name: no prior domain name
+- name: set FQDN
   set_fact:
-    iiab_domain: "{{ iiab_domain }}"
-    iiab_hostname: "{{ iiab_hostname }}"
+    iiab_fqdn: "{{ iiab_hostname }}.{{ iiab_domain }}"
+    FQDN_changed: False
+
+- name: FQDN changed
+  set_fact:
+    FQDN_changed: True
+  when: iiab_fqdn != ansible_fqdn
 
 # Now check FQDN
 - include: roles/2-common/tasks/hostname.yml
-  when: not first_run and "iiab_hostname.iiab_domain" != ansible_fqdn
+  when: not first_run and FQDN_changed
+
+# Discover  do we have a gateway? -- if ansible detects gateway, becomes WAN candidate
+- name: Finding gateway
+  set_fact:
+    discovered_wan_iface: "{{ ansible_default_ipv4.alias }}"
+  when: 'ansible_default_ipv4.gateway is defined'
+
+- name: Verify gateway present
+  shell: ping -c4 "{{ ansible_default_ipv4.gateway }}" &> /dev/null ; echo $?
+  when: discovered_wan_iface != "none"
+  register: gw_active_test
+
+- name: Recording gateway response
+  set_fact:
+     gw_active: True
+  when: discovered_wan_iface != "none" and gw_active_test.stdout == "0"
+
+- name: Test for internet access
+  get_url: url="{{ iiab_download_url }}/heart-beat.txt" dest=/tmp/heart-beat.txt
+  ignore_errors: True
+#  async: 10
+#  poll: 2
+  register: internet_access_test
+
+- name: Set internet_available true if wget succeeded
+  set_fact:
+     internet_available: True
+  when: not internet_access_test|failed and not disregard_network
+
+- name: Cleanup internet test file
+  file: path=/tmp/heart-beat.txt
+        state=absent
 
 # Put all computed vars here so derive properly from any prior var file
 - name: If the TZ is not set in env, set it to UTC
@@ -190,3 +227,9 @@
       value:  '{{ gw_active }}'
     - option: 'internet_available'
       value:  '{{ internet_available }}'
+    - option: 'first_run'
+      value:  '{{ first_run }}'
+    - option: 'local_tz'
+      value:  '{{ local_tz }}'
+    - option: 'FQDN_changed'
+      value:  '{{ FQDN_changed }}'
