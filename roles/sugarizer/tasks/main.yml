@@ -2,42 +2,52 @@
   get_url: url={{ iiab_download_url }}/{{ sugarizer_version }}.tar.gz
            dest={{ downloads_dir }}/{{ sugarizer_version }}.tar.gz
   
+#fixme
 - name: Untar it to target location
   command: tar xzf {{ downloads_dir }}/{{ sugarizer_version }}.tar.gz -C {{ sugarizer_location }}
+           creates="{{ sugarizer_location }}/{{ sugarizer_version }}/index.html"
 
 - name: Create a symbolic link from generic url to version specific location
   file: dest={{ sugarizer_location }}/sugarizer
         src={{ sugarizer_location }}/{{ sugarizer_version }}
         state=link
 
-- name: Install sugarizer required packages
-  package: name=nodejs
+- name: Install sugarizer required packages - is_debuntu
+  package: name={{ item }}
            state=present
-#    - npm
-  when: internet_available 
+  with_items:
+    - node-gyp
+  when: internet_available and is_debuntu
 
-- name: Install npm non debian
-  package: name=npm
+- name: Install npm non is_debuntu
+  package: name={{ item }}
            state=present
-  when: internet_available and not is_debian
+  with_items:
+    - nodejs
+    - npm
+  when: internet_available and not is_debuntu
 
 # attempting to reinstall npn is broken on raspbian 9
-- name: check for npm already installed
+- name: check for sugarizer already installed
   stat: path={{ sugarizer_location }}/sugarizer/server/node_modules
   register: npm
 
 - name: set a flag to abort second attempt to install
-  set_fact: 
+  set_fact:
      npm_exists: True
   when: npm.stat.exists is defined and npm.stat.exists
 
-- name: Install npm on debian -- set up apt sources
+- name: Set up apt sources on is_debuntu
   shell: curl -sL https://deb.nodesource.com/setup_6.x | bash -
-  when: internet_available and is_debian and not npm_exists
+  when: internet_available and is_debuntu
 
-- name: Actually get it installed
-  command: apt-get install -y npm
-  when: internet_available and is_debian and not npm_exists
+- name: Actually get it installed on is_debuntu
+  package: name={{ item }}
+           state=present
+  with_items:
+    - nodejs
+    - npm
+  when: internet_available and is_debuntu
 
 - name: Create systemd files and copy our ini file 
   template: src={{ item.src }}
@@ -46,7 +56,7 @@
             group=root
             mode=0644
   with_items:
-#     - { src: 'sugarizer.service.j2' , dest: '/etc/systemd/system/sugarizer.service'}
+     - { src: 'sugarizer.service.j2' , dest: '/etc/systemd/system/sugarizer.service'}
      - { src: 'sugarizer.ini' , dest: '{{ sugarizer_location }}/sugarizer/server' }
 #     - { src: 'sugarizer.conf' , dest: '/etc/apache2/sites-available' }
 
@@ -55,35 +65,34 @@
 #        dest=/etc/apache2/sites-enabled/sugarizer.conf
 #        state=link
 
-- name: Create the express framework for node.js
+- name: Create the express framework for node.js - ALL less F18
   shell:  npm install
   args:
      chdir: "{{ sugarizer_location }}/sugarizer/server" 
      creates: "{{ sugarizer_location }}/sugarizer/server/node_modules"
-  when: not is_F18
+  when: not is_F18 and not npm_exists
 
-- name: Create the express framework for node.js
+- name: Create the express framework for node.js - F18
   shell:  npm install
   args:
      chdir: "{{ sugarizer_location }}/sugarizer/server" 
-  when: is_F18
+  when: is_F18 and not npm_exists
 
-#- name: enable services
-#  service: name={{ item.name }}
-#           enabled=yes
-#           state=restarted
-#  with_items:
-#      - { name: sugarizer }
-#  when: sugarizer_enabled
+- name: enable services - All
+  service: name={{ item.name }}
+           enabled=yes
+           state=restarted
+  with_items:
+      - { name: sugarizer }
+  when: sugarizer_enabled
 
-
-#- name: disable services
-#  service: name={{ item.name }}
-#           enabled=no
-#           state=stopped
-#  with_items:
-#      - { name: sugarizer }
-#  when: not sugarizer_enabled
+- name: disable services - All
+  service: name={{ item.name }}
+           enabled=no
+           state=stopped
+  with_items:
+      - { name: sugarizer }
+  when: not sugarizer_enabled
 
 - name: add sugarizer to service list
   ini_file: dest='{{ service_filelist }}'
