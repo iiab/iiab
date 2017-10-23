@@ -1,52 +1,53 @@
 - name: Checking for ifcfg-WAN file - Can Fail
   stat: path=/etc/sysconfig/network-scripts/ifcfg-WAN
-  register: has_ifcfg_WAN
   when: not first_run
+  register: has_ifcfg_WAN
+  ignore_errors: True
 
 - name: Setting ifcfg-WAN True
   set_fact:
     has_WAN: True
-  when: has_ifcfg_WAN.stat is defined and has_ifcfg_WAN.stat.exists
+  when: not first_run and has_ifcfg_WAN.stat.exists
 
-# DETECT -- gateway and wireless
+# DETECT -- gateway and wireless - Can Fail
 - name: Get a list of slaves from previous config - Can Fail
   shell: "egrep -rn BRIDGE=br0 /etc/sysconfig/network-scripts/ifcfg-* | gawk -F'[-:]' '{print $3}'"
+  when: not first_run
   register: ifcfg_slaves
   ignore_errors: True
   changed_when: False
-  when: not first_run
 
 # returns list of paths
-- name: Find gateway config based on device
+- name: Find gateway config based on device - Can Fail
   shell: "egrep -rn {{ device_gw }} /etc/sysconfig/network-scripts/ifcfg* | gawk -F ':' '{print $1}'"
+  when: not first_run and device_gw != "none"
   register: ifcfg_gw_device
   ignore_errors: True
   changed_when: False
-  when: not first_run and device_gw != "none"
 
 # last match wins
 - name: Setting has ifcfg gw based on device if found
   set_fact:
     has_ifcfg_gw: "{{ item|trim }}"
-  ignore_errors: True
   when: ifcfg_gw_device.stdout_lines is defined and item|trim != "" and item|trim != "/etc/sysconfig/network-scripts/ifcfg-LAN"
   with_items:
       - "{{ ifcfg_gw_device.stdout_lines }}"
+  ignore_errors: True
 
 # returns path
 - name: Find active gateway config based on macaddress - Can Fail
   shell: "egrep -irn {{ ansible_default_ipv4.macaddress }} /etc/sysconfig/network-scripts/ifcfg* | gawk -F ':' '{print $1}' | head -n 1"
+  when: ansible_default_ipv4.gateway is defined
   register: ifcfg_gw_mac
   ignore_errors: True
   changed_when: False
-  when: ansible_default_ipv4.gateway is defined
 
 - name: Set has ifcfg gw based on on macaddress if found
   set_fact:
     has_ifcfg_gw: "{{ ifcfg_gw_mac.stdout|trim }}"
   when: ifcfg_gw_mac is defined and ifcfg_gw_mac.changed and ifcfg_gw_mac.stdout != ""
 
-# could use something else
+# could use something else - Can Fail
 - name: Find wifi gateway config if present - Can Fail
   shell: egrep -rn ESSID /etc/sysconfig/network-scripts/ifcfg* | gawk -F ':' '{print $1}' | gawk -F '/' '{print $5}'
   register: ifcfg_WAN_wifi
@@ -62,9 +63,9 @@
 
 - name: Finding device for wifi AP gateway - Can Fail
   shell: egrep -rn DEVICE /etc/sysconfig/network-scripts/{{ has_wifi_gw }} |  gawk -F '=' '{print $2}'
+  when: has_wifi_gw != "none" and has_ifcfg_gw != "none"
   register: AP_device
   ignore_errors: True
-  when: has_wifi_gw != "none" and has_ifcfg_gw != "none"
 
 - name: Setting wifi device
   set_fact:
@@ -78,4 +79,3 @@
 #  changed_when: False
 #  ignore_errors: True
 #  when: num_lan_interfaces >= "1" or iiab_wireless_lan_iface != "none"
-
