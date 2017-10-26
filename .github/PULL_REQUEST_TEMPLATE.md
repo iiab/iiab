@@ -1,7 +1,7 @@
-# Fixes Bug
+### Fixes Bug
 
-# Description of changes proposed in this pull request.
+### Description of changes proposed in this pull request.
 
-# Smoke-tested in operating system.
+### Smoke-tested in operating system.
 
-# Mention a team member for further information or comment using @ name
+### Mention a team member for further information or comment using @ name
