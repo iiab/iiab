@@ -1,4 +1,8 @@
 #!/bin/bash -e
+PLAYBOOK="iiab.yml"
+INVENTORY="ansible_hosts"
+# Pass cmdline options for ansible
+ARGS="$@"
 
 # copy var files to /etc/iiab for subsequent use
 mkdir -p /etc/iiab
@@ -28,13 +32,14 @@ fi
 if [ -f /etc/iiab/iiab.env ]
 then
   . /etc/iiab/iiab.env
-  cd $XSCE_DIR
+  cd $IIAB_DIR
 else
-  XSCE_DIR=/opt/iiab/iiab
+  IIAB_DIR=/opt/iiab/iiab
   mkdir -p /etc/iiab
 fi
+CWD=`pwd`
 
-if [ ! -f iiab.yml ]
+if [ ! -f $PLAYBOOK ]
 then
  echo "IIAB Playbook not found."
  echo "Please run this command from the top level of the git repo."
@@ -47,34 +52,10 @@ if [ ! -f /etc/ansible/facts.d/local_facts.fact ]; then
 fi
 cp ./scripts/local_facts.fact /etc/ansible/facts.d/local_facts.fact
 
-PLAYBOOK="iiab.yml"
-INVENTORY="ansible_hosts"
-CWD=`pwd`
 echo "Running local playbooks! "
 
-XSDOMAIN=""
 
-# Pass in Existing Domain
-if [ -f /etc/sysconfig/xs_domain_name ]
-then
- XSDOMAIN=`cat /etc/sysconfig/xs_domain_name`
-fi
-
-# Or accept Domain on command line
-if [ x"$1" != x ]
-then
- XSDOMAIN=$1
-fi
-
-# Pass in git location
-if [ x"$XSDOMAIN" != x ]
-then
- ARGS="--extra-vars '{\"iiab_domain\":\"$XSDOMAIN\"}'"
-else
- ARGS=""
-fi
-
-export ANSIBLE_LOG_PATH="$XSCE_DIR/iiab-install.log"
+export ANSIBLE_LOG_PATH="$CWD/iiab-install.log"
 ansible -m setup -i $INVENTORY localhost --connection=local >> /dev/null
 
 ansible-playbook -i $INVENTORY $PLAYBOOK ${ARGS} --connection=local
