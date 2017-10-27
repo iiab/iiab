@@ -12,10 +12,10 @@ Create the role you wish to add to Internet-in-a-Box by following the pattern of
 Packaging
 ---------
 
-Add your role into the main.yml file in the meta directory of the 7-local-addons role.  It will now get installed as part of
+Add your role into the main.yml file in the tasks directory of the 9-local-addons role.  It will now get installed as part of
 the next ansible run.
 
 More Info
 ---------
 
-Have a look at the docs section of this git repo for more detailed information.
+Have a look at https://github.com/iiab/iiab/wiki/IIAB-Architecture (offline at http://box/info/IIAB-Architecture.html) for more detailed information.
