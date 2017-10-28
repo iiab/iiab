@@ -4,13 +4,7 @@ INVENTORY="ansible_hosts"
 # Pass cmdline options for ansible
 ARGS="$@"
 
-# copy var files to /etc/iiab for subsequent use
-mkdir -p /etc/iiab
-if [ ! -f /etc/iiab/config_vars.yml ]; then
-  echo "{}" > /etc/iiab/config_vars.yml
-fi
-
-# if vars/local_vars.yml is missing, put a default one in place
+# if vars/local_vars.yml is missing, put a default one in place - First Run
 if [ ! -f ./vars/local_vars.yml ]; then
     OS=`grep ^ID= /etc/*release|cut -d= -f2`
     OS=${OS//\"/}
@@ -29,14 +23,24 @@ if [ ! -f ./vars/local_vars.yml ]; then
     esac
 fi
 
+# copy var files to /etc/iiab for subsequent use
+# If iiab.env exists, on second or upgrade run, check for stale variables
+# iiab.env gets created at the end of stage-4 on First Run
 if [ -f /etc/iiab/iiab.env ]
 then
-  . /etc/iiab/iiab.env
-  cd $IIAB_DIR
+  OLD=`grep XSCE /etc/iiab/iiab.env`
+  if [ x"$OLD" != "x" ]
+  then
+    rm /etc/iiab/iiab.env
+  else
+    . /etc/iiab/iiab.env
+    cd $IIAB_DIR
+  fi
 else
-  IIAB_DIR=/opt/iiab/iiab
   mkdir -p /etc/iiab
+  echo "{}" > /etc/iiab/config_vars.yml
 fi
+
 CWD=`pwd`
 
 if [ ! -f $PLAYBOOK ]
