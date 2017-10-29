@@ -3,8 +3,9 @@
 PLAYBOOK="iiab-steps.yml"
 INVENTORY="ansible_hosts"
 CWD=`pwd`
-# Pass cmdline options for ansible
-ARGS="$@"
+# Add cmdline options for passing to ansible
+# todo add proper shift to gobble up --debug --upgrade
+ARGS=""
 
 export ANSIBLE_LOG_PATH="$CWD/iiab-install.log"
 
@@ -17,21 +18,24 @@ STAGE=""
 
 if [ -f /etc/iiab/iiab.env ]; then
     OLD=`grep XSCE /etc/iiab/iiab.env | wc -l`
-    if [ "$OLD" != 0 ]; then
+    if [ "$OLD" != 0 ] || [ "$1" = "--upgrade" ]; then
         echo "Found old XSCE install - re-installing from scratch"
         rm /etc/iiab/iiab.env
         # check ansible version here and force ansible upgrade if needed
     else
         source /etc/iiab/iiab.env
-        if [ ! $STAGE == 9 ]; then
+        if [ $STAGE == 9 ] && [ "$1" = "--debug" ]; then
+            echo "Entering debug mode"
+            sed -i -e 's/^STAGE=.*/STAGE=2/' /etc/iiab/iiab.env
+        elif [ ! $STAGE == 9 ]; then
             echo "Restarting from STAGE $STAGE"
-        fi
-        if [ $STAGE == 9 ]; then
-            # place keeper
-            echo "offer 'Y' dialog box and --debug option to override"
-            echo "need to rewrite STAGE= before ansible is called or rm iiab.env"
-            sleep 5
-            #exit 0
+        else
+            # place keeper add read response
+            echo "offer 'Y' dialog box option to override"
+            echo "'runansible' has already been completed"
+            echo "use --debug to override "
+            echo "Exiting."
+            exit 1
         fi
     fi
 else
