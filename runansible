@@ -1,8 +1,54 @@
 #!/bin/bash -e
-PLAYBOOK="iiab.yml"
+# running from a git repo
+PLAYBOOK="iiab-steps.yml"
 INVENTORY="ansible_hosts"
-# Pass cmdline options for ansible
-ARGS="$@"
+CWD=`pwd`
+# Add cmdline options for passing to ansible
+# todo add proper shift to gobble up --debug --upgrade
+ARGS=""
+
+export ANSIBLE_LOG_PATH="$CWD/iiab-install.log"
+
+if [ ! -f /etc/ansible/facts.d/local_facts.fact ]; then
+    mkdir -p /etc/ansible/facts.d
+fi
+cp ./scripts/local_facts.fact /etc/ansible/facts.d/local_facts.fact
+
+STAGE=""
+
+if [ -f /etc/iiab/iiab.env ]; then
+    OLD=`grep XSCE /etc/iiab/iiab.env | wc -l`
+    if [ "$OLD" != 0 ] || [ "$1" = "--upgrade" ]; then
+        echo "Found old XSCE install - re-installing from scratch"
+        rm /etc/iiab/iiab.env
+        # check ansible version here and force ansible upgrade if needed
+    else
+        source /etc/iiab/iiab.env
+        if [ $STAGE == 9 ] && [ "$1" = "--debug" ]; then
+            echo "Entering debug mode"
+            sed -i -e 's/^STAGE=.*/STAGE=2/' /etc/iiab/iiab.env
+        elif [ ! $STAGE == 9 ]; then
+            echo "Restarting from STAGE $STAGE"
+        else
+            # place keeper add read response
+            echo "offer 'Y' dialog box option to override"
+            echo "'runansible' has already been completed"
+            echo "use --debug to override "
+            echo "In demo mode not preventing runansible"
+#            echo "Exiting."
+#            exit 1
+        fi
+    fi
+else
+    mkdir -p /etc/iiab
+fi
+
+if [ ! -f $PLAYBOOK ]; then
+    echo "IIAB Playbook not found."
+    echo "Please run this command from the top level of the git repo."
+    echo "Exiting."
+    exit 1
+fi
 
 # if vars/local_vars.yml is missing, put a default one in place - First Run
 if [ ! -f ./vars/local_vars.yml ]; then
@@ -23,43 +69,6 @@ if [ ! -f ./vars/local_vars.yml ]; then
     esac
 fi
 
-# copy var files to /etc/iiab for subsequent use
-# If iiab.env exists, on second or upgrade run, check for stale variables
-# iiab.env gets created at the end of stage-4 on First Run
-if [ -f /etc/iiab/iiab.env ]
-then
-  OLD=`grep XSCE /etc/iiab/iiab.env`
-  if [ x"$OLD" != "x" ]
-  then
-    rm /etc/iiab/iiab.env
-  else
-    . /etc/iiab/iiab.env
-    cd $IIAB_DIR
-  fi
-else
-  mkdir -p /etc/iiab
-  echo "{}" > /etc/iiab/config_vars.yml
-fi
-
-CWD=`pwd`
-
-if [ ! -f $PLAYBOOK ]
-then
- echo "IIAB Playbook not found."
- echo "Please run this command from the top level of the git repo."
- echo "Exiting."
- exit 1
-fi
-
-if [ ! -f /etc/ansible/facts.d/local_facts.fact ]; then
-   mkdir -p /etc/ansible/facts.d
-fi
-cp ./scripts/local_facts.fact /etc/ansible/facts.d/local_facts.fact
-
 echo "Running local playbooks! "
-
-
-export ANSIBLE_LOG_PATH="$CWD/iiab-install.log"
 ansible -m setup -i $INVENTORY localhost --connection=local >> /dev/null
-
 ansible-playbook -i $INVENTORY $PLAYBOOK ${ARGS} --connection=local
