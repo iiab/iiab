@@ -1,131 +1,83 @@
-- include: detected_network.yml
+- include_tasks: detected_network.yml
   when: not installing
   tags:
     - network
     - network-discover
 
-- include: computed_network.yml
+- include_tasks: computed_network.yml
   when: not installing
   tags:
     - network
     - network-discover
-
-- name: Set hostname
-  template: dest=/etc/hostname
-            src=network/hostname.j2
-            owner=root
-            mode=0644
-  when: is_debuntu
-  register: hostname_change
-  tags:
-    - network
-    - domain
-
-- name: Configure /etc/sysconfig/network
-  template: src=network/sysconfig.network.j2
-            dest=/etc/sysconfig/network
-            owner=root
-            group=root
-            mode=0644
-  when: is_redhat
-  register: hostname_change
-  tags:
-    - network
-    - domain
-
-- name: Create iiab_domain_name flag
-  template: src=network/{{ item }}.j2
-            dest=/etc/sysconfig/{{ item }}
-            mode=0644
-  with_items:
-    - iiab_domain_name
-  tags:
-    - network
-    - domain
 
 ##### Start static ip address info for first run #####
-#- include: static.yml
+#- include_tasks: static.yml
 #  when: 'iiab_wan_iface != "none" and wan_ip != "dhcp"'
 ##### End static ip address info
 
-- include: hosts.yml
+- include_tasks: hosts.yml
   tags:
     - network
+    - hostname
     - domain
 
-##### end hostname setup
-##### start install portion
-# only needs to be done once
-- include: installing.yml
-  tags:
-    - network
-    - named
-    - dhcpd
-    - dnsmasq
-    - squid
-    - domain
-#  when: hostname_change.changed or installing
-
-
-- include: avahi.yml
+- include_tasks: iptables.yml
   tags:
     - network
 
-#### end install portion
-#### start network layout
-# setting installing would skip configuring network
-# but would configure but not start services
-#- include: computed_network.yml
-#  when: not installing
-#  tags:
-#    - network
-#    - network-discover
-
-- include: computed_services.yml
-  tags:
-    - network
-    - named
-    - dhcpd
-    - dnsmasq
-    - squid
-
-# templates needed from above install section live here
-- include: enable_services.yml
-  tags:
-    - network
-    - named
-    - dhcpd
-    - dnsmasq
-    - squid
-
-- include: hostapd.yml
+- include_tasks: avahi.yml
   tags:
     - network
 
-- include: ifcfg_mods.yml
-  when: not is_debuntu and not installing
+- include_tasks: hostapd.yml
+  tags:
+    - network
+    - AP
+
+
+- include_tasks: ifcfg_mods.yml
   tags:
     - network
 
-- include: debian.yml
-  when: is_debuntu and not installing
+- include_tasks: debian.yml
   tags:
     - network
+  when: is_debuntu and not is_rpi  and not installing
 
-- name: Create IIAB network flags
-  template: src=network/{{ item }}.j2
-            dest=/etc/sysconfig/{{ item }}
-            mode=0644
-  with_items:
-    - iiab_wan_device
-    - iiab_lan_device
+- include_tasks: rpi_debian.yml
+  tags:
+    - network
+  when: is_debuntu and is_rpi  and not installing
+
+- name: Record iiab_wan_device
+  lineinfile: dest=/etc/iiab/iiab.env
+              regexp='^IIAB_WAN_DEVICE=*'
+              line='IIAB_WAN_DEVICE="{{ iiab_wan_iface }}"'
+              state=present
   when: not installing
   tags:
     - network
+
+- name: Record iiab_lan_device
+  lineinfile: dest=/etc/iiab/iiab.env
+              regexp='^IIAB_LAN_DEVICE=*'
+              line='IIAB_LAN_DEVICE="{{ iiab_lan_iface }}"'
+              state=present
+  when: not installing
+  tags:
+    - network
+
 #### end network layout
 #### start services
+- include_tasks: computed_services.yml
+  tags:
+    - network
 
-- include: restart.yml
+- include_tasks: enable_services.yml
+  tags:
+    - network
+
+- include_tasks: restart.yml
   when: not installing
   tags:
     - network
