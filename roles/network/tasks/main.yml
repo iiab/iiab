@@ -1,10 +1,10 @@
-- include: detected_network.yml
+- include_tasks: detected_network.yml
   when: not installing
   tags:
     - network
     - network-discover
 
-- include: computed_network.yml
+- include_tasks: computed_network.yml
   when: not installing
   tags:
     - network
@@ -44,30 +44,29 @@
     - domain
 
 ##### Start static ip address info for first run #####
-#- include: static.yml
+#- include_tasks: static.yml
 #  when: 'iiab_wan_iface != "none" and wan_ip != "dhcp"'
 ##### End static ip address info
 
-- include: hosts.yml
+- include_tasks: hosts.yml
   tags:
     - network
     - domain
 
-##### end hostname setup
-##### start install portion
-# only needs to be done once
-- include: installing.yml
+- include_tasks: named.yml
   tags:
     - network
     - named
+
+- include_tasks: dhcpd.yml
+  tags:
     - dhcpd
     - dnsmasq
     - squid
     - domain
 #  when: hostname_change.changed or installing
 
-
-- include: avahi.yml
+- include_tasks: squid.yml
   tags:
     - network
 
@@ -81,7 +80,7 @@
 #    - network
 #    - network-discover
 
-- include: computed_services.yml
+- include_tasks: wondershaper.yml
   tags:
     - network
     - named
@@ -89,8 +88,7 @@
     - dnsmasq
     - squid
 
-# templates needed from above install section live here
-- include: enable_services.yml
+- include_tasks: iptables.yml
   tags:
     - network
     - named
@@ -98,19 +96,23 @@
     - dnsmasq
     - squid
 
-- include: hostapd.yml
+- include_tasks: avahi.yml
   tags:
     - network
 
-- include: ifcfg_mods.yml
-  when: not is_debuntu and not installing
+- include_tasks: ifcfg_mods.yml
   tags:
     - network
 
-- include: debian.yml
-  when: is_debuntu and not installing
+- include_tasks: debian.yml
   tags:
     - network
+  when: is_debuntu and not is_rpi  and not installing
+
+- include_tasks: rpi_debian.yml
+  tags:
+    - network
+  when: is_debuntu and is_rpi  and not installing
 
 - name: Create IIAB network flags
   template: src=network/{{ item }}.j2
@@ -122,10 +124,16 @@
   when: not installing
   tags:
     - network
-#### end network layout
-#### start services
 
-- include: restart.yml
+- include_tasks: computed_services.yml
+  tags:
+    - network
+
+- include_tasks: enable_services.yml
+  tags:
+    - network
+
+- include_tasks: restart.yml
   when: not installing
   tags:
     - network
