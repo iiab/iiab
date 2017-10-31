@@ -6,76 +6,45 @@
 
 # set top level variables from local facts for convenience
 - set_fact:
-     xo_model: '{{ ansible_local.local_facts.xo_model }}'
-     phplib_dir: '{{ ansible_local.local_facts.phplib_dir }}'
-     iiab_stage: '{{ ansible_local.local_facts.stage }}'
+      xo_model: '{{ ansible_local.local_facts.xo_model }}'
+      phplib_dir: '{{ ansible_local.local_facts.phplib_dir }}'
+      iiab_stage: '{{ ansible_local.local_facts.stage }}'
 
 - name: Set exFAT enabled for XO laptops
   set_fact:
      exFAT_enabled: True
   when: xo_model != "none"
 
-# Discover  do we have a gateway? -- if ansible detects gateway, becomes WAN candidate
-- name: Finding gateway
-  set_fact:
-    discovered_wan_iface: "{{ ansible_default_ipv4.alias }}"
-  when: 'ansible_default_ipv4.gateway is defined'
-
-- name: Verify gateway present
-  shell: ping -c4 "{{ ansible_default_ipv4.gateway }}" &> /dev/null ; echo $?
-  when: discovered_wan_iface != "none"
-  register: gw_active_test
-
-- name: Recording gateway response
-  set_fact:
-     gw_active: True
-  when: discovered_wan_iface != "none" and gw_active_test.stdout == "0"
-
-- name: Test for internet access
-  get_url: url="{{ iiab_download_url }}/heart-beat.txt" dest=/tmp/heart-beat.txt
-  ignore_errors: True
-#  async: 10
-#  poll: 2
-  register: internet_access_test
-
-- name: Set internet_available true if wget succeeded
-  set_fact:
-     internet_available: True
-  when: not internet_access_test|failed and not disregard_network
-
-- name: Cleanup internet test file
-  file: path=/tmp/heart-beat.txt
-        state=absent
-
 - name: set FQDN
   set_fact:
-    iiab_fqdn: "{{ iiab_hostname }}.{{ iiab_domain }}"
-    FQDN_changed: False
+      iiab_fqdn: "{{ iiab_hostname }}.{{ iiab_domain }}"
+      FQDN_changed: False
 
 - name: FQDN changed
   set_fact:
-    FQDN_changed: True
+      FQDN_changed: True
   when: iiab_fqdn != ansible_fqdn
 
-# Now check FQDN
-- include: roles/2-common/tasks/hostname.yml
-  when: not first_run and FQDN_changed
+- name: Now check FQDN
+  include_tasks: roles/2-common/tasks/hostname.yml
+  when: FQDN_changed
 
 # Discover  do we have a gateway? -- if ansible detects gateway, becomes WAN candidate
 - name: Finding gateway
   set_fact:
-    discovered_wan_iface: "{{ ansible_default_ipv4.alias }}"
-  when: 'ansible_default_ipv4.gateway is defined'
+      discovered_wan_iface: "{{ ansible_default_ipv4.alias }}"
+      iiab_wan_iface: "{{ discovered_wan_iface }}"
+  when: ansible_default_ipv4.gateway is defined
 
 - name: Verify gateway present
-  shell: ping -c4 "{{ ansible_default_ipv4.gateway }}" &> /dev/null ; echo $?
+  shell: ping -c4 "{{ ansible_default_ipv4.gateway }}" | grep icmp_seq=4 | wc -l
   when: discovered_wan_iface != "none"
   register: gw_active_test
 
 - name: Recording gateway response
   set_fact:
-     gw_active: True
-  when: discovered_wan_iface != "none" and gw_active_test.stdout == "0"
+      gw_active: True
+  when: discovered_wan_iface != "none" and gw_active_test.stdout == "1"
 
 - name: Test for internet access
   get_url: url="{{ iiab_download_url }}/heart-beat.txt" dest=/tmp/heart-beat.txt
@@ -86,7 +55,7 @@
 
 - name: Set internet_available true if wget succeeded
   set_fact:
-     internet_available: True
+      internet_available: True
   when: not internet_access_test|failed and not disregard_network
 
 - name: Cleanup internet test file
