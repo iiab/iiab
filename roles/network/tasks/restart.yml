@@ -1,20 +1,7 @@
-# dhcpd service is restarted with NM dispatcher.d script
-- name: Stop dhcpd
-  service: name=dhcpd
-           state=stopped
-  when: not dhcpd_enabled
-
-- name: Stop named service
-  service: name={{ dns_service }}
-           state=stopped
-  when: not named_enabled
-
 - name: Start named service
   service: name={{ dns_service }}
            state=started
-  ignore_errors: True
-  when: named_enabled
-  register: dns_started
+  when: named_enabled and named_install
 
 - name: Stop DansGuardian
   service: name=dansguardian
@@ -53,3 +40,15 @@
 
 - name: Run iptables
   command: /usr/bin/iiab-gen-iptables
+
+- name: Checking if wifi slave is active waiting {{ hostapd_wait }} seconds
+  shell: "sleep {{ hostapd_wait }} | brctl show br0 | grep {{ iiab_wireless_lan_iface }}"
+  when: iiab_lan_iface == "br0" and iiab_wireless_lan_iface != "none"
+  register: wifi_slave
+
+- name: Restart hostapd if wifi slave is inactive
+  service: name=hostapd.service
+           state=restarted
+  when: iiab_wireless_lan_iface != "none" and hostapd_enabled and item|trim == ""
+  with_items:
+      - "{{ wifi_slave.stdout }}"
