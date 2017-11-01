@@ -33,17 +33,11 @@
   template: dest=/etc/dhcpcd.conf
             src=network/dhcpcd.conf.j2
   when: dhcpcd_result == "enabled"
-#and (iiab_lan_iface == "br0" or wan_ip != "dhcp")
 
 - name: Copy the bridge script
   template: dest=/etc/network/interfaces.d/iiab
             src=network/systemd.j2
-  register: interface
-  when: iiab_lan_iface == "br0" or wan_ip != "dhcp"
-
-- name: If this was a change, things need to shift
-  service: name=hostapd state=stopped
-#  when: interface.changed
+  when: not is_rpi and (iiab_lan_iface == "br0" or wan_ip != "dhcp")
 
 - name: bind may be affected
   service: name={{ dns_service }} state=stopped
@@ -68,11 +62,11 @@
 
 - name: restart the networking service
   service: name=networking state=restarted
-  when: interface.changed and not is_VM is defined
+  when: not is_rpi or not is_VM is defined
   
-#- name: restart hostapd when wifi is present
-#  service: name=hostapd state=started
-#  when: iiab_wireless_lan_iface != "none" and hostapd_enabled and iiab_network_mode != "Appliance"
+- name: restart hostapd when wifi is present
+  service: name=hostapd state=restarted
+  when: iiab_wireless_lan_iface != "none" and hostapd_enabled and iiab_network_mode != "Appliance"
 
 #- name: dhcp_server may be affected - starting - user choice
 #  service: name={{ dhcp_service2 }} state=started
