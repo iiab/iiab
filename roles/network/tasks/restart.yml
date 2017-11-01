@@ -1,3 +1,8 @@
+- name: restart hostapd when wifi is present
+  service: name=hostapd state=started
+  when: iiab_wireless_lan_iface != "none" and hostapd_enabled
+#  when: iiab_wireless_lan_iface != "none" and hostapd_enabled and iiab_network_mode != "Appliance"
+
 - name: Start named service
   service: name={{ dns_service }}
            state=started
@@ -26,7 +31,7 @@
 
 - name: Restart Wondershaper service
   service: name=wondershaper
-            state=restarted
+           state=restarted
   when: wondershaper_enabled
 
 - name: Restart avahi service
@@ -38,17 +43,23 @@
          creates=/etc/sysconfig/olpc-scripts/setup.d/installed/gateway
   when: iiab_network_mode == "Gateway"
 
+- name: Waiting {{ hostapd_wait }} seconds for network to stablize
+  shell: sleep {{ hostapd_wait }}
+
 - name: Run iptables
   command: /usr/bin/iiab-gen-iptables
 
 - name: Checking if wifi slave is active waiting {{ hostapd_wait }} seconds
-  shell: "sleep {{ hostapd_wait }} | brctl show br0 | grep {{ iiab_wireless_lan_iface }}"
-  when: iiab_lan_iface == "br0" and iiab_wireless_lan_iface != "none"
+  shell: brctl show br0 | grep {{ iiab_wireless_lan_iface }}
+  when: iiab_wireless_lan_iface != "none" and iiab_lan_iface == "br0" and hostapd_enabled
   register: wifi_slave
 
 - name: Restart hostapd if wifi slave is inactive
   service: name=hostapd.service
            state=restarted
-  when: iiab_wireless_lan_iface != "none" and hostapd_enabled and item|trim == ""
-  with_items:
-      - "{{ wifi_slave.stdout }}"
+  when: iiab_wireless_lan_iface != "none" and iiab_lan_iface == "br0" and hostapd_enabled
+
+- name: dhcp_server may be affected - starting - user choice
+  service: name={{ dhcp_service2 }}
+           state=restarted
+  when: iiab_network_mode != "Appliance"
