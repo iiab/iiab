@@ -21,6 +21,7 @@
 - name: On upgrade from earlier IIAB versions, remove /etc/network/interfaces.d/br0
   file: path=/etc/network/interfaces.d/br0
         state=absent
+  when: iiab_lan_iface != "br0" and wan_ip == "dhcp"
 
 - name: Default to 'LanController'
   set_fact:
@@ -33,19 +34,21 @@
 
 - name: Supply our own dhcpcd.conf
   template: dest=/etc/dhcpcd.conf
-            src=network/dhcpcd.conf
+            src=network/dhcpcd.conf.j2
+  when: iiab_lan_iface == "br0" or wan_ip != "dhcp"
 
 - name: Copy the network config script
   template: dest=/etc/network/interfaces.d/iiab
-            src=network/iiab.j2
+            src=network/systemd.j2
   register: interface
+  when: iiab_lan_iface == "br0" or wan_ip != "dhcp"
 
 - name: If this was a change, things need to shift
   service: name=hostapd state=stopped
   when: interface.changed
 
-- name: dhcpd may be affected
-  service: name=bind9 state=stopped
+- name: dhcpcd may be affected
+  service: name=dhcpcd state=stopped
   when: interface.changed
 
 - name: Tear down any bridge and start fresh
@@ -63,52 +66,17 @@
   ignore_errors: True
   when: interface.changed
 
-- name: Restart the networking service
+- name: start up dhcpcd again
+  service: name=dhcpcd state=started
+
+# now pick up denyinterfaces
+- name: restart dhcpcd
+  service: name=dhcpcd state=restarted
+
+- name: restart the networking service
   service: name=networking state=restarted
-  when: interface.changed
-
-- name: Start up hostapd again
-  service: name=hostapd state=started
-  when: interface.changed
-
-- name: dhcpd may be affected
-  service: name=bind9 state=started
-  when: interface.changed
 
 #create lan br0 if lan_controller or gateway
 #create wan br0 if appliance
 #allocate wlan0 under br0 in all cases
 #allocate eth0 under br0 if appliance, alone if gateway
-
-- name: Add location section to config file
-  ini_file: dest='{{ iiab_config_file }}'
-            section=network
-            option='{{ item.option }}'
-            value='{{ item.value }}'
-  with_items:
-  - option: 'gateway_active'
-    value:  '{{ gw_active }}'
-  - option: 'internet_available'
-    value:  '{{ internet_available }}'
-  - option: 'gateway_ifcfg'
-    value: '{{ has_ifcfg_gw }}'
-  - option: 'detected_gateway'
-    value: '{{ discovered_wan_iface }}'
-  - option: 'prior_gateway'
-    value: '{{ device_gw2 }}'
-  - option: 'wireless_list_1'
-    value: '{{ wifi1 }}'
-  - option: 'wireless_list_2'
-    value: '{{ wifi2 }}'
-  - option: 'num_wifi_interfaces'
-    value: '{{ num_wifi_interfaces }}'
-  - option: 'discovered_wireless_iface'
-    value: '{{ discovered_wireless_iface }}'
-  - option: 'iiab_wireless_lan_iface'
-    value: '{{ iiab_wireless_lan_iface }}'
-  - option: 'num_lan_interfaces'
-    value: '{{ num_lan_interfaces }}'
-  - option: 'detected_lan'
-    value: '{{ discovered_lan_iface }}'
-  - option: 'static_wan'
-    value: '{{ gui_static_wan }}'
