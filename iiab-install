@@ -1,13 +1,28 @@
 #!/bin/bash -e
 # running from a git repo
-PLAYBOOK="iiab-stages.yml"
-INVENTORY="ansible_hosts"
-CWD=`pwd`
 # Add cmdline options for passing to ansible
 # todo add proper shift to gobble up --debug --reinstall
 ARGS=""
 
+PLAYBOOK="iiab-stages.yml"
+INVENTORY="ansible_hosts"
+CWD=`pwd`
+OS=`grep ^ID= /etc/*release|cut -d= -f2`
+OS=${OS//\"/}
+
 export ANSIBLE_LOG_PATH="$CWD/iiab-install.log"
+
+if [ $OS = "raspbian" ]; then
+    echo "found"
+    REBOOT=`uname -a | grep 4.9.59-v7+ | wc -l`
+    if [ $REBOOT != 1 ]; then
+    echo "Please update your system with 'add inst' "
+    echo "and reboot to install latest kernel"
+    exit 1
+    else
+    echo "latest kernel installed - continuing"
+    fi
+fi
 
 if [ ! -f /etc/ansible/facts.d/local_facts.fact ]; then
     mkdir -p /etc/ansible/facts.d
@@ -52,9 +67,6 @@ fi
 
 # if vars/local_vars.yml is missing, put a default one in place - First Run
 if [ ! -f ./vars/local_vars.yml ]; then
-    OS=`grep ^ID= /etc/*release|cut -d= -f2`
-    OS=${OS//\"/}
-
     case $OS in
         OLPC | fedora)
         cp ./vars/olpc.localvars ./vars/local_vars.yml
