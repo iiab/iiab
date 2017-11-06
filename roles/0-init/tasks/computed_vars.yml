@@ -1,34 +1,55 @@
-# get local vars from scripts in /etc/ansible/facts.d
-# on first run, this will generate UUID
-
-- name: re-read facts
+- name: re-read local_facts.facts from /etc/ansible/facts.d
   setup: filter=ansible_local
 
 # set top level variables from local facts for convenience
 - set_fact:
-     xo_model: '{{ ansible_local["local_facts"]["xo_model"] }}'
-     phplib_dir: '{{ ansible_local["local_facts"]["phplib_dir"] }}'
+      xo_model: '{{ ansible_local.local_facts.xo_model }}'
+      phplib_dir: '{{ ansible_local.local_facts.phplib_dir }}'
+      iiab_stage: '{{ ansible_local.local_facts.stage }}'
+
+# Networking uses a different file for the rpi
+- name: Discover if this is a rpi -- assume if so it is running raspbian
+  set_fact:
+      rpi_model: "rpi"
+      is_rpi: True
+      no_net_restart: True
+  when: ansible_local.local_facts.os == "raspbian"
 
 - name: Set exFAT enabled for XO laptops
   set_fact:
      exFAT_enabled: True
   when: xo_model != "none"
 
+- name: set FQDN
+  set_fact:
+      iiab_fqdn: "{{ iiab_hostname }}.{{ iiab_domain }}"
+      FQDN_changed: False
+
+- name: FQDN changed
+  set_fact:
+      FQDN_changed: True
+  when: iiab_fqdn != ansible_fqdn
+
+- name: Now check FQDN
+  include_tasks: roles/2-common/tasks/hostname.yml
+  when: FQDN_changed
+
 # Discover  do we have a gateway? -- if ansible detects gateway, becomes WAN candidate
 - name: Finding gateway
   set_fact:
-    discovered_wan_iface: "{{ ansible_default_ipv4.alias }}"
-  when: 'ansible_default_ipv4.gateway is defined'
+      discovered_wan_iface: "{{ ansible_default_ipv4.alias }}"
+      iiab_wan_iface: "{{ discovered_wan_iface }}"
+  when: ansible_default_ipv4.gateway is defined
 
 - name: Verify gateway present
-  shell: ping -c4 "{{ ansible_default_ipv4.gateway }}" &> /dev/null ; echo $?
+  shell: ping -c4 "{{ ansible_default_ipv4.gateway }}" | grep icmp_seq=4 | wc -l
   when: discovered_wan_iface != "none"
   register: gw_active_test
 
 - name: Recording gateway response
   set_fact:
-     gw_active: True
-  when: discovered_wan_iface != "none" and gw_active_test.stdout == "0"
+      gw_active: True
+  when: discovered_wan_iface != "none" and gw_active_test.stdout == "1"
 
 - name: Test for internet access
   get_url: url="{{ iiab_download_url }}/heart-beat.txt" dest=/tmp/heart-beat.txt
@@ -39,39 +60,12 @@
 
 - name: Set internet_available true if wget succeeded
   set_fact:
-     internet_available: True
+      internet_available: True
   when: not internet_access_test|failed and not disregard_network
 
 - name: Cleanup internet test file
   file: path=/tmp/heart-beat.txt
         state=absent
-
-- name: add version section
-  ini_file: dest='{{ iiab_config_file }}'
-            section=runtime
-            option='{{ item.option }}'
-            value='{{ item.value }}'
-  with_items:
-    - option: 'runtime_branch'
-      value: '{{ ansible_local["local_facts"]["iiab_branch"] }}'
-    - option: 'runtime_commit'
-      value: '{{ ansible_local["local_facts"]["iiab_commit"] }}'
-    - option: 'runtime_date'
-      value: '{{ ansible_date_time["iso8601"] }}'
-    - option: 'runtime_php'
-      value: '{{ phplib_dir }}'
-    - option: 'kernel'
-      value: '{{ ansible_kernel }}'
-    - option: 'memory_mb'
-      value: '{{ ansible_memtotal_mb }}'
-    - option: 'swap_mb'
-      value: '{{ ansible_swaptotal_mb }}'
-    - option: 'product_id'
-      value: '{{ ansible_product_uuid }}'
-    - option: 'gw_active'
-      value:  '{{ gw_active }}'
-    - option: 'internet_available'
-      value:  '{{ internet_available }}'
 
 # Put all computed vars here so derive properly from any prior var file
 - name: If the TZ is not set in env, set it to UTC
@@ -176,3 +170,52 @@
   set_fact:
     is_CentOS: True
   when: ansible_distribution == "CentOS"
+
+- name: add version section
+  ini_file: dest='{{ iiab_config_file }}'
+            section=runtime
+            option='{{ item.option }}'
+            value='{{ item.value }}'
+  with_items:
+    - option: 'iiab_stage'
+      value: '{{ iiab_stage }}'
+    - option: 'runtime_php'
+      value: '{{ phplib_dir }}'
+    - option: 'runtime_branch'
+      value: '{{ ansible_local.local_facts.iiab_branch }}'
+    - option: 'runtime_commit'
+      value: '{{ ansible_local.local_facts.iiab_commit }}'
+    - option: 'runtime_date'
+      value: '{{ ansible_date_time.iso8601 }}'
+    - option: 'ansible_version'
+      value: '{{ ansible_local.local_facts.ansible_version }}'
+    - option: 'kernel'
+      value: '{{ ansible_kernel }}'
+    - option: 'memory_mb'
+      value: '{{ ansible_memtotal_mb }}'
+    - option: 'swap_mb'
+      value: '{{ ansible_swaptotal_mb }}'
+    - option: 'product_id'
+      value: '{{ ansible_product_uuid }}'
+    - option: 'gw_active'
+      value:  '{{ gw_active }}'
+    - option: 'internet_available'
+      value:  '{{ internet_available }}'
+    - option: 'is_rpi'
+      value:  '{{ is_rpi }}'
+    - option: 'first_run'
+      value:  '{{ first_run }}'
+    - option: 'local_tz'
+      value:  '{{ local_tz }}'
+    - option: 'FQDN_changed'
+      value:  '{{ FQDN_changed }}'
+
+- name: STAGE 0 HAS COMPLETED ======================================
+  ini_file: dest='{{ iiab_config_file }}'
+            section=runtime
+            option='{{ item.option }}'
+            value='{{ item.value }}'
+  with_items:
+    - option: 'is_VM'
+      value:  'yes'
+  when: is_VM is defined

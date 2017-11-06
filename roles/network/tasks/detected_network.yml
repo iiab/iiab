@@ -1,34 +1,42 @@
-- name: Checking iiab_domain_name
-  shell: "cat /etc/sysconfig/iiab_domain_name"
-  register: prior_domain
-  when: not first_run
-
-# above always registers
-- name: Checking for prior domain name
-  set_fact:
-    iiab_domain: "{{ prior_domain.stdout }}"
-  when: not first_run and prior_domain.stdout != "lan" and prior_domain.stdout != ""
-
 - name: iiab_wan_device
-  shell: "cat /etc/sysconfig/iiab_wan_device"
+  shell: grep IIAB_WAN_DEVICE /etc/iiab/iiab.env | awk -F "=" '{print $2}'
+  when: iiab_stage|int > 4
   register: prior_gw
-  when: not first_run
 
 - name: Checking for old device gateway interface for device test
   set_fact:
-    device_gw: "{{ prior_gw.stdout }}"
-    device_gw2: "{{ prior_gw.stdout }}"
-  when: not first_run and prior_gw is defined and prior_gw.stdout != ""
+      device_gw: "{{ prior_gw.stdout }}"
+      device_gw2: "{{ prior_gw.stdout }}"
+  when: iiab_stage|int > 4 and prior_gw is defined and prior_gw.stdout != ""
 
 - name: Setting WAN if detected
   set_fact:
-    iiab_wan_iface: "{{ discovered_wan_iface }}"
-    device_gw: "{{ discovered_wan_iface }}"
-  when: discovered_wan_iface != "none"
+      iiab_wan_iface: "{{ discovered_wan_iface }}"
+      device_gw: "{{ discovered_wan_iface }}"
+  when: ansible_default_ipv4.gateway is defined
 
 - name: RedHat network detection
-  include: detected_redhat.yml
+  include_tasks: detected_redhat.yml
   when: is_redhat
+
+- name: check to see if dhcpcd is installed and active - Can Fail
+  shell: systemctl is-enabled dhcpcd
+  register: dhcpcd_test
+  ignore_errors: True
+
+- name: setting dhcpcd_test results
+  set_fact:
+    dhcpcd_result: "{{ dhcpcd_test.stdout }}"
+
+- name: check /etc/network/interfaces for gateway
+  shell: grep {{ device_gw }} /etc/network/interfaces | wc -l
+  when: is_debuntu
+  register: wan_file
+
+- name: setting wan_in_interfaces
+  set_fact:
+    wan_in_interfaces: True
+  when: is_debuntu and wan_file.stdout|int >= 0
 
 # WIRELESS -- if any wireless is detected as gateway, it becomes WAN
 - name: Look for any wireless interfaces
@@ -65,6 +73,7 @@
   shell: "ls -la /sys/class/net/*/phy80211 | awk -F / '{print $5}' | wc -l"
   register: count_wifi_interfaces
 
+# facts are apparently all stored as text, so do text comparisons from here on
 - name: Remember number of WiFi devices
   set_fact:
       num_wifi_interfaces: "{{ count_wifi_interfaces.stdout|int }}"
@@ -90,22 +99,12 @@
   ignore_errors: True
   changed_when: false
 
-# Select an adapter that is not WAN and not wireless
-# if there is more than one the last one wins
-- name: Set IIAB discovered_lan_iface fact
-  set_fact:
-    discovered_lan_iface: "{{ item|trim }}"
-  when: item|trim != discovered_wireless_iface and item|trim != discovered_wan_iface
-  with_items:
-      - "{{ lan_list_result.stdout_lines }}"
-
 - name: Count LAN ifaces
   shell: ls /sys/class/net | grep -v  -e wwlan -e ppp -e lo -e br0 -e tun -e {{ device_gw }} -e {{ ap_device }} | wc -l
   register: num_lan_interfaces_result
   ignore_errors: True
   changed_when: false
 
-# facts are apparently all stored as text, so do text comparisons from here on
 - name: Calulate number of LAN interfaces including WiFi
   set_fact:
       num_lan_interfaces: "{{ num_lan_interfaces_result.stdout|int }}"
@@ -118,35 +117,60 @@
 #      num_lan_interfaces: "1"
 #  when: iiab_lan_enabled and iiab_wan_enabled and num_lan_interfaces == "2" and discovered_wireless_iface != "none" and iiab_wan_iface == "none"
 
-- name: Set variable discovered_wireless_iface if present
+# if there is more than one the last one wins
+# Select an adapter that is not WAN and not wireless
+- name: Set discovered_wired_iface fact if present
+  set_fact:
+      discovered_wired_iface: "{{ item|trim }}"
+  when: item|trim != discovered_wireless_iface and item|trim != discovered_wan_iface
+  with_items:
+      - "{{ lan_list_result.stdout_lines }}"
+
+- name: Set discovered_wireless_lan_iface fact if present
   set_fact:
        iiab_wireless_lan_iface: "{{ discovered_wireless_iface }}"
-  when: discovered_wireless_iface != "none" and discovered_wireless_iface != iiab_wan_iface
+  when: discovered_wireless_iface is defined and discovered_wireless_iface != "none" and discovered_wireless_iface != iiab_wan_iface
+
+- name: Set variable discovered_wired_lan_iface if present
+  set_fact:
+       iiab_wired_lan_iface: "{{ discovered_wired_iface }}"
+  when: discovered_wired_iface is defined and discovered_wired_iface != "none" and discovered_wired_iface != iiab_wan_iface
 
 #unused
 #- name: Get a list of ifcfg files to delete
 # moved to detected_redhat
 
 # use value only if present
-- name: Setting detected LAN
+- name: For Debian, always use bridging - except RPi
   set_fact:
-    iiab_lan_iface: "{{ discovered_lan_iface }}"
-  when: 'discovered_lan_iface != "none" and num_lan_interfaces == "1"'
+      iiab_lan_iface: br0
+  when: discovered_wired_iface != "none" and num_lan_interfaces >= 1 and is_debuntu and not is_rpi
 
-- name: For Debian, always use bridging
+- name: WiFi is on the LAN - use bridging - except RPi
   set_fact:
-     iiab_lan_iface: br0
-  when: 'discovered_lan_iface != "none" and num_lan_interfaces >= "1" and is_debuntu'
+      iiab_lan_iface: br0
+  when: iiab_wireless_lan_iface != "none" and not is_rpi
+
+- name: Setting wired LAN as only interface - RPi
+  set_fact:
+      iiab_lan_iface: "{{ iiab_wired_lan_iface }}"
+  when: iiab_wired_lan_iface is defined and num_lan_interfaces == 1 and is_rpi
+
+- name: Setting wireless LAN as only interface - RPi
+  set_fact:
+      iiab_lan_iface: "{{ iiab_wireless_lan_iface }}"
+  when: iiab_wireless_lan_iface is defined and num_lan_interfaces == 1 and is_rpi
 
 - name: 2 or more devices on the LAN - use bridging
   set_fact:
-     iiab_lan_iface: br0
-  when: 'discovered_lan_iface != "none" and num_lan_interfaces >= "2" and not is_debian'
+      iiab_lan_iface: br0
+  when: num_lan_interfaces >= 2 and not is_rpi
 
-- name: WiFi is on the LAN - use bridging
+- name: in VM disable LAN - needs local_vars entry to activate
   set_fact:
-    iiab_lan_iface: br0
-  when: iiab_wireless_lan_iface != "none"
+      iiab_lan_iface: none
+      no_net_restart: True
+  when: is_VM is defined
 
 # OK try old gw this is a best guess based on what's in
 # /etc/sysconfig/iiab_wan_device's last state intended to
@@ -181,7 +205,13 @@
     value: '{{ iiab_wireless_lan_iface }}'
   - option: 'num_lan_interfaces'
     value: '{{ num_lan_interfaces }}'
-  - option: 'discovered_lan_iface'
-    value: '{{ discovered_lan_iface }}'
+  - option: 'discovered_wired_iface'
+    value: '{{ discovered_wired_iface }}'
   - option: 'gui_static_wan'
     value: '{{ gui_static_wan }}'
+  - option: 'dhcpcd_result'
+    value: '{{ dhcpcd_result }}'
+  - option: 'wan_in_interfaces'
+    value: '{{ wan_in_interfaces }}'
+  - option: 'iiab_lan_iface'
+    value: '{{ iiab_lan_iface }}'
