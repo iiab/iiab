@@ -17,6 +17,7 @@
             mode={{ item.mode }}
   with_items:
    - { src: 'dhcp/dhcpd-env.j2' , dest: '/etc/sysconfig/dhcpd' , mode: '0644' }
+   - { src: 'dhcp/dhcpd-iiab.conf.j2', dest: '/etc/dhcpd-iiab.conf', mode: '0644' }
   when: dhcpd_enabled
 
 - name: Copy named file
@@ -50,9 +51,11 @@
   when: not dansguardian_enabled and dansguardian_install
 
 - name: Create xs_httpcache flag
-  shell: echo 1 > /etc/sysconfig/xs_httpcache_on
-         creates=/etc/sysconfig/xs_httpcache_on
-  when: squid_enabled
+  lineinfile: dest=/etc/iiab/iiab.env
+              regexp='^HTTPCACHE_ON=*'
+              line='HTTPCACHE_ON=True'
+              state=present
+  when: squid_enabled and squid_install
 
 - name: Enable Squid service
   service: name={{ proxy }}
@@ -85,8 +88,10 @@
   when: not squid_enabled and squid_install
 
 - name: Remove xs_httpcache flag
-  file: path=/etc/sysconfig/xs_httpcache_on
-        state=absent
+  lineinfile: dest=/etc/iiab/iiab.env
+              regexp='^HTTPCACHE_ON=*'
+              line='HTTPCACHE_ON=False'
+              state=present
   when: not squid_enabled
 
 - name: Enable Wondershaper service

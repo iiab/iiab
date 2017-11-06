@@ -1,33 +1,22 @@
-- name: Checking iiab_domain_name
-  shell: "cat /etc/sysconfig/iiab_domain_name"
-  register: prior_domain
-  when: not first_run
-
-# above always registers
-- name: Checking for prior domain name
-  set_fact:
-    iiab_domain: "{{ prior_domain.stdout }}"
-  when: not first_run and prior_domain.stdout != "lan" and prior_domain.stdout != ""
-
 - name: iiab_wan_device
-  shell: "cat /etc/sysconfig/iiab_wan_device"
+  shell: grep IIAB_WAN_DEVICE /etc/iiab/iiab.env | awk -F "=" '{print $2}'
+  when: iiab_stage|int > 4
   register: prior_gw
-  when: not first_run
 
 - name: Checking for old device gateway interface for device test
   set_fact:
-    device_gw: "{{ prior_gw.stdout }}"
-    device_gw2: "{{ prior_gw.stdout }}"
-  when: not first_run and prior_gw is defined and prior_gw.stdout != ""
+      device_gw: "{{ prior_gw.stdout }}"
+      device_gw2: "{{ prior_gw.stdout }}"
+  when: iiab_stage|int > 4 and prior_gw is defined and prior_gw.stdout != ""
 
 - name: Setting WAN if detected
   set_fact:
-    iiab_wan_iface: "{{ discovered_wan_iface }}"
-    device_gw: "{{ discovered_wan_iface }}"
-  when: discovered_wan_iface != "none"
+      iiab_wan_iface: "{{ discovered_wan_iface }}"
+      device_gw: "{{ discovered_wan_iface }}"
+  when: ansible_default_ipv4.gateway is defined
 
 - name: RedHat network detection
-  include: detected_redhat.yml
+  include_tasks: detected_redhat.yml
   when: is_redhat
 
 # WIRELESS -- if any wireless is detected as gateway, it becomes WAN
