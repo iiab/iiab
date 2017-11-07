@@ -9,94 +9,70 @@
 #   4. In lan_controller: wan is off, eth0 and wlan0 under br0
 #   5. In gateway: eth0 is wan, and wlan0 is under br0 (only one adapter under br0)
 #   6. As a slight concess to auto config, if eth1 exists, make it wan, and force gateway
+ 
+#- name: In upgrade from earlier IIAB 6.2, delete the resolvconf
+#  package: name=resolvconf
+#           state=absent
+#           enabled=False
+#  ignore_errors: True
 
-- name: In upgrade from earlier IIAB 6.2, delete the resolvconf
-  package: name=resolvconf
-           state=absent
-           enabled=False
-  ignore_errors: True
-
-- name: Get the dhcp client daemon used in recent Raspbian
-  package: name=dhcpcd5
-           state=present
+#- name: Get the dhcp client daemon used in recent raspbian
+#  package: name=dhcpcd5
+#           state=present
 
 - name: For upgrades from earlier IIAB 6.2, remove br0 file
   file: path=/etc/network/interfaces.d/br0
         state=absent
+  when: iiab_lan_iface != "br0" and wan_ip == "dhcp"
 
-- name: Default to 'lan_controller'
-  set_fact:
-      gui_desired_network_role: "lan_controller"
-  when: not gui_desired_network_role is defined
+- name: Supply resolvconf.conf
+  template: dest=/etc/resolvconf.conf
+            src=network/resolvconf.j2
 
-- name: Recover from putting config in /etc/network/interfaces
-  template: dest=/etc/network/interfaces
-            src=network/interfaces.j2
+- name: Supply dhcpcd.conf
+  template: dest=/etc/dhcpcd.conf
+            src=network/dhcpcd.conf.j2
+  when: dhcpcd_result == "enabled"
 
 - name: Copy the bridge script
   template: dest=/etc/network/interfaces.d/iiab
-            src=network/iiab.j2
-  register: interface
+            src=network/systemd.j2
+  when: not is_rpi and (iiab_lan_iface == "br0" or wan_ip != "dhcp")
 
-- name: Start up the dhcpcd service
-  service: name=dhcpcd
-           enabled=True
-           state=started
+- name: Copy the bridge script for RPi
+  template: dest=/etc/network/interfaces.d/iiab
+            src=network/rpi.j2
+  when: is_rpi and iiab_lan_iface == "br0"
 
-- name: If this was a change, things need to shift
-  service: name=hostapd state=stopped
-  when: interface.changed
+- name: bind may be affected
+  service: name={{ dns_service }} state=stopped
+  when: named_install and dnsmasq_enabled
 
-- name: dhcpd may be affected
-  service: name=bind9 state=stopped
-  when: interface.changed
+# dhcpd_server release the interface
+- name: dhcpd_server may be affected - stopping dhcpd
+  service: name=dhcpd state=stopped
+  when: dhcpd_install
 
-- name: Restart the networking service
-  service: name=networking state=restarted
-  when: interface.changed
+- name: dhcpd_server may be affected - stopping dnsmasq
+  service: name=dnsmasq state=stopped
+  when: dnsmasq_install
 
-- name: Start up hostapd again
-  service: name=hostapd state=started
-  when: interface.changed
+- name: reload systemd
+  shell: systemctl daemon-reload
 
-- name: dhcpd may be affected
-  service: name=bind9 state=started
-  when: interface.changed
+# now pick up denyinterfaces
+- name: restart dhcpcd
+  service: name=dhcpcd state=restarted
+  when: dhcpcd_result == "enabled"
 
-#create lan br0 if lan_controller or gateway
-#create wan br0 if appliance
-#allocate wlan0 under br0 in all cases
-#allocate eth0 under br0 if appliance, alone if gateway
+- name: restart the networking service
+  service: name=networking  state=restarted
+  when: not nobridge is defined and not no_net_restart
+  
+- name: restart hostapd when wifi is present
+  service: name=hostapd state=restarted
+  when: iiab_wireless_lan_iface is defined and hostapd_enabled and iiab_network_mode != "Appliance"
 
-- name: Add location section to config file
-  ini_file: dest='{{ iiab_config_file }}'
-            section=network
-            option='{{ item.option }}'
-            value='{{ item.value }}'
-  with_items:
-  - option: 'gateway_active'
-    value:  '{{ gw_active }}'
-  - option: 'internet_available'
-    value:  '{{ internet_available }}'
-  - option: 'gateway_ifcfg'
-    value: '{{ has_ifcfg_gw }}'
-  - option: 'detected_gateway'
-    value: '{{ discovered_wan_iface }}'
-  - option: 'prior_gateway'
-    value: '{{ device_gw2 }}'
-  - option: 'wireless_list_1'
-    value: '{{ wifi1 }}'
-  - option: 'wireless_list_2'
-    value: '{{ wifi2 }}'
-  - option: 'num_wifi_interfaces'
-    value: '{{ num_wifi_interfaces }}'
-  - option: 'discovered_wireless_iface'
-    value: '{{ discovered_wireless_iface }}'
-  - option: 'iiab_wireless_lan_iface'
-    value: '{{ iiab_wireless_lan_iface }}'
-  - option: 'num_lan_interfaces'
-    value: '{{ num_lan_interfaces }}'
-  - option: 'detected_lan'
-    value: '{{ discovered_lan_iface }}'
-  - option: 'static_wan'
-    value: '{{ gui_static_wan }}'
+#- name: dhcp_server may be affected - starting - user choice
+#  service: name={{ dhcp_service2 }} state=started
+#  when: iiab_network_mode != "Appliance"

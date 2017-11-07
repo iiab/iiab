@@ -1,0 +1,45 @@
+- name: Creat filesytem layout
+  include_tasks: fl.yml
+  when: first_run
+
+- name: Running hostnamectl
+  shell: hostnamectl set-hostname "{{ iiab_hostname }}.{{ iiab_domain }}"
+  when: is_debuntu
+
+- name: Configure /etc/sysconfig/network
+  template:
+      src: roles/network/templates/network/sysconfig.network.j2
+      dest: /etc/sysconfig/network
+      owner: root
+      group: root
+      mode: 0644
+  when: is_redhat
+
+# Ugly hack
+- name: Configure short hostname in /etc/hosts
+  lineinfile: dest=/etc/hosts
+              regexp='^127\.0\.0\.1'
+              line='127.0.0.1            localhost.localdomain   localhost  box {{ iiab_hostname }}'
+              owner=root
+              group=root
+              mode=0644
+
+- name: Configuring named
+  include_tasks: roles/network/tasks/named.yml
+#  when: named_install
+
+- name: Configuring dhcpd
+  include_tasks: roles/network/tasks/dhcpd.yml
+#  when: dhcpd_install
+
+- name: Configuring squid
+  include_tasks: roles/network/tasks/squid.yml
+  when: squid_install
+
+- name: Re-configuring httpd - not initial install
+  include_tasks: roles/httpd/tasks/main.yml
+  when: iiab_stage|int > 3
+
+- name: Re-configuring rest of networking - not initial install
+  include_tasks: roles/network/tasks/main.yml
+  when: iiab_stage|int > 4

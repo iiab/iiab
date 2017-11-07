@@ -50,43 +50,43 @@
 
 - name: Disable AppArmor -- on by default in Ubuntu
   service: name=apparmor enabled=False state=stopped
-  when: first_run and is_ubuntu
+  when: is_ubuntu
   ignore_errors: true
 
 - name: Disable SELinux on next boot
   selinux: state=disabled
   register: selinux_disabled
-  when: first_run and not is_debuntu
+  when: not is_debuntu
 
 - name: Disable SELinux for this session (if needed)
   command: setenforce Permissive
   when: not is_debuntu and selinux_disabled is defined and selinux_disabled.changed
 
 ##  DISCOVER PLATFORMS ######
-- name: Discover if this is an rpi -- assume it is running Raspbian if so
-  set_fact:
-     rpi_model: "rpi"
-     is_rpi: "True"
-  when: ansible_local.local_facts.os == "raspbian"
-  ignore_errors: true
-
-- include: prep.yml
-  when: first_run
+- include_tasks: prep.yml
 
 # Put conditional actions for hardware platforms here
-- include: raspberry_pi_2.yml
+- include_tasks: raspberry_pi_2.yml
   when: first_run and rpi_model != "none"
 
 - name: Check if the identifier for Intel's NUC6 builtin WiFi is present
   shell: "lsusb | grep 8087:0a2b | wc |awk '{print $1}'"
   register: usb_NUC6
   ignore_errors: true
-  when: first_run
 
 - name: Download the firmware for built-in WiFi on NUC6
   get_url: dest=/lib/firmware
            url={{ iiab_download_url }}/iwlwifi-8000C-13.ucode
-  when: first_run and usb_NUC6.stdout|int > 0
+  when: usb_NUC6.stdout|int > 0
 
-- name: ...HAS COMPLETED ===========================================
-  command: echo
+- name: Set STAGE
+  set_fact:
+        STAGE: 1
+
+- name: Recording STAGE 1 HAS COMPLETED ============================
+  template:
+        src: roles/1-prep/templates/iiab.stage.j2
+        dest: /etc/iiab/iiab.env
+        owner: root
+        group: root
+        mode: 0644
