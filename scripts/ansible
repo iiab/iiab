@@ -1,24 +1,27 @@
 #!/bin/bash -e
 # required to start loading IIAB with ansible
+# keep an eye out for 2.4.1.X in the future
+MIN_GOOD_VER="2.4.1"
 FOUND=""
 VER=""
-# below are unused for future use
 GOOD_VER=""
+# below are unused for future use
 URL="NA"
 # TODO add check for version - to revese patching if upgrading
 if [ $(which ansible-playbook) ]; then
     VER=`ansible --version|head -n 1|cut -f 2 -d " "`
-    GOOD_VER=`echo $VER | grep ^2.4`
-# 2.2.0.0 -> 2.4.0 patching was not applied -just upgrade via pip
-    if [ $GOOD_VER = "" ]; then
-        echo "Ansible $VER installed updating to 2.4.0"
-        pip install --upgrade ansible==2.4.1 --disable-pip-version-check
-        exit 0
-    fi
-# keep an eye out for 2.4.1.X in the future
-    if [ $VER = "2.4.1.0" ]; then
+    GOOD_VER=`echo $VER | grep ^$MIN_GOOD_VER`
+    if [ $GOOD_VER = $MIN_GOOD_VER.0 ]; then
         echo "Ansible $VER installed exiting..."
         exit 0
+    else
+        EXE_PATH=`which ansible-playbook`
+        if [ $EXE_PATH = "/usr/local/bin/ansible-playbook" ]; then
+            echo "ansible installed by pip please see upgrading notes on the wiki "
+            exit 1
+        fi
+        echo "unexpected ansible version please see wiki"
+        exit 1
     fi
 fi
 
@@ -30,7 +33,7 @@ echo "Installing --- Please Wait"
 if [ -f /etc/fedora-release ]; then
     VER=`grep VERSION_ID /etc/*elease | cut -d= -f2`
     URL=https://github.com/jvonau/iiab/blob/ansible/vars/fedora-$VER.yml
-    dnf -y upgrade
+#    dnf -y upgrade
     dnf -y install ansible git bzip2 file findutils gzip hg svn sudo tar which unzip xz zip libselinux-python
     dnf -y install python-pip python-setuptools python-wheel patch
     FOUND="yes"
@@ -40,7 +43,7 @@ fi
 # ansible python-kerberos python-selinux python-winrm python-xmltodict sshpass bzip2 file findutils gzip tar unzip zip python-keyczar python-boto python-dnspython python-pyrax python-sphere
 
 if [ -f /etc/centos-release ]; then
-    yum -y upgrade
+#    yum -y upgrade
     yum -y install ca-certificates nss epel-release
     yum -y install git bzip2 file findutils gzip hg svn sudo tar which unzip xz zip libselinux-python
     yum -y install python-pip python-setuptools python-wheel patch
@@ -49,7 +52,7 @@ if [ -f /etc/centos-release ]; then
     FAMILY="redhat"
 fi
 if [ -f /etc/olpc-release ]; then
-    yum -y upgrade
+#    yum -y upgrade
     yum -y install ca-certificates nss
     yum -y install git bzip2 file findutils gzip hg svn sudo tar which unzip xz zip libselinux-python
     yum -y install python-pip python-setuptools python-wheel patch
@@ -99,7 +102,7 @@ fi
 
 ### start ansible pip install TODO add venv location /opt/iiab/anisble
 if [ $FAMILY = "olpc" ]; then
-    pip install ansible==2.4.0 --disable-pip-version-check
+    pip install ansible==$MIN_GOOD_VER --disable-pip-version-check
     VER=`ansible --version|head -n 1|cut -f 2 -d " "`
     echo "ansible version installed via pip $VER"
 fi

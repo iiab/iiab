@@ -1,7 +1,8 @@
 # Preparations (Hardware Level)
 
 - name: ...IS BEGINNING ============================================
-  command: echo
+  set_fact:
+        STAGE: 1
 
 - name: Get the uuidgen program
   package: name=uuid-runtime
@@ -63,8 +64,6 @@
   when: not is_debuntu and selinux_disabled is defined and selinux_disabled.changed
 
 ##  DISCOVER PLATFORMS ######
-- include_tasks: prep.yml
-
 # Put conditional actions for hardware platforms here
 - include_tasks: raspberry_pi_2.yml
   when: first_run and rpi_model != "none"
@@ -79,10 +78,19 @@
            url={{ iiab_download_url }}/iwlwifi-8000C-13.ucode
   when: usb_NUC6.stdout|int > 0
 
-# this script can be sourced to get IIAB location
-- name: Recording STAGE 1 HAS COMPLETED ============================
-  template: src=roles/1-prep/templates/iiab.env.j2
-            dest=/etc/iiab/iiab.env
+# calling iiab-network-reset w/ snapshot name, stores info, but
+# aborts reset intended as a convenience function for us
+- name: Install script to fully initialize network config, and/or collect data
+  template: src=iiab-network-reset
+            dest=/usr/bin
             owner=root
             group=root
-            mode=0644
+            mode=0755
+
+- name: Recording STAGE 1 HAS COMPLETED ============================
+  template:
+        src: roles/1-prep/templates/iiab.stage.j2
+        dest: /etc/iiab/iiab.env
+        owner: root
+        group: root
+        mode: 0644

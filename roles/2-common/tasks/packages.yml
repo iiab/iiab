@@ -1,31 +1,3 @@
-- name: Install yum deps for arm!!!
-  shell: dnf install -y python-urlgrabber pyxattr yum-metadata-parser
-  when: ansible_distribution == "Fedora" and ansible_machine == "armv7l" and ansible_distribution_version|int >= 22
-
-- name: Install yum from Fedora 23 for arm!!!
-  shell: dnf install -y https://kojipkgs.fedoraproject.org//packages/yum/3.4.3/506.fc23/noarch/yum-3.4.3-506.fc23.noarch.rpm python-dnf
-  when: ansible_distribution == "Fedora" and ansible_machine == "armv7l" and ansible_distribution_version|int >= 22
-
-- name: Install yum if it has been dropped from our distribution -- Fedora 22 uses dnf!!!
-  shell: dnf install -y yum
-  when: ansible_distribution == "Fedora" and ansible_distribution_version|int >= 22 and ansible_machine != "armv7l"
-
-- name: Get the createrepo program
-  package: name=createrepo
-           state=present
-  when: is_redhat
-
-- name: Create local repo
-  shell: createrepo {{ yum_packages_dir }}
-  when: is_redhat
-
-- name: Install local repo file
-  template: dest=/etc/yum.repos.d/iiab-local.repo
-            src=local.repo
-            owner=root
-            mode=0644
-  when: is_redhat
-
 - name: Install yum packages
   package: name={{ item }}
            state=present
@@ -105,15 +77,18 @@
    - python-setuptools
    - python-virtualenv
 
-- name: Update common packages (not Debian)
-  package: name={{ item }}
-           state=latest
-  with_items:
-   - NetworkManager
-   - glibc # CVE-2015-7547
-   - bash
-   - iptables
-  when: is_redhat
+# instructions state to start with a fully updated system before starting, stop using
+# ansible as a crutch for developers not following the directions and taking short-cuts
+
+#- name: Update common packages (not Debian)
+#  package: name={{ item }}
+#           state=latest
+#  with_items:
+#   - NetworkManager
+#   - glibc # CVE-2015-7547
+#   - bash
+#   - iptables
+#  when: is_redhat
 
 - name: Update common packages (Debian)
   package: name={{ item }}
@@ -124,16 +99,9 @@
    - iptables
   when: is_debuntu
 
-# instructions state to start with a fully updated system before starting, stop using
-# ansible as a crutch for developers not following the directions and taking short-cuts
-
 #- name: If version of Network manager has changed, subsequent nmcli commands will fail,restart now
 #  service: name=NetworkManager
 #           state=restarted
 #  when: not installing
 # the above should use a handler - all reboots should wait until all
 # mods are preformed
-
-- name: Install optional exFAT packages for CentOS
-  shell: yum --enablerepo=li-nux-ro install exfat-utils fuse-exfat
-  when: exFAT_enabled == "True" and ansible_distribution == "CentOS"
