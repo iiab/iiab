@@ -1,9 +1,6 @@
 # Initialize
 
 - name: ...IS BEGINNING ============================================
-  command: echo
-
-- name: Determine if runansible was run
   stat: path=/etc/iiab/iiab.env
   register: NewInstall
 
@@ -14,10 +11,200 @@
 
 # we need to inialize the ini file and only write the location and version sections once and only
 # once to preserve the install date and git hash.
-- include: roles/1-prep/tasks/iiab_ini.yml
+- name: Write iiab_ini.yml for the first time
+  include_tasks: roles/1-prep/tasks/iiab_ini.yml
   when: first_run
-# Now load the computed vars
-- include: roles/1-prep/tasks/computed_vars.yml
 
-- name: ...HAS COMPLETED ===========================================
-  command: echo
+#- name: Loading computed_vars
+#  include_tasks: roles/0-init/tasks/computed_vars.yml
+- name: re-read local_facts.facts from /etc/ansible/facts.d
+  setup: filter=ansible_local
+
+# set top level variables from local facts for convenience
+- set_fact:
+      xo_model: '{{ ansible_local.local_facts.xo_model }}'
+      phplib_dir: '{{ ansible_local.local_facts.phplib_dir }}'
+      iiab_stage: '{{ ansible_local.local_facts.stage }}'
+
+# Networking uses a different file for the rpi
+- name: Discover if this is a rpi -- assume if so it is running raspbian
+  set_fact:
+      rpi_model: "rpi"
+      is_rpi: True
+#      no_net_restart: True
+#      nobridge: True
+  when: ansible_local.local_facts.os == "raspbian"
+
+- name: Set exFAT enabled for XO laptops
+  set_fact:
+     exFAT_enabled: True
+  when: xo_model != "none"
+
+# Discover  do we have a gateway? -- if ansible detects gateway, becomes WAN candidate
+- name: Finding gateway
+  set_fact:
+      discovered_wan_iface: "{{ ansible_default_ipv4.alias }}"
+      iiab_wan_iface: "{{ discovered_wan_iface }}"
+  when: ansible_default_ipv4.gateway is defined
+
+- name: Verify gateway present
+  shell: ping -c4 "{{ ansible_default_ipv4.gateway }}" | grep icmp_seq=4 | wc -l
+  when: discovered_wan_iface != "none"
+  register: gw_active_test
+
+- name: Recording gateway response
+  set_fact:
+      gw_active: True
+  when: discovered_wan_iface != "none" and gw_active_test.stdout == "1"
+
+- name: Test for internet access
+  get_url: url="{{ iiab_download_url }}/heart-beat.txt" dest=/tmp/heart-beat.txt
+  ignore_errors: True
+#  async: 10
+#  poll: 2
+  register: internet_access_test
+
+- name: Set internet_available true if wget succeeded
+  set_fact:
+      internet_available: True
+  when: not internet_access_test|failed and not disregard_network
+
+- name: Cleanup internet test file
+  file: path=/tmp/heart-beat.txt
+        state=absent
+
+# Put all computed vars here so derive properly from any prior var file
+- name: If the TZ is not set in env, set it to UTC
+  set_fact: local_tz='UTC'
+  when: local_tz == ""
+
+- name: Set port 80 for Admin Console
+  set_fact:
+    gui_port: 80
+  when: not adm_cons_force_ssl
+
+- name: Set port 443 for Admin Console
+  set_fact:
+    gui_port: 443
+  when: adm_cons_force_ssl
+
+- name: Require MySQL to be on
+  set_fact:
+    mysql_install: True
+    mysql_enabled: True
+
+# we decided to enable mysql unconditionally
+#  when: elgg_enabled or rachel_enabled or owncloud_enabled or phpmyadmin_enabled or wordpress_enabled or iiab_menu_install
+
+# Commenting out MongoDB on a trial basis, for a more basic/lightweight Sugarizer, per https://github.com/iiab/iiab/pull/427
+# - name: Turn on mongodb if sugarizer enabled
+#   set_fact:
+#     mongodb_install: True
+#     mongodb_enabled: True
+#   when: sugarizer_enabled
+
+# There might be other db's
+- name: Turn on PostgreSQL if Moodle or Pathagar enabled
+  set_fact:
+    postgresql_install: True
+    postgresql_enabled: True
+  when: moodle_enabled or pathagar_enabled
+
+- name: Turn on Docker if SchoolTool is to be installed
+  set_fact:
+    docker_install: True
+    docker_enabled: True
+  when: schooltool_enabled or schooltool_install
+
+- name: Set python_path for is_redhat
+  set_fact:
+    python_path: /usr/lib/python2.7/site-packages/
+  when: is_redhat
+
+- name: Set python_path for is_debuntu
+  set_fact:
+    python_path: /usr/local/lib/python2.7/dist-packages/
+  when: is_debuntu
+
+# for various reasons the mysql service can not be enabled on fedora 20,
+# but 'mariadb', which is its real name can
+# on fedora 18 we need to use 'mysqld'
+
+- name: Set mysqld_service to mariadb by default
+  set_fact:
+    mysql_service: mariadb
+
+- name: Set mysqld_service to mysqld for Fedora 18
+  set_fact:
+    mysql_service: mysqld
+    no_NM_reload: True
+    is_F18: True
+  when: ansible_distribution_release == "based on Fedora 18" or ansible_distribution_version == "18"
+
+- name: Set mysql_service to mysql for Debian
+  set_fact:
+    mysql_service: mysql
+  when: is_debuntu
+
+- name: set FQDN
+  set_fact:
+      iiab_fqdn: "{{ iiab_hostname }}.{{ iiab_domain }}"
+      FQDN_changed: False
+
+- name: FQDN changed
+  set_fact:
+      FQDN_changed: True
+  when: iiab_fqdn != ansible_fqdn
+
+- name: add version section
+  ini_file: dest='{{ iiab_config_file }}'
+            section=runtime
+            option='{{ item.option }}'
+            value='{{ item.value }}'
+  with_items:
+    - option: 'iiab_stage'
+      value: '{{ iiab_stage }}'
+    - option: 'runtime_php'
+      value: '{{ phplib_dir }}'
+    - option: 'runtime_branch'
+      value: '{{ ansible_local.local_facts.iiab_branch }}'
+    - option: 'runtime_commit'
+      value: '{{ ansible_local.local_facts.iiab_commit }}'
+    - option: 'runtime_date'
+      value: '{{ ansible_date_time.iso8601 }}'
+    - option: 'ansible_version'
+      value: '{{ ansible_local.local_facts.ansible_version }}'
+    - option: 'kernel'
+      value: '{{ ansible_kernel }}'
+    - option: 'memory_mb'
+      value: '{{ ansible_memtotal_mb }}'
+    - option: 'swap_mb'
+      value: '{{ ansible_swaptotal_mb }}'
+    - option: 'product_id'
+      value: '{{ ansible_product_uuid }}'
+    - option: 'gw_active'
+      value:  '{{ gw_active }}'
+    - option: 'internet_available'
+      value:  '{{ internet_available }}'
+    - option: 'is_rpi'
+      value:  '{{ is_rpi }}'
+    - option: 'first_run'
+      value:  '{{ first_run }}'
+    - option: 'local_tz'
+      value:  '{{ local_tz }}'
+    - option: 'FQDN_changed'
+      value:  '{{ FQDN_changed }}'
+
+- name: Now changing FQDN
+  include_tasks: roles/2-common/tasks/hostname.yml
+  when: FQDN_changed
+
+- name: STAGE 0 HAS COMPLETED ======================================
+  ini_file: dest='{{ iiab_config_file }}'
+            section=runtime
+            option='{{ item.option }}'
+            value='{{ item.value }}'
+  with_items:
+    - option: 'is_VM'
+      value:  'yes'
+  when: is_VM is defined
