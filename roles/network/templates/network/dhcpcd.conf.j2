@@ -37,25 +37,21 @@ require dhcp_server_identifier
 # Generate Stable Private IPv6 Addresses instead of hardware based ones
 slaac private
 
-# don't let dhcpcd mess with IIAB LAN
-denyinterfaces br0 wlan0
+# IIAB
+denyinterfaces {% if iiab_wireless_lan_iface is defined %} {{ iiab_wireless_lan_iface }} {% endif %} {% if iiab_wired_lan_iface is defined %} {{ iiab_wired_lan_iface }} {% endif %}
 
-# Example static IP configuration:
-{% if gui_static_wan == true %}
-interface {{ discovered_wan_iface }}
-# strange that dhcpcd does not have a netmask option -- hardcode it FIXME
-static ip_address={{ gui_static_wan_ip }}/24
-static routers={{ gui_static_wan_gateway }}
-domain_name_servers= {{ gui_static_wan_nameserver }}
+#{% if iiab_lan_iface != "br0" %} {{ iiab_lan_iface }} {% endif %}
+
+{% if dhcpcd_result == "enabled" and iiab_lan_iface != "none" %}
+interface {{ iiab_lan_iface }}
+static ip_address={{ lan_ip }}/19
+static domain_name_servers=127.0.0.1
 {% endif %}
 
-# It is possible to fall back to a static IP if DHCP fails:
-# define static profile
-#profile static_eth0
-#static ip_address=192.168.1.23/24
-#static routers=192.168.1.1
-#static domain_name_servers=192.168.1.1
-
-# fallback to static profile on eth0
-#interface eth0
-#fallback static_eth0
+# IIAB static IP configuration:
+{% if wan_ip != "dhcp" %}
+interface {{ iiab_wan_iface }}
+static ip_address={{ wan_ip }}/24
+static routers={{ wan_gateway }}
+domain_name_servers= {{ wan_nameserver }}
+{% endif %}
