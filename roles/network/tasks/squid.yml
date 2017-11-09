@@ -1,4 +1,4 @@
-- name: Install squid packages
+- name: Install Squid packages
   package: name={{ item }}
            state=present
   with_items:
@@ -7,7 +7,16 @@
   tags:
     - download
 
-- name: Create the squid user
+- name: Bigger hammer for Ubuntu
+  command: /etc/init.d/squid stop
+  when: is_ubuntu
+
+- name: Stop Squid
+  service: name={{ proxy }}
+           state=stopped
+  when: not installing
+
+- name: Create the Squid user
   user: name={{ proxy_user }}
         createhome=False
         shell=/bin/false
@@ -19,61 +28,55 @@
             group={{ item.group }}
             mode={{ item.mode }}
   with_items:
-    - src: 'squid/squid.sysconfig'
+    - src: 'roles/network/templates/squid/squid.sysconfig'
       dest: '/etc/sysconfig/squid'
       owner: 'root'
       group: 'root'
       mode: '0755'
-    - src: 'squid/sites.whitelist.txt'
+    - src: 'roles/network/templates/squid/sites.whitelist.txt'
       dest: '/etc/{{ proxy }}/sites.whitelist.txt'
       owner: '{{ proxy_user }}'
       group: '{{ proxy_user }}'
       mode: '0644'
-    - src: 'squid/allowregex.rules'
+    - src: 'roles/network/templates/squid/allowregex.rules'
       dest: '/etc/{{ proxy }}/allowregex.rules'
       owner: '{{ proxy_user }}'
       group: '{{ proxy_user }}'
       mode: '0644'
-    - src: 'squid/denyregex.rules'
+    - src: 'roles/network/templates/squid/denyregex.rules'
       dest: '/etc/{{ proxy }}/denyregex.rules'
       owner: '{{ proxy_user }}'
       group: '{{ proxy_user }}'
       mode: '0644'
-    - src: 'squid/dstaddress.rules'
+    - src: 'roles/network/templates/squid/dstaddress.rules'
       dest: '/etc/{{ proxy }}/dstaddress.rules'
       owner: '{{ proxy_user }}'
       group: '{{ proxy_user }}'
       mode: '0644'
-    - src: 'squid/iiab-httpcache.j2'
+    - src: 'roles/network/templates/squid/iiab-httpcache.j2'
       dest: '/usr/bin/iiab-httpcache'
       owner: 'root'
       group: 'root'
       mode: '0755'
 
-- name: Create squid cache directory
+- name: Create Squid cache directory
   file: path=/library/cache
         owner={{ proxy_user }}
         group={{ proxy_user }}
         mode=0750
         state=directory
 
-- name: Create squid log directory
+- name: Create Squid log directory
   file: path=/var/log/{{ proxy }}
         owner={{ proxy_user }}
         group={{ proxy_user }}
         mode=0750
         state=directory
 
-- include: dansguardian.yml
+- include_tasks: roles/network/tasks/dansguardian.yml
   when: dansguardian_install
 
-- name: Stop Squid
-  service: name={{ proxy }}
-           state=stopped
-  ignore_errors: yes
-  when: not installing
-
-- name: Add squid to service list
+- name: Add Squid to service list
   ini_file: dest='{{ service_filelist }}'
             section={{ proxy }}
             option='{{ item.option }}'
@@ -86,7 +89,7 @@
     - option: enabled
       value: "{{ squid_enabled }}"
 
-- name: Add dansguardian to service list
+- name: Add 'dansguardian' to service list
   ini_file: dest='{{ service_filelist }}'
             section=dansguardian
             option='{{ item.option }}'
@@ -95,6 +98,6 @@
     - option: name
       value: dansguardian
     - option: description
-      value: '"Dansguardian searches web content for sexual references and denies access when found"'
+      value: '"DansGuardian searches web content for objectionable references and denies access when found."'
     - option: enabled
       value: "{{ dansguardian_enabled }}"

@@ -1,5 +1,5 @@
 =================
-XSCE Admin README
+IIAB Admin README
 =================
 
 This role is home to a number of administrative playbooks.  Those implemented are:
@@ -22,4 +22,4 @@ Add Packages for Remote Access
 Admin Console
 -------------
 
-Has been moved to a separate git repo
+Has been moved to separate git repo: https://github.com/iiab/iiab-admin-console

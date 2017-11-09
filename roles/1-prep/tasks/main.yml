@@ -1,27 +1,14 @@
-- name: Determine if runansible was run
-  stat: path=/etc/iiab/iiab.env
-  register: NewInstall
+# Preparations (Hardware Level)
 
-- name: Setting first run flag
-  set_fact:
-    first_run: True
-  when: NewInstall.stat.exists is defined and not NewInstall.stat.exists
+- name: ...IS BEGINNING ============================================
+  command: echo
 
-# we need to inialize the ini file
-- include: iiab_ini.yml
-  when: first_run
-
-- name: Set flag for fedora 18
-  set_fact:
-    is_F18: True
-  when: ansible_distribution_release == "based on Fedora 18" or ansible_distribution_version == "18"
-
-- name: get the uuidgen program
+- name: Get the uuidgen program
   package: name=uuid-runtime
            state=present
   when: is_debuntu
 
-- name: Test for UUID file
+- name: Test for /etc/iiab/uuid file
   stat: path=/etc/iiab/uuid
   register: uuid_file
 
@@ -38,11 +25,11 @@
   shell: echo {{ uuid_response.stdout_lines[0] }} > /etc/iiab/uuid
   when: not uuid_file.stat.exists
 
-- name: get the uuid
+- name: Get the uuid
   command: cat /etc/iiab/uuid
   register: stored_uuid
 
-- name: get the value into a variable
+- name: Get the value into a variable
   set_fact:
       uuid={{ stored_uuid.stdout_lines[0] }}
 
@@ -61,46 +48,41 @@
             dest=/etc/chrony.conf
             src=chrony.conf.j2
 
-- name: Disable apparmor -- on by default in ubuntu
+- name: Disable AppArmor -- on by default in Ubuntu
   service: name=apparmor enabled=False state=stopped
-  when: first_run and is_ubuntu
+  when: is_ubuntu
   ignore_errors: true
 
-- name: Disable selinux on next boot
+- name: Disable SELinux on next boot
   selinux: state=disabled
   register: selinux_disabled
-  when: first_run and not is_debuntu
+  when: not is_debuntu
 
-- name: Disable selinux for this session (if needed)
+- name: Disable SELinux for this session (if needed)
   command: setenforce Permissive
   when: not is_debuntu and selinux_disabled is defined and selinux_disabled.changed
 
 ##  DISCOVER PLATFORMS ######
-- name: Discover if this is a rpi -- assume if so it is running raspbian
-  set_fact:
-     rpi_model: "rpi"
-     is_rpi: "True"
-  when:   ansible_local.local_facts.os == "raspbian"
-  ignore_errors: true
-
-- include: prep.yml
-
-- include: computed_vars.yml
-
-- include: detected_network.yml
-  when: not installing
+- include_tasks: prep.yml
 
 # Put conditional actions for hardware platforms here
-- include: raspberry_pi_2.yml
+- include_tasks: raspberry_pi_2.yml
   when: first_run and rpi_model != "none"
 
-- name: Check if the identifier for intel's NUC6 builtin wifi is present
+- name: Check if the identifier for Intel's NUC6 builtin WiFi is present
   shell: "lsusb | grep 8087:0a2b | wc |awk '{print $1}'"
   register: usb_NUC6
   ignore_errors: true
-  when: first_run
 
-- name: download the firmware for built in wifi on NUC6
+- name: Download the firmware for built-in WiFi on NUC6
   get_url: dest=/lib/firmware
            url={{ iiab_download_url }}/iwlwifi-8000C-13.ucode
-  when: first_run and usb_NUC6.stdout|int > 0
+  when: usb_NUC6.stdout|int > 0
+
+# this script can be sourced to get IIAB location
+- name: Recording STAGE 1 HAS COMPLETED ============================
+  template: src=roles/1-prep/templates/iiab.env.j2
+            dest=/etc/iiab/iiab.env
+            owner=root
+            group=root
+            mode=0644

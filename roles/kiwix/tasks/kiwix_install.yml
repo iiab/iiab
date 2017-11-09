@@ -1,4 +1,4 @@
-- name: Create various directories for zims
+- name: Create various directories for Kiwix's ZIM files
   file: path={{ item }}
         owner=root
         group=root
@@ -9,16 +9,16 @@
     - "{{ kiwix_content_path }}"
     - "{{ iiab_zim_path }}/index"
 
-- name: Check for kiwix-serve binary
+- name: Check for 'kiwix-serve' binary
   stat: path={{ iiab_base }}/kiwix/bin/kiwix-serve
   register: kiwix_bin
 
-- name: Set kiwix first pass
+- name: Set kiwix_first_pass
   set_fact:
     kiwix_first_pass: True
   when: kiwix_bin.stat.exists is defined and not kiwix_bin.stat.exists
 
-- name: Copy kiwix library file if needed
+- name: Copy Kiwix library file if needed
   template: src={{ item }}
             dest="{{ kiwix_library_xml }}"
             mode=0644
@@ -47,14 +47,14 @@
              group=root
   when: not kiwix_src_bin_only and kiwix_first_pass
 
-- name: Create directory for kiwix bin
+- name: Create kiwix/bin directory
   file: path="{{ iiab_base }}/kiwix/bin"
         owner=root
         group=root
         mode=0755
         state=directory
 
-- name: enable the mods which permit apache to proxy
+- name: Enable the mods which permit Apache to proxy
   apache2_module: name={{ item }}
   with_items:
     - proxy
@@ -63,7 +63,7 @@
     - rewrite
   when: is_debuntu
 
-- name: Unarchive it to permanent location - bin only
+- name: Unarchive Kiwix to permanent location - bin only
   unarchive: src="{{ downloads_dir }}/{{ kiwix_src_file }}"
              dest="{{ iiab_base }}/kiwix/bin"
              owner=root
@@ -71,25 +71,25 @@
   when: kiwix_src_bin_only and kiwix_first_pass
 
 # workaround because unarchive does not set ownership properly
-- name: Set kiwix ownership
-  command: "chown -R root:root {{ iiab_base }}"
+- name: "Set ownership: 'chown -R root:root /opt/iiab/kiwix'"
+  command: "chown -R root:root {{ iiab_base }}/kiwix"
 
 # workaround because kiwix-serve does not stay running
-- name: Make an entry in crontab to restart every hour
+- name: Make a crontab entry to restart kiwix-serve at 4AM (debuntu)
 # *  *  *  *  * user-name  command to be executed
-  lineinfile: line="15 *  *  *  * root /bin/systemctl restart kiwix-serve.service"
+  lineinfile: line="0  4  *  *  * root /bin/systemctl restart kiwix-serve.service"
               dest=/etc/crontab
   when: is_debuntu
 
-- name: Make an entry in crontab to restart every hour
+- name: Make a crontab entry to restart kiwix-serve at 4AM (redhat)
 # *  *  *  *  * user-name  command to be executed
-  lineinfile: line="15 *  *  *  * root /usr/bin/systemctl restart kiwix-serve.service"
+  lineinfile: line="0  4  *  *  * root /usr/bin/systemctl restart kiwix-serve.service"
               dest=/etc/crontab
   when: is_redhat
 
 # Create kiwix service
 
-- name: Create kiwix-serve service
+- name: Create 'kiwix-serve' service
   template: backup=no
             src={{ item.src }}
             dest={{ item.dest }}
@@ -105,7 +105,7 @@
     - { src: 'iiab-make-apache-config.py', dest: '/usr/bin/iiab-make-apache-config.py', mode: '0755'}
 
 
-- name: add kiwix to service list
+- name: Add 'kiwix-serve' to list of services
   ini_file: dest='{{ service_filelist }}'
             section=kiwix-serve
             option='{{ item.option }}'
@@ -130,13 +130,13 @@
     - option: enabled
       value: "{{ kiwix_enabled }}"
 
-- name: Enable kiwix-serve service
+- name: Enable 'kiwix-serve' service
   service: name=kiwix-serve
            enabled=yes
            state=restarted
   when: kiwix_enabled
 
-- name: Disable kiwix-serve service
+- name: Disable 'kiwix-serve' service
   service: name=kiwix-serve
            enabled=no
            state=stopped

@@ -1,40 +1,71 @@
-- name: Server Options Installed
-  command: echo Server Options Installed
+# Server Options
+- name: ...IS BEGINNING ==================================
+  command: echo
 
-# this script can be sourced to get iiab location
-- name: Create iiab.env file
-  template: src=roles/1-prep/templates/iiab.env.j2
-            dest=/etc/iiab/iiab.env
-            owner=root
-            group=root
-            mode=0644
+- name: SSHD
+  include_role:
+    name: sshd
+  # has no "when: XXXXX_install" flag
+  tags: base, sshd
 
-- name: put a python interface to iiab.env
+- name: OPENVPN
+  include_role:
+    name: openvpn
+  when: openvpn_install
+  tags: openvpn
+
+- name: NETWORK
+  include_role:
+    name: network
+  # has no "when: XXXXX_install" flag
+  tags: base, network
+
+- name: HOMEPAGE
+  include_role:
+    name: homepage
+  # has no "when: XXXXX_install" flag
+  tags: base, homepage
+
+- name: POSTGRESQL
+  include_role:
+    name: postgresql
+  when: postgresql_install
+  tags: postgresql, pathagar, moodle
+
+- name: AUTHSERVER
+  include_role:
+    name: authserver
+  when: authserver_install
+  tags: olpc, authserver
+
+- name: CUPS
+  include_role:
+    name: cups
+  when: cups_install
+  tags: cups
+
+- name: SAMBA
+  include_role:
+    name: samba
+  when: samba_install
+  tags: samba
+
+- name: USB-LIB
+  include_role:
+    name: usb-lib
+  when: usb_lib_install
+  tags: usb-lib
+
+- name: Create a Python interface to iiab.env
   template: src=roles/1-prep/templates/iiab_env.py.j2
             dest=/etc/iiab/iiab_env.py
 
-- name: generate the offline documents
+- name: Generate the offline documents
   command: /usr/bin/iiab-refresh-wiki-docs
   when: not nodocs
 
-- name: Stop postgresql service
-  command: "/etc/init.d/postgresql stop"
-  ignore_errors: True
-  when: postgresql_install and is_debuntu
-
-- name: Start postgresql service
-  service: name=postgresql-iiab
-           state=restarted
-           enabled=yes
-  when: postgresql_enabled
-
-- name: Stop authserver service
-  service: name=xs-authserver
-           state=stopped
-           enabled=no
-  when: not authserver_enabled and authserver_install
-
-- name: Start xs-authserver service
-  service: name=xs-authserver
-           state=restarted
-  when: authserver_enabled
+- name: Recording STAGE 4 HAS COMPLETED ==================
+  lineinfile: dest=/etc/iiab/iiab.env
+              regexp='^STAGE=*'
+              line='STAGE=4'
+              state=present

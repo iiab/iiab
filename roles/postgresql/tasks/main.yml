@@ -1,4 +1,4 @@
-- name: Install postgresql packages
+- name: Install PostgreSQL packages
   package: name={{ item }}
            state=present
   with_items:
@@ -6,13 +6,13 @@
   tags:
     - download
 
-- name: Install postgresql for debian
+- name: Install PostgreSQL for Debian
   package: name=postgresql-client
   when: is_debuntu
   tags:
     - download
 
-- name: Install postgresql for fedora
+- name: Install PostgreSQL for Fedora
   package: name=postgresql-server
   when: not is_debuntu
   tags:
@@ -32,12 +32,12 @@
         mode=0700
         state=directory
 
-- name: make sure that the en_US locale is enabled
+- name: Make sure that the en_US locale is enabled
   lineinfile: dest=/etc/locale.gen
               line="{{ postgresql_locale }} UTF-8"
   when: is_debuntu
 
-- name: generate the selected locales
+- name: Generate the selected locales
   command: /usr/sbin/locale-gen
   when: is_debuntu
 
@@ -56,13 +56,18 @@
             creates=/library/pgsql-iiab/pg_hba.conf
   when: not is_debuntu
 
-- name: Configure postgres
+- name: Configure PostgreSQL
   template: backup=yes
             src=postgresql.conf.j2
             dest=/library/pgsql-iiab/postgresql.conf
             owner=postgres
             group=postgres
             mode=0640
+
+- name: Stop postgresql service
+  command: "/etc/init.d/postgresql stop"
+  ignore_errors: True
+  when: postgresql_install and is_debuntu
 
 - name: Stop and disable stock postgresql service
   service: name=postgresql
@@ -74,6 +79,12 @@
            state=started
            enabled=yes
   when: postgresql_enabled
+
+- name: Stop and disable postgresql service if not postgresql_enabled
+  service: name=postgresql
+           state=stopped
+           enabled=no
+  when: not postgresql_enabled
 
 - name: Add postgresql to service list
   ini_file: dest='{{ service_filelist }}'
