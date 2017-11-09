@@ -1,16 +1,16 @@
 # The preferred method of disabling the LAN would be to set iiab_lan_enabled:
 # False before getting here but we are here...
-# Well if we got here something changed with the gateway and ifcfg-WAN maybe 
-# no longer accurate. Note if DEVICE= is any ifcfg files the listed DEVICE 
-# becomes bound to the NAME in the ifcfg file. With the LAN files out of the 
+# Well if we got here something changed with the gateway and ifcfg-WAN maybe
+# no longer accurate. Note if DEVICE= is any ifcfg files the listed DEVICE
+# becomes bound to the NAME in the ifcfg file. With the LAN files out of the
 # way we can try the interfaces one by one starting with device_gw.
 
 # Setting up three way conditions with the results
 # skipped|changed|failed
-# failure results in blowing away the ifcfg-WAN so lets make sure...  
+# failure results in blowing away the ifcfg-WAN so lets make sure...
 
-# We only got here by way of no detected gateway, lets see if we can pick-up 
-# transient change like cable issues.  
+# We only got here by way of no detected gateway, lets see if we can pick-up
+# transient change like cable issues.
 
 - name: BAD DHCP defaults
   set_fact:
@@ -21,20 +21,20 @@
   service: name=dhcpd state=stopped
 
 ### clear all connections first
-# We should have the LAN torndown at this point. 
+# We should have the LAN torndown at this point.
 
 - name: No ifcfg-WAN known
   debug: msg="NO WAN known"
   when: not has_WAN
 
-- name: Finding connection name for wifi AP gateway first
+- name: Finding connection name for WiFi AP gateway first
   shell: egrep -rn NAME /etc/sysconfig/network-scripts/{{ has_wifi_gw }} |  gawk -F '=' '{print $2}'
   register: ap_name
   when: has_wifi_gw != "none" and has_ifcfg_gw != "none"
 
-- name: Trying wifi first
+- name: Trying WiFi first
   shell: nmcli conn up id {{ ap_name.stdout }}
-  register: try_wifi 
+  register: try_wifi
   ignore_errors: yes
   when: ap_name is defined and ap_named.changed
 
@@ -44,8 +44,8 @@
   when: try_wifi is defined and try_wifi.changed
 
 # We have the DEVICE?
-- name: Now setting iiab_wan_iface based on wifi
-  set_fact: 
+- name: Now setting iiab_wan_iface based on WiFi
+  set_fact:
      iiab_wan_iface: "{{ dhcp_wifi_results.stdout }}"
      dhcp_good: True
   when: dhcp_wifi_results.stdout is defined and dhcp_wifi_results.stdout != ""
@@ -69,7 +69,7 @@
       has_WAN: False
   when: dhcp_WAN is defined and dhcp_WAN|failed and wan_ip == "dhcp"
 
-- name: interface list
+- name: Interface list
   shell: ls /sys/class/net | grep -v -e lo -e br -e tun
   register: adapter_list
 
@@ -103,7 +103,7 @@
 
 # We have the DEVICE?
 - name: Now setting iiab_wan_iface via nmcli
-  set_fact: 
+  set_fact:
      iiab_wan_iface: "{{ dhcp_1BY1_results.stdout }}"
      dhcp_good: True
   when: dhcp_1BY1_results.stdout is defined and dhcp_1BY1_results.stdout != "" and not has_WAN
@@ -134,8 +134,7 @@
 ### keep at end.
 ### If dhcp fails the single interface will become LAN again because we didn't prevent the creation
 # Now disable LAN if single interface
-- name: DHCP found on Single interface forcing LAN disabled.
+- name: DHCP found on Single interface forcing LAN disabled
   set_fact:
      iiab_lan_iface: "none"
   when: dhcp_good  and adapter_count.stdout|int == "1"
-

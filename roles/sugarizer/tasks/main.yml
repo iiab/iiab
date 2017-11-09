@@ -1,45 +1,45 @@
-- name: Download the latest stable version of sugarizer from location under our control
+- name: Download the latest stable version of Sugarizer from location under our control
   get_url: url={{ iiab_download_url }}/{{ sugarizer_version }}.tar.gz
            dest={{ downloads_dir }}/{{ sugarizer_version }}.tar.gz
-  
+
+#fixme
 - name: Untar it to target location
   command: tar xzf {{ downloads_dir }}/{{ sugarizer_version }}.tar.gz -C {{ sugarizer_location }}
+           creates="{{ sugarizer_location }}/{{ sugarizer_version }}/index.html"
 
 - name: Create a symbolic link from generic url to version specific location
   file: dest={{ sugarizer_location }}/sugarizer
         src={{ sugarizer_location }}/{{ sugarizer_version }}
         state=link
 
-- name: Install sugarizer required packages
-  package: name=nodejs
-           state=present
-#    - npm
-  when: internet_available 
+- name: Set up apt sources on is_debuntu
+  shell: curl -sL https://deb.nodesource.com/setup_6.x | bash -
+  when: internet_available and is_debuntu
 
-- name: Install npm non debian
-  package: name=npm
+- name: Install nodejs=6.* which includes /usr/bin/npm - is_debuntu
+  package: name=nodejs=6.*
            state=present
-  when: internet_available and not is_debian
+  when: internet_available and is_debuntu
 
-# attempting to reinstall npn is broken on raspbian 9
-- name: check for npm already installed
+- name: Install npm non is_debuntu
+  package: name={{ item }}
+           state=present
+  when: internet_available and not is_debuntu
+  with_items:
+    - nodejs
+    - npm
+
+# attempting to reinstall npm is broken on Raspbian 9
+- name: Check for Sugarizer already installed
   stat: path={{ sugarizer_location }}/sugarizer/server/node_modules
   register: npm
 
-- name: set a flag to abort second attempt to install
-  set_fact: 
+- name: Set a flag to abort second attempt to install
+  set_fact:
      npm_exists: True
   when: npm.stat.exists is defined and npm.stat.exists
 
-- name: Install npm on debian -- set up apt sources
-  shell: curl -sL https://deb.nodesource.com/setup_6.x | bash -
-  when: internet_available and is_debian and not npm_exists
-
-- name: Actually get it installed
-  command: apt-get install -y npm
-  when: internet_available and is_debian and not npm_exists
-
-- name: Create systemd files and copy our ini file 
+- name: Create systemd files and copy our ini file
   template: src={{ item.src }}
             dest={{ item.dest }}
             owner=root
@@ -55,20 +55,20 @@
 #        dest=/etc/apache2/sites-enabled/sugarizer.conf
 #        state=link
 
-- name: Create the express framework for node.js
+- name: Create the express framework for node.js - ALL less F18
   shell:  npm install
   args:
-     chdir: "{{ sugarizer_location }}/sugarizer/server" 
+     chdir: "{{ sugarizer_location }}/sugarizer/server"
      creates: "{{ sugarizer_location }}/sugarizer/server/node_modules"
-  when: not is_F18
+  when: not is_F18 and not npm_exists
 
-- name: Create the express framework for node.js
+- name: Create the express framework for node.js - F18
   shell:  npm install
   args:
-     chdir: "{{ sugarizer_location }}/sugarizer/server" 
-  when: is_F18
+     chdir: "{{ sugarizer_location }}/sugarizer/server"
+  when: is_F18 and not npm_exists
 
-- name: enable services
+- name: Enable services - All
   service: name={{ item.name }}
            enabled=yes
            state=restarted
@@ -76,8 +76,7 @@
       - { name: sugarizer }
   when: sugarizer_enabled
 
-
-- name: disable services
+- name: Disable services - All
   service: name={{ item.name }}
            enabled=no
            state=stopped
@@ -85,7 +84,7 @@
       - { name: sugarizer }
   when: not sugarizer_enabled
 
-- name: add sugarizer to service list
+- name: Add Sugarizer to service list
   ini_file: dest='{{ service_filelist }}'
             section=sugarizer
             option='{{ item.option }}'
@@ -94,6 +93,6 @@
        - option: name
          value: Sugarizer
        - option: description
-         value: '"The Sugar Learning Platform is a leading learning platform that began in the famous One Laptop Per Child project. Sugarizer is a web implementation of that platform"' 
+         value: '"The Sugar Learning Platform began with the famous One Laptop Per Child project, written in Python. Sugarizer is the new HTML/JavaScript implementation of Sugar, usable in most all browsers."'
        - option: enabled
          value: "{{ sugarizer_enabled }}"

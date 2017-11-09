@@ -4,7 +4,7 @@
   with_items:
     - mongodb-server
     - mongodb
-  when: internet_available 
+  when: internet_available
   tags:
     - download
 
@@ -16,7 +16,6 @@
      - { path: '/var/run/mongodb' }
      - { path: '/library/dbdata/mongodb' }
      - { path: '/var/log/mongodb' }
-
 
 - name: Create systemd files
   template: src={{ item.src }}
@@ -38,7 +37,6 @@
       - { name: mongodb }
   when: mongodb_enabled
 
-
 - name: disable services
   service: name={{ item.name }}
            enabled=no
@@ -46,6 +44,20 @@
   with_items:
       - { name: mongodb }
   when: not mongodb_enabled
+
+# See https://github.com/iiab/iiab/issues/254 for other attempts to eliminate
+# these 256MB files. Brute Force Idea: rm /var/lib/mongodb/journal/prealloc.*
+- name: find /var/lib/mongodb/prealloc.* files to delete
+  find:
+    paths: /var/lib/mongodb/journal
+    patterns: prealloc.*
+  register: files_to_delete
+
+- name: delete prealloc files
+  file:
+    path: "{{ item.path }}"
+    state: absent
+  with_items: "{{ files_to_delete.files }}"
 
 - name: add mongodb to service list
   ini_file: dest='{{ service_filelist }}'
