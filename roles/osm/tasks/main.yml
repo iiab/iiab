@@ -1,4 +1,4 @@
-- name: Install IIAB required packages
+- name: Install OSM required packages
   package: name={{ item }}
            state=present
   with_items:
@@ -9,7 +9,7 @@
     - libapache2-mod-xsendfile
   when: is_debuntu
 
-- name: Install IIAB required packages
+- name: Install OSM required packages
   package: name={{ item }}
            state=present
   with_items:
@@ -21,25 +21,45 @@
     - mod_xsendfile
   when: not is_debuntu
 
-# IIAB wants a specific version do that first
+# OSM wants a specific version do that first
 - name: Install Whoosh 2.6
   pip: name=whoosh
        virtualenv={{ osm_venv }}
        virtualenv_site_packages=no
        version=2.6
-       extra_args="--disable-pip-version-check"
-  when: internet_available
+       extra_args="--no-cache-dir"
+  when: internet_available and is_debuntu
 
-- name: Install IIAB with dependencies
+- name: Install OSM with dependencies
   pip: name={{ item }}
        virtualenv={{ osm_venv }}
        virtualenv_site_packages=no
-       extra_args="--disable-pip-version-check"
+       extra_args="--no-cache-dir"
   with_items:
     - MarkupSafe
     - pytz
     - Internet-in-a-Box
-  when: internet_available
+  when: internet_available and is_debuntu
+
+# OSM wants a specific version do that first
+- name: Install Whoosh 2.6
+  pip: name=whoosh
+       virtualenv={{ osm_venv }}
+       virtualenv_site_packages=no
+       version=2.6
+#       extra_args="--no-cache-dir"
+  when: internet_available and not is_debuntu
+
+- name: Install OSM with dependencies
+  pip: name={{ item }}
+       virtualenv={{ osm_venv }}
+       virtualenv_site_packages=no
+#       extra_args="--no-cache-dir"
+  with_items:
+    - MarkupSafe
+    - pytz
+    - Internet-in-a-Box
+  when: internet_available and not is_debuntu
 
 - name: Set osm_path
   set_fact:
@@ -51,7 +71,13 @@
      osm_path: "{{ osm_venv }}/lib/python2.7/site-packages/iiab"
   when: osm_enabled and is_debuntu
 
-- name: All - Copy IIAB config file
+- name: All - Point wsgi to virtual environment
+  lineinfile: dest={{ osm_venv }}/bin/iiab.wsgi
+              regexp="path_to_virtualenv = None"
+              line="path_to_virtualenv = '/usr/local/osm'"
+              state=present
+
+- name: All - Copy OSM config file
   template: backup=no
             src=osm.conf.j2
             dest=/etc/{{ apache_config_dir }}/osm.conf
@@ -111,7 +137,7 @@
   service: name={{ apache_service }}
            state=restarted
 
-- name: add osm to service list
+- name: Add OSM to service list
   ini_file: dest='{{ service_filelist }}'
             section=osm
             option='{{ item.option }}'

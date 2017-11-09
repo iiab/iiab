@@ -1,35 +1,49 @@
 #!/bin/bash -e
-# ./scripts/ansible
-# copy var files to /etc/iiab for subsequent use
-# if vars/local_vars.yml is missing, put a default one in place
+PLAYBOOK="iiab.yml"
+INVENTORY="ansible_hosts"
+# Pass cmdline options for ansible
+ARGS="$@"
+
+# if vars/local_vars.yml is missing, put a default one in place - First Run
 if [ ! -f ./vars/local_vars.yml ]; then
     OS=`grep ^ID= /etc/*release|cut -d= -f2`
     OS=${OS//\"/}
 
     case $OS in
-        OLPC)
-        cp ./vars/olpc.localvars ./vars/local_vars.yml
-        ;;
+        OLPC | fedora)
+            cp ./vars/olpc.localvars ./vars/local_vars.yml
+            ;;
         centos | debian | ubuntu | raspbian)
-        cp ./vars/medium.localvars ./vars/local_vars.yml
-        ;;
+            cp ./vars/medium.localvars ./vars/local_vars.yml
+            ;;
         *)
-        echo "IIAB supports raspbian, debian, ubuntu, centos, and OLPC - exiting now..."
-        exit 1
-        ;;
+            echo "IIAB supports raspbian, debian, ubuntu, centos, and OLPC - exiting now..."
+            exit 1
+            ;;
     esac
 fi
 
+# copy var files to /etc/iiab for subsequent use
+# If iiab.env exists, on second or upgrade run, check for stale variables
+# iiab.env gets created at the end of stage-4 on First Run
 if [ -f /etc/iiab/iiab.env ]
 then
-  . /etc/iiab/iiab.env
-  cd $XSCE_DIR
+  OLD=`grep XSCE /etc/iiab/iiab.env`
+  if [ x"$OLD" != "x" ]
+  then
+    rm /etc/iiab/iiab.env
+  else
+    . /etc/iiab/iiab.env
+    cd $IIAB_DIR
+  fi
 else
-  XSCE_DIR=/opt/iiab/iiab
   mkdir -p /etc/iiab
+  echo "{}" > /etc/iiab/config_vars.yml
 fi
 
-if [ ! -f iiab.yml ]
+CWD=`pwd`
+
+if [ ! -f $PLAYBOOK ]
 then
  echo "IIAB Playbook not found."
  echo "Please run this command from the top level of the git repo."
@@ -42,35 +56,10 @@ if [ ! -f /etc/ansible/facts.d/local_facts.fact ]; then
 fi
 cp ./scripts/local_facts.fact /etc/ansible/facts.d/local_facts.fact
 
-PLAYBOOK="iiab.yml"
-INVENTORY="ansible_hosts"
-CWD=`pwd`
 echo "Running local playbooks! "
 
-XSDOMAIN=""
 
-# Pass in Existing Domain
-if [ -f /etc/sysconfig/xs_domain_name ]
-then
- XSDOMAIN=`cat /etc/sysconfig/xs_domain_name`
-fi
-
-# Or accept Domain on command line
-if [ x"$1" != x ]
-then
- XSDOMAIN=$1
-fi
-
-# Pass in git location
-if [ x"$XSDOMAIN" != x ]
-then
- ARGS="--extra-vars '{\"iiab_domain\":\"$XSDOMAIN\"}'"
-else
- ARGS=""
-fi
-
-export ANSIBLE_LOG_PATH="$XSCE_DIR/iiab-install.log"
+export ANSIBLE_LOG_PATH="$CWD/iiab-install.log"
 ansible -m setup -i $INVENTORY localhost --connection=local >> /dev/null
 
 ansible-playbook -i $INVENTORY $PLAYBOOK ${ARGS} --connection=local
-#ansible-playbook -i $INVENTORY $PLAYBOOK ${ARGS} --syntax-check

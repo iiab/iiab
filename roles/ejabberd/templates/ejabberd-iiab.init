@@ -1,0 +1,220 @@
+#!/bin/bash
+#
+# ejabberd    Start and stop ejabberd.
+
+# chkconfig: - 40 60
+# description: ejabberd
+# processname: ejabberd
+# pidfile: /var/run/ejabberd/ejabberd.pid
+
+### BEGIN INIT INFO
+# Provides: ejabberd
+# Required-Start: network
+# Required-Stop: network
+# Default-Start:
+# Default-Stop: 0 1 6
+# Short-Description: Start and stop ejabberd
+# Description: A distributed, fault-tolerant Jabber/XMPP server
+### END INIT INFO
+
+SYS_DOMAIN_FILE=/etc/sysconfig/iiab_domain_name
+OUR_DOMAIN_FILE=/etc/sysconfig/ejabberd_domain_name
+
+. /etc/rc.d/init.d/functions
+
+if [ -r /etc/sysconfig/ejabberd-iiab ]; then
+	. /etc/sysconfig/ejabberd-iiab
+fi
+
+if [ ! "$CONFIG_FILE" ]; then
+	CONFIG_FILE=/etc/ejabberd/ejabberd-iiab.cfg
+fi
+
+# /var/run is tmpfs in fc18, so need to create every time
+mkdir -p /var/run/ejabberd
+chown ejabberd:ejabberd /var/run/ejabberd
+
+# avoid using consolehelper, call ejabberdctl directly
+progctl=/usr/sbin/ejabberdctl
+
+check_domain_configured() {
+    if [ ! -e $SYS_DOMAIN_FILE ]; then
+	echo "Domain not configured yet 1" > /dev/stderr
+	exit 1;
+    fi
+
+    domain=`cat "$SYS_DOMAIN_FILE" `
+    if [ "$domain" == "random.xs.laptop.org" ]; then
+	echo "Domain not configured yet 2" > /dev/stderr
+	exit 1;
+    fi
+
+    #hostname=`hostname -f`
+    hostname=`hostname `
+    if [ "$hostname" == "localhost.localdomain" ]; then
+         echo "Domain not configured yet 3" > /dev/stderr
+    fi
+
+#    if [ "$hostname" != "schoolserver.$domain" ]; then
+#         echo "Domain changed -- restart to enable ejabberd" > /dev/stderr
+#    fi
+
+    short_host=`hostname -s`
+    node_name=`cat $OUR_DOMAIN_FILE`
+
+#    if [ ! -e "$OUR_DOMAIN_FILE" ] || ! cmp "$SYS_DOMAIN_FILE" "$OUR_DOMAIN_FILE" ; then
+    if [ ! -e "$OUR_DOMAIN_FILE" ] ; then
+	update_domain
+    fi
+}
+
+update_domain() {
+
+    BACKUP_SUFFIX=old
+
+    if [ -e $CONFIG_FILE ]; then
+	cp $CONFIG_FILE $CONFIG_FILE.$BACKUP_SUFFIX || exit 1
+    fi
+
+    new_name=$short_host.$domain
+
+    #(sed -e s/@@BASEDNSNAME2@@/$new_name/ $CONFIG_FILE.in > $CONFIG_FILE.tmp ) && mv $CONFIG_FILE.tmp $CONFIG_FILE || exit 1
+
+    # If we are changing the domain, we must clear the DB.
+    if [ -e /var/lib/ejabberd/online_src_created ] ; then
+	rm -f /var/lib/ejabberd/online_src_created
+    fi
+    if [ -d /var/lib/ejabberd/spool/ ]; then
+	rm -f /var/lib/ejabberd/spool/*
+    fi
+
+    # Mark as done -
+    # cp "$SYS_DOMAIN_FILE" "$OUR_DOMAIN_FILE"
+    echo "$domain" > "$OUR_DOMAIN_FILE"
+}
+
+setup_online_srg() {
+
+    if [ -e /var/lib/ejabberd/online_src_created ]; then
+	return 0
+    fi;
+
+    # give ejabberd a bit of time to startup on XO-1 HW :-)
+    sleep 10;
+
+    short_host=`hostname -s`
+    domain=`cat "$SYS_DOMAIN_FILE"`
+
+    # Note: grep -q exits as soon as the match is found, which ejabberdctl
+    # doesn't like. So we send the output to /dev/null instead - more
+    # portable too.
+    #
+    # ejabberdctl should handle SIGPIPE without messing up, but that's
+    # a minor problem anyway.
+    #
+    if ! ejabberdctl srg_list "$short_host.$domain" | grep '^Online$' > /dev/null ; then
+	# ejabberdctl doesn't like spaces in the description field.
+	# backslashes work - but escaping is better left alone for now :-)
+	ejabberdctl srg_create Online "$short_host.$domain" \
+	    Online "Created_by_ejabberd_init" Online
+	[ $? -eq 0 ] || return 1
+    fi
+
+    if ! ejabberdctl srg_get_info Online "$short_host.$domain" | grep '^online_users: true$' > /dev/null ; then
+	ejabberdctl srg_user_add '@online@' "$short_host.$domain" \
+	    Online "$short_host.$domain"
+	[ $? -eq 0 ] || return 1
+    fi
+
+    # mark success
+    touch /var/lib/ejabberd/online_src_created
+}
+
+is_running() {
+	/sbin/runuser -s /bin/bash - ejabberd -c "$progctl status" &>/dev/null
+}
+
+start() {
+        echo -n $"Starting ejabberd: "
+	#if [ "$ULIMIT_MAX_FILES" ]; then
+	#	ulimit -n $ULIMIT_MAX_FILES
+	#fi
+
+	check_domain_configured
+
+	# check whether ejabberd was already started
+	if is_running; then
+		echo -n "already running" && warning && echo
+		return 0
+	fi
+
+	daemon --user=ejabberd $progctl start	--config $CONFIG_FILE \
+				--ctl-config /etc/ejabberd/ejabberdctl-iiab.cfg \
+				--logs "/var/log/ejabberd" \
+				--spool "/var/lib/ejabberd/spool" \
+				2>/dev/null
+        RETVAL=$?
+        [ $RETVAL -eq 0 ] && touch /var/lock/subsys/ejabberd
+        echo
+
+	# it takes some time to actually start necessary nodes
+	sleep 5
+
+	# Ignore the return val of setup_online_srg
+	# ==> startup even if the SRG setup had errors.
+    set +e;
+    setup_online_srg
+
+        return $RETVAL
+}
+
+stop() {
+        # Stop daemons.
+        echo -n "Shutting down ejabberd: "
+
+	# check whether ejabberd was already stopped
+	if ! is_running; then
+		echo -n "already stopped" && warning && echo
+		return 0
+	fi
+
+	daemon $progctl stop 2>/dev/null
+        RETVAL=$?
+        [ $RETVAL -eq 0 ] && rm -f /var/lock/subsys/ejabberd
+        echo
+
+	# it takes some time to actually stop necessary nodes
+	sleep 5
+
+        return $RETVAL
+}
+
+restart() {
+        stop
+	sleep 5
+        start
+}
+
+# See how we were called.
+case "$1" in
+  start)
+        start
+        ;;
+  stop)
+        stop
+        ;;
+  restart|force-reload)
+        restart
+        ;;
+  condrestart|try-restart)
+        [ -f /var/lock/subsys/ejabberd ] && restart || :
+        ;;
+  status)
+	$progctl status
+        ;;
+  *)
+        echo "Usage: ejabberd {start|stop|restart|force-reload|condrestart|try-restart|status}"
+        exit 2
+esac
+
+exit $RETVAL
