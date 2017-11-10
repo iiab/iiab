@@ -1,90 +1,131 @@
 #!/bin/bash -e
-# running from a git repo
+# Running from a git repo
 # Add cmdline options for passing to ansible
-# todo add proper shift to gobble up --debug --reinstall
-ARGS=""
-OLD_RPI_KERN="4.9.41-v7+"
+# Todo add proper shift to gobble up --debug --reinstall
+
+if [ "$1" != "--debug" ] && [ "$1" != "--reinstall" ] && [ "$1" != "" ]; then
+    echo "Use './iiab-install' for regular installs, or to continue an install."
+    echo "Use './iiab-install --reinstall' to force running all Stages 0-9."
+    echo "Use './iiab-install --debug' to run Stage 0, followed by Stages 3-9."
+    echo "Use './runtags' to run a single Stage or Tag or Role."
+    echo "Use './iiab-network' to run Network sections."
+    exit 1
+fi
+
 PLAYBOOK="iiab-stages.yml"
 INVENTORY="ansible_hosts"
+ARGS=""
 CWD=`pwd`
 OS=`grep ^ID= /etc/*release|cut -d= -f2`
 OS=${OS//\"/}
-
-function version_gt() { [ "$(printf '%s\n' "$@" | sort -V | head -1)" != "$1" ]; }
+MIN_RPI_KERN=4.9.59-v7+
+MIN_ANSIBLE_VER=2.4.1.0
 
 export ANSIBLE_LOG_PATH="$CWD/iiab-install.log"
 
 if [ ! -f $PLAYBOOK ]; then
-    echo "IIAB Playbook not found."
-    echo "Please run this command from the top level of the git repo."
-    echo "Exiting."
+    echo "EXITING: IIAB Playbook not found."
+    echo "Please run 'iiab-install' from /opt/iiab/iiab (top level of git repo)."
     exit 1
 fi
 
-if [ $OS == "raspbian" ]; then
-    echo "Found Raspbian"
-    CURRENT_KERN=`uname -r`
-    if version_gt $CURRENT_KERN $OLD_RPI_KERN ; then
-    	echo "Kernel looks ok - continuing"
-    else
-	echo "Kernel "$CURRENT_KERN" is too old. Before running './iiab-install' you first need"
-	echo "to update your system with 'apt update' then 'apt dist-upgrade' then reboot."
-	echo "INSTALL INSTRUCTIONS: https://github.com/iiab/iiab/wiki/IIAB-Installation"
-	exit 1
-    fi
+# Subroutine compares software version numbers.  Generates rare false positives
+# like "1.0 > 1" and "2.4.0 > 2.4".  Avoid risks by structuring conditionals w/
+# a consistent # of decimal points e.g. "if version_gt w.x.y.z a.b.c.d; then"
+function version_gt() { [ "$(printf '%s\n' "$@" | sort -V | head -1)" != "$1" ]; }
+
+# Verify that Raspbian is running a recent enough kernel.  As Raspbian
+# updates on 4.9.41-v7+ broke bridging, WiFi AP & OpenVPN in Oct/Nov 2017.
+CURR_KERN=`uname -r`
+echo "Found Kernel "$CURR_KERN""
+if [ "$OS" == "raspbian" ] && version_gt $MIN_RPI_KERN $CURR_KERN; then
+    echo -e "\nEXITING: Kernel "$MIN_RPI_KERN" or higher required with Raspbian."
+    echo "PLEASE RUN 'apt update' then 'apt install raspberrypi-kernel' then reboot."
+    echo "IIAB INSTALL INSTRUCTIONS: https://github.com/iiab/iiab/wiki/IIAB-Installation"
+    exit 1
+fi
+
+# Verify that a recent enough version of Ansible is installed.  See #449.  The
+# "include:" command was inconsistently implemented prior to Ansible 2.4.x.x
+CURR_ANSIBLE_VER=0
+if [[ `type -P ansible` ]]; then
+    CURR_ANSIBLE_VER=`ansible --version | head -1 | sed -e 's/.* //'`
+    echo "Found Ansible "$CURR_ANSIBLE_VER""
+fi
+if version_gt $MIN_ANSIBLE_VER $CURR_ANSIBLE_VER; then
+    echo -e "\nEXITING: Ansible "$MIN_ANSIBLE_VER" or higher required."
+    echo "PLEASE RUN './scripts/ansible' to install the latest Ansible from PPA or RPM."
+    echo "'ansible --version' and 'apt -a list ansible' can also be useful here.  Try"
+    echo "to remove prior versions with 'apt purge ansible' or 'pip uninstall ansible'."
+    echo "IIAB INSTALL INSTRUCTIONS: https://github.com/iiab/iiab/wiki/IIAB-Installation"
+    exit 1
 fi
 
 if [ ! -f /etc/ansible/facts.d/local_facts.fact ]; then
     mkdir -p /etc/ansible/facts.d
 fi
 cp ./scripts/local_facts.fact /etc/ansible/facts.d/local_facts.fact
+echo "Placed /etc/ansible/facts.d/local_facts.fact into position."
 
-STAGE=""
-
+# Stage 0 will always be run.  From there on up to Stage 9 we keep a counter
+# (in /etc/iiab/iiab.env) of the highest completed Stage.  Avoid repetition!
+STAGE=0
 if [ ! -f /etc/iiab/iiab.env ]; then
     mkdir -p /etc/iiab
-    # ./scripts/ansible   # needs discussion
 else
-    OLD=`grep XSCE /etc/iiab/iiab.env | wc -l`
-    if [ "$OLD" != 0 ] || [ "$1" == "--reinstall" ]; then
-        echo "Found old XSCE install - re-installing from scratch"
-        rm /etc/iiab/iiab.env
-        # check ansible version here and force ansible upgrade if needed
-    else
+    if [[ `grep STAGE= /etc/iiab/iiab.env` ]]; then
         source /etc/iiab/iiab.env
-        if [ "$1" == "--debug" ]; then
-            echo "Entering debug mode"
-            sed -i -e 's/^STAGE=.*/STAGE=2/' /etc/iiab/iiab.env
-        elif [ ! $STAGE == 9 ]; then
-            echo "Restarting *after* STAGE $STAGE..as soon as Stage 0 completes. Stage 9 comes last."
-        elif [ $STAGE == 9 ]; then
-            # place keeper add read response
-            # "offer 'Y' or stage number dialog box option to override"
-            echo "'iiab-install' has already been completed."
-            echo "Use --debug to override."
-            #echo "In demo mode not preventing second run"
-            echo "Exiting."
+        echo "Extracted STAGE="$STAGE" (counter) from /etc/iiab/iiab.env"
+        if ! [ "$STAGE" -eq "$STAGE" ] 2> /dev/null; then
+            echo -e "\nEXITING: STAGE (counter) value == "$STAGE" is non-integer in /etc/iiab/iiab.env"
+            exit 1
+        elif [ "$STAGE" -lt 1 ] || [ "$STAGE" -gt 9 ]; then
+            echo -e "\nEXITING: STAGE (counter) value == "$STAGE" is out-of-range in /etc/iiab/iiab.env"
             exit 1
         fi
     fi
+    if [[ `grep XSCE /etc/iiab/iiab.env` ]] || [ "$1" == "--reinstall" ]; then
+        STAGE=0
+        rm /etc/iiab/iiab.env
+        echo "Removed /etc/iiab/iiab.env effectively resetting STAGE (counter)."
+    elif [ "$STAGE" -ge 2 ] && [ "$1" == "--debug" ]; then
+        STAGE=2
+        sed -i 's/^STAGE=.*/STAGE=2/' /etc/iiab/iiab.env
+        echo "Wrote STAGE=2 (counter) to /etc/iiab/iiab.env"
+    elif [ "$STAGE" -eq 9 ]; then
+        echo -e "\nEXITING: STAGE (counter) in /etc/iiab/iiab.env shows Stage 9 Is Already Done."
+        echo "Use './iiab-install --reinstall' to force running all Stages 0-9."
+        echo "Use './iiab-install --debug' to run Stage 0, followed by Stages 3-9."
+        echo "Use './runtags' to run a single Stage or Tag or Role."
+        echo "Use './iiab-network' to run Network sections."
+        exit 1
+    fi
+fi
+if [ "$STAGE" -lt 2 ] && [ "$1" == "--debug" ]; then
+    echo -e "\n'--debug' *ignored* as STAGE (counter) < 2."
 fi
 
-# if vars/local_vars.yml is missing, put a default one in place - First Run
+# If vars/local_vars.yml is missing, put a default file in place.
 if [ ! -f ./vars/local_vars.yml ]; then
     case $OS in
         OLPC | fedora)
             cp ./vars/olpc.localvars ./vars/local_vars.yml
+            echo -e "\nvars/local_vars.yml created from olpc.localvars defaults."
             ;;
         centos | debian | ubuntu | raspbian)
             cp ./vars/medium.localvars ./vars/local_vars.yml
+            echo -e "\nvars/local_vars.yml created from medium.localvars defaults."
+            echo "See MIN/MEDIUM/BIG options @ http://wiki.iiab.io/local_vars.yml"
             ;;
         *)
-            echo "IIAB supports raspbian, debian, ubuntu, centos, and OLPC - exiting now..."
+            echo -e "\nEXITING: IIAB requires Raspbian, Debian, Ubuntu, CentOS or OLPC/Fedora."
             exit 1
             ;;
     esac
 fi
 
-echo "Running local playbooks!"
+echo -e "\nTRY TO RERUN './iiab-install' IF IT FAILS DUE TO CONNECTIVITY ISSUES ETC!"
+echo -e "\nRunning local playbooks....Stage 0 will now run....followed by Stages $(($STAGE + 1))-9"
+
 ansible -m setup -i $INVENTORY localhost --connection=local >> /dev/null
 ansible-playbook -i $INVENTORY $PLAYBOOK ${ARGS} --connection=local
