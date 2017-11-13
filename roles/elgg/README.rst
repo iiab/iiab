@@ -1,5 +1,5 @@
 ===========
-ELGG README
+Elgg README
 ===========
 
 Elgg is an award-winning social networking engine, delivering the building blocks
