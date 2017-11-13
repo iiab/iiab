@@ -4,20 +4,31 @@
             option=keepcache
             value=1
 
+- name: Install rpmfusion-free-updates repo -- for exfat
+  template: dest=/etc/yum.repos.d/rpmfusion-free-updates.repo
+            src=rpmfusion-free-updates.repo
+            owner=root
+            group=root
+            mode=0666
+
+- name: Install optional exFAT packages for Fedora
+  shell: yum --enablerepo=rpmfusion-free-updates install exfat-utils fuse-exfat
+  when: exFAT_enabled and is_F18
+
+- name: Install yum deps for arm!!!
+  shell: dnf install -y python-urlgrabber pyxattr yum-metadata-parser
+  when: ansible_distribution == "Fedora" and ansible_machine == "armv7l" and ansible_distribution_version|int >= 22
+
+- name: Install yum from Fedora 23 for arm!!!
+  shell: dnf install -y https://kojipkgs.fedoraproject.org//packages/yum/3.4.3/506.fc23/noarch/yum-3.4.3-506.fc23.noarch.rpm python-dnf
+  when: ansible_distribution == "Fedora" and ansible_machine == "armv7l" and ansible_distribution_version|int >= 22
+
+- name: Install yum if it has been dropped from our distribution -- Fedora 22 uses dnf!!!
+  shell: dnf install -y yum
+  when: ansible_distribution == "Fedora" and ansible_distribution_version|int >= 22 and ansible_machine != "armv7l"
+
 - name: Install Fedora specifc packages
   package: name={{ item }}
            state=present
   with_items:
    - mtd-utils
-
-- name: Install optional exFAT packages for Fedora
-  shell: yum --enablerepo=rpmfusion-free-updates install exfat-utils fuse-exfat
-  when: exFAT_enabled == "True"
-
-#- name: Disable updating ansible on Fedora
-#  shell: sed -i -e '/^enabled=/a exclude=ansible' {{ item }}
-#  with_items:
-#    - /etc/yum.repos.d/fedora.repo
-#    - /etc/yum.repos.d/fedora-updates.repo
-#    - /etc/yum.repos.d/fedora-updates-testing.repo
-#  when: ansible_distribution == "Fedora"
