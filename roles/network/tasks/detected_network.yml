@@ -19,14 +19,9 @@
   include_tasks: detected_redhat.yml
   when: is_redhat
 
-- name: Check to see if dhcpcd is installed and active - Can Fail
-  shell: systemctl is-enabled dhcpcd
-  register: dhcpcd_test
-  ignore_errors: True
-
 - name: Setting dhcpcd_test results
   set_fact:
-    dhcpcd_result: "{{ dhcpcd_test.stdout }}"
+    dhcpcd_result: '{{ ansible_local.local_facts.dhcpcd }}'
 
 - name: Check /etc/network/interfaces for gateway
   shell: grep {{ device_gw }} /etc/network/interfaces | wc -l
@@ -92,22 +87,19 @@
       ap_device: "{{ blacklist_wifi }}"
   when: blacklist_wifi is defined and discovered_wireless_iface != iiab_wan_iface and num_wifi_interfaces >= "2"
 
-# LAN - pick non WAN's
-- name: Create list of LAN (non WAN) ifaces
-  shell: ls /sys/class/net | grep -v -e wwlan -e ppp -e lo -e br0 -e tun -e {{ device_gw }} -e {{ ap_device }}
-  register: lan_list_result
-  ignore_errors: True
-  changed_when: false
-
 - name: Count LAN ifaces
   shell: ls /sys/class/net | grep -v  -e wwlan -e ppp -e lo -e br0 -e tun -e {{ device_gw }} -e {{ ap_device }} | wc -l
   register: num_lan_interfaces_result
-  ignore_errors: True
-  changed_when: false
 
 - name: Calculate number of LAN interfaces including WiFi
   set_fact:
       num_lan_interfaces: "{{ num_lan_interfaces_result.stdout|int }}"
+
+# LAN - pick non WAN's
+- name: Create list of LAN (non WAN) ifaces
+  shell: ls /sys/class/net | grep -v -e wwlan -e ppp -e lo -e br0 -e tun -e {{ device_gw }} -e {{ ap_device }}
+  when: num_lan_interfaces != 0
+  register: lan_list_result
 
 # If 2 interfaces found in gateway mode, with one wifi, declare other to be wan
 #- name: In gateway mode with one wifi adapter, the other is WAN
@@ -122,7 +114,7 @@
 - name: Set discovered_wired_iface fact if present
   set_fact:
       discovered_wired_iface: "{{ item|trim }}"
-  when: item|trim != discovered_wireless_iface
+  when: item|trim != discovered_wireless_iface and lan_list_result is defined
   with_items:
       - "{{ lan_list_result.stdout_lines }}"
 
