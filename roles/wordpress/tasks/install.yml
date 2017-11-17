@@ -1,25 +1,64 @@
-- name: Get the WordPress software
-  get_url: url="{{ wordpress_download_base_url }}/{{ wordpress_src }}" dest={{ downloads_dir }}/
+# IF YOU NEED TO REINSTALL FROM /opt/iiab/downloads/wordpress.tar.gz
+# TO /library/wordpress DURING YOUR NEXT RUN OF "./runtags wordpress" OR
+# "./iiab-install" THEN YOU FIRST NEED TO:
+#
+# - "mv /library/wordpress /library/wordpress.old" (MUST)
+# - back up then drop the database (RECOMMENDED)
+#
+# REASON: "keep_newer: yes" below tries to preserves WordPress's self-upgrades
+# & security enhancements within /library/wordpress, that can occur without
+# warning when WordPress is online, since WordPress ~4.8 especially.
+#
+# Such "emergency" reinstalls from /opt/iiab/downloads/wordpress.tar.gz to
+# /library/wordpress should also work offline.
+
+- name: Download the latest WordPress software
+  get_url:
+    url: "{{ wordpress_download_base_url }}/{{ wordpress_src }}"
+    dest: "{{ downloads_dir }}"
+#   force: yes
+#   backup: yes
   register: wp_download_output
   when: internet_available
 
-- name: Copy it to permanent location /library
-  unarchive: src={{ wp_download_output.dest }} dest=/library
-  when: internet_available
+- name: Create link /opt/iiab/downloads/wordpress.tar.gz pointing to {{ wp_download_output.dest }}
+  file:
+    src: "{{ wp_download_output.dest }}"
+    dest: "{{ downloads_dir }}/wordpress.tar.gz"
+    state: link
+  when: wp_download_output.dest is defined
 
-- name: Rename /library/wordpress* to /library/wordpress
-  shell: if [ ! -d {{ wp_abs_path }} ]; then mv {{ wp_abs_path }}* {{ wp_abs_path }}; fi
+- name: Check if /opt/iiab/downloads/wordpress.tar.gz link exists
+  stat:
+    path: "{{ downloads_dir }}/wordpress.tar.gz"
+  register: wp_link
 
-# First pass at permissions and ownership
-- name: Make Apache owner and group
-  file: path={{ wp_abs_path }}
-        recurse=yes
-        owner=root
-        group={{ apache_user }}
-        mode=0664
-        state=directory
+- name: FAIL (force Ansible to exit) IF /opt/iiab/downloads/wordpress.tar.gz doesn't exist
+  fail:
+    msg: "{{ downloads_dir }}/wordpress.tar.gz is REQUIRED in order to install WordPress."
+  when: not wp_link.stat.exists
 
-- name: Make directories 775 so Apache can traverse and write
+- name: "Unpack /opt/iiab/downloads/wordpress.tar.gz to permanent location /library/wordpress - owner: root, group: {{ apache_user }}, mode: 0664, keep_newer: yes"
+  unarchive:
+    src: "{{ downloads_dir }}/wordpress.tar.gz"
+    dest: "{{ wp_install_path }}"
+    owner: root
+    group: "{{ apache_user }}"
+    mode: 0664
+    keep_newer: yes
+
+# - name: Rename /library/wordpress* to /library/wordpress
+#   shell: if [ ! -d {{ wp_abs_path }} ]; then mv {{ wp_abs_path }}* {{ wp_abs_path }}; fi
+
+#- name: Make Apache owner and group, 1st pass permissions set to 0664
+#  file: path={{ wp_abs_path }}
+#        recurse=yes
+#        owner=root
+#        group={{ apache_user }}
+#        mode=0664
+#        state=directory
+
+- name: Make /library/wordpress directories 775 so Apache can traverse and write (most files remain 0664)
   command: "/usr/bin/find {{ wp_abs_path }} -type d -exec chmod 775 {} +"
 
 - name: Copy wp salt values
