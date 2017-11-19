@@ -3,15 +3,6 @@
 # Add cmdline options for passing to ansible
 # Todo add proper shift to gobble up --debug --reinstall
 
-if [ "$1" != "--debug" ] && [ "$1" != "--reinstall" ] && [ "$1" != "" ]; then
-    echo "Use './iiab-install' for regular installs, or to continue an install."
-    echo "Use './iiab-install --reinstall' to force running all Stages 0-9."
-    echo "Use './iiab-install --debug' to run Stage 0, followed by Stages 3-9."
-    echo "Use './runtags' to run a single Stage or Tag or Role."
-    echo "Use './iiab-network' to run Network sections."
-    exit 1
-fi
-
 PLAYBOOK="iiab-stages.yml"
 INVENTORY="ansible_hosts"
 ARGS=""
@@ -23,9 +14,24 @@ MIN_ANSIBLE_VER=2.4.1.0
 
 export ANSIBLE_LOG_PATH="$CWD/iiab-install.log"
 
+if [ ! -f /etc/ansible/facts.d/local_facts.fact ]; then
+    mkdir -p /etc/ansible/facts.d
+fi
+cp ./scripts/local_facts.fact /etc/ansible/facts.d/local_facts.fact
+echo "Placed /etc/ansible/facts.d/local_facts.fact into position."
+
 if [ ! -f $PLAYBOOK ]; then
     echo "EXITING: IIAB Playbook not found."
     echo "Please run 'iiab-install' from /opt/iiab/iiab (top level of git repo)."
+    exit 1
+fi
+
+if [ "$1" != "--debug" ] && [ "$1" != "--reinstall" ] && [ "$1" != "" ]; then
+    echo "Use './iiab-install' for regular installs, or to continue an install."
+    echo "Use './iiab-install --reinstall' to force running all Stages 0-9."
+    echo "Use './iiab-install --debug' to run Stage 0, followed by Stages 3-9."
+    echo "Use './runtags' to run a single Stage or Tag or Role."
+    echo "Use './iiab-network' to run Network sections."
     exit 1
 fi
 
@@ -60,12 +66,6 @@ if version_gt $MIN_ANSIBLE_VER $CURR_ANSIBLE_VER; then
     echo "IIAB INSTALL INSTRUCTIONS: https://github.com/iiab/iiab/wiki/IIAB-Installation"
     exit 1
 fi
-
-if [ ! -f /etc/ansible/facts.d/local_facts.fact ]; then
-    mkdir -p /etc/ansible/facts.d
-fi
-cp ./scripts/local_facts.fact /etc/ansible/facts.d/local_facts.fact
-echo "Placed /etc/ansible/facts.d/local_facts.fact into position."
 
 # Stage 0 will always be run.  From there on up to Stage 9 we keep a counter
 # (in /etc/iiab/iiab.env) of the highest completed Stage.  Avoid repetition!
