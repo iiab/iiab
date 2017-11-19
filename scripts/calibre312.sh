@@ -7,7 +7,7 @@ apt -y install calibre-bin dirmngr
 apt-key adv --recv-key --keyserver keyserver.ubuntu.com 7638D0442B90D010
 echo "deb http://deb.debian.org/debian testing main" > /etc/apt/sources.list.d/debian-testing.list
 apt update
-apt -y install libqt5core5a  python-lxml
+apt -y install libqt5core5a python-lxml calibre
 rm /etc/apt/sources.list.d/debian-testing.list
 
 # updates to calibre & calibre-bin to 3.12 from unstable
