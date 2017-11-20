@@ -1,62 +1,74 @@
-- name: Get Calibre setup file (CentOS)
-# the installer works for intel fedora, and Centos, and deals with dependencies
-  get_url:
-    url="{{ calibre_src_url }}"
-    dest="{{ downloads_dir }}/calibre-installer.py"
-    mode=0755
-  when: ansible_distribution == "CentOS"
+- name: Check if /library/calibre/metadata.db exists
+  stat:
+    path: "{{ calibre_dbpath }}/metadata.db"
+  register: calibre_db
 
-- name: Install Calibre (CentOS)
-  shell: "{{ downloads_dir }}/calibre-installer.py >> /dev/null"
-  args:
-    creates: /usr/bin/calibre-uninstall
-  when: calibre_install and ansible_distribution == 'CentOS'
+# INSTALL THE LATEST CALIBRE (calibre-server etc) ON ALL OS'S - RUNS IF /usr/bin/calibre-uninstall DOES NOT ALEADY EXIST
 
-- name: Install Calibre (OS's other than CentOS)
-# the fedora rpm arm version, though older, takes care of dependencies, and exists
-  package: name={{ item }}
-           state=present
-  with_items:
-    - calibre
-  when: calibre_install and ansible_distribution != 'CentOS'
+- name: Install Calibre via calibre-installer.py
+  include_tasks: installer.yml
+  when: not calibre_db.stat.exists and (is_redhat or is_ubuntu)
+
+- name: Install Calibre via .debs
+  include_tasks: debs.yml
+  when: not calibre_db.stat.exists and is_debian
+
+# CREATE CALIBRE DATABASE WITH A SAMPLE BOOK
+
+- name: Install Calibre - All
+  include_tasks: config-db.yml
+  when: not calibre_db.stat.exists
+
+# WRAP UP CALIBRE INSTALLATION
 
 - name: Create calibre-serve.service and calibre.conf
-  template: backup=no
-            src={{ item.src }}
-            dest={{ item.dest }}
-            owner=root
-            group=root
-            mode={{ item.mode }}
+  template:
+    backup: no
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
   with_items:
     - { src: 'calibre-serve.service.j2', dest: '/etc/systemd/system/calibre-serve.service', mode: '0644'}
     - { src: 'calibre.conf', dest: '/etc/{{ apache_config_dir }}', mode: '0644'}
-  when: calibre_install
-
-- name: Create the link for sites-enabled, containing ProxyPass[Reverse]...localhost:8080 (debuntu)
-  file: src=/etc/apache2/sites-available/calibre.conf
-        dest=/etc/apache2/sites-enabled/calibre.conf
-        state=link
-  when: is_debuntu and calibre_enabled
-
-- name: Enable Calibre service -- runs calibre-server by Kovid Goyal
-  service: name=calibre-serve
-           enabled=yes
-           state=started
-  #async: 900
-  #poll: 5
   when: calibre_enabled
 
-- name: Disable Calibre service -- stops calibre-server by Kovid Goyal
-  service: name=calibre-serve
-           enabled=no
-           state=stopped
-  when: not calibre_enabled
+# http://box:8080 & http://box:8080/mobile WORK BUT OTHER URL'S LIKE http://box/books ARE A MESS (BOOKS RARELY DISPLAY)
+- name: Create calibre.conf link for UNTESTED http://box/books etc (debuntu)
+  file:
+    src: /etc/apache2/sites-available/calibre.conf
+    dest: /etc/apache2/sites-enabled/calibre.conf
+    state: link
+  when: calibre_enabled and is_debuntu
+
+- name: Enable Calibre service -- runs calibre-server by Kovid Goyal
+  service:
+    name: calibre-serve
+    enabled: yes
+    state: started
+    #async: 900
+    #poll: 5
+  when: calibre_enabled
+
+#- name: Remove calibre.conf link if disabled (debuntu)
+#  file:
+#    dest: /etc/apache2/sites-enabled/calibre.conf
+#    state: absent
+#  when: not calibre_enabled and is_debuntu
+
+#- name: Disable Calibre service -- stops calibre-server by Kovid Goyal
+#  service: name=calibre-serve
+#           enabled=no
+#           state=stopped
+#  when: not calibre_enabled
 
 - name: Add 'calibre-serve' to service list
-  ini_file: dest='{{ service_filelist }}'
-            section=calibre
-            option='{{ item.option }}'
-            value='{{ item.value }}'
+  ini_file:
+    dest: "{{ service_filelist }}"
+    section: calibre
+    option: "{{ item.option }}"
+    value: "{{ item.value }}"
   with_items:
     - option: description
       value: '"Calibre is an extremely popular personal library system for e-books."'
