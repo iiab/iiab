@@ -1,0 +1,35 @@
+- name: Create /library/calibre (mandatory since Calibre 3.x)
+  file:
+    path: "{{ calibre_dbpath }}"
+    state: directory
+    #mode: 0755
+
+- name: Check if sample book exists in /opt/iiab/downloads
+  stat:
+    path: "{{ content_base }}/downloads/{{ calibre_sample_book }}"
+  register: sample_bk
+
+- name: Download sample book (mandatory since Calibre 3.x)
+  get_url:
+    url: "{{ iiab_download_url }}/{{ calibre_sample_book }}"
+    dest: "{{ content_base }}/downloads"
+  when: internet_available and not sample_bk.stat.exists
+
+- name: Check if sample book exists in /opt/iiab/downloads
+  stat:
+    path: "{{ content_base }}/downloads/{{ calibre_sample_book }}"
+  register: sample_bk 
+
+- name: Incorporate sample book into Calibre DB (mandatory since Calibre 3.x)
+  shell: "calibredb add {{ content_base }}/downloads/{{ calibre_sample_book }} --with-library {{ calibre_dbpath }}"
+  when: sample_bk.stat.exists
+
+- name: Make /library/calibre/metadata.db writable for Calibre client SW
+  file:
+    path: "{{ calibre_dbpath }}/metadata.db"
+    mode: "ugo+w"
+    #mode: 0666
+    #owner: pi
+    #group: pi
+    #owner: iiab-admin
+    #group: iiab-admin
