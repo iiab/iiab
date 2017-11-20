@@ -1,6 +1,7 @@
 #!/bin/bash
 
-# Thanks to Jerry Vonau (https://github.com/jvonau) who made this Calibre-3.x-on-Raspbian breakthrough possible!
+# Thanks to Jerry Vonau (https://github.com/jvonau) who made
+# this critical breakthrough (Calibre 3.x on Raspbian) possible!
 
 export DEBIAN_FRONTEND=noninteractive
 # Drags in stock desktop dependencies without too much from testing below
