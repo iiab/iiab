@@ -1,20 +1,21 @@
+# INSTALL THE LATEST CALIBRE (calibre-server etc) ON ALL OS'S
+
+# RUNS IF /usr/bin/calibre-uninstall DOES NOT ALEADY EXIST
+- name: Install Calibre via calibre-installer.py (OS's other than Raspbian)
+  include_tasks: py-installer.yml
+  when: not is_rpi
+  #when: not calibre_db.stat.exists and (is_redhat or is_ubuntu)
+
+- name: Install Calibre via .debs (Raspbian)
+  include_tasks: debs.yml
+  when: is_rpi
+
+# CREATE CALIBRE DATABASE WITH A SAMPLE BOOK
+
 - name: Check if /library/calibre/metadata.db exists
   stat:
     path: "{{ calibre_dbpath }}/metadata.db"
   register: calibre_db
-
-# INSTALL THE LATEST CALIBRE (calibre-server etc) ON ALL OS'S - RUNS IF /usr/bin/calibre-uninstall DOES NOT ALEADY EXIST
-
-- name: Install Calibre via calibre-installer.py
-  include_tasks: py-installer.yml
-  when: (not calibre_db.stat.exists) and (not is_rpi)
-  #when: not calibre_db.stat.exists and (is_redhat or is_ubuntu)
-
-- name: Install Calibre via .debs
-  include_tasks: debs.yml
-  when: (not calibre_db.stat.exists) and is_rpi
-
-# CREATE CALIBRE DATABASE WITH A SAMPLE BOOK
 
 - name: Install Calibre - All
   include_tasks: config-db.yml
@@ -43,6 +44,12 @@
     state: link
   when: calibre_enabled and is_debuntu
 
+- name: Remove calibre.conf link if disabled (debuntu)
+  file:
+    dest: /etc/apache2/sites-enabled/calibre.conf
+    state: absent
+  when: not calibre_enabled and is_debuntu
+
 - name: Enable Calibre service -- runs calibre-server by Kovid Goyal
   service:
     name: calibre-serve
@@ -51,12 +58,6 @@
     #async: 900
     #poll: 5
   when: calibre_enabled
-
-#- name: Remove calibre.conf link if disabled (debuntu)
-#  file:
-#    dest: /etc/apache2/sites-enabled/calibre.conf
-#    state: absent
-#  when: not calibre_enabled and is_debuntu
 
 #- name: Disable Calibre service -- stops calibre-server by Kovid Goyal
 #  service: name=calibre-serve
