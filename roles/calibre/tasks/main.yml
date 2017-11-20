@@ -1,60 +1,25 @@
-- name: Download latest linux-installer.py from GitHub to calibre-installer.py
-# seems to work with just about any Linux, and deals with dependencies
-  get_url:
-    url: "{{ calibre_src_url }}"
-    dest: "{{ downloads_dir }}/calibre-installer.py"
-    mode: 0755
-    force: yes
-    backup: yes
-  register: calibre_download_output
-  when: internet_available
-
-# ALWAYS DEFINED, DESPITE get_url DOCUMENTATION CLAIM...
-# - debug:
-#     msg: "{{ calibre_download_output.src }}"
-#
-# DEFINED ONLY WHEN /opt/iiab/downloads/calibre-installer.py CHANGES
-# - debug:
-#    msg: "{{ calibre_download_output.backup_file }}"
-
-# OOPS BAD IDEA: changes in https://github.com/kovidgoyal/calibre/commits/master/setup/linux-installer.py are not sync'd with Calibre releases!
-# - name: FORCE AN UPGRADE IF calibre-installer.py HAS CHANGED, IF SO ORIGINAL IS SAVED TO {{ calibre_download_output.backup_file }}
-#   file:
-#     path: /usr/bin/calibre-uninstall
-#     state: absent
-#   when: calibre_download_output.backup_file is defined
-
-- name: Check if calibre-installer.py exists in /opt/iiab/downloads
+- name: Check if /library/calibre/metadata.db exists
   stat:
-    path: "{{ downloads_dir }}/calibre-installer.py"
-  register: calib_inst
-
-- name: Check if calibre-uninstall exists in /usr/bin
-  stat:
-    path: "/usr/bin/calibre-uninstall"
-  register: calib_uninst
-
-- name: FAIL (force Ansible to exit) IF /opt/iiab/downloads/calibre-installer.py doesn't exist OR needed Internet connection is missing
-# meta: end_play
-  fail:
-    msg: "{{ downloads_dir }}/calibre-installer.py and an Internet connection are REQUIRED in order to install Calibre!"
-  when: (not calib_inst.stat.exists) or (not internet_available and not calib_uninst.stat.exists)
+    path: "{{ calibre_dbpath }}/metadata.db"
+  register: calibre_db
 
 # INSTALL THE LATEST CALIBRE (calibre-server etc) ON ALL OS'S - RUNS IF /usr/bin/calibre-uninstall DOES NOT ALEADY EXIST
 
-- name: Run calibre-installer.py to install Calibre programs into /usr/bin - MANUALLY REMOVE /usr/bin/calibre-uninstall TO FORCE calibre-installer.py TO REINSTALL/UPGRADE HERE!
-  shell: "{{ downloads_dir }}/calibre-installer.py >> /dev/null"
-  args:
-    creates: /usr/bin/calibre-uninstall
-  when: internet_available
+- name: Install Calibre via calibre-installer.py
+  include_tasks: installer.yml
+  when: not calibre_db.stat.exists and (is_redhat or is_ubuntu)
 
-# - name: Install Calibre (OS's other than CentOS)
-# # the fedora rpm arm version, though older, takes care of dependencies, and exists
-#   package: name={{ item }}
-#            state=present
-#   with_items:
-#     - calibre
-#   when: calibre_install and ansible_distribution != 'CentOS'
+- name: Install Calibre via .debs
+  include_tasks: debs.yml
+  when: not calibre_db.stat.exists and is_debian
+
+# CREATE CALIBRE DATABASE WITH A SAMPLE BOOK
+
+- name: Install Calibre - All
+  include_tasks: config-db.yml
+  when: not calibre_db.stat.exists
+
+# WRAP UP CALIBRE INSTALLATION
 
 - name: Create calibre-serve.service and calibre.conf
   template:
@@ -76,47 +41,6 @@
     state: link
   when: is_debuntu
 
-# CREATE CALIBRE DATABASE WITH A SAMPLE BOOK
-
-- name: Disable Calibre service -- stops calibre-server by Kovid Goyal
-  service:
-    name: calibre-serve
-    enabled: no
-    state: stopped
-
-- name: Create /library/calibre (mandatory since Calibre 3.x)
-  file:
-    path: "{{ calibre_dbpath }}"
-    state: directory
-    mode: 0755
-
-- name: Check if sample book exists in /opt/iiab/downloads
-  stat:
-    path: "{{ content_base }}/downloads/{{ calibre_sample_book }}"
-  register: sample_bk
-
-- name: Download sample book (mandatory since Calibre 3.x)
-  get_url:
-    url: "{{ iiab_download_url }}/{{ calibre_sample_book }}"
-    dest: "{{ content_base }}/downloads"
-  when: internet_available and not sample_bk.stat.exists
-
-- name: Check if sample book exists in /opt/iiab/downloads
-  stat:
-    path: "{{ content_base }}/downloads/{{ calibre_sample_book }}"
-  register: sample_bk
-
-- name: Check if /library/calibre/metadata.db exists
-  stat:
-    path: "{{ calibre_dbpath }}/metadata.db"
-  register: calibre_db
-
-- name: Incorporate sample book into Calibre DB (mandatory since Calibre 3.x)
-  shell: "calibredb add {{ content_base }}/downloads/{{ calibre_sample_book }} --with-library {{ calibre_dbpath }}"
-  when: sample_bk.stat.exists and not calibre_db.stat.exists
-
-# WRAP UP CALIBRE INSTALLATION
-
 - name: Enable Calibre service -- runs calibre-server by Kovid Goyal
   service:
     name: calibre-serve
@@ -126,11 +50,17 @@
     #poll: 5
   when: calibre_enabled
 
-# - name: Disable Calibre service -- stops calibre-server by Kovid Goyal
-#   service: name=calibre-serve
-#            enabled=no
-#            state=stopped
-#   when: not calibre_enabled
+#- name: Remove calibre.conf link if disabled (debuntu)
+#  file:
+#    dest: /etc/apache2/sites-enabled/calibre.conf
+#    state: absent
+#  when: not calibre_enabled and is_debuntu
+
+#- name: Disable Calibre service -- stops calibre-server by Kovid Goyal
+#  service: name=calibre-serve
+#           enabled=no
+#           state=stopped
+#  when: not calibre_enabled
 
 - name: Add 'calibre-serve' to service list
   ini_file:
