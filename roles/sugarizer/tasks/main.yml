@@ -1,31 +1,38 @@
-- name: Download the latest stable version of Sugarizer from location under our control
-  get_url: url={{ iiab_download_url }}/{{ sugarizer_version }}.tar.gz
-           dest={{ downloads_dir }}/{{ sugarizer_version }}.tar.gz
+- name: Download latest stable Sugarizer from location we control
+  get_url:
+    url: "{{ iiab_download_url }}/{{ sugarizer_version }}.tar.gz"
+    dest: "{{ downloads_dir }}/{{ sugarizer_version }}.tar.gz"
 
-#fixme
-- name: Untar it to target location
-  command: tar xzf {{ downloads_dir }}/{{ sugarizer_version }}.tar.gz -C {{ sugarizer_location }}
-           creates="{{ sugarizer_location }}/{{ sugarizer_version }}/index.html"
+- name: Untar to /library/www/html/{{ sugarizer_version }}
+  unarchive:
+    src: "{{ downloads_dir }}/{{ sugarizer_version }}.tar.gz"
+    dest: "{{ sugarizer_location }}"
+    creates: "{{ sugarizer_location }}/{{ sugarizer_version }}/index.html"
+#  command: tar xzf {{ downloads_dir }}/{{ sugarizer_version }}.tar.gz -C {{ sugarizer_location }}
+#           creates="{{ sugarizer_location }}/{{ sugarizer_version }}/index.html"
 
-- name: Create a symbolic link from generic url to version specific location
-  file: dest={{ sugarizer_location }}/sugarizer
-        src={{ sugarizer_location }}/{{ sugarizer_version }}
-        state=link
+- name: Create symbolic link /library/www/html/sugarizer
+  file:
+    src: "{{ sugarizer_location }}/{{ sugarizer_version }}"
+    dest: "{{ sugarizer_location }}/sugarizer"
+    state: link
 
 - name: Set up Node.js 6.x apt sources (debuntu)
   shell: curl -sL https://deb.nodesource.com/setup_6.x | bash -
   when: internet_available and is_debuntu
 
 - name: Install latest Node.js which includes /usr/bin/npm (debuntu)
-  package: name=nodejs
-           state=latest
+  package:
+    name: nodejs
+    state: latest
 # package: name=nodejs=6.*
 #          state=present
   when: internet_available and is_debuntu
 
 - name: Install npm (OS's other than debuntu)
-  package: name={{ item }}
-           state=present
+  package:
+    name: "{{ item }}"
+    state: present
   when: internet_available and not is_debuntu
   with_items:
     - nodejs
@@ -42,11 +49,12 @@
   when: npm.stat.exists is defined and npm.stat.exists
 
 - name: Create systemd files and copy our ini file
-  template: src={{ item.src }}
-            dest={{ item.dest }}
-            owner=root
-            group=root
-            mode=0644
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: root
+    group: root
+    mode: 0644
   with_items:
      - { src: 'sugarizer.service.j2' , dest: '/etc/systemd/system/sugarizer.service'}
      - { src: 'sugarizer.ini' , dest: '{{ sugarizer_location }}/sugarizer/server' }
@@ -58,43 +66,46 @@
 #        state=link
 
 - name: Create the express framework for Node.js (OS's other than Fedora 18)
-  shell:  npm install
+  shell: npm install
   args:
      chdir: "{{ sugarizer_location }}/sugarizer/server"
      creates: "{{ sugarizer_location }}/sugarizer/server/node_modules"
   when: not is_F18 and not npm_exists
 
 - name: Create the express framework for Node.js (Fedora 18)
-  shell:  npm install
+  shell: npm install
   args:
      chdir: "{{ sugarizer_location }}/sugarizer/server"
   when: is_F18 and not npm_exists
 
 - name: Enable services (all OS's)
-  service: name={{ item.name }}
-           enabled=yes
-           state=restarted
+  service:
+    name: "{{ item.name }}"
+    enabled: yes
+    state: restarted
   with_items:
       - { name: sugarizer }
   when: sugarizer_enabled
 
 - name: Disable services (all OS's)
-  service: name={{ item.name }}
-           enabled=no
-           state=stopped
+  service:
+    name: "{{ item.name }}"
+    enabled: no
+    state: stopped
   with_items:
-      - { name: sugarizer }
+    - { name: sugarizer }
   when: not sugarizer_enabled
 
-- name: Add 'sugarizer' to service list
-  ini_file: dest="{{ service_filelist }}"
-            section=sugarizer
-            option="{{ item.option }}"
-            value="{{ item.value }}"
+- name: Add 'sugarizer' to service list in /etc/iiab/iiab.ini
+  ini_file:
+    dest: "{{ service_filelist }}"
+    section: sugarizer
+    option: "{{ item.option }}"
+    value: "{{ item.value }}"
   with_items:
-       - option: name
-         value: Sugarizer
-       - option: description
-         value: '"The Sugar Learning Platform began with the famous One Laptop Per Child project, written in Python. Sugarizer is the new HTML/JavaScript implementation of Sugar, usable in most all browsers."'
-       - option: enabled
-         value: "{{ sugarizer_enabled }}"
+    - option: name
+      value: Sugarizer
+    - option: description
+      value: '"The Sugar Learning Platform began with the famous One Laptop Per Child project, written in Python. Sugarizer is the new HTML/JavaScript implementation of Sugar, usable in most all browsers."'
+    - option: enabled
+      value: "{{ sugarizer_enabled }}"
