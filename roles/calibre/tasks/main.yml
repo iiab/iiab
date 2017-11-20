@@ -10,7 +10,21 @@
   include_tasks: debs.yml
   when: is_rpi
 
-# 2. CREATE DATABASE WITH A SAMPLE BOOK (REQUIRED AS OF CALIBRE 3.x)
+# 2. STOP CALIBRE SERVICE IF IT EXISTS (REQUIRED FOR DATABASE ACTIVITY...AND IF not calibre_enabled)
+
+- name: Check if Calibre systemd service exists
+  stat:
+    path: /etc/systemd/system/calibre-serve.service
+  register: calibre_svc
+
+- name: Disable Calibre service -- stops calibre-server by Kovid Goyal
+  service:
+    name: calibre-serve
+    #enabled: no
+    state: stopped
+  when: calibre_svc.stat.exists
+
+# 3. CREATE DATABASE WITH A SAMPLE BOOK (REQUIRED AS OF CALIBRE 3.x)
 
 - name: Check if /library/calibre/metadata.db exists
   stat:
@@ -21,7 +35,7 @@
   include_tasks: create-db.yml
   when: not calibre_db.stat.exists
 
-# 3. WRAP UP CALIBRE INSTALLATION
+# 4. WRAP UP: ESTABLISH CALIBRE SERVICE, http://box/books ETC
 
 - name: Create calibre-serve.service and calibre.conf
   template:
@@ -58,12 +72,6 @@
   when: calibre_enabled
   #async: 900
   #poll: 5
-
-#- name: Disable Calibre service -- stops calibre-server by Kovid Goyal
-#  service: name=calibre-serve
-#           enabled=no
-#           state=stopped
-#  when: not calibre_enabled
 
 - name: Add 'calibre-serve' to service list at /etc/iiab/iiab.ini
   ini_file:
