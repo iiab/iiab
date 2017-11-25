@@ -1,16 +1,18 @@
 - name: Create various directories for Kiwix's ZIM files
-  file: path={{ item }}
-        owner=root
-        group=root
-        mode=0755
-        state=directory
+  file:
+    path: "{{ item }}"
+    owner: root
+    group: root
+    mode: 0755
+    state: directory
   with_items:
-    - "{{ iiab_zim_path }}"
-    - "{{ kiwix_content_path }}"
-    - "{{ iiab_zim_path }}/index"
+  - "{{ iiab_zim_path }}"
+  - "{{ kiwix_content_path }}"
+  - "{{ iiab_zim_path }}/index"
 
 - name: Check for 'kiwix-serve' binary
-  stat: path={{ iiab_base }}/kiwix/bin/kiwix-serve
+  stat:
+    path: "{{ iiab_base }}/kiwix/bin/kiwix-serve"
   register: kiwix_bin
 
 - name: Set kiwix_first_pass
@@ -19,126 +21,141 @@
   when: kiwix_bin.stat.exists is defined and not kiwix_bin.stat.exists
 
 - name: Copy Kiwix library file if needed
-  template: src={{ item }}
-            dest="{{ kiwix_library_xml }}"
-            mode=0644
-            owner=root
-            group=root
-            force=no
+  template:
+    src: "{{ item }}"
+    dest: "{{ kiwix_library_xml }}"
+    mode: 0644
+    owner: root
+    group: root
+    force: no
   with_items:
-    - library.xml
+  - library.xml
   when: kiwix_first_pass
 
 - name: Copy test.zim file
-  copy: src=test.zim
-        dest={{ kiwix_content_path }}/test.zim
-        mode=0644
-        owner=root
-        group=root
-        force=no
+  copy:
+    src: test.zim
+    dest: "{{ kiwix_content_path }}/test.zim"
+    mode: 0644
+    owner: root
+    group: root
+    force: no
   when: kiwix_first_pass
 
 # we get a whole web server for intel but only the kiwix execs for arm
 
 - name: Unarchive it to permanent location - not bin_only
-  unarchive: src="{{ downloads_dir }}/{{ kiwix_src_file }}"
-             dest="{{ iiab_base }}"
-             owner=root
-             group=root
+  unarchive:
+    src: "{{ downloads_dir }}/{{ kiwix_src_file }}"
+    dest: "{{ iiab_base }}"
+    owner: root
+    group: root
   when: not kiwix_src_bin_only and kiwix_first_pass
 
 - name: Create kiwix/bin directory
-  file: path="{{ iiab_base }}/kiwix/bin"
-        owner=root
-        group=root
-        mode=0755
-        state=directory
+  file:
+    path: "{{ iiab_base }}/kiwix/bin"
+    owner: root
+    group: root
+    mode: 0755
+    state: directory
 
 - name: Enable the mods which permit Apache to proxy (debuntu)
-  apache2_module: name={{ item }}
+  apache2_module:
+    name: "{{ item }}"
   with_items:
-    - proxy
-    - proxy_html
-    - proxy_http
-    - rewrite
+  - proxy
+  - proxy_html
+  - proxy_http
+  - rewrite
   when: is_debuntu
 
 - name: Unarchive Kiwix to permanent location - bin only
-  unarchive: src="{{ downloads_dir }}/{{ kiwix_src_file }}"
-             dest="{{ iiab_base }}/kiwix/bin"
-             owner=root
-             group=root
+  unarchive:
+    src: "{{ downloads_dir }}/{{ kiwix_src_file }}"
+    dest: "{{ iiab_base }}/kiwix/bin"
+    owner: root
+    group: root
   when: kiwix_src_bin_only and kiwix_first_pass
 
-# workaround because unarchive does not set ownership properly
-- name: "Set ownership as if: 'chown -R root:root /opt/iiab/kiwix'"
-  file: path="{{ iiab_base }}/kiwix"
-        owner=root
-        group=root
-        recurse=yes
+# Already done above!
+# # workaround because unarchive does not set ownership properly
+# - name: "Set ownership as if: 'chown -R root:root /opt/iiab/kiwix'"
+#   file:
+#     path: "{{ iiab_base }}/kiwix"
+#     owner: root
+#     group: root
+#     recurse: yes
 
 # workaround because kiwix-serve does not stay running
 - name: Make a crontab entry to restart kiwix-serve at 4AM (debuntu)
 # *  *  *  *  * user-name  command to be executed
-  lineinfile: line="0  4  *  *  * root /bin/systemctl restart kiwix-serve.service"
-              dest=/etc/crontab
+  lineinfile:
+    line: "0  4  *  *  * root /bin/systemctl restart kiwix-serve.service"
+    dest: /etc/crontab
   when: is_debuntu
 
 - name: Make a crontab entry to restart kiwix-serve at 4AM (redhat)
 # *  *  *  *  * user-name  command to be executed
-  lineinfile: line="0  4  *  *  * root /usr/bin/systemctl restart kiwix-serve.service"
-              dest=/etc/crontab
+  lineinfile:
+    line: "0  4  *  *  * root /usr/bin/systemctl restart kiwix-serve.service"
+    dest: /etc/crontab
   when: is_redhat
 
 # Create Kiwix service
 
 - name: Create 'kiwix-serve' service
-  template: backup=no
-            src={{ item.src }}
-            dest={{ item.dest }}
-            owner=root
-            group=root
-            mode={{ item.mode }}
+  template:
+    backup: no
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
   with_items:
-    - { src: 'kiwix-serve.service.j2', dest: '/etc/systemd/system/kiwix-serve.service', mode: '0644'}
-#    - { src: 'kiwix-serve-init.j2', dest: '/usr/libexec/kiwix-serve-init', mode: '0755'}
-    - { src: 'iiab-make-kiwix-lib', dest: '/usr/bin/iiab-make-kiwix-lib', mode: '0755'}
-    - { src: 'iiab-make-kiwix-lib.py', dest: '/usr/bin/iiab-make-kiwix-lib.py', mode: '0755'}
-    - { src: 'iiab-make-apache-config.py', dest: '/usr/bin/iiab-make-apache-config.py', mode: '0755'}
+  - { src: 'kiwix-serve.service.j2', dest: '/etc/systemd/system/kiwix-serve.service', mode: '0644'}
+#   - { src: 'kiwix-serve-init.j2', dest: '/usr/libexec/kiwix-serve-init', mode: '0755'}
+  - { src: 'iiab-make-kiwix-lib', dest: '/usr/bin/iiab-make-kiwix-lib', mode: '0755'}
+  - { src: 'iiab-make-kiwix-lib.py', dest: '/usr/bin/iiab-make-kiwix-lib.py', mode: '0755'}
+  - { src: 'iiab-make-apache-config.py', dest: '/usr/bin/iiab-make-apache-config.py', mode: '0755'}
 
 - name: Add 'kiwix-serve' to list of services
-  ini_file: dest='{{ service_filelist }}'
-            section=kiwix-serve
-            option='{{ item.option }}'
-            value='{{ item.value }}'
+  ini_file:
+    dest: "{{ service_filelist }}"
+    section: kiwix-serve
+    option: "{{ item.option }}"
+    value: "{{ item.value }}"
   with_items:
-    - option: name
-      value: kiwix-serve
-    - option: description
-      value: '"Part of https://github.com/kiwix/kiwix-tools/ - kiwix-serve is the most used web server for ZIM files."'
-    - option: kiwix_url
-      value: "{{ kiwix_url }}"
-    - option: kiwix_path
-      value: "{{ kiwix_path }}"
-    - option: kiwix_port
-      value: "{{ kiwix_port }}"
-    - option: iiab_zim_path
-      value: "{{ iiab_zim_path }}"
-    - option: kiwix_library_xml
-      value: "{{ kiwix_library_xml }}"
-    - option: kiwix_content_path
-      value: "{{ kiwix_content_path }}"
-    - option: enabled
-      value: "{{ kiwix_enabled }}"
+  - option: name
+    value: kiwix-serve
+  - option: description
+    value: '"Part of https://github.com/kiwix/kiwix-tools/ - kiwix-serve is the most used web server for ZIM files."'
+# The following 4 lines are unused as of Nov 2017:
+#   - option: kiwix_url
+#     value: "{{ kiwix_url }}"
+#   - option: kiwix_path
+#     value: "{{ kiwix_path }}"
+  - option: kiwix_port
+    value: "{{ kiwix_port }}"
+  - option: iiab_zim_path
+    value: "{{ iiab_zim_path }}"
+  - option: kiwix_library_xml
+    value: "{{ kiwix_library_xml }}"
+  - option: kiwix_content_path
+    value: "{{ kiwix_content_path }}"
+  - option: enabled
+    value: "{{ kiwix_enabled }}"
 
 - name: Enable 'kiwix-serve' service
-  service: name=kiwix-serve
-           enabled=yes
-           state=restarted
+  service:
+    name: kiwix-serve
+    enabled: yes
+    state: restarted
   when: kiwix_enabled
 
 - name: Disable 'kiwix-serve' service
-  service: name=kiwix-serve
-           enabled=no
-           state=stopped
+  service:
+    name: kiwix-serve
+    enabled: no
+    state: stopped
   when: not kiwix_enabled
