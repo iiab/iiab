@@ -4,4 +4,5 @@
 if [ ! -f /etc/iiab/uuid ]; then
    uuidgen > /etc/iiab/uuid
 fi
+exit 0
 
