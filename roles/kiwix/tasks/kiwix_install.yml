@@ -10,17 +10,12 @@
   - "{{ kiwix_content_path }}"
   - "{{ iiab_zim_path }}/index"
 
-- name: Check for 'kiwix-serve' binary
+- name: Check for /library/zims/library.xml
   stat:
-    path: "{{ iiab_base }}/kiwix/bin/kiwix-serve"
-  register: kiwix_bin
+    path: "{{ kiwix_library_xml }}"
+  register: kiwix_xml
 
-- name: Set kiwix_first_pass
-  set_fact:
-    kiwix_first_pass: True
-  when: kiwix_bin.stat.exists is defined and not kiwix_bin.stat.exists
-
-- name: Copy Kiwix library file if needed
+- name: Place a stub /library/zims/library.xml if file does not exist
   template:
     src: "{{ item }}"
     dest: "{{ kiwix_library_xml }}"
@@ -30,7 +25,17 @@
     force: no
   with_items:
   - library.xml
-  when: kiwix_first_pass
+  when: not kiwix_xml.stat.exists
+
+- name: Check for /opt/iiab/kiwix/bin/kiwix-serve binary
+  stat:
+    path: "{{ iiab_base }}/kiwix/bin/kiwix-serve"
+  register: kiwix_bin
+
+- name: Set kiwix_first_pass if kiwix-serve not found
+  set_fact:
+    kiwix_first_pass: True
+  when: kiwix_bin.stat.exists is defined and not kiwix_bin.stat.exists
 
 - name: Copy test.zim file
   copy:
@@ -42,12 +47,17 @@
     force: no
   when: kiwix_first_pass
 
-# we get a whole web server for intel but only the kiwix execs for arm
+# We get a whole web server for i686 but only the kiwix execs for linux64 & armhf
 
-- name: Unarchive it to permanent location - not bin_only
+# EXPERIMENTAL i686 CODE PATH: as of Nov 2017 bunzip2 then untar unpacks
+# to /tmp/kiwix-0.10-i686/bin WHOSE CONTENTS NEEDS TO BE MOVED TO
+# /opt/iiab/kiwix/bin (STANZA FURTHER BELOW).  All i686 code needs testing.
+# ALSO: code below may need to be revived to chown -R root:root & chmod
+- name: Unarchive kiwix-*-linux-i686.tar.bz2 to /tmp (not bin_only, i.e. i686)
   unarchive:
     src: "{{ downloads_dir }}/{{ kiwix_src_file }}"
-    dest: "{{ iiab_base }}"
+    dest: /tmp
+    # dest: "{{ iiab_base }}"
     owner: root
     group: root
   when: not kiwix_src_bin_only and kiwix_first_pass
@@ -60,6 +70,29 @@
     mode: 0755
     state: directory
 
+# EXPERIMENTAL i686 CODE PATH
+- name: move /tmp/kiwix*i686/bin/* to permanent location /opt/iiab/kiwix/bin (not bin_only, i.e. i686)
+  shell: "mv /tmp/kiwix*i686/bin/* /opt/iiab/kiwix/bin/"
+  when: not kiwix_src_bin_only and kiwix_first_pass
+
+- name: Unarchive Kiwix to permanent location (bin_only, i.e. not i686)
+  unarchive:
+    src: "{{ downloads_dir }}/{{ kiwix_src_file }}"
+    dest: "{{ iiab_base }}/kiwix/bin"
+    owner: root
+    group: root
+  when: kiwix_src_bin_only and kiwix_first_pass
+
+# MIGHT BE RESTORED LATER FOR i686?  Unused as of Nov 2017:
+# # workaround because unarchive does not set ownership properly
+# - name: "Set ownership as if: 'chown -R root:root /opt/iiab/kiwix'"
+#   file:
+#     path: "{{ iiab_base }}/kiwix"
+#     owner: root
+#     group: root
+#     recurse: yes
+#     mode: ????
+
 - name: Enable the mods which permit Apache to proxy (debuntu)
   apache2_module:
     name: "{{ item }}"
@@ -69,23 +102,6 @@
   - proxy_http
   - rewrite
   when: is_debuntu
-
-- name: Unarchive Kiwix to permanent location - bin only
-  unarchive:
-    src: "{{ downloads_dir }}/{{ kiwix_src_file }}"
-    dest: "{{ iiab_base }}/kiwix/bin"
-    owner: root
-    group: root
-  when: kiwix_src_bin_only and kiwix_first_pass
-
-# Already done above!
-# # workaround because unarchive does not set ownership properly
-# - name: "Set ownership as if: 'chown -R root:root /opt/iiab/kiwix'"
-#   file:
-#     path: "{{ iiab_base }}/kiwix"
-#     owner: root
-#     group: root
-#     recurse: yes
 
 # workaround because kiwix-serve does not stay running
 - name: Make a crontab entry to restart kiwix-serve at 4AM (debuntu)
@@ -119,7 +135,21 @@
   - { src: 'iiab-make-kiwix-lib.py', dest: '/usr/bin/iiab-make-kiwix-lib.py', mode: '0755'}
   - { src: 'iiab-make-apache-config.py', dest: '/usr/bin/iiab-make-apache-config.py', mode: '0755'}
 
-- name: Add 'kiwix-serve' to list of services
+- name: Enable 'kiwix-serve' service
+  service:
+    name: kiwix-serve
+    enabled: yes
+    state: restarted
+  when: kiwix_enabled
+
+- name: Disable 'kiwix-serve' service
+  service:
+    name: kiwix-serve
+    enabled: no
+    state: stopped
+  when: not kiwix_enabled
+
+- name: Add 'kiwix-serve' to list of services at /opt/iiab/iiab.ini
   ini_file:
     dest: "{{ service_filelist }}"
     section: kiwix-serve
@@ -145,17 +175,3 @@
     value: "{{ kiwix_content_path }}"
   - option: enabled
     value: "{{ kiwix_enabled }}"
-
-- name: Enable 'kiwix-serve' service
-  service:
-    name: kiwix-serve
-    enabled: yes
-    state: restarted
-  when: kiwix_enabled
-
-- name: Disable 'kiwix-serve' service
-  service:
-    name: kiwix-serve
-    enabled: no
-    state: stopped
-  when: not kiwix_enabled
