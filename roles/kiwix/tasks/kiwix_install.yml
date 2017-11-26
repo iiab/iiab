@@ -42,12 +42,17 @@
     force: no
   when: kiwix_first_pass
 
-# we get a whole web server for intel but only the kiwix execs for arm
+# We get a whole web server for i686 but only the kiwix execs for linux64 & armhf
 
-- name: Unarchive it to permanent location - not bin_only
+# EXPERIMENTAL i686 CODE PATH: as of Nov 2017 bunzip2 then untar unpacks
+# to /tmp/kiwix-0.10-i686/bin WHOSE CONTENTS NEEDS TO BE MOVED TO
+# /opt/iiab/kiwix/bin (STANZA FURTHER BELOW).  All i686 code needs testing.
+# ALSO: code below may need to be revived to chown -R root:root & chmod
+- name: Unarchive kiwix-*-linux-i686.tar.bz2 to /tmp (not bin_only, i.e. i686)
   unarchive:
     src: "{{ downloads_dir }}/{{ kiwix_src_file }}"
-    dest: "{{ iiab_base }}"
+    dest: /tmp
+    # dest: "{{ iiab_base }}"
     owner: root
     group: root
   when: not kiwix_src_bin_only and kiwix_first_pass
@@ -60,6 +65,11 @@
     mode: 0755
     state: directory
 
+# EXPERIMENTAL i686 CODE PATH
+- name: move /tmp/kiwix*i686/bin/* to permanent location /opt/iiab/kiwix/bin (not bin_only, i.e. i686)
+  shell: "mv /tmp/kiwix*i686/bin/* /opt/iiab/kiwix/bin/"
+  when: not kiwix_src_bin_only and kiwix_first_pass
+
 - name: Enable the mods which permit Apache to proxy (debuntu)
   apache2_module:
     name: "{{ item }}"
@@ -70,7 +80,7 @@
   - rewrite
   when: is_debuntu
 
-- name: Unarchive Kiwix to permanent location - bin only
+- name: Unarchive Kiwix to permanent location (bin_only, i.e. not i686)
   unarchive:
     src: "{{ downloads_dir }}/{{ kiwix_src_file }}"
     dest: "{{ iiab_base }}/kiwix/bin"
@@ -78,7 +88,7 @@
     group: root
   when: kiwix_src_bin_only and kiwix_first_pass
 
-# Already done above!
+# MIGHT BE RESTORED LATER FOR i686?  Unused as of Nov 2017:
 # # workaround because unarchive does not set ownership properly
 # - name: "Set ownership as if: 'chown -R root:root /opt/iiab/kiwix'"
 #   file:
@@ -86,6 +96,7 @@
 #     owner: root
 #     group: root
 #     recurse: yes
+#     mode: ????
 
 # workaround because kiwix-serve does not stay running
 - name: Make a crontab entry to restart kiwix-serve at 4AM (debuntu)
