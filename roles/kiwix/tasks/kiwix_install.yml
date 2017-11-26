@@ -34,12 +34,12 @@
     path: "{{ iiab_base }}/kiwix/bin/kiwix-serve"
   register: kiwix_bin
 
-- name: Set kiwix_first_pass if kiwix-serve not found
+- name: Set kiwix_force_install if kiwix-serve not found
   set_fact:
-    kiwix_first_pass: True
+    kiwix_force_install: True
   when: kiwix_bin.stat.exists is defined and not kiwix_bin.stat.exists
 
-- name: Copy test.zim file if 1st pass
+- name: Copy test.zim file if kiwix_force_install
   copy:
     src: test.zim
     dest: "{{ iiab_zim_path }}/content/test.zim"
@@ -47,7 +47,7 @@
     owner: root
     group: root
     force: no
-  when: kiwix_first_pass
+  when: kiwix_force_install
 
 - name: Create /opt/iiab/kiwix/bin directory
   file:
@@ -57,33 +57,33 @@
     mode: 0755
     state: directory
 
-# 2. INSTALL KIWIX-TOOLS EXECUTABLES IF 1ST PASS: we get a whole web server for i686 but only the kiwix execs for linux64 & armhf
+# 2. INSTALL KIWIX-TOOLS EXECUTABLES IF kiwix_force_install: we get a whole web server for i686 but only the kiwix execs for linux64 & armhf
 
-- name: Unarchive Kiwix to permanent location if 1st pass (bin_only, i.e. not i686)
+- name: Unarchive Kiwix to permanent location (bin_only, i.e. not i686)
   unarchive:
     src: "{{ downloads_dir }}/{{ kiwix_src_file }}"
     dest: "{{ iiab_base }}/kiwix/bin"
     owner: root
     group: root
-  when: kiwix_src_bin_only and kiwix_first_pass
+  when: kiwix_src_bin_only and kiwix_force_install
 
 # EXPERIMENTAL i686 CODE PATH: as of Nov 2017 bunzip2 then untar unpacks
 # to /tmp/kiwix-0.10-i686/bin WHOSE CONTENTS NEEDS TO BE MOVED TO
 # /opt/iiab/kiwix/bin (STANZA FURTHER BELOW).  All i686 code needs testing.
 # ALSO: code below may need to be revived to chown -R root:root & chmod
-- name: Unarchive kiwix-*-linux-i686.tar.bz2 to /tmp if 1st pass (not bin_only, i.e. i686)
+- name: Unarchive kiwix-*-linux-i686.tar.bz2 to /tmp (not bin_only, i.e. i686)
   unarchive:
     src: "{{ downloads_dir }}/{{ kiwix_src_file }}"
     dest: /tmp
     # dest: "{{ iiab_base }}"
     owner: root
     group: root
-  when: not kiwix_src_bin_only and kiwix_first_pass
+  when: not kiwix_src_bin_only and kiwix_force_install
 
 # EXPERIMENTAL i686 CODE PATH
-- name: Move /tmp/kiwix*i686/bin/* to permanent location /opt/iiab/kiwix/bin if 1st pass (not bin_only, i.e. i686)
+- name: Move /tmp/kiwix*i686/bin/* to permanent location /opt/iiab/kiwix/bin (not bin_only, i.e. i686)
   shell: "mv /tmp/kiwix*i686/bin/* /opt/iiab/kiwix/bin/"
-  when: not kiwix_src_bin_only and kiwix_first_pass
+  when: not kiwix_src_bin_only and kiwix_force_install
 
 # MIGHT BE RESTORED LATER FOR i686?  Unused as of Nov 2017:
 # # workaround because unarchive does not set ownership properly
@@ -94,6 +94,7 @@
 #     group: root
 #     recurse: yes
 #     mode: ????
+# when: kiwix_force_install
 
 # 3. ENABLE MODS FOR APACHE PROXY IF DEBUNTU
 
