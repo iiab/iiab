@@ -1,135 +1,72 @@
 #!/bin/bash -e
 # required to start loading IIAB with ansible
+GOOD_VER="2.4.2"
 FOUND=""
+FAMILY=""
 VER=""
 # below are unused for future use
-GOOD_VER=""
 URL="NA"
-# TODO add check for version - to revese patching if upgrading
-if [ $(which ansible-playbook) ]; then
-    VER=`ansible --version|head -n 1|cut -f 2 -d " "`
-    GOOD_VER=`echo $VER | grep ^2.4`
-# 2.2.0.0 -> 2.4.1+ patching was not applied -just upgrade via pip
-    if [ $GOOD_VER = "" ]; then
-        echo "Ansible $VER installed updating to 2.4.1"
-        pip install --upgrade ansible==2.4.1 --disable-pip-version-check
-        exit 0
-    fi
-# keep an eye out for 2.4.1.X in the future
-    if [ $VER = "2.4.1.0" ]; then
-        echo "Ansible $VER installed exiting..."
-        exit 0
-    fi
-fi
-
-# TODO add check for version - to revese patching if upgrading
-#if [ $(which ansible-playbook) ]; then
-#    VER=`ansible --version|head -n 1|cut -f 2 -d " "`
-
-echo "Installing --- Please Wait"
-if [ -f /etc/fedora-release ]; then
-    VER=`grep VERSION_ID /etc/*elease | cut -d= -f2`
-    URL=https://github.com/jvonau/iiab/blob/ansible/vars/fedora-$VER.yml
-    dnf -y upgrade
-    dnf -y install ansible git bzip2 file findutils gzip hg svn sudo tar which unzip xz zip libselinux-python
-    dnf -y install python-pip python-setuptools python-wheel patch
-    FOUND="yes"
-    FAMILY="redhat"
-fi
-# might have to revisit dependencies with a redhat dialect
-# ansible python-kerberos python-selinux python-winrm python-xmltodict sshpass bzip2 file findutils gzip tar unzip zip python-keyczar python-boto python-dnspython python-pyrax python-sphere
-
-if [ -f /etc/centos-release ]; then
-    yum -y upgrade
-    yum -y install ca-certificates nss epel-release
-    yum -y install git bzip2 file findutils gzip hg svn sudo tar which unzip xz zip libselinux-python
-    yum -y install python-pip python-setuptools python-wheel patch
-    yum -y install http://releases.ansible.com/ansible/rpm/release/epel-7-x86_64/ansible-2.4.1.0-1.el7.ans.noarch.rpm
-    FOUND="yes"
-    FAMILY="redhat"
-fi
-if [ -f /etc/olpc-release ]; then
-    yum -y upgrade
-    yum -y install ca-certificates nss
-    yum -y install git bzip2 file findutils gzip hg svn sudo tar which unzip xz zip libselinux-python
-    yum -y install python-pip python-setuptools python-wheel patch
-    pip install --upgrade pip setuptools wheel #EOL just do it
-    FOUND="yes"
-    FAMILY="olpc"
-fi
-
-if [ -f /etc/debian_version ]; then
-    echo "deb http://ppa.launchpad.net/ansible/ansible/ubuntu xenial main" >> /etc/apt/sources.list
-    apt-get -y install dirmngr
-    apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 93C4A3FD7BB9C367
-    apt-get -y update
-    apt-get -y install ansible git python-pip python-setuptools python-wheel patch
-#    apt-get install ansible python-kerberos python-selinux python-winrm python-xmltodict sshpass bzip2 file findutils gzip tar unzip zip python-keyczar python-boto python-dnspython python-pyrax python-sphere
-    FOUND="yes"
-    FAMILY="debian"
-fi
-# Has 2.2.1
-if [ `grep -qi raspbian /etc/*elease` ]; then
-    echo "deb http://ppa.launchpad.net/ansible/ansible/ubuntu xenial main" >> /etc/apt/sources.list
-    apt-get -y install dirmngr
-    apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 93C4A3FD7BB9C367
-    apt-get -y update
-    apt-get -y install ansible git python-pip python-setuptools python-wheel patch
-#    apt-get install ansible python-kerberos python-selinux python-winrm python-xmltodict sshpass bzip2 file findutils gzip tar unzip zip python-keyczar python-boto python-dnspython python-pyrax python-sphere
-    FOUND="yes"
-    FAMILY="debian"
-fi
-if [ ! $FOUND = "yes" ]; then
-    if [ `grep -qi ubuntu /etc/lsb-release` ] ||  [ `grep -qi ubuntu /etc/os-release` ]; then
+export DEBIAN_FRONTEND=noninteractive
+if ! [ $(which ansible-playbook) ]; then
+    echo "Installing --- Please Wait"
+    if [ -f /etc/centos-release ]; then
+        yum -y install ca-certificates nss epel-release
+        yum -y install git bzip2 file findutils gzip hg svn sudo tar which unzip xz zip libselinux-python
+        yum -y install python-pip python-setuptools python-wheel patch
+        yum -y install http://releases.ansible.com/ansible/rpm/release/epel-7-x86_64/ansible-2.4.2.0-1.el7.ans.noarch.rpm
+        FOUND="yes"
+        FAMILY="redhat"
+#    elif [ -f /etc/fedora-release ]; then
+#        VER=`grep VERSION_ID /etc/*elease | cut -d= -f2`
+#        URL=https://github.com/jvonau/iiab/blob/ansible/vars/fedora-$VER.yml
+#        dnf -y install ansible git bzip2 file findutils gzip hg svn sudo tar which unzip xz zip libselinux-python
+#        dnf -y install python-pip python-setuptools python-wheel patch
+#        FOUND="yes"
+#        FAMILY="redhat"
+    elif [ -f /etc/olpc-release ]; then
+        yum -y install ca-certificates nss
+        yum -y install git bzip2 file findutils gzip hg svn sudo tar which unzip xz zip libselinux-python
+        yum -y install python-pip python-setuptools python-wheel patch
+        pip install --upgrade pip setuptools wheel #EOL just do it
+        pip install ansible==$GOOD_VER --disable-pip-version-check
+        FOUND="yes"
+        FAMILY="olpc"
+    elif [ -f /etc/debian_version ] || [ `grep -qi raspbian /etc/*elease` ]; then
+        echo "deb http://ppa.launchpad.net/ansible/ansible/ubuntu xenial main" \
+        >> /etc/apt/sources.list.d/ansible
+        apt-get -y install dirmngr python-pip python-setuptools python-wheel patch
+        apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 93C4A3FD7BB9C367
+        FOUND="yes"
+        FAMILY="debian"
+    elif [ `grep -qi ubuntu /etc/lsb-release` ] ||  [ `grep -qi ubuntu /etc/os-release` ]; then
+        apt-get -y install python-pip python-setuptools python-wheel patch
         apt-add-repository -y ppa:ansible/ansible
-        apt-get -y update
-        apt-get -y install ansible git python-pip python-setuptools python-wheel patch
-#        apt-get install ansible python-kerberos python-selinux python-winrm python-xmltodict sshpass bzip2 file findutils gzip tar unzip zip python-keyczar python-boto python-dnspython python-pyrax python-sphere
         FOUND="yes"
         FAMILY="debian"
     fi
-fi
-if [ ! $FOUND = "yes" ]; then
-    echo 'WARN: Could not detect distro or distro unsupported'
-    exit 1
-fi
-
-# latest pip 2.2 is 2.2.3.0 on 2017-07-07
-# ansible-2.3.1.0-1.el7.noarch.rpm from 2017-06-01
-
-### start ansible pip install TODO add venv location /opt/iiab/anisble
-if [ $FAMILY = "olpc" ]; then
-    pip install ansible==2.4.1 --disable-pip-version-check
+    if [ ! $FOUND = "yes" ]; then
+        echo 'WARN: Could not detect distro or distro unsupported'
+        exit 1
+    fi
+else
     VER=`ansible --version|head -n 1|cut -f 2 -d " "`
-    echo "ansible version installed via pip $VER"
-fi
-
-#  handle 2.2.1 -> 2.4.1+ deb install undo patching
-#  unsure if install above will upgrade or skip - cover that now
-if [ $FAMILY = "debian" ]; then
-    if [ ! $VER == "" ]; then
-        sed -i 's/LooseVersion/StrictVersion/g' /usr/lib/python2.7/dist-packages/ansible/modules/core/web_infrastructure/htpasswd.py
-        apt-get -y upgrade ansible
+    echo "Current ansible version installed is $VER"
+    if [ -f /etc/centos-release ] || [ -f /etc/fedora-release ]; then
+        echo "Please use your system's package manager to update ansible"
+        exit 0
+    fi
+    if [ -f /etc/olpc-release ]; then
+        echo "Please use pip package manager to update ansible"
+        exit 0
     fi
 fi
-VER=`ansible --version|head -n 1|cut -f 2 -d " "`
-echo "Current ansible version installed is $VER"
 
-# sample only
-#if [ $FAMILY = "debian" ]; then
-#   rpm -e ansible
-#   pip install ansible==2.2.1 --disable-pip-version-check
-#fi
+if [ ! -f /etc/centos-release ] && [ ! -f /etc/fedora-release ] && \
+   [ ! -f /etc/olpc-release ]; then
+    echo "Using OS package manager to check for ansible updates"
+    apt-get -y update
+    apt-get -y install ansible
+fi
 
-#if [ $FAMILY = "debian" ]; then
-#    echo 'WARN: Trying to install ansible via pip without some dependencies'
-#    echo 'WARN: Not all functionality of ansible may be available'
-#    pip install ansible==2.3.1 --disable-pip-version-check
-#fi
 mkdir -p /etc/ansible/
 echo -e '[local]\nlocalhost\n' > /etc/ansible/hosts
-
-### end ansible routine
-###
-# other pip upgrades here if needed
-###
