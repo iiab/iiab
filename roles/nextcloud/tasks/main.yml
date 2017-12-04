@@ -1,31 +1,43 @@
-# we need to install the rpm in order to get the dependencies
-# but we only need to do this the first time
-
-- name: See if the Nextcloud startup page exists
-  stat: path={{ nextcloud_prefix }}/nextcloud/index.php
+- name: See if Nextcloud version page exists
+  stat:
+    path: "{{ nextcloud_prefix }}/nextcloud/version.php"
+#   path: "{{ nextcloud_prefix }}/nextcloud/index.php"
   register: nextcloud_page
 
+- name: FORCE INSTALL OR REINSTALL OR UPGRADE IF /opt/nextcloud/version.php DOESN'T EXIST
+  set_fact:
+    nextcloud_force_install: True
+  when: not nextcloud_page.stat.exists
 
-# but we use the tar file to get the latest version
+# - debug:
+#     msg: "nextcloud_force_install: {{ nextcloud_force_install }}"
 
-- name: Get the Nextcloud software
-  get_url: url={{ nextcloud_dl_url }}/{{ nextcloud_src_file }} dest={{ downloads_dir }}/{{ nextcloud_src_file }}
-  when: internet_available
+
+- name: Download latest Nextcloud software to /opt/iiab/download/{{ nextcloud_src_file }}
+  get_url:
+    url: "{{ nextcloud_dl_url }}/{{ nextcloud_orig_src_file }}"
+    dest: "{{ downloads_dir }}/{{ nextcloud_src_file }}"
+    force: yes
+  when: internet_available and nextcloud_force_install
   async: 900
   poll: 15
   tags:
     - download
 
 - name: Ubuntu and Debian treat names differently (Debian)
-  package: name={{ item }} state=present
+  package:
+    name: "{{ item }}"
+    state: present
   with_items:
-    - libapache2-mod-php{{ php_version }}
-    - php{{ php_version }}-mbstring
-    - php{{ php_version }}-zip
+    - "libapache2-mod-php{{ php_version }}"
+    - "php{{ php_version }}-mbstring"
+    - "php{{ php_version }}-zip"
   when: is_debian
 
 - name: Ubuntu and Debian treat names differently (Ubuntu)
-  package: name={{ item }} state=present
+  package:
+    name: "{{ item }}"
+    state: present
   with_items:
     - libapache2-mod-php
     - php-imagick
@@ -34,18 +46,25 @@
   when: is_ubuntu
 
 - name: Install list of packages (debuntu)
-  package: name={{ item }} state=present
+  package:
+    name: "{{ item }}"
+    state: present
   with_items:
-    - php{{ php_version }}-gd
-    - php{{ php_version }}-json
-    - php{{ php_version }}-mysql
-    - php{{ php_version }}-curl
-    - php{{ php_version }}-intl
-    - php{{ php_version }}-mcrypt
+    - "php{{ php_version }}-gd"
+    - "php{{ php_version }}-json"
+    - "php{{ php_version }}-mysql"
+    - "php{{ php_version }}-curl"
+    - "php{{ php_version }}-intl"
+    - "php{{ php_version }}-mcrypt"
   when: is_debuntu
 
+# we need to install the rpm in order to get the dependencies
+# but we only need to do this the first time
+
 - name: Install list of packages (redhat)
-  package: name={{ item }} state=present
+  package:
+    name: "{{ item }}"
+    state: present
   with_items:
     - php
     - php-gd
@@ -59,52 +78,63 @@
   when: is_redhat
 
 - name: Copy it to permanent location /opt (OS's other than Fedora 18)
-  unarchive: src={{ downloads_dir }}/{{ nextcloud_src_file }}
-             dest={{ nextcloud_prefix }}
-             creates={{ nextcloud_prefix }}/nextcloud/version.php
-  when: not is_F18
+  unarchive:
+    src: "{{ downloads_dir }}/{{ nextcloud_src_file }}"
+    dest: "{{ nextcloud_prefix }}"
+#   creates: "{{ nextcloud_prefix }}/nextcloud/version.php"
+  when: not is_F18 and nextcloud_force_install
 
-# ansible 1.4.1 does not have "creates"
+# Ansible 1.4.1 does not have "creates" (but hopefully has "when")
 - name: Copy it to permanent location /opt (Fedora 18)
-  unarchive: src={{ downloads_dir }}/{{ nextcloud_src_file }}
-             dest={{ nextcloud_prefix }}
-  when: is_F18
+  unarchive:
+    src: "{{ downloads_dir }}/{{ nextcloud_src_file }}"
+    dest: "{{ nextcloud_prefix }}"
+  when: is_F18 and nextcloud_force_install
 
 - name: In CentOS, the following config dir is symlink to /etc/nextcloud
-  file: path=/etc/nextcloud
-        state=directory
+  file:
+    path: /etc/nextcloud
+    state: directory
   when: is_centos
 
 - name: Add autoconfig file (CentOS)
-  template: src=autoconfig.php.j2
-            dest={{ nextcloud_prefix }}/nextcloud/config/autoconfig.php
-            owner={{ apache_user }}
-            group={{ apache_user }}
-            mode=0640
+  template:
+    src: autoconfig.php.j2
+    dest: "{{ nextcloud_prefix }}/nextcloud/config/autoconfig.php"
+    owner: "{{ apache_user }}"
+    group: "{{ apache_user }}"
+    mode: 0640
   when: is_centos
 
 - name: Make Apache owner
-  file: path={{ nextcloud_prefix }}/nextcloud
-        owner={{ apache_user }}
-        group={{ apache_user }}
-        recurse=yes
-        state=directory
+  file:
+    path: "{{ nextcloud_prefix }}/nextcloud"
+    owner: "{{ apache_user }}"
+    group: "{{ apache_user }}"
+    recurse: yes
+    state: directory
 
 - name: Create data directory library
-  file: path={{ item }}
-        mode=0750
-        owner={{ apache_user }}
-        group={{ apache_user }}
-        state=directory
+  file:
+    path: "{{ item }}"
+    owner: "{{ apache_user }}"
+    group: "{{ apache_user }}"
+    mode: 0750
+    state: directory
   with_items:
     - "{{ nextcloud_data_dir }}"
 
 - name: Create a MySQL database for Nextcloud
-  mysql_db: name={{ nextcloud_dbname }}
+  mysql_db:
+    name: "{{ nextcloud_dbname }}"
   when: mysql_enabled and nextcloud_enabled
 
 - name: Create a user to access the Nextcloud database
-  mysql_user: name={{ nextcloud_dbuser }} host={{ item }} password={{ nextcloud_dbpassword }} priv={{ nextcloud_dbname }}.*:ALL,GRANT
+  mysql_user:
+    name: "{{ nextcloud_dbuser }}"
+    host: "{{ item }}"
+    password: "{{ nextcloud_dbpassword }}"
+    priv: "{{ nextcloud_dbname }}.*:ALL,GRANT"
   with_items:
         - "{{ nextcloud_dbhost }}"
         - 127.0.0.1
@@ -114,7 +144,10 @@
 
 
 - name: Restart Apache, so it picks up the new aliases
-  service: name={{ apache_service }} state=restarted
+  service:
+    name: "{{ apache_service }}"
+    state: restarted
+# when: nextcloud_enabled     # taken care of by nextcloud_enabled.yml below
   when: not nextcloud_enabled
 
 # Enable nextcloud by copying template to httpd config
