@@ -4,25 +4,34 @@
 CWD=`pwd`
 export ANSIBLE_LOG_PATH="$CWD/iiab-network.log"
 
-if [ ! -f iiab-network.yml ]
-then
- echo "IIAB Playbook not found."
- echo "Please run this command from the top level of the git repo."
- echo "Exiting."
- exit
+if [ ! -f iiab-network.yml ]; then
+    echo "IIAB Playbook not found."
+    echo "Please run this command from the top level of the git repo."
+    echo "Exiting."
+    exit 1
 fi
 
-if [ ! -f /etc/iiab/config_vars.yml ]
-then
-   touch /etc/iiab/config_vars.yml
+if [ ! -f /etc/iiab/config_vars.yml ]; then
+    mkdir -p /etc/iiab
+    echo "{}" > /etc/iiab/config_vars.yml
+fi
+
+if [ -f /etc/iiab/iiab.env ]; then
+    source /etc/iiab/iiab.env
+else
+    OS="unknown"
 fi
 
 Start=`date`
 ansible-playbook -i ansible_hosts iiab-network.yml --connection=local
 End=`date`
 echo "" >> iiab-network.log
-if [ ! "OS" == "debian" ]; then
+# redhat path
+if [ ! "OS" == "debian" ] && [ ! "OS" == "unknown" ]; then
    ls -la /etc/sys*/net*/ifcfg* >> iiab-network.log
+fi
+# ubuntu destop might be using NM - split out.
+if [ $(which nmcli) ]; then
    nmcli d >> iiab-network.log
    nmcli c >> iiab-network.log
 fi
