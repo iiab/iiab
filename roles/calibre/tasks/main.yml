@@ -49,6 +49,7 @@
     owner: root
     group: root
     mode: "{{ item.mode }}"
+  register: calibre_config
   with_items:
     - { src: 'calibre-serve.service.j2', dest: '/etc/systemd/system/calibre-serve.service', mode: '0644'}
     - { src: 'calibre.conf', dest: '/etc/{{ apache_config_dir }}', mode: '0644'}
@@ -68,6 +69,11 @@
     state: absent
   when: (not calibre_enabled) and is_debuntu
 
+- name: Forcing systemd to reread configs
+  systemd:
+    daemon_reload: yes
+  when: calibre_config.changed
+
 - name: Enable Calibre service -- runs calibre-server by Kovid Goyal
   service:
     name: calibre-serve
@@ -76,6 +82,11 @@
   when: calibre_enabled
   #async: 900
   #poll: 5
+
+- name: Forcing apache to reread configs
+  service:
+    name: "{{ apache_service }}"
+    state: reloaded
 
 - name: Add 'calibre' to list of services at /etc/iiab/iiab.ini
   ini_file:
