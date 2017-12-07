@@ -1,0 +1,68 @@
+- name: nodogsplash dependencies
+  package:
+    name: libmicrohttpd12
+    state: present
+
+- name: Get the nodogsplash software
+  get_url:
+     url: "{{ iiab_download_url }}/{{ nodogsplash_arm_deb }}"
+     dest: "{{ downloads_dir }}/{{ nodogsplash_arm_deb }}"
+  when: internet_available
+  async: 300
+  poll: 5
+
+- name: Install nodogsplash
+  apt:
+    deb="{{ downloads_dir }}/{{ nodogsplash_arm_deb }}"
+
+#- name: Create nodogsplash.service # deb file has one
+#  template:
+#    backup: no
+#    src: nodogsplash.service.j2
+#    dest: "/etc/systemd/system/nodogsplash.service"
+#    owner: root
+#    group: root
+#    mode: 0644
+
+- name: Install custom files
+  template:
+    backup: no
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  with_items:
+    - { src: 'nodogsplash.conf.j2', dest: '/etc/nodogsplash/nodogsplash.conf', mode: '0644'}
+    - { src: 'splash.html.j2', dest: '/etc/nodogsplash/htdocs/splash.html', mode: '0644'}
+
+# We should probably only start this service on next boot
+- name: Enable nodogsplash service
+  service:
+    name: nodogsplash
+    enabled: yes
+    state: started
+  when: nodogsplash_enabled
+
+- name: Disable nodogsplash service
+  service:
+    name: nodogsplash
+    enabled: no
+    state: stopped
+  when: not nodogsplash_enabled
+
+- name: Add 'nodogsplash' to list of services at /etc/iiab/iiab.ini
+  ini_file:
+    dest: "{{ service_filelist }}"
+    section: nodogsplash
+    option: "{{ item.option }}"
+    value: "{{ item.value }}"
+  with_items:
+  - option: name
+    value: nodogsplash
+  - option: description
+    value: '"Nodogsplash is a lightweight Captive Portal."'
+  - option: source
+    value: "{{ nodogsplash_arm_deb }}"
+  - option: enabled
+    value: "{{ nodogsplash_enabled }}"

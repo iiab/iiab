@@ -5,78 +5,53 @@
 #      a. gui_desired_network_role
 #      b. hostapd_enabled
 #      c. gui_static_wan_ip
-#   3. In appliance mode: wan (and wlan0) is either static or dhcp under br0, and hostapd off
+#   3. In appliance mode: wan is either wired dhcp/static or wlan0 and hostapd off
 #   4. In lan_controller: wan is off, eth0 and wlan0 under br0
-#   5. In gateway: eth0 is wan, and wlan0 is under br0 (only one adapter under br0)
-#   6. As a slight concess to auto config, if eth1 exists, make it wan, and force gateway
+#   5. In gateway: user gateway is wan, and wlan0 under br0 if not acting as
+#      the gateway
 
-- name: Raspbian stock has openresolv which is not available in Debian, off it
-  package: name=openresolv
-           state=absent
+- name: Supply resolvconf.conf
+  template:
+    dest: /etc/resolvconf.conf
+    src: network/resolvconf.j2
 
-- name: Get the stock resolv.conf manager
-  package: name=resolvconf
-           state=absent
+- name: Supply dhcpcd.conf
+  template:
+    dest: /etc/dhcpcd.conf
+    src: network/dhcpcd.conf.j2
 
-- name: On upgrade from earlier IIAB versions, remove /etc/network/interfaces.d/br0
-  file: path=/etc/network/interfaces.d/br0
-        state=absent
-  when: iiab_lan_iface != "br0" and wan_ip == "dhcp"
+- name: Copy the bridge script for RPi
+  template:
+    dest: /etc/network/interfaces.d/iiab
+    src: network/rpi.j2
+  when: iiab_lan_iface == "br0"
 
-- name: Default to 'LanController'
-  set_fact:
-      gui_desired_network_role: "LanController"
-  when: not gui_desired_network_role is defined
+- name: Stopping services
+  include_tasks: down-debian.yml
 
-- name: Rewrite the /etc/network/interfaces file which we corrupted
-  template: dest=/etc/network/interfaces
-            src=network/interfaces.j2
-
-- name: Supply our own dhcpcd.conf
-  template: dest=/etc/dhcpcd.conf
-            src=network/dhcpcd.conf.j2
-  when: iiab_lan_iface == "br0" or wan_ip != "dhcp"
-
-- name: Copy the network config script
-  template: dest=/etc/network/interfaces.d/iiab
-            src=network/systemd.j2
-  register: interface
-  when: iiab_lan_iface == "br0" or wan_ip != "dhcp"
-
-- name: If this was a change, things need to shift
-  service: name=hostapd state=stopped
-  when: interface.changed
-
-- name: dhcpcd may be affected
-  service: name=dhcpcd state=stopped
-  when: interface.changed
-
-- name: Tear down any bridge and start fresh
-  command: ip link set br0 down
-  ignore_errors: True
-  when: interface.changed
-
-- name: And remove the device
-  command: brctl delbr br0
-  ignore_errors: True
-  when: interface.changed
-
-- name: Reset the eth0 interface
-  command: ifdown eth0
-  ignore_errors: True
-  when: interface.changed
-
-- name: Start up dhcpcd again
-  service: name=dhcpcd state=started
+- name: Reload systemd
+  shell: systemctl daemon-reload
 
 # now pick up denyinterfaces
 - name: Restart dhcpcd
-  service: name=dhcpcd state=restarted
+  service:
+    name: dhcpcd
+    state: restarted
 
 - name: Restart the networking service
-  service: name=networking state=restarted
+  service:
+    name: networking
+    enabled: yes
+    state: restarted
+  when: not nobridge is defined and not no_net_restart
 
-#create lan br0 if lan_controller or gateway
-#create wan br0 if appliance
-#allocate wlan0 under br0 in all cases
-#allocate eth0 under br0 if appliance, alone if gateway
+- name: Restart hostapd when WiFi is present
+  service:
+    name: hostapd
+    enabled: yes
+    state: restarted
+  when: iiab_wireless_lan_iface is defined and hostapd_enabled and iiab_network_mode != "Appliance"
+
+#- name: dhcp_server may be affected - starting - user choice
+#  service: name={{ dhcp_service2 }} state=started
+#  when: iiab_network_mode != "Appliance"
