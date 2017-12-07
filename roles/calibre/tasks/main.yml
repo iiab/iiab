@@ -22,6 +22,12 @@
   with_items:
     - { src: 'calibre-serve.service.j2', dest: '/etc/systemd/system/calibre-serve.service', mode: '0644'}
     - { src: 'calibre.conf', dest: '/etc/{{ apache_config_dir }}', mode: '0644'}
+  register: calibre_config
+
+- name: Forcing systemd to reread configs
+  systemd:
+    daemon_reload: yes
+  when: calibre_config.changed
 
 # 2. STOP CALIBRE SERVICE IF IT EXISTS (REQUIRED FOR DB ACTIVITY...AND IF not calibre_enabled)
 
@@ -51,7 +57,7 @@
   include_tasks: create-db.yml
   when: not calibre_db.stat.exists
 
-# 4. WRAP UP: CALIBRE SERVICE, http://box/books ETC
+# 4. WRAP UP: ENABLE CALIBRE SERVICE, http://box/books ETC
 
 # http://box:8080 & http://box:8080/mobile WORK BUT OTHER URL'S LIKE http://box/books ARE A MESS (BOOKS RARELY DISPLAY)
 - name: Create calibre.conf link for UNTESTED http://box/books etc (debuntu)
@@ -75,6 +81,11 @@
   when: calibre_enabled
   #async: 900
   #poll: 5
+
+- name: Forcing apache to reread configs
+  service:
+    name: "{{ apache_service }}"
+    state: reloaded
 
 - name: Add 'calibre' to list of services at /etc/iiab/iiab.ini
   ini_file:
