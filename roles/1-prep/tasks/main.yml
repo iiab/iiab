@@ -4,16 +4,20 @@
   command: echo
 
 - name: Get the uuidgen program
-  package: name=uuid-runtime
-           state=present
+  package:
+    name: uuid-runtime
+    state: present
   when: is_debuntu
 
 - name: Test for /etc/iiab/uuid file
-  stat: path=/etc/iiab/uuid
+  stat:
+    path: /etc/iiab/uuid
   register: uuid_file
 
 - name: Create folder to hold uuid
-  file: path=/etc/iiab state=directory
+  file:
+    path: /etc/iiab
+    state: directory
   when: not uuid_file.stat.exists
 
 - name: If no uuid exists, create one
@@ -31,30 +35,36 @@
 
 - name: Get the value into a variable
   set_fact:
-      uuid={{ stored_uuid.stdout_lines[0] }}
+    uuid: "{{ stored_uuid.stdout_lines[0] }}"
 
 # for rpi, without rtc, we need time as soon as possible
 - name: Install chrony package
-  package: name={{ item }}
-           state=present
+  package:
+    name: "{{ item }}"
+    state: present
   with_items:
-   - chrony
+    - chrony
   tags:
     - download
 
 #TODO: Use regexp filter instead of hard-code ip
 - name: Update chrony config file
-  template: backup=no
-            dest=/etc/chrony.conf
-            src=chrony.conf.j2
+  template:
+    backup: no
+    dest: /etc/chrony.conf
+    src: chrony.conf.j2
 
 - name: Disable AppArmor -- on by default in Ubuntu
-  service: name=apparmor enabled=False state=stopped
+  service:
+    name: apparmor
+    enabled: False
+    state: stopped
   when: is_ubuntu
   ignore_errors: true
 
 - name: Disable SELinux on next boot
-  selinux: state=disabled
+  selinux:
+    state: disabled
   register: selinux_disabled
   when: not is_debuntu
 
@@ -68,19 +78,22 @@
   when: first_run and rpi_model != "none"
 
 - name: Check if the identifier for Intel's NUC6 builtin WiFi is present
-  shell: "lsusb | grep 8087:0a2b | wc |awk '{print $1}'"
+  shell: "lsusb | grep 8087:0a2b | wc | awk '{print $1}'"
   register: usb_NUC6
   ignore_errors: true
 
 - name: Download the firmware for built-in WiFi on NUC6
-  get_url: dest=/lib/firmware
-           url={{ iiab_download_url }}/iwlwifi-8000C-13.ucode
+  get_url:
+    dest: /lib/firmware
+    url: "{{ iiab_download_url }}/iwlwifi-8000C-13.ucode"
+    timeout: "{{ download_timeout }}"
   when: usb_NUC6.stdout|int > 0
 
 # this script can be sourced to get IIAB location
 - name: Recording STAGE 1 HAS COMPLETED ============================
-  template: src=roles/1-prep/templates/iiab.env.j2
-            dest=/etc/iiab/iiab.env
-            owner=root
-            group=root
-            mode=0644
+  template:
+    src: roles/1-prep/templates/iiab.env.j2
+    dest: /etc/iiab/iiab.env
+    owner: root
+    group: root
+    mode: 0644
