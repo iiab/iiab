@@ -1,7 +1,8 @@
 # Initialize
 
 - name: ...IS BEGINNING ============================================
-  stat: path=/etc/iiab/iiab.env
+  stat:
+    path: /etc/iiab/iiab.env
   register: NewInstall
 
 - name: Setting first run flag
@@ -18,32 +19,33 @@
 #- name: Loading computed_vars
 #  include_tasks: roles/0-init/tasks/computed_vars.yml
 - name: Re-read local_facts.facts from /etc/ansible/facts.d
-  setup: filter=ansible_local
+  setup:
+    filter: ansible_local
 
 - name: Set top level variables from local facts for convenience
   set_fact:
-      xo_model: '{{ ansible_local.local_facts.xo_model }}'
-      phplib_dir: '{{ ansible_local.local_facts.phplib_dir }}'
-      iiab_stage: '{{ ansible_local.local_facts.stage }}'
+    xo_model: "{{ ansible_local.local_facts.xo_model }}"
+    phplib_dir: "{{ ansible_local.local_facts.phplib_dir }}"
+    iiab_stage: "{{ ansible_local.local_facts.stage }}"
 
 - name: Discover if this is running Raspbian -- if so assume it is a RPi
   set_fact:
-      rpi_model: "rpi"
-      is_rpi: True
+    rpi_model: "rpi"
+    is_rpi: True
 #      no_net_restart: True
 #      nobridge: True
   when: ansible_local.local_facts.os == "raspbian"
 
 - name: Set exFAT enabled for XO laptops
   set_fact:
-     exFAT_enabled: True
+    exFAT_enabled: True
   when: xo_model != "none"
 
 # Discover  do we have a gateway? -- if ansible detects gateway, becomes WAN candidate
 - name: Finding gateway
   set_fact:
-      discovered_wan_iface: "{{ ansible_default_ipv4.alias }}"
-      iiab_wan_iface: "{{ discovered_wan_iface }}"
+    discovered_wan_iface: "{{ ansible_default_ipv4.alias }}"
+    iiab_wan_iface: "{{ discovered_wan_iface }}"
   when: ansible_default_ipv4.gateway is defined
 
 - name: Verify gateway present
@@ -53,11 +55,14 @@
 
 - name: Recording gateway response
   set_fact:
-      gw_active: True
+    gw_active: True
   when: discovered_wan_iface != "none" and gw_active_test.stdout == "1"
 
 - name: Test for internet access
-  get_url: url="{{ iiab_download_url }}/heart-beat.txt" dest=/tmp/heart-beat.txt
+  get_url:
+    url: "{{ iiab_download_url }}/heart-beat.txt"
+    dest: /tmp/heart-beat.txt
+    timeout: "{{ download_timeout }}"
   ignore_errors: True
 #  async: 10
 #  poll: 2
@@ -65,12 +70,13 @@
 
 - name: Set internet_available true if wget succeeded
   set_fact:
-      internet_available: True
+    internet_available: True
   when: not internet_access_test|failed and not disregard_network
 
 - name: Cleanup internet test file
-  file: path=/tmp/heart-beat.txt
-        state=absent
+  file:
+    path: /tmp/heart-beat.txt
+    state: absent
 
 # Put all computed vars here so derive properly from any prior var file
 - name: If the TZ is not set in env, set it to UTC
@@ -146,19 +152,20 @@
 
 - name: Set FQDN
   set_fact:
-      iiab_fqdn: "{{ iiab_hostname }}.{{ iiab_domain }}"
-      FQDN_changed: False
+    iiab_fqdn: "{{ iiab_hostname }}.{{ iiab_domain }}"
+    FQDN_changed: False
 
 - name: FQDN changed
   set_fact:
-      FQDN_changed: True
+    FQDN_changed: True
   when: iiab_fqdn != ansible_fqdn
 
 - name: Add version section
-  ini_file: dest='{{ iiab_config_file }}'
-            section=runtime
-            option='{{ item.option }}'
-            value='{{ item.value }}'
+  ini_file:
+    dest: "{{ iiab_config_file }}"
+    section: runtime
+    option: "{{ item.option }}"
+    value: "{{ item.value }}"
   with_items:
     - option: 'iiab_stage'
       value: '{{ iiab_stage }}'
@@ -202,10 +209,11 @@
   when: FQDN_changed
 
 - name: STAGE 0 HAS COMPLETED ======================================
-  ini_file: dest='{{ iiab_config_file }}'
-            section=runtime
-            option='{{ item.option }}'
-            value='{{ item.value }}'
+  ini_file:
+    dest: "{{ iiab_config_file }}"
+    section: runtime
+    option: "{{ item.option }}"
+    value: "{{ item.value }}"
   with_items:
     - option: 'is_VM'
       value:  'yes'
