@@ -15,6 +15,7 @@
   get_url:
     url: "{{ wordpress_download_base_url }}/{{ wordpress_src }}"
     dest: "{{ downloads_dir }}"
+    timeout: "{{ download_timeout }}"
 #   force: yes
 #   backup: yes
   register: wp_download_output
@@ -61,66 +62,78 @@
   command: "/usr/bin/find {{ wp_abs_path }} -type d -exec chmod 775 {} +"
 
 - name: Copy wp salt values
-  copy: src=wp-keys.php.BAK
-        dest={{ wp_abs_path }}/wp-keys.php.BAK
-        owner=root
-        group={{ apache_user }}
-        mode=0640
+  copy:
+    src: wp-keys.php.BAK
+    dest: "{{ wp_abs_path }}/wp-keys.php.BAK"
+    owner: root
+    group: "{{ apache_user }}"
+    mode: 0640
 
 # Fetch random salts for WordPress config into wp-keys.php file by generating script and running
 
 - name: Create wp salt script
-  template: src=get-iiab-wp-salts.j2
-            dest=/tmp/get-iiab-wp-salts
-            owner=root
-            group=root
-            mode=0700
+  template:
+    src: get-iiab-wp-salts.j2
+    dest: /tmp/get-iiab-wp-salts
+    owner: root
+    group: root
+    mode: 0700
 
 - name: Run wp salt script to create /library/wordpress/wp-keys.php
   command: /tmp/get-iiab-wp-salts
 
 - name: Cleanup - remove wp salt script
-  file: path=/tmp/get-iiab-wp-salts
-        state=absent
+  file:
+    path: /tmp/get-iiab-wp-salts
+    state: absent
 
 - name: MySQL database needs to be running if we are trying to create a new db
-  service: state=started
-           name='{{ mysql_service }}'
+  service:
+    state: started
+    name: "{{ mysql_service }}"
 
 - name: Create MySQL wordpress database
-  mysql_db: name={{ wp_db_name }}
-            state=present
+  mysql_db:
+    name: "{{ wp_db_name }}"
+    state: present
 
 - name: Create MySQL wordpress database user
-  mysql_user: name={{ wp_db_user }}
-              password={{ wp_db_user_password }}
-              priv={{ wp_db_name }}.*:ALL,GRANT
-              state=present
+  mysql_user:
+    name: "{{ wp_db_user }}"
+    password: "{{ wp_db_user_password }}"
+    priv: "{{ wp_db_name }}.*:ALL,GRANT"
+    state: present
 
 - name: Copy WordPress config file
-  template: src=wp-config.php.j2
-            dest={{ wp_abs_path }}/wp-config.php
-            owner=root
-            group={{ apache_user }}
-            mode=0660
+  template:
+    src: wp-config.php.j2
+    dest: "{{ wp_abs_path }}/wp-config.php"
+    owner: root
+    group: "{{ apache_user }}"
+    mode: 0660
 
 - name: Copy WordPress httpd conf file
-  template: src=wordpress.conf.j2
-            dest=/etc/{{ apache_config_dir }}/wordpress.conf
+  template:
+    src: wordpress.conf.j2
+    dest: "/etc/{{ apache_config_dir }}/wordpress.conf"
 
 - name: Enable httpd conf file if we are disabled (debuntu)
-  file: path=/etc/apache2/sites-enabled/wordpress.conf
-        src=/etc/apache2/sites-available/wordpress.conf
-        state=link
+  file:
+    src: /etc/apache2/sites-available/wordpress.conf
+    dest: /etc/apache2/sites-enabled/wordpress.conf
+    state: link
   when: wordpress_enabled and is_debuntu
 
 - name: Remove httpd conf file if we are disabled (OS's other than debuntu)
-  file: path=/etc/apache2/sites-enabled/wordpress.conf
-        state=absent
+  file:
+    path: /etc/apache2/sites-enabled/wordpress.conf
+    state: absent
   when: not wordpress_enabled and is_debuntu
 
 - name: Restart Apache, so it picks up the new aliases
-  service: name={{ apache_service }} state=restarted
+  service:
+    name: "{{ apache_service }}"
+    state: restarted
 
 - name: Add 'wordpress' to list of services at /etc/iiab/iiab.ini
   ini_file:
@@ -129,21 +142,21 @@
     option: "{{ item.option }}"
     value: "{{ item.value }}"
   with_items:
-  - option: name
-    value: WordPress
-  - option: description
-    value: '"WordPress is a blog and web site management application."'
-  - option: wordpress_src
-    value: "{{ wordpress_src }}"
-  - option: wp_abs_path
-    value: "{{ wp_abs_path }}"
-  - option: wp_db_name
-    value: "{{ wp_db_name }}"
-  - option: wp_db_user
-    value: "{{ wp_db_user }}"
-  - option: wp_url
-    value: "{{ wp_url }}"
-  - option: wp_full_url
-    value: "{{ wp_full_url }}"
-  - option: wordpress_enabled
-    value: "{{ wordpress_enabled }}"
+    - option: name
+      value: WordPress
+    - option: description
+      value: '"WordPress is a blog and web site management application."'
+    - option: wordpress_src
+      value: "{{ wordpress_src }}"
+    - option: wp_abs_path
+      value: "{{ wp_abs_path }}"
+    - option: wp_db_name
+      value: "{{ wp_db_name }}"
+    - option: wp_db_user
+      value: "{{ wp_db_user }}"
+    - option: wp_url
+      value: "{{ wp_url }}"
+    - option: wp_full_url
+      value: "{{ wp_full_url }}"
+    - option: wordpress_enabled
+      value: "{{ wordpress_enabled }}"
