@@ -1,91 +1,104 @@
 - name: Install PostgreSQL packages
-  package: name={{ item }}
-           state=present
+  package:
+    name: "{{ item }}"
+    state: present
   with_items:
     - postgresql
   tags:
     - download
 
-- name: Install PostgreSQL for Debian
-  package: name=postgresql-client
+- name: Install postgresql-client (debuntu)
+  package:
+    name: postgresql-client
   when: is_debuntu
   tags:
     - download
 
-- name: Install PostgreSQL for Fedora
-  package: name=postgresql-server
+- name: Install postgresql-server (OS's other than debuntu)
+  package:
+    name: postgresql-server
   when: not is_debuntu
   tags:
     - download
 
 - name: Create postgresql-iiab systemd service
-  template: src=postgresql-iiab.service
-            dest=/etc/systemd/system/postgresql-iiab.service
-            owner=root
-            group=root
-            mode=0644
+  template:
+    src: postgresql-iiab.service
+    dest: /etc/systemd/system/postgresql-iiab.service
+    owner: root
+    group: root
+    mode: 0644
 
 - name: Create postgres data directory
-  file: path=/library/pgsql-iiab
-        owner=postgres
-        group=postgres
-        mode=0700
-        state=directory
+  file:
+    path: /library/pgsql-iiab
+    owner: postgres
+    group: postgres
+    mode: 0700
+    state: directory
 
-- name: Make sure that the en_US locale is enabled
-  lineinfile: dest=/etc/locale.gen
-              line="{{ postgresql_locale }} UTF-8"
+- name: Make sure that the en_US locale is enabled (debuntu)
+  lineinfile:
+    dest: /etc/locale.gen
+    line: "{{ postgresql_locale }} UTF-8"
   when: is_debuntu
 
-- name: Generate the selected locales
+- name: Generate the selected locales (debuntu)
   command: /usr/sbin/locale-gen
   when: is_debuntu
 
-- name: Initialize the postgres db
-  command:  su - postgres -c "/usr/lib/postgresql/{{ postgresql_version }}/bin/initdb -E 'UTF-8' --locale={{ postgresql_locale }}  -D /library/pgsql-iiab"
-            creates=/library/pgsql-iiab/pg_hba.conf
+- name: Initialize the postgres db (debuntu)
+  command: su - postgres -c "/usr/lib/postgresql/{{ postgresql_version }}/bin/initdb -E 'UTF-8' --locale={{ postgresql_locale }} -D /library/pgsql-iiab"
+  args:
+    creates: /library/pgsql-iiab/pg_hba.conf
   when: is_debuntu
 
-- name: Initialize the postgres db
-  command:  su - postgres -c "/usr/bin/initdb -E 'UTF-8' --lc-collate={{ postgresql_locale }} --lc-ctype={{ postgresql_locale }}  -D /library/pgsql-iiab"
-            creates=/library/pgsql-iiab/pg_hba.conf
+- name: Initialize the postgres db (OS's other than debuntu)
+  command: su - postgres -c "/usr/bin/initdb -E 'UTF-8' --lc-collate={{ postgresql_locale }} --lc-ctype={{ postgresql_locale }} -D /library/pgsql-iiab"
+  args:
+    creates: /library/pgsql-iiab/pg_hba.conf
   when: not is_debuntu
 
 - name: Configure PostgreSQL
-  template: backup=yes
-            src=postgresql.conf.j2
-            dest=/library/pgsql-iiab/postgresql.conf
-            owner=postgres
-            group=postgres
-            mode=0640
+  template:
+    backup: yes
+    src: postgresql.conf.j2
+    dest: /library/pgsql-iiab/postgresql.conf
+    owner: postgres
+    group: postgres
+    mode: 0640
 
-- name: Stop postgresql service
+- name: Stop postgresql service (debuntu)
   command: "/etc/init.d/postgresql stop"
   ignore_errors: True
   when: postgresql_install and is_debuntu
 
 - name: Stop and disable stock postgresql service
-  service: name=postgresql
-           state=stopped
-           enabled=no
+  service:
+    name: postgresql
+    state: stopped
+    enabled: no
 
 - name: Start and enable postgresql-iiab service
-  service: name=postgresql-iiab
-           state=started
-           enabled=yes
+  service:
+    name: postgresql-iiab
+    state: started
+    enabled: yes
   when: postgresql_enabled
 
 - name: Stop and disable postgresql-iiab service if not postgresql_enabled
-  service: name=postgresql-iiab
-           state=stopped
-           enabled=no
+  service:
+    name: postgresql-iiab
+    state: stopped
+    enabled: no
   when: not postgresql_enabled
 
-- name: Add postgresql to service list
-  ini_file: dest='{{ service_filelist }}'
-            section=postgresql
-            option='{{ item.option }}'
-            value='{{ item.value }}'
+- name: Add 'postgresql' to list of services at /etc/iiab/iiab.ini
+  ini_file:
+    dest: "{{ service_filelist }}"
+    section: postgresql
+    option: "{{ item.option }}"
+    value: "{{ item.value }}"
   with_items:
     - option: name
       value: postgresql
