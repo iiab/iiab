@@ -2,6 +2,8 @@
   get_url:
     url: "{{ iiab_download_url }}/{{ sugarizer_version }}.tar.gz"
     dest: "{{ downloads_dir }}/{{ sugarizer_version }}.tar.gz"
+    timeout: "{{ download_timeout }}"
+  when: internet_available
 
 - name: Untar to /library/www/html/{{ sugarizer_version }}
   unarchive:
@@ -40,12 +42,13 @@
 
 # attempting to reinstall npm is broken on Raspbian 9
 - name: Check for Sugarizer already installed
-  stat: path={{ sugarizer_location }}/sugarizer/server/node_modules
+  stat:
+    path: "{{ sugarizer_location }}/sugarizer/server/node_modules"
   register: npm
 
 - name: Set a flag to abort second attempt to install
   set_fact:
-     npm_exists: True
+    npm_exists: True
   when: npm.stat.exists is defined and npm.stat.exists
 
 - name: Create systemd files and copy our ini file
@@ -56,8 +59,8 @@
     group: root
     mode: 0644
   with_items:
-     - { src: 'sugarizer.service.j2' , dest: '/etc/systemd/system/sugarizer.service'}
-     - { src: 'sugarizer.ini' , dest: '{{ sugarizer_location }}/sugarizer/server' }
+    - { src: 'sugarizer.service.j2' , dest: '/etc/systemd/system/sugarizer.service'}
+    - { src: 'sugarizer.ini' , dest: '{{ sugarizer_location }}/sugarizer/server' }
 #     - { src: 'sugarizer.conf' , dest: '/etc/apache2/sites-available' }
 
 #- name: Create the symlink enabling the rewrite
@@ -68,14 +71,14 @@
 - name: Create the express framework for Node.js (OS's other than Fedora 18)
   shell: npm install
   args:
-     chdir: "{{ sugarizer_location }}/sugarizer/server"
-     creates: "{{ sugarizer_location }}/sugarizer/server/node_modules"
+    chdir: "{{ sugarizer_location }}/sugarizer/server"
+    creates: "{{ sugarizer_location }}/sugarizer/server/node_modules"
   when: not is_F18 and not npm_exists
 
 - name: Create the express framework for Node.js (Fedora 18)
   shell: npm install
   args:
-     chdir: "{{ sugarizer_location }}/sugarizer/server"
+    chdir: "{{ sugarizer_location }}/sugarizer/server"
   when: is_F18 and not npm_exists
 
 - name: Enable services (all OS's)
@@ -84,7 +87,7 @@
     enabled: yes
     state: restarted
   with_items:
-      - { name: sugarizer }
+    - { name: sugarizer }
   when: sugarizer_enabled
 
 - name: Disable services (all OS's)
@@ -103,9 +106,9 @@
     option: "{{ item.option }}"
     value: "{{ item.value }}"
   with_items:
-  - option: name
-    value: Sugarizer
-  - option: description
-    value: '"The Sugar Learning Platform began with the famous One Laptop Per Child project, written in Python. Sugarizer is the new HTML/JavaScript implementation of Sugar, usable in most all browsers."'
-  - option: enabled
-    value: "{{ sugarizer_enabled }}"
+    - option: name
+      value: Sugarizer
+    - option: description
+      value: '"The Sugar Learning Platform began with the famous One Laptop Per Child project, written in Python. Sugarizer is the new HTML/JavaScript implementation of Sugar, usable in most all browsers."'
+    - option: enabled
+      value: "{{ sugarizer_enabled }}"
