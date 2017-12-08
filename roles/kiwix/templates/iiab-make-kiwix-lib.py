@@ -108,8 +108,8 @@ def init():
     config = ConfigParser.SafeConfigParser()
     config.read(iiab_config_file)
     iiab_base_path = config.get('location','iiab_base')
-    iiab_zim_path = config.get('kiwix-serve','iiab_zim_path')
-    kiwix_library_xml = config.get('kiwix-serve','kiwix_library_xml')
+    iiab_zim_path = config.get('kiwix','iiab_zim_path')
+    kiwix_library_xml = config.get('kiwix','kiwix_library_xml')
     kiwix_manage = iiab_base_path + "/kiwix/bin/kiwix-manage"
 
 # Now start the application
