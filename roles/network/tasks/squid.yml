@@ -1,6 +1,7 @@
 - name: Install Squid packages
-  package: name={{ item }}
-           state=present
+  package:
+    name: "{{ item }}"
+    state: present
   with_items:
     - "{{ proxy }}"
     - cadaver
@@ -12,21 +13,24 @@
   when: is_ubuntu
 
 - name: Stop Squid
-  service: name={{ proxy }}
-           state=stopped
+  service:
+    name: "{{ proxy }}"
+    state: stopped
   when: not installing
 
 - name: Create the Squid user
-  user: name={{ proxy_user }}
-        createhome=False
-        shell=/bin/false
+  user:
+    name: "{{ proxy_user }}"
+    createhome: False
+    shell: /bin/false
 
 - name: Copy init script and config file
-  template: src={{ item.src }}
-            dest={{ item.dest }}
-            owner={{ item.owner }}
-            group={{ item.group }}
-            mode={{ item.mode }}
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: "{{ item.owner }}"
+    group: "{{ item.group }}"
+    mode: "{{ item.mode }}"
   with_items:
     - src: 'roles/network/templates/squid/squid.sysconfig'
       dest: '/etc/sysconfig/squid'
@@ -60,43 +64,48 @@
       mode: '0755'
 
 - name: Create Squid cache directory
-  file: path=/library/cache
-        owner={{ proxy_user }}
-        group={{ proxy_user }}
-        mode=0750
-        state=directory
+  file:
+    path: /library/cache
+    owner: "{{ proxy_user }}"
+    group: "{{ proxy_user }}"
+    mode: 0750
+    state: directory
 
 - name: Create Squid log directory
-  file: path=/var/log/{{ proxy }}
-        owner={{ proxy_user }}
-        group={{ proxy_user }}
-        mode=0750
-        state=directory
+  file:
+    path: "/var/log/{{ proxy }}"
+    owner: "{{ proxy_user }}"
+    group: "{{ proxy_user }}"
+    mode: 0750
+    state: directory
 
 - include_tasks: roles/network/tasks/dansguardian.yml
   when: dansguardian_install
 
-- name: Add Squid to service list
-  ini_file: dest='{{ service_filelist }}'
-            section={{ proxy }}
-            option='{{ item.option }}'
-            value='{{ item.value }}'
+# {{ proxy }} is normally "squid", but is "squid3" on raspbian-8 & debian-8
+- name: Add '{{ proxy }}' to list of services at /etc/iiab/iiab.ini
+  ini_file:
+    dest: "{{ service_filelist }}"
+    section: "{{ proxy }}"
+    option: "{{ item.option }}"
+    value: "{{ item.value }}"
   with_items:
     - option: name
-      value: squid
+      value: Squid
     - option: description
       value: '"Squid caches web pages the first time they are accessed, and pulls them from the cache thereafter."'
     - option: enabled
       value: "{{ squid_enabled }}"
 
-- name: Add 'dansguardian' to service list
-  ini_file: dest='{{ service_filelist }}'
-            section=dansguardian
-            option='{{ item.option }}'
-            value='{{ item.value }}'
+- name: Add 'dansguardian' to list of services at /etc/iiab/iiab.ini
+  ini_file:
+    dest: "{{ service_filelist }}"
+    section: dansguardian
+    option: "{{ item.option }}"
+    value: "{{ item.value }}"
   with_items:
     - option: name
-      value: dansguardian
+      value: DansGuardian
     - option: description
       value: '"DansGuardian searches web content for objectionable references and denies access when found."'
     - option: enabled

@@ -1,6 +1,7 @@
-- name: Install Munin package
-  package: name={{ item }}
-           state=present
+- name: Install Munin package (debuntu)
+  package:
+    name: "{{ item }}"
+    state: present
   with_items:
     - munin
     - munin-node
@@ -11,9 +12,10 @@
     - download
   when: is_debuntu
 
-- name: Install Munin package
-  package: name={{ item }}
-           state=present
+- name: Install Munin package (OS's other than debuntu)
+  package:
+    name: "{{ item }}"
+    state: present
   with_items:
     - munin
     - munin-node
@@ -22,49 +24,56 @@
   when: not is_debuntu
 
 - name: Copy Munin config file
-  template: src={{ item.src }}
-            dest={{ item.dest }}
-            owner=root
-            group=root
-            mode=0644
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: root
+    group: root
+    mode: 0644
   with_items:
     - { src: 'munin.conf.j2', dest: '/etc/munin/munin.conf' }
     - { src: 'munin24.conf.j2', dest: '/etc/{{ apache_config_dir }}/munin24.conf' }
 
 - name: Create admin user
-  htpasswd: path=/etc/munin/munin-htpasswd
-            name=Admin
-            password=changeme
-            create=yes
-            state=present
+  htpasswd:
+    path: /etc/munin/munin-htpasswd
+    name: Admin
+    password: changeme
+    create: yes
+    state: present
 
 - name: Enable munin-node service
-  service: name=munin-node
-           enabled=yes
-           state=started
+  service:
+    name: munin-node
+    enabled: yes
+    state: started
   when: munin_enabled
 
-- name: Enable Apache lookup
-  file: src=/etc/apache2/sites-available/munin24.conf
-        dest=/etc/apache2/sites-enabled/munin24.conf
-        state=link
+- name: Enable Apache lookup (debuntu)
+  file:
+    src: /etc/apache2/sites-available/munin24.conf
+    dest: /etc/apache2/sites-enabled/munin24.conf
+    state: link
   when: munin_enabled and is_debuntu
 
-- name: Disable Apache lookup
-  file: src=/etc/apache2/sites-available/munin24.conf
-        dest=/etc/apache2/sites-enabled/munin24.conf
-        state=absent
+- name: Disable Apache lookup (debuntu)
+  file:
+    src: /etc/apache2/sites-available/munin24.conf
+    dest: /etc/apache2/sites-enabled/munin24.conf
+    state: absent
   when: not munin_enabled and is_debuntu
 
 - name: Disable munin-node service when it becomes disabled
-  service: name=munin-node
-           enabled=no
-           state=stopped
+  service:
+    name: munin-node
+    enabled: no
+    state: stopped
   when: not munin_enabled
 
 - name: If MySQL is enabled, let Munin monitor it
-  copy: dest=/etc/munin/plugins/
-        src={{ item }}
+  copy:
+    src: "{{ item }}"
+    dest: /etc/munin/plugins/
   with_items:
     - /usr/share/munin/plugins/mysql_
     - /usr/share/munin/plugins/mysql_bytes
@@ -75,14 +84,15 @@
     - /usr/share/munin/plugins/mysql_threads
   when: mysql_enabled
 
-- name: Add munin to service list
-  ini_file: dest='{{ service_filelist }}'
-            section=munin
-            option='{{ item.option }}'
-            value='{{ item.value }}'
+- name: Add 'munin' to list of services at /etc/iiab/iiab.ini
+  ini_file:
+    dest: "{{ service_filelist }}"
+    section: munin
+    option: "{{ item.option }}"
+    value: "{{ item.value }}"
   with_items:
     - option: name
-      value: munin
+      value: Munin
     - option: description
       value: '"Munin is a networked resource monitoring tool that can help analyze resource trends and \"what just happened to kill our performance?\" problems."'
     - option: installed
