@@ -1,12 +1,14 @@
 #!/bin/bash -e
-# Installs or upgrades to the best possible Ansible release, so iiab-install can proceed.
-# Ensure you are online before running this script!
 
-GOOD_VER="2.4.2"       # Ansible version for OLPC.  On other OS's we install/upgrade to the latest Ansible.
-                       # Pinning to 2.4.x could be considered in future, if truly nec?
-VER="undefined"
-# FOUND="false"        # NOT USED AS OF 2017-12-11
-# FAMILY="undefined"   # NOT USED AS OF 2017-12-11
+# Installs or upgrades to the best possible Ansible release, so iiab-install
+# can proceed.  Ensure you're online before running this script!
+
+GOOD_VER="2.4.2"      # Ansible version for OLPC, for pip.
+                      # On other OS's we install/upgrade to the latest Ansible.
+                      # Pin all to 2.4.x in future, if really/truly nec?
+CURR_VER="undefined"
+# FOUND="false"       # NOT USED AS OF 2017-12-12
+# FAMILY="undefined"  # NOT USED AS OF 2017-12-12
 # below are unused for future use
 # URL="NA"
 
@@ -20,10 +22,10 @@ if ! [ `which ansible-playbook` ]; then
         yum -y install python-pip python-setuptools python-wheel patch
         yum -y install http://releases.ansible.com/ansible/rpm/release/epel-7-x86_64/ansible-2.4.2.0-1.el7.ans.noarch.rpm
         # FOUND="true"
-        # FAMILY="redhat"   # NOT USED AS OF 2017-12-11
+        # FAMILY="redhat"
 #    elif [ -f /etc/fedora-release ]; then
-#        VER=`grep VERSION_ID /etc/*elease | cut -d= -f2`
-#        URL=https://github.com/jvonau/iiab/blob/ansible/vars/fedora-$VER.yml
+#        CURR_VER=`grep VERSION_ID /etc/*elease | cut -d= -f2`
+#        URL=https://github.com/jvonau/iiab/blob/ansible/vars/fedora-$CURR_VER.yml
 #        dnf -y install ansible git bzip2 file findutils gzip hg svn sudo tar which unzip xz zip libselinux-python
 #        dnf -y install python-pip python-setuptools python-wheel patch
 #        FOUND="true"
@@ -35,21 +37,22 @@ if ! [ `which ansible-playbook` ]; then
         pip install --upgrade pip setuptools wheel #EOL just do it
         pip install ansible==$GOOD_VER --disable-pip-version-check
         # FOUND="true"
-        # FAMILY="olpc"   # NOT USED AS OF 2017-12-11
-    elif [ -f /etc/debian_version ] || [[ `grep -i raspbian /etc/*elease` ]]; then
-        if [[ ! `grep -i ansible /etc/apt/sources.list` ]] && [ ! -f /etc/apt/sources.list.d/ansible ]; then
+        # FAMILY="olpc"
+    elif [ -f /etc/debian_version ] || (grep -qi raspbian /etc/*elease) ; then
+        if ( ! grep -qi ansible /etc/apt/sources.list) && [ ! -f /etc/apt/sources.list.d/ansible ]; then
             apt -y install dirmngr python-pip python-setuptools python-wheel patch
             echo "deb http://ppa.launchpad.net/ansible/ansible/ubuntu xenial main" \
                  >> /etc/apt/sources.list.d/ansible.list
             apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 93C4A3FD7BB9C367
         fi
         # FOUND="true"
-        # FAMILY="debian"   # NOT USED AS OF 2017-12-11
-    elif [[ `grep -i ubuntu /etc/lsb-release` ]] || [[ `grep -i ubuntu /etc/os-release` ]]; then
+        # FAMILY="debian"
+        # Parens are optional, but greatly clarify :)
+    elif (grep -qi ubuntu /etc/lsb-release) || (grep -qi ubuntu /etc/os-release); then
         apt -y install python-pip python-setuptools python-wheel patch
         apt-add-repository -y ppa:ansible/ansible
         # FOUND="true"
-        # FAMILY="debian"   # NOT USED AS OF 2017-12-11
+        # FAMILY="debian"
     # fi
     # if [ ! $FOUND = "true" ]; then
     else
@@ -57,8 +60,8 @@ if ! [ `which ansible-playbook` ]; then
         exit 1
     fi
 else
-    VER=`ansible --version | head -n 1 | cut -f 2 -d " "`
-    echo "Current ansible version installed is $VER"
+    CURR_VER=`ansible --version | head -n 1 | cut -f 2 -d " "`
+    echo "Current ansible version installed is $CURR_VER"
     if [ -f /etc/centos-release ] || [ -f /etc/fedora-release ]; then
         echo "Please use your system's package manager to update ansible"
         exit 0
@@ -67,7 +70,7 @@ else
         exit 0
     #fi
     #if [[ `grep -qi ansible /etc/apt/sources.list` ]] || [ -f /etc/apt/sources.list.d/ansible*.list ]; then
-    elif [[ `grep -i ansible /etc/apt/sources.list` ]] || ls /etc/apt/sources.list.d/ansible*.list >/dev/null 2>&1 ; then
+    elif (grep -qi ansible /etc/apt/sources.list) || (ls /etc/apt/sources.list.d/ansible*.list >/dev/null 2>&1) ; then
         echo "Ansible repo(s) found within /etc/apt/sources.list*"
     else
         echo "Upstream ansible source repo not found, please uninstall ansible and re-run this script"
