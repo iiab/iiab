@@ -44,7 +44,7 @@ function version_gt() { [ "$(printf '%s\n' "$@" | sort -V | head -1)" != "$1" ];
 # updates on 4.9.41-v7+ broke bridging, WiFi AP & OpenVPN in Oct/Nov 2017.
 CURR_KERN=`uname -r`
 echo "Found Kernel "$CURR_KERN""
-if [ "$OS" == "raspbian" ] && version_gt $MIN_RPI_KERN $CURR_KERN; then
+if [ "$OS" == "raspbian" ] && version_gt $MIN_RPI_KERN $CURR_KERN ; then
     echo -e "\nEXITING: Kernel "$MIN_RPI_KERN" or higher required with Raspbian."
     echo "PLEASE RUN 'apt update' then 'apt install raspberrypi-kernel' then reboot."
     echo "IIAB INSTALL INSTRUCTIONS: https://github.com/iiab/iiab/wiki/IIAB-Installation"
@@ -54,11 +54,19 @@ fi
 # Verify that a recent enough version of Ansible is installed.  See #449.  The
 # "include:" command was inconsistently implemented prior to Ansible 2.4.x.x
 CURR_ANSIBLE_VER=0
-if [[ `type -P ansible` ]]; then
-    CURR_ANSIBLE_VER=`ansible --version | head -1 | sed -e 's/.* //'`
+#if [ $(grep ubuntu /etc/apt/sources.list) ]; then  # FAILS when multiple lines returned, due to single square brackets
+#if grep -q ubuntu /etc/apt/sources.list ; then     # Works: bypasses need for "> /dev/null" thanks to "grep -q" (quiet)
+#if command -v ansible > /dev/null ; then  # Works But Wordy!
+#if [[ $(command -v ansible) ]]; then      # Also Works! $(...) nests more easily than backticks
+#if [[ `which ansible` ]]; then            # "which" misses built-in commands like cd, and is RISKY per https://stackoverflow.com/questions/592620/check-if-a-program-exists-from-a-bash-script
+#if [[ `type -P ansible` ]]; then          # "type -P" isn't POSIX compliant; it misses built-in commands like "cd"
+if [[ `command -v ansible` ]]; then        # "command -v" is POSIX compliant; it catches built-in commands like "cd"
+    #CURR_ANSIBLE_VER=`ansible --version | head -1 | sed -e 's/.* //'`
+    #CURR_ANSIBLE_VER=`ansible --version | head -1 | cut -f 2 -d " "`
+    CURR_ANSIBLE_VER=`ansible --version | head -1 | awk '{print $2}'`  # to match scripts/ansible
     echo "Found Ansible "$CURR_ANSIBLE_VER""
 fi
-if version_gt $MIN_ANSIBLE_VER $CURR_ANSIBLE_VER; then
+if version_gt $MIN_ANSIBLE_VER $CURR_ANSIBLE_VER ; then
     echo -e "\nEXITING: Ansible "$MIN_ANSIBLE_VER" or higher required."
     echo "PLEASE RUN './scripts/ansible' to install the latest Ansible from PPA or RPM."
     echo "'ansible --version' and 'apt -a list ansible' can also be useful here.  Try"
@@ -71,7 +79,7 @@ fi
 # (in /etc/iiab/iiab.env) of the highest completed Stage.  Avoid repetition!
 STAGE=0
 if [ -f /etc/iiab/iiab.env ]; then
-    if [[ `grep STAGE= /etc/iiab/iiab.env` ]]; then
+    if grep -q STAGE= /etc/iiab/iiab.env ; then
         source /etc/iiab/iiab.env
         echo "Extracted STAGE="$STAGE" (counter) from /etc/iiab/iiab.env"
         if ! [ "$STAGE" -eq "$STAGE" ] 2> /dev/null; then
@@ -83,7 +91,7 @@ if [ -f /etc/iiab/iiab.env ]; then
         fi
     fi
 # if XSCE is present resolveconf will not be
-    if [[ `grep XSCE /etc/iiab/iiab.env` ]]; then
+    if grep -q XSCE /etc/iiab/iiab.env ; then
         STAGE=0
         rm /etc/iiab/iiab.env
         echo "Removed /etc/iiab/iiab.env effectively resetting STAGE (counter)."
