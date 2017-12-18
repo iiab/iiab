@@ -5,48 +5,71 @@ CWD=`pwd`
 export ANSIBLE_LOG_PATH="$CWD/iiab-network.log"
 
 if [ ! -f iiab-network.yml ]; then
-    echo "IIAB Playbook not found."
-    echo "Please run this command from the top level of the git repo."
+    echo "iiab-network.yml not found in current directory."
+    echo "Please rerun this command from the top level of the git repo."
     echo "Exiting."
     exit 1
 fi
 
 if [ ! -f /etc/iiab/config_vars.yml ]; then
+    echo "Creating stub /etc/iiab/config_vars.yml"
     mkdir -p /etc/iiab
     echo "{}" > /etc/iiab/config_vars.yml
 fi
 
 OS="unknown"   # will be overridden below, if /etc/iiab/iiab.env is legit
 if [ -f /etc/iiab/iiab.env ]; then
+    echo "Running /etc/iiab/iiab.env"
     source /etc/iiab/iiab.env
 fi
 
+echo "Ansible will now run iiab-network.yml -- monitor log file iiab-network.log"
 Start=`date`
 ansible-playbook -i ansible_hosts iiab-network.yml --connection=local
 End=`date`
 
+
 # Record critical diagnostics to [/opt/iiab/iiab/]iiab-network.log
 echo "" >> iiab-network.log
+
 # redhat path
-if [ "OS" == "centos" ] || [  "OS" == "fedora" ]; then
+# Paul Armstrong's Shell Style Guide (https://google.github.io/styleguide/shell.xml)
+# prefers "if [[ ... ]]; then" for REGEXP's.  Many others prefer "if [ ... ];" then.
+# Each approach is sometimes necessary in my experience, working differently indeed.
+if [ "$OS" == "centos" ] || [ "$OS" == "fedora" ]; then
     ls -la /etc/sys*/net*/ifcfg* >> iiab-network.log
 fi
-# Ubuntu desktop might be using NM - split out.
-if [ $(which nmcli) ]; then
+
+# Ubuntu desktop/others might be using NM (NetworkManager) - split out.
+#if [ $(grep ubuntu /etc/apt/sources.list) ]; then  # FAILS when multiple lines returned, due to single square brackets
+#if grep -q ubuntu /etc/apt/sources.list ; then     # Works: bypasses need for "> /dev/null" thanks to "grep -q" (quiet)
+#if command -v nmcli > /dev/null ; then  # Works But Wordy!
+#if [[ $(command -v nmcli) ]]; then      # Also Works! $(...) nests more easily than backticks
+#if [[ `which nmcli` ]]; then            # "which" misses built-in commands like cd, and is RISKY per https://stackoverflow.com/questions/592620/check-if-a-program-exists-from-a-bash-script
+#if [[ `type -P nmcli` ]]; then          # "type -P" isn't POSIX compliant; it misses built-in commands like "cd"
+if [[ `command -v nmcli` ]]; then        # "command -v" is POSIX compliant; it catches built-in commands like "cd"
     nmcli d >> iiab-network.log
+    echo >> iiab-network.log
     nmcli c >> iiab-network.log
 fi
-echo "" >> iiab-network.log
+
 ip r >> iiab-network.log
-echo "" >> iiab-network.log
 brctl show >> iiab-network.log
-echo "run start: $Start" >> iiab-network.log
-echo "run end: $End" >> iiab-network.log
-echo "" >> iiab-network.log
-echo "" >> iiab-network.log
+echo >> iiab-network.log
+echo "iiab-network run start: $Start" >> iiab-network.log
+echo "iiab-network run end: $End" >> iiab-network.log
+echo >> iiab-network.log
+echo >> iiab-network.log
+
 
 # Put the same diagnostics on screen, for live operator
+if [[ `command -v nmcli` ]]; then
+    nmcli d
+    echo
+    nmcli c
+fi
 ip r
 brctl show
-echo "run start: $Start"
-echo "run end: $End"
+echo
+echo "iiab-network run start: $Start"
+echo "iiab-network run end: $End"
