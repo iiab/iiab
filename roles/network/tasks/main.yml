@@ -1,23 +1,27 @@
-
 #- include_vars: roles/network/defaults/main.yml
 #- include_vars: vars/local_vars.yml
 
 - include_tasks: detected_network.yml
-  when: not installing
+  when: not installing   #REMOVE THIS LINE IF installing IS ALWAYS false AS SET IN roles/0-init/defaults/main.yml
   tags:
-    - network
+    - network            #REMOVE SUCH LINES (BELOW TOO) AS WE'RE IN "network" ?
     - network-discover
+
+- name: Enable manually_toggle_AP if WiFi is primary gateway
+  set_fact:
+    manually_toggle_AP: true
+  when: discovered_wireless_iface == iiab_wan_iface
 
 - name: RPi - reboot to AP post install - installed via wifi so the services are ready
   set_fact:
-      iiab_lan_iface: br0
-      iiab_wan_iface: "{{ discovered_wired_iface }}"
-      iiab_wireless_lan_iface: "{{ discovered_wireless_iface }}"
-      iiab_wired_lan_iface: ""
+    iiab_lan_iface: br0
+    iiab_wan_iface: "{{ discovered_wired_iface }}"
+    iiab_wireless_lan_iface: "{{ discovered_wireless_iface }}"
+    iiab_wired_lan_iface: ""
   when: is_rpi and discovered_wireless_iface is defined and discovered_wireless_iface == iiab_wan_iface and reboot_to_AP
 
 - include_tasks: computed_network.yml
-  when: not installing
+  when: not installing   #REMOVE THIS LINE IF installing IS ALWAYS false AS SET IN roles/0-init/defaults/main.yml
   tags:
     - network
     - network-discover
@@ -29,8 +33,8 @@
 
 - name: RPi - don't reboot to AP post install - installed via wifi - don't blow away current network
   set_fact:
-      no_net_restart: True
-      hostapd_enabled: False
+    no_net_restart: True
+    hostapd_enabled: False
   when: is_rpi and discovered_wireless_iface is defined and discovered_wired_iface != iiab_wan_iface
 
 ##### Start static ip address info for first run #####
@@ -47,7 +51,9 @@
 - name: Configuring wondershaper
   include_tasks: wondershaper.yml
   when: wondershaper_install
-  tags: wondershaper, network
+  tags:
+    - network
+    - wondershaper
 
 - name: (Re)Installing named
   include_tasks: named.yml
@@ -86,64 +92,66 @@
 #### Start network layout
 - name: Redhat networking
   include_tasks: ifcfg_mods.yml
-  tags:
-  - network
   when: is_redhat and not installing
+  tags:
+    - network
 
 - name: NetworkManager in use
   include_tasks: NM-debian.yml
-  tags:
-  - network
   when: is_debuntu and network_manager_active
 #and not installing
+  tags:
+    - network
 
 - name: systemd-networkd in use
   include_tasks: sysd-netd-debian.yml
-  tags:
-  - network
   when: is_debuntu and systemd_networkd_active
 #and not installing
+  tags:
+    - network
 
 - name: RPi's have dhcpcd in use
   include_tasks: rpi_debian.yml
-  tags:
-  - network
   when: is_debuntu and is_rpi
 #and not installing
+  tags:
+    - network
 
 - name: Not RPi, Not NetworkManager, Not systemd-networkd in use
   include_tasks: debian.yml
-  tags:
-  - network
   when: not is_rpi and not network_manager_active and not systemd_networkd_active and is_debuntu
 #and not installing
+  tags:
+    - network
 
 # this is moving
 - name: Record iiab_wan_device
-  lineinfile: dest=/etc/iiab/iiab.env
-              regexp='^IIAB_WAN_DEVICE=*'
-              line='IIAB_WAN_DEVICE="{{ iiab_wan_iface }}"'
-              state=present
+  lineinfile:
+    dest: /etc/iiab/iiab.env
+    regexp: '^IIAB_WAN_DEVICE=*'
+    line: 'IIAB_WAN_DEVICE="{{ iiab_wan_iface }}"'
+    state: present
   when: not installing
   tags:
-  - network
+    - network
 
 - name: Record iiab_lan_device
-  lineinfile: dest=/etc/iiab/iiab.env
-              regexp='^IIAB_LAN_DEVICE=*'
-              line='IIAB_LAN_DEVICE="{{ iiab_lan_iface }}"'
-              state=present
+  lineinfile:
+    dest: /etc/iiab/iiab.env
+    regexp: '^IIAB_LAN_DEVICE=*'
+    line: 'IIAB_LAN_DEVICE="{{ iiab_lan_iface }}"'
+    state: present
   when: not installing
   tags:
-  - network
+    - network
 
 #### end network layout
 - include_tasks: restart.yml
   when: not installing
   tags:
-  - network
-  - named
-  - dhcpd
-  - dnsmasq
-  - squid
-  - AP
+    - network
+    - named
+    - dhcpd
+    - dnsmasq
+    - squid
+    - AP
