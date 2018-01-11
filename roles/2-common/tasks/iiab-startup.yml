@@ -1,26 +1,28 @@
-- name: Does systemd startup service exist
-  stat: path="{{ systemd_location }}/iiab-startup.service"
-  register: startup_unit
+- name: Does /usr/libexec/iiab-startup.sh exist?
+  stat:
+    path: /usr/libexec/iiab-startup.sh
+  register: startup_script
 
-- name: Copy startup service to /etc/systemd/system
-  template: src=iiab-startup.service
-            dest=/etc/systemd/system/
-  when: startup_unit.stat.exists is defined and not startup_unit.stat.exists
+- name: Copy template script to /usr/libexec/iiab-startup.sh
+  template:
+    src: iiab-startup.sh
+    dest: /usr/libexec/
+    mode: 0755
+  when: not startup_script.stat.exists
 
-- name: Copy startup script
-  template: src=iiab-startup.sh
-            dest=/usr/libexec/
-            mode=0755
-  when: startup_unit.stat.exists is defined and not startup_unit.stat.exists
+- name: Copy iiab-startup.service to {{ systemd_location }}
+  template:
+    src: iiab-startup.service
+    dest: "{{ systemd_location }}"
+  when: not startup_script.stat.exists
 
-- name: Ask systemd to recognize the changes
-  shell: systemctl daemon-reload
-  when: startup_unit.stat.exists is defined and not startup_unit.stat.exists
-
-- name: Restart so systemd recognizes the changes
-  shell: systemctl restart iiab-startup.service
-  when: startup_unit.stat.exists is defined and not startup_unit.stat.exists
-
-- name: Enable the reload service
-  shell: systemctl enable iiab-startup.service
-  when: startup_unit.stat.exists is defined and not startup_unit.stat.exists
+- name: Enable & restart the systemd service after daemon-reload
+  # shell: systemctl daemon-reload
+  # shell: systemctl restart iiab-startup.service
+  # shell: systemctl enable iiab-startup.service
+  systemd:
+    name: iiab-startup
+    daemon_reload: yes
+    enabled: yes
+    state: restarted
+  when: not startup_script.stat.exists
