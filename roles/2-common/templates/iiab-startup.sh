@@ -5,7 +5,9 @@ if [ ! -f /etc/iiab/uuid ]; then
    uuidgen > /etc/iiab/uuid
 fi
 
-# Temporary promiscuous-mode workaround for WiFi "10SEC disease"
+# Temporary promiscuous-mode workaround for RPi's WiFi "10SEC disease"
+# Set wlan0 to promiscuous on boot if needed as gateway (i.e. AP's OFF)
+# Scripts iiab-hotspot-on + iiab-hotspot-off SHOULD toggle this boot flag!
 # https://github.com/iiab/iiab/issues/638#issuecomment-355455454
 if [[ $(grep -i raspbian /etc/*release) &&
          ($(grep "hostapd_enabled = False" /etc/iiab/config_vars.yml) ||
