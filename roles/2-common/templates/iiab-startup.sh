@@ -12,7 +12,7 @@ fi
 if [[ $(grep -i raspbian /etc/*release) &&
         #($(grep "hostapd_enabled = False" /etc/iiab/config_vars.yml) ||
             #((! $(grep "hostapd_enabled = True" /etc/iiab/config_vars.yml)) &&
-                 $(grep "hostapd_enabled = False" /etc/iiab/iiab.ini)
+                 $(grep "^hostapd_enabled = False" /etc/iiab/iiab.ini)
             #)
         #)
    ]];
