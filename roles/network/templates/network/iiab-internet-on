@@ -1,0 +1,31 @@
+#!/bin/bash
+# enable the upstream wlan0 for rpi3 and rpi-w
+
+if [ $# -eq 0 ]; then $1="";fi
+# will fail if supplicant is already running
+/usr/bin/killall wpa_supplicant
+/sbin/wpa_supplicant -iwlan0 -c/etc/wpa_supplicant/wpa_supplicant.conf &
+sleep 1
+dhclient wlan0
+
+# may need to change the iptables
+GATEWAY=`route -n | awk '/UG/ { print $8 }'
+# Set the way device -- defaults to wlan0_ap
+if [ "$GATEWAY" == "wlan0" ]; then
+   sed -i -e 's/^IIAB_WAN_DEVICE.*/IIAB_WAN_DEVICE=wlan0/' /etc/iiab/iiab.env
+else
+   sed -i -e 's/^IIAB_WAN_DEVICE.*/IIAB_WAN_DEVICE=wlan0_ap/' /etc/iiab/iiab.env
+fi
+sed -i -e 's/.*iiab_network_mode_applied.*/iiab_network_mode_applied = Gateway/' /etc/iiab/iiab.ini
+
+# check to see if gateway flag is enabled
+IIAB_GATEWAY_ENABLED=`grep iiab_gateway_enabled vars/local_vars.yml | grep rue`
+if [ $? -eq 0 ] || [ "$1" == "toall" ]; then
+   # rewrite the iptables to permit passthrough
+   sed -i -e 's/^IIAB_GATEWAY_ENABLED.*/IIAB_GATEWAY_ENABLED=True/' /etc/iiab/iiab.env
+else
+   sed -i -e 's/^IIAB_GATEWAY_ENABLED.*/IIAB_GATEWAY_ENABLED=False/' /etc/iiab/iiab.env
+fi
+
+# execute script that generates and saves iptables, after changes to iiab.env
+/usr/bin/iiab-gen-iptables

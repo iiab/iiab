@@ -1,20 +1,46 @@
 #!/bin/bash
-cp -f /etc/hostapd/hostapd.conf.iiab /etc/hostapd/hostapd.conf
-sed -i -e "s/^#denyinterfaces/denyinterfaces/" /etc/dhcpcd.conf
-systemctl enable hostapd
-systemctl enable dhcpd
-systemctl daemon-reload
-systemctl restart dhcpcd
-systemctl restart networking
-systemctl start hostapd
-systemctl start dhcpd
+# enable the iiab-startup invocation of hotspot
 
-# Temporary promiscuous-mode workaround for RPi's WiFi "10SEC disease"
-# Disable "promiscuous" on wlan0 when AP (i.e. no WiFi gateway)
-# SEE ALSO iiab-hotspot-off + /usr/libexec/iiab-startup.sh
-# https://github.com/iiab/iiab/issues/638#issuecomment-355455454
-if grep -qi raspbian /etc/*release; then
-    ip link set dev wlan0 promisc off
+grep "^HOTSPOT" /etc/iiab/iiab.env
+# If not HOTSPOT in iiab.env, put one
+if [ $? -ne 0 ]; then
+   echo HOTSPOT >> /etc/iiab/iiab.env
+fi
+sed  -i -e 's/^HOTSPOT.*/HOTSPOT=on/' /etc/iiab/iiab.env
+
+# From now on, networking for rpi is controlled by scripts
+systemctl enable iiab-startup.service
+
+# check to see if gateway flag is enabled
+IIAB_GATEWAY_ENABLED=`grep iiab_gateway_enabled vars/local_vars.yml | grep rue`
+if [ $? -eq 0 ]; then
+   # rewrite the iptables to permit passthrough
+   sed -i -e 's/^IIAB_GATEWAY_ENABLED.*/IIAB_GATEWAY_ENABLED=True/' /etc/iiab/iiab.env
+else
+   sed -i -e 's/^IIAB_GATEWAY_ENABLED.*/IIAB_GATEWAY_ENABLED=False/' /etc/iiab/iiab.env
 fi
 
+# may need to change the iptables
+GATEWAY=`route -n | awk '/UG/ { print $8 }'`
+# Set the wan device -- defaults to wlan0_ap
+if [ "$GATEWAY" == "wlan0" ]; then
+   sed -i -e 's/^IIAB_WAN_DEVICE.*/IIAB_WAN_DEVICE=wlan0/' /etc/iiab/iiab.env
+else
+   sed -i -e 's/^IIAB_WAN_DEVICE.*/IIAB_WAN_DEVICE=wlan0_ap/' /etc/iiab/iiab.env
+fi
+sed -i -e 's/.*iiab_network_mode_applied.*/iiab_network_mode_applied = Gateway/' /etc/iiab/iiab.ini
+
+# execute script that generates and saves iptables, after changes to iiab.env
+/usr/bin/iiab-gen-iptables
+
+# Ask dhcpcd to leave the wifi devices alone
+sed -i -e 's/^#denyinterfaces.*/denyinterfaces wlan0 wlan0_ap/' /etc/dhcpcd.conf
+
+# following used in iiab-startup.sh to set/clear promiscuous mode in wifi driver
 sed -i -e "s/^hostapd_enabled.*/hostapd_enabled = True/" /etc/iiab/iiab.ini
+
+echo
+echo rebooting in 5 seconds
+echo
+sleep 5
+reboot
