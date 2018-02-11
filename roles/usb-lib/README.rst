@@ -4,7 +4,7 @@ usb-lib README
 
 SEE "Can teachers display their own content?" WITHIN http://FAQ.IIAB.IO FOR UP-TO-DATE DOCUMENTATION.
 
-This role implements functionality similar to LibraryBox, to mount and link content on a USB drive within /library/www/html/local_content
+This role implements functionality similar to LibraryBox, to mount content on USB drives, by creating links within /library/www/html/local_content
 
 Users should have nearly immediate access to "teacher content" by browsing to http://box/usb
 
