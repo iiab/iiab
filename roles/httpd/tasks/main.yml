@@ -1,6 +1,7 @@
-- name: Install httpd required packages
-  package: name={{ item }}
-           state=present
+- name: Install httpd required packages (debian)
+  package:
+    name: "{{ item }}"
+    state: present
   with_items:
     - apache2
     - php{{ php_version }}
@@ -10,17 +11,19 @@
     - download
   when: is_debian
 
-- name: Debian changed sqlite name
-  package: name=php{{ php_version }}-sqlite
+- name: Debian changed sqlite name (debian-8)
+  package:
+    name: "php{{ php_version }}-sqlite"
   when: is_debian and ansible_distribution_major_version == "8"
 
 #- name: Debian changed sqlite name
 #  package: name=php{{ php_version }}-sqlite3
 #  when: ansible_local.local_facts.os_ver == "debian-9"
 
--  name: Install httpd required packages
-   package: name={{ item }}
-            state=present
+-  name: Install httpd required packages (ubuntu)
+   package:
+     name: "{{ item }}"
+     state: present
    with_items:
      - apache2
      - php
@@ -28,9 +31,10 @@
      - download
    when: is_ubuntu
 
-- name: Install httpd required packages
-  package: name={{ item }}
-           state=present
+- name: Install httpd required packages (redhat)
+  package:
+    name: "{{ item }}"
+    state: present
   with_items:
     - httpd
     - php
@@ -40,106 +44,120 @@
     - download
   when: is_redhat
 
-- name: Remove the default apache2 config file
-  file: path=/etc/apache2/sites-enabled/000-default.conf
-        src=/etc/apache2/sites-available/000-default.conf
-        state=absent
+- name: Remove the default apache2 config file (debuntu)
+  file:
+    path: /etc/apache2/sites-enabled/000-default.conf
+    src: /etc/apache2/sites-available/000-default.conf
+    state: absent
   when: is_debuntu
 
 - name: Create httpd config files
-  template: backup=yes
-            src={{ item.src }}
-            dest={{ item.dest }}
-            owner=root
-            group=root
-            mode={{ item.mode }}
+  template:
+    backup: yes
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
   with_items:
-      - { src: '010-iiab.conf.j2' , dest: '/etc/{{ apache_config_dir }}/010-iiab.conf', mode: '0755' }
-      - { src: 'proxy_ajp.conf.j2' , dest: '/etc/{{ apache_config_dir }}/proxy_ajp.conf', mode: '0644' }
-      - { src: 'php.ini.j2' , dest: '/etc/php.ini' , mode: '0644' }
+    - { src: '010-iiab.conf.j2' , dest: '/etc/{{ apache_config_dir }}/010-iiab.conf', mode: '0755' }
+    - { src: 'proxy_ajp.conf.j2' , dest: '/etc/{{ apache_config_dir }}/proxy_ajp.conf', mode: '0644' }
+    - { src: 'php.ini.j2' , dest: '/etc/php.ini' , mode: '0644' }
 
 # remove symlinks for mpm-event, replace with mpm-prefork
-- name: Remove mpm event links
-  file: path=/etc/apache2/mods-enabled/{{ item }}
-        state=absent
+- name: Remove mpm event links (debuntu)
+  file:
+    path: "/etc/apache2/mods-enabled/{{ item }}"
+    state: absent
   with_items:
-      - mpm_event.conf
-      - mpm_event.load
+    - mpm_event.conf
+    - mpm_event.load
   when: is_debuntu
 
-- name: Create symlinks for mpm-prefork
-  file: path=/etc/apache2/mods-enabled/{{ item }}
-        src=/etc/apache2/mods-available/{{ item }}
-        state=link
+- name: Create symlinks for mpm-prefork (debuntu)
+  file:
+    path: "/etc/apache2/mods-enabled/{{ item }}"
+    src: "/etc/apache2/mods-available/{{ item }}"
+    state: link
   with_items:
-      - mpm_prefork.conf
-      - mpm_prefork.load
+    - mpm_prefork.conf
+    - mpm_prefork.load
   when: is_debuntu
 
-- name: Turn on mod_proxy
+- name: Turn on mod_proxy (debuntu)
   command: a2enmod {{ item }}
   with_items:
-     - proxy
-     - proxy_html
-     - headers
-     - rewrite
+    - proxy
+    - proxy_html
+    - headers
+    - rewrite
   when: is_debuntu
 
-- name: Create symlinks for enabling our site
-  file: path=/etc/apache2/sites-enabled/{{ item }}
-        src=/etc/apache2/sites-available/{{ item }}
-        state=link
+- name: Create symlinks for enabling our site (debuntu)
+  file:
+    path: "/etc/apache2/sites-enabled/{{ item }}"
+    src: "/etc/apache2/sites-available/{{ item }}"
+    state: link
   with_items:
-      - 010-iiab.conf
+    - 010-iiab.conf
   when: is_debuntu
 
-- name: Remove the default site container
-  file: dest=/etc/apache2/000-default.conf
-        state=absent
+- name: Remove the default site container (debuntu)
+  file:
+    dest: /etc/apache2/000-default.conf
+    state: absent
   when: is_debuntu
 
 - name: Create http pid dir
-  file: path=/var/run/{{ apache_user }}
-        mode=0755
-        owner=root
-        group=root
-        state=directory
+  file:
+    path: "/var/run/{{ apache_user }}"
+    mode: 0755
+    owner: root
+    group: root
+    state: directory
 
 - name: Create admin group
-  group: name=admin
-         state=present
+  group:
+    name: admin
+    state: present
 
 - name: Add apache user to admin group
-  user: name={{ apache_user }}
-        groups=admin
-        state=present
-        createhome=no
+  user:
+    name: "{{ apache_user }}"
+    groups: admin
+    state: present
+    createhome: no
 
 - name: Create httpd log dir
-  file: path=/var/log/{{ apache_service }}
-        mode=0755
-        owner={{ apache_user }}
-        group={{ apache_user }}
-        state=directory
+  file:
+    path: "/var/log/{{ apache_service }}"
+    mode: 0755
+    owner: "{{ apache_user }}"
+    group: "{{ apache_user }}"
+    state: directory
 
 - name: Enable httpd
-  service: name={{ apache_service }}
-           enabled=yes
+  service:
+    name: "{{ apache_service }}"
+    enabled: yes
 
 - name: Create iiab-info directory
-  file: path={{ doc_root }}/info
-        mode=0755
-        owner={{ apache_user }}
-        group={{ apache_user }}
-        state=directory
+  file:
+    path: "{{ doc_root }}/info"
+    mode: 0755
+    owner: "{{ apache_user }}"
+    group: "{{ apache_user }}"
+    state: directory
 
 - name: Remove iiab-info.conf
-  file: dest=/etc/{{ apache_config_dir }}/iiab-info.conf
-        state=absent
+  file:
+    dest: "/etc/{{ apache_config_dir }}/iiab-info.conf"
+    state: absent
 
-- name: Remove iiab-info.conf symlink
-  file: dest=/etc/apache2/sites-enabled/iiab-info.conf
-        state=absent
+- name: Remove iiab-info.conf symlink (debuntu)
+  file:
+    dest: /etc/apache2/sites-enabled/iiab-info.conf
+    state: absent
   when: is_debuntu
 
 - include_tasks: html.yml
@@ -147,17 +165,20 @@
     - base
 
 - name: Place the script to generate homepages
-  template: src=refresh-wiki-docs.sh
-            dest=/usr/bin/iiab-refresh-wiki-docs
-            mode=0755
+  template:
+    src: refresh-wiki-docs.sh
+    dest: /usr/bin/iiab-refresh-wiki-docs
+    mode: 0755
 
 - name: Give apache_user permission for poweroff
-  template: src=020_apache_poweroff.j2
-            dest=/etc/sudoers.d/020_apache_poweroff
-            mode=0755
+  template:
+    src: 020_apache_poweroff.j2
+    dest: /etc/sudoers.d/020_apache_poweroff
+    mode: 0755
   when: allow_apache_sudo
 
 - name: Remove apache_user permission for poweroff
-  file: dest=/etc/sudoers.d/020_apache_poweroff
-        state=absent
+  file:
+    dest: /etc/sudoers.d/020_apache_poweroff
+    state: absent
   when: not allow_apache_sudo
