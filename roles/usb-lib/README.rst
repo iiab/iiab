@@ -4,11 +4,13 @@ usb-lib README
 
 SEE "Can teachers display their own content?" WITHIN http://FAQ.IIAB.IO FOR UP-TO-DATE DOCUMENTATION.
 
-This role implements functionality similar to LibraryBox, to mount content on USB drives, by creating links within /library/www/html/local_content
+This role implements functionality similar to LibraryBox, to mount "teacher content" on USB drives.
 
-Users should have nearly immediate access to "teacher content" by browsing to http://box/usb
+Users should have nearly immediate access to this "teacher content" (on all inserted USB drives) by browsing to http://box/usb
 
-Automount is handled by usbmount and scripts in this role look in the root of the mounted drive for
+USB drives must be formatted with one of the iilesystems listed under "FILESYSTEMS=" at /etc/usbmount/usbmount.conf
+
+Automount is handled by usbmount, and scripts in this role look in the root of the mounted drive for...
 
 * /usb
 * /USB
@@ -16,7 +18,7 @@ Automount is handled by usbmount and scripts in this role look in the root of th
 * /Share
 * /Piratebox/Share
 
-and if found create a symlink of the form /library/content/USBn points to /media/usbn.
+...and if found, create a symlink of the form /library/www/html/local_content/USBn pointing to /media/usbn.
 
 There is also a patch for problems with automount on Fedora 21+
 
