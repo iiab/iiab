@@ -18,7 +18,7 @@ Automount is handled by usbmount, and scripts in this role look in the root of t
 * /Share
 * /Piratebox/Share
 
-...and if found, create a symlink of the form /library/www/html/local_content/USBn pointing to /media/usbn.
+...and if found, creates a symlink of the form /library/www/html/local_content/USBn pointing to /media/usbn.
 
 There is also a patch for problems with automount on Fedora 21+
 
