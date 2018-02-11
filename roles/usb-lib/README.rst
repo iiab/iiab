@@ -1,14 +1,20 @@
 ==============
-USB Lib README
+usb-lib README
 ==============
 
-This role implements Library Box type functionality to mount and link content on a USB drive.
+SEE "Can teachers display their own content?" WITHIN http://FAQ.IIAB.IO FOR UP-TO-DATE DOCUMENTATION.
+
+This role implements LibraryBox-type functionality to mount and link content on a USB drive.
+
+Users should have nearly immediate access to "teacher content" by browsing to http://box/usb
 
 Automount is handled by usbmount and scripts in this role look in the root of the mounted drive for
 
+* /usb
+* /USB
 * /share
 * /Share
-* /PirateShare
+* /Piratebox/Share
 
 and if found create a symlink of the form /library/content/USBn points to /media/usbn.
 
