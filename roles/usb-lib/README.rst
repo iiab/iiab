@@ -8,8 +8,6 @@ This role implements functionality similar to LibraryBox, to mount "teacher cont
 
 Users should have nearly immediate access to this "teacher content" (on all inserted USB drives) by browsing to http://box/usb
 
-USB drives must be formatted with one of the filesystems listed under "FILESYSTEMS=" at /etc/usbmount/usbmount.conf -- also beware that problems remain automounting exFAT filesystems with usbmount, even in 2018.
-
 Automount is handled by usbmount, and scripts in this role look in the root of the mounted drive for...
 
 * /usb
@@ -19,6 +17,8 @@ Automount is handled by usbmount, and scripts in this role look in the root of t
 * /Piratebox/Share
 
 ...and if found, creates a symlink of the form /library/www/html/local_content/USBn pointing to /media/usbn.
+
+USB drives must be formatted with one of the filesystems listed under "FILESYSTEMS=" at /etc/usbmount/usbmount.conf (beware that problems remain automounting exFAT filesystems using usbmount, even in 2018).
 
 There is also a patch for problems with automount on Fedora 21+
 
