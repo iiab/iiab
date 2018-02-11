@@ -4,11 +4,11 @@ usb-lib README
 
 PLEASE SEE "Can teachers display their own content?" WITHIN http://FAQ.IIAB.IO FOR UP-TO-DATE DOCUMENTATION.
 
-This role implements functionality similar to LibraryBox, to mount "teacher content" on USB drives.
+This role implements functionality similar to LibraryBox, to mount "teacher content" from USB drives.
 
 Users should have nearly immediate access to this "teacher content" (on all inserted USB drives) by browsing to http://box/usb
 
-USB drives must be formatted with one of the iilesystems listed under "FILESYSTEMS=" at /etc/usbmount/usbmount.conf
+USB drives must be formatted with one of the filesystems listed under "FILESYSTEMS=" at /etc/usbmount/usbmount.conf -- also beware that problems remain automounting exFAT filesystems with usbmount, even in 2018.
 
 Automount is handled by usbmount, and scripts in this role look in the root of the mounted drive for...
 
