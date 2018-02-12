@@ -1,16 +1,26 @@
 ==============
-USB Lib README
+usb-lib README
 ==============
 
-This role implements Library Box type functionality to mount and link content on a USB drive.
+PLEASE SEE "Can teachers display their own content?" WITHIN http://FAQ.IIAB.IO FOR UP-TO-DATE DOCUMENTATION.
 
-Automount is handled by usbmount and scripts in this role look in the root of the mounted drive for
+This role implements functionality similar to LibraryBox, to mount "teacher content" from USB drives.
 
+Users should have nearly immediate access to this "teacher content" (on all inserted USB drives) by browsing to http://box/usb
+
+Automount is handled by usbmount, and scripts in this role look in the root of the mounted drive for...
+
+* /usb
+* /USB
 * /share
 * /Share
-* /PirateShare
+* /Piratebox/Share
 
-and if found create a symlink of the form /library/content/USBn points to /media/usbn.
+...and if found, creates a symlink of the form /library/www/html/local_content/USBn pointing to /media/usbn.
+
+USB drives must be formatted with one of the filesystems listed under "FILESYSTEMS=" at /etc/usbmount/usbmount.conf
+
+WARNING: even if you manually add "exfat ntfs fuseblk" within the above line, problems remain automounting exFAT and NTFS filesystems using usbmount, as of February 2018.  It's recommended you stick to FAT32 and ext4 filesystems for now.
 
 There is also a patch for problems with automount on Fedora 21+
 
