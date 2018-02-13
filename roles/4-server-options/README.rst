@@ -1,8 +1,9 @@
-=====================
-Server Options README
-=====================
+=======================
+4-server-options README
+=======================
 
-This role is a place to aggregate roles that may be optionally added to the basic server,
-whereas the roles in base-server are required. As in the case of the base-server the
-functionality here is not packages that are not directly consumed by users, which are in common,
-nor specific applications, such as those found in the apps and tools roles.
+Whereas the roles/tasks in 3-base-server are required, this 4th stage includes more optional roles/tasks for core server infra.
+
+It includes some networking fundamentals, before they're configured later on.
+
+As in the case of 2-common, 3-base-server and 5-xo-services: this stage installs core server infra, that is not user-facing.
