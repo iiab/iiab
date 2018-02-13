@@ -1,19 +1,22 @@
-===================
-Local Addons README
-===================
+=====================
+9-local-addons README
+=====================
 
-This role is a place to aggregate roles developed by various contributors or locally developed.
+This 9th stage is a placeholder for roles/tasks/server apps that are locally developed -- or of an experimental nature.
+
+As in the case of 6-generic-apps, 7-edu-apps, and 8-mgmt-tools: this stage is intended to install user-facing server apps.
 
 Development
 -----------
 
-Create the role you wish to add to Internet-in-a-Box by following the pattern of another role or any other means.
+Consider creating your own Ansible role to add essential functionality to Internet-in-a-Box.  You can copy any role you find within /opt/iiab/iiab/roles, and building from there!
 
 Packaging
 ---------
 
-Add your role into the main.yml file in the tasks directory of the 9-local-addons role.  It will now get installed as part of
-the next ansible run.
+Add your role into the main.yml file in the tasks directory of the 9-local-addons role.
+
+It will then get installed as part of the next Ansible run (e.g. "cd /opt/iiab/iiab" and then "./iiab-install --reinstall").
 
 More Info
 ---------

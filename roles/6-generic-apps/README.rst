@@ -1,7 +1,9 @@
-===================
-Generic Apps README
-===================
+=====================
+6-generic-apps README
+=====================
 
-This role is a place to aggregate roles that install apps of a more generic or collaborative nature,
-as opposed to educational or managment.  Content Management Systems or Chat or Wiki applications
-would go here.
+This 6th stage is for apps of a more generic or collaborative nature, as opposed to educational or managerial apps in later stages.
+
+Chat, Wiki and CMS's (Content Management Systems) can go here.
+
+As in the case of 7-edu-apps, 8-mgmt-tools and 9-local-addons: this stage installs user-facing server apps.
