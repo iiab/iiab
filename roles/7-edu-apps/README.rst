@@ -1,6 +1,7 @@
-===================================
-Educational Apps and Content README
-===================================
+=================
+7-edu-apps README
+=================
 
-This role is a place to aggregate roles that provide Educational Content or
-are specifically targetted at pedagogical activities.
+This 7th stage is for Educational Apps and Learning Content, including LMS's (Learning Management Systems).
+
+As in the case of 6-generic-apps, 8-mgmt-tools and 9-local-addons: this stage installs user-facing server apps.
