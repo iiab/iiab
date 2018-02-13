@@ -1,11 +1,13 @@
-==================
-Base Server README
-==================
+====================
+3-base-server README
+====================
 
-This role is a place to aggregate roles that are required to create a basic web server.
-The functionality here is not packages that are not directly consumed by users, which are in common,
-nor specific applications, such as those found in the apps and tools roles.
+This 3rd stage installs base server infra that Internet-in-a-Box requires, including:
 
-The difference between this aggregate (3-base-server) and 4-server-options is that the roles here are required.
+- the web server (Apache for now, possibly NGINX in future)
+- administrator security (username iiab-admin by default)
+- MySQL (the database underlying many/most user-facing apps)
 
-Eventually a graphical configuration console will be added here.
+4-server-options follows with more diverse/optional server infra functionality.
+
+As in the case of 2-common, 4-server-options and 5-xo-services: this stage installs core server infra, that is not user-facing.
