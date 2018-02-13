@@ -4,7 +4,7 @@
 
 This 3rd stage installs base server infra that Internet-in-a-Box requires, including:
 
-- the web server
+- the web server (Apache for now, possibly NGINX in future)
 - administrator security (username iiab-admin by default)
 - MySQL (the database underlying many/most user-facing apps)
 
