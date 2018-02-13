@@ -1,6 +1,8 @@
-=============
-Common README
-=============
+===============
+2-common README
+===============
 
-This role aggregates roles containing packages and a few other tasks that are common to all platforms
-and are required before creating a functioning server.
+This 2nd stage is for low-level roles/packages/tasks *common* to all platforms,
+as required to build up a functioning server.
+
+As in the case of 3-base-server, 4-server-options and 5-xo-services: this stage installs core server infra, that is not user-facing.
