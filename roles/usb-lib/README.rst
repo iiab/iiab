@@ -20,8 +20,6 @@ Automount is handled by usbmount, and scripts in this role look in the root of t
 
 USB drives must be formatted with one of the filesystems listed under "FILESYSTEMS=" at /etc/usbmount/usbmount.conf
 
-WARNING: even if you manually add "exfat ntfs fuseblk" within the above line, problems remain automounting exFAT and NTFS filesystems using usbmount, as of February 2018.  It's recommended you stick to FAT32 and ext4 filesystems for now.
-
 There is also a patch for problems with automount on Fedora 21+
 
 Please Note that as of the 4.1.8-200.fc22.x86_64 not all USB drives will mount even with this patch.
