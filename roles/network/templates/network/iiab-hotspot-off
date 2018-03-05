@@ -1,12 +1,7 @@
 #!/bin/bash
-sed -i -e "s/^denyinterfaces/#denyinterfaces/" /etc/dhcpcd.conf
-systemctl disable hostapd
-systemctl stop hostapd
-systemctl disable dhcpd
-systemctl stop dhcpd
-systemctl daemon-reload
-systemctl restart dhcpcd
-systemctl restart networking
+
+# disable the iiab-startup invokation of hotspot
+sed  -i -e 's/^HOTSPOT.*/HOTSPOT=off/' /etc/iiab/iiab.env
 
 # Temporary promiscuous-mode workaround for RPi's WiFi "10SEC disease"
 # Set wlan0 to promiscuous when AP's OFF (for possible WiFi gateway)
@@ -16,4 +11,28 @@ if grep -qi raspbian /etc/*release; then
     ip link set dev wlan0 promisc on
 fi
 
+# may need to change the iptables
+GATEWAY=`route -n | awk '/UG/ { print $8 }'`
+# Set the way device -- defaults to wlan0_ap
+if [ "$GATEWAY" == "wlan0" ]; then
+   sed -i -e 's/^IIAB_WAN_DEVICE.*/IIAB_WAN_DEVICE=wlan0/' /etc/iiab/iiab.env
+   ip link set dev wlan0 promisc on
+else
+   sed -i -e 's/^IIAB_WAN_DEVICE.*/IIAB_WAN_DEVICE=wlan0_ap/' /etc/iiab/iiab.env
+   ip link set dev wlan0_ap promisc on
+fi
+sed -i -e 's/.*iiab_network_mode_applied.*/iiab_network_mode_applied = Appliance/' /etc/iiab/iiab.ini
+
+# execute script that generates and saves iptables, after changes to iiab.env
+/usr/bin/iiab-gen-iptables
+
+# let dhcpcd manage wlan0
+sed -i -e' s/^denyinterfaces.*/#denyinterfaces wlan0 wlan0_ap/' /etc/dhcpcd.conf
+
+# following used in iiab-startup.sh to set/clear promiscuous mode in wifi driver
 sed -i -e "s/^hostapd_enabled.*/hostapd_enabled = False/" /etc/iiab/iiab.ini
+echo
+echo rebooting in 5 seconds
+echo
+sleep 5
+reboot
