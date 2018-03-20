@@ -1,0 +1,132 @@
+- name: Install required packages
+  package: name={{ item }}
+           state=present
+  with_items:
+    - php7.0-intl
+    - php7.0-mbstring
+  tags:
+    - download
+
+- name: Download the latest MediaWiki software
+  get_url:
+    url: "{{ mediawiki_download_base_url }}/{{ mediawiki_src }}"
+    dest: "{{ downloads_dir }}"
+    timeout: "{{ download_timeout }}"
+#   force: yes
+#   backup: yes
+  register: mediawiki_download_output
+  when: internet_available
+
+- name: Create link /opt/iiab/downloads/mediawiki.tar.gz pointing to {{ mediawiki_download_output.dest }}
+  file:
+    src: "{{ mediawiki_download_output.dest }}"
+    dest: "{{ downloads_dir }}/mediawiki.tar.gz"
+    state: link
+  when: mediawiki_download_output.dest is defined
+
+- name: Check if /opt/iiab/downloads/mediawiki.tar.gz link exists
+  stat:
+    path: "{{ downloads_dir }}/mediawiki.tar.gz"
+  register: mediawiki_link
+
+- name: FAIL (force Ansible to exit) IF /opt/iiab/downloads/mediawiki.tar.gz doesn't exist
+  fail:
+    msg: "{{ downloads_dir }}/mediawiki.tar.gz is REQUIRED in order to install mediawiki."
+  when: not mediawiki_link.stat.exists
+
+- name: "Unpack /opt/iiab/downloads/mediawiki.tar.gz to permanent location /library/mediawiki - owner: root, group: {{ apache_user }}, mode: 0664, keep_newer: yes"
+  unarchive:
+    src: "{{ downloads_dir }}/mediawiki.tar.gz"
+    dest: "{{ mediawiki_install_path }}"
+    owner: root
+    group: "{{ apache_user }}"
+    mode: 0664
+    keep_newer: yes
+
+# - name: Rename /library/mediawiki* to /library/mediawiki
+#   shell: if [ ! -d {{ mediawiki_abs_path }} ]; then mv {{ mediawiki_abs_path }}* {{ mediawiki_abs_path }}; fi
+
+#- name: Make Apache owner and group, 1st pass permissions set to 0664
+#  file: path={{ mediawiki_abs_path }}
+#        recurse=yes
+#        owner=root
+#        group={{ apache_user }}
+#        mode=0664
+#        state=directory
+
+- name: Make MediaWiki install directories 775 so Apache can traverse and write (most files remain 0664)
+  command: "/usr/bin/find {{ mediawiki_abs_path }} -type d -exec chmod 775 {} +"
+
+- name: MySQL database needs to be running if we are trying to create a new db
+  service:
+    state: started
+    name: "{{ mysql_service }}"
+
+- name: Create MySQL mediawiki database
+  mysql_db:
+    name: "{{ mediawiki_db_name }}"
+    state: present
+
+- name: Create MySQL mediawiki database user
+  mysql_user:
+    name: "{{ mediawiki_db_user }}"
+    password: "{{ mediawiki_db_user_password }}"
+    priv: "{{ mediawiki_db_name }}.*:ALL,GRANT"
+    state: present
+
+- name: Copy mediawiki config file
+  template:
+    src: LocalSettings.php.j2
+    dest: "{{ mediawiki_abs_path }}/LocalSettings.php"
+    owner: root
+    group: "{{ apache_user }}"
+    mode: 0600
+
+- name: Copy mediawiki httpd conf file
+  template:
+    src: mediawiki.conf.j2
+    dest: "/etc/{{ apache_config_dir }}/mediawiki.conf"
+
+- name: Enable httpd conf file if we are disabled (debuntu)
+  file:
+    src: /etc/apache2/sites-available/mediawiki.conf
+    dest: /etc/apache2/sites-enabled/mediawiki.conf
+    state: link
+  when: mediawiki_enabled and is_debuntu
+
+- name: Remove httpd conf file if we are disabled (OS's other than debuntu)
+  file:
+    path: /etc/apache2/sites-enabled/mediawiki.conf
+    state: absent
+  when: not mediawiki_enabled and is_debuntu
+
+- name: Restart Apache, so it picks up the new aliases
+  service:
+    name: "{{ apache_service }}"
+    state: restarted
+
+- name: Add 'mediawiki' to list of services at /etc/iiab/iiab.ini
+  ini_file:
+    dest: "{{ service_filelist }}"
+    section: mediawiki
+    option: "{{ item.option }}"
+    value: "{{ item.value }}"
+  with_items:
+    - option: name
+      value: mediawiki
+    - option: description
+      value: '"mediawiki is a blog and web site management application."'
+    - option: mediawiki_src
+      value: "{{ mediawiki_src }}"
+    - option: mediawiki_abs_path
+      value: "{{ mediawiki_abs_path }}"
+    - option: mediawiki_db_name
+      value: "{{ mediawiki_db_name }}"
+    - option: mediawiki_db_user
+      value: "{{ mediawiki_db_user }}"
+    - option: mediawiki_url
+      value: "{{ mediawiki_url }}"
+    - option: mediawiki_full_url
+      value: "{{ mediawiki_full_url }}"
+    - option: mediawiki_enabled
+      value: "{{ mediawiki_enabled }}"
