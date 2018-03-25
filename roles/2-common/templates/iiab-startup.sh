@@ -30,7 +30,7 @@ if [[ $(grep -i raspbian /etc/*release) != "" ]]; then
       fi
       systemctl start hostapd.service
       #sleep 5
-      if [[ $(grep "^hostapd_enabled = True" /etc/iiab/iiab.ini) ]]; then
+      if [[ $(grep "^hostapd_enabled=True" /etc/iiab/iiab.env) ]]; then
          ip link set dev wlan0 promisc on
       fi
    fi
