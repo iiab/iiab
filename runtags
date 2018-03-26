@@ -1,19 +1,19 @@
 #!/bin/bash
-# running from a git repo
-PLAYBOOK="iiab.yml"
+
 INVENTORY="ansible_hosts"
+PLAYBOOK="iiab.yml"
+#PLAYBOOK="iiab-stages.yml"
 CWD=`pwd`
 
 export ANSIBLE_LOG_PATH="$CWD/iiab-debug.log"
 
-if [ ! -f $PLAYBOOK ]
-then
- echo "IIAB Playbook not found."
- echo "Please run this command from the top level of the git repo."
- echo "Exiting."
- exit
+if [ ! -f $PLAYBOOK ]; then
+    echo "Exiting: IIAB Playbook not found."
+    echo "Please run this from /opt/iiab/iiabthe (top level of the git repo)."
+    exit 1
 fi
 
+# is the following stanza nec?
 if [ ! -f /etc/iiab/config_vars.yml ]; then
     mkdir -p /etc/iiab
     echo "{}" > /etc/iiab/config_vars.yml
@@ -21,31 +21,27 @@ fi
 
 tags=$(echo $1 | tr "," "\n")
 
-if [ "$tags" == "" ]
-then
-  echo " usage: ./runtags <tagname>"
-  echo " usage: ./runtags <tagname1>,<tagname2>,<tagname3>"
-  echo " Can take a single value or a comma-separated list (no spaces within the list!)"
-  echo " Now retrieving a list of possible Ansible playbook and tagname values..."
-  ansible-playbook -i ansible_hosts iiab.yml --connection=local --list-tag
-  exit 0
+if [ "$tags" == "" ]; then
+    echo " usage: ./runtags <tagname>"
+    echo " usage: ./runtags <tagname1>,<tagname2>,<tagname3>"
+    echo " Can take a single value or a comma-separated list (no spaces within the list!)"
+    echo " Now retrieving a list of possible Ansible playbook and tagname values..."
+    ansible-playbook -i $INVENTORY $PLAYBOOK --connection=local --list-tags
+    exit 0
 fi
 
 found="N"
 
-for tag in $tags
-do
-  if [ "$tag" == "0-init" ]
-  then
-    found="Y"
-  fi
+for tag in $tags; do
+    if [ "$tag" == "0-init" ]; then
+        found="Y"
+    fi
 done
 
 taglist=$1
 
-if [ "$found" == "N" ]
-then
-  taglist="0-init,"$taglist
+if [ "$found" == "N" ]; then
+    taglist="0-init,"$taglist
 fi
 
-ansible-playbook -i ansible_hosts iiab.yml --connection=local --tags="""$taglist"""
+ansible-playbook -i $INVENTORY $PLAYBOOK --connection=local --tags=$taglist
