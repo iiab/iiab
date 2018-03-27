@@ -22,7 +22,7 @@ if [[ $(grep -i raspbian /etc/*release) != "" ]]; then
       # need unique MAC, so change mfg field, and pick 3 arbitrary octets
       /sbin/ip link set wlan0 address b8:27:99:12:34:56
       /sbin/ifup wlan0_ap
-      /sbin/systemctl restart dnsmasq.service
+      /bin/systemctl restart dnsmasq.service
 
       # get the channel that is in use -- supplied by upstream wifi
       if [ ! -z "$CHANNEL" ]; then
