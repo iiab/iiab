@@ -23,13 +23,18 @@
 - name: New raspbian requires counry code -- check for it
   shell: grep country /etc/wpa_supplicant/wpa_supplicant.conf
   register: country_code
+  ignore_errors: True
 
 - name: Put a country code if it does not exist
   lineinfile: 
     dest: /etc/wpa_supplicant/wpa_supplicant.conf
     regexp: "^country.*"
     line: country={{ host_country_code }}
-  when: country_code.stdout == ""
+  when: country_code is defined and country_code.stdout == ""
+
+- name: Enable the wifi with rfkill
+  shell: rfkill unblock 0
+  ignore_errors: True
 
 - name: Copy the bridge script for RPi
   template:
@@ -60,11 +65,11 @@
   service:
     name: hostapd
     state: restarted
-  when: hostapd_enabled and iiab_wan_iface != discoveed_wireless_iface and iiab_network_mode != "Appliance"
+  when: hostapd_enabled and iiab_wan_iface != discovered_wireless_iface and iiab_network_mode != "Appliance"
 
 - name: Ansible is having a problem enabling services
   shell: systemctl enable hostapd
-  when: hostapd_enabled and iiab_wan_iface != discoveed_wireless_iface and iiab_network_mode != "Appliance"
+  when: hostapd_enabled and iiab_wan_iface != discovered_wireless_iface and iiab_network_mode != "Appliance"
 
 #- name: dhcp_server may be affected - starting - user choice
 #  service: name={{ dhcp_service2 }} state=started
