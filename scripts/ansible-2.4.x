@@ -90,7 +90,10 @@ if [ ! -f /etc/centos-release ] && [ ! -f /etc/fedora-release ] && [ ! -f /etc/o
     echo "Using apt to check for updates, then install/upgrade ansible"
     apt update
     apt -y install ansible=2.4*
-    
+
+    # TEMPORARILY USE ANSIBLE 2.4.4 (REMOVE IT WITH "pip uninstall ansible")
+    #pip install ansible==2.4.4
+
     # TEMPORARILY USE ANSIBLE 2.4.2 DUE TO 2.4.3 MEMORY BUG. DETAILS @ https://github.com/iiab/iiab/issues/669
     #echo "Install http://download.iiab.io/packages/ansible_2.4.2.0-1ppa~xenial_all.deb"
     #cd /tmp
