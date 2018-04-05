@@ -1,11 +1,11 @@
 #!/bin/bash -e
 
-echo -e '\nATTEMPTING TO INSTALL THE LATEST (RELEASED VERSION OF) ANSIBLE.'
+echo -e '\nATTEMPTING TO INSTALL THE LATEST ANSIBLE 2.5.x'
 echo -e 'Ensure you'"'"'re online before running this script!'
-echo -e 'OR: consider scripts/ansible-2.4.x for a "slow food" alternative.\n'
+echo -e 'OR: consider scripts/ansible to keep up-to-date with Ansible'"'"'s evolution.\n'
 
 GOOD_VER="2.5.0"      # Ansible version for OLPC XO laptops (pip install).
-                      # On other OS's we install/upgrade to THE latest (released version of) Ansible.
+                      # On other OS's we attempt to install/upgrade/pin to the latest Ansible 2.5.x
 CURR_VER="undefined"
 # FOUND="false"       # NOT USED AS OF 2017-12-12
 # FAMILY="undefined"  # NOT USED AS OF 2017-12-12
@@ -41,10 +41,10 @@ if [ ! `command -v ansible-playbook` ]; then   # "command -v" is POSIX compliant
     elif [ -f /etc/debian_version ] || (grep -qi raspbian /etc/*elease) ; then
         if ( ! grep -qi ansible /etc/apt/sources.list) && [ ! -f /etc/apt/sources.list.d/ansible ]; then
             apt -y install dirmngr python-pip python-setuptools python-wheel patch
-            echo "deb http://ppa.launchpad.net/ansible/ansible/ubuntu xenial main" \
-                 >> /etc/apt/sources.list.d/iiab-ansible.list
-            #echo "deb http://ppa.launchpad.net/ansible/ansible-2.4/ubuntu xenial main" \
+            #echo "deb http://ppa.launchpad.net/ansible/ansible/ubuntu xenial main" \
             #     >> /etc/apt/sources.list.d/iiab-ansible.list
+            echo "deb http://ppa.launchpad.net/ansible/ansible-2.5/ubuntu xenial main" \
+                 >> /etc/apt/sources.list.d/iiab-ansible.list
             apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 93C4A3FD7BB9C367
         fi
         # FOUND="true"
@@ -52,8 +52,8 @@ if [ ! `command -v ansible-playbook` ]; then   # "command -v" is POSIX compliant
         # Parens are optional, but greatly clarify :)
     elif (grep -qi ubuntu /etc/lsb-release) || (grep -qi ubuntu /etc/os-release); then
         apt -y install python-pip python-setuptools python-wheel patch
-        apt-add-repository -y ppa:ansible/ansible
-        #apt-add-repository -y ppa:ansible/ansible-2.4
+        #apt-add-repository -y ppa:ansible/ansible
+        apt-add-repository -y ppa:ansible/ansible-2.5
         # FOUND="true"
         # FAMILY="debian"
     # fi
@@ -76,7 +76,7 @@ else
     #if [[ `grep -qi ansible /etc/apt/sources.list` ]] || [ -f /etc/apt/sources.list.d/ansible*.list ]; then
     elif (grep -qi ansible /etc/apt/sources.list) || (ls /etc/apt/sources.list.d/*ansible*.list >/dev/null 2>&1) ; then
         #echo "Ansible repo(s) found within /etc/apt/sources.list*"
-        echo -e '\nANSIBLE REPO(S) FOUND WITHIN /etc/apt/sources.list AND/OR /etc/apt/sources.list.d/*ansible*.list -- MUST CONTAIN LINE "deb http://ppa.launchpad.net/ansible/ansible/ubuntu xenial main" IF YOU WANT THE LATEST RELEASED VERSION OF ANSIBLE -- then re-run this script.\n'
+        echo -e '\nANSIBLE REPO(S) FOUND WITHIN /etc/apt/sources.list AND/OR /etc/apt/sources.list.d/*ansible*.list -- MUST CONTAIN LINE "deb http://ppa.launchpad.net/ansible/ansible-2.5/ubuntu xenial main" IF YOU WANT THE LATEST ANSIBLE 2.5.x -- AND REMOVE ALL SIMILAR LINES -- then re-run this script.\n'
     else
         echo "Upstream ansible source repo not found, please uninstall ansible and re-run this script"
         exit 1
@@ -87,7 +87,7 @@ if [ ! -f /etc/centos-release ] && [ ! -f /etc/fedora-release ] && [ ! -f /etc/o
     # Align IIAB with Ansible community's latest official release
     echo "Using apt to check for updates, then install/upgrade ansible"
     apt update
-    apt -y install ansible
+    apt -y --allow-downgrades install ansible=2.5*
 
     # TEMPORARILY USE ANSIBLE 2.4.4 (REMOVE IT WITH "pip uninstall ansible")
     #pip install ansible==2.4.4
