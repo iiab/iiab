@@ -43,9 +43,9 @@ if [ ! `command -v ansible-playbook` ]; then   # "command -v" is POSIX compliant
         if ( ! grep -qi ansible /etc/apt/sources.list) && [ ! -f /etc/apt/sources.list.d/ansible ]; then
             apt -y install dirmngr python-pip python-setuptools python-wheel patch
             #echo "deb http://ppa.launchpad.net/ansible/ansible/ubuntu xenial main" \
-            #     >> /etc/apt/sources.list.d/ansible.list
+            #     >> /etc/apt/sources.list.d/iiab-ansible.list
             echo "deb http://ppa.launchpad.net/ansible/ansible-2.4/ubuntu xenial main" \
-                 >> /etc/apt/sources.list.d/ansible.list
+                 >> /etc/apt/sources.list.d/iiab-ansible.list
             apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 93C4A3FD7BB9C367
         fi
         # FOUND="true"
@@ -75,7 +75,7 @@ else
         exit 0
     #fi
     #if [[ `grep -qi ansible /etc/apt/sources.list` ]] || [ -f /etc/apt/sources.list.d/ansible*.list ]; then
-    elif (grep -qi ansible /etc/apt/sources.list) || (ls /etc/apt/sources.list.d/ansible*.list >/dev/null 2>&1) ; then
+    elif (grep -qi ansible /etc/apt/sources.list) || (ls /etc/apt/sources.list.d/*ansible*.list >/dev/null 2>&1) ; then
         #echo "Ansible repo(s) found within /etc/apt/sources.list*"
         echo -e '\nANSIBLE REPO(S) FOUND WITHIN /etc/apt/sources.list AND/OR /etc/apt/sources.list.d/ansible*.list -- MUST CONTAIN LINE "deb http://ppa.launchpad.net/ansible/ansible-2.4/ubuntu xenial main" IF YOU WANT THE LATEST ANSIBLE 2.4.x -- AND REMOVE ALL SIMILAR LINES -- then re-run this script.\n'
     else
