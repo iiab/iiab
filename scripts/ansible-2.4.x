@@ -88,7 +88,7 @@ if [ ! -f /etc/centos-release ] && [ ! -f /etc/fedora-release ] && [ ! -f /etc/o
     # Align IIAB with Ansible community's latest official release
     echo "Using apt to check for updates, then install/upgrade ansible"
     apt update
-    apt -y install ansible=2.4*
+    apt -y --allow-downgrades install ansible=2.4*
 
     # TEMPORARILY USE ANSIBLE 2.4.4 (REMOVE IT WITH "pip uninstall ansible")
     #pip install ansible==2.4.4
