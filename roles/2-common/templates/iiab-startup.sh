@@ -15,9 +15,9 @@ fi
 if [[ $(grep -i raspbian /etc/*release) &&
         #($(grep "hostapd_enabled = False" /etc/iiab/config_vars.yml) ||
             #((! $(grep "hostapd_enabled = True" /etc/iiab/config_vars.yml)) &&
-                 ! $(grep "^hostapd_enabled = True" /etc/iiab/iiab.ini) ]];
+                 ! $(grep "^HOSTAPD_ENABLED=True" /etc/iiab/iiab.env) ]];
                  # NEGATED LOGIC HELPS FORCE PROMISCUOUS MODE EARLY IN INSTALL
-                 # (when computed_network.yml has not yet populated iiab.ini)
+                 # (when network/tasks/main.yml hasn't yet populated iiab.env)
 
                  # RESULT: WiFi-installed IIAB should have wlan0 properly in
                  # promiscuous mode Even On Reboots (if 2-common completed!)
