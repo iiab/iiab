@@ -36,7 +36,7 @@ if [ ! `command -v ansible-playbook` ]; then   # "command -v" is POSIX compliant
         apt -y install python-pip python-setuptools python-wheel patch
         #apt-add-repository -y ppa:ansible/ansible
         apt-add-repository -y ppa:ansible/ansible-2.4
-    # elif UBUNTU MUST REMAIN ABOVE (as Ubuntu also contains /etc/debian_version, which would trigger the line just below)
+    # elif UBUNTU MUST REMAIN ABOVE (as Ubuntu ALSO contains /etc/debian_version, which would trigger the line just below)
     elif [ -f /etc/debian_version ] || (grep -qi raspbian /etc/*elease) ; then
         if ( ! grep -qi ansible /etc/apt/sources.list) && [ ! -f /etc/apt/sources.list.d/ansible ]; then
             apt -y install dirmngr python-pip python-setuptools python-wheel patch
