@@ -39,6 +39,15 @@ if [ ! `command -v ansible-playbook` ]; then   # "command -v" is POSIX compliant
         pip install ansible==$GOOD_VER --disable-pip-version-check
         # FOUND="true"
         # FAMILY="olpc"
+    elif (grep -qi ubuntu /etc/lsb-release) || (grep -qi ubuntu /etc/os-release); then
+        apt -y install python-pip python-setuptools python-wheel patch
+        #apt-add-repository -y ppa:ansible/ansible
+        apt-add-repository -y ppa:ansible/ansible-2.4
+        # FOUND="true"
+        # FAMILY="debian"
+    # fi
+    # if [ ! $FOUND = "true" ]; then
+        # elif UBUNTU MUST REMAIN ABOVE (as Ubuntu also contains /etc/debian_version, which would trigger the line just below)
     elif [ -f /etc/debian_version ] || (grep -qi raspbian /etc/*elease) ; then
         if ( ! grep -qi ansible /etc/apt/sources.list) && [ ! -f /etc/apt/sources.list.d/ansible ]; then
             apt -y install dirmngr python-pip python-setuptools python-wheel patch
@@ -51,14 +60,6 @@ if [ ! `command -v ansible-playbook` ]; then   # "command -v" is POSIX compliant
         # FOUND="true"
         # FAMILY="debian"
         # Parens are optional, but greatly clarify :)
-    elif (grep -qi ubuntu /etc/lsb-release) || (grep -qi ubuntu /etc/os-release); then
-        apt -y install python-pip python-setuptools python-wheel patch
-        #apt-add-repository -y ppa:ansible/ansible
-        apt-add-repository -y ppa:ansible/ansible-2.4
-        # FOUND="true"
-        # FAMILY="debian"
-    # fi
-    # if [ ! $FOUND = "true" ]; then
     else
         echo "WARN: Could not detect distro or distro unsupported"
         exit 1
