@@ -1,12 +1,12 @@
 #!/bin/bash -e
 
-# Installs or upgrades to the best possible Ansible release, so iiab-install
-# can proceed.  Ensure you're online before running this script!
+echo -e '\nATTEMPTING TO INSTALL THE LATEST ANSIBLE 2.4.x'
+echo -e 'Ensure you'"'"'re online before running this script!'
+echo -e 'OR: consider scripts/ansible to keep up-to-date with Ansible'"'"'s evolution.\n'
 
-GOOD_VER="2.4.4"      # Ansible version to pip install onto OLPC XO laptops.
-                      # On other OS's we install/upgrade/pin to the latest Ansible 2.4.x
-                      # (Whereas for the upcoming IIAB 6.6, we'll likely
-                      # recommend the very latest Ansible 2.5.x or higher)
+GOOD_VER="2.4.4"      # Ansible version for OLPC XO laptops (pip install).
+                      # On other OS's we attempt to install/upgrade/pin to the latest Ansible 2.4.x
+                      # WARNING: IIAB 6.6 will likely recommend the very latest Ansible 2.5.x or higher.
 CURR_VER="undefined"
 # FOUND="false"       # NOT USED AS OF 2017-12-12
 # FAMILY="undefined"  # NOT USED AS OF 2017-12-12
