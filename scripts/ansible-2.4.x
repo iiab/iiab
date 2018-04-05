@@ -64,7 +64,7 @@ else
     #if [[ `grep -qi ansible /etc/apt/sources.list` ]] || [ -f /etc/apt/sources.list.d/ansible*.list ]; then
     elif (grep -qi ansible /etc/apt/sources.list) || (ls /etc/apt/sources.list.d/*ansible*.list >/dev/null 2>&1) ; then
         #echo "Ansible repo(s) found within /etc/apt/sources.list*"
-        echo -e '\nMANUAL INTERVENTION REQUIRED: ANSIBLE REPO(S) FOUND WITHIN /etc/apt/sources.list AND/OR /etc/apt/sources.list.d/*ansible*.list -- MUST CONTAIN LINE "deb http://ppa.launchpad.net/ansible/ansible-2.4/ubuntu xenial main" IF YOU WANT THE LATEST ANSIBLE 2.4.x -- AND REMOVE ALL SIMILAR LINES -- then re-run this script.\n'
+        echo -e '\nMANUAL INTERVENTION URGED: ANSIBLE REPO(S) FOUND WITHIN /etc/apt/sources.list AND/OR /etc/apt/sources.list.d/*ansible*.list -- MUST CONTAIN LINE "deb http://ppa.launchpad.net/ansible/ansible-2.4/ubuntu xenial main" IF YOU WANT THE LATEST ANSIBLE 2.4.x -- AND REMOVE ALL SIMILAR LINES -- then re-run this script.\n'
     else
         echo "Upstream ansible source repo not found, please uninstall ansible and re-run this script"
         exit 1
