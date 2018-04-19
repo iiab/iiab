@@ -32,13 +32,14 @@ if [ ! `command -v ansible-playbook` ]; then   # "command -v" is POSIX compliant
         pip install --upgrade pip setuptools wheel #EOL just do it
         pip install ansible==$GOOD_VER --disable-pip-version-check
     # Parens are optional, but greatly clarify :)
-    elif (grep -qi ubuntu /etc/lsb-release) || (grep -qi ubuntu /etc/os-release); then
+    elif (grep -qi ubuntu /etc/lsb-release 2> /dev/null) || (grep -qi ubuntu /etc/os-release); then
         apt -y install python-pip python-setuptools python-wheel patch
         #apt-add-repository -y ppa:ansible/ansible
         apt-add-repository -y ppa:ansible/ansible-2.4
     # elif UBUNTU MUST REMAIN ABOVE (as Ubuntu ALSO contains /etc/debian_version, which would trigger the line just below)
     elif [ -f /etc/debian_version ] || (grep -qi raspbian /etc/*elease) ; then
         if ( ! grep -qi ansible /etc/apt/sources.list) && [ ! -f /etc/apt/sources.list.d/ansible ]; then
+            apt update
             apt -y install dirmngr python-pip python-setuptools python-wheel patch
             #echo "deb http://ppa.launchpad.net/ansible/ansible/ubuntu xenial main" \
             #     >> /etc/apt/sources.list.d/iiab-ansible.list
