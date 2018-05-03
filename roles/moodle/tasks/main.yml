@@ -1,5 +1,4 @@
----
-- name: Install Moodle required packages (OS's other than debunt)
+- name: Install Moodle required packages (OS's other than debuntu)
   package:
     name: "{{ item }}"
     state: present
@@ -16,10 +15,10 @@
     - python-psycopg2
     - php{{ php_version }}-pgsql
     - php{{ php_version }}-curl
-#    - php{{ php_version }}-zip
+    #- php{{ php_version }}-zip
     - php{{ php_version }}-gd
-#    - php{{ php_version }}-mbstring
-# mbstring is now included in php-cli
+    #- php{{ php_version }}-mbstring
+    # mbstring is now included in php-cli
     - php{{ php_version }}-cli
   when: is_debuntu
 
@@ -44,8 +43,9 @@
     dest: "{{ moodle_base }}"
     depth: 1
     force: yes
-    version: "MOODLE_{{ moodle_version }}_STABLE"
-#  ignore_errors: yes
+    #version: "MOODLE_{{ moodle_version }}_STABLE"
+    version: master   # TEMPORARY DURING MAY 2018 TESTING
+  #ignore_errors: yes
   when: internet_available and moodle.stat.exists is defined and not moodle.stat.exists
 
 - name: Prepare the downloaded directory so Apache can install config file
@@ -70,7 +70,7 @@
     mode: 0770
     state: directory
 
-- name: Remove stock Moodle conf
+- name: Remove stock Moodle config file
   file:
     path: "/etc/{{ apache_config_dir }}/moodle.conf"
     state: absent
@@ -106,7 +106,7 @@
   postgresql_user:
     name: Admin
     password: changeme
-    encrypted: yes   # Required by PostgresSQL 10.3+ e.g. on Ubuntu 18.04, see https://github.com/iiab/iiab/issues/759
+    encrypted: yes   # Required by PostgreSQL 10+ e.g. Ubuntu 18.04's PostgreSQL 10.3+, see https://github.com/iiab/iiab/issues/759
     role_attr_flags: NOSUPERUSER,NOCREATEROLE,NOCREATEDB
     state: present
   become: yes
@@ -114,7 +114,7 @@
 
 - name: Create database
   postgresql_db:
-    name: moodle
+    name: "{{ moodle_database_name }}"
     encoding: utf8
     owner: Admin
     template: template1
@@ -140,7 +140,7 @@
     name: "{{ apache_service }}"
     state: restarted
 
-- name: See if the config.php file exists
+- name: See if config.php exists
   stat:
     path: "{{ moodle_base }}/config.php"
   register: config
@@ -150,7 +150,7 @@
   when: config.stat.exists is defined and not config.stat.exists
 
 - name: Give Apache permission to read config file
-#  command: chown -R {{ apache_user }} {{ moodle_base }}
+  #command: chown -R {{ apache_user }} {{ moodle_base }}
   file:
     path: "{{ moodle_base }}/config.php"
     mode: 0644
