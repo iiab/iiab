@@ -7,74 +7,84 @@
   tags:
     - download
 
-- name: Configure ejabberd
-  template:
-    backup: yes
-    src: "{{ item.src }}"
-    dest: "{{ item.dest }}"
-    owner: root
-    group: root
-    mode: "{{ item.mode }}"
-  with_items:
-    - { src: 'ejabberd-iiab.cfg.j2', dest: '/etc/ejabberd/ejabberd-iiab.cfg' , mode: '0644' }
-    - { src: 'ejabberdctl.cfg.j2', dest: '/etc/ejabberd/ejabberdctl-iiab.cfg', mode: '0644' }
-    - { src: 'ejabberd-iiab', dest: '/etc/sysconfig/ejabberd-iiab', mode: '0755' }
-    #- { src: 'ejabberd-domain-config', dest: '/etc/sysconfig/olpc-scripts/domain_config.d/ejabberd', mode: '0755'}
-    #- { src: 'ejabberd', dest: '/etc/sysconfig/olpc-scripts/domain_config.d/ejabberd' , mode: '0755' }
-    - { src: 'ejabberd-iiab.service.j2', dest: '/etc/systemd/system/ejabberd-iiab.service', mode: '0644' }
-    - { src: 'iiab-ejabberd-srg', dest: '/usr/bin/iiab-ejabberd-srg' , mode: '0755' }
-    #- { src: '10-ejabberdmoodle', dest: '/etc/sudoers.d/10-ejabberdmoodle', mode: '0440' }
-    - { src: 'ejabberd.tmpfiles', dest: '/etc/tmpfiles.d/ejabberd.conf', mode: '0640' }
-  register: ejabberd_config
+#- name: Configure ejabberd
+#  template:
+#    backup: yes
+#    src: "{{ item.src }}"
+#    dest: "{{ item.dest }}"
+#    owner: root
+#    group: root
+#    mode: "{{ item.mode }}"
+#  with_items:
+#    - { src: 'ejabberd-iiab.cfg.j2', dest: '/etc/ejabberd/ejabberd-iiab.cfg' , mode: '0644' }
+#    - { src: 'ejabberdctl.cfg.j2', dest: '/etc/ejabberd/ejabberdctl-iiab.cfg', mode: '0644' }
+#    - { src: 'ejabberd-iiab', dest: '/etc/sysconfig/ejabberd-iiab', mode: '0755' }
+#    #- { src: 'ejabberd-domain-config', dest: '/etc/sysconfig/olpc-scripts/domain_config.d/ejabberd', mode: '0755'}
+#    #- { src: 'ejabberd', dest: '/etc/sysconfig/olpc-scripts/domain_config.d/ejabberd' , mode: '0755' }
+#    - { src: 'ejabberd-iiab.service.j2', dest: '/etc/systemd/system/ejabberd-iiab.service', mode: '0644' }
+#    - { src: 'iiab-ejabberd-srg', dest: '/usr/bin/iiab-ejabberd-srg' , mode: '0755' }
+#    #- { src: '10-ejabberdmoodle', dest: '/etc/sudoers.d/10-ejabberdmoodle', mode: '0440' }
+#    - { src: 'ejabberd.tmpfiles', dest: '/etc/tmpfiles.d/ejabberd.conf', mode: '0640' }
+#  register: ejabberd_config
 
-- name: Stop and disable OS provided systemd ejabberd service
+#- name: Stop and disable OS provided systemd ejabberd service
+#  service:
+#    name: ejabberd
+#    state: stopped
+#    enabled: no
+
+#- name: Put the startup script in place - debian
+#  template:
+#    src: ejabberd-iiab.init
+#    dest: /etc/init.d/ejabberd-iiab
+#    mode: 0755
+#  when: is_debuntu
+
+#- name: Put the startup script in place - non debian
+#  template:
+#    src: ejabberd-iiab.init
+#    dest: /usr/libexec/ejabberd-iiab
+#    mode: 0755
+#  when: not is_debuntu
+
+#- name: Remove ejabberd_domain if domain changes
+#  file:
+#    path: /etc/sysconfig/ejabberd_domain_name
+#    state: absent
+#  when: ejabberd_config.changed
+
+#- name: Enable ejabberd service
+#  file:
+#    src: /etc/systemd/system/ejabberd-iiab.service
+#    dest: /etc/systemd/system/multi-user.target.wants/ejabberd-iiab.service
+#    owner: root
+#    group: root
+#    state: link
+
+- name: Stop ejabberd service
   service:
     name: ejabberd
+    #name: ejabberd-iiab
     state: stopped
     enabled: no
-
-- name: Put the startup script in place - debian
-  template:
-    src: ejabberd-iiab.init
-    dest: /etc/init.d/ejabberd-iiab
-    mode: 0755
-  when: is_debuntu
-
-- name: Put the startup script in place - non debian
-  template:
-    src: ejabberd-iiab.init
-    dest: /usr/libexec/ejabberd-iiab
-    mode: 0755
-  when: not is_debuntu
-
-- name: Remove ejabberd_domain if domain changes
-  file:
-    path: /etc/sysconfig/ejabberd_domain_name
-    state: absent
-  when: ejabberd_config.changed
-
-- name: Enable ejabberd service
-  file:
-    src: /etc/systemd/system/ejabberd-iiab.service
-    dest: /etc/systemd/system/multi-user.target.wants/ejabberd-iiab.service
-    owner: root
-    group: root
-    state: link
+  when: not ejabberd_enabled
 
 - name: Start ejabberd service
   service:
-    name: ejabberd-iiab
+    name: ejabberd
+    #name: ejabberd-iiab
     state: restarted
     enabled: yes
-  when: ejabberd_config.changed and ejabberd_enabled
+  when: ejabberd_enabled
+  #when: ejabberd_config.changed and ejabberd_enabled
 
-- name: Wait for ejabberd service start
-  wait_for:
-    port: 5280
-    delay: 15
-    state: started
-    timeout: 300
-  when: ejabberd_config.changed and ejabberd_enabled
+#- name: Wait for ejabberd service start
+#  wait_for:
+#    port: 5280
+#    delay: 15
+#    state: started
+#    timeout: 300
+#  when: ejabberd_config.changed and ejabberd_enabled
 
 # ejabberd-iiab.init has the logic for the below, needs to be done once 
 # and only if the group does not exist based on presence of
