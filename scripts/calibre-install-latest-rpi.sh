@@ -13,11 +13,11 @@
 # Might break future updates; you have been warned.
 
 export DEBIAN_FRONTEND=noninteractive
-# Updates calibre calibre-bin to version 3.21 or ... from testing
+# Prepare to update to latest from testing
 echo "deb http://raspbian.raspberrypi.org/raspbian/ testing main" > /etc/apt/sources.list.d/rpi-testing.list
 apt update
 apt -y install calibre calibre-bin
-# Remove last line, safer than: rm /etc/apt/sources.list.d/debian-testing.list
+# Remove last line, safer than: rm /etc/apt/sources.list.d/rpi-testing.list
 sed -i '$ d' /etc/apt/sources.list.d/rpi-testing.list
 # Clears the cache of testing
 apt update
