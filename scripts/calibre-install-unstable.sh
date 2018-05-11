@@ -1,18 +1,24 @@
 #!/bin/bash
 
-# Thanks to Jerry Vonau (https://github.com/jvonau) who made
-# this critical breakthrough possible!
-# might break future updates, you have been warned
-# The latest available is 3.20 available from testing
-# https://packages.debian.org/search?keywords=calibre
-# might break future updates, you have been warned
+# Thanks to Jerry Vonau (https://github.com/jvonau) who made this critical
+# breakthrough possible!
+#
+# Calibre 3.23 is the latest available from testing as of 2018-05-10:
+#
+#   https://packages.debian.org/search?keywords=calibre
+#   http://deb.debian.org/debian/pool/main/c/calibre/
+#   http://raspbian.raspberrypi.org/raspbian/pool/main/c/calibre/
+#   http://archive.raspbian.org/raspbian/pool/main/c/calibre/
+#
+# Might break future updates; you have been warned.
 
 export DEBIAN_FRONTEND=noninteractive
-# Updates to calibre & calibre-bin to "very latest" 3.x from unstable
+# Prepares to update to latest from unstable
+apt-key adv --recv-key --keyserver keyserver.ubuntu.com 7638D0442B90D010
 echo "deb http://deb.debian.org/debian unstable main" >> /etc/apt/sources.list.d/unstable.list
 apt update
 apt -y install calibre calibre-bin
-# Remove last line, safer than: rm /etc/apt/sources.list.d/debian-unstable.list
+# Removes last line, safer than: rm /etc/apt/sources.list.d/unstable.list
 sed -i '$ d' /etc/apt/sources.list.d/unstable.list
 # Clears the cache of testing and unstable
 apt update
