@@ -4,7 +4,7 @@ echo -e '\nATTEMPTING TO INSTALL THE LATEST ANSIBLE 2.5.x'
 echo -e 'Ensure you'"'"'re online before running this script!'
 echo -e 'OR: consider scripts/ansible to keep up-to-date with Ansible'"'"'s evolution.\n'
 
-GOOD_VER="2.5.0"      # Ansible version for OLPC XO laptops (pip install).
+GOOD_VER="2.5.2"      # Ansible version for OLPC XO laptops (pip install).
                       # On other OS's we attempt to install/upgrade/pin to the latest Ansible 2.5.x
 CURR_VER="undefined"
 # below are unused for future use
