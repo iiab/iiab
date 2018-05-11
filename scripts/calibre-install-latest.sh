@@ -1,11 +1,13 @@
 #!/bin/bash
 
-# Thanks to Jerry Vonau (https://github.com/jvonau) who made
-# this critical breakthrough for Calibre 3.x possible!
-# The latest available is 3.20 available from testing
+# Thanks to Jerry Vonau (https://github.com/jvonau) who made this critical
+# breakthrough possible!
+#
+# Calibre 3.23 is the latest available from testing as of 2018-05-10:
 # https://packages.debian.org/search?keywords=calibre
-# (SEE http://deb.debian.org/debian/pool/main/c/calibre/ ?)
-# might break future updates, you have been warned
+# (SEE ALSO http://deb.debian.org/debian/pool/main/c/calibre/ ?)
+#
+# Might break future updates; you have been warned.
 
 export DEBIAN_FRONTEND=noninteractive
 # Drags in stock desktop dependencies without too much from testing below
