@@ -18,7 +18,7 @@ apt-key adv --recv-key --keyserver keyserver.ubuntu.com 7638D0442B90D010
 echo "deb http://deb.debian.org/debian unstable main" >> /etc/apt/sources.list.d/unstable.list
 apt update
 apt -y install calibre calibre-bin
-# Remove last line, safer than: rm /etc/apt/sources.list.d/debian-unstable.list
+# Remove last line, safer than: rm /etc/apt/sources.list.d/unstable.list
 sed -i '$ d' /etc/apt/sources.list.d/unstable.list
 # Clears the cache of testing and unstable
 apt update
