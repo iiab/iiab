@@ -16,12 +16,6 @@
     mode: 0644
   when: discovered_wireless_iface is defined
 
-- name: Disable the Access Point 'hostapd' service
-  service:
-    enabled: no
-    name: hostapd.service
-  when: not hostapd_enabled
-
 - name: Use custom systemd unit file to start 'hostapd' service
   template:
     src: hostapd/hostapd.service.j2
@@ -37,6 +31,7 @@
     owner: root
     group: root
     mode: 0755
+  when: is_rpi
 
 - name: Create /usr/bin/iiab-hotspot-off from template
   template:
@@ -45,10 +40,24 @@
     owner: root
     group: root
     mode: 0755
+  when: is_rpi
 
-- name: Enable/Restart the Access Point 'hostapd' service
-  service:
-    # enabled: yes
-    state: restarted
-    name: hostapd.service
+- name: Disable the Access Point 'hostapd' service
+  systemd:
+    name: hostapd
+    enabled: no
+# cheap workaround for when /etc/init.d is populated
+#  when: not hostapd_enabled
+
+- name: Enable the Access Point 'hostapd' service
+  systemd:
+    name: hostapd
+    enabled: yes
   when: hostapd_enabled and iiab_wireless_lan_iface is defined and iiab_network_mode != "Appliance"
+
+- name: Record HOSTAPD_ENABLED to /etc/iiab/iiab.env
+  lineinfile:
+    dest: /etc/iiab/iiab.env
+    regexp: '^HOSTAPD_ENABLED=*'
+    line: 'HOSTAPD_ENABLED={{ hostapd_enabled }}'
+    state: present

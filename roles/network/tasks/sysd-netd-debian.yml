@@ -3,38 +3,38 @@
   template:
     dest: /etc/systemd/network/IIAB-Bridge.netdev
     src: network/systemd-br0.j2
+  when: iiab_lan_iface == "br0"
 
 - name: Copy the bridge script - Assigns IP address
   template:
     dest: /etc/systemd/network/IIAB-Bridge.network
     src: network/systemd-br0-network.j2
+  when: iiab_lan_iface == "br0"
 
 - name: Copy the bridge script - Assigns br0 wired slaves
   template:
     dest: /etc/systemd/network/IIAB-Slave.network
     src: network/systemd-br0-slave.j2
-  when: iiab_wired_lan_iface is defined
+  when: iiab_wired_lan_iface is defined and iiab_lan_iface == "br0"
 
 - name: Stopping services
   include_tasks: down-debian.yml
 
+- name: Disable and mask systemd-networkd-wait-online
+  systemd:
+    name: systemd-networkd-wait-online
+    enabled: no
+    masked: yes
+    state: stopped
+  when: is_ubuntu_18
+
 - name: Reload systemd
-  shell: systemctl daemon-reload
+  systemd:
+    daemon_reload: yes
 
 - name: Restart the systemd-networkd service
-  service:
+  systemd:
     name: systemd-networkd
     enabled: yes
     state: restarted
   when: not nobridge is defined and not no_net_restart
-
-- name: Restart hostapd when WiFi is present
-  service:
-    name: hostapd
-    enabled: yes
-    state: restarted
-  when: iiab_wireless_lan_iface is defined and hostapd_enabled and iiab_network_mode != "Appliance"
-
-#- name: dhcp_server may be affected - starting - user choice
-#  service: name={{ dhcp_service2 }} state=started
-#  when: iiab_network_mode != "Appliance"
