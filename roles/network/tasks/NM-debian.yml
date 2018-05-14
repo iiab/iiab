@@ -17,12 +17,46 @@
     dest: /etc/NetworkManager/system-connections/
     src: network/bridge-br0
     mode: 0600
+  when: iiab_network_mode != "Appliance"
 
 - name: Remove br0 in Appliance Mode for NetworkManager
   file:
     dest: /etc/NetworkManager/system-connections/bridge-br0
     state: absent
   when: iiab_network_mode == "Appliance"
+
+- name: Removing static for NetworkManager
+  file:
+    dest: /etc/NetworkManager/system-connections/iiab-static
+    state: absent
+  when: wan_ip == "dhcp"
+
+- name: Static IP computing CIDR
+  shell: netmask {{ wan_ip }}/{{ wan_netmask }} | awk -F "/" '{print $2}'
+  register: CIDR
+  when: wan_ip != "dhcp"
+
+- name: Static IP setting CIDR
+  set_fact:
+    wan_cidr: "{{ CIDR.stdout }}"
+  when: wan_ip != "dhcp"
+
+- name: Create uuid for NM's keyfile store static
+  shell: uuidgen
+  register: uuid_response2
+  when: wan_ip != "dhcp"
+
+- name: Put the uuid in place
+  set_fact:
+    gen_uuid2: "{{ uuid_response2.stdout_lines[0] }}"
+  when: wan_ip != "dhcp"
+
+- name: Copy static template for NetworkManager
+  template:
+    dest: /etc/NetworkManager/system-connections/iiab-static
+    src: network/NM-static.j2
+    mode: 0600
+  when: wan_ip != "dhcp"
 
 - name: Stop wpa_supplicant service
   service:
