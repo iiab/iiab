@@ -13,10 +13,33 @@
 #  command: tar xzf {{ downloads_dir }}/{{ sugarizer_version }}.tar.gz -C {{ sugarizer_location }}
 #           creates="{{ sugarizer_location }}/{{ sugarizer_version }}/index.html"
 
+- name: Download latest stable Server from location we control
+  get_url:
+    url: "{{ iiab_download_url }}/{{ sugarizer_server_version }}.tar.gz"
+    dest: "{{ downloads_dir }}/{{ sugarizer_server_version }}.tar.gz"
+    timeout: "{{ download_timeout }}"
+  when: internet_available
+
+- name: Untar to /library/www/html/{{ sugarizer_version }}
+  unarchive:
+    src: "{{ downloads_dir }}/{{ sugarizer_version }}.tar.gz"
+    dest: "{{ sugarizer_location }}"
+    creates: "{{ sugarizer_location }}/{{ sugarizer_version }}/index.html"
 - name: Create symbolic link /library/www/html/sugarizer
   file:
     src: "{{ sugarizer_location }}/{{ sugarizer_version }}"
     dest: "{{ sugarizer_location }}/sugarizer"
+    state: link
+
+- name: Untar to /library/www/html/{{ sugarizer_server_version }}
+  unarchive:
+    src: "{{ downloads_dir }}/{{ sugarizer_server_version }}.tar.gz"
+    dest: "{{ sugarizer_location }}"
+    creates: "{{ sugarizer_location }}/{{ sugarizer_server_version }}/index.html"
+- name: Create symbolic link /library/www/html/sugarizer
+  file:
+    src: "{{ sugarizer_location }}/{{ sugarizer_server_version }}"
+    dest: "{{ sugarizer_location }}/sugarizer-server"
     state: link
 
 - name: Set up Node.js 6.x apt sources (debuntu)
@@ -52,7 +75,7 @@
 # attempting to reinstall npm is broken on Raspbian 9
 - name: Check for Sugarizer already installed
   stat:
-    path: "{{ sugarizer_location }}/sugarizer/server/node_modules"
+    path: "{{ sugarizer_location }}/{{ sugarizer_server_version }}/node_modules"
   register: npm
   ignore_errors: true
 
@@ -70,7 +93,7 @@
     mode: 0644
   with_items:
     - { src: 'sugarizer.service.j2' , dest: '/etc/systemd/system/sugarizer.service'}
-    - { src: 'sugarizer.ini' , dest: '{{ sugarizer_location }}/sugarizer/server' }
+    - { src: 'sugarizer.ini' , dest: '{{ sugarizer_location }}/{{ sugarizer_server_version }}/env/sugarizer.ini' }
 #     - { src: 'sugarizer.conf' , dest: '/etc/apache2/sites-available' }
 
 #- name: Create the symlink enabling the rewrite
@@ -81,8 +104,8 @@
 - name: Create the express framework for Node.js (OS's other than Fedora 18)
   shell: npm install
   args:
-    chdir: "{{ sugarizer_location }}/sugarizer/server"
-    creates: "{{ sugarizer_location }}/sugarizer/server/node_modules"
+    chdir: "{{ sugarizer_location }}/{{  sugarizer_server_version }}"
+    creates: "{{ sugarizer_location }}/{{ sugarizer_server_version }}/server/node_modules"
   when: not is_F18 and not npm_exists
 
 - name: Create the express framework for Node.js (Fedora 18)
