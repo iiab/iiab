@@ -3,7 +3,16 @@
 # Thanks to Jerry Vonau (https://github.com/jvonau) who made this critical
 # breakthrough possible!
 #
-# Calibre 3.23 is the latest available from testing as of 2018-05-10:
+# Worked up to Calibre 3.23 from May 2018.
+# Calibre 3.24 and 3.25 fail to "apt install" in June 2018:
+#
+#   The following packages have unmet dependencies:
+#    calibre : Depends: python-pyqt5 (>= 5.10.1+dfsg-2) but 5.10.1+dfsg-1+rpi1 is to be installed
+#   E: Unable to correct problems, you have held broken packages.
+#
+# Debian approach (calibre-install-latest.sh) is the workaround for now: https://github.com/iiab/iiab/pull/832
+# 
+# Calibre 3.25 is the latest available from testing as of 2018-06-10:
 #
 #   http://raspbian.raspberrypi.org/raspbian/pool/main/c/calibre/
 #   http://archive.raspbian.org/raspbian/pool/main/c/calibre/
