@@ -3,7 +3,7 @@
 # Thanks to Jerry Vonau (https://github.com/jvonau) who made this critical
 # breakthrough possible!
 #
-# Calibre 3.23 is the latest available from testing as of 2018-05-10:
+# Calibre 3.25 is the latest available from testing as of 2018-06-10:
 #
 #   https://packages.debian.org/search?keywords=calibre
 #   http://deb.debian.org/debian/pool/main/c/calibre/
