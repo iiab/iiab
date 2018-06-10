@@ -10,7 +10,9 @@
 #    calibre : Depends: python-pyqt5 (>= 5.10.1+dfsg-2) but 5.10.1+dfsg-1+rpi1 is to be installed
 #   E: Unable to correct problems, you have held broken packages.
 #
-# Debian approach (calibre-install-latest.sh) is the workaround for now: https://github.com/iiab/iiab/pull/832
+# Debian approach (calibre-install-latest.sh) is the workaround for now:
+#
+#   https://github.com/iiab/iiab/pull/833
 # 
 # Calibre 3.25 is the latest available from testing as of 2018-06-10:
 #
