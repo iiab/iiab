@@ -1,8 +1,9 @@
 #!/bin/bash -e
 
 echo -e '\nATTEMPTING TO INSTALL THE LATEST ANSIBLE 2.5.x'
-echo -e 'Ensure you'"'"'re online before running this script!'
-echo -e 'OR: consider scripts/ansible to keep up-to-date with Ansible'"'"'s evolution.\n'
+echo -e 'Ensure you'"'"'re online before running this! (/opt/iiab/iiab/scripts/ansible-2.5.x)'
+echo -e 'INSTRUCTIONS: https://github.com/iiab/iiab/wiki/IIAB-Installation#do-everything-from-scratch'
+echo -e 'ALTERNATIVE: Consider scripts/ansible to keep up-to-date as Ansible evolves.\n'
 
 GOOD_VER="2.5.4"      # Ansible version for OLPC XO laptops (pip install).
                       # On other OS's we attempt to install/upgrade/pin to the latest Ansible 2.5.x
@@ -53,20 +54,21 @@ if [ ! `command -v ansible-playbook` ]; then   # "command -v" is POSIX compliant
 else
     #CURR_VER=`ansible --version | head -n 1 | cut -f 2 -d " "`
     CURR_VER=`ansible --version | head -1 | awk '{print $2}'`  # to match iiab-install
-    echo "Current ansible version installed is $CURR_VER"
+    echo "Currently installed Ansible version is: $CURR_VER"
+    echo -e "INTERNET-IN-A-BOX GENERALLY REQUIRES ANSIBLE VERSION: $GOOD_VER or higher\n"
     if [ -f /etc/centos-release ] || [ -f /etc/fedora-release ]; then
-        echo "Please use your system's package manager to update ansible"
+        echo "Please use your system's package manager (or pip if nec) to update Ansible."
         exit 0
     elif [ -f /etc/olpc-release ]; then
-        echo "Please use pip package manager to update ansible"
+        echo "Please use pip package manager to update Ansible."
         exit 0
     #fi
     #if [[ `grep -qi ansible /etc/apt/sources.list` ]] || [ -f /etc/apt/sources.list.d/ansible*.list ]; then
     elif (grep -qi ansible /etc/apt/sources.list) || (ls /etc/apt/sources.list.d/*ansible*.list >/dev/null 2>&1) ; then
         #echo "Ansible repo(s) found within /etc/apt/sources.list*"
-        echo -e '\nMANUAL INTERVENTION URGED: ANSIBLE REPO(S) FOUND WITHIN /etc/apt/sources.list AND/OR /etc/apt/sources.list.d/*ansible*.list -- MUST CONTAIN LINE "deb http://ppa.launchpad.net/ansible/ansible-2.5/ubuntu xenial main" IF YOU WANT THE LATEST ANSIBLE 2.5.x -- AND REMOVE ALL SIMILAR LINES TO ENSURE ANSIBLE UPDATES CLEANLY -- then re-run this script.\n'
+        echo -e 'MANUAL INTERVENTION URGED:\nANSIBLE REPO(S) FOUND WITHIN /etc/apt/sources.list AND/OR /etc/apt/sources.list.d/*ansible*.list -- MUST CONTAIN LINE "deb http://ppa.launchpad.net/ansible/ansible-2.5/ubuntu xenial main" IF YOU WANT THE LATEST ANSIBLE 2.5.x -- AND REMOVE ALL SIMILAR LINES TO ENSURE ANSIBLE UPDATES CLEANLY -- then re-run this script.\n'
     else
-        echo "Upstream ansible source repo not found, please uninstall ansible and re-run this script"
+        echo -e 'Upstream ansible source repo not found:\nPLEASE UNINSTALL ANSIBLE (run "apt purge ansible" or "pip uninstall ansible", depending how Ansible was originally installed) THEN RE-RUN THIS SCRIPT.'
         exit 1
     fi
 fi
