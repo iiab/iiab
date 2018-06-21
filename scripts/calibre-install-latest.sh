@@ -3,14 +3,7 @@
 # Thanks to Jerry Vonau (https://github.com/jvonau) who made this critical
 # breakthrough possible!
 #
-# Calibre 3.25 is the latest available from testing as of 2018-06-10:
-#
-#   https://packages.debian.org/search?keywords=calibre
-#   http://deb.debian.org/debian/pool/main/c/calibre/
-#   http://raspbian.raspberrypi.org/raspbian/pool/main/c/calibre/
-#   http://archive.raspbian.org/raspbian/pool/main/c/calibre/
-#
-# Might break future updates; you have been warned.
+# SEE COMMENTS AT THE TOP OF scripts/calibre-install-packages.sh
 
 export DEBIAN_FRONTEND=noninteractive
 # Drags in stock desktop dependencies without too much from testing below
