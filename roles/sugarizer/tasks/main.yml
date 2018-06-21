@@ -1,3 +1,7 @@
+- name: Wipe any previous sugarizer installation
+  shell: "rm -rf {{ doc_root }}/sugarizer*"
+  when: sugarizer_version == "sugarizer-1.0"
+
 - name: Download latest stable Sugarizer from location we control
   get_url:
     url: "{{ iiab_download_url }}/{{ sugarizer_version }}.tar.gz"
@@ -5,7 +9,7 @@
     timeout: "{{ download_timeout }}"
   when: internet_available
 
-- name: Untar to /library/www/html/{{ sugarizer_version }}
+- name: Untar to {{ sugarizer_version }}
   unarchive:
     src: "{{ downloads_dir }}/{{ sugarizer_version }}.tar.gz"
     dest: "{{ sugarizer_location }}"
@@ -13,10 +17,33 @@
 #  command: tar xzf {{ downloads_dir }}/{{ sugarizer_version }}.tar.gz -C {{ sugarizer_location }}
 #           creates="{{ sugarizer_location }}/{{ sugarizer_version }}/index.html"
 
+- name: Download latest stable Server from location we control
+  get_url:
+    url: "{{ iiab_download_url }}/{{ sugarizer_server_version }}.tar.gz"
+    dest: "{{ downloads_dir }}/{{ sugarizer_server_version }}.tar.gz"
+    timeout: "{{ download_timeout }}"
+  when: internet_available
+
+- name: Untar to /{{ sugarizer_version }}
+  unarchive:
+    src: "{{ downloads_dir }}/{{ sugarizer_version }}.tar.gz"
+    dest: "{{ sugarizer_location }}"
+    creates: "{{ sugarizer_location }}/{{ sugarizer_version }}/index.html"
 - name: Create symbolic link /library/www/html/sugarizer
   file:
     src: "{{ sugarizer_location }}/{{ sugarizer_version }}"
     dest: "{{ sugarizer_location }}/sugarizer"
+    state: link
+
+- name: Untar to /library/www/html/{{ sugarizer_server_version }}
+  unarchive:
+    src: "{{ downloads_dir }}/{{ sugarizer_server_version }}.tar.gz"
+    dest: "{{ sugarizer_location }}"
+    creates: "{{ sugarizer_location }}/{{ sugarizer_server_version }}/index.html"
+- name: Create symbolic link /library/www/html/sugarizer
+  file:
+    src: "{{ sugarizer_location }}/{{ sugarizer_server_version }}"
+    dest: "{{ sugarizer_location }}/sugarizer-server"
     state: link
 
 - name: Set up Node.js 6.x apt sources (debuntu)
@@ -52,36 +79,37 @@
 # attempting to reinstall npm is broken on Raspbian 9
 - name: Check for Sugarizer already installed
   stat:
-    path: "{{ sugarizer_location }}/sugarizer/server/node_modules"
+    path: "{{ sugarizer_location }}/{{ sugarizer_server_version }}/node_modules"
   register: npm
+  ignore_errors: true
 
 - name: Set a flag to abort second attempt to install
   set_fact:
     npm_exists: True
-  when: npm.stat.exists is defined and npm.stat.exists
+  when: npm.stat is defined and npm.stat.exists
 
 - name: Create systemd files and copy our ini file
   template:
     src: "{{ item.src }}"
     dest: "{{ item.dest }}"
+    mode: "{{ item.mode }}"
     owner: root
     group: root
-    mode: 0644
   with_items:
-    - { src: 'sugarizer.service.j2' , dest: '/etc/systemd/system/sugarizer.service'}
-    - { src: 'sugarizer.ini' , dest: '{{ sugarizer_location }}/sugarizer/server' }
-#     - { src: 'sugarizer.conf' , dest: '/etc/apache2/sites-available' }
+    - { src: 'sugarizer.service.j2' , dest: '/etc/systemd/system/sugarizer.service', mode: '0644' }
+    - { src: 'sugarizer.ini' , dest: '{{ sugarizer_location }}/{{ sugarizer_server_version }}/env/sugarizer.ini', mode: '0644' }
+    - { src: 'sugarizer.conf' , dest: '/etc/apache2/sites-available',mode: '0644' }
 
-#- name: Create the symlink enabling the rewrite
-#  file: src=/etc/apache2/sites-available/sugarizer.conf
-#        dest=/etc/apache2/sites-enabled/sugarizer.conf
-#        state=link
+- name: Create the symlink enabling the rewrite
+  file: src=/etc/apache2/sites-available/sugarizer.conf
+        dest=/etc/apache2/sites-enabled/sugarizer.conf
+        state=link
 
 - name: Create the express framework for Node.js (OS's other than Fedora 18)
   shell: npm install
   args:
-    chdir: "{{ sugarizer_location }}/sugarizer/server"
-    creates: "{{ sugarizer_location }}/sugarizer/server/node_modules"
+    chdir: "{{ sugarizer_location }}/{{  sugarizer_server_version }}"
+    creates: "{{ sugarizer_location }}/{{ sugarizer_server_version }}/server/node_modules"
   when: not is_F18 and not npm_exists
 
 - name: Create the express framework for Node.js (Fedora 18)
