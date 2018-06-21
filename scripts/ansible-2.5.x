@@ -5,7 +5,7 @@ echo -e 'Ensure you'"'"'re online before running this! (/opt/iiab/iiab/scripts/a
 echo -e 'INSTRUCTIONS: https://github.com/iiab/iiab/wiki/IIAB-Installation#do-everything-from-scratch'
 echo -e 'ALTERNATIVE: Consider scripts/ansible to keep up-to-date as Ansible evolves.\n'
 
-GOOD_VER="2.5.4"      # Ansible version for OLPC XO laptops (pip install).
+GOOD_VER="2.5.5"      # Ansible version for OLPC XO laptops (pip install).
                       # On other OS's we attempt to install/upgrade/pin to the latest Ansible 2.5.x
 CURR_VER="undefined"
 # below are unused for future use
