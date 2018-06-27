@@ -1,9 +1,14 @@
 #!/bin/bash -e
 
-echo -e '\nATTEMPTING TO INSTALL THE LATEST ANSIBLE 2.5.x'
-echo -e 'Ensure you'"'"'re online before running this! (/opt/iiab/iiab/scripts/ansible-2.5.x)'
-echo -e 'INSTRUCTIONS: https://github.com/iiab/iiab/wiki/IIAB-Installation#do-everything-from-scratch'
-echo -e 'ALTERNATIVE: Consider scripts/ansible to keep up-to-date as Ansible evolves.\n'
+echo -e '\n\nSTRONGLY RECOMMENDED PREREQUISITE: (1) remove all prior versions of Ansible using "apt purge ansible" and/or "pip uninstall ansible" and (2) clear out all lines containing ansible from /etc/apt/sources.list and /etc/apt/sources.list.d/*\n'
+
+echo -e 'COMPLETE INSTALL INSTRUCTIONS:\nhttps://github.com/iiab/iiab/wiki/IIAB-Installation#do-everything-from-scratch\n'
+
+echo -e 'NOW ATTEMPTING TO INSTALL THE LATEST ANSIBLE 2.5.x:'
+echo -e 'Ensure you'"'"'re online before running this (/opt/iiab/iiab/scripts/ansible-2.5.x)\n'
+
+echo -e 'ALTERNATIVES: Run scripts/ansible-2.6.x, or scripts/ansible for the latest.\n\n'
+
 
 GOOD_VER="2.5.5"      # Ansible version for OLPC XO laptops (pip install).
                       # On other OS's we attempt to install/upgrade/pin to the latest Ansible 2.5.x
