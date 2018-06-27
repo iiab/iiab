@@ -1,0 +1,62 @@
+- name: Install nodejs-legacy
+  package:  name={{ item }} 
+            state=present
+  with_items:
+    - nodejs-legacy
+  when: nodered_install
+  tags: download
+
+- name: Install npm
+  package:  name={{ item }} 
+            state=present
+  with_items:
+    - npm
+  when: nodered_install
+  tags: download
+
+- name: Install node-red packages globally.
+  shell: npm install -g --unsafe-perm node-red node-red-admin node-red-dashboard
+
+- name: Create nodered usergroup
+  group:
+    name: nodered
+    state: present
+
+- name: Add the user nodered and add to nodered group
+  user:
+    name: nodered
+    group: nodered
+
+- name: Copy settings.js file with authentication
+  template:
+    backup: yes
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: nodered
+    group: nodered
+    mode: "{{ item.mode }}"
+  with_items:
+    - { src: 'settings.js.j2' , dest: '/home/nodered/.node-red/settings.js', mode: '0755' }
+
+- name: Create node-red systemd file
+  template:
+    backup: yes
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  with_items:
+    - { src: 'node-red.service.j2' , dest: '/etc/systemd/system/node-red.service', mode: '0755' }
+
+- name: Enable node-red
+  service:
+    name: node-red
+    enabled: yes
+  when: nodered_enabled
+
+- name: Start node-red
+  service:
+    name: node-red
+    state: started
+  when: nodered_enabled
