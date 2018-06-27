@@ -2,6 +2,8 @@
 
 echo -e '\n\nSTRONGLY RECOMMENDED PREREQUISITE: (1) remove all prior versions of Ansible using "apt purge ansible" and/or "pip uninstall ansible" and (2) clear out all lines containing ansible from /etc/apt/sources.list and /etc/apt/sources.list.d/*\n'
 
+echo -e 'WARNING: repeatedly re-run "apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 93C4A3FD7BB9C367" if this part of the script fails due to network/mirror.\n'
+
 echo -e 'COMPLETE INSTALL INSTRUCTIONS:\nhttps://github.com/iiab/iiab/wiki/IIAB-Installation#do-everything-from-scratch\n'
 
 echo -e 'NOW ATTEMPTING TO INSTALL THE LATEST ANSIBLE 2.5.x:'
