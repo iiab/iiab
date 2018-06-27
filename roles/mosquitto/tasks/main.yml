@@ -1,0 +1,50 @@
+- name: Install Mosquitto
+  package:  name={{ item }} 
+            state=present
+  with_items:
+    - mosquitto
+    - mosquitto-clients
+  when: mosquitto_install
+  tags: download
+
+- name: Disable mosquitto
+  service:
+    name: mosquitto
+    enabled: no
+
+- name: Stop mosquitto
+  service:
+    name: mosquitto
+    state: stopped
+
+- name: Create mosquitto passwd file
+  file:
+    path: /etc/mosquitto/passwd
+    state: touch
+    mode: "u=rw,g=r,o=r"
+
+- name: Create mosquitto username/password
+  shell: mosquitto_passwd -b /etc/mosquitto/passwd "{{ mosquitto_user }}" "{{ mosquitto_password  }}"
+
+- name: Create mosquitto config file
+  template:
+    backup: yes
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  with_items:
+    - { src: 'websockets.conf.j2' , dest: '/etc/mosquitto/conf.d/websockets.conf', mode: '0755' }
+
+- name: Enable mosquitto
+  service:
+    name: mosquitto
+    enabled: yes
+  when: mosquitto_enabled
+
+- name: Start mosquitto
+  service:
+    name: mosquitto
+    state: started
+  when: mosquitto_enabled
