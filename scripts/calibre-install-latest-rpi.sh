@@ -3,8 +3,9 @@
 # Thanks to Jerry Vonau (https://github.com/jvonau) who made this critical
 # breakthrough possible!
 #
-# Worked up to Calibre 3.23 from May 2018, and again with 3.26 in June 2018.
-# Whereas Calibre 3.24 and 3.25 failed to "apt install" in June 2018:
+# This script worked up to late May 2018 with Calibre 3.23 -- and again began
+# working in late June 2018 with Calibre 3.26 -- whereas Calibre 3.24 and 3.25
+# failed to "apt install" below, back in early/mid-June 2018:
 #
 #   The following packages have unmet dependencies:
 #    calibre : Depends: python-pyqt5 (>= 5.10.1+dfsg-2) but 5.10.1+dfsg-1+rpi1 is to be installed
