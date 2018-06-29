@@ -26,7 +26,7 @@ if [ ! `command -v ansible-playbook` ]; then   # "command -v" is POSIX compliant
         yum -y install ca-certificates nss epel-release
         yum -y install git bzip2 file findutils gzip hg svn sudo tar which unzip xz zip libselinux-python
         yum -y install python-pip python-setuptools python-wheel patch
-        yum -y install http://releases.ansible.com/ansible/rpm/release/epel-7-x86_64/ansible-2.5.0-1.el7.ans.noarch.rpm
+        yum -y install https://releases.ansible.com/ansible/rpm/release/epel-7-x86_64/ansible-2.5.5-1.el7.ans.noarch.rpm
 #    elif [ -f /etc/fedora-release ]; then
 #        CURR_VER=`grep VERSION_ID /etc/*elease | cut -d= -f2`
 #        URL=https://github.com/jvonau/iiab/blob/ansible/vars/fedora-$CURR_VER.yml
