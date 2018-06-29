@@ -1,9 +1,16 @@
 #!/bin/bash -e
 
-echo -e '\nATTEMPTING TO INSTALL THE LATEST ANSIBLE 2.5.x'
-echo -e 'Ensure you'"'"'re online before running this! (/opt/iiab/iiab/scripts/ansible-2.5.x)'
-echo -e 'INSTRUCTIONS: https://github.com/iiab/iiab/wiki/IIAB-Installation#do-everything-from-scratch'
-echo -e 'ALTERNATIVE: Consider scripts/ansible to keep up-to-date as Ansible evolves.\n'
+echo -e '\n\nSTRONGLY RECOMMENDED PREREQUISITE: (1) remove all prior versions of Ansible using "apt purge ansible" and/or "pip uninstall ansible" and (2) clear out all lines containing ansible from /etc/apt/sources.list and /etc/apt/sources.list.d/*\n'
+
+echo -e 'WARNING: repeatedly re-run "apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 93C4A3FD7BB9C367" if this part of the script fails due to network/mirror.\n'
+
+echo -e 'COMPLETE INSTALL INSTRUCTIONS:\nhttps://github.com/iiab/iiab/wiki/IIAB-Installation#do-everything-from-scratch\n'
+
+echo -e 'NOW ATTEMPTING TO INSTALL THE LATEST ANSIBLE 2.5.x:'
+echo -e 'Ensure you'"'"'re online before running this (/opt/iiab/iiab/scripts/ansible-2.5.x)\n'
+
+echo -e 'ALTERNATIVES: Run scripts/ansible-2.6.x, or scripts/ansible for the latest.\n\n'
+
 
 GOOD_VER="2.5.5"      # Ansible version for OLPC XO laptops (pip install).
                       # On other OS's we attempt to install/upgrade/pin to the latest Ansible 2.5.x
@@ -19,7 +26,7 @@ if [ ! `command -v ansible-playbook` ]; then   # "command -v" is POSIX compliant
         yum -y install ca-certificates nss epel-release
         yum -y install git bzip2 file findutils gzip hg svn sudo tar which unzip xz zip libselinux-python
         yum -y install python-pip python-setuptools python-wheel patch
-        yum -y install http://releases.ansible.com/ansible/rpm/release/epel-7-x86_64/ansible-2.5.0-1.el7.ans.noarch.rpm
+        yum -y install https://releases.ansible.com/ansible/rpm/release/epel-7-x86_64/ansible-2.5.5-1.el7.ans.noarch.rpm
 #    elif [ -f /etc/fedora-release ]; then
 #        CURR_VER=`grep VERSION_ID /etc/*elease | cut -d= -f2`
 #        URL=https://github.com/jvonau/iiab/blob/ansible/vars/fedora-$CURR_VER.yml
