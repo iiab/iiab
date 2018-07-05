@@ -12,7 +12,7 @@ echo -e 'Ensure you'"'"'re online before running this (/opt/iiab/iiab/scripts/an
 echo -e 'ALTERNATIVES: Run scripts/ansible-2.5.x, or scripts/ansible for the latest.\n\n'
 
 
-GOOD_VER="2.6.0"      # Ansible version for OLPC XO laptops (pip install).
+GOOD_VER="2.6.1"      # Ansible version for OLPC XO laptops (pip install).
                       # On other OS's we attempt to install/upgrade/pin to the latest Ansible 2.6.x
 CURR_VER="undefined"
 # below are unused for future use
