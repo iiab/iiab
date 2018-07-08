@@ -1,121 +1,112 @@
-- name: Install packages required by Lokole
-  apt:
-    name:
-      - python3
-      - python3-pip
-      - python3-venv
-      - python3-dev
-      - libffi-dev
-      - libssl-dev
-      - bcrypt
+- name: Install packages required by MediaWiki
+  package:
+    name: "{{ item }}"
     state: present
+  with_items:
+    - "php{{ php_version }}-intl"
+    - "php{{ php_version }}-mbstring"
   tags:
-    - install
+    - download
 
-- name: Install Lokole from PyPI
-  pip:
-    name: opwen_email_client
-    version: "{{ lokole_version }}"
-    virtualenv: "{{ lokole_venv }}"
-    virtualenv_command: python3 -m venv "{{ lokole_venv }}"
-  tags:
-    - install
+- name: Download MediaWiki software, per roles/mediawiki/defaults/main.yml
+  get_url:
+    url: "{{ mediawiki_download_base_url }}/{{ mediawiki_src }}"
+    dest: "{{ downloads_dir }}"
+    timeout: "{{ download_timeout }}"
+#   force: yes
+#   backup: yes
+  register: mediawiki_download_output
   when: internet_available
 
-- name: Compile translations
-  shell: |
-    python_version=$(python3 -c 'from sys import version_info; print("%s.%s" % (version_info.major, version_info.minor));';)
-    {{ lokole_venv }}/bin/pybabel compile -d {{ item }}/translations
-  with_items:
-    - "{{ lokole_venv }}/lib/python${python_version}/site-packages/opwen_email_client/webapp"
-  tags:
-    - install
+- name: Unpack download to permanent location
+  unarchive:
+    src: "{{ downloads_dir }}/{{ mediawiki_src }}"
+    dest: "{{ mediawiki_install_path }}"
+    owner: root
+    group: "{{ apache_user }}"
+    mode: 0755
+    keep_newer: yes
 
-- name: Create run directory
-  file: 
-    path: "{{ lokole_run_directory }}"
-    state: directory
-  tags:
-    - configure
+- name: MySQL database needs to be running if we are trying to create a new db
+  service:
+    state: started
+    name: "{{ mysql_service }}"
 
-- name: Configure Lokole
+- name: Create MySQL mediawiki database
+  mysql_db:
+    name: "{{ mediawiki_db_name }}"
+    state: present
+
+- name: Create MySQL mediawiki database user
+  mysql_user:
+    name: "{{ mediawiki_db_user }}"
+    password: "{{ mediawiki_db_user_password }}"
+    priv: "{{ mediawiki_db_name }}.*:ALL,GRANT"
+    state: present
+
+- name: Configure MediaWiki
+  shell: >
+    php '{{ mediawiki_abs_path }}/maintenance/install.php'
+    --dbname={{ mediawiki_db_name }}
+    --dbserver="localhost"
+    --installdbuser={{ mediawiki_db_user }}
+    --installdbpass={{ mediawiki_db_user_password }}
+    --dbuser={{ mediawiki_db_user }}
+    --dbpass={{ mediawiki_db_user_password }}
+    --scriptpath=/mediawiki
+    --lang=en
+    --pass={{ mediawiki_admin_user_password }}
+    "{{ mediawiki_site_name }}"
+    "{{ mediawiki_admin_user }}"
+  args:
+    chdir: "{{ mediawiki_abs_path }}"
+    creates: "{{ mediawiki_abs_path }}/LocalSettings.php"
+
+- name: Copy mediawiki httpd conf file
   template:
-    src: webapp_secrets.sh.j2
-    dest: "{{ lokole_run_directory }}/webapp_secrets.sh"
-  tags:
-    - configure
-
-- name: Configure Gunicorn
-  template:
-    src: webapp.sh.j2
-    dest: "{{ lokole_run_directory }}/webapp.sh"
-    mode: a+x
-  tags:
-    - configure
-
-- name: Create 'lokole' service
-  template:
-    src: lokole.service.j2
-    dest: "/etc/systemd/system/lokole.service"
-  tags:
-    - systemd
-
-- name: Enable 'lokole' service
-  systemd:
-    daemon_reload: yes
-    name: lokole
-    enabled: yes
-    state: restarted
-  when: lokole_enabled
-
-- name: Disable 'lokole' service
-  systemd:
-    name: lokole
-    enabled: no
-    state: stopped
-  when: not lokole_enabled
-
-# Everything below this line is unused
-
-- name: Copy lokole httpd conf file
-  template:
-    src: lokole.conf.j2
-    dest: "/etc/{{ apache_config_dir }}/lokole.conf"
+    src: mediawiki.conf.j2
+    dest: "/etc/{{ apache_config_dir }}/mediawiki.conf"
 
 - name: Enable httpd conf file if we are disabled (debuntu)
   file:
-    src: /etc/{{ apache_config_dir }}/lokole.conf
-    dest: /etc/apache2/sites-enabled/lokole.conf
+    src: /etc/apache2/sites-available/mediawiki.conf
+    dest: /etc/apache2/sites-enabled/mediawiki.conf
     state: link
-  when: lokole_enabled and is_debuntu
+  when: mediawiki_enabled and is_debuntu
 
 - name: Remove httpd conf file if we are disabled (OS's other than debuntu)
   file:
-    path: /etc/apache2/sites-enabled/lokole.conf
+    path: /etc/apache2/sites-enabled/mediawiki.conf
     state: absent
-  when: not lokole_enabled and is_debuntu
+  when: not mediawiki_enabled and is_debuntu
 
 - name: Restart Apache, so it picks up the new aliases
   service:
     name: "{{ apache_service }}"
     state: restarted
 
-- name: Add 'lokole' to list of services at /etc/iiab/iiab.ini
+- name: Add 'mediawiki' to list of services at /etc/iiab/iiab.ini
   ini_file:
     dest: "{{ service_filelist }}"
-    section: lokole
+    section: mediawiki
     option: "{{ item.option }}"
     value: "{{ item.value }}"
   with_items:
     - option: name
-      value: lokole
+      value: mediawiki
     - option: description
-      value: '"lokole is an email service."'
-    - option: lokole_run_directory
-      value: "{{ lokole_run_directory }}"
-    - option: lokole_url
-      value: "{{ lokole_url }}"
-    - option: lokole_full_url
-      value: "{{ lokole_full_url }}"
-    - option: lokole_enabled
-      value: "{{ lokole_enabled }}"
+      value: '"mediawiki is a blog and web site management application."'
+    - option: mediawiki_src
+      value: "{{ mediawiki_src }}"
+    - option: mediawiki_abs_path
+      value: "{{ mediawiki_abs_path }}"
+    - option: mediawiki_db_name
+      value: "{{ mediawiki_db_name }}"
+    - option: mediawiki_db_user
+      value: "{{ mediawiki_db_user }}"
+    - option: mediawiki_url
+      value: "{{ mediawiki_url }}"
+    - option: mediawiki_full_url
+      value: "{{ mediawiki_full_url }}"
+    - option: mediawiki_enabled
+      value: "{{ mediawiki_enabled }}"
