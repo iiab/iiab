@@ -1,4 +1,4 @@
-- name: Install packages required by MediaWiki
+- name: Install packages required by Lokole
   package:
     name: "{{ item }}"
     state: present
@@ -8,20 +8,20 @@
   tags:
     - download
 
-- name: Download MediaWiki software, per roles/mediawiki/defaults/main.yml
+- name: Download Lokole software, per roles/lokole/defaults/main.yml
   get_url:
-    url: "{{ mediawiki_download_base_url }}/{{ mediawiki_src }}"
+    url: "{{ lokole_download_base_url }}/{{ lokole_src }}"
     dest: "{{ downloads_dir }}"
     timeout: "{{ download_timeout }}"
 #   force: yes
 #   backup: yes
-  register: mediawiki_download_output
+  register: lokole_download_output
   when: internet_available
 
 - name: Unpack download to permanent location
   unarchive:
-    src: "{{ downloads_dir }}/{{ mediawiki_src }}"
-    dest: "{{ mediawiki_install_path }}"
+    src: "{{ downloads_dir }}/{{ lokole_src }}"
+    dest: "{{ lokole_install_path }}"
     owner: root
     group: "{{ apache_user }}"
     mode: 0755
@@ -32,81 +32,81 @@
     state: started
     name: "{{ mysql_service }}"
 
-- name: Create MySQL mediawiki database
+- name: Create MySQL lokole database
   mysql_db:
-    name: "{{ mediawiki_db_name }}"
+    name: "{{ lokole_db_name }}"
     state: present
 
-- name: Create MySQL mediawiki database user
+- name: Create MySQL lokole database user
   mysql_user:
-    name: "{{ mediawiki_db_user }}"
-    password: "{{ mediawiki_db_user_password }}"
-    priv: "{{ mediawiki_db_name }}.*:ALL,GRANT"
+    name: "{{ lokole_db_user }}"
+    password: "{{ lokole_db_user_password }}"
+    priv: "{{ lokole_db_name }}.*:ALL,GRANT"
     state: present
 
-- name: Configure MediaWiki
+- name: Configure Lokole
   shell: >
-    php '{{ mediawiki_abs_path }}/maintenance/install.php'
-    --dbname={{ mediawiki_db_name }}
+    php '{{ lokole_abs_path }}/maintenance/install.php'
+    --dbname={{ lokole_db_name }}
     --dbserver="localhost"
-    --installdbuser={{ mediawiki_db_user }}
-    --installdbpass={{ mediawiki_db_user_password }}
-    --dbuser={{ mediawiki_db_user }}
-    --dbpass={{ mediawiki_db_user_password }}
-    --scriptpath=/mediawiki
+    --installdbuser={{ lokole_db_user }}
+    --installdbpass={{ lokole_db_user_password }}
+    --dbuser={{ lokole_db_user }}
+    --dbpass={{ lokole_db_user_password }}
+    --scriptpath=/lokole
     --lang=en
-    --pass={{ mediawiki_admin_user_password }}
-    "{{ mediawiki_site_name }}"
-    "{{ mediawiki_admin_user }}"
+    --pass={{ lokole_admin_user_password }}
+    "{{ lokole_site_name }}"
+    "{{ lokole_admin_user }}"
   args:
-    chdir: "{{ mediawiki_abs_path }}"
-    creates: "{{ mediawiki_abs_path }}/LocalSettings.php"
+    chdir: "{{ lokole_abs_path }}"
+    creates: "{{ lokole_abs_path }}/LocalSettings.php"
 
-- name: Copy mediawiki httpd conf file
+- name: Copy lokole httpd conf file
   template:
-    src: mediawiki.conf.j2
-    dest: "/etc/{{ apache_config_dir }}/mediawiki.conf"
+    src: lokole.conf.j2
+    dest: "/etc/{{ apache_config_dir }}/lokole.conf"
 
 - name: Enable httpd conf file if we are disabled (debuntu)
   file:
-    src: /etc/apache2/sites-available/mediawiki.conf
-    dest: /etc/apache2/sites-enabled/mediawiki.conf
+    src: /etc/apache2/sites-available/lokole.conf
+    dest: /etc/apache2/sites-enabled/lokole.conf
     state: link
-  when: mediawiki_enabled and is_debuntu
+  when: lokole_enabled and is_debuntu
 
 - name: Remove httpd conf file if we are disabled (OS's other than debuntu)
   file:
-    path: /etc/apache2/sites-enabled/mediawiki.conf
+    path: /etc/apache2/sites-enabled/lokole.conf
     state: absent
-  when: not mediawiki_enabled and is_debuntu
+  when: not lokole_enabled and is_debuntu
 
 - name: Restart Apache, so it picks up the new aliases
   service:
     name: "{{ apache_service }}"
     state: restarted
 
-- name: Add 'mediawiki' to list of services at /etc/iiab/iiab.ini
+- name: Add 'lokole' to list of services at /etc/iiab/iiab.ini
   ini_file:
     dest: "{{ service_filelist }}"
-    section: mediawiki
+    section: lokole
     option: "{{ item.option }}"
     value: "{{ item.value }}"
   with_items:
     - option: name
-      value: mediawiki
+      value: lokole
     - option: description
-      value: '"mediawiki is a blog and web site management application."'
-    - option: mediawiki_src
-      value: "{{ mediawiki_src }}"
-    - option: mediawiki_abs_path
-      value: "{{ mediawiki_abs_path }}"
-    - option: mediawiki_db_name
-      value: "{{ mediawiki_db_name }}"
-    - option: mediawiki_db_user
-      value: "{{ mediawiki_db_user }}"
-    - option: mediawiki_url
-      value: "{{ mediawiki_url }}"
-    - option: mediawiki_full_url
-      value: "{{ mediawiki_full_url }}"
-    - option: mediawiki_enabled
-      value: "{{ mediawiki_enabled }}"
+      value: '"lokole is an email service."'
+    - option: lokole_src
+      value: "{{ lokole_src }}"
+    - option: lokole_abs_path
+      value: "{{ lokole_abs_path }}"
+    - option: lokole_db_name
+      value: "{{ lokole_db_name }}"
+    - option: lokole_db_user
+      value: "{{ lokole_db_user }}"
+    - option: lokole_url
+      value: "{{ lokole_url }}"
+    - option: lokole_full_url
+      value: "{{ lokole_full_url }}"
+    - option: lokole_enabled
+      value: "{{ lokole_enabled }}"
