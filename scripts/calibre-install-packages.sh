@@ -37,7 +37,7 @@
 #   http://raspbian.raspberrypi.org/raspbian/pool/main/c/calibre/
 #   http://archive.raspbian.org/raspbian/pool/main/c/calibre/
 #   https://packages.debian.org/search?keywords=calibre
-#   http://deb.debian.org/debian/pool/main/c/calibre/
+#   http://deb.debian.org/debian/pool/main/c/calibre/ ~= http://cdn-fastly.deb.debian.org/debian/pool/main/c/calibre/
 #
 # Might break future updates; you have been warned.
 
