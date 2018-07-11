@@ -32,15 +32,6 @@
 # - run testing branch for Ubuntu 16.04: scripts/calibre-install-latest.sh
 # - run unstable branch for Debian etc: scripts/calibre-install-unstable.sh
 
-- name: Copy template userdb to /library/calibre/users.sqlite (IF /usr/bin/calibre WAS MISSING)
-  copy:
-    src: /opt/iiab/iiab/roles/calibre/templates/users.sqlite
-    dest: "{{ calibre_userdb }}"
-    owner: root
-    group: root
-    mode: 0644
-  when: (not calib_executable.stat.exists)
-
 - name: Create calibre-serve.service and calibre.conf (IF /usr/bin/calibre WAS MISSING)
   template:
     src: "{{ item.src }}"
@@ -78,7 +69,24 @@
 #  failed_when: false          # Never Fail during "systemctl stop calibre-serve" (even if service doesn't exist!)
 # when: calibre_svc.stat.exists
 
-# 3. CREATE DATABASE WITH A SAMPLE BOOK (REQUIRED AS OF CALIBRE 3.x)
+# 3. CREATE USER DATABASE
+
+- name: Create /library/calibre (mandatory since Calibre 3.x)
+  file:
+    path: "{{ calibre_dbpath }}"
+    state: directory
+    #mode: 0755
+
+- name: Copy template userdb to /library/calibre/users.sqlite (IF /usr/bin/calibre WAS MISSING)
+  copy:
+    src: /opt/iiab/iiab/roles/calibre/templates/users.sqlite
+    dest: "{{ calibre_userdb }}"
+    owner: root
+    group: root
+    mode: 0644
+  when: (not calib_executable.stat.exists)
+
+# 4. CREATE CONTENT DATABASE WITH A SAMPLE BOOK (REQUIRED AS OF CALIBRE 3.x)
 
 - name: Check if /library/calibre/metadata.db exists
   stat:
@@ -89,7 +97,7 @@
   include_tasks: create-db.yml
   when: not calibre_db.stat.exists
 
-# 4. WRAP UP: ENABLE CALIBRE SERVICE, http://box/books ETC
+# 5. WRAP UP: ENABLE CALIBRE SERVICE, http://box/books ETC
 
 # http://box:8080 & http://box:8080/mobile WORK BUT OTHER URL'S LIKE http://box/books ARE A MESS (BOOKS RARELY DISPLAY)
 - name: Create calibre.conf link for UNTESTED http://box/books etc (debuntu)

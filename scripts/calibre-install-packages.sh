@@ -32,12 +32,12 @@
 #    https://github.com/iiab/iiab/pull/833    # WORKED ON RPI 3 AND RPI 3 B+ BUT...
 #    https://github.com/iiab/iiab/issues/835  # FAILED ON RPI ZERO W, possibly due to libc6 (IF ABOVE STEP 2 NOT RUN!)
 
-# FYI Calibre 3.26.0 is the latest available from testing as of 2018-06-21:
+# FYI Calibre 3.26.1 and 3.27.1 are the latest available from testing as of 2018-07-10:
 #
 #   http://raspbian.raspberrypi.org/raspbian/pool/main/c/calibre/
 #   http://archive.raspbian.org/raspbian/pool/main/c/calibre/
 #   https://packages.debian.org/search?keywords=calibre
-#   http://deb.debian.org/debian/pool/main/c/calibre/
+#   http://deb.debian.org/debian/pool/main/c/calibre/ ~= http://cdn-fastly.deb.debian.org/debian/pool/main/c/calibre/
 #
 # Might break future updates; you have been warned.
 
