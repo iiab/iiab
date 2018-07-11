@@ -1,21 +1,37 @@
+# 0. CLEAN UP PRIOR VERSIONS OF SUGARIZER (NEEDS WORK!)
+
 - name: Wipe /library/www/html/sugarizer* if sugarizer-1.0
   shell: "rm -rf {{ doc_root }}/sugarizer*"
   when: sugarizer_version == "sugarizer-1.0"
 
-- name: D/L latest stable Sugarizer from location we control to /opt/iiab/downloads/
-  get_url:
-    url: "{{ iiab_download_url }}/{{ sugarizer_version }}.tar.gz"
-    dest: "{{ downloads_dir }}/{{ sugarizer_version }}.tar.gz"
-    timeout: "{{ download_timeout }}"
-  when: internet_available
+# 1. DOWNLOAD /opt/iiab/sugarizer
 
-- name: Untar to /opt/iiab/{{ sugarizer_version }}
-  unarchive:
-    src: "{{ downloads_dir }}/{{ sugarizer_version }}.tar.gz"
+# July 2018: instead let's "git clone" IIAB's specified/preferred version (2 steps below)
+#- name: D/L latest stable Sugarizer from location we control to /opt/iiab/downloads/
+#  get_url:
+#    url: "{{ iiab_download_url }}/{{ sugarizer_version }}.tar.gz"
+#    dest: "{{ downloads_dir }}/{{ sugarizer_version }}.tar.gz"
+#    timeout: "{{ download_timeout }}"
+#  when: internet_available
+#
+#- name: Untar to /opt/iiab/{{ sugarizer_version }}
+#  unarchive:
+#    src: "{{ downloads_dir }}/{{ sugarizer_version }}.tar.gz"
+#    dest: "{{ sugarizer_location }}"
+#    creates: "{{ sugarizer_location }}/{{ sugarizer_version }}/index.html"
+##  command: tar xzf {{ downloads_dir }}/{{ sugarizer_version }}.tar.gz -C {{ sugarizer_location }}
+##           creates="{{ sugarizer_location }}/{{ sugarizer_version }}/index.html"
+
+- name: Clone llaske/sugarizer ({{ sugarizer_git_version }}) from GitHub to /opt/iiab
+  git:
+    repo: https://github.com/llaske/sugarizer
     dest: "{{ sugarizer_location }}"
-    creates: "{{ sugarizer_location }}/{{ sugarizer_version }}/index.html"
-#  command: tar xzf {{ downloads_dir }}/{{ sugarizer_version }}.tar.gz -C {{ sugarizer_location }}
-#           creates="{{ sugarizer_location }}/{{ sugarizer_version }}/index.html"
+    version: "{{ sugarizer_git_version }}"
+
+- name: Move /opt/iiab/sugarizer to /opt/iiab/{{ sugarizer_version }}
+  move:
+    src: "{{ sugarizer_location }}/sugarizer"
+    dest: "{{ sugarizer_location }}/{{ sugarizer_version }}"
 
 - name: Create symbolic link /opt/iiab/sugarizer -> /opt/iiab/{{ sugarizer_version }}
   file:
@@ -23,7 +39,12 @@
     dest: "{{ sugarizer_location }}/sugarizer"
     state: link
 
-# Not working in July 2018, so "git clone" instead (2 steps that follow)
+# 2. DOWNLOAD /opt/iiab/sugarizer-server
+
+# July 2018: instead let's "git clone" IIAB's specified/preferred version (2 steps below)
+# Tarfile below was not working, as documented at:
+#    https://github.com/iiab/iiab/issues/798
+#    https://github.com/iiab/iiab/issues/814
 #- name: Download latest stable Server from location we control
 #  get_url:
 #    url: "{{ iiab_download_url }}/{{ sugarizer_server_version }}.tar.gz"
@@ -37,13 +58,11 @@
 #    dest: "{{ sugarizer_location }}"
 #    creates: "{{ sugarizer_location }}/{{ sugarizer_server_version }}/index.html"
 
-# CLONING SUGARIZER'S MASTER IN NOT A LONG-TERM SOLUTION, BUT
-# UNCOMMENTING "version:" LINE BELOW CAN BRING STABILITY IN FUTURE
-- name: Clone llaske/sugarizer-server from GitHub to /opt/iiab
+- name: Clone llaske/sugarizer-server ({{ sugarizer_server_git_version }}) from GitHub to /opt/iiab
   git:
     repo: https://github.com/llaske/sugarizer-server
     dest: "{{ sugarizer_location }}"
-#   version: "{{ sugarizer_server_version }}"
+    version: "{{ sugarizer_server_git_version }}"
 
 - name: Move /opt/iiab/sugarizer-server to /opt/iiab/{{ sugarizer_server_version }}
   move:
@@ -56,6 +75,10 @@
     dest: "{{ sugarizer_location }}/sugarizer-server"
     state: link
 
+# 3. INSTALL A GOOD VERSION OF Node.js AND npm
+
+# Both Raspbian and Debian 9 STILL need this approach as of 2018-07-11,
+# as documented at https://github.com/iiab/iiab/issues/798#issuecomment-404324530
 - name: Set up Node.js 8.x apt sources (debuntu but avoid ubuntu-18)
   shell: curl -sL https://deb.nodesource.com/setup_8.x | bash -
   when: internet_available and is_debuntu and not is_ubuntu_18
@@ -86,6 +109,8 @@
     - nodejs
     - npm
 
+# 4. RUN "npm install" TO POPULATE ~35MB /opt/iiab/sugarizer-server/node_modules
+
 # attempting to reinstall npm is broken on Raspbian 9
 - name: Check for Sugarizer already installed
   stat:
@@ -97,6 +122,22 @@
   set_fact:
     npm_exists: True
   when: npm.stat is defined and npm.stat.exists
+
+- name: Create the express framework for Node.js (OS's other than Fedora 18)
+  shell: npm install
+  args:
+    chdir: "{{ sugarizer_location }}/{{  sugarizer_server_version }}"
+    creates: "{{ sugarizer_location }}/{{ sugarizer_server_version }}/node_modules"
+    #creates: "{{ sugarizer_location }}/{{ sugarizer_server_version }}/server/node_modules"
+  when: not is_F18 and not npm_exists
+
+- name: Create the express framework for Node.js (Fedora 18)
+  shell: npm install
+  args:
+    chdir: "{{ sugarizer_location }}/sugarizer/server"
+  when: is_F18 and not npm_exists
+
+# 5. PLACE CONFIG FILES
 
 - name: Create systemd files and copy our ini file
   template:
@@ -116,19 +157,7 @@
     dest: /etc/apache2/sites-enabled/sugarizer.conf
     state: link
 
-- name: Create the express framework for Node.js (OS's other than Fedora 18)
-  shell: npm install
-  args:
-    chdir: "{{ sugarizer_location }}/{{  sugarizer_server_version }}"
-    creates: "{{ sugarizer_location }}/{{ sugarizer_server_version }}/node_modules"
-    #creates: "{{ sugarizer_location }}/{{ sugarizer_server_version }}/server/node_modules"
-  when: not is_F18 and not npm_exists
-
-- name: Create the express framework for Node.js (Fedora 18)
-  shell: npm install
-  args:
-    chdir: "{{ sugarizer_location }}/sugarizer/server"
-  when: is_F18 and not npm_exists
+# 6. RESTART/STOP SYSTEMD SERVICE
 
 - name: Enable services (all OS's)
   service:
