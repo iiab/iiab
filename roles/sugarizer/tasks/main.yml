@@ -1,62 +1,73 @@
-- name: Wipe any previous sugarizer installation
+# 0. CLEAN UP PRIOR VERSIONS OF SUGARIZER (NEEDS WORK!)
+
+- name: Wipe /library/www/html/sugarizer* if installing sugarizer-1.0
   shell: "rm -rf {{ doc_root }}/sugarizer*"
   when: sugarizer_version == "sugarizer-1.0"
 
-- name: Download latest stable Sugarizer from location we control
-  get_url:
-    url: "{{ iiab_download_url }}/{{ sugarizer_version }}.tar.gz"
-    dest: "{{ downloads_dir }}/{{ sugarizer_version }}.tar.gz"
-    timeout: "{{ download_timeout }}"
+# 1. DOWNLOAD /opt/iiab/sugarizer
+
+- name: Clone llaske/sugarizer ({{ sugarizer_git_version }}) from GitHub to /opt/iiab
+  git:
+    repo: https://github.com/llaske/sugarizer
+    dest: "{{ sugarizer_location }}/{{ sugarizer_version }}"
+    version: "{{ sugarizer_git_version }}"
+    force: yes
   when: internet_available
 
-- name: Untar to {{ sugarizer_version }}
-  unarchive:
-    src: "{{ downloads_dir }}/{{ sugarizer_version }}.tar.gz"
-    dest: "{{ sugarizer_location }}"
-    creates: "{{ sugarizer_location }}/{{ sugarizer_version }}/index.html"
-#  command: tar xzf {{ downloads_dir }}/{{ sugarizer_version }}.tar.gz -C {{ sugarizer_location }}
-#           creates="{{ sugarizer_location }}/{{ sugarizer_version }}/index.html"
-
-- name: Download latest stable Server from location we control
-  get_url:
-    url: "{{ iiab_download_url }}/{{ sugarizer_server_version }}.tar.gz"
-    dest: "{{ downloads_dir }}/{{ sugarizer_server_version }}.tar.gz"
-    timeout: "{{ download_timeout }}"
-  when: internet_available
-
-- name: Untar to /{{ sugarizer_version }}
-  unarchive:
-    src: "{{ downloads_dir }}/{{ sugarizer_version }}.tar.gz"
-    dest: "{{ sugarizer_location }}"
-    creates: "{{ sugarizer_location }}/{{ sugarizer_version }}/index.html"
-- name: Create symbolic link /library/www/html/sugarizer
+- name: Create symbolic link /opt/iiab/sugarizer -> /opt/iiab/{{ sugarizer_version }}
   file:
     src: "{{ sugarizer_location }}/{{ sugarizer_version }}"
     dest: "{{ sugarizer_location }}/sugarizer"
     state: link
 
-- name: Untar to /library/www/html/{{ sugarizer_server_version }}
-  unarchive:
-    src: "{{ downloads_dir }}/{{ sugarizer_server_version }}.tar.gz"
-    dest: "{{ sugarizer_location }}"
-    creates: "{{ sugarizer_location }}/{{ sugarizer_server_version }}/index.html"
-- name: Create symbolic link /library/www/html/sugarizer
+# 2. DOWNLOAD /opt/iiab/sugarizer-server
+
+# July 2018: http://download.iiab.io/packages/sugarizer-server-1.0.tar.gz
+# was flawed, as documented at:
+#    https://github.com/iiab/iiab/pull/814#issuecomment-404211098
+# Versions of MongoDB, npm (& Node.js ?) matter!  Sugarizer 1.0 Context:
+#    https://github.com/iiab/iiab/issues/798
+# Going forward let's "git clone" IIAB's preferred versions, of sugarizer
+# AND sugarizer-server, as specified in roles/sugarizer/defaults/main.yml
+
+- name: Clone llaske/sugarizer-server ({{ sugarizer_server_git_version }}) from GitHub to /opt/iiab
+  git:
+    repo: https://github.com/llaske/sugarizer-server
+    dest: "{{ sugarizer_location }}/{{ sugarizer_server_version }}"
+    version: "{{ sugarizer_server_git_version }}"
+    force: yes
+  when: internet_available
+
+- name: Create symbolic link /opt/iiab/sugarizer-server -> /opt/iiab/{ sugarizer_server_version }}
   file:
     src: "{{ sugarizer_location }}/{{ sugarizer_server_version }}"
     dest: "{{ sugarizer_location }}/sugarizer-server"
     state: link
 
-- name: Set up Node.js 6.x apt sources (debuntu)
-  shell: curl -sL https://deb.nodesource.com/setup_6.x | bash -
+# 3. INSTALL A GOOD VERSION OF Node.js AND npm
+
+# Both Raspbian and Debian 9 STILL need this approach as of July 2018,
+# as documented at https://github.com/iiab/iiab/issues/798#issuecomment-404324530
+- name: Set up Node.js 8.x apt sources (debuntu but avoid ubuntu-18)
+  shell: curl -sL https://deb.nodesource.com/setup_8.x | bash -
   when: internet_available and is_debuntu and not is_ubuntu_18
 
-- name: Install latest Node.js which includes /usr/bin/npm (debuntu)
+- name: Install latest Node.js which includes /usr/bin/npm (debuntu but avoid ubuntu-18)
   package:
     name: nodejs
+    # name: nodejs=8.x
     state: latest
-# package: name=nodejs=6.*
-#          state=present
+    # state: present
   when: internet_available and is_debuntu and not is_ubuntu_18
+
+- name: Install Node.js and npm (ubuntu-18)
+  package:
+    name: "{{ item }}"
+    state: latest
+  when: internet_available and is_ubuntu_18
+  with_items:
+    - nodejs
+    - npm
 
 - name: Install npm (OS's other than debuntu)
   package:
@@ -67,28 +78,37 @@
     - nodejs
     - npm
 
-- name: Install npm (ubuntu-18)
-  package:
-    name: "{{ item }}"
-    state: latest
-  when: internet_available and is_ubuntu_18
-  with_items:
-    - npm
-    - nodejs
+# 4. RUN "npm install" TO POPULATE ~35MB /opt/iiab/sugarizer-server/node_modules
 
-# attempting to reinstall npm is broken on Raspbian 9
-- name: Check for Sugarizer already installed
+# Re-running "npm install" fails on Raspbian 9 if not other OS's
+- name: Check for /opt/iiab/{{ sugarizer_server_version }}/node_modules
   stat:
     path: "{{ sugarizer_location }}/{{ sugarizer_server_version }}/node_modules"
-  register: npm
+  register: nmtest
   ignore_errors: true
 
-- name: Set a flag to abort second attempt to install
+- name: Set a flag to prevent re-running of "npm install"
   set_fact:
-    npm_exists: True
-  when: npm.stat is defined and npm.stat.exists
+    node_modules_exists: True
+  when: nmtest.stat is defined and nmtest.stat.exists
 
-- name: Create systemd files and copy our ini file
+- name: Create the express framework for Node.js (OS's other than Fedora 18)
+  shell: npm install
+  args:
+    chdir: "{{ sugarizer_location }}/{{  sugarizer_server_version }}"
+    creates: "{{ sugarizer_location }}/{{ sugarizer_server_version }}/node_modules"
+    #creates: "{{ sugarizer_location }}/{{ sugarizer_server_version }}/server/node_modules"
+  when: not is_F18 and not node_modules_exists
+
+- name: Create the express framework for Node.js (Fedora 18)
+  shell: npm install
+  args:
+    chdir: "{{ sugarizer_location }}/sugarizer/server"
+  when: is_F18 and not node_modules_exists
+
+# 5. PLACE CONFIG FILES
+
+- name: Configure sugarizer.service (systemd), sugarizer.conf (Apache) and sugarizer.ini
   template:
     src: "{{ item.src }}"
     dest: "{{ item.dest }}"
@@ -96,27 +116,17 @@
     owner: root
     group: root
   with_items:
-    - { src: 'sugarizer.service.j2' , dest: '/etc/systemd/system/sugarizer.service', mode: '0644' }
-    - { src: 'sugarizer.ini' , dest: '{{ sugarizer_location }}/{{ sugarizer_server_version }}/env/sugarizer.ini', mode: '0644' }
-    - { src: 'sugarizer.conf' , dest: '/etc/apache2/sites-available',mode: '0644' }
+    - { src: 'sugarizer.service.j2', dest: '/etc/systemd/system/sugarizer.service', mode: '0644' }
+    - { src: 'sugarizer.ini', dest: '{{ sugarizer_location }}/{{ sugarizer_server_version }}/env/sugarizer.ini', mode: '0644' }
+    - { src: 'sugarizer.conf', dest: '/etc/apache2/sites-available', mode: '0644' }
 
-- name: Create the symlink enabling the rewrite
-  file: src=/etc/apache2/sites-available/sugarizer.conf
-        dest=/etc/apache2/sites-enabled/sugarizer.conf
-        state=link
+- name: Create symlink for short URL http://box/sugarizer
+  file:
+    src: /etc/apache2/sites-available/sugarizer.conf
+    dest: /etc/apache2/sites-enabled/sugarizer.conf
+    state: link
 
-- name: Create the express framework for Node.js (OS's other than Fedora 18)
-  shell: npm install
-  args:
-    chdir: "{{ sugarizer_location }}/{{  sugarizer_server_version }}"
-    creates: "{{ sugarizer_location }}/{{ sugarizer_server_version }}/server/node_modules"
-  when: not is_F18 and not npm_exists
-
-- name: Create the express framework for Node.js (Fedora 18)
-  shell: npm install
-  args:
-    chdir: "{{ sugarizer_location }}/sugarizer/server"
-  when: is_F18 and not npm_exists
+# 6. RESTART/STOP SYSTEMD SERVICE
 
 - name: Enable services (all OS's)
   service:
@@ -124,10 +134,11 @@
     enabled: yes
     state: restarted
   with_items:
+    - { name: mongodb }
     - { name: sugarizer }
   when: sugarizer_enabled
 
-- name: Disable services (all OS's)
+- name: Disable service (all OS's)
   service:
     name: "{{ item.name }}"
     enabled: no
