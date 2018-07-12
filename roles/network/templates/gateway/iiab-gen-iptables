@@ -60,6 +60,7 @@ kalite_server_port={{ kalite_server_port }}
 sugarizer_port={{ sugarizer_port }}
 block_DNS={{ block_DNS }}
 captive_portal_enabled={{ captive_portal_enabled }}
+py_captive_portal_enabled={{ py_captive_portal_enabled }}
 
 echo "Lan is $lan and WAN is $wan"
 #
@@ -101,12 +102,13 @@ $IPTABLES -A FORWARD -i $wan -o $lan -m state --state ESTABLISHED,RELATED -j ACC
 
 #Block https traffic except if directed at server
 if [  "$gw_block_https" == "True" ]; then
-    $IPTABLES -A FORWARD -p tcp ! -d 172.18.96.1 --dport 443 -j DROP
+    $IPTABLES -A FORWARD -p tcp ! -d {{ lan_ip }} --dport 443 -j DROP
 fi
 
 # Allow outgoing connections from the LAN side.
-$IPTABLES -A FORWARD -i $lan -o $wan -j ACCEPT
-
+if ! [ "$py_captive_portal_enabled" == "True" ];then
+    $IPTABLES -A FORWARD -i $lan -o $wan -j ACCEPT
+fi
 # Don't forward from the outside to the inside.
 $IPTABLES -A FORWARD -i $wan -o $lan -j DROP
 $IPTABLES -A INPUT -i $wan -j DROP
@@ -122,8 +124,11 @@ if [ "$captive_portal_enabled" == "True" ];then
    $IPTABLES -t mangle -A internet -j MARK --set-mark 99
    $IPTABLES -t nat -A PREROUTING -i {{ iiab_lan_iface }} -p tcp -m mark --mark 99 -m tcp --dport 80 -j DNAT --to-destination {{ lan_ip }}
 
+elif [ "py_$captive_portal_enabled" == "True" ];then
+    $IPTABLES  -t nat  -A PREROUTING -i $lan -p tcp --dport 80 ! -d {{ lan_ip }} -j DNAT --to {{ lan_ip }}:{{ py_captive_portal_port }}
+
 elif [ "$HTTPCACHE_ON" == "True" ]; then
-    $IPTABLES  -t nat  -A PREROUTING -i $lan -p tcp --dport 80 ! -d 172.18.96.1 -j DNAT --to 172.18.96.1:3128
+    $IPTABLES  -t nat  -A PREROUTING -i $lan -p tcp --dport 80 ! -d {{ lan_ip }} -j DNAT --to {{ lan_ip }}:3128
 fi
 
 # Enable routing.
