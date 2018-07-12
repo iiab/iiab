@@ -5,6 +5,29 @@
     path: /etc/iiab/iiab.env
   register: NewInstall
 
+- name: Setting runtime defaults
+  set_fact:
+    first_run: False
+    rpi_model: none
+    is_rpi: False
+    xo_model: none
+    gw_active: none
+    internet_available: False
+    discovered_wan_iface: none
+    gui_port: 80
+    exFAT_enabled: False
+    is_F18: False
+    # Set default 1-prep discovered hardware
+    rtc_id: none
+    NUC6_firmware_needed: False
+    # used in 2-common/tasks/xo.yml
+    wifi_id: none
+    # used in 2-common, 3-base-server and roles/network
+    installing: False
+    # network
+    no_net_restart: False
+    no_NM_reload: False
+
 - name: Setting first run flag
   set_fact:
     first_run: True
@@ -15,12 +38,6 @@
 - name: Write iiab_ini.yml for the first time
   include_tasks: first_run.yml
   when: first_run
-
-#- name: Loading computed_vars
-#  include_tasks: roles/0-init/tasks/computed_vars.yml
-- name: Re-read local_facts.facts from /etc/ansible/facts.d
-  setup:
-    filter: ansible_local
 
 - name: Set top level variables from local facts for convenience
   set_fact:
@@ -72,7 +89,14 @@
 - name: Set internet_available true if wget succeeded
   set_fact:
     internet_available: True
-  when: not internet_access_test|failed and not disregard_network
+  when:
+  - internet_access_test is not failed
+
+- name: Set internet_available false if disregard_network is set
+  set_fact:
+    internet_available: False
+  when:
+  - disregard_network
 
 - name: Cleanup internet test file
   file:
@@ -82,11 +106,6 @@
 # Put all computed vars here so derive properly from any prior var file
 - name: If the TZ is not set in env, set it to UTC
   include_tasks: tz.yml
-
-- name: Set port 80 for Admin Console
-  set_fact:
-    gui_port: 80
-  when: not adm_cons_force_ssl
 
 - name: Set port 443 for Admin Console
   set_fact:
