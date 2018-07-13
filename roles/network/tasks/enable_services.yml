@@ -1,157 +1,181 @@
 - name: Disable dhcpd service
-  service: name=dhcpd
-           enabled=no
+  service:
+    name: dhcpd
+    enabled: no
   when: not dhcpd_enabled and dhcpd_install
 
 # service is restarted with NM dispatcher.d script
 - name: Enable dhcpd service
-  service: name=dhcpd
-           enabled=yes
+  service:
+    name: dhcpd
+    enabled: yes
   when: dhcpd_enabled and dhcpd_install
 
 - name: Copy /etc/sysconfig/dhcpd file
-  template: src={{ item.src }}
-            dest={{ item.dest }}
-            owner=root
-            group=root
-            mode={{ item.mode }}
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
   with_items:
-   - { src: 'dhcp/dhcpd-env.j2' , dest: '/etc/sysconfig/dhcpd' , mode: '0644' }
+   - { src: 'dhcp/dhcpd-env.j2', dest: '/etc/sysconfig/dhcpd', mode: '0644' }
    - { src: 'dhcp/dhcpd-iiab.conf.j2', dest: '/etc/dhcpd-iiab.conf', mode: '0644' }
   when: dhcpd_enabled and dhcpd_install
 
 - name: Copy named file
-  template: src={{ item.src }}
-            dest={{ item.dest }}
-            owner=root
-            group=root
-            mode={{ item.mode }}
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
   with_items:
-   - { src: 'named/named-iiab.conf.j2' , dest: '/etc/named-iiab.conf' , mode: '0644' }
-   - { src: 'named/school.local.zone.db' , dest: '/var/named-iiab/' , mode: '0644' }
-   - { src: 'named/school.internal.zone.db' , dest: '/var/named-iiab/' , mode: '0644' }
+   - { src: 'named/named-iiab.conf.j2', dest: '/etc/named-iiab.conf', mode: '0644' }
+   - { src: 'named/school.local.zone.db', dest: '/var/named-iiab/', mode: '0644' }
+   - { src: 'named/school.internal.zone.db', dest: '/var/named-iiab/', mode: '0644' }
 
 - name: Enable named service
-  service: name={{ dns_service }}
-           enabled=yes
+  service:
+    name: "{{ dns_service }}"
+    enabled: yes
   when: named_enabled and named_install
 
 - name: Disable named service
-  service: name={{ dns_service }}
-           enabled=no
+  service:
+    name: "{{ dns_service }}"
+    enabled: no
   when: not named_enabled and named_install
 
 - name: Disable dnsmasq
-  service: name=dnsmasq
-           enabled=no
+  service:
+    name: dnsmasq
+    enabled: no
   when: not dnsmasq_enabled and dnsmasq_install
 
-- name: dnsmasq copy config file to /etc
-  template: src=network/dnsmasq.conf.j2 dest=/etc/dnsmasq.conf
+- name: Copy dnsmasq.conf to /etc
+  template:
+    src: network/dnsmasq.conf.j2
+    dest: /etc/dnsmasq.conf
   when: dnsmasq_enabled and dnsmasq_install
 
 - name: Enable dnsmasq
-  service: name=dnsmasq
-           enabled=yes
+  service:
+    name: dnsmasq
+    enabled: yes
   when: dnsmasq_enabled and dnsmasq_install
 
 - name: Enable DansGuardian
-  service: name=dansguardian
-           enabled=yes
+  service:
+    name: dansguardian
+    enabled: yes
   when: dansguardian_enabled and dansguardian_install
 
 - name: Disable DansGuardian
-  service: name=dansguardian
-           enabled=no
+  service:
+    name: dansguardian
+    enabled: no
   when: not dansguardian_enabled and dansguardian_install
 
 - name: Create xs_httpcache flag
-  lineinfile: dest=/etc/iiab/iiab.env
-              regexp='^HTTPCACHE_ON=*'
-              line='HTTPCACHE_ON=True'
-              state=present
+  lineinfile:
+    dest: /etc/iiab/iiab.env
+    regexp: '^HTTPCACHE_ON=*'
+    line: 'HTTPCACHE_ON=True'
+    state: present
   when: squid_enabled and squid_install
 
 - name: Enable Squid service
-  service: name={{ proxy }}
-           enabled=yes
+  service:
+    name: "{{ proxy }}"
+    enabled: yes
   when: squid_enabled and squid_install
 
 - name: Copy init script and config file
-  template: src={{ item.src }}
-            dest={{ item.dest }}
-            owner={{ item.owner }}
-            group={{ item.group }}
-            mode={{ item.mode }}
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: "{{ item.owner }}"
+    group: "{{ item.group }}"
+    mode: "{{ item.mode }}"
   with_items:
-    - src: 'squid/squid-iiab.conf.j2'
-      dest: '/etc/{{ proxy }}/squid-iiab.conf'
-      owner: '{{ proxy_user }}'
-      group: '{{ proxy_user }}'
-      mode: '0644'
+    - src: squid/squid-iiab.conf.j2
+      dest: "/etc/{{ proxy }}/squid-iiab.conf"
+      owner: "{{ proxy_user }}"
+      group: "{{ proxy_user }}"
+      mode: 0644
   when: squid_enabled and squid_install
 
 - name: Point to Squid config file from startup file
-  lineinfile: regexp='^CONFIG'
-              line='CONFIG=/etc/{{ proxy }}/squid-iiab.conf'
-              dest=/etc/init.d/{{ proxy }}
+  lineinfile:
+    regexp: '^CONFIG'
+    line: "CONFIG=/etc/{{ proxy }}/squid-iiab.conf"
+    dest: "/etc/init.d/{{ proxy }}"
   when: squid_enabled and squid_install and is_debuntu
 
 - name: Disable Squid service
-  service: name={{ proxy }}
-           enabled=no
+  service:
+    name: "{{ proxy }}"
+    enabled: no
   when: not squid_enabled and squid_install
 
 - name: Remove xs_httpcache flag
-  lineinfile: dest=/etc/iiab/iiab.env
-              regexp='^HTTPCACHE_ON=*'
-              line='HTTPCACHE_ON=False'
-              state=present
+  lineinfile:
+    dest: /etc/iiab/iiab.env
+    regexp: '^HTTPCACHE_ON=*'
+    line: 'HTTPCACHE_ON=False'
+    state: present
   when: not squid_enabled
 
 - name: Enable Wondershaper service
-  service: name=wondershaper
-           enabled=yes
+  service:
+    name: wondershaper
+    enabled: yes
   when: wondershaper_enabled and wondershaper_install
 
 - name: Disable Wondershaper service
-  service: name=wondershaper
-           enabled=no
+  service:
+    name: wondershaper
+    enabled: no
   when: not wondershaper_enabled and wondershaper_install
 
 # check-LAN should be iptables.yml remove later
 - name: Grab clean copy of iiab-gen-iptables
-  template: src={{ item.0 }}
-            dest={{ item.1 }}
-            owner='root'
-            group='root'
-            mode='0755'
+  template:
+    src: "{{ item.0 }}"
+    dest: "{{ item.1 }}"
+    owner: root
+    group: root
+    mode: 0755
   with_items:
    - { 0: 'gateway/iiab-gen-iptables', 1: '/usr/bin/iiab-gen-iptables' }
 
-- name: Add 'squid' to service list
-  ini_file: dest='{{ service_filelist }}'
-            section=squid
-            option='{{ item.option }}'
-            value='{{ item.value }}'
+- name: Add 'squid' to list of services at /etc/iiab/iiab.ini
+  ini_file:
+    dest: "{{ service_filelist }}"
+    section: squid
+    option: "{{ item.option }}"
+    value: "{{ item.value }}"
   with_items:
     - option: enabled
       value: "{{ squid_enabled }}"
 
-- name: Add 'dansguardian' to service list
-  ini_file: dest='{{ service_filelist }}'
-            section=dansguardian
-            option='{{ item.option }}'
-            value='{{ item.value }}'
+- name: Add 'dansguardian' to list of services at /etc/iiab/iiab.ini
+  ini_file:
+    dest: "{{ service_filelist }}"
+    section: dansguardian
+    option: "{{ item.option }}"
+    value: "{{ item.value }}"
   with_items:
     - option: enabled
       value: "{{ dansguardian_enabled }}"
 
-- name: Add 'wondershaper' to service list
-  ini_file: dest='{{ service_filelist }}'
-            section=wondershaper
-            option='{{ item.option }}'
-            value='{{ item.value }}'
+- name: Add 'wondershaper' to list of services at /etc/iiab/iiab.ini
+  ini_file:
+    dest: "{{ service_filelist }}"
+    section: wondershaper
+    option: "{{ item.option }}"
+    value: "{{ item.value }}"
   with_items:
     - option: enabled
       value: "{{ wondershaper_enabled }}"
