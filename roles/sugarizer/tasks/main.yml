@@ -31,6 +31,10 @@
 # Going forward let's "git clone" IIAB's preferred versions, of sugarizer
 # AND sugarizer-server, as specified in roles/sugarizer/defaults/main.yml
 
+# 2018-07-14 BLOWBACK: git works well BUT even with "depth: 1"
+# - 229MB is unfort downloaded to /opt/iiab/sugarizer/.git
+# - 1.4MB is unfort downloaded to /opt/iiab/sugarizer-server/.git
+
 - name: Clone llaske/sugarizer-server ({{ sugarizer_server_git_version }}) from GitHub to /opt/iiab
   git:
     repo: https://github.com/llaske/sugarizer-server
@@ -48,8 +52,8 @@
 
 # 3. INSTALL A GOOD VERSION OF Node.js AND npm
 
-# Both Raspbian and Debian 9 STILL need this approach as of July 2018,
-# as documented at https://github.com/iiab/iiab/issues/798#issuecomment-404324530
+# Raspbian & Debian 9 STILL need this approach (July 2018) to get a recent
+# version of npm.  As documented at https://github.com/iiab/iiab/issues/798#issuecomment-404324530
 - name: Set up Node.js 8.x apt sources (debuntu but avoid ubuntu-18)
   shell: curl -sL https://deb.nodesource.com/setup_8.x | bash -
   when: internet_available and is_debuntu and not is_ubuntu_18
@@ -57,56 +61,60 @@
 - name: Install latest Node.js which includes /usr/bin/npm (debuntu but avoid ubuntu-18)
   package:
     name: nodejs
-    # name: nodejs=8.x
     state: latest
+    # name: nodejs=8.x
     # state: present
   when: internet_available and is_debuntu and not is_ubuntu_18
 
-- name: Install Node.js and npm (ubuntu-18)
+#- name: Install Node.js and npm (ubuntu-18)
+- name: Install Node.js and npm (ubuntu-18 or not is_debuntu)
   package:
     name: "{{ item }}"
     state: latest
-  when: internet_available and is_ubuntu_18
+  when: internet_available and (is_ubuntu_18 or (not is_debuntu))
   with_items:
     - nodejs
     - npm
 
-- name: Install npm (OS's other than debuntu)
-  package:
-    name: "{{ item }}"
-    state: present
-  when: internet_available and not is_debuntu
-  with_items:
-    - nodejs
-    - npm
+#- name: Install npm (OS's other than debuntu)
+#  package:
+#    name: "{{ item }}"
+#    state: present
+#  when: internet_available and not is_debuntu
+#  with_items:
+#    - nodejs
+#    - npm
 
 # 4. RUN "npm install" TO POPULATE ~35MB /opt/iiab/sugarizer-server/node_modules
 
-# Re-running "npm install" fails on Raspbian 9 if not other OS's
-- name: Check for /opt/iiab/{{ sugarizer_server_version }}/node_modules
-  stat:
-    path: "{{ sugarizer_location }}/{{ sugarizer_server_version }}/node_modules"
-  register: nmtest
-  ignore_errors: true
+# OLD WAY: Re-running "npm install" fails on Raspbian 9 if not other OS's, so...
 
-- name: Set a flag to prevent re-running of "npm install"
-  set_fact:
-    node_modules_exists: True
-  when: nmtest.stat is defined and nmtest.stat.exists
+#- name: Check for /opt/iiab/{{ sugarizer_server_version }}/node_modules
+#  stat:
+#    path: "{{ sugarizer_location }}/{{ sugarizer_server_version }}/node_modules"
+#  register: nmtest
+#  ignore_errors: true
+#
+#- name: Set a flag to prevent re-running of "npm install"
+#  set_fact:
+#    node_modules_exists: True
+#  when: nmtest.stat is defined and nmtest.stat.exists
 
-- name: Create the express framework for Node.js (OS's other than Fedora 18)
+# NEW WAY: "creates: ..." below (checks for existence of "node_modules")
+
+#- name: Create the express framework for Node.js (OS's other than Fedora 18)
+- name: Run 'npm install' to create the express framework for Node.js
   shell: npm install
   args:
     chdir: "{{ sugarizer_location }}/{{  sugarizer_server_version }}"
     creates: "{{ sugarizer_location }}/{{ sugarizer_server_version }}/node_modules"
-    #creates: "{{ sugarizer_location }}/{{ sugarizer_server_version }}/server/node_modules"
-  when: not is_F18 and not node_modules_exists
+# when: not is_F18 and not node_modules_exists
 
-- name: Create the express framework for Node.js (Fedora 18)
-  shell: npm install
-  args:
-    chdir: "{{ sugarizer_location }}/sugarizer/server"
-  when: is_F18 and not node_modules_exists
+#- name: Create the express framework for Node.js (Fedora 18)
+#  shell: npm install
+#  args:
+#    chdir: "{{ sugarizer_location }}/sugarizer/server"
+#  when: is_F18 and not node_modules_exists
 
 # 5. PLACE CONFIG FILES
 
