@@ -52,17 +52,19 @@
 
 # 3. INSTALL A GOOD VERSION OF Node.js AND npm
 
-# Raspbian & Debian 9 STILL need this approach (July 2018) to get a recent
-# version of npm.  As documented at https://github.com/iiab/iiab/issues/798#issuecomment-404324530
-- name: Set up Node.js 8.x apt sources (debuntu but avoid ubuntu-18)
+# Raspbian & Debian 9 STILL need this nodesource.com approach (July 2018) to get a recent version of npm.
+# As documented at https://github.com/iiab/iiab/issues/798#issuecomment-404324530
+# This nodesource.com approach (brings in npm 5.6.0 with nodejs 8.11.3)
+# would also work on Ubuntu 18.04, but U18's apt brings in npm 3.5.2, which is sufficient (SO FAR!?)
+- name: Set up Node.js 8.x apt sources (debuntu, but avoid ubuntu-18)
   shell: curl -sL https://deb.nodesource.com/setup_8.x | bash -
   when: internet_available and is_debuntu and not is_ubuntu_18
 
-- name: Install latest Node.js which includes /usr/bin/npm (debuntu but avoid ubuntu-18)
+- name: Install latest Node.js which includes /usr/bin/npm (debuntu, but avoid ubuntu-18)
   package:
     name: nodejs
-    state: latest
     # name: nodejs=8.x
+    state: latest
     # state: present
   when: internet_available and is_debuntu and not is_ubuntu_18
 
@@ -87,7 +89,14 @@
 
 # 4. RUN "npm install" TO POPULATE ~35MB /opt/iiab/sugarizer-server/node_modules
 
-# OLD WAY: Re-running "npm install" fails on Raspbian 9 if not other OS's, so...
+# Re-running "npm install" USED TO fail on Raspbian 9 if not other OS's.
+# Several strategies to avoid re-running it:
+# OLD WAY 1: test & set flag node_modules_exists: True
+# OLD WAY 2: "creates: ..." checks for non-existence of /opt/iiab/sugarizer-server-1.0/node_modules
+# OLD WAY 3: set "register: git_sug_server_output" above, then as nec delete /opt/iiab/sugarizer-server-1.0/node_modules "when: git_sug_server_output.changed" and as nec run "npm install"
+
+# NEW WAY: run "npm install" every time, as modern versions of npm are
+# incremental, with sanity checks (as tested with npm 3.5.2 and 5.6.0)
 
 #- name: Check for /opt/iiab/{{ sugarizer_server_version }}/node_modules
 #  stat:
@@ -100,15 +109,14 @@
 #    node_modules_exists: True
 #  when: nmtest.stat is defined and nmtest.stat.exists
 
-# NEW WAY: "creates: ..." below (checks for existence of "node_modules")
-
 #- name: Create the express framework for Node.js (OS's other than Fedora 18)
-- name: Run 'npm install' to create the express framework for Node.js
-  shell: npm install
+- name: Run 'npm install' to create /opt/iiab/{{ sugarizer_server_version }}/node_modules (CAN TAKE SEVERAL MINUTES)
+  command: npm install    # slightly safer than "shell:"
   args:
     chdir: "{{ sugarizer_location }}/{{  sugarizer_server_version }}"
-    creates: "{{ sugarizer_location }}/{{ sugarizer_server_version }}/node_modules"
-# when: not is_F18 and not node_modules_exists
+#   creates: "{{ sugarizer_location }}/{{ sugarizer_server_version }}/node_modules"    # OLD WAY 2
+# when: git_sug_server_output.changed    # OLD WAY 3
+# when: not is_F18 and not node_modules_exists    # OLD WAY 1
 
 #- name: Create the express framework for Node.js (Fedora 18)
 #  shell: npm install
@@ -144,7 +152,7 @@
     enabled: yes
     state: restarted
   with_items:
-    - { name: mongodb }
+#   - { name: mongodb }    # 2018-07-14: NICE TRY, but still doesn't bring http://box:8089 to life reliably, as a reboot does usually does!  (Is a daemon-reload or some such nec?)
     - { name: sugarizer }
   when: sugarizer_enabled
 
