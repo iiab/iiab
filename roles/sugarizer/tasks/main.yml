@@ -97,14 +97,11 @@
 
 # 4. RUN "npm install" TO POPULATE ~35MB /opt/iiab/sugarizer-server/node_modules
 
-# Re-running "npm install" USED TO fail on Raspbian 9 if not other OS's.
-# Several strategies to avoid re-running it:
+# Re-running "npm install" USED TO fail on Raspbian 9 if not other OS's ?
+# Strategies considered to avoid re-running it:
 # OLD WAY 1: test & set flag node_modules_exists: True
 # OLD WAY 2: "creates: ..." checks for non-existence of /opt/iiab/sugarizer-server-1.0/node_modules
 # OLD WAY 3: set "register: git_sug_server_output" above, then as nec delete /opt/iiab/sugarizer-server-1.0/node_modules "when: git_sug_server_output.changed" and as nec run "npm install"
-
-# NEW WAY: run "npm install" every time, as modern versions of npm are
-# incremental, with sanity checks (as tested with npm 3.5.2 and 5.6.0)
 
 #- name: Check for /opt/iiab/{{ sugarizer_server_version }}/node_modules
 #  stat:
@@ -117,9 +114,26 @@
 #    node_modules_exists: True
 #  when: nmtest.stat is defined and nmtest.stat.exists
 
+# NEW WAY BELOW: run "npm install --allow-root" every time, as modern versions
+# of npm are incremental, with sanity checks (all 3 may work: but npm 6.2.0
+# is better than 5.6.0. which is better than Ubuntu 18.04's 3.5.2).
+
+# 2018-07-15: TK Kang & Holt confirmed sudo-driven "npm install" maxes out CPU
+# for hours, on diff OS's.  Error code EACCES, errno -13 (permission denied):
+# "Missing write access to /opt/iiab/sugarizer-server-1.0/node_modules"
+#
+# SOLUTION: Implement '--allow-root' below, as is critical for 1st run of
+# sudo-driven 'npm install' (causing it to create /root/.npm cache & lock
+# files owned by root:root instead of iiab-admin:iiab-admin) permitting it
+# and IIAB install scripts to actually complete :)
+#
+# CLARIF: something like 'chown -R root:root /root/.npm' cannot happen
+# synchronously with the 1st run of 'npm install' (when it's needed!)
+# Nor is 'chown' functionality nec, now that --allow-root does the job.
+
 #- name: Create the express framework for Node.js (OS's other than Fedora 18)
-- name: Run 'npm install' to create /opt/iiab/{{ sugarizer_server_version }}/node_modules (CAN TAKE SEVERAL MINUTES)
-  command: npm install    # slightly safer than "shell:"
+- name: Run 'npm install --allow-root' to create /opt/iiab/{{ sugarizer_server_version }}/node_modules (CAN TAKE SEVERAL MINUTES)
+  command: npm install --allow-root    # "command:" a bit safer than "shell:"
   args:
     chdir: "{{ sugarizer_location }}/{{  sugarizer_server_version }}"
     #creates: "{{ sugarizer_location }}/{{ sugarizer_server_version }}/node_modules"    # OLD WAY 2
