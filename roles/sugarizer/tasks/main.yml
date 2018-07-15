@@ -6,7 +6,7 @@
 
 # 1. DOWNLOAD+LINK /opt/iiab/sugarizer
 
-- name: Clone llaske/sugarizer ({{ sugarizer_git_version }}) from GitHub to /opt/iiab (CAN TAKE SEVERAL MINUTES)
+- name: Clone llaske/sugarizer ({{ sugarizer_git_version }}) from GitHub to /opt/iiab (MAY DOWNLOAD 600+ MB)
   git:
     repo: https://github.com/llaske/sugarizer
     dest: "{{ sugarizer_location }}/{{ sugarizer_version }}"
@@ -119,27 +119,32 @@
 # is better than 5.6.0. which is better than Ubuntu 18.04's 3.5.2).
 
 # 2018-07-15: TK Kang & Holt confirmed sudo-driven "npm install" maxes out CPU
-# for hours, on diff OS's using npm 5.6.0 and 6.2.0.  Error code EACCES,
-# errno -13 (permission denied):
+# for hours, on diff OS's using npm 5.6.0 and 6.2.0.  Hours later you get
+# error: code EACCES,  errno -13 (permission denied),
 # "Missing write access to /opt/iiab/sugarizer-server-1.0/node_modules"
 #
-# SOLUTION: Implement '--allow-root' below, as is critical for 1st run of
-# sudo-driven 'npm install' (causing it to create /root/.npm cache & lock
-# files owned by root:root instead of iiab-admin:iiab-admin) permitting it
-# and IIAB install scripts to actually complete :)
+# SOLUTION: Implement '--allow-root --unsafe-perm=true' below, as is critical
+# for 1st run of sudo-driven 'npm install' especially:
 #
-# CLARIF 1: Something like 'chown -R root:root /root/.npm' cannot happen
-# synchronously with the 1st run of 'npm install' (when it's needed!)
-# Nor is 'chown' functionality nec, now that --allow-root does the job.
+# ON DEBIAN: npm 5.6.0's --allow-root is sufficient: causing creation of
+# /root/.npm cache & lock files to owned by root:root instead of
+# iiab-admin:iiab-admin...thus permitting it & IIAB installs to complete!
+#
+# ON RASPBIAN: npm 5.6.0's --unsafe-perm=true is required, so that npm install
+# actually finished (in about 5 minutes).
+#
+# CLARIF 1: Something like 'chown -R root:root /root/.npm' would do the job,
+# but cannot happen synchronously with the 1st run of 'npm install' (when
+# it's needed!)  Similar to what --allow-root does on Debian.
 #
 # CLARIF 2: Ubuntu 18.04 is currently unaffected due to its ancient
 # npm 3.5.2, which instead uses /home/iiab-admin/.npm (these remain owned
-# by iiab-admin:iiab-admin, even with the new "npm install --allow-root",
-# but thankfully still get the job done, for now!)
+# by iiab-admin:iiab-admin, even with '--allow-root', but thankfully still
+# gets the job done, for now!)
 
 #- name: Create the express framework for Node.js (OS's other than Fedora 18)
-- name: Run 'npm install --allow-root' to create /opt/iiab/{{ sugarizer_server_version }}/node_modules (CAN TAKE SEVERAL MINUTES)
-  command: npm install --allow-root    # "command:" a bit safer than "shell:"
+- name: Run 'npm install --allow-root --unsafe-perm=true' to create /opt/iiab/{{ sugarizer_server_version }}/node_modules (CAN TAKE ~3 MINUTES)
+  command: npm install --allow-root --unsafe-perm=true    # "command:" a bit safer than "shell:"
   args:
     chdir: "{{ sugarizer_location }}/{{  sugarizer_server_version }}"
     #creates: "{{ sugarizer_location }}/{{ sugarizer_server_version }}/node_modules"    # OLD WAY 2
