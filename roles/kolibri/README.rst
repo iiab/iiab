@@ -2,10 +2,11 @@
 Kolibri README
 ==============
 
-This role installs Kolibri, an open-source educational platform specially designed
-to provide offline access to a wide range of quality, openly licensed educational
-contents in low-resource contexts like rural schools, refugee camps, orphanages,
-and also in non-formal school programs.
+This Ansible role installs Kolibri within Internet-in-a-Box.  Kolibri is an
+open-source educational platform specially designed to provide offline access
+to a wide range of quality, openly licensed educational contents in
+low-resource contexts like rural schools, refugee camps, orphanages, and also
+in non-formal school programs.
 
 Access
 ------
