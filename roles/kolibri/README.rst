@@ -2,19 +2,20 @@
 Kolibri README
 ==============
 
-This role install Kolibri, an open-source educational platform specially designed
-to provide offline access to a wide range of quality, openly licensed educational
-contents in low-resource contexts like rural schools, refugee camps, orphanages,
-and also in non-formal school programs.
+This Ansible role installs Kolibri within Internet-in-a-Box.  Kolibri is an
+open-source educational platform specially designed to provide offline access
+to a wide range of quality, openly licensed educational contents in
+low-resource contexts like rural schools, refugee camps, orphanages, and also
+in non-formal school programs.
 
 Access
 ------
 
-If enabled and with the default settings Kolibri should be accessible at http://box:8009/
+If enabled and with the default settings Kolibri should be accessible at http://box:8009
 
 To login to Kolibri enter
 
-  User Name: Admin
+  Username: Admin
 
   Password: changeme
 
@@ -26,6 +27,7 @@ in this readme assumes the default values.
 
 Automatic Device Provisioning
 -----------------------------
+
 When kolibri_provision is enabled, the installation will setup the following settings:
 
   Kolibri Facility name: 'Kolibri-in-a-Box'
@@ -40,12 +42,12 @@ When kolibri_provision is enabled, the installation will setup the following set
 
 Cloning content
 ---------------
-In Kolibri 0.10 introduced `kolibri manage deprovision` which will remove
+
+Kolibri 0.10 introduced `kolibri manage deprovision` which will remove
 user configuration, leaving content intact. You can then copy/clone /library/kolibri
 to a new location.
 
-
-Trouble Shooting
+Troubleshooting
 ----------------
 
 You can run the server manually with the following commands:
@@ -54,7 +56,7 @@ You can run the server manually with the following commands:
 
   export KOLIBRI_HOME=/library/kolibri
 
-  export KOLIBRI_HTTP_PORT=8009 (other Kolibri will run on default port 8080)
+  export KOLIBRI_HTTP_PORT=8009 (otherwise Kolibri will try to run on default port 8080)
 
   kolibri start
 
