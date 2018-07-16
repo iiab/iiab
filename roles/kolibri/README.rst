@@ -16,7 +16,7 @@ If enabled and with the default settings Kolibri should be accessible at http://
 To login to Kolibri enter
 
   Username: Admin
-  
+
   Password: changeme
 
 Configuration Parameters
