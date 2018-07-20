@@ -21,7 +21,7 @@ CURR_VER="undefined"
 export DEBIAN_FRONTEND=noninteractive
 
 if [ ! `command -v ansible-playbook` ]; then   # "command -v" is POSIX compliant; also catches built-in commands like "cd"
-    echo "Installing --- Please Wait"
+    echo "scripts/ansible-2.6.x will now try to install Ansible --- Please Wait"
     if [ -f /etc/centos-release ]; then
         yum -y install ca-certificates nss epel-release
         yum -y install git bzip2 file findutils gzip hg svn sudo tar which unzip xz zip libselinux-python
