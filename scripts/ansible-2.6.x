@@ -21,7 +21,7 @@ CURR_VER="undefined"
 export DEBIAN_FRONTEND=noninteractive
 
 if [ ! `command -v ansible-playbook` ]; then   # "command -v" is POSIX compliant; also catches built-in commands like "cd"
-    echo "Installing --- Please Wait"
+    echo "scripts/ansible-2.6.x will now try to install Ansible --- Please Wait"
     if [ -f /etc/centos-release ]; then
         yum -y install ca-certificates nss epel-release
         yum -y install git bzip2 file findutils gzip hg svn sudo tar which unzip xz zip libselinux-python
@@ -74,7 +74,7 @@ else
     #if [[ `grep -qi ansible /etc/apt/sources.list` ]] || [ -f /etc/apt/sources.list.d/ansible*.list ]; then
     elif (grep -qi ansible /etc/apt/sources.list) || (ls /etc/apt/sources.list.d/*ansible*.list >/dev/null 2>&1) ; then
         #echo "Ansible repo(s) found within /etc/apt/sources.list*"
-        echo -e 'MANUAL INTERVENTION URGED:\nANSIBLE REPO(S) FOUND WITHIN /etc/apt/sources.list AND/OR /etc/apt/sources.list.d/*ansible*.list -- MUST CONTAIN LINE "deb http://ppa.launchpad.net/ansible/ansible-2.6/ubuntu xenial main" IF YOU WANT THE LATEST ANSIBLE 2.6.x -- AND REMOVE ALL SIMILAR LINES TO ENSURE ANSIBLE UPDATES CLEANLY -- then re-run this script.\n'
+        echo -e 'CONSIDER MANUAL INTERVENTION:\nANSIBLE REPO(S) FOUND WITHIN /etc/apt/sources.list AND/OR /etc/apt/sources.list.d/*ansible*.list -- MUST CONTAIN LINE "deb http://ppa.launchpad.net/ansible/ansible-2.6/ubuntu xenial main" IF YOU WANT THE LATEST ANSIBLE 2.6.x -- AND REMOVE ALL SIMILAR LINES TO ENSURE ANSIBLE UPDATES CLEANLY -- then re-run this script.\n'
     else
         echo -e 'Upstream ansible source repo not found:\nPLEASE UNINSTALL ANSIBLE (run "apt purge ansible" or "pip uninstall ansible", depending how Ansible was originally installed) THEN RE-RUN THIS SCRIPT.'
         exit 1
