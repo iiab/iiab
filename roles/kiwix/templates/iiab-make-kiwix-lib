@@ -1,8 +1,25 @@
 #!/bin/bash
 
-{{ systemctl_program }} stop kiwix-serve
-/usr/bin/iiab-make-kiwix-lib.py
-#/usr/bin/iiab-make-apache-config.py
-{{ systemctl_program }} start kiwix-serve
+LOCK_PATH=/run/lock/kiwix
+WAITLOCK="$LOCK_PATH/make-kiwix-lib-wait.LCK";
+RUNLOCK=WAITLOCK="$LOCK_PATH/make-kiwix-lib-run.LCK";
+exec 200>$WAITLOCK;
+exec 201>$RUNLOCK;
 
+if flock -n -e 200; then :
+  echo 'Waiting to run iiab-make-kiwix-lib.py'
+  # wait for up to 5 min
+  flock -x -w 300 201
+  echo "Now running iiab-make-kiwix-lib.py"
+  # write to {{ kiwix_library_xml }}.tmp to minimize kiwix down
+  # zim map could be out of sync for a few seconds
+  /usr/bin/iiab-make-kiwix-lib.py
+  {{ systemctl_program }} stop kiwix-serve
+  rm {{ kiwix_library_xml }}
+  mv {{ kiwix_library_xml }}.tmp {{ kiwix_library_xml }}
+  {{ systemctl_program }} start kiwix-serve
+else
+  echo "Can't get wait lock for iiab-make-kiwix-lib.py";
+  exit 1;
+fi
 exit 0

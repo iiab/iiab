@@ -30,7 +30,7 @@ iiab_config_file = "{{ iiab_config_file }}"
 # Variables that should be read from config file
 # All of these variables will be read from config files and recomputed in init()
 iiab_zim_path = "{{ iiab_zim_path }}"
-kiwix_library_xml = "{{ kiwix_library_xml }}"
+kiwix_library_xml = "{{ kiwix_library_xml }}.tmp"
 
 iiab_base_path = "{{ iiab_base }}"
 kiwix_manage = iiab_base_path + "/kiwix/bin/kiwix-manage"
