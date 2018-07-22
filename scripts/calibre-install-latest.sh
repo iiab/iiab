@@ -8,7 +8,7 @@
 export DEBIAN_FRONTEND=noninteractive
 # Drags in stock desktop dependencies without too much from testing below
 apt -y install dirmngr
-# Prepares to update to latest from testing
+# Prepares to update to latest from debian testing
 apt-key adv --recv-key --keyserver keyserver.ubuntu.com 7638D0442B90D010
 echo "deb http://deb.debian.org/debian testing main" >> /etc/apt/sources.list.d/debian-testing.list
 apt update
