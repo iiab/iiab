@@ -1,4 +1,3 @@
-
 #!/bin/bash
 
 # Calibre 3.27.1 .deb's were released for Raspbian 2018-07-22 but requires
