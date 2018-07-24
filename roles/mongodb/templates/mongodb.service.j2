@@ -1,14 +1,20 @@
 [Unit]
 Description=High-performance, schema-free document-oriented database
 After=syslog.target network.target
- 
+
 [Service]
 Type=simple
 User=mongodb
 Group=mongodb
-ExecStartPre=/usr/bin/mongod --repair --dbpath {{ mongodb_db_path }}
+# FAILS (after power failures, etc) as --repair cannot run when lock file exists: (https://github.com/iiab/iiab/issues/942)
+#ExecStartPre=/usr/bin/mongod --repair --dbpath /library/dbdata/mongodb
+# FAILS as systemd cannot run bash here:
+#ExecStartPre=if [ ! -f /library/dbdata/mongodb/mongod.lock ]; then /usr/bin/mongod --repair --dbpath {{ mongodb_db_path }}; fi
+ExecStartPre=/usr/bin/iiab-mongodb-repair-if-no-lock
 ExecStart=/usr/bin/mongod -f {{ mongodb_conf }}
 ExecStop=/usr/bin/killall mongod
- 
+# killall's SIGTERM (15) seems fine, to induce a graceful stop.  This would work too:
+#ExecStop=mongod --dbpath {{ mongodb_db_path }} --shutdown
+
 [Install]
 WantedBy=multi-user.target
