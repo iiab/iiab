@@ -2,7 +2,7 @@
 
 """
 
-   Creates library.xml file for kiwix from contents of /zims/content and index
+   Creates temp library.xml file for kiwix from contents of /zims/content and index
 
    Author: Tim Moody <tim(at)timmoody(dot)com>
    Contributors: Jerry Vonau <jvonau3(at)gmail.com>
@@ -30,6 +30,8 @@ iiab_config_file = "{{ iiab_config_file }}"
 # Variables that should be read from config file
 # All of these variables will be read from config files and recomputed in init()
 iiab_zim_path = "{{ iiab_zim_path }}"
+
+# Later we will append .tmp to file name
 kiwix_library_xml = "{{ kiwix_library_xml }}"
 
 iiab_base_path = "{{ iiab_base }}"
@@ -41,8 +43,9 @@ old_zim_map = {"bad.zim" : "unparseable name"}
 
 def main():
     """Server routine"""
-
+    global kiwix_library_xml
     init()
+    kiwix_library_xml += '.tmp' # write to temp file    
 
     # remove existing file
     try:
