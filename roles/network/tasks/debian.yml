@@ -21,52 +21,64 @@
 #           state=present
 
 - name: For upgrades from earlier IIAB 6.2, remove br0 file
-  file: path=/etc/network/interfaces.d/br0
-        state=absent
+  file:
+    path: /etc/network/interfaces.d/br0
+    state: absent
   when: iiab_lan_iface != "br0" and wan_ip == "dhcp"
 
 - name: Supply resolvconf.conf
-  template: dest=/etc/resolvconf.conf
-            src=network/resolvconf.j2
+  template:
+    dest: /etc/resolvconf.conf
+    src: network/resolvconf.j2
 
 - name: Supply dhcpcd.conf
-  template: dest=/etc/dhcpcd.conf
-            src=network/dhcpcd.conf.j2
+  template:
+    dest: /etc/dhcpcd.conf
+    src: network/dhcpcd.conf.j2
   when: dhcpcd_result == "enabled"
 
 - name: Copy the bridge script
-  template: dest=/etc/network/interfaces.d/iiab
-            src=network/systemd.j2
+  template:
+    dest: /etc/network/interfaces.d/iiab
+    src: network/systemd.j2
   when: not is_rpi and (iiab_lan_iface == "br0" or wan_ip != "dhcp" or gui_static_wan_ip == "undefined")
 
 - name: Copy the bridge script for RPi
-  template: dest=/etc/network/interfaces.d/iiab
-            src=network/rpi.j2
+  template:
+    dest: /etc/network/interfaces.d/iiab
+    src: network/rpi.j2
   when: is_rpi and iiab_lan_iface == "br0"
 
-- name: Workaround auto issue on Debian-9
-  template: dest=/etc/network/interfaces.d/patch_auto
-            src=network/debian-auto.j2
+- name: Workaround auto issue (debian-9)
+  template:
+    dest: /etc/network/interfaces.d/patch_auto
+    src: network/debian-auto.j2
   when: iiab_wan_iface != "none" and is_debian_9
 
-- name: Clearing out /etc/network/interfaces for static addresses (is_debian_9)
+- name: Clearing out /etc/network/interfaces for static addresses (debian-9)
   lineinfile:
-      state: absent
-      path: /etc/network/interfaces
-      regexp: "{{ iiab_wan_iface }}"
+    state: absent
+    path: /etc/network/interfaces
+    regexp: "{{ iiab_wan_iface }}"
   when: wan_ip != "dhcp" and iiab_wan_iface != "none" and is_debian_9
 
-- name: bind may be affected
-  service: name={{ dns_service }} state=stopped
+- name: BIND may be affected
+  service:
+    name: "{{ dns_service }}"
+    state: stopped
   when: named_install and dnsmasq_enabled
 
 # dhcpd_server release the interface
 - name: dhcpd_server may be affected - stopping dhcpd
-  service: name=dhcpd state=stopped
+  service:
+    name: dhcpd
+    state: stopped
   when: dhcpd_install
 
 - name: dhcpd_server may be affected - stopping dnsmasq
-  service: name=dnsmasq state=stopped
+  service:
+    name: dnsmasq
+    state: stopped
   when: dnsmasq_install
 
 - name: Reload systemd
@@ -75,9 +87,13 @@
 
 # now pick up denyinterfaces
 - name: Restart dhcpcd
-  service: name=dhcpcd state=restarted
+  service:
+    name: dhcpcd
+    state: restarted
   when: dhcpcd_result == "enabled"
 
 - name: Restart the networking service
-  service: name=networking  state=restarted
+  service:
+    name: networking
+    state: restarted
   when: not nobridge is defined and not no_net_restart

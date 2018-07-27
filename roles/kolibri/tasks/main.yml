@@ -1,0 +1,96 @@
+- name: Create Linux user {{ kolibri_user }} and add it to groups {{ apache_user }}, disk
+  user:
+    name: "{{ kolibri_user }}"
+    groups:
+      - "{{ apache_user }}"
+      - disk
+    state: present
+    shell: /bin/false
+    system: yes
+    create_home: no
+
+- name: Create /library/kolibri to store data and configuration files
+  file:
+    path: "{{ item }}"
+    owner: "{{ kolibri_user }}"
+    group: "{{ apache_user }}"
+    mode: 0755
+    state: directory
+  with_items:
+    - "{{ kolibri_home }}"
+
+- name: Install kolibri using pip on all OS's
+  pip:
+    name: kolibri
+    state: latest
+    extra_args: --no-cache-dir
+  when: internet_available
+
+- name: Create kolibri systemd service unit file
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    mode: "{{ item.mode }}"
+    owner: root
+    group: root
+  with_items:
+    - { src: 'kolibri.service.j2', dest: '/etc/systemd/system/kolibri.service', mode: '0644' }
+
+- name: Ask systemd to reread unit files (daemon-reload)
+  systemd:
+    daemon_reload: yes
+
+- name: Set kolibri default language
+  shell: export KOLIBRI_HOME="{{ kolibri_home }}" && "{{ kolibri_exec_path }}" language setdefault "{{ kolibri_language }}"
+  ignore_errors: yes
+  when: kolibri_provision
+
+- name: Create kolibri default facility name, admin account and language
+  shell: >
+    export KOLIBRI_HOME="{{ kolibri_home }}" &&
+    "{{ kolibri_exec_path }}" manage provisiondevice --facility "{{ kolibri_facility }}"
+    --superusername "{{ kolibri_admin_user }}" --superuserpassword "{{ kolibri_admin_password }}"
+    --preset "{{ kolibri_preset }}" --language_id "{{ kolibri_language }}" --verbosity 0 --noinput
+  ignore_errors: yes
+  when: kolibri_provision
+
+- name: Change /library/kolibri directory permissions
+  file:
+    path: "{{ kolibri_home }}"
+    owner: "{{ kolibri_user }}"
+    group: "{{ apache_user }}"
+    recurse: yes
+
+- name: Enable kolibri service
+  service:
+    name: kolibri
+    enabled: yes
+    state: restarted
+  when: kolibri_enabled
+
+- name: Disable kolibri service
+  service:
+    name: kolibri
+    enabled: no
+    state: stopped
+  when: not kolibri_enabled
+
+- name: Add 'kolibri' to list of services at /etc/iiab/iiab.ini
+  ini_file:
+    dest: "{{ service_filelist }}"
+    section: kolibri
+    option: "{{ item.option }}"
+    value: "{{ item.value }}"
+  with_items:
+    - option: name
+      value: kolibri
+    - option: description
+      value: '"Kolibri is an open-source educational platform specially designed to provide offline access to a wide range of quality, openly licensed educational contents in low-resource contexts like rural schools, refugee camps, orphanages, and also in non-formal school programs."'
+    - option: kolibri_url
+      value: "{{ kolibri_url }}"
+    - option: kolibri_path
+      value: "{{ kolibri_path }}"
+    - option: kolibri_port
+      value: "{{ kolibri_http_port }}"
+    - option: enabled
+      value: "{{ kolibri_enabled }}"
