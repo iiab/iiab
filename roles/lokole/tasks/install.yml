@@ -22,11 +22,22 @@
   tags:
     - install
   when: internet_available
-  
+
+- name: Compile translations
+  shell: |
+    python_version=$(python3 -c 'from sys import version_info; print("%s.%s" % (version_info.major, version_info.minor));';)
+    {{ lokole_venv }}/bin/pybabel compile -d {{ item }}/translations
+  with_items:
+    - "{{ lokole_venv }}/lib/python${python_version}/site-packages/opwen_email_client/webapp"
+  tags:
+    - install
+
 - name: Create run directory
   file: 
     path: "{{ lokole_run_directory }}"
     state: directory
+  tags:
+    - configure
 
 - name: Configure Lokole
   template:
@@ -39,10 +50,31 @@
   template:
     src: webapp.sh.j2
     dest: "{{ lokole_run_directory }}/webapp.sh"
+    mode: a+x
   tags:
     - configure
 
+- name: Create 'lokole' service
+  template:
+    src: lokole.service.j2
+    dest: "/etc/systemd/system/lokole.service"
+  tags:
+    - systemd
 
+- name: Enable 'lokole' service
+  systemd:
+    daemon_reload: yes
+    name: lokole
+    enabled: yes
+    state: restarted
+  when: lokole_enabled
+
+- name: Disable 'lokole' service
+  systemd:
+    name: lokole
+    enabled: no
+    state: stopped
+  when: not lokole_enabled
 
 # Everything below this line is unused
 
@@ -53,7 +85,7 @@
 
 - name: Enable httpd conf file if we are disabled (debuntu)
   file:
-    src: /etc/apache2/sites-available/lokole.conf
+    src: /etc/{{ apache_config_dir }}/lokole.conf
     dest: /etc/apache2/sites-enabled/lokole.conf
     state: link
   when: lokole_enabled and is_debuntu
@@ -80,14 +112,8 @@
       value: lokole
     - option: description
       value: '"lokole is an email service."'
-    - option: lokole_src
-      value: "{{ lokole_src }}"
-    - option: lokole_abs_path
-      value: "{{ lokole_abs_path }}"
-    - option: lokole_db_name
-      value: "{{ lokole_db_name }}"
-    - option: lokole_db_user
-      value: "{{ lokole_db_user }}"
+    - option: lokole_run_directory
+      value: "{{ lokole_run_directory }}"
     - option: lokole_url
       value: "{{ lokole_url }}"
     - option: lokole_full_url
