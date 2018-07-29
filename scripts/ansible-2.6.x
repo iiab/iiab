@@ -13,7 +13,7 @@ echo -e 'ALTERNATIVES: Run scripts/ansible-2.5.x-deprecated "slow food", or scri
 
 
 GOOD_VER="2.6.2"    # Ansible version for OLPC XO laptops (pip install).
-                    # On other OS's we install/upgrade the latest 2.6.x from PPA, which might provide an even more recent version of Ansible.
+                    # On other OS's we attempt to install/upgrade the latest 2.6.x from PPA, which might provide an even more recent version of Ansible.
 CURR_VER="undefined"
 # below are unused for future use
 # URL="NA"
