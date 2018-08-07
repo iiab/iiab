@@ -10,9 +10,42 @@ CWD=`pwd`
 OS=`grep ^ID= /etc/*release|cut -d= -f2`
 OS=${OS//\"/}
 MIN_RPI_KERN=4.9.59-v7+
-MIN_ANSIBLE_VER=2.4.1.0
+MIN_ANSIBLE_VER=2.5.7
 
-export ANSIBLE_LOG_PATH="$CWD/iiab-install.log"
+if [ ! -f /etc/iiab/local_vars.yml ]; then
+
+    if [ -f /opt/iiab/iiab/vars/local_vars.yml ]; then
+        echo -e "\nACTION NEEDED: YOUR /opt/iiab/iiab/vars/local_vars.yml IS NO LONGER SUPPORTED.\n" >&2
+        echo -e "███████████████████ TO MOVE IT TO THE CORRECT LOCATION, RUN: ███████████████████" >&2
+        echo -e "██                                                                            ██" >&2
+        echo -e "██       mv /opt/iiab/iiab/vars/local_vars.yml /etc/iiab/local_vars.yml       ██" >&2
+        echo -e "██                                                                            ██" >&2
+        echo -e "████████████████████████████████████████████████████████████████████████████████\n" >&2
+    fi
+
+    echo -e "\nEXITING: /opt/iiab/iiab/iiab-install REQUIRES /etc/iiab/local_vars.yml\n" >&2
+    echo -e "(1) Please read http://wiki.iiab.io/local_vars.yml to learn more" >&2
+    echo -e "(2) MIN/MEDIUM/BIG samples are included in /opt/iiab/iiab/vars" >&2
+    echo -e "(3) NO TIME FOR DETAILS?  RUN INTERNET-IN-A-BOX'S FRIENDLY 1-LINE INSTALLER:\n" >&2
+    echo -e '    http://download.iiab.io   (click on "6.6" or a more recent version!)\n' >&2
+
+    #case $OS in
+    #    OLPC | fedora)
+    #        echo -e "Please examine /opt/iiab/iiab/vars/local_vars_olpc.yml for XO laptops.\n" >&2
+    #        ;;
+    #    centos | debian | ubuntu | raspbian)
+    #        echo -e "Please consider /opt/iiab/iiab/vars/local_vars_medium.yml or similar.\n" >&2
+    #        ;;
+    #    *)
+    #        echo -e "EXITING: IIAB requires Raspbian, Debian, Ubuntu, CentOS or OLPC/Fedora.\n" >&2
+    #        ;;
+    #esac
+    exit 1
+fi
+
+# FUTURE: Test if their local_vars.yml is sufficiently version-compatible !
+
+echo -e "\n\n./iiab-install $* BEGUN IN $CWD\n"
 
 if [ ! -f /etc/ansible/facts.d/local_facts.fact ]; then
     mkdir -p /etc/ansible/facts.d
@@ -30,7 +63,7 @@ if [ "$1" != "--debug" ] && [ "$1" != "--reinstall" ] && [ "$1" != "" ]; then
     echo "Use './iiab-install' for regular installs, or to continue an install."
     echo "Use './iiab-install --reinstall' to force running all Stages 0-9."
     echo "Use './iiab-install --debug' to run Stage 0, followed by Stages 3-9."
-    echo "Use './runtags' to run a single Stage or Tag or Role."
+    echo "Use './runrole' to run a single Stage or Role."
     echo "Use './iiab-network' to run Network sections."
     exit 1
 fi
@@ -68,9 +101,11 @@ if [[ `command -v ansible` ]]; then        # "command -v" is POSIX compliant; it
 fi
 if version_gt $MIN_ANSIBLE_VER $CURR_ANSIBLE_VER ; then
     echo -e "\nEXITING: Ansible "$MIN_ANSIBLE_VER" or higher required."
-    echo "PLEASE RUN './scripts/ansible' to install the latest Ansible from PPA or RPM."
-    echo "'ansible --version' and 'apt -a list ansible' can also be useful here.  Try"
-    echo "to remove prior versions with 'apt purge ansible' or 'pip uninstall ansible'."
+    echo
+    echo "REMOVE PRIOR VERSIONS using 'apt purge ansible' and/or 'pip uninstall ansible'."
+    echo "THEN RUN 'scripts/ansible' to install the latest Ansible from PPA or RPM."
+    echo "'ansible --version' and 'apt -a list ansible' can also be very useful."
+    echo
     echo "IIAB INSTALL INSTRUCTIONS: https://github.com/iiab/iiab/wiki/IIAB-Installation"
     exit 1
 fi
@@ -107,36 +142,21 @@ if [ -f /etc/iiab/iiab.env ]; then
         echo -e "\nEXITING: STAGE (counter) in /etc/iiab/iiab.env shows Stage 9 Is Already Done."
         echo "Use './iiab-install --reinstall' to force running all Stages 0-9."
         echo "Use './iiab-install --debug' to run Stage 0, followed by Stages 3-9."
-        echo "Use './runtags' to run a single Stage or Tag or Role."
-        echo "Use './iiab-network' to run Network sections."
-        exit 1
+        echo "Use './runrole' to run a single Stage or Role."
+        echo -e "Use './iiab-network' to run Network sections.\n\n"
+        exit 0    # allows rerunning http://download.iiab.io/6.6/install.txt
     fi
 fi
 if [ "$STAGE" -lt 2 ] && [ "$1" == "--debug" ]; then
     echo -e "\n'--debug' *ignored* as STAGE (counter) < 2."
 fi
 
-# If vars/local_vars.yml is missing, put a default file in place.
-if [ ! -f ./vars/local_vars.yml ]; then
-    case $OS in
-        OLPC | fedora)
-            cp ./vars/local_vars_olpc.yml ./vars/local_vars.yml
-            echo -e "\nvars/local_vars.yml created from local_vars_olpc.yml defaults."
-            ;;
-        centos | debian | ubuntu | raspbian)
-            cp ./vars/local_vars_medium.yml ./vars/local_vars.yml
-            echo -e "\nvars/local_vars.yml created from local_vars_medium.yml defaults."
-            echo "See MIN/MEDIUM/BIG options @ http://wiki.iiab.io/local_vars.yml"
-            ;;
-        *)
-            echo -e "\nEXITING: IIAB requires Raspbian, Debian, Ubuntu, CentOS or OLPC/Fedora."
-            exit 1
-            ;;
-    esac
-fi
-
 echo -e "\nTRY TO RERUN './iiab-install' IF IT FAILS DUE TO CONNECTIVITY ISSUES ETC!"
 echo -e "\nRunning local playbooks....Stage 0 will now run....followed by Stages $(($STAGE + 1))-9"
 
+export ANSIBLE_LOG_PATH="$CWD/iiab-install.log"
+
 ansible -m setup -i $INVENTORY localhost --connection=local >> /dev/null
 ansible-playbook -i $INVENTORY $PLAYBOOK ${ARGS} --connection=local
+
+echo -e "./iiab-install $* COMPLETED IN $CWD\n\n"

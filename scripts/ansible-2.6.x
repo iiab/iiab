@@ -1,12 +1,19 @@
 #!/bin/bash -e
 
-echo -e '\nATTEMPTING TO INSTALL THE LATEST ANSIBLE 2.5.x'
-echo -e 'Ensure you'"'"'re online before running this! (/opt/iiab/iiab/scripts/ansible-2.5.x)'
-echo -e 'INSTRUCTIONS: https://github.com/iiab/iiab/wiki/IIAB-Installation#do-everything-from-scratch'
-echo -e 'ALTERNATIVE: Consider scripts/ansible to keep up-to-date as Ansible evolves.\n'
+echo -e '\n\nSTRONGLY RECOMMENDED PREREQUISITE: (1) remove all prior versions of Ansible using "apt purge ansible" and/or "pip uninstall ansible" and (2) clear out all lines containing ansible from /etc/apt/sources.list and /etc/apt/sources.list.d/*\n'
 
-GOOD_VER="2.5.4"      # Ansible version for OLPC XO laptops (pip install).
-                      # On other OS's we attempt to install/upgrade/pin to the latest Ansible 2.5.x
+echo -e 'WARNING: repeatedly re-run "apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 93C4A3FD7BB9C367" if this part of the script fails due to network/mirrors.\n'
+
+echo -e 'COMPLETE INSTALL INSTRUCTIONS:\nhttps://github.com/iiab/iiab/wiki/IIAB-Installation#do-everything-from-scratch\n'
+
+echo -e 'NOW ATTEMPTING TO INSTALL THE LATEST ANSIBLE 2.6.x:'
+echo -e 'Ensure you'"'"'re online before running this (/opt/iiab/iiab/scripts/ansible-2.6.x)\n'
+
+echo -e 'ALTERNATIVES: Run scripts/ansible-2.5.x-deprecated "slow food", or scripts/ansible for the latest.\n\n'
+
+
+GOOD_VER="2.6.2"    # Ansible version for OLPC XO laptops (pip install).
+                    # On other OS's we attempt to install/upgrade/pin to the latest 2.6.x from PPA, which might provide an even more recent version of Ansible.
 CURR_VER="undefined"
 # below are unused for future use
 # URL="NA"
@@ -14,12 +21,12 @@ CURR_VER="undefined"
 export DEBIAN_FRONTEND=noninteractive
 
 if [ ! `command -v ansible-playbook` ]; then   # "command -v" is POSIX compliant; also catches built-in commands like "cd"
-    echo "Installing --- Please Wait"
+    echo "scripts/ansible-2.6.x will now try to install Ansible --- Please Wait"
     if [ -f /etc/centos-release ]; then
         yum -y install ca-certificates nss epel-release
         yum -y install git bzip2 file findutils gzip hg svn sudo tar which unzip xz zip libselinux-python
         yum -y install python-pip python-setuptools python-wheel patch
-        yum -y install http://releases.ansible.com/ansible/rpm/release/epel-7-x86_64/ansible-2.5.0-1.el7.ans.noarch.rpm
+        yum -y install https://releases.ansible.com/ansible/rpm/release/epel-7-x86_64/ansible-2.6.2-1.el7.ans.noarch.rpm
 #    elif [ -f /etc/fedora-release ]; then
 #        CURR_VER=`grep VERSION_ID /etc/*elease | cut -d= -f2`
 #        URL=https://github.com/jvonau/iiab/blob/ansible/vars/fedora-$CURR_VER.yml
@@ -35,7 +42,7 @@ if [ ! `command -v ansible-playbook` ]; then   # "command -v" is POSIX compliant
     elif (grep -qi ubuntu /etc/lsb-release 2> /dev/null) || (grep -qi ubuntu /etc/os-release); then
         apt -y install python-pip python-setuptools python-wheel patch
         #apt-add-repository -y ppa:ansible/ansible
-        apt-add-repository -y ppa:ansible/ansible-2.5
+        apt-add-repository -y ppa:ansible/ansible-2.6
     # elif UBUNTU MUST REMAIN ABOVE (as Ubuntu ALSO contains /etc/debian_version, which would trigger the line just below)
     elif [ -f /etc/debian_version ] || (grep -qi raspbian /etc/*elease) ; then
         if ( ! grep -qi ansible /etc/apt/sources.list) && [ ! -f /etc/apt/sources.list.d/ansible ]; then
@@ -44,7 +51,7 @@ if [ ! `command -v ansible-playbook` ]; then   # "command -v" is POSIX compliant
             apt -y install dirmngr
             #echo "deb http://ppa.launchpad.net/ansible/ansible/ubuntu xenial main" \
             #     >> /etc/apt/sources.list.d/iiab-ansible.list
-            echo "deb http://ppa.launchpad.net/ansible/ansible-2.5/ubuntu xenial main" \
+            echo "deb http://ppa.launchpad.net/ansible/ansible-2.6/ubuntu xenial main" \
                  >> /etc/apt/sources.list.d/iiab-ansible.list
             apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 93C4A3FD7BB9C367
         fi
@@ -67,7 +74,7 @@ else
     #if [[ `grep -qi ansible /etc/apt/sources.list` ]] || [ -f /etc/apt/sources.list.d/ansible*.list ]; then
     elif (grep -qi ansible /etc/apt/sources.list) || (ls /etc/apt/sources.list.d/*ansible*.list >/dev/null 2>&1) ; then
         #echo "Ansible repo(s) found within /etc/apt/sources.list*"
-        echo -e 'MANUAL INTERVENTION URGED:\nANSIBLE REPO(S) FOUND WITHIN /etc/apt/sources.list AND/OR /etc/apt/sources.list.d/*ansible*.list -- MUST CONTAIN LINE "deb http://ppa.launchpad.net/ansible/ansible-2.5/ubuntu xenial main" IF YOU WANT THE LATEST ANSIBLE 2.5.x -- AND REMOVE ALL SIMILAR LINES TO ENSURE ANSIBLE UPDATES CLEANLY -- then re-run this script.\n'
+        echo -e 'CONSIDER MANUAL INTERVENTION:\nANSIBLE REPO(S) FOUND WITHIN /etc/apt/sources.list AND/OR /etc/apt/sources.list.d/*ansible*.list -- MUST CONTAIN LINE "deb http://ppa.launchpad.net/ansible/ansible-2.6/ubuntu xenial main" IF YOU WANT THE LATEST ANSIBLE 2.6.x -- AND REMOVE ALL SIMILAR LINES TO ENSURE ANSIBLE UPDATES CLEANLY -- then re-run this script.\n'
     else
         echo -e 'Upstream ansible source repo not found:\nPLEASE UNINSTALL ANSIBLE (run "apt purge ansible" or "pip uninstall ansible", depending how Ansible was originally installed) THEN RE-RUN THIS SCRIPT.'
         exit 1
@@ -78,7 +85,7 @@ if [ ! -f /etc/centos-release ] && [ ! -f /etc/fedora-release ] && [ ! -f /etc/o
     # Align IIAB with Ansible community's latest official release
     echo "Using apt to check for updates, then install/upgrade ansible"
     apt update
-    apt -y --allow-downgrades install ansible=2.5*
+    apt -y --allow-downgrades install ansible=2.6*
 
     # TEMPORARILY USE ANSIBLE 2.4.4 (REMOVE IT WITH "pip uninstall ansible")
     #pip install ansible==2.4.4

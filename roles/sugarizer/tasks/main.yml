@@ -1,94 +1,168 @@
-- name: Wipe any previous sugarizer installation
+# 0. CLEAN UP PRIOR VERSIONS OF SUGARIZER (NEEDS WORK!)
+
+- name: Wipe /library/www/html/sugarizer* if installing sugarizer-1.0
   shell: "rm -rf {{ doc_root }}/sugarizer*"
   when: sugarizer_version == "sugarizer-1.0"
 
-- name: Download latest stable Sugarizer from location we control
-  get_url:
-    url: "{{ iiab_download_url }}/{{ sugarizer_version }}.tar.gz"
-    dest: "{{ downloads_dir }}/{{ sugarizer_version }}.tar.gz"
-    timeout: "{{ download_timeout }}"
+# 1. DOWNLOAD+LINK /opt/iiab/sugarizer
+
+- name: Clone llaske/sugarizer ({{ sugarizer_git_version }}) from GitHub to /opt/iiab (MAY DOWNLOAD 600+ MB)
+  git:
+    repo: https://github.com/llaske/sugarizer
+    dest: "{{ sugarizer_location }}/{{ sugarizer_version }}"
+    version: "{{ sugarizer_git_version }}"
+    force: yes
+    depth: 1
   when: internet_available
 
-- name: Untar to {{ sugarizer_version }}
-  unarchive:
-    src: "{{ downloads_dir }}/{{ sugarizer_version }}.tar.gz"
-    dest: "{{ sugarizer_location }}"
-    creates: "{{ sugarizer_location }}/{{ sugarizer_version }}/index.html"
-#  command: tar xzf {{ downloads_dir }}/{{ sugarizer_version }}.tar.gz -C {{ sugarizer_location }}
-#           creates="{{ sugarizer_location }}/{{ sugarizer_version }}/index.html"
-
-- name: Download latest stable Server from location we control
-  get_url:
-    url: "{{ iiab_download_url }}/{{ sugarizer_server_version }}.tar.gz"
-    dest: "{{ downloads_dir }}/{{ sugarizer_server_version }}.tar.gz"
-    timeout: "{{ download_timeout }}"
-  when: internet_available
-
-- name: Untar to /{{ sugarizer_version }}
-  unarchive:
-    src: "{{ downloads_dir }}/{{ sugarizer_version }}.tar.gz"
-    dest: "{{ sugarizer_location }}"
-    creates: "{{ sugarizer_location }}/{{ sugarizer_version }}/index.html"
-- name: Create symbolic link /library/www/html/sugarizer
+- name: Create symbolic link /opt/iiab/sugarizer -> /opt/iiab/{{ sugarizer_version }}
   file:
     src: "{{ sugarizer_location }}/{{ sugarizer_version }}"
     dest: "{{ sugarizer_location }}/sugarizer"
     state: link
 
-- name: Untar to /library/www/html/{{ sugarizer_server_version }}
-  unarchive:
-    src: "{{ downloads_dir }}/{{ sugarizer_server_version }}.tar.gz"
-    dest: "{{ sugarizer_location }}"
-    creates: "{{ sugarizer_location }}/{{ sugarizer_server_version }}/index.html"
-- name: Create symbolic link /library/www/html/sugarizer
+# 2. DOWNLOAD+LINK /opt/iiab/sugarizer-server
+
+# 2018-07-11: http://download.iiab.io/packages/sugarizer-server-1.0.tar.gz
+# was flawed, as documented at:
+#    https://github.com/iiab/iiab/pull/814#issuecomment-404211098
+# Versions of MongoDB, npm (& Node.js ?) matter!  Sugarizer 1.0 Context:
+#    https://github.com/iiab/iiab/issues/798
+# Going forward let's "git clone" IIAB's preferred versions, of sugarizer
+# AND sugarizer-server, as specified in roles/sugarizer/defaults/main.yml
+
+# 2018-07-14 BLOAT: git works well BUT even with "depth: 1"
+# - 229MB is unfort downloaded to /opt/iiab/sugarizer/.git
+# - 1.4MB is unfort downloaded to /opt/iiab/sugarizer-server/.git
+
+# CLARIF: during repeat runs of "./runrole sugarizer", this git sync shows
+# "changed" (whereas above git sync shows "ok").  Reason: "npm install"
+# (below) modifies /opt/iiab/sugarizer-server/node_modules
+- name: Clone llaske/sugarizer-server ({{ sugarizer_server_git_version }}) from GitHub to /opt/iiab
+  git:
+    repo: https://github.com/llaske/sugarizer-server
+    dest: "{{ sugarizer_location }}/{{ sugarizer_server_version }}"
+    version: "{{ sugarizer_server_git_version }}"
+    force: yes
+    depth: 1
+  when: internet_available
+
+- name: Create symbolic link /opt/iiab/sugarizer-server -> /opt/iiab/{{ sugarizer_server_version }}
   file:
     src: "{{ sugarizer_location }}/{{ sugarizer_server_version }}"
     dest: "{{ sugarizer_location }}/sugarizer-server"
     state: link
 
-- name: Set up Node.js 6.x apt sources (debuntu)
-  shell: curl -sL https://deb.nodesource.com/setup_6.x | bash -
+# 3. INSTALL A GOOD VERSION OF Node.js AND npm
+
+- name: Set up Node.js 8.x apt sources (debuntu, but avoid ubuntu-18)
+  shell: curl -sL https://deb.nodesource.com/setup_8.x | bash -
   when: internet_available and is_debuntu and not is_ubuntu_18
 
-- name: Install latest Node.js which includes /usr/bin/npm (debuntu)
+- name: Install latest Node.js which includes /usr/bin/npm (debuntu, but avoid ubuntu-18)
   package:
     name: nodejs
+    # name: nodejs=8.x
     state: latest
-# package: name=nodejs=6.*
-#          state=present
+    # state: present
   when: internet_available and is_debuntu and not is_ubuntu_18
 
-- name: Install npm (OS's other than debuntu)
-  package:
-    name: "{{ item }}"
-    state: present
-  when: internet_available and not is_debuntu
-  with_items:
-    - nodejs
-    - npm
+# 2018-07-14: BOTH STEPS ABOVE TAKE TIME, but Raspbian (apt offers npm
+# 1.4.21) & Debian 9 (apt offers no npm!) STILL NEED the above
+# nodesource.com approach to get a version of npm that works with Sugarizer:
+# https://github.com/iiab/iiab/issues/798#issuecomment-404324530
+#
+# MORE POSITIVELY: this nodesource.com approach (brings in npm 5.6.0 with
+# nodejs 8.11.3 for now, to any OS) would also work on Ubuntu 18.04, and
+# might even bring about a sane consistency across mainline OS's?
+#
+# BUT FOR NOW: Ubuntu 18.04's apt (approach below) brings in npm 3.5.2,
+# which appears suffic "SO FAR"?  18.04's nodejs 8.10.0 is more reassuring!
 
-- name: Install npm (ubuntu-18)
+# CRAZY IDEA: most versions of npm can upgrade themselves to the latest
+# (6.2.0 for now) using command "npm install -g npm", if that helps us in
+# future, e.g. TK's memory issue etc?  If so, be CAREFUL this puts npm
+# in /usr/local/bin on Ubuntu 18.04 -- unlike Ubuntu 16.04 and Raspbian
+# where it upgrades /usr/bin/npm in place:
+# https://askubuntu.com/questions/1036278/npm-is-incorrect-version-on-latest-ubuntu-18-04-installation
+
+- name: Install Node.js and npm (ubuntu-18 or not debuntu)
   package:
     name: "{{ item }}"
     state: latest
-  when: internet_available and is_ubuntu_18
   with_items:
-    - npm
     - nodejs
+    - npm
+  when: internet_available and (is_ubuntu_18 or not is_debuntu)
 
-# attempting to reinstall npm is broken on Raspbian 9
-- name: Check for Sugarizer already installed
-  stat:
-    path: "{{ sugarizer_location }}/{{ sugarizer_server_version }}/node_modules"
-  register: npm
-  ignore_errors: true
+# 4. RUN "npm install" TO POPULATE ~35MB /opt/iiab/sugarizer-server/node_modules
 
-- name: Set a flag to abort second attempt to install
-  set_fact:
-    npm_exists: True
-  when: npm.stat is defined and npm.stat.exists
+# Re-running "npm install" USED TO fail on Raspbian 9 if not other OS's ?
+# Strategies considered to avoid re-running it:
+# OLD WAY 1: test & set flag node_modules_exists: True
+# OLD WAY 2: "creates: ..." checks for non-existence of /opt/iiab/sugarizer-server-1.0/node_modules
+# OLD WAY 3: set "register: git_sug_server_output" above, then as nec delete /opt/iiab/sugarizer-server-1.0/node_modules "when: git_sug_server_output.changed" and as nec run "npm install"
 
-- name: Create systemd files and copy our ini file
+#- name: Check for /opt/iiab/{{ sugarizer_server_version }}/node_modules
+#  stat:
+#    path: "{{ sugarizer_location }}/{{ sugarizer_server_version }}/node_modules"
+#  register: nmtest
+#  ignore_errors: true
+#
+#- name: Set a flag to prevent re-running of "npm install"
+#  set_fact:
+#    node_modules_exists: True
+#  when: nmtest.stat is defined and nmtest.stat.exists
+
+# NEW WAY BELOW: run "npm install --allow-root" every time, as modern versions
+# of npm are incremental, with sanity checks (all 3 may work: but npm 6.2.0
+# is better than 5.6.0. which is better than Ubuntu 18.04's 3.5.2).
+
+# 2018-07-15: TK Kang & Holt confirmed sudo-driven "npm install" maxes out CPU
+# for hours, on diff OS's using npm 5.6.0 and 6.2.0.  Hours later you may get
+# error: code EACCES, errno -13 (permission denied),
+# "Missing write access to /opt/iiab/sugarizer-server-1.0/node_modules"
+#
+# SOLUTION: Implement '--allow-root --unsafe-perm=true' below, as is critical
+# for 1st run of sudo-driven 'npm install' especially:
+#
+# ON DEBIAN: npm 5.6.0's --allow-root would be sufficient: causing creation
+# of /root/.npm cache & lock files to owned by root:root instead of
+# iiab-admin:iiab-admin...thus permitting it & IIAB installs to complete!
+#
+# ON RASPBIAN: npm 5.6.0's --unsafe-perm=true is *required* so that npm
+# install actually finished (in about 5 minutes).  It's possible we should
+# remove --allow-root in favore of --unsafe-perm=true alone.  But this needs
+# testing on different Linuxes before proceeding.
+#
+# CLARIF 1: Something like 'chown -R root:root /root/.npm' would do the job,
+# but cannot happen synchronously throughout the 1st run of 'npm install'
+# (when it's needed!)  Similar to what --allow-root does on Debian.
+#
+# CLARIF 2: Ubuntu 18.04 is currently unaffected due to its ancient
+# npm 3.5.2, which instead uses /home/iiab-admin/.npm (which remains owned
+# by iiab-admin:iiab-admin, even with '--allow-root', but thankfully still
+# gets the job done, for now!)
+
+#- name: Create the express framework for Node.js (OS's other than Fedora 18)
+- name: Run 'npm install --allow-root --unsafe-perm=true' to create /opt/iiab/{{ sugarizer_server_version }}/node_modules (CAN TAKE ~3 MINUTES)
+  command: npm install --allow-root --unsafe-perm=true    # "command:" a bit safer than "shell:"
+  args:
+    chdir: "{{ sugarizer_location }}/{{  sugarizer_server_version }}"
+    #creates: "{{ sugarizer_location }}/{{ sugarizer_server_version }}/node_modules"    # OLD WAY 2
+  when: internet_available    # "npm install" generally requires Internet access
+# when: internet_available and git_sug_server_output.changed    # OLD WAY 3
+# when: internet_available and not is_F18 and not node_modules_exists    # OLD WAY 1
+
+#- name: Create the express framework for Node.js (Fedora 18)
+#  shell: npm install
+#  args:
+#    chdir: "{{ sugarizer_location }}/sugarizer/server"
+#  when: internet_available and is_F18 and not node_modules_exists
+
+# 5. PLACE CONFIG FILES
+
+- name: Configure sugarizer.service (systemd), sugarizer.conf (Apache) and sugarizer.ini
   template:
     src: "{{ item.src }}"
     dest: "{{ item.dest }}"
@@ -96,46 +170,50 @@
     owner: root
     group: root
   with_items:
-    - { src: 'sugarizer.service.j2' , dest: '/etc/systemd/system/sugarizer.service', mode: '0644' }
-    - { src: 'sugarizer.ini' , dest: '{{ sugarizer_location }}/{{ sugarizer_server_version }}/env/sugarizer.ini', mode: '0644' }
-    - { src: 'sugarizer.conf' , dest: '/etc/apache2/sites-available',mode: '0644' }
-    - { src: 'sugarizer.js' , dest: '/opt/iiab/sugarizer-server',mode: '0644' }
+    - { src: 'sugarizer.ini', dest: '{{ sugarizer_location }}/{{ sugarizer_server_version }}/env/sugarizer.ini', mode: '0644' }
+    - { src: 'sugarizer.conf', dest: '/etc/apache2/sites-available', mode: '0644' }
+    - { src: 'sugarizer.service.j2', dest: '/etc/systemd/system/sugarizer.service', mode: '0644' }
+    - { src: 'sugarizer.js', dest: '/opt/iiab/sugarizer-server', mode: '0644' }
 
-- name: Create the symlink enabling the rewrite
-  file: src=/etc/apache2/sites-available/sugarizer.conf
-        dest=/etc/apache2/sites-enabled/sugarizer.conf
-        state=link
+- name: Create symlink for short URL http://box/sugarizer
+  file:
+    src: /etc/apache2/sites-available/sugarizer.conf
+    dest: /etc/apache2/sites-enabled/sugarizer.conf
+    state: link
 
-- name: Create the express framework for Node.js (OS's other than Fedora 18)
-  shell: npm install
-  args:
-    chdir: "{{ sugarizer_location }}/{{  sugarizer_server_version }}"
-    creates: "{{ sugarizer_location }}/{{ sugarizer_server_version }}/server/node_modules"
-  when: not is_F18 and not npm_exists
+# 6. RESTART/STOP SYSTEMD SERVICE
 
-- name: Create the express framework for Node.js (Fedora 18)
-  shell: npm install
-  args:
-    chdir: "{{ sugarizer_location }}/sugarizer/server"
-  when: is_F18 and not npm_exists
-
-- name: Enable services (all OS's)
-  service:
-    name: "{{ item.name }}"
+- name: Enable+restart systemd service if sugarizer_enabled, with "systemctl daemon-reload" (in case mongodb.service changed?)
+  systemd:
+    name: sugarizer
     enabled: yes
     state: restarted
-  with_items:
-    - { name: sugarizer }
+    daemon_reload: yes
   when: sugarizer_enabled
 
-- name: Disable services (all OS's)
-  service:
-    name: "{{ item.name }}"
+- name: 'Disable+stop systemd service if sugarizer_enabled: False'
+  systemd:
+    name: sugarizer
     enabled: no
     state: stopped
-  with_items:
-    - { name: sugarizer }
   when: not sugarizer_enabled
+
+#- name: Enable services (all OS's)
+#  service:
+#    name: "{{ item.name }}"
+#    enabled: yes
+#    state: restarted
+#  with_items:
+##   - { name: mongodb }    # 2018-07-14: NICE TRY, but still doesn't bring http://box:8089 to life reliably, as a reboot usually does!  (Is a "systemctl daemon-reload" or some such nec?)
+#    - { name: sugarizer }
+#  when: sugarizer_enabled
+
+#- name: Disable service (all OS's)
+#  service:
+#    name: sugarizer
+#    enabled: no
+#    state: stopped
+#  when: not sugarizer_enabled
 
 - name: Add 'sugarizer' to list of services at /etc/iiab/iiab.ini
   ini_file:

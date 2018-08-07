@@ -1,6 +1,7 @@
-- name: Install mongodb required packages
-  package: name={{ item }}
-           state=present
+- name: Install MongoDB required packages
+  package:
+    name: "{{ item }}"
+    state: present
   with_items:
     - mongodb-server
     - mongodb
@@ -8,50 +9,67 @@
   tags:
     - download
 
-- name: create the data directory for mongodb
-  file: state=directory
-        path={{ item.path }}
-        owner=mongodb
+- name: Create the data directory for MongoDB
+  file:
+    state: directory
+    path: "{{ item.path }}"
+    owner: mongodb
   with_items:
-     - { path: '/var/run/mongodb' }
-     - { path: '/library/dbdata/mongodb' }
-     - { path: '/var/log/mongodb' }
+    - { path: '/var/run/mongodb' }
+    - { path: "{{ mongodb_db_path }}" }    # == /library/dbdata/mongodb/
+    - { path: '/var/log/mongodb' }
 
-- name: Move required files
-  template: src={{ item.src }}
-            dest={{ item.dest }}
-            owner=root
-            group=root
-            mode=0644
+- name: Populate & position /etc/mongod.conf, mongodb.service
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
   with_items:
-     - { src: 'mongodb.service' , dest: '/etc/systemd/system/' }
-     - { src: 'mongod.conf' , dest: '/etc/mongod.conf'}
+    - { src: 'mongod.conf.j2', dest: "{{ mongodb_conf }}", mode: '0644' }
+    - { src: 'mongodb.service.j2', dest: '/etc/systemd/system/mongodb.service', mode: '0644' }
+    - { src: 'iiab-mongodb-repair-if-no-lock.j2', dest: '/usr/bin/iiab-mongodb-repair-if-no-lock', mode: '0755' }
 
-- name: enable services
-  service: name={{ item.name }}
-           enabled=yes
-           state=restarted
-  with_items:
-      - { name: mongodb }
+- name: Enable+restart systemd service if mongodb_enabled, with "systemctl daemon-reload" (in case mongodb.service changed?)
+  systemd:
+    name: mongodb
+    enabled: yes
+    state: restarted
+    daemon_reload: yes
   when: mongodb_enabled
 
-- name: disable services
-  service: name={{ item.name }}
-           enabled=no
-           state=stopped
-  with_items:
-      - { name: mongodb }
+- name: 'Disable+stop systemd service if mongodb_enabled: False'
+  systemd:
+    name: mongodb
+    enabled: no
+    state: stopped
   when: not mongodb_enabled
 
-- name: add mongodb to service list
-  ini_file: dest="{{ service_filelist }}"
-            section=mongodb
-            option="{{ item.option }}"
-            value="{{ item.value }}"
+#- name: Restart service if enabled
+#  service:
+#    name: mongodb
+#    enabled: yes
+#    state: restarted
+#  when: mongodb_enabled
+
+#- name: Stop service if not enabled
+#  service:
+#    name: mongodb
+#    enabled: no
+#    state: stopped
+#  when: not mongodb_enabled
+
+- name: Add 'mongodb' to list of services at /etc/iiab/iiab.ini
+  ini_file:
+    dest: "{{ service_filelist }}"
+    section: mongodb
+    option: "{{ item.option }}"
+    value: "{{ item.value }}"
   with_items:
-       - option: name
-         value: MongoDB
-       - option: description
-         value: '"MongoDB is an open-source document database that provides high performance, high availability, and automatic scaling."'
-       - option: enabled
-         value: "{{ mongodb_enabled }}"
+    - option: name
+      value: MongoDB
+    - option: description
+      value: '"MongoDB is an open-source document database that provides high performance, high availability, and automatic scaling."'
+    - option: enabled
+      value: "{{ mongodb_enabled }}"
