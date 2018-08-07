@@ -23,7 +23,7 @@ Locations
 ---------
 
 - The uploaded files are expected to be in /library/elgg
-- The software is in /opt/elgg -> /opt/elgg-x.y.z
+- The software is in /opt/elgg -> /opt/elgg-x.y.z (i.e. actual version number)
 - The URL is http://box/elgg
 
 Parameters
