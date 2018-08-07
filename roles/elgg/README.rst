@@ -37,11 +37,11 @@ Users and Passwords
 
 There are a number of seemingly similar user names and passwords in this installation:
 
-* dbuser - the MySQL user that Elgg uses to access the database.  This is a local variable
-           the name of which corresponds to that in /opt/elgg/elgg-config/settings.php
+* dbuser - the MySQL user that Elgg uses to access the database
+           This is a local variable, the name of which corresponds to that in /opt/elgg/elgg-config/settings.php
 
-* dbpassword - password for dbuser. This is also a local variable, the name of
-               which corresponds to that in /opt/elgg/elgg-config/settings.php
+* dbpassword - password for dbuser
+               This is also a local variable, the name of which corresponds to that in /opt/elgg/elgg-config/settings.php
 
 * elgg_mysql_password - this is the global name for dbpassword in default_vars.yml
 
