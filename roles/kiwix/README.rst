@@ -13,7 +13,7 @@ Locations
 ---------
 
 - Your ZIM files go in /library/zims/content
-- Your ZIM index files go in directories under /library/zims/index (these index files are increasingly no longer necessary, as most ZIM files produced since 2017 contain an internal search index!)
+- Your ZIM index files go in directories under /library/zims/index (these index files are increasingly no longer necessary, as most ZIM files produced since 2017 contain an internal search index instead!)
 - The URL is http://box/kiwix or http://box.lan/kiwix (both proxied for AWStats)
 - Use URL http://box:3000/kiwix/ if you want to avoid the proxy
 
