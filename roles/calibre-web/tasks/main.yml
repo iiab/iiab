@@ -1,0 +1,86 @@
+- name: Create calibre-web folders to store data and configuration files
+  file:
+    path: "{{ item }}"
+    owner: "{{ calibre-web_user }}"
+    group: "{{ apache_user }}"
+    mode: 0755
+    state: directory
+  with_items:
+    - "{{ calibre-web_home }}"
+    - "{{ calibre-web_path }}"
+
+- name: Checkout calibre-web github repo
+  git:
+    repo: https://github.com/janeczku/calibre-web.git
+    dest: "{{ calibre-web_path }}"
+    update: yes
+    version: master
+  when: internet_available
+
+- name: Download calibre-web dependencies
+- pip:
+    chdir: "{{ calibre-web_path }}"
+    requirements: "{{ calibre-web_path }}/requirements.txt"
+    extra_args: "--target vendor --no-cache-dir"
+
+- name: Create calibre-web systemd service unit, httpd2 configuration and initial database
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    mode: "{{ item.mode }}"
+    owner: root
+    group: root
+  with_items:
+    - { src: 'calibre-web.service.j2', dest: '/etc/systemd/system/calibre-web.service', mode: '0644' }
+    - { src: 'calibre-web.conf.j2', dest: '/etc/apache2/sites-available/calibre-web.conf', mode: '0644' }
+    - { src: 'metadata.db', dest: '{{ calibre-web_home }}/metadata.db', mode: '0644' }
+
+- name: Ask systemd to reread unit files (daemon-reload)
+  systemd:
+    daemon_reload: yes
+
+- name: Enable calibre-web service
+  service:
+    name: calibre-web
+    enabled: yes
+    state: restarted
+  when: calibre-web_enabled
+
+- name: Enable calibre-web httpd2 site
+  command: a2ensite calibre-web.conf
+  when: calibre-web_enabled
+
+- name: Restart Apache after enabling calibre-web httpd2 site
+  command: apachectl -k graceful
+  when: calibre-web_enabled
+
+- name: Disable calibre-web service
+  service:
+    name: calibre-web
+    enabled: no
+    state: stopped
+  when: not calibre-web_enabled
+
+- name: Disable calibre-web httpd2 site
+  command: a2dissite calibre-web.conf
+  when: not calibre-web_enabled
+
+- name: Add 'calibre-web' to list of services at /etc/iiab/iiab.ini
+  ini_file:
+    dest: "{{ service_filelist }}"
+    section: calibre-web
+    option: "{{ item.option }}"
+    value: "{{ item.value }}"
+  with_items:
+    - option: name
+      value: calibre-web
+    - option: description
+      value: '"calibre-web is a web app providing a clean interface for browsing, reading and downloading eBooks."'
+    - option: calibre-web_url
+      value: "{{ calibre-web_url }}"
+    - option: calibre-web_path
+      value: "{{ calibre-web_path }}"
+    - option: calibre-web_port
+      value: "{{ calibre-web_http_port }}"
+    - option: enabled
+      value: "{{ calibre-web_enabled }}"
