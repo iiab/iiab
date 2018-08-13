@@ -1,105 +1,129 @@
----
-
 - name: Install OpenVPN packages
-  package:  name={{ item }}
-            state=present
+  package:
+    name: "{{ item }}"
+    state: present
   with_items:
-        - openvpn
-        - nmap
+    - openvpn
+    - nmap
   tags:
     - download
 
 - name: Create the directory for keys
-  file: dest=/etc/openvpn/keys
-        state=directory
-        owner=root
-        group=root
-        mode=0755
+  file:
+    dest: /etc/openvpn/keys
+    state: directory
+    owner: root
+    group: root
+    mode: 0755
 
 - name: Create the directory for scripts
-  file: dest=/etc/openvpn/scripts
-        state=directory
-        owner=root
-        group=root
-        mode=0755
+  file:
+    dest: /etc/openvpn/scripts
+    state: directory
+    owner: root
+    group: root
+    mode:0755
 
 - name: Create a folder for iiab executable not on path
-  file: path=/usr/lib/iiab
-        state=directory
+  file:
+    path: /usr/lib/iiab
+    state: directory
 
 - name: Configure OpenVPN
-  template: src={{ item.src }}
-            dest={{ item.dest }}
-            owner={{ item.owner }}
-            group=root
-            mode={{ item.mode }}
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: "{{ item.owner }}"
+    group: root
+    mode: "{{ item.mode }}"
   with_items:
-    - { src: 'ca.crt', dest: '/etc/openvpn/keys/ca.crt', owner: "root" , mode: '0644' }
-    - { src: 'client1.crt', dest: '/etc/openvpn/keys/client1.crt', owner: "root" , mode: '0644' }
-    - { src: 'client1.key', dest: '/etc/openvpn/keys/client1.key', owner: "root" , mode: '0600' }
-    - { src: 'announce', dest: '/etc/openvpn/scripts/announce', owner: "root" , mode: '0755' }
-    - { src: 'announcer', dest: '/etc/openvpn/scripts/announcer', owner: "root" , mode: '0755' }
-    - { src: 'silence', dest: '/etc/openvpn/scripts/silence', owner: "root" , mode: '0755' }
-    - { src: 'xscenet.conf', dest: '/etc/openvpn/xscenet.conf', owner: "root" , mode: '0644' }
-    - { src: 'iiab-vpn.conf.in', dest: '/etc/openvpn/iiab-vpn.conf.in', owner: "root" , mode: '0644' }
-    - { src: 'iiab-vpn', dest: '/usr/bin/iiab-vpn', owner: "root" , mode: '0755' }
-    - { src: 'iiab-handle', dest: '/usr/bin/iiab-handle', owner: "root" , mode: '0755' }
-    - { src: 'up_wan', dest: '/usr/lib/iiab/up_wan', owner: "root" , mode: '0755' }
-    - { src: 'start.j2', dest: '/usr/lib/iiab/start', owner: "root" , mode: '0755' }
-    - { src: 'iiab-remote-on', dest: '/usr/bin/iiab-remote-on', owner: "root" , mode: '0755' }
-    - { src: 'iiab-remote-off', dest: '/usr/bin/iiab-remote-off', owner: "root" , mode: '0755' }
+    - { src: 'ca.crt', dest: '/etc/openvpn/keys/ca.crt', owner: "root", mode: '0644' }
+    - { src: 'client1.crt', dest: '/etc/openvpn/keys/client1.crt', owner: "root", mode: '0644' }
+    - { src: 'client1.key', dest: '/etc/openvpn/keys/client1.key', owner: "root", mode: '0600' }
+    - { src: 'announce', dest: '/etc/openvpn/scripts/announce', owner: "root", mode: '0755' }
+    - { src: 'announcer', dest: '/etc/openvpn/scripts/announcer', owner: "root", mode: '0755' }
+    - { src: 'silence', dest: '/etc/openvpn/scripts/silence', owner: "root", mode: '0755' }
+    - { src: 'xscenet.conf', dest: '/etc/openvpn/xscenet.conf', owner: "root", mode: '0644' }
+    - { src: 'iiab-vpn.conf.in', dest: '/etc/openvpn/iiab-vpn.conf.in', owner: "root", mode: '0644' }
+    - { src: 'iiab-vpn', dest: '/usr/bin/iiab-vpn', owner: "root", mode: '0755' }
+    - { src: 'iiab-handle', dest: '/usr/bin/iiab-handle', owner: "root", mode: '0755' }
+    - { src: 'up_wan', dest: '/usr/lib/iiab/up_wan', owner: "root", mode: '0755' }
+    - { src: 'start.j2', dest: '/usr/lib/iiab/start', owner: "root", mode: '0755' }
+    - { src: 'iiab-remote-on', dest: '/usr/bin/iiab-remote-on', owner: "root", mode: '0755' }
+    - { src: 'iiab-remote-off', dest: '/usr/bin/iiab-remote-off', owner: "root", mode: '0755' }
 
-- name: Put up_wan in place for Debian
-  template: src=up_wan dest=/usr/lib/iiab/up_wan
+- name: Put up_wan in place (debuntu)
+  template:
+    src: up_wan
+    dest: /usr/lib/iiab/up_wan
   when: is_debuntu
 
-- name: Put dispatcher up for NM
-  template: src=15-openvpn dest=/etc/NetworkManager/dispatcher.d/
+- name: Put dispatcher up for NM (not debuntu)
+  template:
+    src: 15-openvpn
+    dest: /etc/NetworkManager/dispatcher.d/
   when: not is_debuntu
 
 - name: Check for manually configured OpenVPN tunnel
-  stat: path=/etc/openvpn/iiab-vpn.conf
+  stat:
+    path: /etc/openvpn/iiab-vpn.conf
   register: stat
 
 
-# note that ansible does not currently handle @ in a service name
-- name:  Enable the OpenVPN tunnel at boot time
-  shell: systemctl enable openvpn@xscenet.service
-  when:  openvpn_enabled and not stat.exists is defined and is_debuntu
+# note that ansible does not currently handle @ in a service name (FIXED SOMETIME PRIOR TO AUGUST 2018??)
+- name: Enable & Start openvpn@xscenet tunnel
+  systemd:
+    name: openvpn@xscenet.service
+    enabled: yes
+    state: started
+  when: openvpn_enabled and not stat.exists is defined
 
-- name:  Enable the OpenVPN tunnel at boot time for Debian
-  shell: update-rc.d openvpn enable
-  when:  openvpn_enabled and not stat.exists is defined and is_debuntu
+#- name: Enable the OpenVPN tunnel at boot time (debuntu)
+#  shell: systemctl enable openvpn@xscenet.service
+#  when: openvpn_enabled and not stat.exists is defined and is_debuntu
 
-- name:  Start the OpenVPN tunnel now
-  shell: systemctl start openvpn@xscenet.service
-  when:  openvpn_enabled and not stat.exists is defined and not installing
+#- name: Enable the OpenVPN tunnel at boot time (debuntu)
+#  shell: update-rc.d openvpn enable
+#  when: openvpn_enabled and not stat.exists is defined and is_debuntu
+
+#- name: Start the OpenVPN tunnel now
+#  shell: systemctl start openvpn@xscenet.service
+#  when: openvpn_enabled and not stat.exists is defined and not installing
 
 
 - name: Make OpenVPN connection automatic
-  lineinfile: dest=/etc/crontab
-            line="25 *  *  *  * root (/usr/bin/systemctl start openvpn@xscenet.service) > /dev/null"
+  lineinfile:
+    dest: /etc/crontab
+    line: "25 *  *  *  * root (/usr/bin/systemctl start openvpn@xscenet.service) > /dev/null"
   when: openvpn_enabled and openvpn_cron_enabled and not stat.exists is defined
 
 - name: Make OpenVPN connection manual
-  lineinfile: dest=/etc/crontab
-            regexp=".*/usr/bin/systemctl*"
-            state=absent
+  lineinfile:
+    dest: /etc/crontab
+    regexp: ".*/usr/bin/systemctl*"
+    state: absent
   when: not openvpn_enabled or not openvpn_cron_enabled
 
 
-- name:  Stop starting the OpenVPN tunnel at boot time
-  shell: systemctl disable openvpn@xscenet.service
-  when:  not openvpn_enabled and not is_debuntu
+- name: Disable & Stop openvpn@xscenet tunnel
+  systemd:
+    name: openvpn@xscenet.service
+    enabled: no
+    state: stopped
+  when: not openvpn_enabled
 
-- name:  Stop starting the OpenVPN tunnel at boot time for Debian
-  shell: update-rc.d openvpn disable
-  when:  not openvpn_enabled and is_debuntu
+#- name: Stop starting the OpenVPN tunnel at boot time (not debuntu)    
+#  shell: systemctl disable openvpn@xscenet.service
+#  when: not openvpn_enabled and not is_debuntu
 
-- name:  Stop OpenVPN tunnel immediately
-  shell: systemctl stop openvpn@xscenet.service
-  ignore_errors: True
-  when:  not openvpn_enabled and not installing
+#- name: Stop starting the OpenVPN tunnel at boot time (debuntu)
+#  shell: update-rc.d openvpn disable
+#  when: not openvpn_enabled and is_debuntu
+
+#- name: Stop OpenVPN tunnel immediately
+#  shell: systemctl stop openvpn@xscenet.service
+#  ignore_errors: True
+#  when: not openvpn_enabled and not installing
 
 
 - name: Add 'openvpn' to list of services at /etc/iiab/iiab.ini
