@@ -55,4 +55,4 @@ upgrading. Also set calibre-web_provision varilable to False before upgrading.
 Known Issues
 ------------
 Current implementation of the calibre-web in Internet in a box doesn't include https/SSL configuration.
-Some of the administration login urls might not work. 
+Some of the administration login urls might not work.
