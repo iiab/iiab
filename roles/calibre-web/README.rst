@@ -50,7 +50,7 @@ Backup Content
 --------------
 Calibre-web stores its configuration into SQLite database file /library/calibre-web/metadata.db.
 The content is stored in various folders under /library/calibre-web. Please backup the files before
-upgrading. Also set calibre-web_provision varilable to False before upgrading.
+upgrading. Also set calibre_web_provision varilable to False before upgrading.
 
 Known Issues
 ------------
