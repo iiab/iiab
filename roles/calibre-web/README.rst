@@ -29,3 +29,30 @@ You can manage the backend Calibre-web server manually with the following comman
   systemctl status calibre-web
 
   systemctl stop calibre-web
+
+Configuration
+-------------
+You can login using the default administration account. Then select "Configuration"
+under admin panel.
+
+Upgrading
+---------
+Reinstalling Calibre-web automatically upgrades to the latest version. Please backup your configuration
+before reinstalling. To retain your configuration set calibre-web_provision variable to False.
+
+You can manually upgrade while following commands:
+
+$ cd /opt/calibre-web
+
+$ sudo git pull
+
+Backup Content
+--------------
+Calibre-web stores its configuration into SQLite database file /library/calibre-web/metadata.db.
+The content is stored in various folders under /library/calibre-web. Please backup the files before
+upgrading. Also set calibre-web_provision varilable to False before upgrading.
+
+Known Issues
+------------
+Current implementation of the calibre-web in Internet in a box doesn't include https/SSL configuration.
+Some of the administration login urls might not work. 
