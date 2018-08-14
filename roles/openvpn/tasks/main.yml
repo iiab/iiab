@@ -79,7 +79,20 @@
   register: stat
 
 
-# AUGUST 2018: Unexplainably, this stanza had to be placed underneath ANY
+# FIXED SOMETIME PRIOR TO AUGUST 2018: ansible [did] not handle @ in a service name
+#- name: Enable the OpenVPN tunnel at boot time (debuntu)
+#  shell: systemctl enable openvpn@xscenet.service
+#  when: openvpn_enabled and not stat.exists is defined and is_debuntu
+
+#- name: Enable the OpenVPN tunnel at boot time (debuntu)
+#  shell: update-rc.d openvpn enable
+#  when: openvpn_enabled and not stat.exists is defined and is_debuntu
+
+#- name: Start the OpenVPN tunnel now
+#  shell: systemctl start openvpn@xscenet.service
+#  when: openvpn_enabled and not stat.exists is defined and not installing
+
+# AUGUST 2018: Unexplainably, stanza below had to be placed underneath ANY
 # "lineinfile: ... state: absent" stanza to make openvpn_handle propagate
 # properly to xscenet.net (monitoring ncat's erroneous handle parameter by
 # observing "systemctl status openvpn@xscenet" helped trace the [primary?]
@@ -95,29 +108,17 @@
     state: restarted
   when: openvpn_enabled and not stat.exists is defined
 
-# FIXED SOMETIME PRIOR TO AUGUST 2018: ansible [did] not handle @ in a service name
-#- name: Enable the OpenVPN tunnel at boot time (debuntu)
-#  shell: systemctl enable openvpn@xscenet.service
-#  when: openvpn_enabled and not stat.exists is defined and is_debuntu
-
-#- name: Enable the OpenVPN tunnel at boot time (debuntu)
-#  shell: update-rc.d openvpn enable
-#  when: openvpn_enabled and not stat.exists is defined and is_debuntu
-
-#- name: Start the OpenVPN tunnel now
-#  shell: systemctl start openvpn@xscenet.service
-#  when: openvpn_enabled and not stat.exists is defined and not installing
-
 - name: Enable hourly cron job for OpenVPN
   lineinfile:
-    dest: /etc/crontab
+    path: /etc/crontab
     line: "25 *  *  *  * root (/usr/bin/systemctl start openvpn@xscenet.service) > /dev/null"
   when: openvpn_enabled and openvpn_cron_enabled and not stat.exists is defined
 
-- name: Remove hourly cron jobs for OpenVPN
+- name: Remove hourly cron job for OpenVPN
   lineinfile:
-    dest: /etc/crontab
+    path: /etc/crontab
     regexp: "openvpn@xscenet"
+    # Potentially DANGEROUS as others use systemctl too:
     #regexp: ".*/usr/bin/systemctl*"
     state: absent
   when: not openvpn_enabled or not openvpn_cron_enabled
@@ -153,7 +154,7 @@
   - option: name
     value: OpenVPN
   - option: description
-    value: "OpenVPN is a means of connecting to others anywhere on the internet, via a middleman server, using Virtual Private Network techniques to create secure connections."
+    value: "OpenVPN is a means of connecting to other machines anywhere on the internet, via a middleman server, using Virtual Private Network techniques to create secure connections."
   - option: enabled
     value: "{{ openvpn_enabled }}"
   - option: handle
