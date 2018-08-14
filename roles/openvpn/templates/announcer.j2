@@ -1,0 +1,32 @@
+#!/bin/bash -x
+# small daemon to identify this machine to the openvpn server
+
+HANDLE=
+UUID=
+if [ -f /etc/iiab/openvpn_handle ]; then
+    HANDLE=`cat /etc/iiab/openvpn_handle`
+else
+    source /etc/iiab/iiab.env
+    # DANGEROUS AS OF AUGUST 2018:
+    if [ -z "$HANDLE" ]; then
+        HANDLE=`cat /etc/iiab/iiab.ini | gawk \
+        '{ if((toupper($1) == "HANDLE") && ($2 == "=")) { print $3;}}'`
+    fi
+fi
+HANDLE=${HANDLE// /_}
+if [ -f /etc/iiab/uuid ]; then
+    UUID=`cat /etc/iiab/uuid`
+fi
+
+# start the daemon which will serve the handle on demand
+SERVER=/usr/bin/ncat
+ID=`printf "HANDLE = %s|UUID = %s" $HANDLE $UUID`
+{% if is_debuntu %}
+#ID=`printf "HANDLE = %s|UUID = %s|" $HANDLE $UUID`
+$SERVER -l -k -p1705 --exec "/bin/echo $ID" &
+{% else %}
+source /etc/init.d/functions
+PID_FILE=/var/run/openvpn/announce.pid
+daemon --pidfile=${PID_FILE} $SERVER "-l -k -p1705 --exec \"/usr/bin/echo $ID\"" &
+#daemon --pidfile=${PID_FILE} $SERVER "-l -k -p1705 --exec \"/usr/bin/echo $(printf 'HANDLE = %s|UUID = %s' $HANDLE $UUID)\"" &
+{% endif %}
