@@ -16,7 +16,7 @@ To login to Calibre-web enter
 
   Username: admin
 
-  Password: admin123
+  Password: changme
 
 Backend
 --------
