@@ -1,5 +1,5 @@
 ====================
-Calibre Web README
+Calibre-web README
 ====================
 
 This Ansible role installs Calibre Web within Internet-in-a-Box. Calibre Web is
@@ -48,7 +48,7 @@ $ sudo git pull
 
 Backup Content
 --------------
-Calibre-web stores its configuration into SQLite database file /library/calibre-web/metadata.db.
+Calibre-web stores its configuration into SQLite database file /library/calibre-web/app.db.
 The content is stored in various folders under /library/calibre-web. Please backup the files before
 upgrading. Also set calibreweb_provision variable to False before upgrading.
 
