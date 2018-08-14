@@ -38,7 +38,7 @@ under admin panel.
 Upgrading
 ---------
 Reinstalling Calibre-web automatically upgrades to the latest version. Please backup your configuration
-before reinstalling. To retain your configuration set calibre-web_provision variable to False.
+before reinstalling. To retain your configuration set calibreweb_provision variable to False.
 
 You can manually upgrade while following commands:
 
@@ -50,7 +50,7 @@ Backup Content
 --------------
 Calibre-web stores its configuration into SQLite database file /library/calibre-web/metadata.db.
 The content is stored in various folders under /library/calibre-web. Please backup the files before
-upgrading. Also set calibre_web_provision varilable to False before upgrading.
+upgrading. Also set calibreweb_provision variable to False before upgrading.
 
 Known Issues
 ------------
