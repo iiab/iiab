@@ -1,0 +1,37 @@
+#!/bin/bash -x
+# Small daemon to identify this machine to the OpenVPN server
+
+HANDLE=
+UUID=
+if [ -f /etc/iiab/openvpn_handle ]; then
+    # Option #0: Might source directly from /etc/iiab/local_vars.yml in future
+    # Option #1
+    HANDLE=`cat /etc/iiab/openvpn_handle`
+else
+    # Option #2: Dangerous to invoke hypothetical variables :(
+    source /etc/iiab/iiab.env
+    # Option #3: CAUSED FAILURES IN AUGUST 2018, invoking stale variable from /etc/iiab/iiab.ini, but safer now that relegated to #3 ?
+    if [ -z "$HANDLE" ]; then
+        HANDLE=`cat /etc/iiab/iiab.ini | gawk \
+        '{ if((toupper($1) == "HANDLE") && ($2 == "=")) { print $3;}}'`
+    fi
+fi
+HANDLE=${HANDLE// /_}
+if [ -f /etc/iiab/uuid ]; then
+    UUID=`cat /etc/iiab/uuid`
+fi
+
+SERVER=/usr/bin/ncat
+ID=`printf "HANDLE = %s|UUID = %s" $HANDLE $UUID`
+# August 2018: Removal of trailing slash tested on Raspbian, Ubuntu 18.04 & Ubuntu 16.04
+#ID=`printf "HANDLE = %s|UUID = %s|" $HANDLE $UUID`
+
+# Start the daemon which will serve the handle on demand
+{% if is_debuntu %}
+$SERVER -l -k -p1705 --exec "/bin/echo $ID" &
+{% else %}
+source /etc/init.d/functions
+PID_FILE=/var/run/openvpn/announce.pid
+daemon --pidfile=${PID_FILE} $SERVER "-l -k -p1705 --exec \"/usr/bin/echo $ID\"" &
+#daemon --pidfile=${PID_FILE} $SERVER "-l -k -p1705 --exec \"/usr/bin/echo $(printf 'HANDLE = %s|UUID = %s' $HANDLE $UUID)\"" &
+{% endif %}
