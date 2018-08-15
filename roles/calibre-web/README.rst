@@ -14,7 +14,7 @@ This is front-end application running under Apache2 httpd.
 
 To login to Calibre-web enter
 
-  Username: admin
+  Username: Admin
 
   Password: changme
 
