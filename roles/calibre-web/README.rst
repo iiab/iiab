@@ -18,6 +18,13 @@ To login to Calibre-web enter
 
   Password: changme
 
+When a configuration is not found calibre-web uses its default administration credentials.
+
+ Username: admin
+
+ Password: admin123
+
+
 Backend
 --------
 You can manage the backend Calibre-web server manually with the following commands:
@@ -34,6 +41,8 @@ Configuration
 -------------
 You can login using the default administration account. Then select "Configuration"
 under admin panel.
+
+The default database path is /library/calibre-web/
 
 Upgrading
 ---------
