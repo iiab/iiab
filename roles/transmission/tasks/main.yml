@@ -1,4 +1,14 @@
 ---
+- name: Create Transmission download directory
+  file:
+    path: "{{ item }}"
+    owner: root
+    group: root
+    mode: 0755
+    state: directory
+  with_items:
+    - "{{ transmission_download_dir }}"
+
 - name: Install Transmission daemon and cli-tools.
   package:
     name: "{{ item }}"
@@ -6,6 +16,34 @@
   with_items:
     - transmission-daemon
     - transmission-cli
+
+- name: Stop Transmission daemon before creating settings.
+  service:
+    name: transmission-daemon
+    state: stopped
+
+- name: Create the transmission-daemon settings
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    mode: "{{ item.mode }}"
+    owner: root
+    group: root
+  with_items:
+    - { src: 'settings.json.j2', dest: '/etc/transmission-daemon/settings.json', mode: '0644' }
+
+- name: Start Transmission daemon.
+  service:
+    name: transmission-daemon
+    state: restarted
+    enabled: yes
+  when: transmission_enabled
+
+# TODO Make this loop transmission_KaLite-Languages
+- name: Add a torrent Ka-Lite English
+  shell: transmission-remote -a http://pantry.learningequality.org/downloads/ka-lite/0.17/content/ka-lite-0.17-resized-videos-english.torrent
+  ignore_errors: yes
+  when: transmission_provision
 
 - name: Add transmission to list of services at /etc/iiab/iiab.ini
   ini_file:
