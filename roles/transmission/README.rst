@@ -22,9 +22,12 @@ Password: changeme
 
 The torrents are added by provisioning system based on the variables. You can also add
 your own torrent using web UI or command-line option.
+s
+$ transmission-remote -a <path_to_the.torrent>
 
-$ transmission-remote -a http://pantry.learningequality.org/downloads/ka-lite/0.17/content/ka-lite-0.17-resized-videos-english.torrent
-
+Known Issues
+-------------
+Currently it is not possible to use random ports in the range 65535-49152. It is difficult to open multiple ports in IIAB firewall.
 
 
 
