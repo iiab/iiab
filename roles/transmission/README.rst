@@ -12,8 +12,8 @@ Caution
 Usage of transmission consumes significant Internet data and system resources.
 Caveat emptor! (That's Latin for "Buyer Beware").
 
- Access
- ------
+Access
+------
 
 You can login transmission using its web interface http://box:9091/ with the following administration account.
 
@@ -33,8 +33,8 @@ $ sudo systemctl stop transmission-daemon.service
 $ sudo nano /etc/transmission-daemon/settings.json
 
 
- Adding torrents
- ---------------
+Adding torrents
+---------------
 The transmission provisioning system is designed to add ka-Lite packages. You can also use transmission is
 download torrent using the Transmission web interface or using 'transmission-remote' program.
 
@@ -45,8 +45,8 @@ Known Issues
 Currently it is not possible to use random ports in the range 65535-49152. It is difficult to open multiple ports in IIAB firewall.
 
 
- Troubleshooting
- ----------------
+Troubleshooting
+----------------
 
 Please check if the transmission daemon is running:
 
