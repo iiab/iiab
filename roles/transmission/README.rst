@@ -4,7 +4,7 @@ Transmission README
 Transmission is a set of lightweight BitTorrent clients (in GUI, CLI and daemon form). All its incarnations feature a very simple, intuitive
  interface on top on an efficient, cross-platform back-end.
 
-The transmission program is used to download and seed Ka-Lite packages. Once the packages are download, Please verify the content
+The transmission program is used to download and seed Ka-Lite packages. Once the packages are downloaded, Please verify the content
 before copying them to Ka-Lite content directory.
 
 Caution
