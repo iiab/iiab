@@ -42,6 +42,10 @@ $ transmission-remote -a <path_to_the.torrent>
 
 Known Issues
 -------------
+* Default Transmission user/group (See https://github.com/transmission/transmission/issues/537)
+Currently  you need to set these these in "transmission_user" and "transmission_group" variables. You can check
+the value for these in transmission-daemon systemd unit file "lib/systemd/system/transmission-daemon.service"
+* Random Ports
 Currently it is not possible to use random ports in the range 65535-49152. It is difficult to open multiple ports in IIAB firewall.
 
 
