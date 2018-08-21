@@ -12,6 +12,7 @@
 # Thanks to Jerry Vonau (https://github.com/jvonau) who made this critical
 # breakthrough possible!
 #
+# Might break future updates; you have been warned.
 # SEE NOTES AT TOP OF scripts/calibre-install-packages.sh
 
 export DEBIAN_FRONTEND=noninteractive
