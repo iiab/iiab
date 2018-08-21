@@ -3,7 +3,8 @@
 # Thanks to Jerry Vonau (https://github.com/jvonau) who made this critical
 # breakthrough possible!
 #
-# SEE COMMENTS AT THE TOP OF scripts/calibre-install-packages.sh
+# Might break future updates; you have been warned.
+# SEE NOTES AT TOP OF scripts/calibre-install-packages.sh
 
 export DEBIAN_FRONTEND=noninteractive
 # Prepares to update to latest from raspbian testing

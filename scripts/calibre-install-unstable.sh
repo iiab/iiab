@@ -11,6 +11,7 @@
 #   http://archive.raspbian.org/raspbian/pool/main/c/calibre/
 #
 # Might break future updates; you have been warned.
+# SEE NOTES AT TOP OF scripts/calibre-install-packages.sh
 
 export DEBIAN_FRONTEND=noninteractive
 # Prepares to update to latest from unstable
