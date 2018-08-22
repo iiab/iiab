@@ -32,6 +32,9 @@ if (ini.security.https) {
 	server = http.createServer(app);
 }
 
+var pathPrefix = '/sugarizer';
+app.use(pathPrefix, require('path-prefix-proxy')(pathPrefix));
+
 // Start listening
 server.listen(ini.web.port,"0.0.0.0");
 console.log("Sugarizer Server is listening on"+(ini.security.https ? " secure":"")+" port " + ini.web.port + "...");
