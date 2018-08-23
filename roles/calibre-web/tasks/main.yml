@@ -1,0 +1,111 @@
+- name: Create calibre-web folders to store data and configuration files.
+  file:
+    path: "{{ item }}"
+    owner: "{{ calibreweb_user }}"
+    group: "{{ apache_user }}"
+    mode: 0755
+    state: directory
+  with_items:
+    - "{{ calibreweb_home }}"
+    - "{{ calibreweb_path }}"
+
+## TODO: Calibre-web future release might get into pypi https://github.com/janeczku/calibre-web/issues/456
+- name: Download calibre-web github repository.
+  git:
+    repo: https://github.com/janeczku/calibre-web.git
+    dest: "{{ calibreweb_path }}"
+    update: yes
+    depth: 1
+    version: master
+  when: internet_available
+
+## TODO: Use Ansible native pip module for this. How do you use --target vendor ?
+- name: Download calibre-web dependencies into vendor subdirectory.
+  command: pip install --target vendor -r ./requirements.txt
+  args:
+   chdir: "{{ calibreweb_path }}"
+
+- name: Create calibre-web systemd service unit and httpd2 configuration.
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    mode: "{{ item.mode }}"
+    owner: "{{ calibreweb_user }}"
+    group: "{{ apache_user }}"
+  with_items:
+    - { src: 'calibre-web.service.j2', dest: '/etc/systemd/system/calibre-web.service', mode: '0644' }
+    - { src: 'calibre-web.conf.j2', dest: '/etc/apache2/sites-available/calibre-web.conf', mode: '0644' }
+    - { src: 'cps.conf.j2', dest: "{{ calibreweb_home }}/cps.conf" , mode: '0644' }
+
+
+- name: Provision calibre-web with default administration account and database.
+  copy:
+    src: roles/calibre-web/files/metadata.db
+    dest: "{{ calibreweb_home }}/{{ calibreweb_database }}"
+    owner: "{{ calibreweb_user }}"
+    group: "{{ apache_user }}"
+    mode: 0644
+    backup: yes
+  when: calibreweb_provision
+
+- name: Ask systemd to reread unit files (daemon-reload).
+  systemd:
+    daemon_reload: yes
+
+- name: Enable calibre-web service.
+  service:
+    name: calibre-web
+    enabled: yes
+    state: reloaded
+  when: calibreweb_enabled
+
+- name: Enable calibre-web httpd2 site
+  command: a2ensite calibre-web.conf
+  when: calibreweb_enabled
+
+# TODO: Use Systemd service daemon_reload instead?
+- name: Restart Apache after enabling calibre-web httpd2 site.
+  command: apachectl -k graceful
+  when: calibreweb_enabled
+
+- name: Disable calibre-web service.
+  service:
+    name: calibre-web
+    enabled: no
+    state: stopped
+  when: not calibreweb_enabled
+
+- name: Disable calibre-web httpd2 site.
+  command: a2dissite calibre-web.conf
+  when: not calibreweb_enabled
+
+# TODO: Use Systemd service daemon_reload instead?
+- name: Restart Apache after disabling calibre-web httpd2 site.
+  command: apachectl -k graceful
+  when: not calibreweb_enabled
+
+- name: Add 'calibre-web' to list of services at /etc/iiab/iiab.ini
+  ini_file:
+    dest: "{{ service_filelist }}"
+    section: calibre-web
+    option: "{{ item.option }}"
+    value: "{{ item.value }}"
+  with_items:
+    - option: name
+      value: calibre-web
+    - option: description
+      value: '"calibre-web is a web app providing a clean interface for browsing, reading and downloading eBooks."'
+    - option: calibreweb_url
+      value: "{{ calibreweb_url }}"
+    - option: calibreweb_path
+      value: "{{ calibreweb_path }}"
+    - option: calibreweb_home
+      value: "{{ calibreweb_home }}"
+    - option: calibreweb_port
+      value: "{{ calibreweb_port }}"
+    - option: calibreweb_database
+      value: "{{ calibreweb_database }}"
+    - option: calibreweb_enabled
+      value: "{{ calibreweb_enabled }}"
+    - option: calibreweb_provision
+      value: "{{ calibreweb_provision }}"
