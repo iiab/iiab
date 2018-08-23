@@ -24,8 +24,7 @@ echo "deb http://deb.debian.org/debian testing main" > /etc/apt/sources.list.d/d
 apt update
 #apt -y install libqt5core5a python-lxml calibre calibre-bin
 apt -y install calibre calibre-bin
-## Removes last line, safer than: rm /etc/apt/sources.list.d/debian-testing.list
-#sed -i '$ d' /etc/apt/sources.list.d/debian-testing.list
+#sed -i '$ d' /etc/apt/sources.list.d/debian-testing.list    # Removes last line
 rm /etc/apt/sources.list.d/debian-testing.list
 # Clears the cache of debian/testing
 apt update
