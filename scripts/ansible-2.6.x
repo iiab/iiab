@@ -9,7 +9,7 @@ echo -e 'COMPLETE INSTALL INSTRUCTIONS:\nhttps://github.com/iiab/iiab/wiki/IIAB-
 echo -e 'NOW ATTEMPTING TO INSTALL THE LATEST ANSIBLE 2.6.x:'
 echo -e 'Ensure you'"'"'re online before running this (/opt/iiab/iiab/scripts/ansible-2.6.x)\n'
 
-echo -e 'ALTERNATIVES: Run scripts/ansible-2.5.x-deprecated "slow food", or scripts/ansible for the latest.\n\n'
+echo -e 'ALTERNATIVES: Run scripts/ansible for the latest, or scripts/ansible-2.5.x-deprecated "slow food".\n\n'
 
 
 GOOD_VER="2.6.3"    # Ansible version for OLPC XO laptops (pip install).
