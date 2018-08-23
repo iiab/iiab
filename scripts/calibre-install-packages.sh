@@ -51,5 +51,5 @@ apt -y install libegl1 libegl-mesa0 libqt5sensors5 libbrotli1 libwoff1 libpodofo
 ## Removes last line, safer than: rm /etc/apt/sources.list.d/rpi-testing.list
 #sed -i '$ d' /etc/apt/sources.list.d/rpi-testing.list
 rm /etc/apt/sources.list.d/rpi-testing.list
-# Clears the cache of testing
+# Clears the cache of rpi/testing
 apt update
