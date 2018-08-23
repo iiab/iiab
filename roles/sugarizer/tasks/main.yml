@@ -160,6 +160,13 @@
 #    chdir: "{{ sugarizer_location }}/sugarizer/server"
 #  when: internet_available and is_F18 and not node_modules_exists
 
+# Add a nodejs express function that appends a prefix to urls
+- name: Install path prefix proxy
+  command: npm install --allow-root --unsafe-perm=true path-prefix-proxy 
+  args:
+    chdir: "{{ sugarizer_location }}/{{  sugarizer_server_version }}"
+  when: internet_available
+
 # 5. PLACE CONFIG FILES
 
 - name: Configure sugarizer.service (systemd), sugarizer.conf (Apache) and sugarizer.ini
@@ -173,6 +180,7 @@
     - { src: 'sugarizer.ini', dest: '{{ sugarizer_location }}/{{ sugarizer_server_version }}/env/sugarizer.ini', mode: '0644' }
     - { src: 'sugarizer.conf', dest: '/etc/apache2/sites-available', mode: '0644' }
     - { src: 'sugarizer.service.j2', dest: '/etc/systemd/system/sugarizer.service', mode: '0644' }
+    - { src: 'sugarizer.js', dest: '/opt/iiab/sugarizer-server', mode: '0644' }
 
 - name: Create symlink for short URL http://box/sugarizer
   file:
@@ -188,6 +196,12 @@
     enabled: yes
     state: restarted
     daemon_reload: yes
+  when: sugarizer_enabled
+  
+- name: Restart Apache so http://box/sugarizer works (not just http://box:8089)
+  systemd:
+    name: apache2
+    state: restarted
   when: sugarizer_enabled
 
 - name: 'Disable+stop systemd service if sugarizer_enabled: False'
