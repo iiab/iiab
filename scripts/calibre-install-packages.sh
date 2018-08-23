@@ -47,9 +47,8 @@ echo "deb http://raspbian.raspberrypi.org/raspbian/ testing main" > /etc/apt/sou
 apt update
 # Packages below cribbed from Calibre 3.23 installation on 2018-05-22, as recorded in /var/log/apt/history.log*
 apt -y install libegl1 libegl-mesa0 libqt5sensors5 libbrotli1 libwoff1 libpodofo0.9.5 libjs-coffeescript python-regex libhyphen0 libqt5webchannel5 python-msgpack python-html5-parser libqt5positioning5 libpcre2-16-0 libglvnd0 libdrm-common python-sip libqt5svg5 libnih-dbus1 qt5-gtk-platformtheme libc6-dbg libqt5help5 libc6-dev libqt5dbus5 libqt5sql5-sqlite libc6 libqt5widgets5 locales libegl1-mesa python-pyqt5.qtsvg python-lxml fontconfig-config libqt5xml5 libgbm1 libqt5printsupport5 libqt5qml5 libc-l10n libqt5gui5 libc-bin libnih1 libqt5webkit5 python-pyqt5.qtwebkit libdrm2 libqt5core5a libfontconfig1 libqt5opengl5 libc-dev-bin python-pyqt5 libqt5network5 libqt5designer5 libqt5quick5 libqt5sql5
-# BUT DO NOT DO "apt -y install calibre calibre-bin" UNTIL calibre-install-latest.sh
-## Removes last line, safer than: rm /etc/apt/sources.list.d/rpi-testing.list
-#sed -i '$ d' /etc/apt/sources.list.d/rpi-testing.list
+# BUT DO NOT DO "apt -y install calibre calibre-bin" UNTIL calibre-install-latest.sh ?
+#sed -i '$ d' /etc/apt/sources.list.d/rpi-testing.list    # Removes last line
 rm /etc/apt/sources.list.d/rpi-testing.list
 # Clears the cache of rpi/testing
 apt update
