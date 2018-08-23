@@ -11,8 +11,7 @@ export DEBIAN_FRONTEND=noninteractive
 echo "deb http://raspbian.raspberrypi.org/raspbian/ testing main" > /etc/apt/sources.list.d/rpi-testing.list
 apt update
 apt -y install calibre calibre-bin
-## Removes last line, safer than: rm /etc/apt/sources.list.d/rpi-testing.list
-#sed -i '$ d' /etc/apt/sources.list.d/rpi-testing.list
+#sed -i '$ d' /etc/apt/sources.list.d/rpi-testing.list    # Removes last line
 rm /etc/apt/sources.list.d/rpi-testing.list
 # Clears the cache of rpi/testing
 apt update
