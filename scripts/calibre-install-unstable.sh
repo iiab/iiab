@@ -16,10 +16,11 @@
 export DEBIAN_FRONTEND=noninteractive
 # Prepares to update to latest from unstable
 apt-key adv --recv-key --keyserver keyserver.ubuntu.com 7638D0442B90D010
-echo "deb http://deb.debian.org/debian unstable main" >> /etc/apt/sources.list.d/unstable.list
+echo "deb http://deb.debian.org/debian unstable main" > /etc/apt/sources.list.d/unstable.list
 apt update
 apt -y install calibre calibre-bin
-# Removes last line, safer than: rm /etc/apt/sources.list.d/unstable.list
-sed -i '$ d' /etc/apt/sources.list.d/unstable.list
+## Removes last line, safer than: rm /etc/apt/sources.list.d/unstable.list
+#sed -i '$ d' /etc/apt/sources.list.d/unstable.list
+rm /etc/apt/sources.list.d/unstable.list
 # Clears the cache of testing and unstable
 apt update
