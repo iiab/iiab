@@ -29,5 +29,5 @@ echo "deb http://raspbian.raspberrypi.org/raspbian/ testing main" > /etc/apt/sou
 apt update
 apt -y install calibre calibre-bin
 rm /etc/apt/sources.list.d/rpi-testing.list
-# Clears the cache of testing
+# Clears the cache of rpi/testing
 apt update
