@@ -73,7 +73,7 @@ Provision script from over-writting your settings.
 Known Issues
 ------------
 
-Trying to access a empty public bookshelf causes a system error.
+Trying to access an empty public bookshelf causes a system error.
 
 As of August 2018, calibre-web doesn't include Calibre's e-book conversion
 functionality (Calibre itself allows teachers to convert between PDF, epub, txt
