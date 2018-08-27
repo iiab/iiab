@@ -2,28 +2,26 @@
 Calibre-web README
 ====================
 
-This Ansible role installs Calibre Web within Internet-in-a-Box. Calibre Web is
-a web app providing a clean interface for browsing, reading and downloading eBooks
+This Ansible role installs Calibre-web in Internet-in-a-Box. Calibre-web server
+provides a clean interface for browsing, reading and downloading eBooks
 using an existing Calibre database.
 
 Access
 ------
 
-If enabled and with the default settings Calibre-web should be accessible at http://box/calibre-web.
-This is front-end application running under Apache2 httpd.
-
-To login to Calibre-web enter
+After installation you can access Calibre-web at `http://box/calibre-web` using the
+following IIAB calibre-web administration account.
 
   Username: Admin
 
   Password: changme
 
-When a configuration is not found calibre-web uses its default administration credentials.
+If the default configuration is not found calibre-web server creates a new settings file
+with calibre-web default administration account.
 
  Username: admin
 
  Password: admin123
-
 
 Backend
 --------
@@ -39,29 +37,33 @@ You can manage the backend Calibre-web server manually with the following comman
 
 Configuration
 -------------
-You can login using the default administration account. Then select "Configuration"
-under admin panel.
+To configure calibre-web, first login as 'Admin'. Then select 'Configuration'
+under the admin panel.
 
-The default database path is /library/calibre-web/
+
+The default calibre-web settings are stored under '/library/calibre-web/config/app.db'
+database file. The calibre-web stores its eBook information in calibre database
+ '/library/calibre-web/metadata.db' file.
 
 Upgrading
 ---------
 Reinstalling Calibre-web automatically upgrades to the latest version. Please backup your configuration
-before reinstalling. To retain your configuration set calibreweb_provision variable to False.
+before reinstalling. To retain your configuration set `calibreweb_provision` variable to False.
 
-You can manually upgrade while following commands:
+You can manually upgrade using 'git' command:
 
 $ cd /opt/calibre-web
 
 $ sudo git pull
 
-Backup Content
+Backuping Content
 --------------
-Calibre-web stores its configuration into SQLite database file /library/calibre-web/app.db.
-The content is stored in various folders under /library/calibre-web. Please backup the files before
-upgrading. Also set calibreweb_provision variable to False before upgrading.
+Calibre-web stores eBooks and various configuration settings under /library/calibre-web.
+Please backup this folder before upgrading. Also set `calibreweb_provision` variable to
+False before upgrading to prevent the Provision script from over-writting your settings.
 
 Known Issues
 ------------
-Current implementation of the calibre-web in Internet in a box doesn't include https/SSL configuration.
-Some of the administration login urls might not work.
+Trying to access a empty public bookshelf causes a system error.
+
+Current implementation of the calibre-web in Internet in a box doesn't include ebook converter program.
