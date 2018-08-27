@@ -2,10 +2,10 @@
 Calibre-Web README
 ==================
 
-This Ansible role installs Calibre-Web in Internet-in-a-Box (we'll call it
-"calibre-web" from here on down, noting that calibreweb_* variables do not
-include the dash!)  The calibre-web server provides a clean interface for
-browsing, reading and downloading e-books using an existing Calibre database.
+Calibre-Web server provides a clean interface for browsing, reading and
+downloading e-books using an existing Calibre database.  This Ansible role
+installs Calibre-Web in Internet-in-a-Box (we'll call it "calibre-web"
+from here on down, noting that calibreweb_* variables do not include the dash!)
 
 Access
 ------
