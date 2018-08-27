@@ -4,26 +4,26 @@ Calibre-Web README
 
 Calibre-Web server provides a clean interface for browsing, reading and
 downloading e-books using an existing Calibre database.  This Ansible role
-installs Calibre-Web in Internet-in-a-Box (we'll call it "calibre-web"
-from here on down, noting that calibreweb_* variables do not include the dash!)
+installs Calibre-Web in Internet-in-a-Box (we'll call it 'calibre-web' from
+here on down, noting that calibreweb_* variables do not include the dash, per
+Ansible recommendations.)
 
 Access
 ------
 
-After installation you can access calibre-web at `http://box:8083` or
-`http://box/calibre-web` (in future we may consider `http://box/books`).
-You can log in with administrative account:
+After installation you can access calibre-web at http://box/calibre-web (in
+future we may consider http://box/books).  Log in with administrative account:
 
- Username: Admin
+  Username: Admin
 
- Password: changeme
+  Password: changeme
 
 If the default configuration is not found, calibre-web server creates a
 new settings file with calibre-web's own default administrative account:
 
- Username: admin
+  Username: admin
 
- Password: admin123
+  Password: admin123
 
 Backend
 -------
@@ -32,7 +32,7 @@ You can manage the backend calibre-web server manually with these commands:
 
   systemctl enable calibre-web
 
-  systemctl start calibre-web
+  systemctl restart calibre-web
 
   systemctl status calibre-web
 
@@ -41,34 +41,53 @@ You can manage the backend calibre-web server manually with these commands:
 Configuration
 -------------
 
-To configure calibre-web, first login as 'Admin'.  Then select 'Configuration'
-under the admin panel.
+To configure calibre-web, login as user 'Admin' then click on 'Admin' panel on
+top.  See 'Configuration' options near the bottom of the page.
 
-The default calibre-web settings are stored under
-'/library/calibre-web/config/app.db' database file. The calibre-web stores
-its eBook information in calibre database '/library/calibre-web/metadata.db'
-file.
+Critical settings are stored in:
+
+  /library/calibre-web/config/app.db
+
+Your e-book metadata is stored in a Calibre-style database:
+
+  /library/calibre-web/metadata.db
+
+See also:
+
+  /library/calibre-web/metadata_db_prefs_backup.json
+
+Back Up Your Content
+--------------------
+
+Please back up the entire folder ``/library/calibre-web`` before upgrading --
+as it contains your calibre-web content **and** settings!
 
 Upgrading
 ---------
 
 Reinstalling calibre-web automatically upgrades to the latest version.
-Please back up your configuration before reinstalling.  To retain your
-configuration, set `calibreweb_provision` variable to False.
 
-You can manually upgrade using 'git' command:
+Back up your content **and** settings before reinstalling, as explained above.
 
-$ cd /opt/calibre-web
+**Move your /library/calibre-web/metadata.db if you're sure you want to install
+a bare/minimal metadata.db and force default settings.  Then run:**
 
-$ sudo git pull
+  cd /opt/iiab/iiab
+  
+  ./runrole calibre-web
+  
+Or, to reinstall all of Internet-in-a-Box:
 
-Backup Your Content
--------------------
+  cd /opt/iiab/iiab
 
-calibre-web stores e-books and various configuration settings under
-/library/calibre-web.  Please back up this folder before upgrading.  Also set
-variable `calibreweb_provision` to False before upgrading, to prevent the
-Provision script from overwriting your settings.
+  ./iiab-install --reinstall
+
+Or, if you just want to upgrade calibre-web code alone, prior to proceeding
+manually:
+
+  cd /opt/iiab/calibre-web
+
+  git pull
 
 Known Issues
 ------------
