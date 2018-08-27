@@ -53,8 +53,8 @@ Upgrading
 ---------
 
 Reinstalling calibre-web automatically upgrades to the latest version.
-Please backup your configuration before reinstalling.  To retain your
-configuration set `calibreweb_provision` variable to False.
+Please back up your configuration before reinstalling.  To retain your
+configuration, set `calibreweb_provision` variable to False.
 
 You can manually upgrade using 'git' command:
 
@@ -66,9 +66,9 @@ Backup Your Content
 -------------------
 
 calibre-web stores e-books and various configuration settings under
-/library/calibre-web.  Please backup this folder before upgrading.  Also set
-`calibreweb_provision` variable to False before upgrading to prevent the
-Provision script from over-writting your settings.
+/library/calibre-web.  Please back up this folder before upgrading.  Also set
+variable `calibreweb_provision` to False before upgrading, to prevent the
+Provision script from overwriting your settings.
 
 Known Issues
 ------------
