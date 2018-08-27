@@ -3,7 +3,7 @@ Calibre-Web README
 ==================
 
 This Ansible role installs Calibre-Web in Internet-in-a-Box (we'll call it
-"calibre-web" from here on).  The calibre-web server provides a clean
+"calibre-web" from here on down).  The calibre-web server provides a clean
 interface for browsing, reading and downloading e-books using an existing
 Calibre database.
 
@@ -62,8 +62,8 @@ $ cd /opt/calibre-web
 
 $ sudo git pull
 
-Backuping Content
------------------
+Backup Your Content
+-------------------
 
 calibre-web stores e-books and various configuration settings under
 /library/calibre-web.  Please backup this folder before upgrading.  Also set
