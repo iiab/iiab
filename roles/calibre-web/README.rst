@@ -11,8 +11,9 @@ Ansible recommendations.)
 Access
 ------
 
-After installation you can access calibre-web at http://box/calibre-web (in
-future we may consider http://box/books).  Log in with administrative account:
+After installation you can access calibre-web at http://box/books
+
+Log in with administrative account:
 
   Username: Admin
 
