@@ -3,10 +3,11 @@ Calibre-Web README
 ==================
 
 Calibre-Web server provides a clean interface for browsing, reading and
-downloading e-books using an existing Calibre database.  This Ansible role
-installs Calibre-Web in Internet-in-a-Box (we'll call it 'calibre-web' from
-here on down, noting that calibreweb_* variables do not include the dash, per
-Ansible recommendations.)
+downloading e-books using an existing Calibre database.
+
+This Ansible role installs Calibre-Web in Internet-in-a-Box (we'll call it
+'calibre-web' from here on down, noting that ``calibreweb_*`` variables do not
+include the dash, per Ansible recommendations.)
 
 Access
 ------
@@ -55,7 +56,7 @@ See also::
 Back Up Your Content
 --------------------
 
-Please back up the entire folder ``/library/calibre-web`` before upgrading --
+Please back up the entire folder ``/library/calibre-web`` before upgrading —
 as it contains your calibre-web content **and** settings!
 
 Upgrading
@@ -85,8 +86,8 @@ manually::
 Known Issues
 ------------
 
-Trying to access an empty public bookshelf causes a system error.
+* Trying to access an empty public bookshelf causes a system error.
 
-As of August 2018, calibre-web doesn't include Calibre's e-book conversion
+* As of August 2018, calibre-web doesn't include Calibre's e-book conversion
 functionality (Calibre itself allows teachers to convert between PDF, epub, txt
 etc — to permit reading on a wider array client devices and client software).
