@@ -46,7 +46,7 @@ You can also download other torrents using Transmission's web interface, or by t
 Known Issues
 ------------
 
-* Default Transmission user/group may need fixing (https://github.com/transmission/transmission/issues/537).  You can set Ansible variables 'transmission_user' and 'transmission_group' e.g. in /opt/iiab/iiab/roles/transmission/defaults/main.yml (in the end check 'User=' and 'Group=' in systemd unit file /lib/systemd/system/transmission-daemon.service — both might need to be set to 'debian-transmission' — followed by 'systemctl daemon-reload' then 'systemctl restart transmission-daemon').
+* Default Transmission user/group may need fixing (https://github.com/transmission/transmission/issues/537).  You can set Ansible variables 'transmission_user' and 'transmission_group' e.g. in /opt/iiab/iiab/roles/transmission/defaults/main.yml (you might need 'User=' and 'Group=' in systemd unit file /lib/systemd/system/transmission-daemon.service — both might need to be set to 'debian-transmission' — if so 'systemctl daemon-reload' then 'systemctl restart transmission-daemon').
 
 * Random Ports: Currently it is not possible to use random ports in the range 49152-65535.  It is difficult to open multiple ports in IIAB's iptables-based firewall.
 
