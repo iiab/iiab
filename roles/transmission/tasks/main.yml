@@ -1,0 +1,73 @@
+---
+- name: Create Transmission download directory
+  file:
+    path: "{{ item }}"
+    owner: "{{ transmission_user }}"
+    group: "{{ transmission_group }}"
+    mode: 0755
+    state: directory
+  with_items:
+    - "{{ transmission_download_dir }}"
+
+- name: Install Transmission daemon and its command line tools.
+  package:
+    name: "{{ item }}"
+    state: present
+  with_items:
+    - transmission-daemon
+    - transmission-cli
+
+- name: Stop Transmission daemon before modifying its settings.
+  service:
+    name: transmission-daemon
+    state: stopped
+
+- name: Create the transmission-daemon settings
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    mode: "{{ item.mode }}"
+    owner: "{{ transmission_user }}"
+    group: "{{ transmission_group }}"
+  with_items:
+    - { src: 'settings.json.j2', dest: '/etc/transmission-daemon/settings.json', mode: '0644' }
+
+- name: Start Transmission daemon.
+  service:
+    name: transmission-daemon
+    state: restarted
+    enabled: yes
+  when: transmission_enabled
+
+- name: Add ka-lite torrents to transmission daemon.
+  shell: /usr/bin/transmission-remote -a http://pantry.learningequality.org/downloads/ka-lite/{{ transmission_kalite_version }}/content/ka-lite-0.17-resized-videos-{{ item }}.torrent
+  with_items: "{{ transmission_kalite_languages }}"
+  ignore_errors: yes
+  when: transmission_provision
+
+- name: Disable Transmission daemon service.
+  service:
+    name: transmission-daemon
+    enabled: no
+    state: stopped
+  when: not transmission_enabled
+
+- name: Add transmission to list of services at /etc/iiab/iiab.ini
+  ini_file:
+    dest: "{{ service_filelist }}"
+    section: transmission
+    option: "{{ item.option }}"
+    value: "{{ item.value }}"
+  with_items:
+    - option: name
+      value: transmission
+    - option: description
+      value: '"Transmission is a set of lightweight BitTorrent clients (in GUI, CLI and daemon form)."'
+    - option: transmission_enabled
+      value: "{{ transmission_enabled }}"
+    - option: transmission_install
+      value: "{{ transmission_install }}"
+    - option: transmission_http_port
+      value: "{{ transmission_http_port }}"
+    - option: transmission_url
+      value: "{{ transmission_url }}"
