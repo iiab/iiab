@@ -29,10 +29,15 @@ Configuration
 
 Configure Transmission using its web interface: http://box:9091
 
-You can also edit Transmission settings in '/etc/transmission-daemon/settings.json'.  Before you edit this file, ensure that transmission-daemon.service is stopped::
+More settings can be edited within '/etc/transmission-daemon/settings.json' if you first ensure that the transmission-daemon.service is stopped::
 
   systemctl stop transmission-daemon
+
+Then edit the file::
+
   nano /etc/transmission-daemon/settings.json
+
+Here are some short explanations, as to what those 70+ variables mean: https://github.com/transmission/transmission/wiki/Editing-Configuration-Files
 
 Adding torrents
 ---------------
@@ -57,6 +62,6 @@ Verify that transmission-daemon is running::
 
   systemctl status transmission-daemon
 
-Check that Transmission's settings are correct in::
+Re-check that Transmission's settings are correct in::
 
   /etc/transmission-daemon/settings.json
