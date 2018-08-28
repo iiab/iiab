@@ -3,14 +3,14 @@ Calibre-Web README
 ==================
 
 Calibre-Web provides a clean interface for browsing, reading and downloading
-e-books using an existing Calibre database.  Teachers can add and arrange
-e-books by adjusting their metadata etc:
+e-books using an existing Calibre database.  Teachers can add upload e-books,
+adjust e-book metadata, and create custom book collections ("bookshelves"):
+https://github.com/janeczku/calibre-web#about
 
-   https://github.com/janeczku/calibre-web
-
-This Ansible role installs Calibre-Web to your Internet-in-a-Box, as a possible
-alternative to Calibre (we'll call it 'calibre-web' from here down, noting that
-``calibreweb_*`` variables do not include the dash, per Ansible recommendations).
+This Ansible role installs Calibre-Web as part of your Internet-in-a-Box, as a
+possible alternative to Calibre (we'll call it 'calibre-web' from here down,
+noting that ``calibreweb_*`` variables do not include the dash, per Ansible
+recommendations).
 
 Using It
 --------
