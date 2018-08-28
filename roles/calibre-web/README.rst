@@ -88,6 +88,7 @@ Known Issues
 
 * Trying to access an empty public bookshelf causes a system error.
 
-* As of August 2018, calibre-web doesn't include Calibre's e-book conversion
-functionality (Calibre itself allows teachers to convert between PDF, epub, txt
-etc — to permit reading on a wider array client devices and client software).
+* As of August 2018, calibre-web doesn't yet include Calibre's e-book
+  conversion functionality (Calibre 3.27.1 [released 2018-07-06] allows
+  teachers to convert between PDF, epub, txt etc — to permit reading on a wider
+  array client devices and client software).
