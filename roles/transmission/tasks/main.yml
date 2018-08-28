@@ -1,15 +1,12 @@
----
 - name: Create Transmission download directory
   file:
-    path: "{{ item }}"
+    path: "{{ transmission_download_dir }}"
     owner: "{{ transmission_user }}"
     group: "{{ transmission_group }}"
     mode: 0755
     state: directory
-  with_items:
-    - "{{ transmission_download_dir }}"
 
-- name: Install Transmission daemon and its command line tools.
+- name: Install transmission-daemon and transmission-cli
   package:
     name: "{{ item }}"
     state: present
@@ -17,37 +14,38 @@
     - transmission-daemon
     - transmission-cli
 
-- name: Stop Transmission daemon before modifying its settings.
-  service:
+- name: Stop transmission-daemon before modifying its settings
+  systemd:
     name: transmission-daemon
     state: stopped
+  ignore_errors: yes  
 
-- name: Create the transmission-daemon settings
+- name: Create transmission-daemon settings
   template:
-    src: "{{ item.src }}"
-    dest: "{{ item.dest }}"
-    mode: "{{ item.mode }}"
+    src: settings.json.j2
+    dest: /etc/transmission-daemon/settings.json
+    mode: 0644
     owner: "{{ transmission_user }}"
     group: "{{ transmission_group }}"
-  with_items:
-    - { src: 'settings.json.j2', dest: '/etc/transmission-daemon/settings.json', mode: '0644' }
 
-- name: Start Transmission daemon.
-  service:
+- name: Enable and Restart transmission-daemon service
+  systemd:
     name: transmission-daemon
-    state: restarted
+    daemon_reload: yes
     enabled: yes
+    state: restarted
   when: transmission_enabled
 
-- name: Add ka-lite torrents to transmission daemon.
+- name: Add KA Lite torrents to transmission-daemon's queue
   shell: /usr/bin/transmission-remote -a http://pantry.learningequality.org/downloads/ka-lite/{{ transmission_kalite_version }}/content/ka-lite-0.17-resized-videos-{{ item }}.torrent
   with_items: "{{ transmission_kalite_languages }}"
   ignore_errors: yes
   when: transmission_provision
 
-- name: Disable Transmission daemon service.
-  service:
+- name: Disable transmission-daemon service
+  systemd:
     name: transmission-daemon
+    daemon_reload: yes
     enabled: no
     state: stopped
   when: not transmission_enabled
