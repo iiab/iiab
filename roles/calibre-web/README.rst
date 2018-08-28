@@ -23,7 +23,7 @@ whereas teachers add books using an administrative account, as follows::
   Username: Admin
   Password: changeme
 
-If the default configuration is not found, calibre-web server creates a
+If the default configuration is not found, the calibre-web server creates a
 new settings file with calibre-web's own administrative account default::
 
   Username: admin
