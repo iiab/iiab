@@ -1,0 +1,92 @@
+- name: Install packages transmission-daemon and transmission-cli
+  package:
+    name: "{{ item }}"
+    state: present
+  with_items:
+    - transmission-daemon
+    - transmission-cli
+
+- name: Create /library/transmission download directory
+  file:
+    path: "{{ transmission_download_dir }}"
+    owner: "{{ transmission_user }}"
+    group: "{{ transmission_group }}"
+    mode: 0755
+    state: directory
+
+- name: Stop transmission-daemon before modifying its settings
+  systemd:
+    name: transmission-daemon
+    state: stopped
+  ignore_errors: yes  
+
+- name: Create transmission-daemon settings
+  template:
+    src: settings.json.j2
+    dest: /etc/transmission-daemon/settings.json
+    mode: 0644
+    owner: "{{ transmission_user }}"
+    group: "{{ transmission_group }}"
+
+- name: Enable and Restart transmission-daemon service
+  systemd:
+    name: transmission-daemon
+    daemon_reload: yes
+    enabled: yes
+    state: restarted
+  when: transmission_enabled
+
+- name: Add KA Lite torrent(s) to transmission-daemon's queue
+  shell: >
+    /usr/bin/transmission-remote
+    -n {{ transmission_username }}:{{ transmission_password }}
+    -a http://pantry.learningequality.org/downloads/ka-lite/{{ transmission_kalite_version }}/content/ka-lite-0.17-resized-videos-{{ item }}.torrent
+  with_items: "{{ transmission_kalite_languages }}"
+  ignore_errors: yes
+  when: transmission_provision
+
+- name: Disable transmission-daemon service
+  systemd:
+    name: transmission-daemon
+    daemon_reload: yes
+    enabled: no
+    state: stopped
+  when: not transmission_enabled
+
+- name: Add transmission to list of services at /etc/iiab/iiab.ini
+  ini_file:
+    dest: "{{ service_filelist }}"
+    section: transmission
+    option: "{{ item.option }}"
+    value: "{{ item.value }}"
+  with_items:
+    - option: name
+      value: transmission
+    - option: description
+      value: '"Transmission is a set of lightweight BitTorrent clients (in GUI, CLI and daemon form)."'
+    - option: transmission_install
+      value: "{{ transmission_install }}"
+    - option: transmission_enabled
+      value: "{{ transmission_enabled }}"
+    - option: transmission_download_dir
+      value: "{{ transmission_download_dir }}"
+    - option: transmission_user
+      value: "{{ transmission_user }}"
+    - option: transmission_group
+      value: "{{ transmission_group }}"
+    - option: transmission_http_port
+      value: "{{ transmission_http_port }}"
+    - option: transmission_url
+      value: "{{ transmission_url }}"
+    - option: transmission_peer_port
+      value: "{{ transmission_peer_port }}"
+    - option: transmission_provision
+      value: "{{ transmission_provision }}"
+    - option: transmission_kalite_version
+      value: "{{ transmission_kalite_version }}"
+    - option: transmission_kalite_languages
+      value: "{{ transmission_kalite_languages }}"
+    - option: transmission_username
+      value: "{{ transmission_username }}"
+    - option: transmission_password
+      value: "{{ transmission_password }}"
