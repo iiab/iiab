@@ -72,8 +72,8 @@ Internet-in-a-Box (IIAB) is online.
 But first: back up your content **and** settings, as explained above.
 
 **Then move your /library/calibre-web/metadata.db out of the way, if you're
-sure you want to (re)install bare/minimal metadata, and force all settings to
-the default.  Then run**::
+sure you want to (re)install bare/minimal metadata, and force all calibre-web
+settings to the default.  Then run**::
 
   cd /opt/iiab/iiab
   ./runrole calibre-web
@@ -108,7 +108,8 @@ Known Issues
   http://10.8.0.x/books, http://127.0.0.1/books and http://box/books} all work.
 
 * calibre-web does not currently use version numbers, so glitches might
-  occasionally arise, when changes impact its master branch without warning.
+  occasionally arise, when upstream developers change its master branch without
+  warning.
   
 * *Please assist us in reporting serious issues here:*
   https://github.com/janeczku/calibre-web/issues
