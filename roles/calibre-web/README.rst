@@ -70,8 +70,9 @@ Reinstalling calibre-web automatically upgrades to the latest version.
 
 Back up your content **and** settings before reinstalling, as explained above.
 
-**Move your /library/calibre-web/metadata.db if you're sure you want to install
-a bare/minimal metadata.db and force all settings to the default.  Then run**::
+**Move your /library/calibre-web/metadata.db if you're sure you want to
+reinstall a bare/minimal metadata.db and force all settings to the default.
+Then run**::
 
   cd /opt/iiab/iiab
   ./runrole calibre-web
