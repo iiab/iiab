@@ -21,6 +21,7 @@ Install Transmission by setting 'transmission_install' and 'transmission_enabled
 
   cd /opt/iiab/iiab
   ./runrole transmission
+  ./iiab-network
 
 Or if you prefer a complete reinstall of IIAB::
 
