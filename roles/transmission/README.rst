@@ -79,6 +79,8 @@ Verify that transmission-daemon is running::
 
   systemctl status transmission-daemon
 
-Re-check that Transmission's settings are correct, while following the instructions above, under 'Configuration'::
+Re-check that Transmission's settings are correct here: (by following the instructions above, under 'Configuration')
+
+::
 
   /etc/transmission-daemon/settings.json
