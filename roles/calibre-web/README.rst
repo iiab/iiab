@@ -3,14 +3,14 @@ Calibre-Web README
 ==================
 
 Calibre-Web provides a clean interface for browsing, reading and downloading
-e-books using an existing Calibre database.  Teachers can add upload e-books,
-adjust e-book metadata, and create custom book collections ("bookshelves"):
+e-books using an existing Calibre database.  Teachers can upload e-books,
+adjust e-book metadata, and create custom e-book collections ("bookshelves"):
 https://github.com/janeczku/calibre-web#about
 
-This Ansible role installs Calibre-Web as part of your Internet-in-a-Box, as a
-possible alternative to Calibre (we'll call it 'calibre-web' from here down,
-noting that ``calibreweb_*`` variables do not include the dash, per Ansible
-recommendations).
+This Ansible role installs Calibre-Web as part of your Internet-in-a-Box (IIAB)
+as a possible alternative to Calibre (we'll call it 'calibre-web' from here
+down, noting that ``calibreweb_*`` variables do not include the dash, per
+Ansible recommendations).
 
 Using It
 --------
@@ -24,7 +24,7 @@ whereas teachers add books using an administrative account, as follows::
   Password: changeme
 
 If the default configuration is not found, the calibre-web server creates a
-new settings file with calibre-web's own administrative account default::
+new settings file with calibre-web's own default administrative account::
 
   Username: admin
   Password: admin123
@@ -42,7 +42,7 @@ You can manage the backend calibre-web server with these systemd commands::
 Configuration
 -------------
 
-To configure calibre-web, login as user 'Admin' then click 'Admin' on top.
+To configure calibre-web, log in as user 'Admin' then click 'Admin' on top.
 Check 'Configuration' options near the bottom of the page.
 
 Critical settings are stored in::
@@ -66,18 +66,19 @@ as it contains your calibre-web content **and** settings!
 Upgrading
 ---------
 
-Reinstalling calibre-web automatically upgrades to the latest version.
+Reinstalling calibre-web automatically upgrades to the latest version if your
+Internet-in-a-Box (IIAB) is online.
 
-Back up your content **and** settings before reinstalling, as explained above.
+But first: back up your content **and** settings, as explained above.
 
-**Move your /library/calibre-web/metadata.db if you're sure you want to
-reinstall a bare/minimal metadata.db and force all settings to the default.
-Then run**::
+**Then move your /library/calibre-web/metadata.db out of the way, if you're
+sure you want to (re)install bare/minimal metadata, and force all settings to
+the default.  Then run**::
 
   cd /opt/iiab/iiab
   ./runrole calibre-web
   
-Or, to reinstall all of Internet-in-a-Box::
+Or, to reinstall all of IIAB::
 
   cd /opt/iiab/iiab
   ./iiab-install --reinstall
