@@ -57,8 +57,8 @@ See also::
 
   /library/calibre-web/metadata_db_prefs_backup.json
 
-Back Up Your Content
---------------------
+Backup
+------
 
 Please back up the entire folder ``/library/calibre-web`` before upgrading —
 as it contains your calibre-web content **and** settings!
