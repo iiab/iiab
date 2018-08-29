@@ -40,7 +40,7 @@ Configuration
 
 Configure Transmission using its web interface: http://box:9091
 
-More settings can be changed within '/etc/transmission-daemon/settings.json' if you first ensure that the transmission-daemon.service is stopped::
+More settings can be changed within /etc/transmission-daemon/settings.json if you first ensure that the transmission-daemon.service is stopped::
 
   systemctl stop transmission-daemon
 
@@ -50,7 +50,7 @@ Then edit the file::
 
 Here are some short explanations, as to what those 70+ variables mean: https://github.com/transmission/transmission/wiki/Editing-Configuration-Files
 
-After saving your changes in settings.json, restart Transmission by running::
+After saving your changes in 'settings.json' restart Transmission by running::
 
   systemctl restart transmission-daemon
 
@@ -59,7 +59,7 @@ Adding Torrents
 
 Transmission can facilitate provisioning content onto your IIAB, e.g. by adding thousands of KA Lite videos from places like: http://pantry.learningequality.org/downloads/ka-lite/0.17/content/
 
-Please read the lettered instructions (A, B, C, D) in /etc/iiab/local_vars.yml and "KA Lite Administration: What tips & tricks exist?" at http://FAQ.IIAB.IO outlining how to use Transmission to download and then install KA Lite content.
+Please read the lettered instructions (A, B, C, D) in /etc/iiab/local_vars.yml and 'KA Lite Administration: What tips & tricks exist?' at http://FAQ.IIAB.IO outlining how to use Transmission to download and then install KA Lite content.
 
 You can also download other torrents using Transmission's web interface, or by typing 'transmission-remote' at the command-line::
 
