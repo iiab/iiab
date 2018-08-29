@@ -92,11 +92,21 @@ Known Issues
 
 * Trying to access an empty public bookshelf causes a system error.
 
+* It's sometime impossible to set the language of an e-book: `#1040 <https://github.com/iiab/iiab/issues/1040>`_
+  `janeczku/calibre-web#593 <https://github.com/janeczku/calibre-web/issues/593>`_
+
 * As of August 2018, calibre-web doesn't yet include Calibre's e-book
   conversion functionality (e.g. Calibre 3.27.1 [released 2018-07-06] allows
   teachers to convert between PDF, epub, txt etc — to permit reading on a wider
   array client devices and client software).
 
+* http://192.168.0.x:8083 does not work, as a result of `iptables <https://github.com/iiab/iiab/blob/master/roles/network/templates/gateway/iiab-gen-iptables#L93>`_,
+  even when ``services_externally_visible: true``.  This is fixable, but perhaps
+  it's not a priority, as {http://192.168.0.x/books, http://box/books, etc} URL's
+  all work.
+
 * calibre-web does not currently use version numbers, so glitches might
-  occasionally arise using its master branch.  Please assist us in reporting
-  issues here, if they do arise: https://github.com/janeczku/calibre-web/issues
+  occasionally arise using its master branch.
+  
+* *Please assist us in reporting serious issues here:*
+  https://github.com/janeczku/calibre-web/issues
