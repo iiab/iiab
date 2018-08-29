@@ -94,6 +94,8 @@ Known Issues
 
 * It's sometime impossible to set the language of an e-book: `#1040 <https://github.com/iiab/iiab/issues/1040>`_ `janeczku/calibre-web#593 <https://github.com/janeczku/calibre-web/issues/593>`_
 
+* http://192.168.0.x:8083 does not work, even when ``services_externally_visible: true`` as a result of `iptables <https://github.com/iiab/iiab/blob/master/roles/network/templates/gateway/iiab-gen-iptables#L93>`_.  However http://192.168.0.x/books does work.
+
 * As of August 2018, calibre-web doesn't yet include Calibre's e-book
   conversion functionality (e.g. Calibre 3.27.1 [released 2018-07-06] allows
   teachers to convert between PDF, epub, txt etc — to permit reading on a wider
