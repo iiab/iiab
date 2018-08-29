@@ -6,7 +6,7 @@ Transmission is a set of lightweight BitTorrent clients (in GUI, CLI and daemon 
 
 Transmission is intended to download KA Lite content to IIAB, from places like http://pantry.learningequality.org/downloads/ka-lite/0.17/content/ — and also to seed content, assisting others.
 
-Once the packages are downloaded, please verify the content before copying it (carefully!) into KA Lite content directory: ``/library/ka-lite/content``
+For example, once KA Lite videos and thumbnails are confirmed downloaded, copy them (carefully!) from ``/library/transmission`` into ``/library/ka-lite/content`` as outlined by "KA Lite Administration: What tips & tricks exist?" at http://FAQ.IIAB.IO
 
 Caution
 -------
