@@ -92,6 +92,8 @@ Known Issues
 
 * Trying to access an empty public bookshelf causes a system error.
 
+* It's sometime impossible to set the language of an e-book: `#1040 <https://github.com/iiab/iiab/issues/1040>`_ `janeczku/calibre-web#593 <https://github.com/janeczku/calibre-web/issues/593>`_
+
 * As of August 2018, calibre-web doesn't yet include Calibre's e-book
   conversion functionality (e.g. Calibre 3.27.1 [released 2018-07-06] allows
   teachers to convert between PDF, epub, txt etc — to permit reading on a wider
@@ -99,4 +101,4 @@ Known Issues
 
 * calibre-web does not currently use version numbers, so glitches might
   occasionally arise using its master branch.  Please assist us in reporting
-  issues here, if they do arise: https://github.com/janeczku/calibre-web/issues
+  serious issues here: https://github.com/janeczku/calibre-web/issues
