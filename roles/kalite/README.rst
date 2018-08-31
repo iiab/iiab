@@ -12,7 +12,7 @@ KA Lite downloads Khan Academy videos for offline use, with exercises and accoun
 Using It
 --------
 
-If enabled and with the default settings KA Lite should be accessible at http://box:8008 or http://box.lan:8008
+If enabled with the default settings, KA Lite should be accessible at http://box:8008 or http://box.lan:8008
 
 Log in to KA Lite::
 
@@ -22,9 +22,11 @@ Log in to KA Lite::
 Bulk Loading Videos
 -------------------
 
-Videos and their corresponding png images can be copied into /library/ka-lite/content and will be recognized the next time kalite is started.  Please see http://FAQ.IIAB.IO ("KA Lite Administration: What tips & tricks exist?") to use BitTorrent to download compressed KA Lite videos, that are much smaller than the ones downloaded with KA Lite's administrative interface.
+Videos and their corresponding PNG thumbnail images can be copied into /library/ka-lite/content and will be recognized the next time KA Lite is started.
 
-As of August 2018, please also consider the `"Transmission" BitTorrent tool <https://github.com/iiab/iiab/tree/master/roles/transmission#transmission-readme>`_ that will automatically download thousands of KA Lite videos for you, if install and enable it and set the language(s) you want within /etc/iiab/local_vars.yml
+Please see http://FAQ.IIAB.IO ("KA Lite Administration: What tips & tricks exist?") to use BitTorrent to download compressed KA Lite videos, that are much smaller than the ones downloaded via KA Lite's administrative interface.
+
+As of August 2018, please also consider the `"Transmission" BitTorrent tool <https://github.com/iiab/iiab/tree/master/roles/transmission#transmission-readme>`_ that will automatically download thousands of KA Lite videos to your Internet-in-a-Box (IIAB) — if you install and enable "transmission" within /etc/iiab/local_vars.yml — carefully choosing the language(s) you want as downloading these videos can take many hours if not days!
 
 Configuration Parameters
 ------------------------
