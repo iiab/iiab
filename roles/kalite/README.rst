@@ -2,10 +2,10 @@
 KA Lite README
 ==============
 
-This role installs KA Lite, an offline version of the Khan Academy (https://www.khanacademy.org) created by Learning Equality
+This role installs KA Lite, an offline version of Khan Academy (https://www.khanacademy.org) created by Learning Equality
 (https://learningequality.org/ka-lite/).
 
-KA Lite downloads Khan Academy videos for offline use, with exercises and accounts if students wanting to track their own progress.
+KA Lite downloads Khan Academy videos to your Internet-in-a-Box for offline use, with exercises and accounts if students want to track their own progress.
 
 [Originally KA Lite had two servers, a light httpd server that serves Khan Academy videos, and a cron server that sets up cron jobs to download language packs and KA videos from the internet.  There were separate flags to enable these two servers.]
 
