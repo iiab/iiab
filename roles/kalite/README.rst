@@ -19,8 +19,8 @@ After your Internet-in-a-Box (IIAB) is completely installed, log in to KA Lite t
   Username: Admin
   Password: changeme
 
-Bulk Loading Videos
--------------------
+Bulk Downloading Videos
+-----------------------
 
 Videos and their corresponding PNG thumbnail images can be copied into /library/ka-lite/content and will be recognized the next time KA Lite is started.
 
