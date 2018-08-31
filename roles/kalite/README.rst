@@ -14,7 +14,7 @@ Using It
 
 If enabled with the default settings, KA Lite should be accessible at http://box:8008 or http://box.lan:8008
 
-Log in to KA Lite::
+After your Internet-in-a-Box (IIAB) is completely installed, log in to KA Lite to explore and configure it::
 
   Username: Admin
   Password: changeme
