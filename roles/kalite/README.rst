@@ -5,17 +5,19 @@ KA Lite README
 This role installs KA Lite, an offline version of the Khan Academy (https://www.khanacademy.org), written by Learning Equality
 (https://learningequality.org/ka-lite/).
 
-KA Lite has two servers, a light httpd server that serves Khan Academy videos, and a cron server that sets up cron jobs to download language packs and KA videos from the internet.  There are separate flags to enable these two servers.
+KA Lite downloads Khan Academy videos for offline use, with exercises and accounts if students wanting to track their own progress.
 
-Access
-------
+[Originally KA Lite had two servers, a light httpd server that serves Khan Academy videos, and a cron server that sets up cron jobs to download language packs and KA videos from the internet.  There were separate flags to enable these two servers.]
+
+Using It
+--------
 
 If enabled and with the default settings KA Lite should be accessible at http://box:8008 or http://box.lan:8008
 
-To log in to KA Lite::
+Log in to KA Lite::
 
   Username: Admin
-  Password: changme
+  Password: changeme
 
 Bulk Loading Videos
 -------------------
