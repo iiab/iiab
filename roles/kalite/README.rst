@@ -48,4 +48,4 @@ To return to using the systemd unit:
 * kalite stop
 * systemctl start kalite-serve
 
-*In late 2017, Internet-in-a-Box added a virtual environment (/usr/local/kalite/venv/) to keep KA Lite's Python and PHP package risks under control.  As such the command* `/usr/bin/kalite <https://github.com/iiab/iiab/blob/master/roles/kalite/templates/kalite.sh.j2>`_ *is a wrapper to this virtualenv.*
+*In late 2017, Internet-in-a-Box added a virtual environment (/usr/local/kalite/venv/) to keep KA Lite's Python package/dependency risks under control.  As such the command* `/usr/bin/kalite <https://github.com/iiab/iiab/blob/master/roles/kalite/templates/kalite.sh.j2>`_ *is a wrapper to this virtualenv.*
