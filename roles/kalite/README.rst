@@ -2,48 +2,46 @@
 KA Lite README
 ==============
 
-This role installs KA Lite, an offline version of the Khan Academy (https://www.khanacademy.org/),
-written by Learning Equality (https://learningequality.org/ka-lite/).
+This role installs KA Lite, an offline version of the Khan Academy (https://www.khanacademy.org), written by Learning Equality
+(https://learningequality.org/ka-lite/).
 
-KA Lite has two servers, a light httpd server that serves Khan Academy videos, and a cron server
-that sets up cron jobs to download language packs and KA videos from the internet.  There are
-separate flags to enable these two servers.
+KA Lite has two servers, a light httpd server that serves Khan Academy videos, and a cron server that sets up cron jobs to download language packs and KA videos from the internet.  There are separate flags to enable these two servers.
 
 Access
 ------
 
-If enabled and with the default settings KA Lite should be accessible at http://schoolserver:8008/
+If enabled and with the default settings KA Lite should be accessible at http://box:8008 or http://box.lan:8008
 
-To login to kalite enter
+To log in to KA Lite::
 
-User Name: Admin
-Password: changme
+  Username: Admin
+  Password: changme
 
 Bulk Loading Videos
 -------------------
 
-Videos and their corresponding png images can be copied into /library/ka-lite/content and will
-be recognized the next time kalite is started.  The kalite website has instructions on getting
-videos with bitsync.  These videos are also smaller than the ones downloaded with the kalite
-admin interface.
+Videos and their corresponding png images can be copied into /library/ka-lite/content and will be recognized the next time kalite is started.  Please see http://FAQ.IIAB.IO ("KA Lite Administration: What tips & tricks exist?") to use BitTorrent to download compressed KA Lite videos, that are much smaller than the ones downloaded with KA Lite's administrative interface.
+
+As of August 2018, please also consider the `"Transmission" BitTorrent tool <https://github.com/iiab/iiab/tree/master/roles/transmission#transmission-readme>`_ that will automatically download thousands of KA Lite videos for you, if install and enable it and set the language(s) you want within /etc/iiab/local_vars.yml
 
 Configuration Parameters
 ------------------------
 
-Please look in defaults/main.yml for the default values of the various install parameters.  Everything
-in this readme assumes the default values.
+Look at `role/kalite/defaults/main.yml <https://github.com/iiab/iiab/blob/master/roles/kalite/defaults/main.yml>`_ for the default values of the various install parameters.
 
-Trouble Shooting
-----------------
+Troubleshooting
+---------------
 
-Starting with kalite 0.15 you can run the server manually with the following commands:
+Starting with KA Lite 0.15 (October 2015) you can run the server manually with the following commands:
 
 * systemctl stop kalite-serve (make sure the systemd service is not running)
 * export KALITE_HOME=/library/ka-lite (point kalite to the right environment)
-* kalite start (start the server; can take more than 10 minutes in some environment)
+* kalite start (start the server; can take more than 10 minutes in some environments)
 
 To return to using the systemd unit:
 
 * export KALITE_HOME=/library/ka-lite (point kalite to the right environment)
 * kalite stop
 * systemctl start kalite-serve
+
+*In late 2017, Internet-in-a-Box added a virtual environment (/usr/local/kalite/venv/) to keep KA Lite's Python and PHP package risks under control.  As such the command* `/usr/bin/kalite <https://github.com/iiab/iiab/blob/master/roles/kalite/templates/kalite.sh.j2>`_ *is a wrapper to this virtualenv.*
