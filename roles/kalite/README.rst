@@ -2,7 +2,7 @@
 KA Lite README
 ==============
 
-This role installs KA Lite, an offline version of the Khan Academy (https://www.khanacademy.org), written by Learning Equality
+This role installs KA Lite, an offline version of the Khan Academy (https://www.khanacademy.org) created by Learning Equality
 (https://learningequality.org/ka-lite/).
 
 KA Lite downloads Khan Academy videos for offline use, with exercises and accounts if students wanting to track their own progress.
