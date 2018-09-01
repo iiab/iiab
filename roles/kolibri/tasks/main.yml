@@ -18,10 +18,13 @@
     state: directory
   with_items:
     - "{{ kolibri_home }}"
+    - "{{ kolibri_venv_path }}"
 
 - name: Install kolibri using pip on all OS's
   pip:
     name: kolibri
+    virtualenv: "{{ kolibri_venv_path }}"
+    virtualenv_site_packages: no
     state: latest
     extra_args: --no-cache-dir
   when: internet_available
@@ -36,9 +39,20 @@
   with_items:
     - { src: 'kolibri.service.j2', dest: '/etc/systemd/system/kolibri.service', mode: '0644' }
 
-- name: Ask systemd to reread unit files (daemon-reload)
+- name: Enable kolibri service
   systemd:
+    name: kolibri
+    enabled: yes
+    state: restarted
     daemon_reload: yes
+  when: kolibri_enabled
+
+- name: Disable kolibri service
+  systemd:
+    name: kolibri
+    enabled: no
+    state: stopped
+  when: not kolibri_enabled
 
 - name: Set kolibri default language
   shell: export KOLIBRI_HOME="{{ kolibri_home }}" && "{{ kolibri_exec_path }}" language setdefault "{{ kolibri_language }}"
@@ -61,20 +75,6 @@
     group: "{{ apache_user }}"
     recurse: yes
 
-- name: Enable kolibri service
-  service:
-    name: kolibri
-    enabled: yes
-    state: restarted
-  when: kolibri_enabled
-
-- name: Disable kolibri service
-  service:
-    name: kolibri
-    enabled: no
-    state: stopped
-  when: not kolibri_enabled
-
 - name: Add 'kolibri' to list of services at /etc/iiab/iiab.ini
   ini_file:
     dest: "{{ service_filelist }}"
@@ -89,7 +89,7 @@
     - option: kolibri_url
       value: "{{ kolibri_url }}"
     - option: kolibri_path
-      value: "{{ kolibri_path }}"
+      value: "{{ kolibri_exec_path }}"
     - option: kolibri_port
       value: "{{ kolibri_http_port }}"
     - option: enabled
