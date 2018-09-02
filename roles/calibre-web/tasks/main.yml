@@ -7,14 +7,14 @@
     state: directory
   with_items:
     - "{{ calibreweb_home }}"
-    - "{{ calibreweb_path }}"
+    - "{{ calibreweb_venv_path }}"
     - "{{ calibreweb_config }}"
 
 ## TODO: Calibre-web future release might get into pypi https://github.com/janeczku/calibre-web/issues/456
 - name: Download calibre-web github repository
   git:
     repo: https://github.com/janeczku/calibre-web.git
-    dest: "{{ calibreweb_path }}"
+    dest: "{{ calibreweb_venv_path }}"
     force: yes
     #update: yes
     depth: 1
@@ -30,12 +30,18 @@
 #  ignore_errors: True
 ##
 # Implementing this with Ansible command module for now.
-- name: Download calibre-web dependencies into vendor subdirectory
-  command: pip install --target vendor -r ./requirements.txt
-  args:
-    chdir: "{{ calibreweb_path }}"
-  ignore_errors: True
+- name: Download calibre-web dependencies into virtual environment
+  pip:
+    requirements: "{{ calibreweb_venv_path }}/requirements.txt"
+    virtualenv: "{{ calibreweb_venv_path }}"
+    virtualenv_site_packages: no
   when: internet_available
+
+- name: Symlink 'vendor' to site-packages for python to keep cps.py happy'
+  file:
+    state: link
+    src: "{{ calibreweb_venv_path }}/lib/python2.7/site-packages"
+    dest: "{{ calibreweb_venv_path }}/vendor"
 
 - name: Create calibre-web systemd service unit file and calibre-web.conf for Apache
   template:
@@ -130,7 +136,7 @@
     - option: calibreweb_url
       value: "{{ calibreweb_url }}"
     - option: calibreweb_path
-      value: "{{ calibreweb_path }}"
+      value: "{{ calibreweb_venv_path }}"
     - option: calibreweb_home
       value: "{{ calibreweb_home }}"
     - option: calibreweb_port
