@@ -33,7 +33,7 @@ When kolibri_provision is enabled, the installation will setup the following set
 Cloning content
 ---------------
 
-Kolibri 0.10 introduced `kolibri manage deprovision` which will remove user configuration, leaving content intact. You can then copy/clone /library/kolibri to a new location.
+Kolibri 0.10 introduced `kolibri manage deprovision` which will remove user configuration, leaving content intact.  You can then copy/clone /library/kolibri to a new location.
 
 Troubleshooting
 ----------------
