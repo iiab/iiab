@@ -154,20 +154,30 @@
 # /etc/iiab/openvpn_handle to xscenet.net -- and
 # "systemctl restart openvpn@xscenet" was failing completely (no matter how
 # many times it was run) to transmit /etc/iiab/openvpn_handle to xscenet.net
-- name: Enable & (Re)Start openvpn@xscenet tunnel
+
+# 2018-09-02: OpenVPN had been starting tunnels by accident after reboot,
+# with new IIAB installs.  Fix below (https://github.com/iiab/iiab/pull/1079)
+# changes most all instances below from PARENT service "openvpn@xscenet" to
+# CHILD service "openpvn".  See these 2 critical files to understand why:
+#
+#    /etc/default/openvpn
+#    /etc/openvpn/xscenet.conf
+
+- name: Enable & (Re)Start PARENT service openvpn, which (re)starts CHILD service openvpn@xscenet (& actual tunnel)
   systemd:
-    name: openvpn@xscenet.service
+    name: openvpn
+    daemon_reload: yes
     enabled: yes
-    state: restarted
+    state: restarted    # 2018-09-02: Should we be concerned that "systemctl status openvpn" often shows "active (exited)" ?  If so we might consider "state: started" or "state: reloaded" instead?
   when: openvpn_enabled
 
-- name: Enable hourly cron job for OpenVPN
+- name: Enable hourly cron job for OpenVPN (starts CHILD service openvpn@xscenet, typically for CentOS only?)
   lineinfile:
     path: /etc/crontab
     line: "25 *  *  *  * root (/usr/bin/systemctl start openvpn@xscenet.service) > /dev/null"
   when: openvpn_enabled and openvpn_cron_enabled
 
-- name: Remove hourly cron job for OpenVPN
+- name: Remove hourly cron job for OpenVPN (typically for CentOS only?)
   lineinfile:
     path: /etc/crontab
     regexp: "openvpn@xscenet"
@@ -176,9 +186,9 @@
     state: absent
   when: not openvpn_enabled or not openvpn_cron_enabled
 
-- name: Disable & Stop openvpn@xscenet tunnel
+- name: Disable & Stop PARENT service openvpn, which stops CHILD service openvpn@xscenet (& actual tunnel)
   systemd:
-    name: openvpn@xscenet.service
+    name: openvpn
     enabled: no
     state: stopped
   when: not openvpn_enabled
@@ -207,7 +217,7 @@
   - option: name
     value: OpenVPN
   - option: description
-    value: "OpenVPN is a means of connecting to other machines anywhere on the internet, via a middleman server, using Virtual Private Network techniques to create secure connections."
+    value: "OpenVPN enables live/remote support by connecting machines anywhere on the Internet, via a middleman server, using Virtual Private Network (VPN) techniques to create secure connections."
   - option: enabled
     value: "{{ openvpn_enabled }}"
 # openvpn_handle variable can no longer be left completely undefined of August 2018 (EMPTY STRING "" IS TOLERATED, in which case OpenVPN server should use /etc/iiab/uuid in lieu of the handle)
