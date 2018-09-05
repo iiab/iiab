@@ -41,7 +41,7 @@ if [ ! `command -v ansible-playbook` ]; then   # "command -v" is POSIX compliant
     # Parens are optional, but greatly clarify :)
     elif (grep -qi ubuntu /etc/lsb-release 2> /dev/null) || (grep -qi ubuntu /etc/os-release); then
         #apt -y install python-pip python-setuptools python-wheel patch
-        apt install software-properties-common
+        apt -y install software-properties-common
         #apt-add-repository -y ppa:ansible/ansible
         apt-add-repository -y ppa:ansible/ansible-2.6
     # elif UBUNTU MUST REMAIN ABOVE (as Ubuntu ALSO contains /etc/debian_version, which would trigger the line just below)
