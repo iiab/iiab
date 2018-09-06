@@ -40,9 +40,10 @@ if [ ! `command -v ansible-playbook` ]; then   # "command -v" is POSIX compliant
         pip install ansible==$GOOD_VER --disable-pip-version-check
     # Parens are optional, but greatly clarify :)
     elif (grep -qi ubuntu /etc/lsb-release 2> /dev/null) || (grep -qi ubuntu /etc/os-release); then
-        apt -y install python-pip python-setuptools python-wheel patch
+        #apt -y install python-pip python-setuptools python-wheel patch    # 2018-09-05: fails on @kananigit's Ubuntu 18.04/Server.  Fix @ https://github.com/iiab/iiab/pull/1091
+        apt -y install software-properties-common    # adds command "apt-add-repository"
+        apt-add-repository -y ppa:ansible/ansible-2.6    # adds correct line to correct file e.g. adds line "deb http://ppa.launchpad.net/ansible/ansible-2.6/ubuntu bionic main" to /etc/apt/sources.list.d/ansible-ubuntu-ansible-bionic.list
         #apt-add-repository -y ppa:ansible/ansible
-        apt-add-repository -y ppa:ansible/ansible-2.6
     # elif UBUNTU MUST REMAIN ABOVE (as Ubuntu ALSO contains /etc/debian_version, which would trigger the line just below)
     elif [ -f /etc/debian_version ] || (grep -qi raspbian /etc/*elease) ; then
         if ( ! grep -qi ansible /etc/apt/sources.list) && [ ! -f /etc/apt/sources.list.d/ansible ]; then
