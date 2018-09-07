@@ -13,7 +13,7 @@ echo -e 'COMPLETE INSTALL INSTRUCTIONS:\nhttps://github.com/iiab/iiab/wiki/IIAB-
 echo -e 'VERIFY YOU'"'"'RE ONLINE BEFORE RUNNING THIS: /opt/iiab/iiab/scripts/ansible-2.6.x'
 echo -e 'Alternative: Run /opt/iiab/iiab/scripts/ansible for the very latest Ansible\n'
 
-if [ $(command -v ansible-playbook) ]; then   # "command -v" is POSIX compliant; also catches built-in commands like "cd"
+if [ $(command -v ansible-playbook) ]; then    # "command -v" is POSIX compliant; also catches built-in commands like "cd"
     CURR_VER=`ansible --version | head -1 | awk '{print $2}'`    # To match iiab-install.  Was: CURR_VER=`ansible --version | head -n 1 | cut -f 2 -d " "`
     echo "Currently installed Ansible: $CURR_VER"
     echo -e "INTERNET-IN-A-BOX GENERALLY REQUIRES ANSIBLE VERSION: $GOOD_VER or higher"
@@ -29,7 +29,7 @@ else
     echo -e "INTERNET-IN-A-BOX GENERALLY REQUIRES ANSIBLE VERSION: $GOOD_VER or higher"
 fi
 
-echo -e 'scripts/ansible will now try to install Ansible 2.6.x...\n'
+echo -e 'scripts/ansible-2.6.x will now try to install Ansible 2.6.x...\n'
 if [ -f /etc/olpc-release ]; then
     yum -y install ca-certificates nss
     yum -y install git bzip2 file findutils gzip hg svn sudo tar which unzip xz zip libselinux-python
