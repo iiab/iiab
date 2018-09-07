@@ -9,7 +9,7 @@ echo -e 'COMPLETE INSTALL INSTRUCTIONS:\nhttps://github.com/iiab/iiab/wiki/IIAB-
 echo -e 'NOW ATTEMPTING TO INSTALL THE LATEST ANSIBLE 2.6.x:'
 echo -e 'Ensure you'"'"'re online before running this (/opt/iiab/iiab/scripts/ansible-2.6.x)\n'
 
-echo -e 'ALTERNATIVES: Run scripts/ansible for the latest, or scripts/ansible-2.5.x-deprecated "slow food"\n\n'
+echo -e 'ALTERNATIVE: Run scripts/ansible for the latest\n\n'
 
 
 GOOD_VER="2.6.4"    # Ansible version for OLPC XO laptops (pip install).
@@ -21,7 +21,7 @@ CURR_VER="undefined"
 export DEBIAN_FRONTEND=noninteractive
 
 if [ ! `command -v ansible-playbook` ]; then   # "command -v" is POSIX compliant; also catches built-in commands like "cd"
-    echo "scripts/ansible-2.6.x will now try to install Ansible --- Please Wait"
+    echo -e "scripts/ansible will now try to install Ansible --- Please Wait\n"
     if [ -f /etc/centos-release ]; then
         yum -y install ca-certificates nss epel-release
         yum -y install git bzip2 file findutils gzip hg svn sudo tar which unzip xz zip libselinux-python
