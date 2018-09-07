@@ -29,7 +29,7 @@ else
     echo -e "INTERNET-IN-A-BOX GENERALLY REQUIRES ANSIBLE VERSION: $GOOD_VER or higher"
 fi
 
-echo -e 'scripts/ansible will now try to install Ansible 2.6.x...\n'
+echo -e 'scripts/ansible-2.6.x will now try to install Ansible 2.6.x...\n'
 if [ -f /etc/olpc-release ]; then
     yum -y install ca-certificates nss
     yum -y install git bzip2 file findutils gzip hg svn sudo tar which unzip xz zip libselinux-python
