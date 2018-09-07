@@ -40,10 +40,10 @@ if [ ! `command -v ansible-playbook` ]; then   # "command -v" is POSIX compliant
         pip install ansible==$GOOD_VER --disable-pip-version-check
     # Parens are optional, but greatly clarify :)
     elif (grep -qi ubuntu /etc/lsb-release 2> /dev/null) || (grep -qi ubuntu /etc/os-release); then
+        apt update
         #apt -y install python-pip python-setuptools python-wheel patch    # 2018-09-05: fails on @kananigit's Ubuntu 18.04/Server.  Fix @ https://github.com/iiab/iiab/pull/1091
         apt -y install software-properties-common    # adds command "apt-add-repository"
         apt-add-repository -y ppa:ansible/ansible-2.6    # adds correct line to correct file e.g. adds line "deb http://ppa.launchpad.net/ansible/ansible-2.6/ubuntu bionic main" to /etc/apt/sources.list.d/ansible-ubuntu-ansible-bionic.list
-        #apt-add-repository -y ppa:ansible/ansible
     # elif UBUNTU MUST REMAIN ABOVE (as Ubuntu ALSO contains /etc/debian_version, which would trigger the line just below)
     elif [ -f /etc/debian_version ] || (grep -qi raspbian /etc/*elease) ; then
         if ( ! grep -qi ansible /etc/apt/sources.list) && [ ! -f /etc/apt/sources.list.d/ansible ]; then
@@ -79,7 +79,7 @@ else
         echo -e '\nThe latest Ansible 2.6.x will be installed using line "deb http://ppa.launchpad.net/ansible/ansible-2.6/ubuntu ... main" correctly found in /etc/apt/sources.list and/or /etc/apt/sources.list.d/*.list'
         echo -e '\nIF *OTHER* ANSIBLE REPOS ARE ALSO FOUND BELOW, PLEASE MANUALLY REMOVE THEM TO ENSURE ANSIBLE UPDATES CLEANLY: (then re-run this script to be sure!)\n'
         grep ansible /etc/apt/sources.list /etc/apt/sources.list.d/*.list
-        echo -e '\n'
+        echo
     else
         echo -e '\nEXITING: Ansible repo "deb http://ppa.launchpad.net/ansible/ansible-2.6/ubuntu ... main" not found in /etc/apt/sources.list or /etc/apt/sources.list.d/*.list'
         echo -e '\nPLEASE UNINSTALL ANSIBLE (run "apt purge ansible" or "pip uninstall ansible", depending how Ansible was originally installed) THEN RE-RUN THIS SCRIPT.'
@@ -89,7 +89,7 @@ fi
 
 if [ ! -f /etc/centos-release ] && [ ! -f /etc/fedora-release ] && [ ! -f /etc/olpc-release ]; then
     # Align IIAB with Ansible community's latest official release
-    echo -e "Using apt to check for updates, then install/upgrade ansible:\n"
+    echo -e "\nUsing apt to check for updates, then install/upgrade ansible:\n"
     apt update
     apt -y --allow-downgrades install ansible=2.6*
 
