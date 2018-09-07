@@ -71,13 +71,19 @@ else
     elif [ -f /etc/olpc-release ]; then
         echo "Please use pip package manager to update Ansible."
         exit 0
-    #fi
-    #if [[ `grep -qi ansible /etc/apt/sources.list` ]] || [ -f /etc/apt/sources.list.d/ansible*.list ]; then
-    elif (grep -qi ansible /etc/apt/sources.list) || (ls /etc/apt/sources.list.d/*ansible*.list >/dev/null 2>&1) ; then
+    #elif [[ `grep -qi ansible /etc/apt/sources.list` ]] || [ -f /etc/apt/sources.list.d/ansible*.list ]; then
+    #elif (grep -qi ansible /etc/apt/sources.list) || (ls /etc/apt/sources.list.d/*ansible*.list >/dev/null 2>&1) ; then
+    #elif grep -r ansible /etc/apt; then
+    elif grep -qx "deb http://ppa.launchpad.net/ansible/ansible-2.6/ubuntu xenial main" /etc/apt/sources.list /etc/apt/sources.list.d/*.list; then
         #echo "Ansible repo(s) found within /etc/apt/sources.list*"
-        echo -e 'CONSIDER MANUAL INTERVENTION:\nANSIBLE REPO(S) FOUND WITHIN /etc/apt/sources.list AND/OR /etc/apt/sources.list.d/*ansible*.list -- MUST CONTAIN LINE "deb http://ppa.launchpad.net/ansible/ansible-2.6/ubuntu xenial main" IF YOU WANT THE LATEST ANSIBLE 2.6.x -- AND REMOVE ALL SIMILAR LINES TO ENSURE ANSIBLE UPDATES CLEANLY -- then re-run this script.\n'
+        #echo -e 'CONSIDER MANUAL INTERVENTION:\nANSIBLE REPO(S) FOUND WITHIN /etc/apt/sources.list AND/OR /etc/apt/sources.list.d/*ansible*.list -- MUST CONTAIN LINE "deb http://ppa.launchpad.net/ansible/ansible-2.6/ubuntu xenial main" IF YOU WANT THE LATEST ANSIBLE 2.6.x -- AND REMOVE ALL SIMILAR LINES TO ENSURE ANSIBLE UPDATES CLEANLY -- then re-run this script.\n'
+        echo -e '\nThe latest Ansible 2.6.x will be installed using line "deb http://ppa.launchpad.net/ansible/ansible-2.6/ubuntu xenial main" correctly found in /etc/apt/sources.list and/or /etc/apt/sources.list.d/*.list'
+        echo -e '\nIF OTHER ANSIBLE REPOS ARE ALSO FOUND BELOW, PLEASE MANUALLY REMOVE THEM TO ENSURE ANSIBLE UPDATES CLEANLY: (then re-run this script to be sure!)\n'
+        grep ansible /etc/apt/sources.list /etc/apt/sources.list.d/*.list
+        echo
     else
-        echo -e 'Upstream ansible source repo not found:\nPLEASE UNINSTALL ANSIBLE (run "apt purge ansible" or "pip uninstall ansible", depending how Ansible was originally installed) THEN RE-RUN THIS SCRIPT.'
+        echo -e '\nAnsible repo "deb http://ppa.launchpad.net/ansible/ansible-2.6/ubuntu xenial main" not found in /etc/apt/sources.list or /etc/apt/sources.list.d/*.list:'
+        echo -e '\nPLEASE UNINSTALL ANSIBLE (run "apt purge ansible" or "pip uninstall ansible", depending how Ansible was originally installed) THEN RE-RUN THIS SCRIPT.'
         exit 1
     fi
 fi
