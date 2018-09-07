@@ -81,7 +81,7 @@ else
         grep ansible /etc/apt/sources.list /etc/apt/sources.list.d/*.list
         echo -e '\n'
     else
-        echo -e '\nEXITING: Ansible repo "deb http://ppa.launchpad.net/ansible/ansible-2.6/ubuntu xenial main" not found in /etc/apt/sources.list or /etc/apt/sources.list.d/*.list:'
+        echo -e '\nEXITING: Ansible repo "deb http://ppa.launchpad.net/ansible/ansible-2.6/ubuntu xenial main" not found in /etc/apt/sources.list or /etc/apt/sources.list.d/*.list'
         echo -e '\nPLEASE UNINSTALL ANSIBLE (run "apt purge ansible" or "pip uninstall ansible", depending how Ansible was originally installed) THEN RE-RUN THIS SCRIPT.'
         exit 1
     fi
