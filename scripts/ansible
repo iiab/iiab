@@ -38,7 +38,7 @@ if [ -f /etc/olpc-release ]; then
     pip install --upgrade pip setuptools wheel #EOL just do it
     pip install ansible==$GOOD_VER --disable-pip-version-check
 elif [ -f /etc/centos-release ]; then
-    yum install ansible
+    yum -y install ansible
 # 2018-09-07: the next 4 lines aren't needed according to https://docs.ansible.com/ansible/latest/installation_guide/intro_installation.html#latest-release-via-dnf-or-yum
 #    yum -y install ca-certificates nss epel-release
 #    yum -y install git bzip2 file findutils gzip hg svn sudo tar which unzip xz zip libselinux-python
