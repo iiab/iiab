@@ -85,7 +85,7 @@ elif [ -f /etc/debian_version ]; then    # Includes Debian, Ubuntu & Raspbian
 
     echo -e '\n\nPPA source "deb http://ppa.launchpad.net/ansible/ansible-2.6/ubuntu xenial main" successfully saved to /etc/apt/sources.list.d/iiab-ansible.list'
     echo -e '\nIF *OTHER* ANSIBLE SOURCES ARE ALSO IN THE LIST BELOW, PLEASE MANUALLY REMOVE THEM TO ENSURE ANSIBLE UPDATES CLEANLY: (then re-run this script to be sure!)\n'
-    grep '^deb .*ansible' /etc/apt/sources.list /etc/apt/sources.list.d/*.list | grep -v '^/etc/apt/sources.list.d/iiab-ansible.list:'
+    grep '^deb .*ansible' /etc/apt/sources.list /etc/apt/sources.list.d/*.list | grep -v '^/etc/apt/sources.list.d/iiab-ansible.list:' || true    # Override bash -e (instead of aborting at 1st error)
     echo
 else
     echo -e "\nEXITING: Could not detect your OS (unsupported?)\n"
