@@ -126,12 +126,16 @@ Known Issues
   `janeczku/calibre-web#624 <https://github.com/janeczku/calibre-web/issues/624>`_
   |se| |nbsp|  Fixed by `#1127 <https://github.com/iiab/iiab/pull/1127>`_ on 2018-09-12.
 
-  Specifically, to enable e-book conversion, log in as Admin/changeme (etc)
-  then click http://box/books -> Admin -> Basic Configuration -> External
-  binaries.  Then change these 2 settings:
+  To manually enable the converting of e-books (automated above, should no
+  longer be necessary!) log in to http://box/books as Admin/changeme (etc) then
+  click Admin -> Basic Configuration -> External binaries.  Then change these
+  2 settings:
 
   * Change radio button "No converter" to "Use calibre's ebook converter"
   * In textfield "Path to convertertool" type in: ``/usr/bin/ebook-convert``
+  
+  Then:
+  
   * Submit
   * Verify that "ebook-convert" appears on Calibre-Web's "About" page at http://box/books/stats
   * Test it by clicking any e-book -> Edit metadata -> Convert book format
