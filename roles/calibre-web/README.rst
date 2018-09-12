@@ -112,8 +112,13 @@ Known Issues
   conversion functionality (e.g. Calibre 3.27.1 [released 2018-07-06] allows
   teachers to convert between PDF, EPUB, HTML, TXT etc — to permit reading on a
   wider array client devices and client software). |se| |nbsp|  This new calibre-web
-  feature (which requires Calibre's ebook-converter program) is not yet quite
-  working in IIAB as of 2018-09-12: `janeczku/calibre-web#624 <https://github.com/janeczku/calibre-web/issues/624>`_
+  feature (which requires Calibre's ebook-converter program) needs to be manually configured in IIAB as of 2018-09-12: `janeczku/calibre-web#624 <https://github.com/janeczku/calibre-web/issues/624>`_
+
+  Specifically, to enable e-book conversion, log in as Admin/changeme (etc) then click http://box/books -> Admin -> Basic Configuration -> External binaries, then change these 2 settings:
+
+  * Change radio button "No converter" to "Use calibre's ebook converter"
+  * In textfield "Path to convertertool" type in: ``/usr/bin/ebook-convert``
+  * Submit
 
 * http://192.168.0.x:8083 does not work, as a result of `iptables <https://github.com/iiab/iiab/blob/master/roles/network/templates/gateway/iiab-gen-iptables#L93>`_,
   even when ``services_externally_visible: true``.  This is fixable, but perhaps
