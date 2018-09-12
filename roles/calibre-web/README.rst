@@ -6,6 +6,9 @@
 
    </strike>
 
+.. |nbsp| unicode:: 0xA0
+   :trim:
+
 ==================
 Calibre-Web README
 ==================
@@ -100,15 +103,15 @@ manually::
 Known Issues
 ------------
 
-* |ss| Trying to access an empty public bookshelf causes a system error. |se|  Appears fixed as of 2018-09-12: `janeczku/calibre-web#620 <https://github.com/janeczku/calibre-web/issues/620>`_
+* |ss| Trying to access an empty public bookshelf causes a system error. |se| |nbsp|  Appears fixed as of 2018-09-12: `janeczku/calibre-web#620 <https://github.com/janeczku/calibre-web/issues/620>`_
 
 * |ss| As of August 2018, it's sometimes impossible to set the language of an
-  e-book: `#1040 <https://github.com/iiab/iiab/issues/1040>`_, `janeczku/calibre-web#593 <https://github.com/janeczku/calibre-web/issues/593>`_ |se|  Appears fixed as of 2018-09-12: `janeczku/calibre-web#620 <https://github.com/janeczku/calibre-web/issues/620>`_
+  e-book: `#1040 <https://github.com/iiab/iiab/issues/1040>`_, `janeczku/calibre-web#593 <https://github.com/janeczku/calibre-web/issues/593>`_ |se| |nbsp|  Appears fixed as of 2018-09-12: `janeczku/calibre-web#620 <https://github.com/janeczku/calibre-web/issues/620>`_
 
 * |ss| As of August 2018, calibre-web doesn't yet include Calibre's e-book
   conversion functionality (e.g. Calibre 3.27.1 [released 2018-07-06] allows
   teachers to convert between PDF, EPUB, HTML, TXT etc — to permit reading on a
-  wider array client devices and client software). |se|  This new calibre-web
+  wider array client devices and client software). |se| |nbsp|  This new calibre-web
   feature (which requires Calibre's ebook-converter program) is not yet quite
   working in IIAB as of 2018-09-12: `janeczku/calibre-web#624 <https://github.com/janeczku/calibre-web/issues/624>`_
 
