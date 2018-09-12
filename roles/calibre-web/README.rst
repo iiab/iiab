@@ -1,3 +1,14 @@
+.. |ss| raw:: html
+
+   <strike>
+
+.. |se| raw:: html
+
+   </strike>
+
+.. |nbsp| unicode:: 0xA0
+   :trim:
+
 ==================
 Calibre-Web README
 ==================
@@ -8,14 +19,20 @@ adjust e-book metadata, and create custom e-book collections ("bookshelves"):
 https://github.com/janeczku/calibre-web#about
 
 This Ansible role installs Calibre-Web as part of your Internet-in-a-Box (IIAB)
-as a possible alternative to Calibre (we'll call it 'calibre-web' from here
-down, noting that ``calibreweb_*`` variables do not include the dash, per
-Ansible recommendations).
+as a possible alternative to Calibre.
+
+*WARNING: Calibre-Web depends on Calibre's own /usr/bin/ebook-convert program,
+so we strongly recommend you also install Calibre during your IIAB
+installation!*
+
+Please note Calibre-Web's Ansible playbook is ``/opt/iiab/iiab/roles/calibre-web``
+whereas its Ansible variables ``calibreweb_*`` do **not** include the dash,
+per Ansible recommendations.
 
 Using It
 --------
 
-After installation, try out calibre-web at http://box/books (or box.lan/books).
+After installation, try out Calibre-Web at http://box/books (or box.lan/books).
 
 Typically students access it without a password (to read and download books)
 whereas teachers add books using an administrative account, as follows::
@@ -23,7 +40,7 @@ whereas teachers add books using an administrative account, as follows::
   Username: Admin
   Password: changeme
 
-If the default configuration is not found, the calibre-web server creates a
+If the default configuration is not found, the Calibre-Web server creates a
 new settings file with calibre-web's own default administrative account::
 
   Username: admin
@@ -32,7 +49,7 @@ new settings file with calibre-web's own default administrative account::
 Backend
 -------
 
-You can manage the backend calibre-web server with these systemd commands::
+You can manage the backend Calibre-Web server with these systemd commands::
 
   systemctl enable calibre-web
   systemctl restart calibre-web
@@ -42,7 +59,7 @@ You can manage the backend calibre-web server with these systemd commands::
 Configuration
 -------------
 
-To configure calibre-web, log in as user 'Admin' then click 'Admin' on top.
+To configure Calibre-Web, log in as user 'Admin' then click 'Admin' on top.
 Check 'Configuration' options near the bottom of the page.
 
 Critical settings are stored in::
@@ -61,18 +78,18 @@ Back Up Everything
 ------------------
 
 Please back up the entire folder ``/library/calibre-web`` before upgrading —
-as it contains your calibre-web content **and** settings!
+as it contains your Calibre-Web content **and** settings!
 
 Upgrading
 ---------
 
-Reinstalling calibre-web automatically upgrades to the latest version if your
+Reinstalling Calibre-Web automatically upgrades to the latest version if your
 Internet-in-a-Box (IIAB) is online.
 
 But first: back up your content **and** settings, as explained above.
 
 **Then move your /library/calibre-web/metadata.db out of the way, if you're
-sure you want to (re)install bare/minimal metadata, and force all calibre-web
+sure you want to (re)install bare/minimal metadata, and force all Calibre-Web
 settings to the default.  Then run**::
 
   cd /opt/iiab/iiab
@@ -83,7 +100,7 @@ Or, to reinstall all of IIAB::
   cd /opt/iiab/iiab
   ./iiab-install --reinstall
 
-Or, if you just want to upgrade calibre-web code alone, prior to proceeding
+Or, if you just want to upgrade Calibre-Web code alone, prior to proceeding
 manually::
 
   cd /opt/iiab/calibre-web
@@ -92,22 +109,34 @@ manually::
 Known Issues
 ------------
 
-* Trying to access an empty public bookshelf causes a system error.
+* |ss| Trying to access an empty public bookshelf causes a system error. |se| |nbsp|  Appears fixed as of 2018-09-12: `janeczku/calibre-web#620 <https://github.com/janeczku/calibre-web/issues/620>`_
 
-* As of August 2018, it's sometimes impossible to set the language of an
-  e-book: `#1040 <https://github.com/iiab/iiab/issues/1040>`_, `janeczku/calibre-web#593 <https://github.com/janeczku/calibre-web/issues/593>`_
+* |ss| As of August 2018, it's sometimes impossible to set the language of an
+  e-book: `#1040 <https://github.com/iiab/iiab/issues/1040>`_, `janeczku/calibre-web#593 <https://github.com/janeczku/calibre-web/issues/593>`_ |se| |nbsp|  Appears fixed as of 2018-09-12: `janeczku/calibre-web#620 <https://github.com/janeczku/calibre-web/issues/620>`_
 
-* As of August 2018, calibre-web doesn't yet include Calibre's e-book
+* |ss| As of August 2018, Calibre-Web doesn't yet include Calibre's e-book
   conversion functionality (e.g. Calibre 3.27.1 [released 2018-07-06] allows
   teachers to convert between PDF, EPUB, HTML, TXT etc — to permit reading on a
-  wider array client devices and client software).
+  wider array client devices and client software). |se| |nbsp|  This new Calibre-Web
+  feature (which depends on Calibre's ebook-converter program) needs to be manually
+  configured in IIAB 6.6 as of 2018-09-12: `janeczku/calibre-web#624 <https://github.com/janeczku/calibre-web/issues/624>`_
+
+  Specifically, to enable e-book conversion, log in as Admin/changeme (etc) then
+  click http://box/books -> Admin -> Basic Configuration -> External binaries.  Then
+  change these 2 settings:
+
+  * Change radio button "No converter" to "Use calibre's ebook converter"
+  * In textfield "Path to convertertool" type in: ``/usr/bin/ebook-convert``
+  * Submit
+  * Verify that "ebook-convert" appears on Calibre-Web's "About" page at http://box/books/stats
+  * Test it by clicking any e-book -> Edit metadata -> Convert book format
 
 * http://192.168.0.x:8083 does not work, as a result of `iptables <https://github.com/iiab/iiab/blob/master/roles/network/templates/gateway/iiab-gen-iptables#L93>`_,
   even when ``services_externally_visible: true``.  This is fixable, but perhaps
   it's not a priority, as URL's like {http://192.168.0.x/books,
   http://10.8.0.x/books, http://127.0.0.1/books and http://box/books} all work.
 
-* calibre-web does not currently use version numbers, so glitches might
+* Calibre-Web does not currently use version numbers, so glitches might
   occasionally arise, when upstream developers change its master branch without
   warning.
   
