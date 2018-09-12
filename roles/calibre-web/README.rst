@@ -141,7 +141,7 @@ Known Issues
   it's not a priority, as URL's like {http://192.168.0.x/books,
   http://10.8.0.x/books, http://127.0.0.1/books and http://box/books} all work. |se| |nbsp|  Marked as "wontfix" on 2018-09-12: `#1050 <https://github.com/iiab/iiab/issues/1050>`_
 
-* Calibre-Web does not currently use version numbers, so glitches might
+* Calibre-Web does not currently use version numbers, so glitches may
   occasionally arise, when upstream developers change its master branch without
   warning.
   
