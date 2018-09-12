@@ -119,8 +119,8 @@ Known Issues
   * Change radio button "No converter" to "Use calibre's ebook converter"
   * In textfield "Path to convertertool" type in: ``/usr/bin/ebook-convert``
   * Submit
-  * Verify that ebook-convert appears on calibre-web's "About" page at http://box/books/stats
-  * Test it by clicking any book -> Edit metadata -> Convert book format:
+  * Verify that "ebook-convert" appears on calibre-web's "About" page at http://box/books/stats
+  * Test it by clicking any e-book -> Edit metadata -> Convert book format:
 
 * http://192.168.0.x:8083 does not work, as a result of `iptables <https://github.com/iiab/iiab/blob/master/roles/network/templates/gateway/iiab-gen-iptables#L93>`_,
   even when ``services_externally_visible: true``.  This is fixable, but perhaps
