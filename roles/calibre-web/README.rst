@@ -116,14 +116,19 @@ Known Issues
 
 * |ss| As of August 2018, Calibre-Web doesn't yet include Calibre's e-book
   conversion functionality (e.g. Calibre 3.27.1 [released 2018-07-06] allows
-  teachers to convert between PDF, EPUB, HTML, TXT etc — to permit reading on a
-  wider array client devices and client software). |se| |nbsp|  This new Calibre-Web
-  feature (which depends on Calibre's ebook-converter program) needs to be manually
-  configured in IIAB 6.6 as of 2018-09-12: `janeczku/calibre-web#624 <https://github.com/janeczku/calibre-web/issues/624>`_
+  teachers to convert between PDF, EPUB, TXT etc — to permit reading on a
+  wider array client devices and client software). |se| |nbsp|  Fixed by
+  `janeczku/calibre-web#609 <https://github.com/janeczku/calibre-web/issues/609>`_
+  in early September 2018.
 
-  Specifically, to enable e-book conversion, log in as Admin/changeme (etc) then
-  click http://box/books -> Admin -> Basic Configuration -> External binaries.  Then
-  change these 2 settings:
+* |ss| This new Calibre-Web feature (which depends on Calibre's ebook-converter 
+  program) needs to be manually configured as of 2018-09-12:
+  `janeczku/calibre-web#624 <https://github.com/janeczku/calibre-web/issues/624>`_
+  |se| |nbsp|  Fixed by `#1127 <https://github.com/iiab/iiab/pull/1127>`_ on 2018-09-12.
+
+  Specifically, to enable e-book conversion, log in as Admin/changeme (etc)
+  then click http://box/books -> Admin -> Basic Configuration -> External
+  binaries.  Then change these 2 settings:
 
   * Change radio button "No converter" to "Use calibre's ebook converter"
   * In textfield "Path to convertertool" type in: ``/usr/bin/ebook-convert``
@@ -131,10 +136,10 @@ Known Issues
   * Verify that "ebook-convert" appears on Calibre-Web's "About" page at http://box/books/stats
   * Test it by clicking any e-book -> Edit metadata -> Convert book format
 
-* http://192.168.0.x:8083 does not work, as a result of `iptables <https://github.com/iiab/iiab/blob/master/roles/network/templates/gateway/iiab-gen-iptables#L93>`_,
+* |ss| http://192.168.0.x:8083 does not work, as a result of `iptables <https://github.com/iiab/iiab/blob/master/roles/network/templates/gateway/iiab-gen-iptables#L93>`_,
   even when ``services_externally_visible: true``.  This is fixable, but perhaps
   it's not a priority, as URL's like {http://192.168.0.x/books,
-  http://10.8.0.x/books, http://127.0.0.1/books and http://box/books} all work.
+  http://10.8.0.x/books, http://127.0.0.1/books and http://box/books} all work. |se| |nbsp|  Marked as "wontfix" on 2018-09-12: `#1050 <https://github.com/iiab/iiab/issues/1050>`_
 
 * Calibre-Web does not currently use version numbers, so glitches might
   occasionally arise, when upstream developers change its master branch without
