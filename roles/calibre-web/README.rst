@@ -24,7 +24,7 @@ Calibre's own /usr/bin/ebook-convert program, so we strongly recommend you
 install Calibre too during your IIAB installation!*
 
 Please note Calibre-Web's Ansible playbook is ``/opt/iiab/iiab/roles/calibre-web``
-whereas that its Ansible variables ``calibreweb_*`` do **not** include the dash,
+whereas its Ansible variables ``calibreweb_*`` do **not** include the dash,
 per Ansible recommendations.
 
 Using It
