@@ -176,7 +176,7 @@ def add_libr_xml(kiwix_library_xml, zim_path, zimname, zimidx):
         outp = subprocess.check_output(args)
 
     except: #skip things that don't work
-        print 'skipping ' + filename
+        print 'skipping ' + zimname
         pass
 
 def init():
