@@ -11,6 +11,7 @@ export DEBIAN_FRONTEND=noninteractive
 echo "deb http://raspbian.raspberrypi.org/raspbian/ testing main" > /etc/apt/sources.list.d/rpi-testing.list
 apt update
 # WARNING: you MUST remove old .deb's from /opt/iiab/downloads if upgrading Calibre in this way, SEE: http://FAQ.IIAB.IO "Can I upgrade or reinstall server apps?"
+apt -y install sqlite3    # workaround for https://github.com/iiab/iiab/issues/1139 that blocked install of Admin Console
 apt -y install /opt/iiab/downloads/calibre*.deb
 #sed -i '$ d' /etc/apt/sources.list.d/rpi-testing.list    # Removes last line
 rm /etc/apt/sources.list.d/rpi-testing.list
