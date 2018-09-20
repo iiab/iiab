@@ -5,20 +5,20 @@
   with_items:
     - "php{{ php_version }}-intl"
     - "php{{ php_version }}-mbstring"
-  tags:
-    - download
+  #tags:
+  #  - download
 
-- name: Download MediaWiki software, per roles/mediawiki/defaults/main.yml
+- name: Download {{ mediawiki_download_base_url }}/{{ mediawiki_src }} to {{ downloads_dir }}
   get_url:
     url: "{{ mediawiki_download_base_url }}/{{ mediawiki_src }}"
     dest: "{{ downloads_dir }}"
     timeout: "{{ download_timeout }}"
-#   force: yes
-#   backup: yes
-  register: mediawiki_download_output
+    #force: yes
+    #backup: yes
+  #register: mediawiki_download_output
   when: internet_available
 
-- name: Unpack download to permanent location
+- name: Unpack it to permanent location {{ mediawiki_abs_path }}
   unarchive:
     src: "{{ downloads_dir }}/{{ mediawiki_src }}"
     dest: "{{ mediawiki_install_path }}"
@@ -27,24 +27,24 @@
     mode: 0755
     keep_newer: yes
 
-- name: MySQL database needs to be running if we are trying to create a new db
+- name: Ensure MySQL is running, so we can create db
   service:
     state: started
     name: "{{ mysql_service }}"
 
-- name: Create MySQL mediawiki database
+- name: Create MySQL database {{ mediawiki_db_name }}
   mysql_db:
     name: "{{ mediawiki_db_name }}"
     state: present
 
-- name: Create MySQL mediawiki database user
+- name: Create MySQL database user {{ mediawiki_db_user }}
   mysql_user:
     name: "{{ mediawiki_db_user }}"
     password: "{{ mediawiki_db_user_password }}"
     priv: "{{ mediawiki_db_name }}.*:ALL,GRANT"
     state: present
 
-- name: Configure MediaWiki
+- name: Configure MediaWiki, if {{ mediawiki_abs_path }}/LocalSettings.php doesn't exist
   shell: >
     php '{{ mediawiki_abs_path }}/maintenance/install.php'
     --dbname={{ mediawiki_db_name }}
@@ -62,25 +62,25 @@
     chdir: "{{ mediawiki_abs_path }}"
     creates: "{{ mediawiki_abs_path }}/LocalSettings.php"
 
-- name: Copy mediawiki httpd conf file
+- name: Copy mediawiki.conf to permit http://box{{ mediawiki_url }}
   template:
     src: mediawiki.conf.j2
     dest: "/etc/{{ apache_config_dir }}/mediawiki.conf"
 
-- name: Enable httpd conf file if we are disabled (debuntu)
+- name: Enable mediawiki.conf if mediawiki_enabled (debuntu)
   file:
     src: /etc/apache2/sites-available/mediawiki.conf
     dest: /etc/apache2/sites-enabled/mediawiki.conf
     state: link
   when: mediawiki_enabled and is_debuntu
 
-- name: Remove httpd conf file if we are disabled (OS's other than debuntu)
+- name: Remove mediawiki.conf if not mediawiki_enabled (debuntu)
   file:
     path: /etc/apache2/sites-enabled/mediawiki.conf
     state: absent
   when: not mediawiki_enabled and is_debuntu
 
-- name: Restart Apache, so it picks up the new aliases
+- name: Restart Apache to enable/disable http://box{{ mediawiki_url }}
   service:
     name: "{{ apache_service }}"
     state: restarted
