@@ -21,16 +21,16 @@
     name: "php{{ php_version }}-sqlite3"
   when: is_debian and ansible_distribution_major_version == "9"
 
--  name: Install httpd required packages (ubuntu)
-   package:
-     name: "{{ item }}"
-     state: present
-   with_items:
-     - apache2
-     - php
-   tags:
-     - download
-   when: is_ubuntu
+- name: Install httpd required packages (ubuntu)
+  package:
+    name: "{{ item }}"
+    state: present
+  with_items:
+    - apache2
+    - php
+  tags:
+    - download
+  when: is_ubuntu
 
 - name: SQLite3 no longer included in another package (ubuntu-18)
   package:
@@ -69,7 +69,22 @@
   with_items:
     - { src: '010-iiab.conf.j2', dest: '/etc/{{ apache_config_dir }}/010-iiab.conf', mode: '0755' }
     - { src: 'proxy_ajp.conf.j2', dest: '/etc/{{ apache_config_dir }}/proxy_ajp.conf', mode: '0644' }
-    - { src: 'php.ini.j2', dest: '/etc/php.ini', mode: '0644' }
+    #- { src: 'php.ini.j2', dest: '/etc/php.ini', mode: '0644' }    # @jvonau suggests removing this in https://github.com/iiab/iiab/issues/1147
+
+# For schools that use WordPress and/or Moodle intensively. See iiab/iiab #1147
+# WARNING: Enabling this (might) cause excess use of RAM or other resources?
+- name: Enact high limits in /etc/php/{{ php_version }}/{{ apache_service }}/php.ini if using WordPress and/or Moodle intensively
+  lineinfile:
+    path: "/etc/php/{{ php_version }}/{{ apache_service }}/php.ini"
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+  when: apache_high_php_limits
+  with_items:
+    - { regexp: '^upload_max_filesize', line: 'upload_max_filesize = 64M    ; default is 2M' }
+    - { regexp: '^post_max_size', line: 'post_max_size = 128M    ; default is 8M' }
+    - { regexp: '^memory_limit', line: 'memory_limit = 256M    ; default is 128M' }
+    - { regexp: '^max_execution_time', line: 'max_execution_time = 300    ; default is 30' }
+    - { regexp: '^max_input_time', line: 'max_input_time = 300    ; default is 60' }
 
 # remove symlinks for mpm-event, replace with mpm-prefork
 - name: Remove mpm event links (debuntu)
@@ -207,10 +222,10 @@
     src: 020_apache_poweroff.j2
     dest: /etc/sudoers.d/020_apache_poweroff
     mode: 0755
-  when: allow_apache_sudo
+  when: apache_allow_sudo
 
 - name: Remove apache_user permission to poweroff
   file:
     dest: /etc/sudoers.d/020_apache_poweroff
     state: absent
-  when: not allow_apache_sudo
+  when: not apache_allow_sudo

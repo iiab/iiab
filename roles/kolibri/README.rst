@@ -49,3 +49,10 @@ To return to using the systemd unit::
 
   kolibri stop
   systemctl start kolibri
+
+Known Issues
+-------------
+
+* Kolibri migrations can take a long time on a Raspberry Pi. These long running migrations could cause kolibri service timeouts. Try running migrations manually using 'kolibri manage migrate' command following the troubleshooting instructions above. Kolibri developers are trying to address this issue. (Refer https://github.com/learningequality/kolibri/issues/4310).
+
+* Loading channels can take a long time on a Raspberry Pi. When generating channel contents for Khan Academy, the step indicated as “Generating channel listing. This could take a few minutes…” could mean ~30 minutes. The device’s computation power is the bottleneck. You might get logged out while waiting, but this is harmless and the process will continue. Sit tight!
