@@ -7,7 +7,7 @@ GOOD_VER="2.6.4"    # For XO laptops (pip install) & CentOS (yum install rpm)
 export DEBIAN_FRONTEND=noninteractive
 
 echo -e "\n\nYOU ARE RUNNING: /opt/iiab/iiab/scripts/ansible-2.6.x (TO INSTALL ANSIBLE)"
-echo -e 'Alternative: Run /opt/iiab/iiab/scripts/ansible ("for the very latest Ansible")\n'
+echo -e 'Alternative:     /opt/iiab/iiab/scripts/ansible ("for the very latest Ansible")\n'
 
 echo -e "RECOMMENDED PREREQUISITES:"
 echo -e "(1) Verify you're online"
