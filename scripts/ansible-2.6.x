@@ -92,7 +92,7 @@ elif [ -f /etc/debian_version ]; then    # Includes Debian, Ubuntu & Raspbian
     echo -e "successfully saved to /etc/apt/sources.list.d/iiab-ansible.list\n"
     
     echo -e "IF *OTHER* ANSIBLE SOURCES APPEAR BELOW, PLEASE MANUALLY REMOVE THEM TO"
-    echo -e "ENSURE ANSIBLE UPDATES CLEANLY: (then re-run this script to be sure!)\n'
+    echo -e "ENSURE ANSIBLE UPDATES CLEANLY: (then re-run this script to be sure!)\n"
     grep '^deb .*ansible' /etc/apt/sources.list /etc/apt/sources.list.d/*.list | grep -v '^/etc/apt/sources.list.d/iiab-ansible.list:' || true    # Override bash -e (instead of aborting at 1st error)
 else
     echo -e "\nEXITING: Could not detect your OS (unsupported?)\n"
