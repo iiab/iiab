@@ -77,7 +77,7 @@ elif [ -f /etc/debian_version ]; then    # Includes Debian, Ubuntu & Raspbian
     echo -e "\napt update; apt install ansible\n"
     apt update
     apt -y --allow-downgrades install ansible
-    echo -e "\nPlease verify Ansible using 'ansible --version' and/or 'apt -a list ansible'\n\n"
+    echo -e "\nSUCCESS: verify Ansible using 'ansible --version' and/or 'apt -a list ansible'\n\n"
 
     # TEMPORARILY USE ANSIBLE 2.4.4 (REMOVE IT WITH "pip uninstall ansible")
     #pip install ansible==2.4.4
