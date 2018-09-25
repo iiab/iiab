@@ -21,7 +21,7 @@ echo -e "https://github.com/iiab/iiab/wiki/IIAB-Installation#do-everything-from-
 
 if [ $(command -v ansible-playbook) ]; then    # "command -v" is POSIX compliant; also catches built-in commands like "cd"
     CURR_VER=`ansible --version | head -1 | awk '{print $2}'`    # To match iiab-install.  Was: CURR_VER=`ansible --version | head -n 1 | cut -f 2 -d " "`
-    echo -e "CURRENTLY INSTALLED ANSIBLE: $CURR_VER -- LET'S TRY TO UPGRADE IT!""
+    echo -e "CURRENTLY INSTALLED ANSIBLE: $CURR_VER -- LET'S TRY TO UPGRADE IT!"
     echo -e "(Internet-in-a-Box requests Ansible $GOOD_VER or higher)\n"
     if [ -f /etc/centos-release ] || [ -f /etc/fedora-release ]; then
         echo "Please use your system's package manager (or pip if nec) to update Ansible.\n"
