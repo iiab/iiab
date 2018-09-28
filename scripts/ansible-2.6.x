@@ -6,30 +6,35 @@ GOOD_VER="2.6.4"    # For XO laptops (pip install) & CentOS (yum install rpm)
     
 export DEBIAN_FRONTEND=noninteractive
 
-echo -e '\n\nSTRONGLY RECOMMENDED PREREQUISITE: (1) remove all prior versions of Ansible using "apt purge ansible" and/or "pip uninstall ansible" and (2) clear out all lines containing ansible from /etc/apt/sources.list and /etc/apt/sources.list.d/*\n'
+echo -e "\n\nYOU ARE RUNNING: /opt/iiab/iiab/scripts/ansible-2.6.x (TO INSTALL ANSIBLE)"
+echo -e 'Alternative:     /opt/iiab/iiab/scripts/ansible ("for the very latest Ansible")\n'
 
-echo -e 'COMPLETE INSTALL INSTRUCTIONS:\nhttps://github.com/iiab/iiab/wiki/IIAB-Installation#do-everything-from-scratch\n'
+echo -e "RECOMMENDED PREREQUISITES:"
+echo -e "(1) Verify you're online"
+echo -e "(2) Remove all prior versions of Ansible using"
+echo -e "    'apt purge ansible' and/or 'pip uninstall ansible'"
+echo -e "(3) Remove all lines containing 'ansible' from"
+echo -e "    /etc/apt/sources.list and /etc/apt/sources.list.d/*\n"
 
-echo -e 'VERIFY YOU'"'"'RE ONLINE BEFORE RUNNING THIS: /opt/iiab/iiab/scripts/ansible-2.6.x'
-echo -e 'Alternative: Run /opt/iiab/iiab/scripts/ansible for the very latest Ansible\n'
+echo -e "COMPLETE INSTALL INSTRUCTIONS:"
+echo -e "https://github.com/iiab/iiab/wiki/IIAB-Installation#do-everything-from-scratch\n"
 
 if [ $(command -v ansible-playbook) ]; then    # "command -v" is POSIX compliant; also catches built-in commands like "cd"
     CURR_VER=`ansible --version | head -1 | awk '{print $2}'`    # To match iiab-install.  Was: CURR_VER=`ansible --version | head -n 1 | cut -f 2 -d " "`
-    echo "Currently installed Ansible: $CURR_VER"
-    echo -e "INTERNET-IN-A-BOX GENERALLY REQUIRES ANSIBLE VERSION: $GOOD_VER or higher"
+    echo -e "CURRENTLY INSTALLED ANSIBLE: $CURR_VER -- LET'S TRY TO UPGRADE IT!"
+    echo -e "(Internet-in-a-Box requests Ansible $GOOD_VER or higher)\n"
     if [ -f /etc/centos-release ] || [ -f /etc/fedora-release ]; then
-        echo "Please use your system's package manager (or pip if nec) to update Ansible."
+        echo "Please use your system's package manager (or pip if nec) to update Ansible.\n"
         exit 0
     elif [ -f /etc/olpc-release ]; then
-        echo 'Please use pip package manager to update Ansible.'
+        echo "Please use pip package manager to update Ansible.\n"
         exit 0
     fi
 else
-    echo -e 'Ansible NOT found on this computer.'
-    echo -e "INTERNET-IN-A-BOX GENERALLY REQUIRES ANSIBLE VERSION: $GOOD_VER or higher"
+    echo -e "ANSIBLE NOT FOUND ON THIS COMPUTER -- LET'S TRY TO INSTALL IT!"
+    echo -e "(Internet-in-a-Box requests Ansible $GOOD_VER or higher)\n"
 fi
 
-echo -e 'scripts/ansible-2.6.x will now try to install Ansible 2.6.x...\n'
 if [ -f /etc/olpc-release ]; then
     yum -y install ca-certificates nss
     yum -y install git bzip2 file findutils gzip hg svn sudo tar which unzip xz zip libselinux-python
@@ -60,7 +65,7 @@ elif [ -f /etc/centos-release ]; then
 #elif [ ! -f /etc/centos-release ] && [ ! -f /etc/fedora-release ] && [ ! -f /etc/olpc-release ]; then
 elif [ -f /etc/debian_version ]; then    # Includes Debian, Ubuntu & Raspbian
 
-    echo -e '\napt update; install dirmngr; PPA to /etc/apt/sources.list.d/iiab-ansible.list\n'
+    echo -e "\napt update; install dirmngr; PPA to /etc/apt/sources.list.d/iiab-ansible.list\n"
     apt update
     apt -y install dirmngr    # Raspbian needs.  Formerly: python-pip python-setuptools python-wheel patch
     echo "deb http://ppa.launchpad.net/ansible/ansible-2.6/ubuntu xenial main" \
@@ -69,10 +74,10 @@ elif [ -f /etc/debian_version ]; then    # Includes Debian, Ubuntu & Raspbian
     echo -e '\nIF YOU FACE ERROR "signatures couldn'"'"'t be verified because the public key is not available" THEN REPEATEDLY RE-RUN "apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 93C4A3FD7BB9C367"\n'
     apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 93C4A3FD7BB9C367
 
-    echo -e '\napt update; apt install ansible\n'
+    echo -e "\napt update; apt install ansible\n"
     apt update
     apt -y --allow-downgrades install ansible
-    echo -e '\nPlease verify Ansible using "ansible --version" and/or "apt -a list ansible"'
+    echo -e "\nSUCCESS: verify Ansible using 'ansible --version' and/or 'apt -a list ansible'\n\n"
 
     # TEMPORARILY USE ANSIBLE 2.4.4 (REMOVE IT WITH "pip uninstall ansible")
     #pip install ansible==2.4.4
@@ -83,8 +88,11 @@ elif [ -f /etc/debian_version ]; then    # Includes Debian, Ubuntu & Raspbian
     #wget http://download.iiab.io/packages/ansible_2.4.2.0-1ppa~xenial_all.deb
     #apt -y --allow-downgrades install ./ansible_2.4.2.0-1ppa~xenial_all.deb
 
-    echo -e '\n\nPPA source "deb http://ppa.launchpad.net/ansible/ansible-2.6/ubuntu xenial main" successfully saved to /etc/apt/sources.list.d/iiab-ansible.list'
-    echo -e '\nIF *OTHER* ANSIBLE SOURCES ARE ALSO IN THE LIST BELOW, PLEASE MANUALLY REMOVE THEM TO ENSURE ANSIBLE UPDATES CLEANLY: (then re-run this script to be sure!)\n'
+    echo -e 'PPA source "deb http://ppa.launchpad.net/ansible/ansible-2.6/ubuntu xenial main"'
+    echo -e "successfully saved to /etc/apt/sources.list.d/iiab-ansible.list\n"
+    
+    echo -e "IF *OTHER* ANSIBLE SOURCES APPEAR BELOW, PLEASE MANUALLY REMOVE THEM TO"
+    echo -e "ENSURE ANSIBLE UPDATES CLEANLY: (then re-run this script to be sure!)\n"
     grep '^deb .*ansible' /etc/apt/sources.list /etc/apt/sources.list.d/*.list | grep -v '^/etc/apt/sources.list.d/iiab-ansible.list:' || true    # Override bash -e (instead of aborting at 1st error)
 else
     echo -e "\nEXITING: Could not detect your OS (unsupported?)\n"
