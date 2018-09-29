@@ -345,7 +345,7 @@ def put_204(environ, start_response):
     response_headers = [('Content-type','text/html'),
             ('Content-Length',str(len(response_body)))]
     start_response(status, response_headers)
-    logger.debug("sending 204 html response")
+    logger.debug("in function  put_204: sending 204 html response")
     return [response_body]
 
 def parse_agent(agent):
@@ -517,11 +517,12 @@ def application (environ, start_response):
             environ['HTTP_HOST'] == "connectivitycheck.android.com" or\
             environ['HTTP_HOST'] == "connectivitycheck.gstatic.com":
             current_ts, last_ts, send204after = timeout_info(ip) 
+            logger.debug("current_ts: %s laat_ts: %s send204after: %s"%(current_ts, last_ts, send204after,))
             if not last_ts or (ts - int(last_ts) > INACTIVITY_TO):
                 return android(environ, start_response) 
             elif is_after204_timeout(ip):
                 return put_204(environ,start_response)
-            return #return without doing anything
+            return null(environ,start_response)  #return without doing anything
 
         # microsoft
         if  environ['PATH_INFO'] == "/connecttest.txt" and not is_inactive(ip):
