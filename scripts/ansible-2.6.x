@@ -3,7 +3,7 @@
 CURR_VER="undefined"    # Ansible version you currently have installed
 GOOD_VER="2.6.5"    # For XO laptops (pip install) & CentOS (yum install rpm)
 # On other OS's we attempt the latest from PPA, which might be more recent
-    
+
 export DEBIAN_FRONTEND=noninteractive
 
 echo -e "\n\nYOU ARE RUNNING: /opt/iiab/iiab/scripts/ansible-2.6.x (TO INSTALL ANSIBLE)"
