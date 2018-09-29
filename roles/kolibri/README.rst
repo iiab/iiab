@@ -35,7 +35,7 @@ When kolibri_provision is enabled (e.g. in `/etc/iiab/local_vars.yml <http://wik
 Cloning Content
 ---------------
 
-Kolibri 0.10 introduced ``kolibri manage deprovision`` which will remove user configurations, leaving content intact — i.e. if student and teacher privacy requires their records to be deleted.  You can then copy or clone /library/kolibri to a new location, or to a new school entirely.
+Kolibri 0.10 introduced ``kolibri manage deprovision`` which will remove user configurations, leaving content intact — i.e. if student and teacher privacy requires their records be deleted.  You can then copy or clone /library/kolibri to a new location, or to a new school entirely.
 
 Troubleshooting
 ----------------
