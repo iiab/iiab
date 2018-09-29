@@ -22,7 +22,7 @@ Please look in `roles/kolibri/defaults/main.yml <https://github.com/iiab/iiab/bl
 Automatic Device Provisioning
 -----------------------------
 
-When kolibri_provision is enabled (e.g. in `/etc/iiab/local_vars.yml <http://wiki.laptop.org/go/IIAB/local_vars.yml>`_) the installation will set up the following settings::
+When kolibri_provision is enabled (e.g. in `/etc/iiab/local_vars.yml <http://wiki.laptop.org/go/IIAB/local_vars.yml>`_) the installation will set up the following defaults::
 
   Kolibri Facility name: 'Kolibri-in-a-Box'
   Kolibri Preset type: formal    # Options: formal, nonformal, informal
@@ -30,7 +30,9 @@ When kolibri_provision is enabled (e.g. in `/etc/iiab/local_vars.yml <http://wik
   Kolibri Admin username: Admin
   Kolibri Admin password: changeme
 
-Cloning content
+*Feel free to override any of the above, by copying the relevant line from /opt/iiab/iiab/roles/kolibri/defaults/main.yml to /etc/iiab/local_vars.yml (then run 'cd /opt/iiab/iiab' followed by './runrole kolibri' per IIAB's general guidelines at http://FAQ.IIAB.IO).*
+
+Cloning Content
 ---------------
 
 Kolibri 0.10 introduced ``kolibri manage deprovision`` which will remove user configurations, leaving content intact — i.e. if student and teacher privacy requires their records to be deleted.  You can then copy or clone /library/kolibri to a new location, or to a new school entirely.
