@@ -17,7 +17,7 @@ Caveat emptor!  (That's Latin for "Buyer Beware")
 Using It
 --------
 
-Install Transmission by setting 'transmission_install' and 'transmission_enabled' to True in `/etc/iiab/local_vars.yml <http://wiki.iiab.io/local_vars.yml>`_ — carefully choosing language(s) for KA Lite videos you want to download — and then run::
+Install Transmission by setting 'transmission_install' and 'transmission_enabled' to True in `/etc/iiab/local_vars.yml <http://wiki.laptop.org/go/IIAB/local_vars.yml>`_ — carefully choosing language(s) for KA Lite videos you want to download — and then run::
 
   cd /opt/iiab/iiab
   ./runrole transmission
@@ -59,7 +59,7 @@ Adding Torrents
 
 Transmission can facilitate provisioning content onto your IIAB, e.g. by adding thousands of KA Lite videos from places like: http://pantry.learningequality.org/downloads/ka-lite/0.17/content/
 
-Please read the lettered instructions (A, B, C, D) in `/etc/iiab/local_vars.yml <http://wiki.iiab.io/local_vars.yml>`_ and 'KA Lite Administration: What tips & tricks exist?' at http://FAQ.IIAB.IO outlining how to use Transmission to download and then install KA Lite content.
+Please read the lettered instructions (A, B, C, D) in `/etc/iiab/local_vars.yml <http://wiki.laptop.org/go/IIAB/local_vars.yml>`_ and 'KA Lite Administration: What tips & tricks exist?' at http://FAQ.IIAB.IO outlining how to use Transmission to download and then install KA Lite content.
 
 You can also download other torrents using Transmission's web interface, or by typing 'transmission-remote' at the command-line::
 
