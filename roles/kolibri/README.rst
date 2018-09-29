@@ -2,12 +2,12 @@
 Kolibri README
 ==============
 
-This Ansible role installs Kolibri within Internet-in-a-Box.  Kolibri is an open-source educational platform specially designed to provide offline access to a wide range of quality, openly licensed educational contents in low-resource contexts like rural schools, refugee camps, orphanages, and also in non-formal school programs.
+This Ansible role installs `Kolibri <https://learningequality.org/kolibri/>`_ within `Internet-in-a-Box (IIAB) <http://internet-in-a-box.org/>`_.  Kolibri is an open-source educational platform specially designed to provide offline access to a wide range of quality, openly licensed educational contents in low-resource contexts like rural schools, refugee camps, orphanages, and also in non-formal school programs.
 
 Using It
 --------
 
-If enabled and with the default settings Kolibri should be accessible at http://box:8009 (and in future at http://box/kolibri).
+If enabled and with the default settings Kolibri should be accessible at http://box:8009 (and in future at http://box/kolibri, work is ongoing in 2018 at `#913 <https://github.com/iiab/iiab/issues/913>`_).
 
 To login to Kolibri enter::
 
@@ -17,23 +17,25 @@ To login to Kolibri enter::
 Configuration Parameters
 ------------------------
 
-Please look in roles/kolibri/defaults/main.yml for the default values of the various install parameters.  Everything in this README assumes the default values.
+Please look in `roles/kolibri/defaults/main.yml <https://github.com/iiab/iiab/blob/master/roles/kolibri/defaults/main.yml>`_ for the default values of the various install parameters.  Everything in this README assumes the default values.
 
 Automatic Device Provisioning
 -----------------------------
 
-When kolibri_provision is enabled, the installation will setup the following settings::
+When kolibri_provision is enabled (e.g. in `/etc/iiab/local_vars.yml <http://wiki.laptop.org/go/IIAB/local_vars.yml>`_) the installation will set up the following defaults::
 
   Kolibri Facility name: 'Kolibri-in-a-Box'
-  Kolibri Preset type: formal    (Other options are nonformal, informal)
-  Kolibri default language: en    (Otherwise language are ar,bn-bd,en,es-es,fa,fr-fr,hi-in,mr,nyn,pt-br,sw-tz,ta,te,ur-pk,yo,zu)
-  Kolibri Admin User: Admin
+  Kolibri Preset type: formal    # Options: formal, nonformal, informal
+  Kolibri default language: en    # Options: ar, bn-bd, en, es-es, fa, fr-fr, hi-in, mr, nyn, pt-br, sw-tz, ta, te, ur-pk, yo, zu
+  Kolibri Admin username: Admin
   Kolibri Admin password: changeme
 
-Cloning content
+*Feel free to override any of the above, by copying the relevant line from /opt/iiab/iiab/roles/kolibri/defaults/main.yml to /etc/iiab/local_vars.yml (then run 'cd /opt/iiab/iiab' followed by './runrole kolibri' per IIAB's general guidelines at http://FAQ.IIAB.IO).*
+
+Cloning Content
 ---------------
 
-Kolibri 0.10 introduced `kolibri manage deprovision` which will remove user configuration, leaving content intact.  You can then copy/clone /library/kolibri to a new location.
+Kolibri 0.10 introduced ``kolibri manage deprovision`` which will remove user configurations, leaving content intact — i.e. if student and teacher privacy requires their records to be deleted.  You can then copy or clone /library/kolibri to a new location, or to a new school entirely.
 
 Troubleshooting
 ----------------
@@ -53,6 +55,6 @@ To return to using the systemd unit::
 Known Issues
 -------------
 
-* Kolibri migrations can take a long time on a Raspberry Pi. These long running migrations could cause kolibri service timeouts. Try running migrations manually using 'kolibri manage migrate' command following the troubleshooting instructions above. Kolibri developers are trying to address this issue. (Refer https://github.com/learningequality/kolibri/issues/4310).
+* Kolibri migrations can take a long time on a Raspberry Pi.  These long-running migrations could cause kolibri service timeouts.  Try running migrations manually using command ``kolibri manage migrate`` after following the troubleshooting instructions above.  Kolibri developers are trying to address this issue.  (See `learningequality/kolibri#4310 <https://github.com/learningequality/kolibri/issues/4310>`_)
 
-* Loading channels can take a long time on a Raspberry Pi. When generating channel contents for Khan Academy, the step indicated as “Generating channel listing. This could take a few minutes…” could mean ~30 minutes. The device’s computation power is the bottleneck. You might get logged out while waiting, but this is harmless and the process will continue. Sit tight!
+* Loading channels can take a long time on a Raspberry Pi.  When generating channel contents for Khan Academy, the step indicated as “Generating channel listing.  This could take a few minutes…” could mean ~30 minutes.  The device’s computation power is the bottleneck.  You might get logged out while waiting, but this is harmless and the process will continue.  Sit tight!
