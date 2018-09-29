@@ -27,7 +27,7 @@ When kolibri_provision is enabled (e.g. in `/etc/iiab/local_vars.yml <http://wik
   Kolibri Facility name: 'Kolibri-in-a-Box'
   Kolibri Preset type: formal    # Options: formal, nonformal, informal
   Kolibri default language: en    # Options: ar, bn-bd, en, es-es, fa, fr-fr, hi-in, mr, nyn, pt-br, sw-tz, ta, te, ur-pk, yo, zu
-  Kolibri Admin User: Admin
+  Kolibri Admin username: Admin
   Kolibri Admin password: changeme
 
 Cloning content
