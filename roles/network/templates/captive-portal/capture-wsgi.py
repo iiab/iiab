@@ -66,7 +66,6 @@ if len(sys.argv) > 1 and sys.argv[1] == '-l':
     loggingLevel = logging.DEBUG
 else:
     loggingLevel = logging.ERROR
-loggingLevel = logging.DEBUG
 logging.basicConfig(filename='/var/log/apache2/portal.log',format='%(asctime)s.%(msecs)03d:%(name)s:%(message)s', datefmt='%M:%S',level=loggingLevel)
 
 
