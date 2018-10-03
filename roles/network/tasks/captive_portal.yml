@@ -1,3 +1,12 @@
+- name: Get python dateutil
+  package:
+     name: '{{ item }}'
+     state: present
+  when: py_captive_portal_install
+  with_items:
+     - python-dateutil
+     - sqlite3
+
 - name: Create directory for Captive Portal script
   file:
     path: /opt/iiab/captive-portal
@@ -6,42 +15,106 @@
 
 - name: Copy Captive Portal script
   template:
-    src: roles/network/templates/captive_portal/captive_portal.py.j2
-    dest: /opt/iiab/captive-portal/captive_portal.py
-    owner: root
-    group: root
-    mode: 0740
+    src: "{{ item.src }}"
+    dest: /opt/iiab/captive-portal/
+    mode: "{{ item.mode }}"
+  with_items:
+     - { src: roles/network/templates/captive-portal/checkurls, mode: '0644' }
+     - { src: roles/network/templates/captive-portal/capture-wsgi.py, mode: '0755' }
   when: py_captive_portal_install
 
+- name: Copy the jinja2 template to captive portal
+  copy: 
+    src: roles/network/files/simple.template
+    dest: /opt/iiab/captive-portal/
+
+- name: Copy the jinja2 template to captive portal
+  copy: 
+    src: roles/network/files/mac.template
+    dest: /opt/iiab/captive-portal/
+
+- name: Copy Captive Portal scripts
+  template:
+    src: "{{ item.src }}"
+    dest: /usr/bin/
+    owner: root
+    group: root
+    mode: 0755
+  with_items:
+     - src: roles/network/templates/captive-portal/iiab-catch
+     - src: roles/network/templates/captive-portal/iiab-uncatch
+  when: py_captive_portal_install
+
+- name: Generate the diversion lists for dnsmasq and apache2
+  shell: /usr/bin/iiab-uncatch
+  when: py_captive_portal_install
+     
 - name: Copy Captive Portal service file
   template:
-    src: roles/network/templates/captive_portal/captive_portal.service.j2
-    dest: /etc/systemd/system/captive_portal.service
+    src: roles/network/templates/captive-portal/py-captive-portal.service.j2
+    dest: /etc/systemd/system/py-captive-portal.service
     owner: root
     group: root
     mode: 0644
   when: py_captive_portal_install
 
-- name: Enable captive_portal after copying files
-  service:
-    name: captive_portal.service
+- name: Copy Captive Portal Apache config file
+  template:
+    src: roles/network/templates/captive-portal/captive-portal.conf
+    dest: /etc/{{ apache_config_dir }}/captive-portal.conf
+    owner: root
+    group: root
+    mode: 0740
+  when: py_captive_portal_install and py_captive_portal_enabled
+
+- name: Enable captive-portal after copying files
+  systemd:
+    name: py-captive-portal.service
     enabled: yes
+    daemon-reload: yes
   when: py_captive_portal_install and py_captive_portal_enabled
 
-- name: Start captive_portal after copying files
-  service:
-    name: captive_portal.service
+- name: Enable Apache config file
+  file:
+    src: /etc/apache2/sites-available/captive-portal.conf
+    dest: /etc/apache2/sites-enabled/captive-portal.conf
+    state: link
+  when: py_captive_portal_enabled and is_debuntu
+
+- name: Enable Apache ssl config file
+  file:
+    src: /etc/apache2/sites-available/default-ssl.conf
+    dest: /etc/apache2/sites-enabled/default-ssl.conf
+    state: link
+  when: py_captive_portal_enabled and is_debuntu
+
+- name: Start captive-portal after copying files
+  systemd:
+    name: py-captive-portal.service
     state: started
   when: py_captive_portal_install and py_captive_portal_enabled
 
-- name: Disable captive_portal after copying files
-  service:
-    name: captive_portal.service
+- name: Disable captive-portal after copying files
+  systemd:
+    name: py-captive-portal.service
     enabled: no
-  when: py_captive_portal_install and py_captive_portal_enabled
+    daemon-reload: yes
+  when: py_captive_portal_install and not py_captive_portal_enabled
 
-- name: Stop captive_portal after copying files
+- name: Stop captive-portal after copying files
   service:
-    name: captive_portal.service
-    state: started
-  when: py_captive_portal_install and py_captive_portal_enabled
+    name: py-captive-portal.service
+    state: stopped
+  when: py_captive_portal_install and not py_captive_portal_enabled
+
+- name: Disable Apache config file
+  file:
+    dest: /etc/apache2/sites-enabled/captive-portal.conf
+    state: absent
+  when: not py_captive_portal_enabled and is_debuntu
+
+- name: Make sure dnsmasq is not diverting if captive-portal disabled
+  file:
+    dest: /etc/dnsmasq.d/capture
+    state: absent
+  when: not py_captive_portal_enabled

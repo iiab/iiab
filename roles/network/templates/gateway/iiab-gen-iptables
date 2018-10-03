@@ -62,7 +62,6 @@ transmission_http_port={{ transmission_http_port }}
 transmission_peer_port={{ transmission_peer_port }}
 sugarizer_port={{ sugarizer_port }}
 block_DNS={{ block_DNS }}
-captive_portal_enabled={{ captive_portal_enabled }}
 py_captive_portal_enabled={{ py_captive_portal_enabled }}
 
 echo "LAN is $lan and WAN is $wan"
@@ -124,16 +123,11 @@ if [ "$block_DNS" == "True" ];then
     $IPTABLES -t nat -A PREROUTING -i $lan -p udp --dport 53 ! -d {{ lan_ip }} -j DNAT --to {{ lan_ip }}:53
 fi
 
-if [ "$captive_portal_enabled" == "True" ];then
-   $IPTABLES -t mangle -N internet
-   $IPTABLES -t mangle -A PREROUTING -i {{ iiab_lan_iface }} -p tcp -m tcp --dport 80 -j internet
-   $IPTABLES -t mangle -A internet -j MARK --set-mark 99
-   $IPTABLES -t nat -A PREROUTING -i {{ iiab_lan_iface }} -p tcp -m mark --mark 99 -m tcp --dport 80 -j DNAT --to-destination {{ lan_ip }}
+if [ "$py_captive_portal_enabled" == "True" ];then
+      $IPTABLES  -t nat  -A PREROUTING -i $lan -p tcp --dport 80 ! -d {{ lan_ip }} -j DNAT --to {{ lan_ip }}:{{ py_captive_portal_port }}
+fi
 
-elif [ "py_$captive_portal_enabled" == "True" ];then
-    $IPTABLES  -t nat  -A PREROUTING -i $lan -p tcp --dport 80 ! -d {{ lan_ip }} -j DNAT --to {{ lan_ip }}:{{ py_captive_portal_port }}
-
-elif [ "$HTTPCACHE_ON" == "True" ]; then
+if [ "$HTTPCACHE_ON" == "True" ]; then
     $IPTABLES  -t nat  -A PREROUTING -i $lan -p tcp --dport 80 ! -d {{ lan_ip }} -j DNAT --to {{ lan_ip }}:3128
 fi
 
