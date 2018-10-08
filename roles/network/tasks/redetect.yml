@@ -17,14 +17,17 @@
     dhcp_good: False
 
 # don't shoot ourselves in the foot....
-- name: Disable dhcp server just because
-  service: name=dhcpd state=stopped
+- name: Disable dhcpd server just because
+  service:
+    name: dhcpd
+    state: stopped
 
 ### clear all connections first
 # We should have the LAN torndown at this point.
 
 - name: No ifcfg-WAN known
-  debug: msg="NO WAN known"
+  debug:
+    msg: "NO WAN known"
   when: not has_WAN
 
 - name: Finding connection name for WiFi AP gateway first
@@ -46,8 +49,8 @@
 # We have the DEVICE?
 - name: Now setting iiab_wan_iface based on WiFi
   set_fact:
-     iiab_wan_iface: "{{ dhcp_wifi_results.stdout }}"
-     dhcp_good: True
+    iiab_wan_iface: "{{ dhcp_wifi_results.stdout }}"
+    dhcp_good: True
   when: dhcp_wifi_results.stdout is defined and dhcp_wifi_results.stdout != ""
 
 - name: Trying ifcfg-WAN second
@@ -57,7 +60,8 @@
   when: has_WAN
 
 - name: BAD ifcfg-WAN
-  debug: msg="BAD WAN"
+  debug:
+    msg: "BAD WAN"
   when: dhcp_WAN is defined and dhcp_WAN|failed
 
 - name: Delete ifcfg-WAN
@@ -66,7 +70,7 @@
 
 - name: Setting no ifcfg-WAN
   set_fact:
-      has_WAN: False
+    has_WAN: False
   when: dhcp_WAN is defined and dhcp_WAN|failed and wan_ip == "dhcp"
 
 - name: Interface list
@@ -79,7 +83,7 @@
   ignore_errors: True
   when: item|trim != iiab_wireless_lan_iface and not dhcp_good and wan_ip == "dhcp"
   with_items:
-      - "{{ adapter_list.stdout_lines }}"
+    - "{{ adapter_list.stdout_lines }}"
 
 # monitor-connection-files defaults to no with F21, F18-F20 defaults to yes
 - name: Reloading nmcli for deleted files
@@ -93,7 +97,7 @@
   ignore_errors: True
   when: item|trim != discovered_wireless_iface and item|trim != iiab_wireless_lan_iface and not dhcp_good and wan_ip == "dhcp"
   with_items:
-      - "{{ adapter_list.stdout_lines }}"
+    - "{{ adapter_list.stdout_lines }}"
 
 # This should be neat on a VM with 2 bridged interfaces.
 - name: Checking for gateway
@@ -104,8 +108,8 @@
 # We have the DEVICE?
 - name: Now setting iiab_wan_iface via nmcli
   set_fact:
-     iiab_wan_iface: "{{ dhcp_1BY1_results.stdout }}"
-     dhcp_good: True
+    iiab_wan_iface: "{{ dhcp_1BY1_results.stdout }}"
+    dhcp_good: True
   when: dhcp_1BY1_results.stdout is defined and dhcp_1BY1_results.stdout != "" and not has_WAN
 
 - name: Find gateway config based on device
@@ -120,7 +124,7 @@
     has_ifcfg_gw: "{{ item|trim }}"
   when: dhcp_good and ifcfg_dhcp_device is defined and item|trim != ""
   with_items:
-      - "{{ ifcfg_dhcp_device.stdout_lines }}"
+    - "{{ ifcfg_dhcp_device.stdout_lines }}"
   ignore_errors: True
 
 # wired devices with no wire plugged in fail here
@@ -129,12 +133,12 @@
   ignore_errors: True
   when: item|trim != iiab_wireless_lan_iface and item|trim != iiab_wan_iface and wan_ip == "dhcp"
   with_items:
-      - "{{ adapter_list.stdout_lines }}"
+    - "{{ adapter_list.stdout_lines }}"
 
 ### keep at end.
 ### If dhcp fails the single interface will become LAN again because we didn't prevent the creation
 # Now disable LAN if single interface
 - name: DHCP found on Single interface forcing LAN disabled
   set_fact:
-     iiab_lan_iface: "none"
-  when: dhcp_good  and adapter_count.stdout|int == "1"
+    iiab_lan_iface: "none"
+  when: dhcp_good and adapter_count.stdout|int == "1"
