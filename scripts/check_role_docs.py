@@ -10,7 +10,7 @@ clipboard utility (e.g. pbcopy on macOS, xclip on Linux).
 
 import os, glob
 
-for role in os.listdir("roles"):
+for role in sorted(os.listdir("roles")):
     readme_glob = os.path.join("roles", role, "README.*")
     if not glob.glob(readme_glob):
         print(role)
