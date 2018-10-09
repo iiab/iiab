@@ -1,40 +1,47 @@
-- name: Create a user for avahi
-  user: name=avahi
-        createhome=no
-        shell=/bin/false
+- name: Create a user for avahi (debuntu)
+  user:
+    name: avahi
+    createhome: no
+    shell: /bin/false
   when: is_debuntu
 
-- name: Install avahi announce config files
-  template: src=avahi/schoolserver.service
-            dest=/etc/avahi/services/schoolserver.service
-            owner=avahi
-            group=avahi
-            mode=0640
+- name: Install avahi announce config file /etc/avahi/services/schoolserver.service
+  template:
+    src: avahi/schoolserver.service
+    dest: /etc/avahi/services/schoolserver.service
+    owner: avahi
+    group: avahi
+    mode: 0640
   when: 'gui_wan == True'
 
-- name: Find a clean copy of ssh.service
-  shell: "ls /usr/share/doc/ |grep avahi | head -n1"
+- name: Find avahi_ver for clean copy of ssh.service (not debuntu)
+  shell: "ls /usr/share/doc/ | grep avahi | head -n1"
   register: avahi_ver
   ignore_errors: True
   changed_when: false
+  # when: not is_debuntu    # would cause failures 6 lines below
 
-- name: Grab a clean copy of ssh.service
-  copy: src='/usr/share/doc/{{ avahi_ver.stdout }}/ssh.service'
-        dest='/etc/avahi/services/'
+- name: Grab a clean copy of ssh.service (not debuntu)
+  copy:
+    src: '/usr/share/doc/{{ avahi_ver.stdout }}/ssh.service'
+    dest: /etc/avahi/services/
   when: avahi_ver.stdout != "" and not is_debuntu
 
-- name: Grab a clean copy of ssh.service
-  copy: src='/usr/share/doc/avahi-daemon/examples/ssh.service'
-        dest='/etc/avahi/services/'
+- name: Grab a clean copy of ssh.service (debuntu)
+  copy:
+    src: /usr/share/doc/avahi-daemon/examples/ssh.service
+    dest: /etc/avahi/services/
   when: is_debuntu
 
 - name: Set ssh port for avahi
-  lineinfile: dest=/etc/avahi/services/ssh.service
-              regexp='</port>$'
-              line='    <port>{{ ssh_port }}</port>'
-              state=present
-              backrefs=yes
+  lineinfile:
+    dest: /etc/avahi/services/ssh.service
+    regexp: '</port>$'
+    line: '    <port>{{ ssh_port }}</port>'
+    state: present
+    backrefs: yes
 
 - name: Enable avahi service
-  service: name=avahi-daemon
-           enabled=yes
+  service:
+    name: avahi-daemon
+    enabled: yes
