@@ -16,7 +16,7 @@ The [Installation](https://github.com/iiab/iiab/wiki/IIAB-Installation) wiki pag
 
 #### Built with Ansible
 
-FYI we use [Ansible](https://www.ansible.com) as the underlying technology to install, deploy, configure and manage the various software components.
+FYI we use [Ansible](http://wiki.laptop.org/go/IIAB/FAQ#What_is_Ansible_and_what_version_should_I_use.3F) as the underlying technology to install, deploy, configure and manage the various software components.
 
 ## Contributing
 
