@@ -20,8 +20,8 @@ check_hash () {
    #SHADOW_PW=$(echo $SHADOW | cut -d: -f2)
    #if [ "$SHADOW_PW" != "\$6\$iiab51\$D.IrrEeLBYIuJkGDmi27pZUGOwPFp98qpl3hxMwWV4hXigFGmdSvy3s/j7tn6OnyTTLmlV7SsN0lCUAFzxSop." ]; then return 0 ; fi
    #if echo "${SHADOW}" | grep -q "${HASH}"; then
-   if check_user_pwd "iiab-admin" "g0adm1n"; then
-       zenity --warning --text="SSH is enabled and the default password for user 'iiab-admin' is in use.\nThis is a security risk - please change the password using IIAB's Admin Console (http://box/admin) -> Utilities -> Change Password."
+   if check_user_pwd "iiab-admin" "{{ iiab_admin_published_pwd }}"; then
+       zenity --warning --text="SSH is enabled and the default password for user 'iiab-admin' is in use.\nThis is a security risk - please change its password using IIAB's Admin Console (http://box/admin) -> Utilities -> Change Password."
    fi
 }
 
