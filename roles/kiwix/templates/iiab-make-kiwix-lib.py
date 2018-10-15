@@ -187,7 +187,7 @@ def init():
     global kiwix_manage
 
     config = ConfigParser.SafeConfigParser()
-    config.read(iiab_config_file)
+    config.read(iiab_ini_file)
     iiab_base_path = config.get('location','iiab_base')
     zim_path = config.get('kiwix','iiab_zim_path')
     kiwix_library_xml = config.get('kiwix','kiwix_library_xml')
