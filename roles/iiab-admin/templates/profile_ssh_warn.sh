@@ -18,9 +18,9 @@ check_hash () {
     #if echo $SHADOW | grep -q "iiab-admin:!" ; then return 0 ; fi
     #SHADOW_PW=$(echo $SHADOW | cut -d: -f2)
     #if [ "$SHADOW_PW" != '{{ iiab_admin_pwd_hash }}' ]; then return 0 ; fi
-    if check_user_pwd "iiab-admin" "g0adm1n"; then
+    if check_user_pwd "iiab-admin" "{{ iiab_admin_published_pwd }}"; then
         echo -e "\nSSH is enabled and the default password for the 'iiab-admin' user is unchanged."
-        echo -e "This is a security risk - please login as user 'iiab-admin' and run 'passwd' to change its password.\n"
+        echo -e "This is a security risk - please log in as user 'iiab-admin' and run 'passwd' to change its password.\n"
     fi
 }
 
