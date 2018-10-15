@@ -30,8 +30,8 @@ from iiab_env import get_iiab_env
 
 # Config Files
 # iiab_ini_file should be in {{ iiab_env_file }}
-iiab_ini_file = "{{ iiab_ini_file }}" # nominally /etc/iiab/iiab.ini
-# iiab_ini_file = "/etc/iiab/iiab.ini" # comment out after testing
+iiab_ini_file = "{{ iiab_ini_file }}" # nominally {{ iiab_ini_file }}
+# iiab_ini_file = "{{ iiab_ini_file }}" # comment out after testing
 
 IIAB_INI = get_iiab_env('IIAB_INI') # future
 if IIAB_INI:
