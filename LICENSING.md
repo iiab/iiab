@@ -11,8 +11,8 @@ of the License, or (at your option) any later version.
 This license is contained in the file named LICENSE.  The simplest way to do
 this is to include the following two lines at the top of the file:
 
-# Copyright (C) 20xx <your name>
-# Licensed under the terms of the GNU GPL v2 or later; see LICENSE for details.
+    Copyright (C) 20xx <your name>
+    Licensed under the terms of the GNU GPL v2 or later; see LICENSE for details.
 
 All files not containing an explicit copyright notice or terms of license in
 the file are Copyright © 2015-2018, Unleash Kids, and are licensed under the
