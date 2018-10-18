@@ -1,3 +1,5 @@
+# Prepare to install Gitea: create user and directory structure
+
 - name: Create user gitea
   user:
     name: gitea
@@ -28,15 +30,7 @@
   tags:
     - pre-install
 
-- name: Create Gitea config directory
-  file:
-    path: /etc/gitea
-    state: directory
-    owner: root
-    group: gitea
-    mode: 0770
-  tags:
-    - pre-install
+# Download, verify, and link Gitea binary
 
 - name: Download Gitea binary
   get_url:
@@ -73,6 +67,30 @@
   tags:
     - install
 
+# Configure Gitea
+
+- name: Create Gitea config directory
+  file:
+    path: /etc/gitea
+    state: directory
+    owner: root
+    group: gitea
+    mode: 0750
+  tags:
+    - config
+
+- name: Create app.ini
+  template:
+    src: app.ini.j2
+    dest: /etc/gitea/app.ini
+    owner: root
+    group: gitea
+    mode: 0644
+  tags:
+    - config
+
+# Create systemd service
+
 - name: Create 'gitea' service
   template:
     src: gitea.service.j2
@@ -94,6 +112,8 @@
     enabled: no
     state: stopped
   when: not gitea_enabled
+
+# Configure HTTPD
 
 - name: Copy gitea httpd conf file
   template:
@@ -118,6 +138,8 @@
     name: "{{ apache_service }}"
     state: restarted
 
+# Add Gitea to registry
+
 - name: Add 'gitea' to list of services at /etc/iiab/iiab.ini
   ini_file:
     dest: "{{ service_filelist }}"
@@ -128,7 +150,7 @@
     - option: name
       value: gitea
     - option: description
-      value: '"gitea is an email service."'
+      value: '"Gitea: Git with a cup of tea"'
     - option: gitea_run_directory
       value: "{{ gitea_run_directory }}"
     - option: gitea_url
