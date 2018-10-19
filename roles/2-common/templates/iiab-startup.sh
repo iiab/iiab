@@ -15,7 +15,7 @@ fi
 if [[ $(grep -i raspbian /etc/*release) &&
         #($(grep "hostapd_enabled = False" /etc/iiab/config_vars.yml) ||
             #((! $(grep "hostapd_enabled = True" /etc/iiab/config_vars.yml)) &&
-                 ! $(grep "^HOSTAPD_ENABLED=True" /etc/iiab/iiab.env) ]];
+                 ! $(grep "^HOSTAPD_ENABLED=True" {{ iiab_env_file }}) ]];
                  # NEGATED LOGIC HELPS FORCE PROMISCUOUS MODE EARLY IN INSTALL
                  # (when network/tasks/main.yml hasn't yet populated iiab.env)
 

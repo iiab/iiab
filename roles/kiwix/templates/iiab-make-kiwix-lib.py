@@ -29,13 +29,13 @@ if not IIAB_PATH in sys.path:
 from iiab_env import get_iiab_env
 
 # Config Files
-# iiab_config_file should be in /etc/iiab/iiab.env
-iiab_config_file = "{{ iiab_config_file }}" # nominally /etc/iiab/iiab.ini
-# iiab_config_file = "/etc/iiab/iiab.ini" # comment out after testing
+# iiab_ini_file should be in {{ iiab_env_file }} (/etc/iiab/iiab.env) ?
+iiab_ini_file = "{{ iiab_ini_file }}" # nominally /etc/iiab/iiab.ini
+# iiab_ini_file = "/etc/iiab/iiab.ini" # comment out after testing
 
 IIAB_INI = get_iiab_env('IIAB_INI') # future
 if IIAB_INI:
-    iiab_config_file = IIAB_INI
+    iiab_ini_file = IIAB_INI
 
 # Variables that should be read from config file
 # All of these variables will be read from config files and recomputed in init()
@@ -187,7 +187,7 @@ def init():
     global kiwix_manage
 
     config = ConfigParser.SafeConfigParser()
-    config.read(iiab_config_file)
+    config.read(iiab_ini_file)
     iiab_base_path = config.get('location','iiab_base')
     zim_path = config.get('kiwix','iiab_zim_path')
     kiwix_library_xml = config.get('kiwix','kiwix_library_xml')

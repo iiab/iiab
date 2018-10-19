@@ -3,7 +3,7 @@
 # Pull down repo's entire wiki (and similar) to create offline docs
 
 set -e
-source /etc/iiab/iiab.env
+source {{ iiab_env_file }}
 INPUT=/tmp/iiab-wiki
 OUTPUT=/tmp/iiab-wiki.out
 DESTPATH=/library/www/html/info

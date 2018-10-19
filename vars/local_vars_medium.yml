@@ -8,20 +8,23 @@
 # Ansible's default timeout for "get_url:" downloads (10 seconds) often fails
 download_timeout: 200
 
-# Users and Passwords
+# Languages (for Apache)
+default_language: en
+language_priority: en es fr
 
+# Set iiab_admin_user_install: False if you don't want iiab_admin_user & wheel
+# group auto-created in roles/iiab-admin/tasks/main.yml (hence disabling sudo-
+# checks/warnings of published passwds like pi/raspberry & iiab-admin/g0adm1n).
+iiab_admin_user_install: True
+# If iiab_admin_user_install: False, set iiab_admin_user (below) to an existing
+# Linux user that has sudo access, for login to Admin Console http://box/admin
 iiab_admin_user: iiab-admin
-# Obtain a password hash with:
+# Password hash to be used if Ansible creates the above user:
+iiab_admin_pwd_hash: $6$xsce51$D.IrrEeLBYIuJkGDmi27pZUGOwPFp98qpl3hxMwWV4hXigFGmdSvy3s/j7tn6OnyTTLmlV7SsN0lCUAFzxSop.
+# Obtain a password hash - NEW MORE SECURE WAY:
+#    python3 -c 'import crypt; print(crypt.crypt("<plaintext>", crypt.mksalt(crypt.METHOD_SHA512)))'
+# Obtain a password hash - OLD WAY:
 #    python -c 'import crypt; print crypt.crypt("<plaintext>", "$6$<salt>")'
-# iiab_admin_passw_hash:
-admin_install: True
-
-# Set admin_install: False if you don't want iiab_admin_user & wheel group
-# auto-created in roles/iiab-admin/tasks/main.yml, thereby disabling sudo-based
-# warnings on use of published passwords like pi/raspberry & iiab-admin/g0adm1n
-
-# If admin_install: False, set iiab_admin_user (above) to an existing Linux
-# user that has sudo access, so you can login to Admin Console http://box/admin
 
 iiab_hostname: box
 iiab_domain: lan
@@ -59,13 +62,6 @@ py_captive_portal_install: True
 py_captive_portal_enabled: True
 # In a pinch, disable it by running: systemctl disable py-captive-portal
 
-# Stages 3 & 4 must be run (using iiab-install or runrole) if changing these:
-squid_install: False
-squid_enabled: False
-
-dansguardian_install: False
-dansguardian_enabled: False
-
 # Unmaintained as of October 2017: https://github.com/iiab/iiab/pull/382
 # wondershaper_install: False
 # wondershaper_enabled: False
@@ -73,33 +69,52 @@ dansguardian_enabled: False
 
 # 1-PREP
 
+# roles/sshd & roles/iiab-admin run here
+# SEE IIAB-ADMIN VARIABLES NEAR TOP OF THIS FILE:
+# e.g. iiab_admin_user_install, iiab_admin_user, iiab_admin_pwd_hash
+
+# SECURITY WARNING: See http://wiki.laptop.org/go/IIAB/Security
+openvpn_install: True
+openvpn_enabled: False
+# Set /etc/iiab/openvpn_handle in advance here:
+openvpn_handle: ""
+# The following seems necessary on CentOS:
+# openvpn_cron_enabled: True
+
+
 # 2-COMMON
+
+# exFAT_enabled: True is auto-enabled in roles/2-common/tasks/packages.yml
+# as set in 0-init/defaults/main.yml AND 0-init/tasks/main.yml
+
+# /usr/libexec/iiab-startup.sh is much like autoexec.bat & /etc/rc.local
+# It's put in place by 2-common/tasks/iiab-startup.yml at the end of Stage 2.
+
 
 # 3-BASE-SERVER
 
 # Make this False to disable http://box/common/services/power_off.php button:
 apache_allow_sudo: True
-
-# For schools that use WordPress and/or Moodle intensively. See iiab/iiab #1147
+# For schools that use WordPress and/or Moodle intensively, see iiab/iiab #1147
 # WARNING: Enabling this (might) cause excess use of RAM or other resources?
 apache_high_php_limits: False
+# SEE ALSO VARIABLES NEAR TOP OF THIS FILE: default_language, language_priority
 
 # roles/mysql runs here (mandatory)
 
 
 # 4-SERVER-OPTIONS
 
-# SECURITY WARNING: See http://wiki.laptop.org/go/IIAB/Security
-openvpn_install: True
-openvpn_enabled: False
+# DNS prep (dnsmasq, named &/or dhcpd) run here.  The full network stage runs
+# after 9-LOCAL-ADDONS (or manually run "cd /opt/iiab/iiab; ./iiab-network")
 
-# Set /etc/iiab/openvpn_handle in advance here:
-openvpn_handle: ""
+# Squid
+squid_install: False
+squid_enabled: False
 
-# The following seems necessary on CentOS:
-# openvpn_cron_enabled: True
-
-# roles/network runs here (MANY SETTINGS ABOVE)
+# DansGuardian
+dansguardian_install: False
+dansguardian_enabled: False
 
 # PostgreSQL - auto-installed by Moodle and/or Pathagar - no need to touch!
 postgresql_install: False
@@ -109,7 +124,7 @@ postgresql_enabled: False
 # authserver_install: False
 # authserver_enabled: False
 
-# Common UNIX Printing System
+# Common UNIX Printing System (CUPS)
 cups_install: True
 cups_enabled: False
 
@@ -132,12 +147,13 @@ iiab_usb_lib_show_all: True
 # activity_server_install: False
 # activity_server_enabled: False
 
+# Please instead consider 'ejabberd' in Stage 6-GENERIC-APPS below
+# ejabberd_xs_install: False
+# ejabberd_xs_enabled: False
+
 # Change calibre_port from 8080 to 8010 below, if you enable idmgr
 # idmgr_install: False
 # idmgr_enabled: False
-
-# ejabberd_xs_install: False
-# ejabberd_xs_enabled: False
 
 
 # 6-GENERIC-APPS
@@ -157,9 +173,9 @@ ejabberd_enabled: False
 nextcloud_install: True
 nextcloud_enabled: True
 
+# If using WordPress intensively, set apache_high_php_limits in 3-BASE-SERVER
 wordpress_install: True
 wordpress_enabled: True
-# If using WordPress intensively, consider setting apache_high_php_limits above
 
 
 # 7-EDU-APPS
@@ -179,7 +195,7 @@ kiwix_enabled: True
 # Warning: Moodle is a serious LMS, that takes a while to install
 moodle_install: False
 moodle_enabled: False
-# If using Moodle intensively, consider setting apache_high_php_limits above
+# If using Moodle intensively, set apache_high_php_limits in 3-BASE-SERVER
 
 # Might stall MongoDB on Power Failure: github.com/xsce/xsce/issues/879
 # Sugarizer 1.0.1+ strategies to solve? github.com/iiab/iiab/pull/957

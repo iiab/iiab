@@ -5,11 +5,12 @@
 
 # By convention we use True/False to indicate boolean constants.
 
-# Installation Constants
-content_base: "/library"
-#doc_base: "/var"
-doc_base: "{{ content_base }}/www"
-doc_root: "{{ doc_base }}/html"
+# Configuration Files
+iiab_local_vars_file: /etc/iiab/local_vars.yml
+iiab_env_file: /etc/iiab/iiab.env
+iiab_ini_file: /etc/iiab/iiab.ini
+#iiab_config_file: "{{ iiab_ini_file }}"    # Legacy support / let's phase this out eventually
+#service_filelist: "{{ iiab_ini_file }}"    # Legacy support / let's phase this out eventually
 
 iiab_base: /opt/iiab
 iiab_dir: "{{ iiab_base }}/iiab"
@@ -17,35 +18,32 @@ pip_packages_dir: "{{ iiab_base }}/pip-packages"
 yum_packages_dir: "{{ iiab_base }}/yum-packages"
 downloads_dir: "{{ iiab_base }}/downloads"
 iiab_download_url: http://download.iiab.io/packages
+
+content_base: "/library"
+doc_base: "{{ content_base }}/www"
+doc_root: "{{ doc_base }}/html"
+
 # Ansible's default timeout for "get_url:" downloads (10 seconds) often fails
 download_timeout: 200
 
-# Configuration File(s)
-iiab_config_file: /etc/iiab/iiab.ini
-iiab_local_vars_file: /etc/iiab/local_vars.yml
-service_filelist: "{{ iiab_config_file }}"
-
-# The following variable may be useful in debugging
-disregard_network: False  # use cache or error out if cache does not exist
-
-# Users and Passwords
-
-iiab_admin_user: iiab-admin
-# Obtain a password hash with:
-#    python -c 'import crypt; print crypt.crypt("<plaintext>", "$6$<salt>")'
-iiab_admin_passw_hash: $6$xsce51$D.IrrEeLBYIuJkGDmi27pZUGOwPFp98qpl3hxMwWV4hXigFGmdSvy3s/j7tn6OnyTTLmlV7SsN0lCUAFzxSop.
-admin_install: True
-
-# Set admin_install: False if you don't want iiab_admin_user & wheel group
-# auto-created in roles/iiab-admin/tasks/main.yml, thereby disabling sudo-based
-# warnings on use of published passwords like pi/raspberry & iiab-admin/g0adm1n
-
-# If admin_install: False, set iiab_admin_user (above) to an existing Linux
-# user that has sudo access, so you can login to Admin Console http://box/admin
-
-# Languages
+# Languages (for Apache)
 default_language: en
-language_priority: en es
+language_priority: en es fr
+
+# Set iiab_admin_user_install: False if you don't want iiab_admin_user & wheel
+# group auto-created in roles/iiab-admin/tasks/main.yml (hence disabling sudo-
+# checks/warnings of published passwds like pi/raspberry & iiab-admin/g0adm1n).
+iiab_admin_user_install: True
+# If iiab_admin_user_install: False, set iiab_admin_user (below) to an existing
+# Linux user that has sudo access, for login to Admin Console http://box/admin
+iiab_admin_user: iiab-admin
+iiab_admin_published_pwd: g0adm1n    # For live checks/alerts of published pwds
+# Password hash to override above, if Ansible creates above user:
+iiab_admin_pwd_hash: $6$xsce51$D.IrrEeLBYIuJkGDmi27pZUGOwPFp98qpl3hxMwWV4hXigFGmdSvy3s/j7tn6OnyTTLmlV7SsN0lCUAFzxSop.
+# Obtain a password hash - NEW MORE SECURE WAY:
+#    python3 -c 'import crypt; print(crypt.crypt("<plaintext>", crypt.mksalt(crypt.METHOD_SHA512)))'
+# Obtain a password hash - OLD WAY:
+#    python -c 'import crypt; print crypt.crypt("<plaintext>", "$6$<salt>")'
 
 # Time Zone (php needs timezone to be set)
 local_tz: "{{ ansible_date_time.tz }}"
@@ -53,9 +51,12 @@ local_tz: "{{ ansible_date_time.tz }}"
 # Read https://github.com/iiab/iiab/wiki/IIAB-Networking
 # Also readable offline @ http://box/info/IIAB-Networking.html
 
-# NETWORK PARAMETERS FOLLOW ACROSS THE NEXT 65 LINES, as enabled by Ansible's
+# NETWORK PARAMETERS FOLLOW ACROSS THE NEXT 100 LINES, as enabled by Ansible's
 # NETWORK role (/opt/iiab/iiab/roles/network/*) in 4-SERVER-OPTIONS below.
 # SEE ALSO: /opt/iiab/iiab/roles/network/defaults/main.yml
+
+# The following variable may be useful in debugging
+disregard_network: False  # use cache or error out if cache does not exist
 
 iiab_hostname: box
 iiab_domain: lan
@@ -125,14 +126,6 @@ py_captive_portal_enabled: True
 # captive_portal_install: False
 # captive_portal_enabled: False
 
-# Squid
-squid_install: False
-squid_enabled: False
-
-# DansGuardian
-dansguardian_install: False
-dansguardian_enabled: False
-
 # Wonder Shaper
 # Unmaintained as of October 2017: https://github.com/iiab/iiab/pull/382
 wondershaper_install: False
@@ -146,34 +139,58 @@ wan_ip: dhcp
 wan_netmask:
 wan_gateway:
 wan_nameserver:
-# exFAT is auto-enabled for all "debuntu" OS's as of Nov 2017, in roles/2-common/tasks/packages.yml#L35-L36
-# exFAT_enabled: True
 
-# Parameters by Aggregate Roles
-# Each Role must have the following variables which are either True or False:
+
+# Parameters for Aggregate Roles
+# Each Role should have the following variables which are either True or False:
 #   <role-name>_install
 #   <role-name>_enabled
 
-# Our past convention was to install everything in all aggregates
+# Past convention had been to install everything in all aggregate roles (stages)
 # And to enable everything in 1-PREP, 2-COMMON, and 3-BASE-SERVER
 
 
 # 1-PREP
 
+# sshd
+sshd_enabled: True
+
+# roles/iiab-admin runs here
+# SEE IIAB-ADMIN VARIABLES NEAR TOP OF THIS FILE: e.g. iiab_admin_user_install,
+# iiab_admin_user, iiab_admin_published_pwd, iiab_admin_pwd_hash
+
+# OpenVPN
+openvpn_install: True
+openvpn_enabled: False
+# For /etc/iiab/openvpn_handle
+openvpn_handle: ""
+# cron seems necessary on CentOS:
+openvpn_cron_enabled: False
+# General OpenVPN settings
+openvpn_server: xscenet.net
+openvpn_server_virtual_ip: 10.8.0.1
+openvpn_server_port: 1194
+
+
 # 2-COMMON
+
+# Auto-enabled in roles/2-common/tasks/packages.yml as set in
+# 0-init/defaults/main.yml AND 0-init/tasks/main.yml :
+exFAT_enabled: True
+
+# /usr/libexec/iiab-startup.sh is much like autoexec.bat & /etc/rc.local
+# It's put in place by 2-common/tasks/iiab-startup.yml at the end of Stage 2.
+
 
 # 3-BASE-SERVER
 
-# roles/httpd (Apache configuration) runs here
-
+# httpd (Apache)
 # Make this False to disable http://box/common/services/power_off.php button:
 apache_allow_sudo: True
-
-# For schools that use WordPress and/or Moodle intensively. See iiab/iiab #1147
+# For schools that use WordPress and/or Moodle intensively, see iiab/iiab #1147
 # WARNING: Enabling this (might) cause excess use of RAM or other resources?
 apache_high_php_limits: False
-
-# roles/iiab-admin runs here
+# SEE ALSO VARIABLES NEAR TOP OF THIS FILE: default_language, language_priority
 
 # MySQL MANDATORY - THESE SETTINGS HAVE NO EFFECT - SEE roles/1-prep/tasks/computed_vars.yml, roles/mysql/tasks/main.yml
 mysql_install: True
@@ -184,24 +201,16 @@ mysql_root_password: fixmysql
 
 # 4-SERVER-OPTIONS
 
-# sshd
-sshd_enabled: True
+# DNS prep (dnsmasq, named &/or dhcpd) run here.  The full network stage runs
+# after 9-LOCAL-ADDONS (or manually run "cd /opt/iiab/iiab; ./iiab-network")
 
-# OpenVPN
-openvpn_install: True
-openvpn_enabled: False
+# Squid
+squid_install: False
+squid_enabled: False
 
-# For /etc/iiab/openvpn_handle
-openvpn_handle: ""
-
-# cron seems necessary on CentOS:
-openvpn_cron_enabled: False
-
-openvpn_server: xscenet.net
-openvpn_server_virtual_ip: 10.8.0.1
-openvpn_server_port: 1194
-
-# roles/network runs here (MANY SETTINGS ABOVE)
+# DansGuardian
+dansguardian_install: False
+dansguardian_enabled: False
 
 # Homepage
 iiab_home_url: /home
@@ -234,6 +243,7 @@ samba_enabled: False
 # usb-lib
 usb_lib_install: True
 usb_lib_enabled: True
+# Show entire contents of USB sticks/drives (at http://box/usb)
 iiab_usb_lib_show_all: False
 
 # Toggle iiab-refresh-wiki-docs scraping for offline docs (http://box/info)
@@ -248,15 +258,14 @@ nodocs: False
 xo_services_install: False
 xo_services_enabled: False
 
-# activity-server
 activity_server_install: False
 activity_server_enabled: False
 
-# ejabberd-xs
+# Please instead consider 'ejabberd' in Stage 6-GENERIC-APPS below
 ejabberd_xs_install: False
 ejabberd_xs_enabled: False
 
-# idmgr
+# Change calibre_port from 8080 to 8010 below, if you enable idmgr
 idmgr_install: False
 idmgr_enables: False
 
@@ -288,7 +297,7 @@ nextcloud_enabled: False
 # WordPress
 wordpress_install: True
 wordpress_enabled: False
-# If using WordPress intensively, consider setting apache_high_php_limits above
+# If using WordPress intensively, set apache_high_php_limits in 3-BASE-SERVER
 
 
 # 7-EDU-APPS
@@ -318,7 +327,7 @@ iiab_zim_path: /library/zims
 # Moodle
 moodle_install: False
 moodle_enabled: False
-# If using Moodle intensively, consider setting apache_high_php_limits above
+# If using Moodle intensively, set apache_high_php_limits in 3-BASE-SERVER
 
 # Sugarizer
 # Might stall MongoDB on Power Failure: github.com/xsce/xsce/issues/879
