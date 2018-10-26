@@ -1,6 +1,6 @@
 #!/bin/bash
 
-check_user_pwd () {
+check_user_pwd() {
     # $meth (hashing method) is typically '6' which implies 5000 rounds
     # of SHA-512 per /etc/login.defs -> /etc/pam.d/common-password
     meth=$(sudo grep "^$1:" /etc/shadow | cut -d: -f2 | cut -d$ -f2)
@@ -10,7 +10,7 @@ check_user_pwd () {
 }
 
 # credit to the folks at raspberry pi foundatioon
-check_hash () {
+check_hash() {
    if ! id -u iiab-admin > /dev/null 2>&1 ; then return 0 ; fi
    if grep -q "^PasswordAuthentication\s*no" /etc/ssh/sshd_config ; then return 0 ; fi
    #test -x /usr/bin/mkpasswd || return 0
