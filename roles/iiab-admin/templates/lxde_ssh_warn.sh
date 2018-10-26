@@ -1,6 +1,6 @@
 #!/bin/bash
 
-function check_user_pwd() {
+check_user_pwd () {
     # $meth (hashing method) is typically '6' which implies 5000 rounds
     # of SHA-512 per /etc/login.defs -> /etc/pam.d/common-password
     meth=$(sudo grep "^$1:" /etc/shadow | cut -d: -f2 | cut -d$ -f2)
