@@ -1,6 +1,8 @@
 #!/bin/bash
 
-function check_user_pwd() {
+# bash syntax "function check_user_pwd() {" was removed, as it prevented all
+# lightdm/graphical logins (incl autologin) on Raspbian: #1252 -> PR #1253
+check_user_pwd() {
     # $meth (hashing method) is typically '6' which implies 5000 rounds
     # of SHA-512 per /etc/login.defs -> /etc/pam.d/common-password
     meth=$(sudo grep "^$1:" /etc/shadow | cut -d: -f2 | cut -d$ -f2)
@@ -10,7 +12,7 @@ function check_user_pwd() {
 }
 
 # credit to the folks at raspberry pi foundatioon
-check_hash () {
+check_hash() {
     if ! id -u iiab-admin > /dev/null 2>&1 ; then return 0 ; fi
     if grep -q "^PasswordAuthentication\s*no" /etc/ssh/sshd_config ; then return 0 ; fi
     #SHADOW="$(sudo -n grep -E '^iiab-admin:' /etc/shadow 2>/dev/null)"
