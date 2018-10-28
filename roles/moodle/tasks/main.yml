@@ -1,25 +1,23 @@
-- name: Install Moodle required packages (OS's other than debuntu)
+- name: Install packages python-psycopg2 and php-pgsql (OS's other than debuntu)
   package:
-    name: "{{ item }}"
-    state: present
-  with_items:
-    - python-psycopg2
-    - php-pgsql
+    name:
+      - python-psycopg2
+      - php-pgsql
+  state: present
   when: not is_debuntu
 
-- name: Install Moodle required packages (debuntu)
+- name: Install python-psycopg2 and 4 php packages (debuntu)
   package:
-    name: "{{ item }}"
+    name:
+      - python-psycopg2
+      - php{{ php_version }}-pgsql
+      - php{{ php_version }}-curl
+      #- php{{ php_version }}-zip
+      - php{{ php_version }}-gd
+      #- php{{ php_version }}-mbstring
+      # mbstring is now included in php-cli
+      - php{{ php_version }}-cli
     state: present
-  with_items:
-    - python-psycopg2
-    - php{{ php_version }}-pgsql
-    - php{{ php_version }}-curl
-    #- php{{ php_version }}-zip
-    - php{{ php_version }}-gd
-    #- php{{ php_version }}-mbstring
-    # mbstring is now included in php-cli
-    - php{{ php_version }}-cli
   when: is_debuntu
 
 - name: php-zip name (debian-9 or ubuntu)
@@ -70,12 +68,12 @@
     mode: 0770
     state: directory
 
-- name: Remove stock Moodle config file
+- name: Remove Apache's stock moodle.conf
   file:
     path: "/etc/{{ apache_config_dir }}/moodle.conf"
     state: absent
 
-- name: Put Moodle config file in place
+- name: Install Apache's 022-moodle.conf from template
   template:
     src: 022-moodle.j2
     dest: "/etc/{{ apache_config_dir }}/022-moodle.conf"
@@ -84,14 +82,14 @@
     mode: 0644
   when: moodle_enabled
 
-- name: Enable Moodle (debuntu)
+- name: Create symlink 022-moodle.conf from sites-enabled to sites-available (debuntu)
   file:
     src: /etc/apache2/sites-available/022-moodle.conf
     dest: /etc/apache2/sites-enabled/022-moodle.conf
     state: link
   when: moodle_enabled and is_debuntu
 
-- name: Disable Moodle (debuntu)
+- name: Remove symlink 022-moodle.conf (debuntu)
   file:
     path: /etc/apache2/sites-enabled/022-moodle.conf
     state: absent
@@ -122,7 +120,7 @@
   become: yes
   become_user: postgres
 
-- name: Put a startup install script in place
+- name: Put moodle_installer script in {{ moodle_base }}
   template:
     dest: "{{ moodle_base }}"
     src: moodle_installer
@@ -140,16 +138,16 @@
     name: "{{ apache_service }}"
     state: restarted
 
-- name: See if config.php exists
+- name: See if {{ moodle_base }}/config.php exists
   stat:
     path: "{{ moodle_base }}/config.php"
   register: config
 
-- name: Execute Moodle startup script
+- name: Execute moodle_installer script
   shell: '{{ moodle_base }}/moodle_installer'
   when: config.stat.exists is defined and not config.stat.exists
 
-- name: Give Apache permission to read config file
+- name: Give Apache permission to read {{ moodle_base }}/config.php
   #command: chown -R {{ apache_user }} {{ moodle_base }}
   file:
     path: "{{ moodle_base }}/config.php"
