@@ -4,7 +4,7 @@
     nextcloud_required_ip: "{{ ansible_default_ipv4.network }}/{{ ansible_default_ipv4.netmask }}"
   when: ansible_default_ipv4.network is defined
 
-- name: Enable Nextcloud by copying template to httpd config
+- name: Install Apache's nextcloud.conf from template, for http://box/nextcloud
   template:
     src: nextcloud.conf.j2
     dest: "/etc/{{ apache_config_dir }}/nextcloud.conf"
@@ -13,20 +13,20 @@
     mode: 0644
   when: nextcloud_enabled
 
-- name: Enable Nextcloud (debuntu)
+- name: Create symlink from sites-available to sites-enabled for http://box/nextcloud (debuntu)
   file:
-    path: /etc/apache2/sites-enabled/nextcloud.conf
     src: /etc/apache2/sites-available/nextcloud.conf
+    path: /etc/apache2/sites-enabled/nextcloud.conf
     state: link
   when: nextcloud_enabled and is_debuntu
 
-- name: Remove the config file if not nextcloud_enabled (redhat)
+- name: Remove nextcloud.conf if not nextcloud_enabled (redhat)
   file:
     path: "/etc/{{ apache_config_dir }}/nextcloud.conf"
     state: absent
   when: not nextcloud_enabled and is_redhat
 
-- name: Restart Apache, so it picks up the new aliases
+- name: Restart Apache, enabling http://box/nextcloud
   service:
     name: "{{ apache_service }}"
     state: restarted
@@ -34,9 +34,11 @@
 # the install wizard does not succeed if already installed
 - name: Determine if Nextcloud is installed
   shell: >
-    sudo -u {{ apache_user }} php
-    '{{ nextcloud_prefix }}/nextcloud/occ' status |
+    #sudo -u {{ apache_user }}
+    php '{{ nextcloud_prefix }}/nextcloud/occ' status |
     gawk '/installed:/ { print $3 }'
+  become: yes
+  become_user: "{{ apache_user }}"
   register: returned
 
 - name: Run Nextcloud initial install wizard
@@ -59,9 +61,11 @@
 
 - name: Determine if Nextcloud user exists already
   shell: >
-    sudo -u {{ apache_user }} php
-    '{{ nextcloud_prefix }}/nextcloud/occ' user:list |
+    #sudo -u {{ apache_user }}
+    php '{{ nextcloud_prefix }}/nextcloud/occ' user:list |
     grep {{ nextcloud_user }} | wc | cut -d' ' -f1
+  become: yes
+  become_user: "{{ apache_user }}"
   register: returned_count
 
 # nextcloud wants to make users rather than just mysql users and not done
@@ -74,8 +78,8 @@
     --group="users" {{ nextcloud_user }}'
   when: nextcloud_enabled and returned_count == "0"
 
-- name: Remove Rewrite URL
+- name: Remove overwrite.cli.url line (Rewrite URL) from /opt/nextcloud/config/config.php
   lineinfile:
     regexp: "overwrite.cli.url"
     state: absent
-    dest: "{{ nextcloud_prefix }}/nextcloud/config/config.php"
+    path: "{{ nextcloud_prefix }}/nextcloud/config/config.php"
