@@ -1,10 +1,14 @@
 # Assume we only get here if elgg_install: True
-# Assume mysql is running
+# Assume MySQL is running
 
 - name: Download current version from our site
-  shell: wget {{ iiab_download_url }}/elgg-{{ elgg_version }}.zip -c -P {{ downloads_dir }}
-  args:
-    creates: "{{ downloads_dir }}/elgg-{{ elgg_version }}.zip"
+  #shell: wget {{ iiab_download_url }}/elgg-{{ elgg_version }}.zip -c -P {{ downloads_dir }}
+  #args:
+  #  creates: "{{ downloads_dir }}/elgg-{{ elgg_version }}.zip"
+  get_url:
+    url: "{{ iiab_download_url }}/elgg-{{ elgg_version }}.zip"
+    dest: "{{ downloads_dir }}"
+    timeout: "{{ download_timeout }}"
   when: internet_available
 
 - name: Determine if software is already expanded
@@ -12,12 +16,15 @@
     path: "/opt/elgg-{{ elgg_version }}/index.php"
   register: elgg
 
-# use unzip and shell until unarchive works again
-# unarchive: dest=/opt/
-#            src={{ downloads_dir }}/elgg-{{ elgg_version }}.zip
-
 - name: Expand it to our location unless already done
-  shell: "/usr/bin/unzip -o {{ downloads_dir }}/elgg-{{ elgg_version }}.zip -d /opt"
+  #shell: "/usr/bin/unzip -o {{ downloads_dir }}/elgg-{{ elgg_version }}.zip -d /opt"
+  unarchive:
+    #remote_src: yes
+    #src: "{{ iiab_download_url }}/elgg-{{ elgg_version }}.zip"
+    src: "{{ downloads_dir }}/elgg-{{ elgg_version }}.zip"
+    dest: /opt
+    owner: "{{ apache_user }}"
+    group: "{{ apache_user }}"
   when: elgg.stat.exists is defined and not elgg.stat.exists
 
 - name: Create a link to the versioned elgg-* folder
@@ -29,9 +36,7 @@
     state: link
     force: true
 
-# Use template to fix up settings in elgg-config/settings.php with our variables substituted.
-# Note this will overwrite any manual settings.
-- name: Substitute our parameters in /opt/elgg/elgg-config/settings.php
+- name: Install /opt/elgg/elgg-config/settings.php from template (WARNING: overwrites manual settings!)
   template:
     src: "settings.php.j2"
     dest: "/opt/{{ elgg_xx }}/elgg-config/settings.php"
@@ -69,7 +74,7 @@
     state: directory
     owner: "{{ apache_user }}"
 
-- name: Change ownership
+- name: Change ownership (likely not nec, unarchive & all do this above)
   file:
     path: "/opt/elgg-{{ elgg_version }}"
     owner: "{{ apache_user }}"
@@ -82,7 +87,7 @@
     name: "{{ dbname }}"
   register: create_elgg_database
 
-- name: Create a user to access the Elgg database - can be run more than once
+- name: Create user/password to access Elgg database - can be run more than once
   mysql_user:
     name: "{{ dbuser }}"
     host: "{{ item }}"
@@ -93,7 +98,7 @@
     - ::1
     - localhost
 
-- name: Create file to load database
+- name: Create /tmp/elggdb.sql from template, to load database
   template:
     src: "elggdb.sql.j2"
     dest: "/tmp/elggdb.sql"
@@ -102,41 +107,46 @@
 # tar up a mysqldump of freshly installed database and use it in the install to avoid the startup
 # form, which worries me a lot. (/var/lib/mysql/elggdb)
 
-- name: Load Elgg database dump
+- name: Load Elgg database from /tmp/elggdb.sql
   mysql_db:
     name: "{{ dbname }}"
     state: import
     target: /tmp/elggdb.sql
   when: create_elgg_database.changed
 
-- name: Remove database dump after load
+- name: Remove database dump /tmp/elggdb.sql
   file:
     name: /tmp/elggdb.sql
     state: absent
 
-- name: Install config file for Elgg in Apache
+- name: Install Apache's elgg.conf from template, for http://box/elgg
   template:
     src: elgg.conf
     dest: "/etc/{{ apache_config_dir }}/elgg.conf"
 
-- name: Enable Elgg for debuntu (will already be enabled above for redhat)
+- name: Create symlink elgg.conf from sites-enabled to sites-available (debuntu, not nec for redhat)
   file:
     src: /etc/apache2/sites-available/elgg.conf
-    dest: /etc/apache2/sites-enabled/elgg.conf
+    path: /etc/apache2/sites-enabled/elgg.conf
     state: link
   when: elgg_enabled and is_debuntu
 
-- name: Disable Elgg - remove config file for Elgg in Apache (debuntu)
+- name: Remove symlink elgg.conf from sites-enabled (debuntu)
   file:
     path: /etc/apache2/sites-enabled/elgg.conf
     state: absent
   when: not elgg_enabled and is_debuntu
 
-- name: Disable Elgg - remove config file for Elgg in Apache (redhat)
+- name: Remove Apache's elgg.conf (redhat)
   file:
     dest: "/etc/{{ apache_config_dir }}/elgg.conf"
     state: absent
   when: not elgg_enabled and is_redhat
+
+- name: Restart Apache, to enable/disable http://box/elgg
+  service:
+    name: "{{ apache_service }}"
+    state: restarted
 
 - name: Add 'elgg' to list of services at {{ iiab_ini_file }}
   ini_file:
@@ -153,8 +163,3 @@
       value: /opt/elgg
     - option: enabled
       value: "{{ elgg_enabled }}"
-
-- name: Restart Apache, so it picks up the new aliases
-  service:
-    name: "{{ apache_service }}"
-    state: restarted
