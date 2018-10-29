@@ -331,6 +331,12 @@ def null(environ, start_response):
     start_response(status, headers)
     return [""]
 
+def not_found(environ, start_response):
+    status = '404 Not Found'
+    headers = [('Content-type', 'text/html')]
+    start_response(status, headers)
+    return [""]
+
 def success(environ, start_response):
     status = '200 ok'
     html = '<html><head><title>Success</title></head><body>Success</body></html>'
@@ -519,9 +525,9 @@ def application (environ, start_response):
             logger.debug("current_ts: %s laat_ts: %s send204after: %s"%(current_ts, last_ts, send204after,))
             if not last_ts or (ts - int(last_ts) > INACTIVITY_TO):
                 return android(environ, start_response) 
-            elif is_after204_timeout(ip):
-                return put_204(environ,start_response)
-            return null(environ,start_response)  #return without doing anything
+            #elif is_after204_timeout(ip):
+                #return put_204(environ,start_response)
+            return not_found(environ,start_response)  #return without doing anything
 
         # microsoft
         if  environ['PATH_INFO'] == "/connecttest.txt" and not is_inactive(ip):
