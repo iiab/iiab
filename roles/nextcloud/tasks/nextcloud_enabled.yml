@@ -13,20 +13,26 @@
     mode: 0644
   when: nextcloud_enabled
 
-- name: Create symlink from sites-available to sites-enabled for http://box/nextcloud (debuntu)
+- name: Create symlink nextcloud.conf from sites-enabled to sites-available for http://box/nextcloud (debuntu)
   file:
-    src: /etc/apache2/sites-available/nextcloud.conf
+    src: "/etc/{{ apache_config_dir }}/nextcloud.conf"
     path: /etc/apache2/sites-enabled/nextcloud.conf
     state: link
   when: nextcloud_enabled and is_debuntu
 
-- name: Remove nextcloud.conf if not nextcloud_enabled (redhat)
+- name: Remove symlink nextcloud.conf from /etc/apache2/sites-enabled if not nextcloud_enabled (debuntu)
+  file:
+    path: /etc/apache2/sites-enabled/nextcloud.conf
+    state: absent
+  when: not nextcloud_enabled and is_debuntu
+
+- name: Remove sites-available/nextcloud.conf if not nextcloud_enabled (redhat)
   file:
     path: "/etc/{{ apache_config_dir }}/nextcloud.conf"
     state: absent
   when: not nextcloud_enabled and is_redhat
 
-- name: Restart Apache, enabling http://box/nextcloud
+- name: Restart Apache, enabling/disabling http://box/nextcloud
   service:
     name: "{{ apache_service }}"
     state: restarted
@@ -34,8 +40,7 @@
 # the install wizard does not succeed if already installed
 - name: Determine if Nextcloud is installed
   shell: >
-    #sudo -u {{ apache_user }}
-    php '{{ nextcloud_prefix }}/nextcloud/occ' status |
+    php {{ nextcloud_prefix }}/nextcloud/occ status |
     gawk '/installed:/ { print $3 }'
   become: yes
   become_user: "{{ apache_user }}"
@@ -44,39 +49,55 @@
 - name: Run Nextcloud initial install wizard
   shell: >
     cd {{ nextcloud_prefix }}/nextcloud;
-    sudo -u {{ apache_user }} php occ maintenance:install
+    php occ maintenance:install
     --database "mysql"
     --database-name "{{ nextcloud_dbname }}"
     --database-user "{{ nextcloud_dbuser }}"
     --database-pass "{{ nextcloud_dbpassword }}"
     --admin-user "{{ nextcloud_admin_user }}"
     --admin-pass "{{ nextcloud_admin_password }}"
+  become: yes
+  become_user: "{{ apache_user }}"
   when: nextcloud_enabled and returned.stdout == "false"
 
 - name: Allow access from all hosts and ips
-  command: php '{{ nextcloud_prefix }}/nextcloud/occ' config:system:set trusted_domains 1 --value=*
-  become: true
+  command: php {{ nextcloud_prefix }}/nextcloud/occ config:system:set trusted_domains 1 --value=*
+  become: yes
   become_user: "{{ apache_user }}"
   when: nextcloud_enabled and returned.stdout == "false"
 
-- name: Determine if Nextcloud user exists already
-  shell: >
-    #sudo -u {{ apache_user }}
-    php '{{ nextcloud_prefix }}/nextcloud/occ' user:list |
-    grep {{ nextcloud_user }} | wc | cut -d' ' -f1
-  become: yes
-  become_user: "{{ apache_user }}"
-  register: returned_count
-
-# nextcloud wants to make users rather than just mysql users and not done
-- name: Create the default user
-  shell: >
-    su -s /bin/sh {{ apache_user }} -c
-    'OC_PASS={{ nextcloud_user_password }};
-    php {{ nextcloud_prefix }}/nextcloud/occ user:add
-    --password-from-env --display-name={{ nextcloud_user }}
-    --group="users" {{ nextcloud_user }}'
-  when: nextcloud_enabled and returned_count == "0"
+# Code below was NEVER RUNNING as of 2018-10-29, as "wc | cut -d' ' -f1" ALWAYS
+# returns null (rather than the intended returned_count !)  This line could
+# be replaced by ALTERNATIVE 1 or ALTERNATIVE 2 below IF it truly needs fixing.
+#
+# Or perhaps default user/password nextcloud/nextcloudmysql (from variables
+# nextcloud_user/nextcloud_user_password) is just not needed in the end...
+#
+# NOTE: COMMENTS (FOLLOWING '#' SIGN) WITHIN A SHELL COMMAND CAUSE IT TO *FAIL*
+# 
+#- name: Determine if Nextcloud user exists already
+#  shell: >
+#    php {{ nextcloud_prefix }}/nextcloud/occ user:list |
+#    grep {{ nextcloud_user }} | wc | cut -d' ' -f1        # USELESS
+#    #grep {{ nextcloud_user }} | wc -l                    # ALTERNATIVE 1
+#    #grep {{ nextcloud_user }} | wc | awk '{print $1}'    # ALTERNATIVE 2
+#  become: yes
+#  become_user: "{{ apache_user }}"
+#  register: returned_count
+#
+# debug:
+#   var: returned_count
+#
+## nextcloud wants to make users rather than just mysql users and not done
+#- name: Create the default user
+#  shell: >
+#    OC_PASS={{ nextcloud_user_password }};
+#    php {{ nextcloud_prefix }}/nextcloud/occ user:add
+#    --password-from-env --display-name={{ nextcloud_user }}
+#    --group="users" {{ nextcloud_user }}
+#  become: yes
+#  become_user: "{{ apache_user }}"
+#  when: nextcloud_enabled and returned_count == "0"
 
 - name: Remove overwrite.cli.url line (Rewrite URL) from /opt/nextcloud/config/config.php
   lineinfile:
