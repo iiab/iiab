@@ -40,8 +40,7 @@
 # the install wizard does not succeed if already installed
 - name: Determine if Nextcloud is installed
   shell: >
-    #sudo -u {{ apache_user }}
-    php '{{ nextcloud_prefix }}/nextcloud/occ' status |
+    php {{ nextcloud_prefix }}/nextcloud/occ status |
     gawk '/installed:/ { print $3 }'
   become: yes
   become_user: "{{ apache_user }}"
@@ -50,42 +49,48 @@
 - name: Run Nextcloud initial install wizard
   shell: >
     cd {{ nextcloud_prefix }}/nextcloud;
-    sudo -u {{ apache_user }} php occ maintenance:install
+    php occ maintenance:install
     --database "mysql"
     --database-name "{{ nextcloud_dbname }}"
     --database-user "{{ nextcloud_dbuser }}"
     --database-pass "{{ nextcloud_dbpassword }}"
     --admin-user "{{ nextcloud_admin_user }}"
     --admin-pass "{{ nextcloud_admin_password }}"
+  become: yes
+  become_user: "{{ apache_user }}"
   when: nextcloud_enabled and returned.stdout == "false"
 
 - name: Allow access from all hosts and ips
-  command: php '{{ nextcloud_prefix }}/nextcloud/occ' config:system:set trusted_domains 1 --value=*
+  command: php {{ nextcloud_prefix }}/nextcloud/occ config:system:set trusted_domains 1 --value=*
   become: yes
   become_user: "{{ apache_user }}"
   when: nextcloud_enabled and returned.stdout == "false"
 
 # Code below was NEVER RUNNING as of 2018-10-29, as "wc | cut -d' ' -f1" ALWAYS
-# returns null (rather than the intended returned_count !)  This fragment could
-# be replace with "wc -l" or "wc | awk '{print $1}'" if it truly needs fixing?
+# returns null (rather than the intended returned_count !)  This line could
+# be replaced by ALTERNATIVE 1 or ALTERNATIVE 2 below IF it truly needs fixing.
 #
 # Or perhaps default user/password nextcloud/nextcloudmysql (from variables
 # nextcloud_user/nextcloud_user_password) is just not needed in the end...
+#
+# NOTE: COMMENTS (FOLLOWING '#' SIGN) WITHIN A SHELL COMMAND CAUSE IT TO *FAIL*
 # 
 #- name: Determine if Nextcloud user exists already
 #  shell: >
-#    #sudo -u {{ apache_user }}
-#    php '{{ nextcloud_prefix }}/nextcloud/occ' user:list |
-#    grep {{ nextcloud_user }} | wc | cut -d' ' -f1
-#    #grep {{ nextcloud_user }} | wc -l
+#    php {{ nextcloud_prefix }}/nextcloud/occ user:list |
+#    grep {{ nextcloud_user }} | wc | cut -d' ' -f1        # USELESS
+#    #grep {{ nextcloud_user }} | wc -l                    # ALTERNATIVE 1
+#    #grep {{ nextcloud_user }} | wc | awk '{print $1}'    # ALTERNATIVE 2
 #  become: yes
 #  become_user: "{{ apache_user }}"
 #  register: returned_count
 #
+# debug:
+#   var: returned_count
+#
 ## nextcloud wants to make users rather than just mysql users and not done
 #- name: Create the default user
 #  shell: >
-#    #su -s /bin/sh {{ apache_user }} -c
 #    OC_PASS={{ nextcloud_user_password }};
 #    php {{ nextcloud_prefix }}/nextcloud/occ user:add
 #    --password-from-env --display-name={{ nextcloud_user }}
