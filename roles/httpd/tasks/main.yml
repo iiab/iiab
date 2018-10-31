@@ -1,4 +1,4 @@
-- name: Install Apache's required packages (debian)
+- name: 'Install 3 packages: apache2, php{{ php_version }}, php{{ php_version }}-curl (debian)'
   package:
     #name: [u'apache2', u'php{{ php_version }}', u'php{{ php_version }}-curl']    # FAILS ('u' for Unicode strings)
     #name: ['apache2', 'php{{ php_version }}', 'php{{ php_version }}-curl']       # WORKS?
@@ -11,17 +11,7 @@
   tags:
     - download
 
-- name: Debian changed SQLite name (debian-8)
-  package:
-    name: "php{{ php_version }}-sqlite"
-  when: is_debian and ansible_distribution_major_version == "8"
-
-- name: Debian changed SQLite3 name (debian-9)
-  package:
-    name: "php{{ php_version }}-sqlite3"
-  when: is_debian and ansible_distribution_major_version == "9"
-
-- name: Install Apache's required packages (ubuntu)
+- name: 'Install 2 packages: apache2, php (ubuntu)'
   package:
     #name: [u'apache2', u'php']    # FAILS ('u' for Unicode strings)
     #name: ['apache2', 'php']      # WORKS
@@ -33,31 +23,30 @@
   tags:
     - download
 
-- name: SQLite3 no longer included in another package (ubuntu-18)
+- name: Install php{{ php_version }}-sqlite (debian-8)
   package:
-    name: php{{ php_version }}-sqlite3
-  when: is_ubuntu_18
+    name: "php{{ php_version }}-sqlite"
+  when: is_debian and ansible_distribution_major_version == "8"
 
-- name: Install Apache's required packages (redhat)
+# SQLite3 no longer included in another package
+- name: Install php{{ php_version }}-sqlite3 (debian-9 or ubuntu-18)
+  package:
+    name: "php{{ php_version }}-sqlite3"
+  when: (is_debian and ansible_distribution_major_version == "9") or is_ubuntu_18
+
+- name: 'Install 4 packages: httpd, mod_authnz_external, php, php-curl (redhat)'
   package:
     #name: [u'httpd', u'php', u'php-curl', u'mod_authnz_external']    # FAILS ('u' for Unicode strings)
     #name: ['httpd', 'php', 'php-curl', 'mod_authnz_external']        # WORKS
     name:
       - httpd
+      - mod_authnz_external
       - php
       - php-curl
-      - mod_authnz_external
     state: present
   when: is_redhat
   tags:
     - download
-
-# MOVED DOWN ~58 LINES
-#- name: Remove the default apache2 config file (debuntu)
-#  file:
-#    path: /etc/apache2/sites-enabled/000-default.conf
-#    state: absent
-#  when: is_debuntu
 
 - name: Install Apache's 010-iiab.conf & proxy_ajp.conf into /etc/apache2/sites-available, from templates
   template:
@@ -88,7 +77,7 @@
     - { regexp: '^max_input_time', line: 'max_input_time = 300    ; default is 60' }
 
 # remove symlinks for mpm-event, replace with mpm-prefork
-- name: Remove mpm event symlinks (debuntu)
+- name: Remove both mpm_event symlinks from /etc/apache2/mods-enabled (debuntu)
   file:
     path: "/etc/apache2/mods-enabled/{{ item }}"
     state: absent
@@ -97,7 +86,7 @@
     - mpm_event.load
   when: is_debuntu
 
-- name: Create symlinks for mpm-prefork (debuntu)
+- name: Create both mpm_prefork symlinks from /etc/apache2/mods-enabled to /etc/apache2/mods-available (debuntu)
   file:
     src: "/etc/apache2/mods-available/{{ item }}"
     path: "/etc/apache2/mods-enabled/{{ item }}"
@@ -107,7 +96,7 @@
     - mpm_prefork.load
   when: is_debuntu
 
-- name: Turn on mod_proxy (debuntu)
+- name: 'Turn on mod_proxy using a2enmod with: proxy, proxy_html, headers, rewrite (debuntu)'
   command: a2enmod {{ item }}
   with_items:
     - proxy
@@ -116,14 +105,14 @@
     - rewrite
   when: is_debuntu
 
-- name: Create 010-iiab.conf symlink enabling our site (debuntu)
+- name: Enable our site, creating 010-iiab.conf symlink from sites-enabled to sites-available (debuntu)
   file:
     src: "/etc/{{ apache_config_dir }}/010-iiab.conf"
     path: /etc/apache2/sites-enabled/010-iiab.conf
     state: link
   when: is_debuntu
 
-- name: Remove apache2 default config files (debuntu)
+- name: Remove 000-default.conf from /etc/apache2 and /etc/apache2/sites-enabled (debuntu)
   file:
     path: "{{ item }}"
     state: absent
@@ -140,19 +129,19 @@
     group: root
     state: directory
 
-- name: Create admin group
+- name: 'Create group: admin'
   group:
     name: admin
     state: present
 
-- name: Add user {{ apache_user }} (from variable apache_user) to admin group
+- name: Add user {{ apache_user }} (from variable apache_user) to group admin
   user:
     name: "{{ apache_user }}"
     groups: admin
     state: present
     createhome: no
 
-- name: Create Apache's log dir /var/log/{{ apache_service }}
+- name: Create Apache dir /var/log/{{ apache_service }}
   file:
     path: "/var/log/{{ apache_service }}"
     mode: 0755
@@ -160,7 +149,7 @@
     group: "{{ apache_user }}"
     state: directory
 
-- name: Enable systemd service {{ apache_service }}
+- name: Enable {{ apache_service }} systemd service
   service:
     name: "{{ apache_service }}"
     enabled: yes
@@ -173,23 +162,8 @@
     group: "{{ apache_user }}"
     state: directory
 
-# roles/httpd/templates/iiab-info.conf.j2.deprecated is no longer needed, as
-# Apache serves http://box/info directly from above /library/www/html/info
-# directly (as generated by /usr/bin/iiab-refresh-wiki-docs)
-#
-#- name: Remove iiab-info.conf
-#  file:
-#    path: "/etc/{{ apache_config_dir }}/iiab-info.conf"
-#    state: absent
-#
-#- name: Remove iiab-info.conf symlink (debuntu)
-#  file:
-#    path: /etc/apache2/sites-enabled/iiab-info.conf
-#    state: absent
-#  when: is_debuntu
-
 # SEE https://github.com/iiab/iiab/issues/1143 as the old roles/osm playbook is rarely used as of late 2018 (if anybody still uses roles/osm, they can overwrite osm.conf using the original osm playbook, or in other ways)
-- name: Copy osm.conf for http://box/maps (all OS's)
+- name: Copy osm.conf to /etc/{{ apache_config_dir }} for http://box/maps (all OS's)
   copy:
     src: osm.conf
     dest: "/etc/{{ apache_config_dir }}"
@@ -215,7 +189,7 @@
   tags:
     - base
 
-- name: Install /usr/bin/iiab-refresh-wiki-docs (scraper script) to create http://box/info offline documentation.  (This script will run at the end of Stage 4 = roles/4-server-options/tasks/main.yml)
+- name: Install /usr/bin/iiab-refresh-wiki-docs (scraper script) to create http://box/info offline documentation.  (Script can be run manually and/or at the end of Stage 4 = roles/4-server-options/tasks/main.yml)
   template:
     src: refresh-wiki-docs.sh
     dest: /usr/bin/iiab-refresh-wiki-docs
