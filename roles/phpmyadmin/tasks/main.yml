@@ -1,4 +1,4 @@
-- name: Download phpMyAdmin software
+- name: Download {{ iiab_download_url }}/{{ phpmyadmin_name_zip }} to {{ downloads_dir }}
   get_url:
     url: "{{ iiab_download_url }}/{{ phpmyadmin_name_zip }}"
     dest: "{{ downloads_dir }}"
@@ -6,7 +6,7 @@
   #register: phpmyadmin_dl_output
   when: internet_available
 
-- name: Check if /opt/iiab/downloads/{{ phpmyadmin_name_zip }} exists
+- name: Does {{ downloads_dir }}/{{ phpmyadmin_name_zip }} exist?    # e.g. /opt/iiab/downloads/phpMyAdmin-4.8.3-all-languages.zip
   stat:
     path: "{{ downloads_dir }}/{{ phpmyadmin_name_zip }}"
   register: phpmyadmin_dl
@@ -22,14 +22,14 @@
     dest: /opt
     owner: "{{ apache_user }}"
 
-- name: Create symbolic link /opt/phpmyadmin to phpMyAdmin folder above
+- name: Create symlink from /opt/phpmyadmin to {{ phpmyadmin_name }}
   file:
     src: "{{ phpmyadmin_name }}"
-    dest: /opt/phpmyadmin
+    path: /opt/phpmyadmin
     owner: "{{ apache_user }}"
     state: link
 
-- name: Copy phpMyAdmin's config file into place
+- name: Install /opt/phpmyadmin/config.inc.php from template
   template:
     src: config.inc.php
     dest: /opt/phpmyadmin/config.inc.php
@@ -46,28 +46,28 @@
 #   #  recurse: yes
 #   #  state: directory
 
-- name: Put the alias into Apache config when enabled
+- name: Install /etc/{{ apache_config_dir }}/phpmyadmin.conf from template, if phpmyadmin_enabled
   template:
     src: phpmyadmin.j2
     dest: "/etc/{{ apache_config_dir }}/phpmyadmin.conf"
   when: phpmyadmin_enabled
 
-- name: Enable phpMyAdmin
+- name: Create symlink phpmyadmin.conf from sites-enabled to sites-available (debuntu)
   file:
     src: /etc/apache2/sites-available/phpmyadmin.conf
-    dest: /etc/apache2/sites-enabled/phpmyadmin.conf
+    path: /etc/apache2/sites-enabled/phpmyadmin.conf
     state: link
   when: phpmyadmin_enabled and is_debuntu
 
-- name: Remove the alias into Apache config when not enabled
+- name: Remove /etc/apache2/sites-enabled/phpmyadmin.conf, if not phpmyadmin_enabled (debuntu)
   file:
     path: /etc/apache2/sites-enabled/phpmyadmin.conf
     state: absent
   when: not phpmyadmin_enabled and is_debuntu
 
-- name: Add 'phpmyadmin' to list of services at {{ iiab_ini_file }}
+- name: Add 'phpmyadmin' variable values to {{ iiab_ini_file }}
   ini_file:
-    dest: "{{ iiab_ini_file }}"
+    path: "{{ iiab_ini_file }}"
     section: phpmyadmin
     option: "{{ item.option }}"
     value: "{{ item.value }}"
