@@ -1,30 +1,28 @@
-- name: Install OSM required packages (debuntu)
+- name: Install 5 OSM required packages (debuntu)
   package:
-    name: "{{ item }}"
+    name:
+      - gcc
+      - python-dev
+      - liblzma-dev
+      - libapache2-mod-wsgi
+      - libapache2-mod-xsendfile
     state: present
-  with_items:
-    - gcc
-    - python-dev
-    - liblzma-dev
-    - libapache2-mod-wsgi
-    - libapache2-mod-xsendfile
   when: is_debuntu
 
-- name: Install OSM required packages (not debuntu)
+- name: Install 6 OSM required packages (not debuntu)
   package:
-    name: "{{ item }}"
+    name:
+      - python-pip
+      - gcc
+      - python-devel
+      - xz-devel
+      - mod_wsgi
+      - mod_xsendfile
     state: present
-  with_items:
-    - python-pip
-    - gcc
-    - python-devel
-    - xz-devel
-    - mod_wsgi
-    - mod_xsendfile
   when: not is_debuntu
 
 # OSM wants a specific version do that first
-- name: Install Whoosh 2.6 (debuntu)
+- name: Install Whoosh 2.6 using pip, into virtualenv (debuntu)
   pip:
     name: whoosh
     virtualenv: "{{ osm_venv }}"
@@ -33,7 +31,7 @@
     extra_args: "--no-cache-dir"
   when: internet_available and is_debuntu
 
-- name: Install Flask 0.12X (debuntu)
+- name: Install Flask 0.12.4 using pip, into virtualenv (debuntu)
   pip:
     name: Flask
     virtualenv: "{{ osm_venv }}"
@@ -42,7 +40,7 @@
     extra_args: "--no-cache-dir"
   when: internet_available and is_debuntu
 
-- name: Install OSM with dependencies (debuntu)
+- name: Install OSM with dependencies using pip, into virtualenv (debuntu)
   pip:
     name: "{{ item }}"
     virtualenv: "{{ osm_venv }}"
@@ -55,56 +53,56 @@
   when: internet_available and is_debuntu
 
 # OSM wants a specific version do that first
-- name: Install Whoosh 2.6 (not debuntu)
+- name: Install Whoosh 2.6 using pip, into virtualenv (not debuntu)
   pip:
     name: whoosh
     virtualenv: "{{ osm_venv }}"
     virtualenv_site_packages: no
     version: 2.6
-#       extra_args="--no-cache-dir"
+    #extra_args: "--no-cache-dir"
   when: internet_available and not is_debuntu
 
-- name: Install Flask 0.12X (not debuntu)
+- name: Install Flask 0.12.4 using pip, into virtualenv (not debuntu)
   pip:
     name: Flask
     virtualenv: "{{ osm_venv }}"
     virtualenv_site_packages: no
     version: 0.12.4
-#       extra_args="--no-cache-dir"
+    #extra_args: "--no-cache-dir"
   when: internet_available and not is_debuntu
 
-- name: Install OSM with dependencies (not debuntu)
+- name: Install OSM with dependencies using pip, into virtualenv (not debuntu)
   pip:
     name: "{{ item }}"
     virtualenv: "{{ osm_venv }}"
     virtualenv_site_packages: no
-#       extra_args="--no-cache-dir"
+    #extra_args: "--no-cache-dir"
   with_items:
     - MarkupSafe
     - pytz
     - Internet-in-a-Box
   when: internet_available and not is_debuntu
 
-- name: Set osm_path (redhat)
+- name: Set osm_path fact (redhat)
   set_fact:
     #osm_path: "{{ osm_venv }}/{{ python_path }}/iiab"
     osm_path: "{{ osm_venv }}{{ python_path }}/iiab"
   when: osm_enabled and is_redhat
 
-- name: Set osm_path (debuntu)
+- name: Set osm_path fact (debuntu)
   set_fact:
     #osm_path: "{{ osm_venv }}/lib/python2.7/site-packages/iiab"
     osm_path: "{{ osm_venv }}lib/python2.7/site-packages/iiab"
   when: osm_enabled and is_debuntu
 
-- name: Point wsgi to virtual environment (all OS's)
+- name: Point wsgi to virtual environment
   lineinfile:
-    dest: "{{ osm_venv }}/bin/iiab.wsgi"
+    path: "{{ osm_venv }}/bin/iiab.wsgi"
     regexp: "path_to_virtualenv = None"
     line: "path_to_virtualenv = '/usr/local/osm'"
     state: present
 
-- name: Copy OSM config file (all OS's)
+- name: Install /etc/{{ apache_config_dir }}/osm.conf from template
   template:
     src: osm.conf.j2
     dest: "/etc/{{ apache_config_dir }}/osm.conf"
@@ -114,41 +112,41 @@
     backup: no
   when: osm_enabled
 
-- name: Create a link from sites-enabled to sites-available (debuntu)
+- name: Create softlink osm.conf from sites-enabled to sites-available (debuntu)
   file:
     src: "/etc/{{ apache_config_dir }}/osm.conf"
-    dest: /etc/apache2/sites-enabled/osm.conf
+    path: /etc/apache2/sites-enabled/osm.conf
     state: link
   when: osm_enabled and is_debuntu
 
-- name: Remove the link from sites-enabled to sites-available (debuntu)
+- name: Remove softlink osm.conf from sites-enabled (debuntu)
   file:
-    dest: /etc/apache2/sites-enabled/osm.conf
+    path: /etc/apache2/sites-enabled/osm.conf
     state: absent
   when: not osm_enabled and is_debuntu
 
-- name: Remove the osm.conf (redhat)
+- name: Remove /{{ apache_config_dir }}/osm.conf (redhat)
   file:
-    dest: "/{{ apache_config_dir }}/osm.conf"
+    path: "/{{ apache_config_dir }}/osm.conf"
     state: absent
   when: not osm_enabled and is_redhat
 
-- name: Remove link to cgi (all OS's)
+- name: Remove link {{ doc_root }}/osm.wsgi
   file:
-    dest: "{{ doc_root }}/osm.wsgi"
+    path: "{{ doc_root }}/osm.wsgi"
     state: absent
   when: not osm_enabled
 
-- name: Create link to cgi (all OS's)
+- name: Create softlink osm.wsgi to iiab.cgi
   file:
     src: "{{ osm_venv }}/bin/iiab.wsgi"
-    dest: "{{ doc_root }}/osm.wsgi"
+    path: "{{ doc_root }}/osm.wsgi"
     owner: root
     group: root
     state: link
   when: osm_enabled
 
-- name: Create the knowledge data set folders
+- name: Create dir /library/knowledge/modules
   file:
     path: /library/knowledge/modules
     state: directory
@@ -156,7 +154,7 @@
     group: "{{ apache_user }}"
 
 # the following was brought into OSM playbook from iiab-factory osm-fix script
-- name: Copy the files
+- name: Install 6 files from templates
   template:
     src: "{{ item.src }}"
     dest: "{{ item.dest }}"
@@ -174,9 +172,9 @@
     name: "{{ apache_service }}"
     state: restarted
 
-- name: Add 'osm' to list of services at {{ iiab_ini_file }}
+- name: Add 'osm' variable values to {{ iiab_ini_file }}
   ini_file:
-    dest: "{{ iiab_ini_file }}"
+    path: "{{ iiab_ini_file }}"
     section: osm
     option: "{{ item.option }}"
     value: "{{ item.value }}"

@@ -1,6 +1,6 @@
 # 1. CREATE/VERIFY CRITICAL DIRECTORIES & FILES ARE IN PLACE
 
-- name: Create various directories for Kiwix ZIM files
+- name: Create directory {{ iiab_zim_path }} and subdirs {content, index} for Kiwix ZIM files
   file:
     path: "{{ item }}"
     owner: root
@@ -12,12 +12,12 @@
   - "{{ iiab_zim_path }}/content"
   - "{{ iiab_zim_path }}/index"
 
-- name: Check for /library/zims/library.xml
+- name: Check for {{ kiwix_library_xml }}    # /library/zims/library.xml
   stat:
     path: "{{ kiwix_library_xml }}"
   register: kiwix_xml
 
-- name: Place a stub /library/zims/library.xml if file does not exist
+- name: Install a stub /library/zims/library.xml if one doesn't exist
   template:
     src: "{{ item }}"
     dest: "{{ kiwix_library_xml }}"
@@ -34,12 +34,12 @@
     path: "{{ kiwix_path }}/bin/kiwix-serve"
   register: kiwix_bin
 
-- name: Set kiwix_force_install if kiwix-serve not found
+- name: Set fact kiwix_force_install if kiwix-serve not found
   set_fact:
     kiwix_force_install: True
   when: not kiwix_bin.stat.exists
 
-- name: Copy test.zim file if kiwix_force_install
+- name: Install {{ iiab_zim_path }}/content/test.zim if kiwix_force_install
   copy:
     src: test.zim
     dest: "{{ iiab_zim_path }}/content/test.zim"
@@ -49,7 +49,7 @@
     force: no
   when: kiwix_force_install
 
-- name: Create /opt/iiab/kiwix/bin directory
+- name: Create {{ kiwix_path }}/bin directory    # /opt/iiab/kiwix/bin
   file:
     path: "{{ kiwix_path }}/bin"
     owner: root
@@ -59,7 +59,7 @@
 
 # 2. INSTALL KIWIX-TOOLS EXECUTABLES IF kiwix_force_install
 
-- name: Unarchive kiwix-tools .tar.gz to /tmp
+- name: Unarchive {{ kiwix_src_file }} to /tmp    # e.g. kiwix-tools_linux-armhf-0.6.1-1.tar.gz
   unarchive:
     src: "{{ downloads_dir }}/{{ kiwix_src_file }}"
     dest: /tmp
@@ -73,7 +73,7 @@
 
 # 3. ENABLE MODS FOR APACHE PROXY IF DEBUNTU
 
-- name: Enable the mods which permit Apache to proxy (debuntu)
+- name: Enable the 4 mods which permit Apache to proxy (debuntu)
   apache2_module:
     name: "{{ item }}"
   with_items:
@@ -85,7 +85,7 @@
 
 # 4. CREATE/ENABLE/RESTART (OR DISABLE) KIWIX SERVICE & ITS CRON JOB
 
-- name: Create 'kiwix-serve' service and related files
+- name: 'Install from templates: kiwix-serve.service, iiab-make-kiwix-lib, iiab-make-kiwix-lib.py, kiwix.conf'
   template:
     backup: no
     src: "{{ item.src }}"
@@ -101,14 +101,14 @@
 #  - { src: 'iiab-make-apache-config.py', dest: '/usr/bin/iiab-make-apache-config.py', mode: '0755'}
   - { src: 'kiwix.conf.j2', dest: '/etc/{{ apache_config_dir }}/kiwix.conf', mode: '0644'}
 
-- name: Enable Kiwix Proxy in Apache - is disabled by turning off kiwix service (debuntu)
+- name: Create softlink kiwix.conf from sites-enabled to sites-available - for Kiwix Proxy in Apache - is disabled by turning off service kiwix-serve (debuntu)
   file:
     src: /etc/apache2/sites-available/kiwix.conf
     path: /etc/apache2/sites-enabled/kiwix.conf
     state: link
   when: is_debuntu
 
-- name: Enable 'kiwix-serve' service
+- name: Enable & Restart 'kiwix-serve' service
   service:
     name: kiwix-serve
     enabled: yes
@@ -149,9 +149,9 @@
 
 # 5. FINALIZE
 
-- name: Add 'kiwix' to list of services at {{ iiab_ini_file }}
+- name: Add 'kiwix' variable values to {{ iiab_ini_file }}
   ini_file:
-    dest: "{{ iiab_ini_file }}"
+    path: "{{ iiab_ini_file }}"
     section: kiwix
     option: "{{ item.option }}"
     value: "{{ item.value }}"
