@@ -11,7 +11,7 @@
 # and security enhancements using timestamps under /library/wordpress, as these
 # can arise without warning when WordPress is online, since WordPress ~4.8
 
-- name: Download the latest WordPress software
+- name: Download {{ wordpress_download_base_url }}/{{ wordpress_src }} to {{ downloads_dir }}
   get_url:
     url: "{{ wordpress_download_base_url }}/{{ wordpress_src }}"
     dest: "{{ downloads_dir }}"
@@ -21,14 +21,14 @@
   register: wp_download_output
   when: internet_available
 
-- name: Create link /opt/iiab/downloads/wordpress.tar.gz pointing to {{ wp_download_output.dest }}
+- name: Create symlink from /opt/iiab/downloads/wordpress.tar.gz to {{ wp_download_output.dest }}
   file:
     src: "{{ wp_download_output.dest }}"
-    dest: "{{ downloads_dir }}/wordpress.tar.gz"
+    path: "{{ downloads_dir }}/wordpress.tar.gz"
     state: link
   when: wp_download_output.dest is defined
 
-- name: Check if /opt/iiab/downloads/wordpress.tar.gz link exists
+- name: Does /opt/iiab/downloads/wordpress.tar.gz link exist?
   stat:
     path: "{{ downloads_dir }}/wordpress.tar.gz"
   register: wp_link
@@ -61,7 +61,7 @@
 - name: Make /library/wordpress directories 775 so Apache can traverse and write (most files remain 0664)
   command: "/usr/bin/find {{ wp_abs_path }} -type d -exec chmod 775 {} +"
 
-- name: Copy wp salt values
+- name: Install {{ wp_abs_path }}/wp-keys.php.BAK
   copy:
     src: wp-keys.php.BAK
     dest: "{{ wp_abs_path }}/wp-keys.php.BAK"
@@ -71,7 +71,7 @@
 
 # Fetch random salts for WordPress config into wp-keys.php file by generating script and running
 
-- name: Create wp salt script
+- name: Install script /tmp/get-iiab-wp-salts from template
   template:
     src: get-iiab-wp-salts.j2
     dest: /tmp/get-iiab-wp-salts
@@ -79,20 +79,20 @@
     group: root
     mode: 0700
 
-- name: Run wp salt script to create /library/wordpress/wp-keys.php
+- name: Run /tmp/get-iiab-wp-salts to create /library/wordpress/wp-keys.php
   command: /tmp/get-iiab-wp-salts
 
-- name: Cleanup - remove wp salt script
+- name: Remove script /tmp/get-iiab-wp-salts
   file:
     path: /tmp/get-iiab-wp-salts
     state: absent
 
-- name: MySQL database needs to be running if we are trying to create a new db
+- name: Start MySQL systemd service
   service:
     state: started
     name: "{{ mysql_service }}"
 
-- name: Create MySQL wordpress database
+- name: 'Create MySQL wordpress database: {{ wp_db_name }}'
   mysql_db:
     name: "{{ wp_db_name }}"
     state: present
@@ -104,7 +104,7 @@
     priv: "{{ wp_db_name }}.*:ALL,GRANT"
     state: present
 
-- name: Copy wp-config.php
+- name: Install {{ wp_abs_path }}/wp-config.php
   template:
     src: wp-config.php.j2
     dest: "{{ wp_abs_path }}/wp-config.php"
@@ -112,32 +112,32 @@
     group: "{{ apache_user }}"
     mode: 0660
 
-- name: Copy wordpress.conf to permit http://box{{ wp_url }}
+- name: Install etc/{{ apache_config_dir }}/wordpress.conf from template, for http://box{{ wp_url }}
   template:
     src: wordpress.conf.j2
     dest: "/etc/{{ apache_config_dir }}/wordpress.conf"
 
-- name: Enable wordpress.conf if wordpress_enabled (debuntu)
+- name: Create symlink wordpress.conf from sites-enabled to sites-available, if wordpress_enabled (debuntu)
   file:
     src: /etc/apache2/sites-available/wordpress.conf
-    dest: /etc/apache2/sites-enabled/wordpress.conf
+    path: /etc/apache2/sites-enabled/wordpress.conf
     state: link
   when: wordpress_enabled and is_debuntu
 
-- name: Remove wordpress.conf if not wordpress_enabled (debuntu)
+- name: Remove /etc/apache2/sites-enabled/wordpress.conf if not wordpress_enabled (debuntu)
   file:
     path: /etc/apache2/sites-enabled/wordpress.conf
     state: absent
   when: not wordpress_enabled and is_debuntu
 
 - name: Restart Apache to enable/disable http://box{{ wp_url }}
-  service:
+  systemd:
     name: "{{ apache_service }}"
     state: restarted
 
-- name: Add 'wordpress' to list of services at {{ iiab_ini_file }}
+- name: Add 'wordpress' variable values to {{ iiab_ini_file }}
   ini_file:
-    dest: "{{ iiab_ini_file }}"
+    path: "{{ iiab_ini_file }}"
     section: wordpress
     option: "{{ item.option }}"
     value: "{{ item.value }}"
