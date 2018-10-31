@@ -21,7 +21,7 @@
   tags:
     - download
 
-- name: Create postgresql-iiab systemd service
+- name: Install /etc/systemd/system/postgresql-iiab.service from template
   template:
     src: postgresql-iiab.service
     dest: /etc/systemd/system/postgresql-iiab.service
@@ -29,7 +29,7 @@
     group: root
     mode: 0644
 
-- name: Create postgres data directory
+- name: Create PostgreSQL data dir /library/pgsql-iiab, owned by postgres:postgres
   file:
     path: /library/pgsql-iiab
     owner: postgres
@@ -37,17 +37,17 @@
     mode: 0700
     state: directory
 
-- name: Make sure that the en_US locale is enabled (debuntu)
+- name: Make sure locale {{ postgresql_locale }} is enabled (debuntu)    # en_US.UTF-8
   lineinfile:
     dest: /etc/locale.gen
     line: "{{ postgresql_locale }} UTF-8"
   when: is_debuntu
 
-- name: Generate the selected locales (debuntu)
+- name: Generate locales (debuntu)
   command: /usr/sbin/locale-gen
   when: is_debuntu
 
-- name: Initialize the postgres db (debuntu)
+- name: Initialize the PostgreSQL db, creating /library/pgsql-iiab/pg_hba.conf (debuntu)
   #command: su - postgres -c "/usr/lib/postgresql/{{ postgresql_version }}/bin/initdb -E 'UTF-8' --locale={{ postgresql_locale }} -D /library/pgsql-iiab"
   command: /usr/lib/postgresql/{{ postgresql_version }}/bin/initdb -E 'UTF-8' --locale={{ postgresql_locale }} -D /library/pgsql-iiab
   args:
@@ -56,7 +56,7 @@
   become_user: postgres
   when: is_debuntu
 
-- name: Initialize the postgres db (OS's other than debuntu)
+- name: Initialize the PostgreSQL db, creating /library/pgsql-iiab/pg_hba.conf (OS's other than debuntu)
   #command: su - postgres -c "/usr/bin/initdb -E 'UTF-8' --lc-collate={{ postgresql_locale }} --lc-ctype={{ postgresql_locale }} -D /library/pgsql-iiab"
   command: /usr/bin/initdb -E 'UTF-8' --lc-collate={{ postgresql_locale }} --lc-ctype={{ postgresql_locale }} -D /library/pgsql-iiab
   args:
@@ -65,7 +65,7 @@
   become_user: postgres
   when: not is_debuntu
 
-- name: Configure PostgreSQL
+- name: Install /library/pgsql-iiab/postgresql.conf owned by postgres:postgres, from template
   template:
     backup: yes
     src: postgresql.conf.j2
@@ -74,34 +74,35 @@
     group: postgres
     mode: 0640
 
-- name: Stop postgresql service (debuntu)
+# Probably Not Nec!  Given stanza below does the same.
+- name: 'Stop postgresql service: /etc/init.d/postgresql stop (debuntu)'
   command: "/etc/init.d/postgresql stop"
   ignore_errors: True
   when: postgresql_install and is_debuntu
 
-- name: Stop and disable stock postgresql service
-  service:
+- name: Disable stock postgresql service
+  systemd:
     name: postgresql
     state: stopped
     enabled: no
 
-- name: Start and enable postgresql-iiab service
-  service:
+- name: Start & enable postgresql-iiab systemd service, if postgresql_enabled
+  systemd:
     name: postgresql-iiab
     state: started
     enabled: yes
   when: postgresql_enabled
 
-- name: Stop and disable postgresql-iiab service if not postgresql_enabled
-  service:
+- name: Disable postgresql-iiab service, if not postgresql_enabled
+  systemd:
     name: postgresql-iiab
     state: stopped
     enabled: no
   when: not postgresql_enabled
 
-- name: Add 'postgresql' to list of services at {{ iiab_ini_file }}
+- name: Add 'postgresql' variable values to {{ iiab_ini_file }}
   ini_file:
-    dest: "{{ iiab_ini_file }}"
+    path: "{{ iiab_ini_file }}"
     section: postgresql
     option: "{{ item.option }}"
     value: "{{ item.value }}"
