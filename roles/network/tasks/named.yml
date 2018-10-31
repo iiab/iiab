@@ -1,4 +1,4 @@
-- name: Install named packages {bind9, bind9utils} (if debuntu)
+- name: "Install named packages: bind9, bind9utils (debuntu)"
   package:
     name:
       - bind9
@@ -8,7 +8,7 @@
   tags:
     - download
 
-- name: Install named packages {bind, bind-utils} (if not debuntu)
+- name: "Install named packages: bind, bind-utils (OS's other than debuntu)"
   package:
     name:
       - bind
@@ -25,7 +25,7 @@
     state: stopped
   when: first_run and is_debuntu
 
-- name: Set folder permission
+- name: "Set 3 folders' ownership to {{ dns_user }}:root and permission to 0755"
   file:
     path: "{{ item }}"
     owner: "{{ dns_user }}"
@@ -37,7 +37,7 @@
     - /var/named-iiab/data
     - /etc/sysconfig/olpc-scripts/domain_config.d
 
-- name: Configure named
+- name: Install 20+ files for named, from templates
   template:
     src: "{{ item.src }}"
     dest: "{{ item.dest }}"
@@ -68,39 +68,39 @@
     - { src: 'roles/network/templates/named/dummy', dest: '/var/named-iiab/data/dummy', owner: "{{ dns_user }}", mode: '0644' }
     - { src: 'roles/network/templates/named/named.blackhole', dest: '/var/named-iiab/named.blackhole', owner: "{{ dns_user }}", mode: '0644' }
 
-- name: Substitute our unit file which uses $OPTIONS from sysconfig
+- name: Install named unit file /etc/systemd/system/{{ dns_service }}.service, which uses $OPTIONS from sysconfig
   template:
     src: "roles/network/templates/named/{{ dns_service }}.service"
     dest: "/etc/systemd/system/{{ dns_service }}.service"
     mode: 0644
 
-- name: The dns-jail redirect requires the named.blackhole, disabling recursion (if dns_jail_enabled)
+- name: "Install /etc/{{ apache_config_dir }}/dns-jail.conf from template: dns-jail redirect requires the named.blackhole, disabling recursion (if dns_jail_enabled)"
 #        in named-iiab.conf, and the redirection of 404 error documents to /
   template:
     src: roles/network/templates/named/dns-jail.conf
     dest: "/etc/{{ apache_config_dir }}/"
   when: dns_jail_enabled
 
-- name: Separate enabling required (if debuntu and dns_jail_enabled)
+- name: Create symlink dns-jail.conf from sites-enabled to sites-available (if debuntu and dns_jail_enabled)
   file:
     src: "/etc/{{ apache_config_dir }}/dns-jail.conf"
     path: "/etc/{{ apache_service }}/sites-enabled/dns-jail.conf"
     state: link
   when: is_debuntu and dns_jail_enabled
 
-- name: Separate disabling required (if debuntu and not dns_jail_enabled)
+- name: Remove symlink /etc/{{ apache_service }}/sites-enabled/dns-jail.conf (if debuntu and not dns_jail_enabled)
   file: 
     path: "/etc/{{ apache_service }}/sites-enabled/dns-jail.conf"
     state: absent
   when: is_debuntu and not dns_jail_enabled
 
-- name: Separate enabling/disabling required (if not debuntu and not dns_jail_enabled)
+- name: Remove symlink /etc/{{ apache_config_dir }}/dns-jail.conf (if not debuntu and not dns_jail_enabled)
   file:
     path: "/etc/{{ apache_config_dir }}/dns-jail.conf"
     state: absent
   when: not is_debuntu and not dns_jail_enabled
 
-- name: Start named after copying files
-  service:
+- name: Start named systemd service
+  systemd:
     name: "{{ dns_service }}"
     state: started
