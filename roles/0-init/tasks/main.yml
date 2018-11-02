@@ -5,14 +5,14 @@
     path: "{{ iiab_env_file }}"
   register: NewInstall
 
-- name: Setting first run flag
+- name: Set first_run flag
   set_fact:
     first_run: True
   when: not NewInstall.stat.exists
 
 # We need to inialize the ini file and only write the location and version
 # sections once and only once to preserve the install date and git hash.
-- name: Write iiab_ini.yml for the first time
+- name: Create IIAB directory structure and {{ iiab_ini_file }}, if first_run
   include_tasks: first_run.yml
   when: first_run
 
@@ -36,30 +36,30 @@
 #      nobridge: True
   when: ansible_local.local_facts.os == "raspbian"
 
-- name: Set exFAT enabled for XO laptops
+- name: Set exFAT_enabled if xo_model != "none"
   set_fact:
     exFAT_enabled: True
   when: xo_model != "none"
 
 # Discover: do we have a gateway?
 # If Ansible detects gateway, becomes WAN candidate.
-- name: Finding gateway
+- name: "Do we have a gateway? If so set discovered_wan_iface: {{ ansible_default_ipv4.alias }}, iiab_wan_iface: {{ discovered_wan_iface }}"
   set_fact:
     discovered_wan_iface: "{{ ansible_default_ipv4.alias }}"
     iiab_wan_iface: "{{ discovered_wan_iface }}"
   when: ansible_default_ipv4.gateway is defined
 
-- name: Verify gateway present
+- name: "Verify gateway active: ping -c4 {{ ansible_default_ipv4.gateway }}"
   shell: ping -c4 "{{ ansible_default_ipv4.gateway }}" | grep icmp_seq=4 | wc -l
   when: discovered_wan_iface != "none"
   register: gw_active_test
 
-- name: Recording gateway response
+- name: If so, set gw_active
   set_fact:
     gw_active: True
   when: discovered_wan_iface != "none" and gw_active_test.stdout == "1"
 
-- name: Test for Internet access
+- name: Test for Internet access ({{ iiab_download_url }}/heart-beat.txt)
   get_url:
     url: "{{ iiab_download_url }}/heart-beat.txt"
     dest: /tmp/heart-beat.txt
@@ -70,12 +70,12 @@
 # poll: 2
   register: internet_access_test
 
-- name: Set internet_available true if wget succeeded
+- name: Set internet_available if download succeeded and not disregard_network
   set_fact:
     internet_available: True
   when: not internet_access_test.failed and not disregard_network
 
-- name: Remove Internet test file
+- name: Remove downloaded Internet test file /tmp/heart-beat.txt
   file:
     path: /tmp/heart-beat.txt
     state: absent
@@ -84,17 +84,17 @@
 - name: If the TZ is not set in env, set it to UTC
   include_tasks: tz.yml
 
-- name: Set port 80 for Admin Console
+- name: Set port 80 for Admin Console if not adm_cons_force_ssl
   set_fact:
     gui_port: 80
   when: not adm_cons_force_ssl
 
-- name: Set port 443 for Admin Console
+- name: Set port 443 for Admin Console if adm_cons_force_ssl
   set_fact:
     gui_port: 443
   when: adm_cons_force_ssl
 
-- name: Require MySQL to be on (mandatory in Stage 3!)
+- name: Turn on both vars for MySQL (mandatory in Stage 3!)
   set_fact:
     mysql_install: True
     mysql_enabled: True
@@ -103,18 +103,18 @@
 #  when: elgg_enabled or rachel_enabled or owncloud_enabled or phpmyadmin_enabled or wordpress_enabled or iiab_menu_install
 
 # Late 2017: Had commented out MongoDB on a trial basis, for a more basic/lightweight Sugarizer, per https://github.com/iiab/iiab/pull/427
-- name: Turn on vars for MongoDB if Sugarizer enabled
+- name: Turn on both vars for MongoDB if sugarizer_enabled
   set_fact:
      mongodb_install: True
      mongodb_enabled: True
   when: sugarizer_enabled
 
 # There might be other db's
-- name: Turn on vars for PostgreSQL if Moodle or Pathagar enabled
+- name: Turn on both vars for PostgreSQL if moodle_enabled or pathagar_enabled
   set_fact:
     postgresql_install: True
     postgresql_enabled: True
-  when: moodle_enabled or (pathagar is defined and pathagar_enabled)
+  when: moodle_enabled or (pathagar_enabled is defined and pathagar_enabled)
 
 #- name: Turn on vars for Docker if SchoolTool is to be installed
 #  set_fact:
@@ -122,12 +122,12 @@
 #    docker_enabled: True
 #  when: schooltool_enabled or schooltool_install
 
-- name: Set python_path (redhat)
+- name: "Set python_path: /lib/python2.7/site-packages/ (redhat)"
   set_fact:
     python_path: /lib/python2.7/site-packages/
   when: is_redhat
 
-- name: Set python_path (debuntu)
+- name: "Set python_path: /usr/local/lib/python2.7/dist-packages/ (debuntu)"
   set_fact:
     python_path: /usr/local/lib/python2.7/dist-packages/
   when: is_debuntu
@@ -135,28 +135,28 @@
 # For various reasons the mysql service cannot be enabled on Fedora 20, but
 # 'mariadb', which is its real name can.  On Fedora 18 we need to use 'mysqld'.
 
-- name: Set mysql_service to mariadb by default
+- name: "Set mysql_service: mariadb by default"
   set_fact:
     mysql_service: mariadb
 
-- name: Set mysql_service to mysqld etc (Fedora 18)
+- name: "Set mysql_service: mysqld etc (Fedora 18)"
   set_fact:
     mysql_service: mysqld
     no_NM_reload: True
     is_F18: True
   when: (ansible_distribution_release == "based on Fedora 18" or ansible_distribution_version == "18") and ansible_distribution == "Fedora"
 
-- name: Set mysql_service to mysql (debuntu)
+- name: "Set mysql_service: mysql (debuntu)"
   set_fact:
     mysql_service: mysql
   when: is_debuntu
 
-- name: Set FQDN
+- name: "Set iiab_fqdn: {{ iiab_hostname }}.{{ iiab_domain }}"
   set_fact:
     iiab_fqdn: "{{ iiab_hostname }}.{{ iiab_domain }}"
     FQDN_changed: False
 
-- name: FQDN changed
+- name: Set FQDN_changed when iiab_fqdn != ansible_fqdn ({{ ansible_fqdn }})
   set_fact:
     FQDN_changed: True
   when: iiab_fqdn != ansible_fqdn
