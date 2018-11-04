@@ -27,7 +27,7 @@ CAPTIVE_PORTAL_BASE = "/opt/iiab/captive-portal"
 j2_env = Environment(loader=FileSystemLoader(CAPTIVE_PORTAL_BASE),trim_blocks=True)
 
 # Define time outs
-INACTIVITY_TO = 10
+INACTIVITY_TO = 30
 PORTAL_TO = 0 # delay after triggered by ajax upon click of link to home page
 # I had hoped that returning 204 status after some delay 
 #  would dispense with android's "sign-in to network" (no work)
@@ -219,7 +219,7 @@ def android(environ, start_response):
         set_204after(ip,0)
     else:
         set_204after(ip,20)
-        location = 'https://android_http'
+        location = '/android_https'
     agent = environ.get('HTTP_USER_AGENT','default_agent')
     response_body = "hello"
     status = '302 Moved Temporarily'
@@ -542,8 +542,8 @@ def application (environ, start_response):
         # microsoft
         if  environ['PATH_INFO'] == "/microsoft_splash":
            return microsoft_splash(environ, start_response) 
-        #if  environ['PATH_INFO'] == "/connecttest.txt" and not is_inactive(ip):
-           #return microsoft_connect(environ, start_response) 
+        if  environ['PATH_INFO'] == "/connecttest.txt" and not is_inactive(ip):
+           return microsoft_connect(environ, start_response) 
         if environ['HTTP_HOST'] == "ipv6.msftncsi.com" or\
            environ['HTTP_HOST'] == "detectportal.firefox.com" or\
            environ['HTTP_HOST'] == "ipv6.msftncsi.com.edgesuite.net" or\
@@ -554,6 +554,7 @@ def application (environ, start_response):
            environ['HTTP_HOST'] == "teredo.ipv6.microsoft.com.nsatc.net": 
            return microsoft(environ, start_response) 
 
+        # firefox -- seems both mac and Windows use it
     logger.debug("executing the defaut 204 response. [%s"%data)
     return put_204(environ,start_response)
 
