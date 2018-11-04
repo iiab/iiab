@@ -53,6 +53,6 @@ To return to using the systemd unit:
 Tips & Tricks
 -------------
 
-Please see "KA Lite Administration: What tips & tricks exist?" at: http://FAQ.IIAB.IO
+If you're online, please see "KA Lite Administration: What tips & tricks exist?" at: http://FAQ.IIAB.IO
 
-If you are offline, click on the FAQ (Frequently Asked Questions) here: http://box/info
+If you're offline, Internet-in-a-Box's FAQ (Frequently Asked Questions) is here: http://box/info
