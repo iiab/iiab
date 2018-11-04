@@ -27,7 +27,7 @@ CAPTIVE_PORTAL_BASE = "/opt/iiab/captive-portal"
 j2_env = Environment(loader=FileSystemLoader(CAPTIVE_PORTAL_BASE),trim_blocks=True)
 
 # Define time outs
-INACTIVITY_TO = 30
+INACTIVITY_TO = 10
 PORTAL_TO = 0 # delay after triggered by ajax upon click of link to home page
 # I had hoped that returning 204 status after some delay 
 #  would dispense with android's "sign-in to network" (no work)
@@ -87,6 +87,7 @@ sys.stderr = sl
 # Define globals
 MAC_SUCCESS=False
 ANDROID_TRIGGERED=False
+MICROSOFT_TRIGGERED=False
 
 logger.debug("")
 logger.debug('##########################################')
@@ -145,6 +146,8 @@ def timeout_info(ip):
 def is_inactive(ip):
     ts=tstamp(datetime.datetime.now(tzutc()))
     current_ts, last_ts, send204after = timeout_info(ip) 
+    logger.debug("In is_inactive. current_ts:%s. last_ts:%s. send204after:%s"%\
+            (current_ts,last_ts,send204after,))
     if not last_ts:
         return True
     if ts - int(last_ts) > INACTIVITY_TO:
@@ -179,8 +182,7 @@ def set_lasttimestamp(ip):
     conn.commit()
 
 #  ###################  Action routines based on OS  ################3
-def microsoft(environ,start_response):
-    #logger.debug("sending microsoft response")
+def microsoft_splash(environ,start_response):
     en_txt={ 'message':"Click on the button to go to the IIAB home page",\
             'btn1':"GO TO IIAB HOME PAGE",'doc_root':get_iiab_env("WWWROOT")}
     es_txt={ 'message':"Haga clic en el botón para ir a la página de inicio de IIAB",\
@@ -196,6 +198,17 @@ def microsoft(environ,start_response):
     start_response(status, response_headers)
     return [response_body]
 
+def microsoft(environ,start_response):
+    global MICROSOFT_TRIGGERED
+    logger.debug("sending microsoft redirect")
+    response_body = ""
+    status = '302 Moved Temporarily'
+    response_headers = [('Location','/microsoft_splash'),
+            ('Content-type','text/html'),
+            ('Content-Length',str(len(response_body)))]
+    start_response(status, response_headers)
+    return [response_body]
+
 def android(environ, start_response):
     global ANDROID_TRIGGERED
     ip = environ['HTTP_X_FORWARDED_FOR'].strip()
@@ -206,8 +219,8 @@ def android(environ, start_response):
         set_204after(ip,0)
     else:
         set_204after(ip,20)
-        location = '/android_https'
-    agent = environ['HTTP_USER_AGENT']
+        location = 'https://android_http'
+    agent = environ.get('HTTP_USER_AGENT','default_agent')
     response_body = "hello"
     status = '302 Moved Temporarily'
     response_headers = [('Location',location)]
@@ -331,12 +344,6 @@ def null(environ, start_response):
     start_response(status, headers)
     return [""]
 
-def not_found(environ, start_response):
-    status = '404 Not Found'
-    headers = [('Content-type', 'text/html')]
-    start_response(status, headers)
-    return [""]
-
 def success(environ, start_response):
     status = '200 ok'
     html = '<html><head><title>Success</title></head><body>Success</body></html>'
@@ -372,6 +379,10 @@ def parse_agent(agent):
     if match:
         system = match.group(1)
         system_version = match.group(2)
+    match = re.search(r"(Microsoft NCSI)",agent)
+    if match:
+        system = match.group(1)
+        system_version = "8"
     return (system, system_version)
 
 #
@@ -402,7 +413,7 @@ def application (environ, start_response):
         data.append("path: %s\n"%environ['PATH_INFO'])
         data.append("query: %s\n"%environ['QUERY_STRING'])
         data.append("ip: %s\n"%ip)
-        agent = environ['HTTP_USER_AGENT']
+        agent = environ.get('HTTP_USER_AGENT','default_agent')
         data.append("AGENT: %s\n"%agent)
         #print(data)
         found = False
@@ -435,7 +446,7 @@ def application (environ, start_response):
         data.append("path: %s\n"%environ['PATH_INFO'])
         data.append("query: %s\n"%environ['QUERY_STRING'])
         data.append("ip: %s\n"%ip)
-        agent = environ['HTTP_USER_AGENT']
+        agent = environ.get('HTTP_USER_AGENT','default_agent')
         data.append("AGENT: %s\n"%agent)
         logger.debug(data)
         #print(data)
@@ -499,7 +510,6 @@ def application (environ, start_response):
 
         if environ['HTTP_HOST'] == "captive.apple.com" or\
            environ['HTTP_HOST'] == "appleiphonecell.com" or\
-           environ['HTTP_HOST'] == "detectportal.firefox.com" or\
            environ['HTTP_HOST'] == "*.apple.com.edgekey.net" or\
            environ['HTTP_HOST'] == "gsp1.apple.com" or\
            environ['HTTP_HOST'] == "apple.com" or\
@@ -525,14 +535,17 @@ def application (environ, start_response):
             logger.debug("current_ts: %s laat_ts: %s send204after: %s"%(current_ts, last_ts, send204after,))
             if not last_ts or (ts - int(last_ts) > INACTIVITY_TO):
                 return android(environ, start_response) 
-            #elif is_after204_timeout(ip):
-                #return put_204(environ,start_response)
-            return not_found(environ,start_response)  #return without doing anything
+            elif is_after204_timeout(ip):
+                return put_204(environ,start_response)
+            return null(environ,start_response)  #return without doing anything
 
         # microsoft
-        if  environ['PATH_INFO'] == "/connecttest.txt" and not is_inactive(ip):
-           return microsoft_connect(environ, start_response) 
+        if  environ['PATH_INFO'] == "/microsoft_splash":
+           return microsoft_splash(environ, start_response) 
+        #if  environ['PATH_INFO'] == "/connecttest.txt" and not is_inactive(ip):
+           #return microsoft_connect(environ, start_response) 
         if environ['HTTP_HOST'] == "ipv6.msftncsi.com" or\
+           environ['HTTP_HOST'] == "detectportal.firefox.com" or\
            environ['HTTP_HOST'] == "ipv6.msftncsi.com.edgesuite.net" or\
            environ['HTTP_HOST'] == "www.msftncsi.com" or\
            environ['HTTP_HOST'] == "www.msftncsi.com.edgesuite.net" or\
