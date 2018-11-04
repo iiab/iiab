@@ -50,8 +50,8 @@ To return to using the systemd unit:
 
 *In late 2017, Internet-in-a-Box added a virtual environment (/usr/local/kalite/venv/) to keep KA Lite's Python package/dependency risks under control.  As such the command* `/usr/bin/kalite <https://github.com/iiab/iiab/blob/master/roles/kalite/templates/kalite.sh.j2>`_ *is a wrapper to this virtualenv.*
 
-Tips & Tricks
--------------
+More Tips & Tricks
+------------------
 
 If you're online, please see "KA Lite Administration: What tips & tricks exist?" at: http://FAQ.IIAB.IO
 
