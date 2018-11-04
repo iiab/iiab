@@ -1,0 +1,119 @@
+- name: Install packages required by Lokole
+  apt:
+    name:
+      - python3
+      - python3-pip
+      - python3-venv
+      - python3-dev
+      - libffi-dev
+      - libssl-dev
+      - bcrypt
+    state: present
+  tags:
+    - install
+
+- name: Install Lokole from PyPI
+  pip:
+    name: opwen_email_client
+    version: "{{ lokole_version }}"
+    virtualenv: "{{ lokole_venv }}"
+    virtualenv_command: python3 -m venv "{{ lokole_venv }}"
+  tags:
+    - install
+  when: internet_available
+
+- name: Compile translations
+  shell: |
+    python_version=$(python3 -c 'from sys import version_info; print("%s.%s" % (version_info.major, version_info.minor));';)
+    {{ lokole_venv }}/bin/pybabel compile -d {{ item }}/translations
+  with_items:
+    - "{{ lokole_venv }}/lib/python${python_version}/site-packages/opwen_email_client/webapp"
+  tags:
+    - install
+
+- name: Create run directory
+  file: 
+    path: "{{ lokole_run_directory }}"
+    state: directory
+  tags:
+    - configure
+
+- name: Configure Lokole
+  template:
+    src: webapp_secrets.sh.j2
+    dest: "{{ lokole_run_directory }}/webapp_secrets.sh"
+  tags:
+    - configure
+
+- name: Configure Gunicorn
+  template:
+    src: webapp.sh.j2
+    dest: "{{ lokole_run_directory }}/webapp.sh"
+    mode: a+x
+  tags:
+    - configure
+
+- name: Create 'lokole' service
+  template:
+    src: lokole.service.j2
+    dest: /etc/systemd/system/lokole.service
+  tags:
+    - systemd
+
+- name: Enable 'lokole' service
+  systemd:
+    daemon_reload: yes
+    name: lokole
+    enabled: yes
+    state: restarted
+  when: lokole_enabled
+
+- name: Disable 'lokole' service
+  systemd:
+    name: lokole
+    enabled: no
+    state: stopped
+  when: not lokole_enabled
+
+- name: Copy lokole httpd conf file
+  template:
+    src: lokole.conf.j2
+    dest: "/etc/{{ apache_config_dir }}/lokole.conf"
+
+- name: Enable httpd conf file if lokole_enabled (debuntu)
+  file:
+    src: "/etc/{{ apache_config_dir }}/lokole.conf"
+    dest: /etc/apache2/sites-enabled/lokole.conf
+    state: link
+  when: lokole_enabled and is_debuntu
+
+- name: Remove httpd conf file if we are disabled (OS's other than debuntu)
+  file:
+    path: /etc/apache2/sites-enabled/lokole.conf
+    state: absent
+  when: not lokole_enabled and is_debuntu
+
+- name: Restart Apache, so it picks up the new aliases
+  service:
+    name: "{{ apache_service }}"
+    state: restarted
+
+- name: Add 'lokole' variable values to {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"
+    section: lokole
+    option: "{{ item.option }}"
+    value: "{{ item.value }}"
+  with_items:
+    - option: name
+      value: lokole
+    - option: description
+      value: '"lokole is an email service."'
+    - option: lokole_run_directory
+      value: "{{ lokole_run_directory }}"
+    - option: lokole_url
+      value: "{{ lokole_url }}"
+    - option: lokole_full_url
+      value: "{{ lokole_full_url }}"
+    - option: lokole_enabled
+      value: "{{ lokole_enabled }}"
