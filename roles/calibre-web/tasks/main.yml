@@ -11,7 +11,7 @@
     - "{{ calibreweb_config }}"
 
 ## TODO: Calibre-web future release might get into pypi https://github.com/janeczku/calibre-web/issues/456
-- name: Download Calibre-Web github repository
+- name: Download Calibre-Web github repository to {{ calibreweb_venv_path }}
   git:
     repo: https://github.com/janeczku/calibre-web.git
     dest: "{{ calibreweb_venv_path }}"
@@ -30,29 +30,29 @@
 #  ignore_errors: True
 ##
 # Implementing this with Ansible command module for now.
-- name: Download Calibre-Web dependencies into virtual environment
+- name: Download Calibre-Web dependencies (using pip) into virtual environment
   pip:
     requirements: "{{ calibreweb_venv_path }}/requirements.txt"
     virtualenv: "{{ calibreweb_venv_path }}"
     virtualenv_site_packages: no
   when: internet_available
 
-- name: Symlink 'vendor' to site-packages for python to keep cps.py happy
+- name: Symlink {{ calibreweb_venv_path }}/vendor to {{ calibreweb_venv_path }}/lib/python2.7/site-packages to keep cps.py happy
   file:
-    state: link
     src: "{{ calibreweb_venv_path }}/lib/python2.7/site-packages"
     dest: "{{ calibreweb_venv_path }}/vendor"
+    state: link
 
-- name: Install systemd unit file calibre-web.service & Apache's calibre-web.conf, from templates
+- name: Install unit file /etc/systemd/system/calibre-web.service & /etc/apache2/sites-available/calibre-web.conf for http://box{{ calibreweb_url }}, from templates
   template:
     src: "{{ item.src }}"
     dest: "{{ item.dest }}"
-    mode: "{{ item.mode }}"
     owner: root
     group: root
+    mode: 0644
   with_items:
-    - { src: 'calibre-web.service.j2', dest: '/etc/systemd/system/calibre-web.service', mode: '0644' }
-    - { src: 'calibre-web.conf.j2', dest: '/etc/apache2/sites-available/calibre-web.conf', mode: '0644' }
+    - { src: 'calibre-web.service.j2', dest: '/etc/systemd/system/calibre-web.service' }
+    - { src: 'calibre-web.conf.j2', dest: '/etc/apache2/sites-available/calibre-web.conf' }
 
 - name: Does /library/calibre-web/metadata.db exist?
   stat:
@@ -73,7 +73,7 @@
   when: not metadatadb.stat.exists
   #when: calibreweb_provision
 
-- name: Provision/Copy default admin settings to /library/calibre-web/config/app.db IF metadata.db did not exist
+- name: Provision/Copy default admin settings to {{ calibreweb_config }}/app.db IF metadata.db did not exist    # {{ calibreweb_config }} is /library/calibre-web/config
   copy:
     src: roles/calibre-web/files/app.db
     dest: "{{ calibreweb_config }}"
@@ -84,7 +84,7 @@
   when: not metadatadb.stat.exists
   #when: calibreweb_provision
 
-- name: Enable and restart 'calibre-web' systemd service
+- name: Enable & Restart 'calibre-web' systemd service
   systemd:
     name: calibre-web
     daemon_reload: yes
@@ -117,7 +117,7 @@
 #  command: apachectl -k graceful
 #  when: not calibreweb_enabled
 
-- name: Restart Apache service {{ apache_service }}
+- name: Restart Apache systemd service ({{ apache_service }})
   systemd:
     name: "{{ apache_service }}"    # httpd or apache2
     state: restarted
