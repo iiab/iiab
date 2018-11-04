@@ -15,3 +15,8 @@ Using It
 --------
 
 Lokole should be accessible at http://box/lokole
+
+Known Issues
+------------
+
+Please see `#1282 <https://github.com/iiab/iiab/pull/1282#issuecomment-435622419>`_.
