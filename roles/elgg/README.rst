@@ -48,3 +48,10 @@ There are a number of seemingly similar usernames and passwords in this installa
 * elgg_admin_user - the Elgg (not MySQL) user that is the administrator
 
 * elgg_admin_password - the password for elgg_admin_user
+
+More Tips & Tricks
+------------------
+
+If you're online, please see "Elgg Administration: What tips & tricks exist? " at: http://FAQ.IIAB.IO
+
+If you're offline, Internet-in-a-Box's FAQ (Frequently Asked Questions) is here: http://box/info
