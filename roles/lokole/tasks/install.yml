@@ -1,4 +1,4 @@
-- name: Install packages required by Lokole
+- name: "Install 7 packages for Lokole: python3, python3-pip, python3-venv, python3-dev, libffi-dev, libssl-dev, bcrypt"
   apt:
     name:
       - python3
@@ -12,7 +12,7 @@
   tags:
     - install
 
-- name: Install Lokole from PyPI
+- name: pip install opwen_email_client (Lokole) {{ lokole_version }} from PyPI to {{ lokole_venv }}
   pip:
     name: opwen_email_client
     version: "{{ lokole_version }}"
@@ -31,21 +31,21 @@
   tags:
     - install
 
-- name: Create run directory
+- name: Create dir {{ lokole_run_directory }}
   file: 
     path: "{{ lokole_run_directory }}"
     state: directory
   tags:
     - configure
 
-- name: Configure Lokole
+- name: Install {{ lokole_run_directory }}/webapp_secrets.sh from template, to configure Lokole
   template:
     src: webapp_secrets.sh.j2
     dest: "{{ lokole_run_directory }}/webapp_secrets.sh"
   tags:
     - configure
 
-- name: Configure Gunicorn
+- name: Install {{ lokole_run_directory }}/webapp.sh from template, to configure Gunicorn
   template:
     src: webapp.sh.j2
     dest: "{{ lokole_run_directory }}/webapp.sh"
@@ -53,14 +53,14 @@
   tags:
     - configure
 
-- name: Create 'lokole' service
+- name: Install unit file /etc/systemd/system/lokole.service from template
   template:
     src: lokole.service.j2
     dest: /etc/systemd/system/lokole.service
   tags:
     - systemd
 
-- name: Enable 'lokole' service
+- name: Enable & Restart 'lokole' systemd service, with daemon_reload, if lokole_enabled
   systemd:
     daemon_reload: yes
     name: lokole
@@ -68,32 +68,38 @@
     state: restarted
   when: lokole_enabled
 
-- name: Disable 'lokole' service
+- name: Disable 'lokole' service, if not lokole_enabled
   systemd:
     name: lokole
     enabled: no
     state: stopped
   when: not lokole_enabled
 
-- name: Copy lokole httpd conf file
+- name: Install /etc/{{ apache_config_dir }}/lokole.conf from template, for http://box/lokole
   template:
     src: lokole.conf.j2
     dest: "/etc/{{ apache_config_dir }}/lokole.conf"
 
-- name: Enable httpd conf file if lokole_enabled (debuntu)
+- name: Symlink /etc/apache2/sites-enabled/lokole.conf to /etc/{{ apache_config_dir }}/lokole.conf, if lokole_enabled (debuntu)
   file:
     src: "/etc/{{ apache_config_dir }}/lokole.conf"
-    dest: /etc/apache2/sites-enabled/lokole.conf
+    path: /etc/apache2/sites-enabled/lokole.conf
     state: link
   when: lokole_enabled and is_debuntu
 
-- name: Remove httpd conf file if we are disabled (OS's other than debuntu)
+- name: Remove /etc/apache2/sites-enabled/lokole.conf, if not lokole_enabled (debuntu)
   file:
     path: /etc/apache2/sites-enabled/lokole.conf
     state: absent
   when: not lokole_enabled and is_debuntu
 
-- name: Restart Apache, so it picks up the new aliases
+- name: Remove /etc/{{ apache_config_dir }}/lokole.conf, if not lokole_enabled (OS's other than debuntu)
+  file:
+    path: "/etc/{{ apache_config_dir }}/lokole.conf"
+    state: absent
+  when: (not lokole_enabled) and (not is_debuntu)
+
+- name: Restart Apache ({{ apache_service }}) to enable/disable http://box/lokole
   service:
     name: "{{ apache_service }}"
     state: restarted
