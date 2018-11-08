@@ -65,6 +65,7 @@ class StreamToLogger(object):
 
 if len(sys.argv) > 1 and sys.argv[1] == '-l':
     loggingLevel = logging.DEBUG
+    os.remove('/var/log/apache2/portal.log')
 else:
     loggingLevel = logging.ERROR
 logging.basicConfig(filename='/var/log/apache2/portal.log',format='%(asctime)s.%(msecs)03d:%(name)s:%(message)s', datefmt='%M:%S',level=loggingLevel)
@@ -218,7 +219,7 @@ def home(environ,start_response):
     logger.debug("sending direct to home")
     response_body = ""
     status = '302 Moved Temporarily'
-    response_headers = [('Location','http://iiab-server.lan/home'),
+    response_headers = [('Location','http://' + fully_qualified_domain_name + '/home'),
             ('Content-type','text/html'),
             ('Content-Length',str(len(response_body)))]
     start_response(status, response_headers)
@@ -232,8 +233,10 @@ def android(environ, start_response):
         logger.debug("system < 6:%s"%system_version)
         location = '/android_splash'
         set_204after(ip,0)
+    elif system_version.startswith('8'):
+        location = "http://" + fully_qualified_domain_name + "/home"
     else:
-        set_204after(ip,20)
+        #set_204after(ip,20)
         location = '/android_https'
     agent = environ.get('HTTP_USER_AGENT','default_agent')
     response_body = "hello"
