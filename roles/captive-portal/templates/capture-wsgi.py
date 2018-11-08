@@ -37,6 +37,7 @@ PORTAL_TO = 0 # delay after triggered by ajax upon click of link to home page
 sys.path.append('/etc/iiab/')
 from iiab_env import get_iiab_env
 doc_root = get_iiab_env("WWWROOT")
+fully_qualified_domain_name = get_iiab_env("FQDN")
 
 # make a way to find new URLs queried by new clients
 # CATCH substitues this server for apache at port 80
@@ -200,10 +201,24 @@ def microsoft_splash(environ,start_response):
 
 def microsoft(environ,start_response):
     global MICROSOFT_TRIGGERED
+    # firefox -- seems both mac and Windows use it
+    agent = environ.get('HTTP_USER_AGENT','default_agent')
+    if agent.startswith('Mozilla'):
+       return home(environ, start_response) 
     logger.debug("sending microsoft redirect")
     response_body = ""
     status = '302 Moved Temporarily'
     response_headers = [('Location','/microsoft_splash'),
+            ('Content-type','text/html'),
+            ('Content-Length',str(len(response_body)))]
+    start_response(status, response_headers)
+    return [response_body]
+
+def home(environ,start_response):
+    logger.debug("sending direct to home")
+    response_body = ""
+    status = '302 Moved Temporarily'
+    response_headers = [('Location','http://iiab-server.lan/home'),
             ('Content-type','text/html'),
             ('Content-Length',str(len(response_body)))]
     start_response(status, response_headers)
@@ -230,8 +245,10 @@ def android(environ, start_response):
 def android_splash(environ, start_response):
     en_txt={ 'message':"Click on the button to go to the IIAB home page",\
             'btn1':"GO TO IIAB HOME PAGE", \
+            "FQDN": fully_qualified_domain_name, \
             'doc_root':get_iiab_env("WWWROOT") }
     es_txt={ 'message':"Haga clic en el botón para ir a la página de inicio de IIAB",\
+            "FQDN": fully_qualified_domain_name, \
             'btn1':"IIAB",'doc_root':get_iiab_env("WWWROOT")}
     if lang == "en":
         txt = en_txt
@@ -248,8 +265,10 @@ def android_https(environ, start_response):
     en_txt={ 'message':"""Please ignore the SECURITY warning which appears after clicking the first button""",\
              'btn2':'Click this first Go to the browser we need',\
              'btn1':'Then click this to go to IIAB home page',\
+             "FQDN": fully_qualified_domain_name, \
             'doc_root':get_iiab_env("WWWROOT") }
     es_txt={ 'message':"Haga clic en el botón para ir a la página de inicio de IIAB",\
+            "FQDN": fully_qualified_domain_name, \
             'btn1':"IIAB",'doc_root':get_iiab_env("WWWROOT")}
     if lang == "en":
         txt = en_txt
@@ -266,8 +285,10 @@ def mac_splash(environ,start_response):
     logger.debug("in function mac_splash")
     en_txt={ 'message':"Click on the button to go to the IIAB home page",\
             'btn1':"GO TO IIAB HOME PAGE",'success_token': 'Success',
+            "FQDN": fully_qualified_domain_name, \
             'doc_root':get_iiab_env("WWWROOT")}
     es_txt={ 'message':"Haga clic en el botón para ir a la página de inicio de IIAB",\
+            "FQDN": fully_qualified_domain_name, \
             'btn1':"IIAB",'doc_root':get_iiab_env("WWWROOT")}
     if lang == "en":
         txt = en_txt
@@ -550,11 +571,11 @@ def application (environ, start_response):
            environ['HTTP_HOST'] == "www.msftncsi.com" or\
            environ['HTTP_HOST'] == "www.msftncsi.com.edgesuite.net" or\
            environ['HTTP_HOST'] == "www.msftconnecttest.com" or\
+           environ['HTTP_HOST'] == "www.msn.com" or\
            environ['HTTP_HOST'] == "teredo.ipv6.microsoft.com" or\
            environ['HTTP_HOST'] == "teredo.ipv6.microsoft.com.nsatc.net": 
            return microsoft(environ, start_response) 
 
-        # firefox -- seems both mac and Windows use it
     logger.debug("executing the defaut 204 response. [%s"%data)
     return put_204(environ,start_response)
 
