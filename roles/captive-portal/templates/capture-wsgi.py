@@ -72,7 +72,7 @@ logger.addHandler(handler)
 
 stdout_logger = logging.getLogger('STDOUT')
 sl = StreamToLogger(stdout_logger, logging.ERROR)
-#sys.stdout = sl
+sys.stdout = sl
 
 stderr_logger = logging.getLogger('STDERR')
 sl = StreamToLogger(stderr_logger, logging.ERROR)
