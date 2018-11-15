@@ -31,7 +31,7 @@ from iiab_env import get_iiab_env
 # Config Files
 # iiab_ini_file should be in {{ iiab_env_file }} (/etc/iiab/iiab.env) ?
 iiab_ini_file = "{{ iiab_ini_file }}" # nominally /etc/iiab/iiab.ini
-# iiab_ini_file = "/etc/iiab/iiab.ini" # comment out after testing
+#iiab_ini_file = "/etc/iiab/iiab.ini" # comment out after testing
 
 IIAB_INI = get_iiab_env('IIAB_INI') # future
 if IIAB_INI:
@@ -51,7 +51,7 @@ old_zim_map = {"bad.zim" : "unparseable name"}
 
 # Working variables
 # zim_files - list of zims and possible index from file system
-# path_to_array_map - list of zims in current library.xml with array index number (for delete)
+# path_to_id_map - list of zims in current library.xml with id (for delete)
 zim_versions = {} # map of zim's generic name to version installed, e.g. wikipedia_es_all to wikipedia_es_all_2017-01
 
 def main():
@@ -78,23 +78,21 @@ def main():
         except OSError:
             pass
         zims_installed = {}
-        path_to_array_map = {}
+        path_to_id_map = {}
     else:
-          zims_installed, path_to_array_map = read_library_xml(kiwix_library_xml)
+          zims_installed, path_to_id_map = read_library_xml(kiwix_library_xml)
 
     zim_files = get_zim_list(zim_path)
 
     # Remove zims not in file system from library.xml
     remove_list_str = ""
-    for item in path_to_array_map:
-          if item not in zim_files:
-              remove_list_str += str(path_to_array_map[item]) + " "
-    if remove_list_str:
-        rem_libr_xml(remove_list_str)
+    for item in path_to_id_map:
+        if item not in zim_files:
+            rem_libr_xml(path_to_id_map[item])
 
     # Add zims from file system that are not in library.xml
     for item in zim_files:
-          if item not in path_to_array_map:
+          if item not in path_to_id_map:
               add_libr_xml(kiwix_library_xml, zim_path, item, zim_files[item])
 
     # Write Version Map
@@ -139,13 +137,13 @@ def read_library_xml(lib_xml_file, kiwix_exclude_attr=[""]): # duplicated from i
     kiwix_exclude_attr.append("id") # don't include id
     kiwix_exclude_attr.append("favicon") # don't include large favicon
     zims_installed = {}
-    path_to_array_map = {}
+    path_to_id_map = {}
     try:
         tree = ET.parse(lib_xml_file)
         root = tree.getroot()
         xml_item_no = 0
         for child in root:
-            xml_item_no += 1 # hopefully this is the array number
+            #xml_item_no += 1 # hopefully this is the array number
             attributes = {}
             if 'id' not in child.attrib: # is this necessary? implies there are records with no book id which would break index for removal
                   print "xml record missing Book Id"
@@ -154,17 +152,20 @@ def read_library_xml(lib_xml_file, kiwix_exclude_attr=[""]): # duplicated from i
                 if attr not in kiwix_exclude_attr:
                     attributes[attr] = child.attrib[attr] # copy if not id or in exclusion list
             zims_installed[id] = attributes
-            path_to_array_map[child.attrib['path']] = xml_item_no
+            path_to_id_map[child.attrib['path']] = id
     except IOError:
         zims_installed = {}
-    return zims_installed, path_to_array_map
+    return zims_installed, path_to_id_map
 
-def rem_libr_xml(list_str):
-    command = kiwix_manage + " " + kiwix_library_xml + " remove " + list_str
+def rem_libr_xml(id):
+    command = kiwix_manage + " " + kiwix_library_xml + " remove " + id
     print command
     args = shlex.split(command)
-
-    outp = subprocess.check_output(args)
+    try:
+        outp = subprocess.check_output(args)
+    except subprocess.CalledProcessError as e:
+        if e.returncode != 2: # skip bogus file open error in kiwix-manage
+            print outp
 
 def add_libr_xml(kiwix_library_xml, zim_path, zimname, zimidx):
     command = kiwix_manage + " " + kiwix_library_xml + " add " + zim_path + "/" + zimname
