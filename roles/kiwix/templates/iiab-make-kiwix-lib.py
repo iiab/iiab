@@ -126,8 +126,8 @@ def get_zim_list(path):
                     wiki_name = old_zim_map[filename]
                 else:
                     ulpos = filename.rfind("_")
-                    # but gutenberg don't - future maybe put in old_zim_map (en and fr, but instance dates may change)
-                    if "gutenberg_" in filename:
+                    # but old gutenberg and some other names are not canonical
+                    if filename.rfind("-") < 0: # non-canonical name
                         ulpos = filename[:ulpos].rfind("_")
                     wiki_name = filename[:ulpos]
                 zim_versions[wiki_name] = filename # if there are multiples, last should win
