@@ -19,7 +19,7 @@ The Lokole web app can be accessed at http://box/lokole.
 Administration
 --------------
 
-Every Lokole installation has an admin account named ``admin``. By default, the password is ``changeme1``.
+Every Lokole installation has an admin account named ``admin``. By default, the password is ``changeme``.
 
 Administrators can:
 
