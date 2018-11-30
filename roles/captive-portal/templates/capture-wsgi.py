@@ -37,15 +37,8 @@ PORTAL_TO = 0 # delay after triggered by ajax upon click of link to home page
 sys.path.append('/etc/iiab/')
 from iiab_env import get_iiab_env
 doc_root = get_iiab_env("WWWROOT")
+fully_qualified_domain_name = get_iiab_env("FQDN")
 
-# make a way to find new URLs queried by new clients
-# CATCH substitues this server for apache at port 80
-CATCH = False
-if len(sys.argv) > 1 and sys.argv[1] == '-d':
-    CATCH = True
-    PORT=80
-else:
-    PORT=9090
 
 # set up some logging -- selectable for diagnostics
 # Create dummy iostream to capture stderr and stdout
@@ -64,28 +57,30 @@ class StreamToLogger(object):
 
 if len(sys.argv) > 1 and sys.argv[1] == '-l':
     loggingLevel = logging.DEBUG
+    try:
+      os.remove('/var/log/apache2/portal.log')
+    except:
+      pass
 else:
     loggingLevel = logging.ERROR
+
+# divert stdout and stderr to logger
 logging.basicConfig(filename='/var/log/apache2/portal.log',format='%(asctime)s.%(msecs)03d:%(name)s:%(message)s', datefmt='%M:%S',level=loggingLevel)
-
-
 logger = logging.getLogger('/var/log/apache2/portal.log')
 handler = RotatingFileHandler("/var/log/apache2/portal.log", maxBytes=100000, backupCount=2)
 logger.addHandler(handler)
 
-
-# divert stdout and stderr to logger
 stdout_logger = logging.getLogger('STDOUT')
 sl = StreamToLogger(stdout_logger, logging.ERROR)
-#sys.stdout = sl
+sys.stdout = sl
 
 stderr_logger = logging.getLogger('STDERR')
 sl = StreamToLogger(stderr_logger, logging.ERROR)
 sys.stderr = sl
+PORT={{ captive_portal_port }}
 
 
 # Define globals
-MAC_SUCCESS=False
 ANDROID_TRIGGERED=False
 
 logger.debug("")
@@ -145,6 +140,8 @@ def timeout_info(ip):
 def is_inactive(ip):
     ts=tstamp(datetime.datetime.now(tzutc()))
     current_ts, last_ts, send204after = timeout_info(ip) 
+    logger.debug("In is_inactive. current_ts:%s. last_ts:%s. send204after:%s"%\
+            (current_ts,last_ts,send204after,))
     if not last_ts:
         return True
     if ts - int(last_ts) > INACTIVITY_TO:
@@ -179,8 +176,7 @@ def set_lasttimestamp(ip):
     conn.commit()
 
 #  ###################  Action routines based on OS  ################3
-def microsoft(environ,start_response):
-    #logger.debug("sending microsoft response")
+def microsoft_splash(environ,start_response):
     en_txt={ 'message':"Click on the button to go to the IIAB home page",\
             'btn1':"GO TO IIAB HOME PAGE",'doc_root':get_iiab_env("WWWROOT")}
     es_txt={ 'message':"Haga clic en el botón para ir a la página de inicio de IIAB",\
@@ -196,6 +192,31 @@ def microsoft(environ,start_response):
     start_response(status, response_headers)
     return [response_body]
 
+def microsoft(environ,start_response):
+    global MICROSOFT_TRIGGERED
+    # firefox -- seems both mac and Windows use it
+    agent = environ.get('HTTP_USER_AGENT','default_agent')
+    if agent.startswith('Mozilla'):
+       return home(environ, start_response) 
+    logger.debug("sending microsoft redirect")
+    response_body = ""
+    status = '302 Moved Temporarily'
+    response_headers = [('Location','/microsoft_splash'),
+            ('Content-type','text/html'),
+            ('Content-Length',str(len(response_body)))]
+    start_response(status, response_headers)
+    return [response_body]
+
+def home(environ,start_response):
+    logger.debug("sending direct to home")
+    response_body = ""
+    status = '302 Moved Temporarily'
+    response_headers = [('Location','http://' + fully_qualified_domain_name + '/home'),
+            ('Content-type','text/html'),
+            ('Content-Length',str(len(response_body)))]
+    start_response(status, response_headers)
+    return [response_body]
+
 def android(environ, start_response):
     global ANDROID_TRIGGERED
     ip = environ['HTTP_X_FORWARDED_FOR'].strip()
@@ -204,10 +225,12 @@ def android(environ, start_response):
         logger.debug("system < 6:%s"%system_version)
         location = '/android_splash'
         set_204after(ip,0)
+    elif system_version.startswith('8'):
+        location = "http://" + fully_qualified_domain_name + "/home"
     else:
-        set_204after(ip,20)
+        #set_204after(ip,20)
         location = '/android_https'
-    agent = environ['HTTP_USER_AGENT']
+    agent = environ.get('HTTP_USER_AGENT','default_agent')
     response_body = "hello"
     status = '302 Moved Temporarily'
     response_headers = [('Location',location)]
@@ -217,8 +240,10 @@ def android(environ, start_response):
 def android_splash(environ, start_response):
     en_txt={ 'message':"Click on the button to go to the IIAB home page",\
             'btn1':"GO TO IIAB HOME PAGE", \
+            "FQDN": fully_qualified_domain_name, \
             'doc_root':get_iiab_env("WWWROOT") }
     es_txt={ 'message':"Haga clic en el botón para ir a la página de inicio de IIAB",\
+            "FQDN": fully_qualified_domain_name, \
             'btn1':"IIAB",'doc_root':get_iiab_env("WWWROOT")}
     if lang == "en":
         txt = en_txt
@@ -235,8 +260,10 @@ def android_https(environ, start_response):
     en_txt={ 'message':"""Please ignore the SECURITY warning which appears after clicking the first button""",\
              'btn2':'Click this first Go to the browser we need',\
              'btn1':'Then click this to go to IIAB home page',\
+             "FQDN": fully_qualified_domain_name, \
             'doc_root':get_iiab_env("WWWROOT") }
     es_txt={ 'message':"Haga clic en el botón para ir a la página de inicio de IIAB",\
+            "FQDN": fully_qualified_domain_name, \
             'btn1':"IIAB",'doc_root':get_iiab_env("WWWROOT")}
     if lang == "en":
         txt = en_txt
@@ -253,8 +280,10 @@ def mac_splash(environ,start_response):
     logger.debug("in function mac_splash")
     en_txt={ 'message':"Click on the button to go to the IIAB home page",\
             'btn1':"GO TO IIAB HOME PAGE",'success_token': 'Success',
+            "FQDN": fully_qualified_domain_name, \
             'doc_root':get_iiab_env("WWWROOT")}
     es_txt={ 'message':"Haga clic en el botón para ir a la página de inicio de IIAB",\
+            "FQDN": fully_qualified_domain_name, \
             'btn1':"IIAB",'doc_root':get_iiab_env("WWWROOT")}
     if lang == "en":
         txt = en_txt
@@ -366,177 +395,145 @@ def parse_agent(agent):
     if match:
         system = match.group(1)
         system_version = match.group(2)
+    match = re.search(r"(Microsoft NCSI)",agent)
+    if match:
+        system = match.group(1)
+        system_version = "8"
     return (system, system_version)
 
 #
 # ================== Start serving the wsgi application  =================
 def application (environ, start_response):
-    global ip
-    global CATCH
-    global LIST
-    global INACTIVITY_TO
-    global ANDROID_TRIGGERED
+   global ip
+   global CATCH
+   global LIST
+   global INACTIVITY_TO
+   global ANDROID_TRIGGERED
 
-    # Log the URLs that are not in checkurls
-    # This "CATCH" mode substitutes this server for apache at port 80
-    # CATCH mode is started by "iiab-catch" and turned off by "iiab-uncath".
-    if CATCH:
-        logger.debug("Checking for url %s. USER_AGENT:%s"%(environ['HTTP_HOST'],\
-               environ['HTTP_USER_AGENT'],))
-        if environ['HTTP_HOST'] == '/box.lan':
-            return                            
-        if  'HTTP_X_FORWARDED_FOR' in environ:
-            ip = environ['HTTP_X_FORWARDED_FOR'].strip()
-        else:
-            ip = environ['HTTP_HOST'].strip()
-        cmd="arp -an %s|gawk \'{print $4}\'" % ip
-        mac = subprocess.check_output(cmd, shell=True)
-        data = []
-        data.append("host: %s\n"%environ['HTTP_HOST'])
-        data.append("path: %s\n"%environ['PATH_INFO'])
-        data.append("query: %s\n"%environ['QUERY_STRING'])
-        data.append("ip: %s\n"%ip)
-        agent = environ['HTTP_USER_AGENT']
-        data.append("AGENT: %s\n"%agent)
-        #print(data)
-        found = False
-        url_list = os.path.join(CAPTIVE_PORTAL_BASE,"checkurls")
-        if os.path.exists(url_list):
-           with open(url_list,"r") as checkers:
-              for line in checkers:
-                 if line.find(environ['HTTP_HOST']) > -1:
-                    found = True
-                    break
-        if not found:
-            with open(url_list,"a") as checkers:
-               outstr ="%s\n" %  (environ['HTTP_HOST']) 
-               checkers.write(outstr)
-            data = ['%s: %s\n' % (key, value) for key, value in sorted(environ.items()) ]
-            logger.debug("This url was missing from checkurls:%s"%data)
-    
-    # Normal query for captive portal
-    else:
-        if  'HTTP_X_FORWARDED_FOR' in environ:
-            ip = environ['HTTP_X_FORWARDED_FOR'].strip()
-        else:
-            data = ['%s: %s\n' % (key, value) for key, value in sorted(environ.items()) ]
-            #logger.debug("need the correct ip:%s"%data)
-            ip = environ['REMOTE_ADDR'].strip()
-        cmd="arp -an %s|gawk \'{print $4}\'" % ip
-        mac = subprocess.check_output(cmd, shell=True)
-        data = []
-        data.append("host: %s\n"%environ['HTTP_HOST'])
-        data.append("path: %s\n"%environ['PATH_INFO'])
-        data.append("query: %s\n"%environ['QUERY_STRING'])
-        data.append("ip: %s\n"%ip)
-        agent = environ['HTTP_USER_AGENT']
-        data.append("AGENT: %s\n"%agent)
-        logger.debug(data)
-        #print(data)
-        found = False
-        return_204_flag = "False"
+   if  'HTTP_X_FORWARDED_FOR' in environ:
+      ip = environ['HTTP_X_FORWARDED_FOR'].strip()
+   else:
+      data = ['%s: %s\n' % (key, value) for key, value in sorted(environ.items()) ]
+      #logger.debug("need the correct ip:%s"%data)
+      ip = environ['REMOTE_ADDR'].strip()
+   cmd="arp -an %s|gawk \'{print $4}\'" % ip
+   mac = subprocess.check_output(cmd, shell=True)
+   data = []
+   data.append("host: %s\n"%environ['HTTP_HOST'])
+   data.append("path: %s\n"%environ['PATH_INFO'])
+   data.append("query: %s\n"%environ['QUERY_STRING'])
+   data.append("ip: %s\n"%ip)
+   agent = environ.get('HTTP_USER_AGENT','default_agent')
+   data.append("AGENT: %s\n"%agent)
+   logger.debug(data)
+   #print(data)
+   found = False
+   return_204_flag = "False"
 
-        # record the activity with this ip
-        ts=tstamp(datetime.datetime.now(tzutc()))
-        sql = "INSERT or IGNORE INTO users (current_ts,ip) VALUES (?,?)" 
-        c.execute(sql,(ts,ip,))
-        sql = "UPDATE users SET current_ts = ? where ip = ?" 
-        c.execute(sql,(ts,ip,))
-        if c.rowcount == 0:
-            logger.debug("failed UPDATE  users SET current_ts = %s WHERE ip = %s"%(ts,ip,)) 
-        conn.commit()
-        ymd=datetime.datetime.today().strftime("%y%m%d-%H%M")
+   # record the activity with this ip
+   ts=tstamp(datetime.datetime.now(tzutc()))
+   sql = "INSERT or IGNORE INTO users (current_ts,ip) VALUES (?,?)" 
+   c.execute(sql,(ts,ip,))
+   sql = "UPDATE users SET current_ts = ? where ip = ?" 
+   c.execute(sql,(ts,ip,))
+   if c.rowcount == 0:
+      logger.debug("failed UPDATE  users SET current_ts = %s WHERE ip = %s"%(ts,ip,)) 
+   conn.commit()
+   ymd=datetime.datetime.today().strftime("%y%m%d-%H%M")
 
-        system,system_version = parse_agent(agent)
-        if system != '':
-            update_user(ip, mac, system, system_version, ymd)
+   system,system_version = parse_agent(agent)
+   if system != '':
+      update_user(ip, mac, system, system_version, ymd)
 
-#######   Return pages based upon PATH   ###############
-        # do more specific stuff first
-        if  environ['PATH_INFO'] == "/iiab_banner6.png":
-            return banner(environ, start_response) 
+   #######   Return pages based upon PATH   ###############
+   # do more specific stuff first
+   if  environ['PATH_INFO'] == "/iiab_banner6.png":
+      return banner(environ, start_response) 
 
-        if  environ['PATH_INFO'] == "/bootstrap.min.js":
-            return bootstrap(environ, start_response) 
+   if  environ['PATH_INFO'] == "/bootstrap.min.js":
+      return bootstrap(environ, start_response) 
 
-        if  environ['PATH_INFO'] == "/bootstrap.min.css":
-            return bootstrap_css(environ, start_response) 
+   if  environ['PATH_INFO'] == "/bootstrap.min.css":
+      return bootstrap_css(environ, start_response) 
 
-        if  environ['PATH_INFO'] == "/jquery.min.js":
-            return jquery(environ, start_response) 
+   if  environ['PATH_INFO'] == "/jquery.min.js":
+      return jquery(environ, start_response) 
 
-        if  environ['PATH_INFO'] == "/favicon.ico":
-            return null(environ, start_response) 
+   if  environ['PATH_INFO'] == "/favicon.ico":
+      return null(environ, start_response) 
 
-        if  environ['PATH_INFO'] == "/home_selected":
-            # the js link to home page triggers this ajax url 
-            # mark the sign-in conversation completed, return 204 or Success or Success
-            ANDROID_TRIGGERED = True
-            #data = ['%s: %s\n' % (key, value) for key, value in sorted(environ.items()) ]
-            #logger.debug("need the correct ip:%s"%data)
-            logger.debug("function: home_selected. Setting flag to return_204")
-            #print("setting flag to return_204")
-            set_204after(ip,PORTAL_TO)
-            set_lasttimestamp(ip)
-            status = '200 OK'
-            headers = [('Content-type', 'text/html')]
-            start_response(status, headers)
-            return [""]
+   if  environ['PATH_INFO'] == "/home_selected":
+      # the js link to home page triggers this ajax url 
+      # mark the sign-in conversation completed, return 204 or Success or Success
+      ANDROID_TRIGGERED = True
+      #data = ['%s: %s\n' % (key, value) for key, value in sorted(environ.items()) ]
+      #logger.debug("need the correct ip:%s"%data)
+      logger.debug("function: home_selected. Setting flag to return_204")
+      #print("setting flag to return_204")
+      set_204after(ip,PORTAL_TO)
+      set_lasttimestamp(ip)
+      status = '200 OK'
+      headers = [('Content-type', 'text/html')]
+      start_response(status, headers)
+      return [""]
 
-#### parse OS platform based upon URL  ##################
-        # mac
-        if  environ['PATH_INFO'] == "/mac_splash":
-            return mac_splash(environ, start_response) 
+   #### parse OS platform based upon URL  ##################
+   # mac
+   if  environ['PATH_INFO'] == "/mac_splash":
+      return mac_splash(environ, start_response) 
 
-        if  environ['PATH_INFO'] == "/step2":
-            return step2(environ, start_response) 
+   if  environ['PATH_INFO'] == "/step2":
+      return step2(environ, start_response) 
 
-        if environ['HTTP_HOST'] == "captive.apple.com" or\
-           environ['HTTP_HOST'] == "appleiphonecell.com" or\
-           environ['HTTP_HOST'] == "detectportal.firefox.com" or\
-           environ['HTTP_HOST'] == "*.apple.com.edgekey.net" or\
-           environ['HTTP_HOST'] == "gsp1.apple.com" or\
-           environ['HTTP_HOST'] == "apple.com" or\
-           environ['HTTP_HOST'] == "www.apple.com": 
-           current_ts, last_ts, send204after = timeout_info(ip) 
-           if not send204after:
-                # take care of uninitialized state
-                set_204after(ip,0)
-           return macintosh(environ, start_response) 
+   if environ['HTTP_HOST'] == "captive.apple.com" or\
+     environ['HTTP_HOST'] == "appleiphonecell.com" or\
+     environ['HTTP_HOST'] == "*.apple.com.edgekey.net" or\
+     environ['HTTP_HOST'] == "gsp1.apple.com" or\
+     environ['HTTP_HOST'] == "apple.com" or\
+     environ['HTTP_HOST'] == "www.apple.com": 
+     current_ts, last_ts, send204after = timeout_info(ip) 
+     if not send204after:
+          # take care of uninitialized state
+          set_204after(ip,0)
+     return macintosh(environ, start_response) 
 
-        # android
-        if  environ['PATH_INFO'] == "/android_splash":
-           return android_splash(environ, start_response) 
-        if  environ['PATH_INFO'] == "/android_https":
-           return android_https(environ, start_response) 
-        if environ['HTTP_HOST'] == "clients3.google.com" or\
-            environ['HTTP_HOST'] == "mtalk.google.com" or\
-            environ['HTTP_HOST'] == "alt7-mtalk.google.com" or\
-            environ['HTTP_HOST'] == "alt6-mtalk.google.com" or\
-            environ['HTTP_HOST'] == "connectivitycheck.android.com" or\
-            environ['HTTP_HOST'] == "connectivitycheck.gstatic.com":
-            current_ts, last_ts, send204after = timeout_info(ip) 
-            logger.debug("current_ts: %s laat_ts: %s send204after: %s"%(current_ts, last_ts, send204after,))
-            if not last_ts or (ts - int(last_ts) > INACTIVITY_TO):
-                return android(environ, start_response) 
-            elif is_after204_timeout(ip):
-                return put_204(environ,start_response)
-            return null(environ,start_response)  #return without doing anything
+   # android
+   if  environ['PATH_INFO'] == "/android_splash":
+     return android_splash(environ, start_response) 
+   if  environ['PATH_INFO'] == "/android_https":
+     return android_https(environ, start_response) 
+   if environ['HTTP_HOST'] == "clients3.google.com" or\
+      environ['HTTP_HOST'] == "mtalk.google.com" or\
+      environ['HTTP_HOST'] == "alt7-mtalk.google.com" or\
+      environ['HTTP_HOST'] == "alt6-mtalk.google.com" or\
+      environ['HTTP_HOST'] == "connectivitycheck.android.com" or\
+      environ['HTTP_HOST'] == "connectivitycheck.gstatic.com":
+      current_ts, last_ts, send204after = timeout_info(ip) 
+      logger.debug("current_ts: %s laat_ts: %s send204after: %s"%(current_ts, last_ts, send204after,))
+      if not last_ts or (ts - int(last_ts) > INACTIVITY_TO):
+          return android(environ, start_response) 
+      elif is_after204_timeout(ip):
+          return put_204(environ,start_response)
+      return null(environ,start_response)  #return without doing anything
 
-        # microsoft
-        if  environ['PATH_INFO'] == "/connecttest.txt" and not is_inactive(ip):
-           return microsoft_connect(environ, start_response) 
-        if environ['HTTP_HOST'] == "ipv6.msftncsi.com" or\
-           environ['HTTP_HOST'] == "ipv6.msftncsi.com.edgesuite.net" or\
-           environ['HTTP_HOST'] == "www.msftncsi.com" or\
-           environ['HTTP_HOST'] == "www.msftncsi.com.edgesuite.net" or\
-           environ['HTTP_HOST'] == "www.msftconnecttest.com" or\
-           environ['HTTP_HOST'] == "teredo.ipv6.microsoft.com" or\
-           environ['HTTP_HOST'] == "teredo.ipv6.microsoft.com.nsatc.net": 
-           return microsoft(environ, start_response) 
+   # microsoft
+   if  environ['PATH_INFO'] == "/microsoft_splash":
+     return microsoft_splash(environ, start_response) 
+   if  environ['PATH_INFO'] == "/connecttest.txt" and not is_inactive(ip):
+     return microsoft_connect(environ, start_response) 
+   if environ['HTTP_HOST'] == "ipv6.msftncsi.com" or\
+     environ['HTTP_HOST'] == "detectportal.firefox.com" or\
+     environ['HTTP_HOST'] == "ipv6.msftncsi.com.edgesuite.net" or\
+     environ['HTTP_HOST'] == "www.msftncsi.com" or\
+     environ['HTTP_HOST'] == "www.msftncsi.com.edgesuite.net" or\
+     environ['HTTP_HOST'] == "www.msftconnecttest.com" or\
+     environ['HTTP_HOST'] == "www.msn.com" or\
+     environ['HTTP_HOST'] == "teredo.ipv6.microsoft.com" or\
+     environ['HTTP_HOST'] == "teredo.ipv6.microsoft.com.nsatc.net": 
+     return microsoft(environ, start_response) 
 
-    logger.debug("executing the defaut 204 response. [%s"%data)
-    return put_204(environ,start_response)
+   logger.debug("executing the defaut 204 response. [%s"%data)
+   return put_204(environ,start_response)
 
 # Instantiate the server
 httpd = make_server (
