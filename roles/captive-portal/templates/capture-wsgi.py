@@ -230,7 +230,7 @@ def android(environ, start_response):
         logger.debug("system < 6:%s"%system_version)
         location = '/android_splash'
         set_204after(ip,0)
-    elif system_version.startswith('8'):
+    elif system_version.startswith('7'):
         location = "http://" + fully_qualified_domain_name + "/home"
     else:
         #set_204after(ip,20)
