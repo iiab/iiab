@@ -179,8 +179,10 @@ def set_lasttimestamp(ip):
 #  ###################  Action routines based on OS  ################3
 def microsoft_splash(environ,start_response):
     en_txt={ 'message':"Click on the button to go to the IIAB home page",\
+            "FQDN": fully_qualified_domain_name, \
             'btn1':"GO TO IIAB HOME PAGE",'doc_root':get_iiab_env("WWWROOT")}
     es_txt={ 'message':"Haga clic en el botón para ir a la página de inicio de IIAB",\
+            "FQDN": fully_qualified_domain_name, \
             'btn1':"IIAB",'doc_root':get_iiab_env("WWWROOT")}
     txt = en_txt
     if lang == "en":
