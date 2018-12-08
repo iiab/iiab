@@ -78,7 +78,7 @@ sys.stdout = sl
 stderr_logger = logging.getLogger('STDERR')
 sl = StreamToLogger(stderr_logger, logging.ERROR)
 sys.stderr = sl
-PORT=9090
+PORT={{ captive_portal_port }}
 
 
 # Define globals
