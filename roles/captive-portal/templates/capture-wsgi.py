@@ -28,7 +28,7 @@ j2_env = Environment(loader=FileSystemLoader(CAPTIVE_PORTAL_BASE),trim_blocks=Tr
 
 # Define time outs
 INACTIVITY_TO = 30
-PORTAL_TO = 0 # delay after triggered by ajax upon click of link to home page
+PORTAL_TO = 20 # delay after triggered by ajax upon click of link to home page
 # I had hoped that returning 204 status after some delay 
 #  would dispense with android's "sign-in to network" (no work)
 
@@ -55,7 +55,8 @@ class StreamToLogger(object):
         for line in buf.rstrip().splitlines():
             self.logger.log(self.log_level, line.rstrip())
 
-if len(sys.argv) > 1 and sys.argv[1] == '-l':
+#if len(sys.argv) > 1 and sys.argv[1] == '-l':
+if True:
     loggingLevel = logging.DEBUG
     try:
       os.remove('/var/log/apache2/portal.log')
@@ -178,9 +179,12 @@ def set_lasttimestamp(ip):
 #  ###################  Action routines based on OS  ################3
 def microsoft_splash(environ,start_response):
     en_txt={ 'message':"Click on the button to go to the IIAB home page",\
+            "FQDN": fully_qualified_domain_name, \
             'btn1':"GO TO IIAB HOME PAGE",'doc_root':get_iiab_env("WWWROOT")}
     es_txt={ 'message':"Haga clic en el botón para ir a la página de inicio de IIAB",\
+            "FQDN": fully_qualified_domain_name, \
             'btn1':"IIAB",'doc_root':get_iiab_env("WWWROOT")}
+    txt = en_txt
     if lang == "en":
         txt = en_txt
     elif lang == "es":
@@ -219,13 +223,18 @@ def home(environ,start_response):
 
 def android(environ, start_response):
     global ANDROID_TRIGGERED
-    ip = environ['HTTP_X_FORWARDED_FOR'].strip()
+    if  environ.get('HTTP_X_FORWARDED_FOR'):
+        ip = environ['HTTP_X_FORWARDED_FOR'].strip()
+    else: 
+        ip = environ['REMOTE_ADDR'].strip()
     system,system_version = platform_info(ip)
+    if not system_version:
+        put_302(environ, start_response)
     if system_version[0:1] < '6':
         logger.debug("system < 6:%s"%system_version)
         location = '/android_splash'
         set_204after(ip,0)
-    elif system_version.startswith('8'):
+    elif system_version.startswith('7'):
         location = "http://" + fully_qualified_domain_name + "/home"
     else:
         #set_204after(ip,20)
@@ -245,6 +254,7 @@ def android_splash(environ, start_response):
     es_txt={ 'message':"Haga clic en el botón para ir a la página de inicio de IIAB",\
             "FQDN": fully_qualified_domain_name, \
             'btn1':"IIAB",'doc_root':get_iiab_env("WWWROOT")}
+    txt = en_txt
     if lang == "en":
         txt = en_txt
     elif lang == "es":
@@ -265,6 +275,7 @@ def android_https(environ, start_response):
     es_txt={ 'message':"Haga clic en el botón para ir a la página de inicio de IIAB",\
             "FQDN": fully_qualified_domain_name, \
             'btn1':"IIAB",'doc_root':get_iiab_env("WWWROOT")}
+    txt = en_txt
     if lang == "en":
         txt = en_txt
     elif lang == "es":
@@ -285,6 +296,7 @@ def mac_splash(environ,start_response):
     es_txt={ 'message':"Haga clic en el botón para ir a la página de inicio de IIAB",\
             "FQDN": fully_qualified_domain_name, \
             'btn1':"IIAB",'doc_root':get_iiab_env("WWWROOT")}
+    txt = en_txt
     if lang == "en":
         txt = en_txt
     elif lang == "es":
@@ -300,6 +312,7 @@ def mac_splash(environ,start_response):
 def macintosh(environ, start_response):
     global ip
     logger.debug("in function mcintosh")
+    #print >> sys.stderr , "Geo Print to stderr" + environ['HTTP_HOST']
     if not is_inactive(ip):
         set_lasttimestamp(ip)
         return success(environ,start_response)
@@ -355,7 +368,7 @@ def bootstrap_css(environ, start_response):
     return [boot]
 
 def null(environ, start_response):
-    status = '200 ok'
+    status = '404 Not Found'
     headers = [('Content-type', 'text/html')]
     start_response(status, headers)
     return [""]
@@ -374,6 +387,17 @@ def put_204(environ, start_response):
             ('Content-Length',str(len(response_body)))]
     start_response(status, response_headers)
     logger.debug("in function  put_204: sending 204 html response")
+    return [response_body]
+
+def put_302(environ, start_response):
+    status = '302 Moved Temporarily'
+    response_body = ''
+    location = "http://" + fully_qualified_domain_name + "/home"
+    response_headers = [('Content-type','text/html'),
+            ('Location',location), 
+            ('Content-Length',str(len(response_body)))]
+    start_response(status, response_headers)
+    logger.debug("in function  put_302: sending 302 html response")
     return [response_body]
 
 def parse_agent(agent):
@@ -507,14 +531,15 @@ def application (environ, start_response):
       environ['HTTP_HOST'] == "alt7-mtalk.google.com" or\
       environ['HTTP_HOST'] == "alt6-mtalk.google.com" or\
       environ['HTTP_HOST'] == "connectivitycheck.android.com" or\
+      environ['PATH_INFO'] == "/gen_204" or\
       environ['HTTP_HOST'] == "connectivitycheck.gstatic.com":
       current_ts, last_ts, send204after = timeout_info(ip) 
-      logger.debug("current_ts: %s laat_ts: %s send204after: %s"%(current_ts, last_ts, send204after,))
+      logger.debug("current_ts: %s last_ts: %s send204after: %s"%(current_ts, last_ts, send204after,))
       if not last_ts or (ts - int(last_ts) > INACTIVITY_TO):
           return android(environ, start_response) 
       elif is_after204_timeout(ip):
           return put_204(environ,start_response)
-      return null(environ,start_response)  #return without doing anything
+      return android(environ, start_response) 
 
    # microsoft
    if  environ['PATH_INFO'] == "/microsoft_splash":
@@ -532,16 +557,17 @@ def application (environ, start_response):
      environ['HTTP_HOST'] == "teredo.ipv6.microsoft.com.nsatc.net": 
      return microsoft(environ, start_response) 
 
-   logger.debug("executing the defaut 204 response. [%s"%data)
-   return put_204(environ,start_response)
+   logger.debug("executing the default 204 response. [%s"%data)
+   return put_302(environ,start_response)
 
 # Instantiate the server
-httpd = make_server (
+if __name__ == "__main__":
+    httpd = make_server (
     "", # The host name
     PORT, # A port number where to wait for the request
     application # The application object name, in this case a function
-)
+    )
 
-httpd.serve_forever()
+    httpd.serve_forever()
 #vim: tabstop=3 expandtab shiftwidth=3 softtabstop=3 background=dark
 
