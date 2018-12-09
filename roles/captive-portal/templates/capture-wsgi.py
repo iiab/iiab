@@ -228,6 +228,8 @@ def android(environ, start_response):
     else: 
         ip = environ['REMOTE_ADDR'].strip()
     system,system_version = platform_info(ip)
+    if not system_version:
+        put_302(environ, start_response)
     if system_version[0:1] < '6':
         logger.debug("system < 6:%s"%system_version)
         location = '/android_splash'
@@ -390,10 +392,12 @@ def put_204(environ, start_response):
 def put_302(environ, start_response):
     status = '302 Moved Temporarily'
     response_body = ''
+    location = "http://" + fully_qualified_domain_name + "/home"
     response_headers = [('Content-type','text/html'),
+            ('Location',location), 
             ('Content-Length',str(len(response_body)))]
     start_response(status, response_headers)
-    logger.debug("in function  put_204: sending 204 html response")
+    logger.debug("in function  put_302: sending 302 html response")
     return [response_body]
 
 def parse_agent(agent):
