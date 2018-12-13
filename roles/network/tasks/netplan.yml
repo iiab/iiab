@@ -3,21 +3,7 @@
   shell: ls /etc/netplan | grep -v -e 01-iiab-config
   register: netplan
 
-# Think 50-cloud-init.yaml is created on the fly by cloud-init on every boot
-# need to double check the timestamps of the file on a rebooted machine
-# disable cloud-init if that holds true
-#- name: Disable and mask cloud-init
-#  systemd:
-#    name: "{{ item }}"
-#    enabled: no
-#    masked: yes
-#    state: stopped
-#  with_items:
-#   - cloud-init-local
-#   - cloud-init
-#  when: "{{ netplan }}" == "50-cloud-init.yaml"
-
-- name: Disable cloud-init
+- name: Disable cloud-init the easy way
   shell: touch /etc/cloud/cloud-init.disabled
   when: "{{ netplan }}" == "50-cloud-init.yaml"
 
@@ -27,13 +13,27 @@
     dest: /etc/netplan/{{ netplan }}
   when: netplan != ""
 
-# Was needed at one point retesting current needs
-#- name: Disable and mask systemd-networkd-wait-online
-#  systemd:
-#    name: systemd-networkd-wait-online
-#    enabled: no
-#    masked: yes
-#    state: stopped
+### NM might need attention also
+- name: Disable the stock dnsmasq unit file that starts too early with systemd_networkd_active
+  systemd:
+    name: dnsmasq
+    enabled: no
+  when: systemd_networkd_active
+
+- name: Install dnsmasq helper unit file when systemd_networkd_active
+  template:
+    src: network/dnsmasq.service.u18
+    dest: /etc/systemd/system/iiab-dnsmasq.service
+  when: systemd_networkd_active
+
+- name: Ensure required dnsmasq unit files are enabled for reboot systemd_networkd_active
+  systemd:
+    name: "{{ item }}"
+    enabled: yes
+  with_items:
+   - iiab-dnsmasq
+   - systemd-networkd-wait-online
+  when: systemd_networkd_active
 
 # ICO will always set gui_static_wan_ip away from the default of 'unset' while
 # gui_static_wan turns dhcp on/off through wan_ip in computed_network and
