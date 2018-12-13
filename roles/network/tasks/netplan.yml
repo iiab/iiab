@@ -1,0 +1,66 @@
+# netplan.yml
+- name: Figure out netplan file name on Ubuntu 18
+  shell: ls /etc/netplan
+  register: netplan
+
+- name: Remove stock netplan template
+  file:
+    state: absent
+    dest: /etc/netplan/{{ netplan }}
+
+# Was needed at one point retesting current needs
+#- name: Disable and mask systemd-networkd-wait-online
+#  systemd:
+#    name: systemd-networkd-wait-online
+#    enabled: no
+#    masked: yes
+#    state: stopped
+
+- name: Disable and mask cloud-init
+  systemd:
+    name: "{{ item }}"
+    enabled: no
+    masked: yes
+    state: stopped
+  with_items:
+   - cloud-init-local
+   - cloud-init
+  when: "{{ netplan }}" == "50-cloud-init.yaml"
+
+# ICO will always set gui_static_wan_ip away from the default of 'unset' while
+# gui_static_wan turns dhcp on/off through wan_ip in computed_network and
+# overrides gui_static_wan_ip that is present. Changing wan_ip in local_vars
+# is a oneway street to static.
+
+- name: Static IP computing CIDR
+  shell: netmask {{ wan_ip }}/{{ wan_netmask }} | awk -F "/" '{print $2}'
+  register: CIDR
+  when: wan_ip != "dhcp"
+
+- name: Static IP setting CIDR
+  set_fact:
+    wan_cidr: "{{ CIDR.stdout }}"
+  when: wan_ip != "dhcp"
+
+- name: Supply netplan template
+  template:
+    dest:  /etc/netplan/01-iiab-config
+    src: network/netplan.j2
+    backup: no
+
+- name: Stopping services
+  include_tasks: down-debian.yml
+
+- name: generate netplan config
+  shell: netplan generate --debug
+
+# wants a controlling terminal so it fails
+- name: test netplan config
+  shell: netplan try --debug --timeout=2
+  register: test-netplan
+  ignore_errors: True
+
+# and does not apply this config until rebooted or ignore the above test
+- name: Reload netplan
+  shell: netplan apply
+  when: not no_net_restart and test-netplan == "Configuration accepted"
