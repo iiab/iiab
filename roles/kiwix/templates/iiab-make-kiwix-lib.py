@@ -22,16 +22,18 @@ import shlex
 import ConfigParser
 import xml.etree.ElementTree as ET
 import argparse
+import fnmatch
 
 IIAB_PATH='/etc/iiab'
 if not IIAB_PATH in sys.path:
     sys.path.append(IIAB_PATH)
 from iiab_env import get_iiab_env
+KIWIX_CAT = IIAB_PATH + '/kiwix_catalog.json'
 
 # Config Files
 # iiab_ini_file should be in {{ iiab_env_file }} (/etc/iiab/iiab.env) ?
-iiab_ini_file = "{{ iiab_ini_file }}" # nominally /etc/iiab/iiab.ini
-#iiab_ini_file = "/etc/iiab/iiab.ini" # comment out after testing
+#iiab_ini_file = "{{ iiab_ini_file }}" # nominally /etc/iiab/iiab.ini
+iiab_ini_file = "/etc/iiab/iiab.ini" # comment out after testing
 
 IIAB_INI = get_iiab_env('IIAB_INI') # future
 if IIAB_INI:
@@ -45,7 +47,10 @@ iiab_base_path = "/opt/iiab"
 kiwix_manage = iiab_base_path + "/kiwix/bin/kiwix-manage"
 doc_root = get_iiab_env('WWWROOT')
 zim_version_idx_dir = doc_root + "/common/assets/"
-zim_version_idx_file = "zim_version_idx.json"
+#zim_version_idx_file = "zim_version_idx.json"
+zim_version_idx_file = "zim_version_idx_test.json"
+menuDefs = doc_root + "/js-menu/menu-files/menu-defs/"
+menuJsonPath = doc_root + "/home/menu.json"
 
 old_zim_map = {"bad.zim" : "unparseable name"}
 
@@ -98,7 +103,7 @@ def main():
     # Write Version Map
     if os.path.isdir(zim_version_idx_dir):
         with open(zim_version_idx_dir + zim_version_idx_file, 'w') as fp:
-            json.dump(zim_versions, fp)
+            fp.write(json.dumps(zim_versions,indent=2 ))
     else:
         print zim_version_idx_dir + " not found."
     sys.exit()
@@ -113,6 +118,7 @@ def get_zim_list(path):
     for filename in flist:
         zimpos = filename.find(".zim")
         if zimpos != -1:
+            zim_info = {}
             filename = filename[:zimpos]
             zimname = "content/" + filename + ".zim"
             zimidx = "index/" + filename + ".zim.idx"
@@ -130,7 +136,13 @@ def get_zim_list(path):
                     if filename.rfind("-") < 0: # non-canonical name
                         ulpos = filename[:ulpos].rfind("_")
                     wiki_name = filename[:ulpos]
-                zim_versions[wiki_name] = filename # if there are multiples, last should win
+                zim_info['zimFileName'] = filename
+                zim_info['menuItem'] = find_menuitem_from_zimname(wiki_name)
+                articlecount,mediacount,size = get_substitution_data(wiki_name)
+                zim_info['articleCount'] = articlecount
+                zim_info['mediaCount'] = mediacount
+                zim_info['size'] = size
+                zim_versions[wiki_name] = zim_info # if there are multiples, last should win
     return files_processed
 
 def read_library_xml(lib_xml_file, kiwix_exclude_attr=[""]): # duplicated from iiab-cmdsrv
@@ -202,9 +214,63 @@ def parse_args():
     parser.add_argument("-v", "--verbose", help="Print messages.", action="store_true")
     return parser.parse_args()
 
-# Now start the application
+def get_menu_def_zimnames(intended_use='kiwix'):
+   menu_def_dict = {}
+   os.chdir(menuDefs)
+   for filename in os.listdir('.'):
+      if fnmatch.fnmatch(filename, '*.json'):
+         try:
+            with open(filename,'r') as json_file:
+                readstr = json_file.read()
+                data = json.loads(readstr)
+         except:
+            print("failed to parse %s"%filename)
+            print(readstr)
+         zimname = data.get('zim_name','')
+         if zimname != '':
+            menu_def_dict[data['zim_name']] = menuDefs + filename
+   print("parsed:%s  noparsed:%s"%(parsed,noparsed))
+   return menu_def_dict
 
+def find_menuitem_from_zimname(zimname):
+   defs = get_menu_def_zimnames()
+   defs_filename = defs.get(zimname,'')
+   if defs_filename != '':
+      with open(defs_filename,'r') as json_file:
+          readstr = json_file.read()
+          #print(readstr)
+          data = json.loads(readstr)
+          return data['menu_item_name']
+   return ''
+
+def update_menu_json(new_item):
+   with open(menuJsonPath,"w") as menu_fp:
+      data = json.loads(menu_fp.read())
+      for item in data['menu_items_1']:
+         if item == new_item:
+            return
+      # new_item does not exist in list
+      data['menu_items_1'].append("new_item")
+      menu-fp.write(json.dumps(data, indent=2))
+
+def get_substitution_data(perma_ref):
+   # Read the kiwix catalog
+   with open(KIWIX_CAT, 'r') as kiwix_cat:
+      json_data = kiwix_cat.read()
+      download = json.loads(json_data)
+      zims = download['zims']
+      for uuid in zims.keys():
+         #print("%s   %s"%(zims[uuid]['perma_ref'],perma_ref,))
+         if zims[uuid]['perma_ref'] == perma_ref:
+            mediacount = zims[uuid]['mediaCount']
+            articlecount = zims[uuid]['articleCount']
+            size = zims[uuid]['size']
+            return (articlecount,mediacount,size)
+      return (0,0,0)
+
+# Now start the application
 if __name__ == "__main__":
 
     # Run the main routine
     main()
+    #print(get_substitution_data('wikivoyage_pt_all_nopic'))
