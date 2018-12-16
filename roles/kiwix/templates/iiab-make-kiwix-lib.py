@@ -47,8 +47,8 @@ iiab_base_path = "/opt/iiab"
 kiwix_manage = iiab_base_path + "/kiwix/bin/kiwix-manage"
 doc_root = get_iiab_env('WWWROOT')
 zim_version_idx_dir = doc_root + "/common/assets/"
-#zim_version_idx_file = "zim_version_idx.json"
-zim_version_idx_file = "zim_version_idx_test.json"
+zim_version_idx_file = "zim_version_idx.json"
+#zim_version_idx_file = "zim_version_idx_test.json"
 menuDefs = doc_root + "/js-menu/menu-files/menu-defs/"
 menuJsonPath = doc_root + "/home/menu.json"
 
@@ -109,7 +109,15 @@ def main():
     sys.exit()
 
 def get_zim_list(path):
+    # save the info from previous downloads (kiwix catalog may have changed)
     files_processed = {}
+    try:
+       with open(zim_version_idx_dir + zim_version_idx_file, 'r') as fp:
+          zimVersionIdx = json.loads(fp.read())
+          for key,value in zimVersionIdx:
+             files_processed['content/' + zimVersionIdx['zimFileName'] + '.zim'] = 'index/' + zimVersionIdx['zimFileName'] + '.zim.idx'
+    except:
+       pass
     zim_list = []
     content = path + "/content/"
     index = path + "/index/"
@@ -143,6 +151,7 @@ def get_zim_list(path):
                 zim_info['mediaCount'] = mediacount
                 zim_info['size'] = size
                 zim_versions[wiki_name] = zim_info # if there are multiples, last should win
+                update_menu_json(zim_info['menuItem']) # check if in home menu
     return files_processed
 
 def read_library_xml(lib_xml_file, kiwix_exclude_attr=[""]): # duplicated from iiab-cmdsrv
@@ -235,6 +244,7 @@ def find_menuitem_from_zimname(zimname):
    defs = get_menu_def_zimnames()
    defs_filename = defs.get(zimname,'')
    if defs_filename != '':
+      print("reading menu-def:%s"%defs_filename)
       with open(defs_filename,'r') as json_file:
           readstr = json_file.read()
           #print(readstr)
@@ -253,7 +263,8 @@ def find_menuitem_from_zimname(zimname):
          outstr += '"intended_use":"zim",\n'
          outstr += '"lang" : "' + lang +'",\n'
          outstr += '"logo_url" : "",\n'
-         outstr += '"menu_item_name" : "' + filename + '",\n'
+         menuitem = lang + '-' + zimname
+         outstr += '"menu_item_name" : "' + menuitem + '",\n'
          outstr += '"title" : "' + item['title'] + '",\n'
          outstr += '"zim_name" : "' + zimname + '",\n'
          outstr += '"start_url" : "",\n'
@@ -261,17 +272,31 @@ def find_menuitem_from_zimname(zimname):
          outstr += '"extra_html" : ""\n'
          outstr += '}\n'
          menufile.write(outstr)
-      return filename
+      return menuitem
 
 def update_menu_json(new_item):
-   with open(menuJsonPath,"w") as menu_fp:
-      data = json.loads(menu_fp.read())
+   with open(menuJsonPath,"r") as menu_fp:
+      reads = menu_fp.read()
+      #print("menu.json:%s"%reads)
+      data = json.loads(reads)
+      if data.get('autoupdate_menu','') == 'false' or\
+         data.get('autoupdate_menu','') == 'False':
+         return
+
       for item in data['menu_items_1']:
          if item == new_item:
             return
       # new_item does not exist in list
-      data['menu_items_1'].append("new_item")
-      menu-fp.write(json.dumps(data, indent=2))
+      last_item = data['menu_items_1'].pop()
+      # always keep credits last
+      if last_item.find('credits') == -1:
+         data['menu_items_1'].append(last_item)
+         data['menu_items_1'].append(new_item)
+      else:
+         data['menu_items_1'].append(new_item)
+         data['menu_items_1'].append(last_item)
+   with open(menuJsonPath,"w") as menu_fp:
+      menu_fp.write(json.dumps(data, indent=2))
 
 def get_kiwix_catalog_item(perma_ref):
    # Read the kiwix catalog
