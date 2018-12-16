@@ -229,7 +229,6 @@ def get_menu_def_zimnames(intended_use='kiwix'):
          zimname = data.get('zim_name','')
          if zimname != '':
             menu_def_dict[data['zim_name']] = menuDefs + filename
-   print("parsed:%s  noparsed:%s"%(parsed,noparsed))
    return menu_def_dict
 
 def find_menuitem_from_zimname(zimname):
@@ -241,7 +240,28 @@ def find_menuitem_from_zimname(zimname):
           #print(readstr)
           data = json.loads(readstr)
           return data['menu_item_name']
-   return ''
+   else:
+      # create a stub for this zim
+      item = get_kiwix_catalog_item(zimname)
+      lang = item['language'][:2]
+      filename = lang + '-' + zimname + '.json'
+      fullpath = menuDefs + filename
+      print("creating %s"%filename)
+      outstr = ''
+      with open(filename,'w') as menufile:
+         outstr += '{\n'
+         outstr += '"intended_use":"zim",\n'
+         outstr += '"lang" : "' + lang +'",\n'
+         outstr += '"logo_url" : "",\n'
+         outstr += '"menu_item_name" : "' + filename + '",\n'
+         outstr += '"title" : "' + item['title'] + '",\n'
+         outstr += '"zim_name" : "' + zimname + '",\n'
+         outstr += '"start_url" : "",\n'
+         outstr += '"description":"",\n'
+         outstr += '"extra_html" : ""\n'
+         outstr += '}\n'
+         menufile.write(outstr)
+      return filename
 
 def update_menu_json(new_item):
    with open(menuJsonPath,"w") as menu_fp:
@@ -253,7 +273,7 @@ def update_menu_json(new_item):
       data['menu_items_1'].append("new_item")
       menu-fp.write(json.dumps(data, indent=2))
 
-def get_substitution_data(perma_ref):
+def get_kiwix_catalog_item(perma_ref):
    # Read the kiwix catalog
    with open(KIWIX_CAT, 'r') as kiwix_cat:
       json_data = kiwix_cat.read()
@@ -262,11 +282,36 @@ def get_substitution_data(perma_ref):
       for uuid in zims.keys():
          #print("%s   %s"%(zims[uuid]['perma_ref'],perma_ref,))
          if zims[uuid]['perma_ref'] == perma_ref:
-            mediacount = zims[uuid]['mediaCount']
-            articlecount = zims[uuid]['articleCount']
-            size = zims[uuid]['size']
-            return (articlecount,mediacount,size)
-      return (0,0,0)
+            return zims[uuid]
+      return {}
+
+def get_substitution_data(perma_ref):
+   item =get_kiwix_catalog_item(perma_ref)
+   if len(item) != 0:
+      mediacount = item['mediaCount']
+      articlecount = item['articleCount']
+      size = item['size']
+      return (articlecount,mediacount,size)
+   return (0,0,0)
+
+def check_linkage_kiwix2menudefs():
+   missing = present = 0
+   # Read the kiwix catalog
+   with open(KIWIX_CAT, 'r') as kiwix_cat:
+      json_data = kiwix_cat.read()
+      download = json.loads(json_data)
+      zims = download['zims']
+      for uuid in zims.keys():
+         perma_ref = zims[uuid]['perma_ref']
+         defs = get_menu_def_zimnames()
+         defs_filename = defs.get(perma_ref,'')
+         if defs_filename =='':
+            print("missing zim_filename in menu-defs for:%s"%perma_ref) 
+            missing += 1
+         else:
+            present += 1
+      print("present:%s missing:%s"%(present,missing,))
+      print("number of kiwix menudefs:%s"%(len(defs),))
 
 # Now start the application
 if __name__ == "__main__":
@@ -274,3 +319,4 @@ if __name__ == "__main__":
     # Run the main routine
     main()
     #print(get_substitution_data('wikivoyage_pt_all_nopic'))
+    #check_linkage_kiwix2menudefs()
