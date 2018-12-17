@@ -105,7 +105,7 @@ def main():
         with open(zim_version_idx_dir + zim_version_idx_file, 'w') as fp:
             fp.write(json.dumps(zim_versions,indent=2 ))
     else:
-        print zim_version_idx_dir + " not found."
+        #print zim_version_idx_dir + " not found."
     sys.exit()
 
 def get_zim_list(path):
@@ -180,7 +180,7 @@ def read_library_xml(lib_xml_file, kiwix_exclude_attr=[""]): # duplicated from i
 
 def rem_libr_xml(id):
     command = kiwix_manage + " " + kiwix_library_xml + " remove " + id
-    print command
+    #print command
     args = shlex.split(command)
     try:
         outp = subprocess.check_output(args)
@@ -192,13 +192,13 @@ def add_libr_xml(kiwix_library_xml, zim_path, zimname, zimidx):
     command = kiwix_manage + " " + kiwix_library_xml + " add " + zim_path + "/" + zimname
     if zimidx:
           command += " -i " + zim_path + "/" + zimidx
-    print command
+    #print command
     args = shlex.split(command)
     try:
         outp = subprocess.check_output(args)
 
     except: #skip things that don't work
-        print 'skipping ' + zimname
+        #print 'skipping ' + zimname
         pass
 
 def init():
@@ -244,7 +244,7 @@ def find_menuitem_from_zimname(zimname):
    defs = get_menu_def_zimnames()
    defs_filename = defs.get(zimname,'')
    if defs_filename != '':
-      print("reading menu-def:%s"%defs_filename)
+      #print("reading menu-def:%s"%defs_filename)
       with open(defs_filename,'r') as json_file:
           readstr = json_file.read()
           #print(readstr)
@@ -256,7 +256,7 @@ def find_menuitem_from_zimname(zimname):
       lang = item['language'][:2]
       filename = lang + '-' + zimname + '.json'
       fullpath = menuDefs + filename
-      print("creating %s"%filename)
+      #print("creating %s"%filename)
       outstr = ''
       with open(filename,'w') as menufile:
          outstr += '{\n'
@@ -318,25 +318,6 @@ def get_substitution_data(perma_ref):
       size = item['size']
       return (articlecount,mediacount,size)
    return (0,0,0)
-
-def check_linkage_kiwix2menudefs():
-   missing = present = 0
-   # Read the kiwix catalog
-   with open(KIWIX_CAT, 'r') as kiwix_cat:
-      json_data = kiwix_cat.read()
-      download = json.loads(json_data)
-      zims = download['zims']
-      for uuid in zims.keys():
-         perma_ref = zims[uuid]['perma_ref']
-         defs = get_menu_def_zimnames()
-         defs_filename = defs.get(perma_ref,'')
-         if defs_filename =='':
-            print("missing zim_filename in menu-defs for:%s"%perma_ref) 
-            missing += 1
-         else:
-            present += 1
-      print("present:%s missing:%s"%(present,missing,))
-      print("number of kiwix menudefs:%s"%(len(defs),))
 
 # Now start the application
 if __name__ == "__main__":
