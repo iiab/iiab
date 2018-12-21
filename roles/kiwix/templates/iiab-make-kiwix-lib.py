@@ -223,7 +223,7 @@ def parse_args():
     parser.add_argument("-v", "--verbose", help="Print messages.", action="store_true")
     return parser.parse_args()
 
-def get_menu_def_zimnames(intended_use='kiwix'):
+def get_menu_def_zimnames(intended_use='zim'):
    menu_def_dict = {}
    os.chdir(menuDefs)
    for filename in os.listdir('.'):
@@ -235,6 +235,8 @@ def get_menu_def_zimnames(intended_use='kiwix'):
          except:
             print("failed to parse %s"%filename)
             print(readstr)
+         if data.get['intended_use'],'') != 'zim':
+            continue
          zimname = data.get('zim_name','')
          if zimname != '':
             menu_def_dict[data['zim_name']] = menuDefs + filename
