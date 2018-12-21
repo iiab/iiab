@@ -23,6 +23,7 @@ import ConfigParser
 import xml.etree.ElementTree as ET
 import argparse
 import fnmatch
+from iiab-update-menus import update_menu_json
 
 IIAB_PATH='/etc/iiab'
 if not IIAB_PATH in sys.path:
@@ -275,30 +276,6 @@ def find_menuitem_from_zimname(zimname):
          outstr += '}\n'
          menufile.write(outstr)
       return menuitem
-
-def update_menu_json(new_item):
-   with open(menuJsonPath,"r") as menu_fp:
-      reads = menu_fp.read()
-      #print("menu.json:%s"%reads)
-      data = json.loads(reads)
-      if data.get('autoupdate_menu','') == 'false' or\
-         data.get('autoupdate_menu','') == 'False':
-         return
-
-      for item in data['menu_items_1']:
-         if item == new_item:
-            return
-      # new_item does not exist in list
-      last_item = data['menu_items_1'].pop()
-      # always keep credits last
-      if last_item.find('credits') == -1:
-         data['menu_items_1'].append(last_item)
-         data['menu_items_1'].append(new_item)
-      else:
-         data['menu_items_1'].append(new_item)
-         data['menu_items_1'].append(last_item)
-   with open(menuJsonPath,"w") as menu_fp:
-      menu_fp.write(json.dumps(data, indent=2))
 
 def get_kiwix_catalog_item(perma_ref):
    # Read the kiwix catalog
