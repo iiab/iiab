@@ -23,7 +23,6 @@ import ConfigParser
 import xml.etree.ElementTree as ET
 import argparse
 import fnmatch
-from iiab-update-menus import update_menu_json
 
 IIAB_PATH='/etc/iiab'
 if not IIAB_PATH in sys.path:
@@ -152,7 +151,6 @@ def get_zim_list(path):
                 zim_info['mediaCount'] = mediacount
                 zim_info['size'] = size
                 zim_versions[wiki_name] = zim_info # if there are multiples, last should win
-                update_menu_json(zim_info['menuItem']) # check if in home menu
     return files_processed
 
 def read_library_xml(lib_xml_file, kiwix_exclude_attr=[""]): # duplicated from iiab-cmdsrv
