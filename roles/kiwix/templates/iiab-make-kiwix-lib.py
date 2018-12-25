@@ -250,7 +250,7 @@ def find_menuitem_from_zimname(zimname):
           readstr = json_file.read()
           #print(readstr)
           data = json.loads(readstr)
-          return data['menu_item_name']
+          return data.('menu_item_name','')
    else:
       # create a stub for this zim
       item = get_kiwix_catalog_item(zimname)
