@@ -105,7 +105,7 @@ def main():
         with open(zim_version_idx_dir + zim_version_idx_file, 'w') as fp:
             fp.write(json.dumps(zim_versions,indent=2 ))
     else:
-        #print zim_version_idx_dir + " not found."
+        print zim_version_idx_dir + " not found."
     sys.exit()
 
 def get_zim_list(path):
