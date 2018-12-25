@@ -234,7 +234,7 @@ def get_menu_def_zimnames(intended_use='zim'):
          except:
             print("failed to parse %s"%filename)
             print(readstr)
-         if data.get['intended_use'],'') != 'zim':
+         if data.get('intended_use','') != 'zim':
             continue
          zimname = data.get('zim_name','')
          if zimname != '':
