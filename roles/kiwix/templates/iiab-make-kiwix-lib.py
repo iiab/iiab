@@ -22,11 +22,13 @@ import shlex
 import ConfigParser
 import xml.etree.ElementTree as ET
 import argparse
+import fnmatch
 
 IIAB_PATH='/etc/iiab'
 if not IIAB_PATH in sys.path:
     sys.path.append(IIAB_PATH)
 from iiab_env import get_iiab_env
+KIWIX_CAT = IIAB_PATH + '/kiwix_catalog.json'
 
 # Config Files
 # iiab_ini_file should be in {{ iiab_env_file }} (/etc/iiab/iiab.env) ?
@@ -46,6 +48,10 @@ kiwix_manage = iiab_base_path + "/kiwix/bin/kiwix-manage"
 doc_root = get_iiab_env('WWWROOT')
 zim_version_idx_dir = doc_root + "/common/assets/"
 zim_version_idx_file = "zim_version_idx.json"
+#zim_version_idx_file = "zim_version_idx_test.json"
+menuDefs = doc_root + "/js-menu/menu-files/menu-defs/"
+menuImages = doc_root + "/js-menu/menu-files/images/"
+menuJsonPath = doc_root + "/home/menu.json"
 
 old_zim_map = {"bad.zim" : "unparseable name"}
 
@@ -98,13 +104,21 @@ def main():
     # Write Version Map
     if os.path.isdir(zim_version_idx_dir):
         with open(zim_version_idx_dir + zim_version_idx_file, 'w') as fp:
-            json.dump(zim_versions, fp)
+            fp.write(json.dumps(zim_versions,indent=2 ))
     else:
         print zim_version_idx_dir + " not found."
     sys.exit()
 
 def get_zim_list(path):
+    # save the info from previous downloads (kiwix catalog may have changed)
     files_processed = {}
+    try:
+       with open(zim_version_idx_dir + zim_version_idx_file, 'r') as fp:
+          zimVersionIdx = json.loads(fp.read())
+          for key,value in zimVersionIdx:
+             files_processed['content/' + zimVersionIdx['zimFileName'] + '.zim'] = 'index/' + zimVersionIdx['zimFileName'] + '.zim.idx'
+    except:
+       pass
     zim_list = []
     content = path + "/content/"
     index = path + "/index/"
@@ -113,6 +127,7 @@ def get_zim_list(path):
     for filename in flist:
         zimpos = filename.find(".zim")
         if zimpos != -1:
+            zim_info = {}
             filename = filename[:zimpos]
             zimname = "content/" + filename + ".zim"
             zimidx = "index/" + filename + ".zim.idx"
@@ -130,7 +145,14 @@ def get_zim_list(path):
                     if filename.rfind("-") < 0: # non-canonical name
                         ulpos = filename[:ulpos].rfind("_")
                     wiki_name = filename[:ulpos]
-                zim_versions[wiki_name] = filename # if there are multiples, last should win
+                zim_info['zimFileName'] = filename
+                zim_info['menuItem'] = find_menuitem_from_zimname(wiki_name)
+                articlecount,mediacount,size,tags = get_substitution_data(wiki_name)
+                zim_info['articleCount'] = articlecount
+                zim_info['mediaCount'] = mediacount
+                zim_info['size'] = size
+                zim_info['tags'] = tags
+                zim_versions[wiki_name] = zim_info # if there are multiples, last should win
     return files_processed
 
 def read_library_xml(lib_xml_file, kiwix_exclude_attr=[""]): # duplicated from iiab-cmdsrv
@@ -159,7 +181,7 @@ def read_library_xml(lib_xml_file, kiwix_exclude_attr=[""]): # duplicated from i
 
 def rem_libr_xml(id):
     command = kiwix_manage + " " + kiwix_library_xml + " remove " + id
-    print command
+    #print command
     args = shlex.split(command)
     try:
         outp = subprocess.check_output(args)
@@ -171,13 +193,13 @@ def add_libr_xml(kiwix_library_xml, zim_path, zimname, zimidx):
     command = kiwix_manage + " " + kiwix_library_xml + " add " + zim_path + "/" + zimname
     if zimidx:
           command += " -i " + zim_path + "/" + zimidx
-    print command
+    #print command
     args = shlex.split(command)
     try:
         outp = subprocess.check_output(args)
 
     except: #skip things that don't work
-        print 'skipping ' + zimname
+        #print 'skipping ' + zimname
         pass
 
 def init():
@@ -202,8 +224,60 @@ def parse_args():
     parser.add_argument("-v", "--verbose", help="Print messages.", action="store_true")
     return parser.parse_args()
 
-# Now start the application
+def get_menu_def_zimnames(intended_use='zim'):
+   # read all the menuDefs,create an index between 
+   #    zim_name(kiwix_perma_ref)->menuDef filename
+   menu_def_dict = {}
+   os.chdir(menuDefs)
+   for filename in os.listdir('.'):
+      if fnmatch.fnmatch(filename, '*.json'):
+         try:
+            with open(filename,'r') as json_file:
+                readstr = json_file.read()
+                data = json.loads(readstr)
+         except:
+            print("failed to parse %s"%filename)
+            print(readstr)
+         if data.get('intended_use','') != intended_use:
+            continue
+         zimname = data.get('zim_name','')
+         if zimname != '':
+            menu_def_dict[data['zim_name']] = menuDefs + filename
+   return menu_def_dict
 
+def find_menuitem_from_zimname(zimname):
+   defs = get_menu_def_zimnames()
+   defs_filename = defs.get(zimname,'')
+   if defs_filename != '':
+      #print("reading menu-def:%s"%defs_filename)
+      with open(defs_filename,'r') as json_file:
+          readstr = json_file.read()
+          data = json.loads(readstr)
+          return data.get('menu_item_name','')
+
+def get_kiwix_catalog_item(perma_ref):
+   # Read the kiwix catalog
+   with open(KIWIX_CAT, 'r') as kiwix_cat:
+      json_data = kiwix_cat.read()
+      download = json.loads(json_data)
+      zims = download['zims']
+      for uuid in zims.keys():
+         #print("%s   %s"%(zims[uuid]['perma_ref'],perma_ref,))
+         if zims[uuid]['perma_ref'] == perma_ref:
+            return zims[uuid]
+      return {}
+
+def get_substitution_data(perma_ref):
+   item =get_kiwix_catalog_item(perma_ref)
+   if len(item) != 0:
+      mediacount = item.get('mediaCount','')
+      articlecount = item.get('articleCount')
+      size = item.get('size','')
+      tags = item.get('tags','')
+      return (articlecount,mediacount,size,tags)
+   return ('0','0','0','0')
+
+# Now start the application
 if __name__ == "__main__":
 
     # Run the main routine
