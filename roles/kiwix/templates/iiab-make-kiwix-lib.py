@@ -23,7 +23,6 @@ import ConfigParser
 import xml.etree.ElementTree as ET
 import argparse
 import fnmatch
-from iiab-update-menus import update_menu_json
 
 IIAB_PATH='/etc/iiab'
 if not IIAB_PATH in sys.path:
@@ -51,6 +50,7 @@ zim_version_idx_dir = doc_root + "/common/assets/"
 zim_version_idx_file = "zim_version_idx.json"
 #zim_version_idx_file = "zim_version_idx_test.json"
 menuDefs = doc_root + "/js-menu/menu-files/menu-defs/"
+menuImages = doc_root + "/js-menu/menu-files/images/"
 menuJsonPath = doc_root + "/home/menu.json"
 
 old_zim_map = {"bad.zim" : "unparseable name"}
@@ -106,7 +106,7 @@ def main():
         with open(zim_version_idx_dir + zim_version_idx_file, 'w') as fp:
             fp.write(json.dumps(zim_versions,indent=2 ))
     else:
-        #print zim_version_idx_dir + " not found."
+        print zim_version_idx_dir + " not found."
     sys.exit()
 
 def get_zim_list(path):
@@ -147,12 +147,11 @@ def get_zim_list(path):
                     wiki_name = filename[:ulpos]
                 zim_info['zimFileName'] = filename
                 zim_info['menuItem'] = find_menuitem_from_zimname(wiki_name)
-                articlecount,mediacount,size = get_substitution_data(wiki_name)
+                articlecount,mediacount,size,tags = get_substitution_data(wiki_name)
                 zim_info['articleCount'] = articlecount
                 zim_info['mediaCount'] = mediacount
                 zim_info['size'] = size
                 zim_versions[wiki_name] = zim_info # if there are multiples, last should win
-                update_menu_json(zim_info['menuItem']) # check if in home menu
     return files_processed
 
 def read_library_xml(lib_xml_file, kiwix_exclude_attr=[""]): # duplicated from iiab-cmdsrv
@@ -236,7 +235,7 @@ def get_menu_def_zimnames(intended_use='zim'):
          except:
             print("failed to parse %s"%filename)
             print(readstr)
-         if data.get['intended_use'],'') != 'zim':
+         if data.get('intended_use','') != 'zim':
             continue
          zimname = data.get('zim_name','')
          if zimname != '':
@@ -250,22 +249,25 @@ def find_menuitem_from_zimname(zimname):
       #print("reading menu-def:%s"%defs_filename)
       with open(defs_filename,'r') as json_file:
           readstr = json_file.read()
-          #print(readstr)
           data = json.loads(readstr)
-          return data['menu_item_name']
+          return data.get('menu_item_name','')
    else:
       # create a stub for this zim
       item = get_kiwix_catalog_item(zimname)
       lang = item['language'][:2]
       filename = lang + '-' + zimname + '.json'
-      fullpath = menuDefs + filename
       #print("creating %s"%filename)
       outstr = ''
+      default = ''
+      default = get_default_logo(zimname)
       with open(filename,'w') as menufile:
          outstr += '{\n'
          outstr += '"intended_use":"zim",\n'
          outstr += '"lang" : "' + lang +'",\n'
-         outstr += '"logo_url" : "",\n'
+         if default != '':
+            outstr += '"logo_url" : "' + default + '",\n'
+         else:
+            outstr += '"logo_url" : "",\n'
          menuitem = lang + '-' + zimname
          outstr += '"menu_item_name" : "' + menuitem + '",\n'
          outstr += '"title" : "' + item['title'] + '",\n'
@@ -292,11 +294,47 @@ def get_kiwix_catalog_item(perma_ref):
 def get_substitution_data(perma_ref):
    item =get_kiwix_catalog_item(perma_ref)
    if len(item) != 0:
-      mediacount = item['mediaCount']
-      articlecount = item['articleCount']
-      size = item['size']
-      return (articlecount,mediacount,size)
-   return (0,0,0)
+      mediacount = item.get('mediaCount','')
+      articlecount = item.get('articleCount')
+      size = item.get('size','')
+      tags = item.get('tags','')
+      return (articlecount,mediacount,size,tags)
+   return ('0','0','0','0')
+
+def get_default_logo(logo_selector):
+   default_logos = {
+      "wiktionary":"en-wiktionary.png",
+      "wikivoyage":"en-wikivoyage.png",
+      "wikinews":"wikinews-logo.png",
+      "wiktionary":"en-wiktionary.png",
+      "wikipedia":"en-wikipedia.png"
+   }
+   #  Selectthe first part of the selector
+   short_selector = logo_selector[:logo_selector.find('_')-1]
+   # give preference to language if present
+   for logo in default_logos:
+      if logo.startswith(short_selector):
+         return default_logos[logo]
+   """
+   # Maybe language is not present -- check for en-<selector>
+   en_default = "en-" + logo_selector
+   for logo in default_logos:
+      if logo.startswith(en_default):
+         return default_logos[logo]
+   # try for a match without language prefix
+   nolang_selector = logo_selector[3:]
+   for logo in default_logos:
+      if logo.startswith(nolang_selector):
+         return default_logos[logo]
+   """
+   # check for a png or jpg with same selector
+   if os.path.isfile(menuImages + logo_selector + '.jpg'):
+      return logo_selector + '.jpg'
+   if os.path.isfile(menuImages + logo_selector + '.png'):
+      return logo_selector + '.png'
+
+   return ''
+
 
 # Now start the application
 if __name__ == "__main__":
