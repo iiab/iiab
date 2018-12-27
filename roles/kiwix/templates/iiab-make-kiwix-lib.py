@@ -147,11 +147,12 @@ def get_zim_list(path):
                     wiki_name = filename[:ulpos]
                 zim_info['file_name'] = filename
                 zim_info['menu_item'] = find_menuitem_from_zimname(wiki_name)
-                articlecount,mediacount,size,tags = get_substitution_data(wiki_name)
+                articlecount,mediacount,size,tags,lang = get_substitution_data(wiki_name)
                 zim_info['article_count'] = articlecount
                 zim_info['media_count'] = mediacount
                 zim_info['size'] = size
                 zim_info['tags'] = tags
+                zim_info['language'] = lang
                 zim_versions[wiki_name] = zim_info # if there are multiples, last should win
     return files_processed
 
@@ -274,8 +275,11 @@ def get_substitution_data(perma_ref):
       articlecount = item.get('articleCount')
       size = item.get('size','')
       tags = item.get('tags','')
-      return (articlecount,mediacount,size,tags)
-   return ('0','0','0','0')
+      lang = item.get('language','')
+      if len(lang) > 2:
+          lang = lang[:2]
+      return (articlecount,mediacount,size,tags,lang)
+   return ('0','0','0','0','0')
 
 # Now start the application
 if __name__ == "__main__":
