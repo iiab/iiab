@@ -145,11 +145,11 @@ def get_zim_list(path):
                     if filename.rfind("-") < 0: # non-canonical name
                         ulpos = filename[:ulpos].rfind("_")
                     wiki_name = filename[:ulpos]
-                zim_info['zimFileName'] = filename
-                zim_info['menuItem'] = find_menuitem_from_zimname(wiki_name)
+                zim_info['file_name'] = filename
+                zim_info['menu_item'] = find_menuitem_from_zimname(wiki_name)
                 articlecount,mediacount,size,tags = get_substitution_data(wiki_name)
-                zim_info['articleCount'] = articlecount
-                zim_info['mediaCount'] = mediacount
+                zim_info['article_count'] = articlecount
+                zim_info['media_count'] = mediacount
                 zim_info['size'] = size
                 zim_info['tags'] = tags
                 zim_versions[wiki_name] = zim_info # if there are multiples, last should win
