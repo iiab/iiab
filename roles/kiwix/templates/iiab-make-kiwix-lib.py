@@ -101,12 +101,7 @@ def main():
           if item not in path_to_id_map:
               add_libr_xml(kiwix_library_xml, zim_path, item, zim_files[item])
 
-    # Write Version Map
-    if os.path.isdir(zim_version_idx_dir):
-        with open(zim_version_idx_dir + zim_version_idx_file, 'w') as fp:
-            fp.write(json.dumps(zim_versions,indent=2 ))
-    else:
-        print zim_version_idx_dir + " not found."
+    write_zim_versions_idx()
     sys.exit()
 
 def get_zim_list(path):
@@ -127,7 +122,6 @@ def get_zim_list(path):
     for filename in flist:
         zimpos = filename.find(".zim")
         if zimpos != -1:
-            zim_info = {}
             filename = filename[:zimpos]
             zimname = "content/" + filename + ".zim"
             zimidx = "index/" + filename + ".zim.idx"
@@ -145,13 +139,7 @@ def get_zim_list(path):
                     if filename.rfind("-") < 0: # non-canonical name
                         ulpos = filename[:ulpos].rfind("_")
                     wiki_name = filename[:ulpos]
-                zim_info['zimFileName'] = filename
-                zim_info['menuItem'] = find_menuitem_from_zimname(wiki_name)
-                articlecount,mediacount,size,tags = get_substitution_data(wiki_name)
-                zim_info['articleCount'] = articlecount
-                zim_info['mediaCount'] = mediacount
-                zim_info['size'] = size
-                zim_versions[wiki_name] = zim_info # if there are multiples, last should win
+                    update_zim_versions_idx(wiki_name,filename)
     return files_processed
 
 def read_library_xml(lib_xml_file, kiwix_exclude_attr=[""]): # duplicated from iiab-cmdsrv
@@ -223,6 +211,38 @@ def parse_args():
     parser.add_argument("-v", "--verbose", help="Print messages.", action="store_true")
     return parser.parse_args()
 
+def update_zim_versions_idx(wiki_name,filename):
+   global zim_versions
+   zim_info = {}
+   zim_info['zimFileName'] = filename
+   zim_info['menuItem'] = find_menuitem_from_zimname(wiki_name)
+   articlecount,mediacount,size,tags,lang = get_substitution_data(wiki_name)
+   zim_info['articleCount'] = articlecount
+   zim_info['mediaCount'] = mediacount
+   zim_info['size'] = size
+   zim_info['language'] = lang
+   zim_versions[wiki_name] = zim_info # if there are multiples, last should win
+
+def write_zim_versions_idx():
+   # Write Version Map
+   global zim_versions
+   if os.path.isdir(zim_version_idx_dir):
+      with open(zim_version_idx_dir + zim_version_idx_file, 'w') as fp:
+         fp.write(json.dumps(zim_versions,indent=2 ))
+   else:
+      print zim_version_idx_dir + " not found."
+      
+def get_substitution_data(perma_ref):
+   item =get_kiwix_catalog_item(perma_ref)
+   if len(item) != 0:
+      mediacount = item.get('mediaCount','')
+      articlecount = item.get('articleCount')
+      size = item.get('size','')
+      tags = item.get('tags','')
+      lang = item.get('language','')
+      return (articlecount,mediacount,size,tags,lang)
+   return ('0','0','0','0','0')
+
 def get_menu_def_zimnames(intended_use='zim'):
    menu_def_dict = {}
    os.chdir(menuDefs)
@@ -290,51 +310,6 @@ def get_kiwix_catalog_item(perma_ref):
          if zims[uuid]['perma_ref'] == perma_ref:
             return zims[uuid]
       return {}
-
-def get_substitution_data(perma_ref):
-   item =get_kiwix_catalog_item(perma_ref)
-   if len(item) != 0:
-      mediacount = item.get('mediaCount','')
-      articlecount = item.get('articleCount')
-      size = item.get('size','')
-      tags = item.get('tags','')
-      return (articlecount,mediacount,size,tags)
-   return ('0','0','0','0')
-
-def get_default_logo(logo_selector):
-   default_logos = {
-      "wiktionary":"en-wiktionary.png",
-      "wikivoyage":"en-wikivoyage.png",
-      "wikinews":"wikinews-logo.png",
-      "wiktionary":"en-wiktionary.png",
-      "wikipedia":"en-wikipedia.png"
-   }
-   #  Selectthe first part of the selector
-   short_selector = logo_selector[:logo_selector.find('_')-1]
-   # give preference to language if present
-   for logo in default_logos:
-      if logo.startswith(short_selector):
-         return default_logos[logo]
-   """
-   # Maybe language is not present -- check for en-<selector>
-   en_default = "en-" + logo_selector
-   for logo in default_logos:
-      if logo.startswith(en_default):
-         return default_logos[logo]
-   # try for a match without language prefix
-   nolang_selector = logo_selector[3:]
-   for logo in default_logos:
-      if logo.startswith(nolang_selector):
-         return default_logos[logo]
-   """
-   # check for a png or jpg with same selector
-   if os.path.isfile(menuImages + logo_selector + '.jpg'):
-      return logo_selector + '.jpg'
-   if os.path.isfile(menuImages + logo_selector + '.png'):
-      return logo_selector + '.png'
-
-   return ''
-
 
 # Now start the application
 if __name__ == "__main__":
