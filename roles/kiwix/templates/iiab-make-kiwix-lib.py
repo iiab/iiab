@@ -123,6 +123,7 @@ def get_zim_list(path):
     for filename in flist:
         zimpos = filename.find(".zim")
         if zimpos != -1:
+            zim_info = {}
             filename = filename[:zimpos]
             zimname = "content/" + filename + ".zim"
             zimidx = "index/" + filename + ".zim.idx"
@@ -140,7 +141,15 @@ def get_zim_list(path):
                     if filename.rfind("-") < 0: # non-canonical name
                         ulpos = filename[:ulpos].rfind("_")
                     wiki_name = filename[:ulpos]
-                    update_zim_versions_idx(wiki_name,filename)
+                zim_info['file_name'] = filename
+                zim_info['menu_item'] = find_menuitem_from_zimname(wiki_name)
+                articlecount,mediacount,size,tags,lang = get_substitution_data(wiki_name)
+                zim_info['article_count'] = articlecount
+                zim_info['media_count'] = mediacount
+                zim_info['size'] = size
+                zim_info['tags'] = tags
+                zim_info['language'] = lang
+                zim_versions[wiki_name] = zim_info # if there are multiples, last should win
     return files_processed
 
 def read_library_xml(lib_xml_file, kiwix_exclude_attr=[""]): # duplicated from iiab-cmdsrv
@@ -211,19 +220,6 @@ def parse_args():
     parser.add_argument("-f", "--force", help="force complete rebuild of library.xml", action="store_true")
     parser.add_argument("-v", "--verbose", help="Print messages.", action="store_true")
     return parser.parse_args()
-
-def update_zim_versions_idx(wiki_name,filename):
-   global zim_versions
-   zim_info = {}
-   zim_info['file_name'] = filename
-   zim_info['menu_item'] = find_menuitem_from_zimname(wiki_name)
-   articlecount,mediacount,size,tags,lang = get_substitution_data(wiki_name)
-   zim_info['article_count'] = articlecount
-   zim_info['media_count'] = mediacount
-   zim_info['size'] = size
-   zim_info['tags'] = tags
-   zim_info['language'] = lang
-   zim_versions[wiki_name] = zim_info # if there are multiples, last should win
 
 def write_zim_versions_idx():
    # Write Version Map
