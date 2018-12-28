@@ -272,32 +272,8 @@ def find_menuitem_from_zimname(zimname):
           data = json.loads(readstr)
           return data.get('menu_item_name','')
    else:
-      # create a stub for this zim
-      item = get_kiwix_catalog_item(zimname)
-      lang = item['language'][:2]
-      filename = lang + '-' + zimname + '.json'
-      #print("creating %s"%filename)
-      outstr = ''
-      default = ''
-      default = get_default_logo(zimname)
-      with open(filename,'w') as menufile:
-         outstr += '{\n'
-         outstr += '"intended_use":"zim",\n'
-         outstr += '"lang" : "' + lang +'",\n'
-         if default != '':
-            outstr += '"logo_url" : "' + default + '",\n'
-         else:
-            outstr += '"logo_url" : "",\n'
-         menuitem = lang + '-' + zimname
-         outstr += '"menu_item_name" : "' + menuitem + '",\n'
-         outstr += '"title" : "' + item['title'] + '",\n'
-         outstr += '"zim_name" : "' + zimname + '",\n'
-         outstr += '"start_url" : "",\n'
-         outstr += '"description":"",\n'
-         outstr += '"extra_html" : ""\n'
-         outstr += '}\n'
-         menufile.write(outstr)
-      return menuitem
+      pass
+      # Let the update_menus function in admin-console deal with it
 
 def get_kiwix_catalog_item(perma_ref):
    # Read the kiwix catalog
@@ -316,5 +292,3 @@ if __name__ == "__main__":
 
     # Run the main routine
     main()
-    #print(get_substitution_data('wikivoyage_pt_all_nopic'))
-    #check_linkage_kiwix2menudefs()
