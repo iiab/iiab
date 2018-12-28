@@ -221,6 +221,7 @@ def update_zim_versions_idx(wiki_name,filename):
    zim_info['article_count'] = articlecount
    zim_info['media_count'] = mediacount
    zim_info['size'] = size
+   zim_info['tags'] = tags
    zim_info['language'] = lang
    zim_versions[wiki_name] = zim_info # if there are multiples, last should win
 
