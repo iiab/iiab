@@ -100,7 +100,8 @@ def main():
     for item in zim_files:
           if item not in path_to_id_map:
               add_libr_xml(kiwix_library_xml, zim_path, item, zim_files[item])
-
+    print("Writing zim_versions_idx")
+    
     write_zim_versions_idx()
     sys.exit()
 
@@ -214,11 +215,11 @@ def parse_args():
 def update_zim_versions_idx(wiki_name,filename):
    global zim_versions
    zim_info = {}
-   zim_info['zimFileName'] = filename
-   zim_info['menuItem'] = find_menuitem_from_zimname(wiki_name)
+   zim_info['file_name'] = filename
+   zim_info['menu_item'] = find_menuitem_from_zimname(wiki_name)
    articlecount,mediacount,size,tags,lang = get_substitution_data(wiki_name)
-   zim_info['articleCount'] = articlecount
-   zim_info['mediaCount'] = mediacount
+   zim_info['article_count'] = articlecount
+   zim_info['media_count'] = mediacount
    zim_info['size'] = size
    zim_info['language'] = lang
    zim_versions[wiki_name] = zim_info # if there are multiples, last should win
@@ -229,6 +230,7 @@ def write_zim_versions_idx():
    if os.path.isdir(zim_version_idx_dir):
       with open(zim_version_idx_dir + zim_version_idx_file, 'w') as fp:
          fp.write(json.dumps(zim_versions,indent=2 ))
+         fp.close()
    else:
       print zim_version_idx_dir + " not found."
       
@@ -240,6 +242,8 @@ def get_substitution_data(perma_ref):
       size = item.get('size','')
       tags = item.get('tags','')
       lang = item.get('language','')
+      if len(lang) > 2:
+         lang = lang[:2]
       return (articlecount,mediacount,size,tags,lang)
    return ('0','0','0','0','0')
 
