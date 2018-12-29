@@ -146,6 +146,7 @@ def get_zim_list(path):
                 articlecount,mediacount,size,tags,lang = get_substitution_data(wiki_name)
                 zim_info['article_count'] = articlecount
                 zim_info['media_count'] = mediacount
+                size = human_readable(size)
                 zim_info['size'] = size
                 zim_info['tags'] = tags
                 zim_info['language'] = lang
@@ -285,6 +286,19 @@ def get_kiwix_catalog_item(perma_ref):
          if zims[uuid]['perma_ref'] == perma_ref:
             return zims[uuid]
       return {}
+
+def human_readable(num):
+    # return 3 significant digits and unit specifier
+    num = float(num)
+    units = [ '','K','M','G']
+    for i in range(4):
+        if num<10.0:
+            return "%.2f%s"%(num,units[i])
+        if num<100.0:
+            return "%.1f%s"%(num,units[i])
+        if num < 1000.0:
+            return "%.0f%s"%(num,units[i])
+        num /= 1000.0
 
 # Now start the application
 if __name__ == "__main__":
