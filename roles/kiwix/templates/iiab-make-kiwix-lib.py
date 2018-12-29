@@ -272,9 +272,7 @@ def find_menuitem_from_zimname(zimname):
           readstr = json_file.read()
           data = json.loads(readstr)
           return data.get('menu_item_name','')
-   else:
-      pass
-      # Let the update_menus function in admin-console deal with it
+   return ''
 
 def get_kiwix_catalog_item(perma_ref):
    # Read the kiwix catalog
