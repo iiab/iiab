@@ -234,7 +234,7 @@ def write_zim_versions_idx():
       
 def get_substitution_data(perma_ref):
    item =get_kiwix_catalog_item(perma_ref)
-   if len(item) != 0:
+   if len(item) != 0 or perma_ref == 'test':
       mediacount = item.get('mediaCount','')
       articlecount = item.get('articleCount')
       size = item.get('size','')
