@@ -17,16 +17,11 @@
     src: network/systemd-br0-slave.j2
   when: iiab_wired_lan_iface is defined and iiab_lan_iface == "br0"
 
-- name: Stopping services
-  include_tasks: down-debian.yml
-
-- name: Disable and mask systemd-networkd-wait-online
-  systemd:
-    name: systemd-networkd-wait-online
-    enabled: no
-    masked: yes
-    state: stopped
-  when: is_ubuntu_18
+- name: Remove static WAN template
+  file:
+    state: absent
+    dest: /etc/systemd/network/IIAB-Static.network
+  when: wan_ip == "dhcp"
 
 - name: Static IP computing CIDR
   shell: netmask {{ wan_ip }}/{{ wan_netmask }} | awk -F "/" '{print $2}'
@@ -38,33 +33,14 @@
     wan_cidr: "{{ CIDR.stdout }}"
   when: wan_ip != "dhcp"
 
-- name: Figure out netplan file name on Ubuntu 18
-  shell: ls /etc/netplan
-  register: netplan
-  when: is_ubuntu_18
-
-# ICO will always set gui_static_wan_ip away from the default of 'unset' while
-# gui_static_wan turns dhcp on/off through wan_ip in computed_network and
-# overrides gui_static_wan_ip that is present. Changing wan_ip in local_vars
-# is a oneway street to static.
-- name: Supply static template
-  template:
-    dest:  /etc/netplan/{{ netplan.stdout }}
-    src: network/cloud-init.j2
-    backup: no
-  when: (wan_ip != "dhcp" or gui_static_wan_ip == "undefined") and is_ubuntu_18
-
-- name: Remove static WAN template
-  file:
-    state: absent
-    dest: /etc/systemd/network/IIAB-Static.network
-  when: wan_ip == "dhcp" and not is_ubuntu_18
-
 - name: Supply static WAN template
   template:
     dest: /etc/systemd/network/IIAB-Static.network
     src: network/systemd-static-net.j2
   when: wan_ip != "dhcp" and not is_ubuntu_18
+
+- name: Stopping services
+  include_tasks: down-debian.yml
 
 - name: Reload systemd
   systemd:
