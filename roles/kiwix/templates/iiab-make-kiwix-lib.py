@@ -100,21 +100,13 @@ def main():
     for item in zim_files:
           if item not in path_to_id_map:
               add_libr_xml(kiwix_library_xml, zim_path, item, zim_files[item])
+
     print("Writing zim_versions_idx")
-    
     write_zim_versions_idx()
     sys.exit()
 
 def get_zim_list(path):
-    # save the info from previous downloads (kiwix catalog may have changed)
     files_processed = {}
-    try:
-       with open(zim_version_idx_dir + zim_version_idx_file, 'r') as fp:
-          zimVersionIdx = json.loads(fp.read())
-          for key,value in zimVersionIdx:
-             files_processed['content/' + zimVersionIdx['zimFileName'] + '.zim'] = 'index/' + zimVersionIdx['zimFileName'] + '.zim.idx'
-    except:
-       pass
     zim_list = []
     content = path + "/content/"
     index = path + "/index/"
@@ -142,14 +134,6 @@ def get_zim_list(path):
                         ulpos = filename[:ulpos].rfind("_")
                     wiki_name = filename[:ulpos]
                 zim_info['file_name'] = filename
-                zim_info['menu_item'] = find_menuitem_from_zimname(wiki_name)
-                articlecount,mediacount,size,tags,lang = get_substitution_data(wiki_name)
-                zim_info['article_count'] = articlecount
-                zim_info['media_count'] = mediacount
-                size = human_readable(size)
-                zim_info['size'] = size
-                zim_info['tags'] = tags
-                zim_info['language'] = lang
                 zim_versions[wiki_name] = zim_info # if there are multiples, last should win
     return files_processed
 
@@ -223,8 +207,21 @@ def parse_args():
     return parser.parse_args()
 
 def write_zim_versions_idx():
-   # Write Version Map
    global zim_versions
+   zims_installed,path_to_id_map = read_library_xml(kiwix_library_xml)
+   for perma_ref in zim_versions:
+      zim_versions[perma_ref]['menu_item'] = find_menuitem_from_zimname(perma_ref)
+      articlecount,mediacount,size,tags,lang,date = \
+           get_substitution_data(perma_ref, zims_installed, path_to_id_map)
+      zim_versions[perma_ref]['article_count'] = articlecount
+      zim_versions[perma_ref]['media_count'] = mediacount
+      size = human_readable(size)
+      zim_versions[perma_ref]['size'] = size
+      zim_versions[perma_ref]['tags'] = tags
+      zim_versions[perma_ref]['language'] = lang
+      zim_versions[perma_ref]['zim_date'] = date
+
+   # Write Version Map
    if os.path.isdir(zim_version_idx_dir):
       with open(zim_version_idx_dir + zim_version_idx_file, 'w') as fp:
          fp.write(json.dumps(zim_versions,indent=2 ))
@@ -232,18 +229,22 @@ def write_zim_versions_idx():
    else:
       print zim_version_idx_dir + " not found."
       
-def get_substitution_data(perma_ref):
-   item =get_kiwix_catalog_item(perma_ref)
+def get_substitution_data(perma_ref,zims_installed, path_to_id_map):
+   #reconstruct the path in the id map
+   path = 'content/' + zim_versions[perma_ref]['file_name'] + '.zim'
+   id = path_to_id_map[path]
+   item = zims_installed[id]
    if len(item) != 0 or perma_ref == 'test':
       mediacount = item.get('mediaCount','')
-      articlecount = item.get('articleCount')
+      articlecount = item.get('articleCount','')
       size = item.get('size','')
       tags = item.get('tags','')
       lang = item.get('language','')
       if len(lang) > 2:
          lang = lang[:2]
-      return (articlecount,mediacount,size,tags,lang)
-   return ('0','0','0','0','0')
+      date =  item.get('date')
+      return (articlecount,mediacount,size,tags,lang,date)
+   return ('0','0','0','0','0','0')
 
 def get_menu_def_zimnames(intended_use='zim'):
    menu_def_dict = {}
@@ -274,18 +275,6 @@ def find_menuitem_from_zimname(zimname):
           data = json.loads(readstr)
           return data.get('menu_item_name','')
    return ''
-
-def get_kiwix_catalog_item(perma_ref):
-   # Read the kiwix catalog
-   with open(KIWIX_CAT, 'r') as kiwix_cat:
-      json_data = kiwix_cat.read()
-      download = json.loads(json_data)
-      zims = download['zims']
-      for uuid in zims.keys():
-         #print("%s   %s"%(zims[uuid]['perma_ref'],perma_ref,))
-         if zims[uuid]['perma_ref'] == perma_ref:
-            return zims[uuid]
-      return {}
 
 def human_readable(num):
     # return 3 significant digits and unit specifier
