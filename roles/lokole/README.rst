@@ -11,6 +11,9 @@ The Lokole is a simple email client that offers functionality like:
 3. Write emails including rich formatting
 4. Send attachments
 
+The Lokole email client is translated into a number of languages, including French and Lingala.
+For an up-to-date list of supported languages, refer to the `Lokole translations source <https://github.com/ascoderu/opwen-webapp/tree/master/opwen_email_client/webapp/translations>`_.
+
 Using It
 --------
 
@@ -26,7 +29,7 @@ By default, the password is: ``changeme``
 Administrators can:
 
 - Suspend and reinstate user accounts
-- Change passwords of user accounts (TODO: admin accounts too?)
+- Reset passwords of non-admin user accounts
 - Promote users to the admin role
 
 All of these actions can be performed from the page http://box/lokole/users
@@ -51,19 +54,24 @@ Creating an Admin Account
 
 To create a new admin account, run the following command::
 
-  ./manage.py createadmin [--name | -n] <username> [--password | -p] <password>
+  cd /library/lokole/venv
+  ./python3 ./manage.py createadmin [--name | -n] <username> [--password | -p] <password>
 
-(TODO what working directory?)
 
 Resetting the Database
 ~~~~~~~~~~~~~~~~~~~~~~
 
-TODO
+To reset the database, run the following command::
+
+  cd /library/lokole/venv
+  ./python3 ./manage.py resetdb
+
+This command will remove all users and all emails from the system.
 
 Troubleshooting
 ---------------
 
-TODO
+For further usage information and troubleshooting, refer to the `Lokole user manual <https://github.com/iiab/iiab/raw/master/roles/lokole/The%20Lokole-IIAB%20User's%20Manual.pdf>`_.
 
 Known Issues
 ------------
