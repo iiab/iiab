@@ -1,56 +1,42 @@
-- name: Set up Node.js 8.x apt sources (debuntu, but avoid ubuntu-18)
+- name: Set up Node.js 8.x apt sources (debuntu distros up to 2017)
   shell: curl -sL https://deb.nodesource.com/setup_8.x | bash -
   args:
     warn: no
-  when: internet_available and is_debuntu and not is_ubuntu_18 and nodered_install
-
-- name: Install latest Node.js which includes /usr/bin/npm (debuntu, but avoid ubuntu-18)
+  when: internet_available and (is_debian_8 or is_debian_9) and nodered_install
+  # NOT NEC TO TEST FOR is_raspbian_8 OR is_raspbian_9 AS /opt/iiab/iiab/vars/<OS>.yml
+  # DEFINES THESE AS SUBSETS OF is_debian_8 OR is_debian_9 (FOR NOW!)
+  
+- name: Install latest Node.js which includes /usr/bin/npm (debuntu distros up to 2017)
   package:
     name: nodejs
     # name: nodejs=8.x
     state: latest
     # state: present
-  when: internet_available and is_debuntu and not is_ubuntu_18 and nodered_install
+  when: internet_available and (is_debian_8 or is_debian_9) and nodered_install
 
-# 2018-07-14: BOTH STEPS ABOVE TAKE TIME, but Raspbian (apt offers npm
-# 1.4.21) & Debian 9 (apt offers no npm!) STILL NEED the above
-# nodesource.com approach to get a version of npm that works with Sugarizer:
-# https://github.com/iiab/iiab/issues/798#issuecomment-404324530
-#
-# MORE POSITIVELY: this nodesource.com approach (brings in npm 5.6.0 with
-# nodejs 8.11.3 for now, to any OS) would also work on Ubuntu 18.04, and
-# might even bring about a sane consistency across mainline OS's?
-#
-# BUT FOR NOW: Ubuntu 18.04's apt (approach below) brings in npm 3.5.2,
-# which appears suffic "SO FAR"?  18.04's nodejs 8.10.0 is more reassuring!
+# 2019-01-15: WE'RE BORROWING npm INSTALLATION TRICKS FROM MID-2018 SUGARIZER:
+# https://github.com/iiab/iiab/blob/master/roles/sugarizer/tasks/main.yml#L77-L94
 
-# CRAZY IDEA: most versions of npm can upgrade themselves to the latest
-# (6.2.0 for now) using command "npm install -g npm", if that helps us in
-# future, e.g. TK's memory issue etc?  If so, be CAREFUL this puts npm
-# in /usr/local/bin on Ubuntu 18.04 -- unlike Ubuntu 16.04 and Raspbian
-# where it upgrades /usr/bin/npm in place:
-# https://askubuntu.com/questions/1036278/npm-is-incorrect-version-on-latest-ubuntu-18-04-installation
-
-- name: Install latest packages nodejs and npm (ubuntu-18 or not debuntu)
+- name: Install latest packages nodejs and npm (debuntu distros after 2017, or other distros)
   package:
     name:
       - nodejs
       - npm
     state: latest
-  when: internet_available and (is_ubuntu_18 or not is_debuntu) and nodered_install
+  when: internet_available and not (is_debian_8 or is_debian_9) and nodered_install
 
 
-- name: Install node-red packages globally.
+- name: 'npm install node-red packages globally: node-red, node-red-admin, node-red-dashboard'
   shell: npm install -g --unsafe-perm node-red node-red-admin node-red-dashboard
   when: nodered_install
 
-- name: Create nodered usergroup
+- name: Ensure Linux group "nodered" exists
   group:
     name: nodered
     state: present
   when: nodered_install
 
-- name: Add the user nodered and add to nodered group
+- name: Ensure Linux user "nodered" exists and is added to group "nodered"
   user:
     name: nodered
     group: nodered
@@ -58,45 +44,36 @@
 
 - name: Create /home/nodered/.node-red/ directory
   file:
-    path: "/home/nodered/.node-red"
+    path: /home/nodered/.node-red
     state: directory
     owner: nodered
     group: nodered
     mode: 0775
   when: nodered_install
 
-- name: Copy settings.js file with authentication
+- name: Install /home/nodered/.node-red/settings.js from template, with authentication
   template:
     backup: yes
-    src: "{{ item.src }}"
-    dest: "{{ item.dest }}"
+    src: settings.js.j2
+    dest: /home/nodered/.node-red/settings.js
     owner: nodered
     group: nodered
-    mode: "{{ item.mode }}"
-  with_items:
-    - { src: 'settings.js.j2' , dest: '/home/nodered/.node-red/settings.js', mode: '0755' }
+    mode: 0755
   when: nodered_install
 
-- name: Create node-red systemd file
+- name: Install /etc/systemd/system/node-red.service systemd unit file from template
   template:
     backup: yes
-    src: "{{ item.src }}"
-    dest: "{{ item.dest }}"
+    src: node-red.service.j2
+    dest: /etc/systemd/system/node-red.service
     owner: root
     group: root
-    mode: "{{ item.mode }}"
-  with_items:
-    - { src: 'node-red.service.j2' , dest: '/etc/systemd/system/node-red.service', mode: '0755' }
+    mode: 0755
   when: nodered_install
 
-- name: Enable node-red
-  service:
+- name: Enable & Start node-red service
+  systemd:
     name: node-red
     enabled: yes
-  when: nodered_enabled
-
-- name: Start node-red
-  service:
-    name: node-red
     state: started
   when: nodered_enabled
