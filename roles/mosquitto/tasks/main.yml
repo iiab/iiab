@@ -1,4 +1,4 @@
-- name: Install Mosquitto
+- name: Install mosquitto & mosquitto-clients
   package:
     name: "{{ item }}"
     state: present
@@ -8,49 +8,37 @@
   when: mosquitto_install
   tags: download
 
-- name: Disable mosquitto
-  service:
+- name: Disable & Stop mosquitto service
+  systemd:
     name: mosquitto
     enabled: no
-  when: mosquitto_install
-
-- name: Stop mosquitto
-  service:
-    name: mosquitto
     state: stopped
   when: mosquitto_install
 
-- name: Create mosquitto passwd file
+- name: Create (touch) file /etc/mosquitto/passwd
   file:
     path: /etc/mosquitto/passwd
     state: touch
-    mode: "u=rw,g=r,o=r"
+    mode: "u=rw,g=r,o=r"    # 0644
   when: mosquitto_install
 
-- name: Create mosquitto username/password
+- name: Populate /etc/mosquitto/passwd with actual username/password
   shell: mosquitto_passwd -b /etc/mosquitto/passwd "{{ mosquitto_user }}" "{{ mosquitto_password  }}"
   when: mosquitto_install
 
-- name: Create mosquitto config file
+- name: Install /etc/mosquitto/conf.d/websockets.conf from template
   template:
     backup: yes
-    src: "{{ item.src }}"
-    dest: "{{ item.dest }}"
+    src: websockets.conf.j2
+    dest: /etc/mosquitto/conf.d/websockets.conf
     owner: root
     group: root
-    mode: "{{ item.mode }}"
-  with_items:
-    - { src: 'websockets.conf.j2' , dest: '/etc/mosquitto/conf.d/websockets.conf', mode: '0755' }
+    mode: 0755
   when: mosquitto_install
 
-- name: Enable mosquitto
-  service:
+- name: Enable & Start mosquitto service
+  systemd:
     name: mosquitto
     enabled: yes
-  when: mosquitto_enabled
-
-- name: Start mosquitto
-  service:
-    name: mosquitto
     state: started
   when: mosquitto_enabled
