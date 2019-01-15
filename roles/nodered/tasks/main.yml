@@ -2,7 +2,7 @@
   shell: curl -sL https://deb.nodesource.com/setup_8.x | bash -
   args:
     warn: no
-  when: internet_available and is_debuntu and not is_ubuntu_18
+  when: internet_available and is_debuntu and not is_ubuntu_18 and nodered_install
 
 - name: Install latest Node.js which includes /usr/bin/npm (debuntu, but avoid ubuntu-18)
   package:
@@ -10,7 +10,7 @@
     # name: nodejs=8.x
     state: latest
     # state: present
-  when: internet_available and is_debuntu and not is_ubuntu_18
+  when: internet_available and is_debuntu and not is_ubuntu_18 and nodered_install
 
 # 2018-07-14: BOTH STEPS ABOVE TAKE TIME, but Raspbian (apt offers npm
 # 1.4.21) & Debian 9 (apt offers no npm!) STILL NEED the above
@@ -37,21 +37,24 @@
       - nodejs
       - npm
     state: latest
-  when: internet_available and (is_ubuntu_18 or not is_debuntu)
+  when: internet_available and (is_ubuntu_18 or not is_debuntu) and nodered_install
 
 
 - name: Install node-red packages globally.
   shell: npm install -g --unsafe-perm node-red node-red-admin node-red-dashboard
+  when: nodered_install
 
 - name: Create nodered usergroup
   group:
     name: nodered
     state: present
+  when: nodered_install
 
 - name: Add the user nodered and add to nodered group
   user:
     name: nodered
     group: nodered
+  when: nodered_install
 
 - name: Create /home/nodered/.node-red/ directory
   file:
@@ -60,6 +63,7 @@
     owner: nodered
     group: nodered
     mode: 0775
+  when: nodered_install
 
 - name: Copy settings.js file with authentication
   template:
@@ -71,6 +75,7 @@
     mode: "{{ item.mode }}"
   with_items:
     - { src: 'settings.js.j2' , dest: '/home/nodered/.node-red/settings.js', mode: '0755' }
+  when: nodered_install
 
 - name: Create node-red systemd file
   template:
@@ -82,6 +87,7 @@
     mode: "{{ item.mode }}"
   with_items:
     - { src: 'node-red.service.j2' , dest: '/etc/systemd/system/node-red.service', mode: '0755' }
+  when: nodered_install
 
 - name: Enable node-red
   service:
