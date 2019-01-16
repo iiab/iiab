@@ -20,6 +20,10 @@ Username: ``Admin``
 
 Password: ``changeme``
 
+You can monitor the Node-RED service with command::
+
+  systemctl status node-red
+
 See Also
 --------
 
