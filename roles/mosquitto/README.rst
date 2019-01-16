@@ -9,13 +9,13 @@ Roughly follows this guide: https://www.digitalocean.com/community/tutorials/how
 Using It
 -------
 
-The mosquitto service is authenticated with:
+The Mosquitto service is authenticated with:
 
 Username: ``Admin``
 
 Password: ``changeme``
 
-You can monitor the service with command::
+You can monitor it with command::
 
   systemctl status mosquitto
 
