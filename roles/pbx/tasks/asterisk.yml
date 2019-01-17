@@ -91,17 +91,32 @@
   args:
     chdir: "{{ asterisk_src_dir }}"
 
-- name: Asterisk - Create the necessary user/group config and set permissions
-  command: "{{ item }} chdir={{ asterisk_src_dir }}"
+- name: Asterisk - Ensure group "asterisk" exists
+  group:
+    name: asterisk
+    state: present
+
+- name: Asterisk - Ensure user "asterisk" exists, and belongs to the required groups
+  user:
+    name: asterisk
+    group: asterisk
+    groups: audio,dialout
+    home: "/var/lib/asterisk"
+    system: yes
+    append: yes
+
+- name: Asterisk - Set directory ownership
+  file: 
+    dest: "{{ item }}" 
+    owner: asterisk 
+    group: asterisk
+    recurse: yes
   with_items:
-    - groupadd asterisk
-    - useradd -r -d /var/lib/asterisk -g asterisk asterisk
-    - usermod -aG audio,dialout asterisk
-    - chown -R asterisk.asterisk /etc/asterisk
-    - chown -R asterisk.asterisk /var/lib/asterisk
-    - chown -R asterisk.asterisk /var/log/asterisk
-    - chown -R asterisk.asterisk /var/spool/asterisk
-    - chown -R asterisk.asterisk /usr/lib/asterisk
+    - /etc/asterisk
+    - /var/lib/asterisk
+    - /var/log/asterisk
+    - /var/spool/asterisk
+    - /usr/lib/asterisk
 
 - name: Asterisk - Set default user to asterisk in /etc/default/asterisk
   lineinfile:
@@ -133,7 +148,7 @@
     name: asterisk
     enabled: yes
     state: started
-  when: asterisk_enabled
+  when: pbx_enabled
 
 - name: Disable & Stop asterisk service
   systemd:
@@ -141,4 +156,4 @@
     name: asterisk
     enabled: no
     state: stopped
-  when: (not asterisk_enabled)
+  when: (not pbx_enabled)
