@@ -8,12 +8,12 @@
     timeout: "{{ download_timeout }}"
   when: internet_available
 
-- name: FreePBX - Check for /opt/iiab/downloads/{{ freepbx_src_file }}
+- name: FreePBX - Check for {{ downloads_dir }}/{{ freepbx_src_file }}
   stat:
     path: "{{ downloads_dir }}/{{ freepbx_src_file }}"
   register: freepbx_src
 
-- name: FreePBX - FAIL (force Ansible to exit) IF /opt/iiab/downloads/{{ freepbx_src_file }} doesn't exist
+- name: FreePBX - FAIL (force Ansible to exit) IF {{ downloads_dir }}/{{ freepbx_src_file }} doesn't exist
   fail:
     msg: "{ downloads_dir }}/{{ freepbx_src_file }} is REQUIRED in order to install."
   when: not freepbx_src.stat.exists
@@ -38,20 +38,41 @@
     enabled: no
     state: stopped
 
-- name: Install freepbx (just ran once)
+- name: FreePBX - Install (just run once)
   command: "{{ item }}"
   args:
     chdir: "{{ freepbx_src_dir }}"
-    creates: /var/www/html/freepbx
+    creates: "{{ freepbx_install_dir }}"
   with_items:
     - ./start_asterisk start
-    - ./install -n --webroot /var/www/html/freepbx --dbuser root --dbpass {{ mysql_root_password }} 
+    - ./install -n --webroot {{ freepbx_install_dir }} --dbuser root --dbpass {{ mysql_root_password }} 
   register: freepbx_installation
 
-- name: Create /etc/odbc.ini
+- name: FreePBX - Create /etc/odbc.ini
   template:
     src: odbc.ini.j2
     dest: /etc/odbc.ini
     owner: root
     group: root
     mode: 0644
+
+- name: FreePBX - Copy freepbx.conf
+  template:
+    src: freepbx.conf.j2
+    dest: /etc/apache2/sites-available/freepbx.conf
+    owner: www-data
+    group: www-data
+    mode: 0644
+
+- name: FreePBX - Enable freepbx
+  file: 
+    src: /etc/apache2/sites-available/freepbx.conf
+    dest: /etc/apache2/sites-enabled/freepbx.conf
+    state: link
+  when: pbx_enabled
+
+- name: FreePBX - Disable freepbx
+  file: 
+    path: /etc/apache2/sites-enabled/freepbx.conf
+    state: absent
+  when: (not pbx_enabled)
