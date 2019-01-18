@@ -31,55 +31,12 @@
     group: root
     extra_opts: [--strip-components=1]
 
-- name: FreePBX - Add mysql user
-  mysql_user:
-    name: "{{ asterisk_db_user }}"
-    password: "{{ asterisk_db_password }}"
-    priv: "{{ asterisk_db_dbname }}.*:ALL/{{ asterisk_db_cdrdbname }}.*:ALL"
-    login_host: "{{ asterisk_db_host }}"
-    host: "{{ (asterisk_db_host == 'localhost') | ternary('localhost', ansible_default_ipv4.address) }}"
-    state: present
-
-- name: FreePBX - Add mysql db
-  mysql_db:
-    name: "{{ asterisk_db_dbname }}"
-    encoding: utf8
-    collation: utf8_general_ci
-    login_host: "{{ asterisk_db_host }}"
-    state: present
-
-- name: FreePBX - Add cdr mysql db
-  mysql_db:
-    name: "{{ asterisk_db_cdrdbname }}"
-    encoding: utf8
-    collation: utf8_general_ci
-    login_host: "{{ asterisk_db_host }}"
-    state: present
-
 - name: FreePBX - Disable & Stop asterisk service
   systemd:
     daemon_reload: yes
     name: asterisk
     enabled: no
     state: stopped
-
-## using named groups due to this: http://www.handverdrahtet.org/2016/01/ansible-using-numbered-backreference.html
-#- name: Enable freepbx installation with remote mysql db
-#  replace:
-#    dest: '{{ freepbx_src_dir }}/installlib/installcommand.class.php'
-#    regexp: '(?P<firstpart>\$amp_conf\[.AMPDBHOST.\] = .)localhost(.;)'
-#    replace: '\g<firstpart>{{ asterisk_db_host }}\2'
-
-- name: Don't let freepbx take over the php sessions dir
-  blockinfile:
-    content: |
-      [blacklist]
-      directory = /var/lib/php/sessions
-    marker: "; {mark} ANSIBLE MANAGED BLOCK"
-    dest: /etc/asterisk/freepbx_chown.conf
-    owner: asterisk
-    group: asterisk
-    create: yes
 
 - name: Install freepbx (just ran once)
   command: "{{ item }}"
@@ -88,58 +45,13 @@
     creates: /var/www/html/freepbx
   with_items:
     - ./start_asterisk start
-    - ./install -n --webroot /var/www/html/freepbx --dbuser {{ asterisk_db_user }} --dbpass {{ asterisk_db_password }} --dbname {{ asterisk_db_dbname }} --cdrdbname {{ asterisk_db_cdrdbname }}
+    - ./install -n --webroot /var/www/html/freepbx --dbuser root --dbpass {{ mysql_root_password }} 
   register: freepbx_installation
 
-- name: Install unit file /etc/systemd/system/freepbx.service from templates
+- name: Create /etc/odbc.ini
   template:
-    src: "freepbx.service.j2"
-    dest: "/etc/systemd/system/freepbx.service"
+    src: odbc.ini.j2
+    dest: /etc/odbc.ini
     owner: root
     group: root
     mode: 0644
-
-# http://community.freepbx.org/t/fixing-cdr-cel-on-ubuntu-debian-installation/30836
-# Test using `isql -v MySQL-asteriskcdrdb`
-- name: Fix asterisk cdr odbc connection (1)
-  blockinfile:
-    dest: /etc/odbcinst.ini
-    create: yes
-    marker: "; {mark} ANSIBLE MANAGED BLOCK"
-    content: |
-      [MySQL]
-      Description = ODBC for MySQL
-      Driver      = {{ libodbc_path }}
-      FileUsage   = 1
-
-- name: Fix asterisk cdr odbc connection (2)
-  replace:
-    dest: /etc/odbc.ini
-    regexp: /var/lib/mysql/mysql.sock
-    replace: /var/run/mysqld/mysqld.sock
-
-- name: Install freepbx modules
-  command: "fwconsole ma downloadinstall {{ item }}"
-  args:
-    creates: /var/www/html/freepbx/admin/modules/{{ item }}
-  with_items:
-    - userman
-    - asteriskinfo
-    - backup
-    - outroutemsg
-
-- name: FreePBX - Enable and start FreePBX service
-  systemd:
-    daemon_reload: yes
-    name: freepbx
-    enabled: yes
-    state: started
-  when: pbx_enabled
-
-- name: FreePBX - Disable and Stop FreePBX service
-  systemd:
-    daemon_reload: yes
-    name: freepbx
-    enabled: no
-    state: stopped
-  when: pbx_enabled
