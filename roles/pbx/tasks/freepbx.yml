@@ -39,6 +39,31 @@
     enabled: no
     state: stopped
 
+- name: Add mysql user
+  mysql_user:
+    name: "{{ asterisk_db_user }}"
+    password: "{{ asterisk_db_password }}"
+    priv: "{{ asterisk_db_dbname }}.*:ALL/{{ asterisk_db_cdrdbname }}.*:ALL"
+    login_host: "{{ asterisk_db_host }}"
+    host: "{{ (asterisk_db_host == 'localhost') | ternary('localhost', ansible_default_ipv4.address) }}"
+    state: present
+
+- name: Add mysql db
+  mysql_db:
+    name: "{{ asterisk_db_dbname }}"
+    encoding: utf8
+    collation: utf8_general_ci
+    login_host: "{{ asterisk_db_host }}"
+    state: present
+
+- name: Add cdr mysql db
+  mysql_db:
+    name: "{{ asterisk_db_cdrdbname }}"
+    encoding: utf8
+    collation: utf8_general_ci
+    login_host: "{{ asterisk_db_host }}"
+    state: present
+
 - name: FreePBX - Install (just run once)
   command: "{{ item }}"
   args:
@@ -46,7 +71,7 @@
     creates: "{{ freepbx_install_dir }}"
   with_items:
     - ./start_asterisk start
-    - ./install -n --webroot {{ freepbx_install_dir }} --dbuser root --dbpass {{ mysql_root_password }} 
+    - ./install -n --webroot {{ freepbx_install_dir }} --dbuser {{ asterisk_db_user }} --dbpass {{ asterisk_db_password }} --dbname {{ asterisk_db_dbname }} --cdrdbname {{ asterisk_db_cdrdbname }}
 
 - name: FreePBX - Create /etc/odbc.ini
   template:
