@@ -1,30 +1,5 @@
-- name: Set up Node.js 8.x apt sources (debuntu distros up to 2017)
-  shell: curl -sL https://deb.nodesource.com/setup_8.x | bash -
-  args:
-    warn: no
-  when: internet_available and (is_debian_8 or is_debian_9 or is_ubuntu_16 or is_ubuntu_17) and nodered_install
-  # NOT NEC TO TEST FOR is_raspbian_8 OR is_raspbian_9 AS /opt/iiab/iiab/vars/<OS>.yml
-  # DEFINES THESE AS SUBSETS OF is_debian_8 OR is_debian_9 (FOR NOW!)
-  
-- name: Install latest Node.js which includes /usr/bin/npm (debuntu distros up to 2017)
-  package:
-    name: nodejs
-    # name: nodejs=8.x
-    state: latest
-    # state: present
-  when: internet_available and (is_debian_8 or is_debian_9 or is_ubuntu_16 or is_ubuntu_17) and nodered_install
-
-# 2019-01-15: WE'RE BORROWING npm INSTALLATION TRICKS FROM MID-2018 SUGARIZER:
-# https://github.com/iiab/iiab/blob/master/roles/sugarizer/tasks/main.yml#L77-L94
-
-- name: Install latest packages nodejs and npm (debuntu distros after 2017, or other distros)
-  package:
-    name:
-      - nodejs
-      - npm
-    state: latest
-  when: internet_available and not (is_debian_8 or is_debian_9 or is_ubuntu_16 or is_ubuntu_17) and nodered_install
-
+# 2019-01-16: @jvonau's PR #1403 moved installation of Node.js (8.x for now) &
+# npm to roles/nodejs/tasks/main.yml, triggered by roles/nodered/meta/main.yml
 
 - name: 'npm install node-red packages globally: node-red, node-red-admin, node-red-dashboard'
   shell: npm install -g --unsafe-perm node-red node-red-admin node-red-dashboard
@@ -78,3 +53,19 @@
     enabled: yes
     state: started
   when: nodered_enabled
+
+- name: Add 'nodered' variable values to {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"
+    section: nodered
+    option: "{{ item.option }}"
+    value: "{{ item.value }}"
+  with_items:
+    - option: name
+      value: Node-RED
+    - option: description
+      value: '"Node-RED is a flow-based development tool for visual programming developed originally by IBM for wiring together hardware devices, APIs and online services as part of the Internet of Things. Node-RED provides a web browser-based flow editor, which can be used to create JavaScript functions."'
+    - option: nodered_install
+      value: "{{ nodered_install }}"
+    - option: nodered_enabled
+      value: "{{ nodered_enabled }}"
