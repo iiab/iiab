@@ -157,6 +157,7 @@
     #- { src: 'sugarizer.ini.j2', dest: '{{ sugarizer_location }}/sugarizer-server/env/sugarizer.ini' }
     #- { src: 'sugarizer.js', dest: '{{ sugarizer_location }}/sugarizer-server' }
 
+# SEE https://github.com/iiab/iiab/pull/1430#issuecomment-459129378
 - name: Set Sugarizer port to {{ sugarizer_port }} in /opt/iiab/sugarizer-server/env/sugarizer.ini
   lineinfile:
     path: /opt/iiab/sugarizer-server/env/sugarizer.ini
@@ -167,14 +168,31 @@
 
 # SEE https://github.com/iiab/iiab/pull/1430#issuecomment-459129378
 - name: Customize pathPrefix /sugarizer in /opt/iiab/sugarizer-server/sugarizer.js
-  blockinfile:
+  lineinfile:
     path: /opt/iiab/sugarizer-server/sugarizer.js
+    regexp: "AUTO-INSERTED BY IIAB"    # avoids inserting it twice!
     insertbefore: "// Start listening$"
-    block: "var pathPrefix = '/sugarizer';\napp.use(pathPrefix, require('path-prefix-proxy')(pathPrefix));\n"
-    marker: "// {mark} ANSIBLE MANAGED BLOCK FOR IIAB"
-#    block: |+
+    line: |    # SEE https://yaml-multiline.info (use |+ to 'keep' newlines at end...though |8 and |+4 "indentation indicators" don't work with Ansible)
+      // AUTO-INSERTED BY IIAB FOR http://box/sugarizer
+      var pathPrefix = '/sugarizer';
+      app.use(pathPrefix, require('path-prefix-proxy')(pathPrefix));
+    # Use this instead, if tabs are truly nec:
+    # line: "\t// AUTO-INSERTED BY IIAB FOR http://box/sugarizer\n\tvar pathPrefix = '/sugarizer';\n\tapp.use(pathPrefix, require('path-prefix-proxy')(pathPrefix));\n"
+
+# Ansible's blockinfile module:
+# - inserts a mandatory marker line at beginning AND end of the block...ok fine
+# - doesn't support adding a newline after the block...ugly :(
+# - doesn't include above lineinfile's "regexp" parameter...and so risks inserting the block repeatedly, on each run :(
+#
+#  blockinfile:
+#    path: /opt/iiab/sugarizer-server/sugarizer.js
+#    insertbefore: "// Start listening$"
+#    marker: "// {mark} AUTO-INSERTED BY IIAB FOR http://box/sugarizer"
+#    block: |
 #      var pathPrefix = '/sugarizer';
 #      app.use(pathPrefix, require('path-prefix-proxy')(pathPrefix));
+#    # Use this instead, if tabs are truly nec:
+#    # block: "\tvar pathPrefix = '/sugarizer';\n\tapp.use(pathPrefix, require('path-prefix-proxy')(pathPrefix));"
 
 - name: Create symlink sugarizer.conf from sites-enabled to sites-available, for short URL http://box/sugarizer (debuntu)
   file:
