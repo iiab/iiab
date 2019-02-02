@@ -17,7 +17,7 @@
 - name: Clone llaske/sugarizer ({{ sugarizer_git_version }} branch/version) from GitHub to /opt/iiab/{{ sugarizer_dir_version }} (MAY DOWNLOAD 600+ MB)
   git:
     repo: https://github.com/llaske/sugarizer
-    dest: "{{ sugarizer_location }}/{{ sugarizer_dir_version }}"
+    dest: "{{ iiab_base }}/{{ sugarizer_dir_version }}"
     version: "{{ sugarizer_git_version }}"
     force: yes
     depth: 1
@@ -25,8 +25,8 @@
 
 - name: Create symlink /opt/iiab/sugarizer -> /opt/iiab/{{ sugarizer_dir_version }}
   file:
-    src: "{{ sugarizer_location }}/{{ sugarizer_dir_version }}"
-    dest: "{{ sugarizer_location }}/sugarizer"
+    src: "{{ iiab_base }}/{{ sugarizer_dir_version }}"
+    dest: "{{ iiab_base }}/sugarizer"
     state: link
 
 
@@ -50,7 +50,7 @@
 - name: Clone llaske/sugarizer-server ({{ sugarizer_server_git_version }} branch/version) from GitHub to /opt/iiab/{{ sugarizer_server_dir_version }}
   git:
     repo: https://github.com/llaske/sugarizer-server
-    dest: "{{ sugarizer_location }}/{{ sugarizer_server_dir_version }}"
+    dest: "{{ iiab_base }}/{{ sugarizer_server_dir_version }}"
     version: "{{ sugarizer_server_git_version }}"
     force: yes
     depth: 1
@@ -58,8 +58,8 @@
 
 - name: Create symlink /opt/iiab/sugarizer-server -> /opt/iiab/{{ sugarizer_server_dir_version }}
   file:
-    src: "{{ sugarizer_location }}/{{ sugarizer_server_dir_version }}"
-    dest: "{{ sugarizer_location }}/sugarizer-server"
+    src: "{{ iiab_base }}/{{ sugarizer_server_dir_version }}"
+    dest: "{{ iiab_base }}/sugarizer-server"
     state: link
 
 
@@ -79,7 +79,7 @@
 
 #- name: Check for /opt/iiab/sugarizer-server/node_modules
 #  stat:
-#    path: "{{ sugarizer_location }}/sugarizer-server/node_modules"
+#    path: "{{ iiab_base }}/sugarizer-server/node_modules"
 #  register: nmtest
 #  ignore_errors: true
 #
@@ -122,8 +122,8 @@
 - name: Run 'npm install --allow-root --unsafe-perm=true' to create /opt/iiab/sugarizer-server/node_modules (CAN TAKE ~5 MINUTES)
   command: npm install --allow-root --unsafe-perm=true    # "command:" a bit safer than "shell:"
   args:
-    chdir: "{{ sugarizer_location }}/sugarizer-server"
-    #creates: "{{ sugarizer_location }}/sugarizer-server/node_modules"    # OLD WAY 2
+    chdir: "{{ iiab_base }}/sugarizer-server"
+    #creates: "{{ iiab_base }}/sugarizer-server/node_modules"    # OLD WAY 2
   when: internet_available    # "npm install" generally requires Internet access
 # when: internet_available and git_sug_server_output.changed    # OLD WAY 3
 # when: internet_available and not is_F18 and not node_modules_exists    # OLD WAY 1
@@ -131,16 +131,16 @@
 #- name: Create the express framework for Node.js (Fedora 18)
 #  shell: npm install
 #  args:
-#    chdir: "{{ sugarizer_location }}/sugarizer/server"
+#    chdir: "{{ iiab_base }}/sugarizer/server"
 #  when: internet_available and is_F18 and not node_modules_exists
 
 # Add a Node.js Express function that appends a prefix to URLs.
-# SEE "AUTO-INSERTED BY IIAB" ~44 LINES BELOW: as those two "pathPrefix" lines
+# SEE "AUTO-INSERTED BY IIAB" ~53 LINES BELOW: as those two "pathPrefix" lines
 # MUST be added to /opt/iiab/sugarizer-server/sugarizer.js
 - name: For http://box/sugarizer -- run 'npm install --allow-root --unsafe-perm=true path-prefix-proxy' to create /opt/iiab/sugarizer-server/node_modules/path-prefix-proxy
   command: npm install --allow-root --unsafe-perm=true path-prefix-proxy
   args:
-    chdir: "{{ sugarizer_location }}/sugarizer-server"
+    chdir: "{{ iiab_base }}/sugarizer-server"
   when: internet_available
 
 
@@ -156,35 +156,44 @@
   with_items:
     - { src: 'sugarizer.service', dest: '/etc/systemd/system/sugarizer.service' }
     - { src: 'sugarizer.conf.j2', dest: '/etc/apache2/sites-available/sugarizer.conf' }
-    #- { src: 'sugarizer.ini.j2', dest: '{{ sugarizer_location }}/sugarizer-server/env/sugarizer.ini' }
-    #- { src: 'sugarizer.js', dest: '{{ sugarizer_location }}/sugarizer-server' }
+    #- { src: 'sugarizer.ini.j2', dest: '{{ iiab_base }}/sugarizer-server/env/sugarizer.ini' }
+    #- { src: 'sugarizer.js', dest: '{{ iiab_base }}/sugarizer-server' }
 
-# 3 STANZAS ADDED BELOW JAN/FEB 2019, HOPING THIS MIGHT "JUST WORK" WITH FUTURE
+# 4 STANZAS ADDED BELOW JAN/FEB 2019, HOPING THIS MIGHT "JUST WORK" WITH FUTURE
 # UPGRADES BEYOND SUGARIZER 1.1?  SEE: github.com/iiab/iiab/pull/1430/files
 
 # sugarizer_port is set to 8089 in /opt/iiab/iiab/vars/default_vars.yml
 # If you need to change this, edit /etc/iiab/local_vars.yml prior to installing
 - name: Set Sugarizer port to {{ sugarizer_port }} in /opt/iiab/sugarizer-server/env/sugarizer.ini
   lineinfile:
-    path: /opt/iiab/sugarizer-server/env/sugarizer.ini
+    path: {{ iiab_base }}/sugarizer-server/env/sugarizer.ini
     regexp: "^port = 8080$"
     line: "port = {{ sugarizer_port }}"
+
+# 2019-02-01: HACK REQUIRED FOR NOW on Ubuntu 18.04 so Sugarizer finds MongoDB
+# after 1st reboot!  This does NOT affect Raspbian.  @jvonau wonders if Ubuntu's
+# "nameserver 127.0.0.53" in /etc/resolv.conf is to blame?  BACKGROUND: PR #1430
+- name: Set MongoDB "server" from localhost to 127.0.0.1 in /opt/iiab/sugarizer-server/env/sugarizer.ini
+  lineinfile:
+    path: {{ iiab_base }}/sugarizer-server/env/sugarizer.ini
+    regexp: "^server = localhost$"
+    line: "server = 127.0.0.1"
 
 # mongodb_port is set to 27018 in /opt/iiab/iiab/vars/default_vars.yml
 # If you need to change this, edit /etc/iiab/local_vars.yml prior to installing
 - name: Set MongoDB port to {{ mongodb_port }} in /opt/iiab/sugarizer-server/env/sugarizer.ini
   lineinfile:
-    path: /opt/iiab/sugarizer-server/env/sugarizer.ini
+    path: {{ iiab_base }}/sugarizer-server/env/sugarizer.ini
     regexp: "^port = 27017$"
     line: "port = {{ mongodb_port }}"
 
 # 2-LINE FIX FOR sugarizer.js BY @georgejhunt FOR http://box/sugarizer
-# SEE ~44 LINES ABOVE, as this is REQUIRED: 'npm install --allow-root --unsafe-perm=true path-prefix-proxy'
+# SEE ~53 LINES ABOVE, as this is REQUIRED: 'npm install --allow-root --unsafe-perm=true path-prefix-proxy'
 # OR YOU GET ERRORS: "status=255" within "systemctl status sugarizer"
 #                    "Cannot find module 'path-prefix-proxy'" within "journalctl -eu sugarizer"
-- name: For http://box/sugarizer -- add pathPrefix /sugarizer in /opt/iiab/sugarizer-server/sugarizer.js
+- name: For http://box/sugarizer -- add pathPrefix lines in /opt/iiab/sugarizer-server/sugarizer.js
   lineinfile:
-    path: /opt/iiab/sugarizer-server/sugarizer.js
+    path: {{ iiab_base }}/sugarizer-server/sugarizer.js
     regexp: "AUTO-INSERTED BY IIAB"    # avoids inserting it twice!
     insertbefore: "// Start listening$"
     line: |    # SEE https://yaml-multiline.info (use |+ to 'keep' newlines at end...though |8 and |+4 "indentation indicators" don't work with Ansible)
