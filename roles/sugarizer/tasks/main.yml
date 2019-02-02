@@ -135,7 +135,7 @@
 #  when: internet_available and is_F18 and not node_modules_exists
 
 # Add a nodejs express function that appends a prefix to urls
-- name: Run 'npm install --allow-root --unsafe-perm=true path-prefix-proxy' to create /opt/iiab/sugarizer-server/node_modules/path-prefix-proxy
+- name: For http://box/sugarizer -- run 'npm install --allow-root --unsafe-perm=true path-prefix-proxy' to create /opt/iiab/sugarizer-server/node_modules/path-prefix-proxy
   command: npm install --allow-root --unsafe-perm=true path-prefix-proxy
   args:
     chdir: "{{ sugarizer_location }}/sugarizer-server"
@@ -157,9 +157,11 @@
     #- { src: 'sugarizer.ini.j2', dest: '{{ sugarizer_location }}/sugarizer-server/env/sugarizer.ini' }
     #- { src: 'sugarizer.js', dest: '{{ sugarizer_location }}/sugarizer-server' }
 
+# 3 STANZAS ADDED BELOW JAN/FEB 2019, HOPING THIS MIGHT "JUST WORK" WITH FUTURE
+# UPGRADES BEYOND SUGARIZER 1.1?  SEE: github.com/iiab/iiab/pull/1430/files
+
 # sugarizer_port is set to 8089 in /opt/iiab/iiab/vars/default_vars.yml
 # If you need to change this, edit /etc/iiab/local_vars.yml prior to installing
-# SEE https://github.com/iiab/iiab/pull/1430#issuecomment-459129378
 - name: Set Sugarizer port to {{ sugarizer_port }} in /opt/iiab/sugarizer-server/env/sugarizer.ini
   lineinfile:
     path: /opt/iiab/sugarizer-server/env/sugarizer.ini
@@ -168,7 +170,6 @@
 
 # mongodb_port is set to 27018 in /opt/iiab/iiab/vars/default_vars.yml
 # If you need to change this, edit /etc/iiab/local_vars.yml prior to installing
-# SEE https://github.com/iiab/iiab/pull/1430#issuecomment-459129378
 - name: Set MongoDB port to {{ mongodb_port }} in /opt/iiab/sugarizer-server/env/sugarizer.ini
   lineinfile:
     path: /opt/iiab/sugarizer-server/env/sugarizer.ini
@@ -176,24 +177,20 @@
     line: "port = {{ mongodb_port }}"
 
 # 2-LINE FIX FOR sugarizer.js BY @georgejhunt FOR http://box/sugarizer
-# SEE https://github.com/iiab/iiab/pull/1430#issuecomment-459129378
-#
-# 2019-02-02: USED TO WORK ON Node.js 8.x BUT SUGARIZER NO LONGER STARTS ON Node.js 10.x
-# As tested w/ MongoDB 3.0.14 (binaries) on RPi and MongoDB 3.6.3 (apt) on Ubuntu 18.04
-# Errors are: "status=255" within "systemctl status sugarizer"
-#             "Cannot find module 'path-prefix-proxy'" within "journalctl -eu sugarizer"
-#
-#- name: Customize pathPrefix /sugarizer in /opt/iiab/sugarizer-server/sugarizer.js
-#  lineinfile:
-#    path: /opt/iiab/sugarizer-server/sugarizer.js
-#    regexp: "AUTO-INSERTED BY IIAB"    # avoids inserting it twice!
-#    insertbefore: "// Start listening$"
-#    line: |    # SEE https://yaml-multiline.info (use |+ to 'keep' newlines at end...though |8 and |+4 "indentation indicators" don't work with Ansible)
-#      // AUTO-INSERTED BY IIAB FOR http://box/sugarizer
-#      var pathPrefix = '/sugarizer';
-#      app.use(pathPrefix, require('path-prefix-proxy')(pathPrefix));
-#    # Use this instead, if tabs are truly nec:
-#    # line: "\t// AUTO-INSERTED BY IIAB FOR http://box/sugarizer\n\tvar pathPrefix = '/sugarizer';\n\tapp.use(pathPrefix, require('path-prefix-proxy')(pathPrefix));\n"
+# REQUIRES above 'npm install --allow-root --unsafe-perm=true path-prefix-proxy'
+# OR YOU GET ERRORS: "status=255" within "systemctl status sugarizer"
+#                    "Cannot find module 'path-prefix-proxy'" within "journalctl -eu sugarizer"
+- name: For http://box/sugarizer -- add pathPrefix /sugarizer in /opt/iiab/sugarizer-server/sugarizer.js
+  lineinfile:
+    path: /opt/iiab/sugarizer-server/sugarizer.js
+    regexp: "AUTO-INSERTED BY IIAB"    # avoids inserting it twice!
+    insertbefore: "// Start listening$"
+    line: |    # SEE https://yaml-multiline.info (use |+ to 'keep' newlines at end...though |8 and |+4 "indentation indicators" don't work with Ansible)
+      // AUTO-INSERTED BY IIAB FOR http://box/sugarizer
+      var pathPrefix = '/sugarizer';
+      app.use(pathPrefix, require('path-prefix-proxy')(pathPrefix));
+    # Use this instead, if tabs are truly nec:
+    # line: "\t// AUTO-INSERTED BY IIAB FOR http://box/sugarizer\n\tvar pathPrefix = '/sugarizer';\n\tapp.use(pathPrefix, require('path-prefix-proxy')(pathPrefix));\n"
 
 # Ansible's blockinfile module:
 # - inserts a mandatory marker line at beginning AND end of the block...ok fine
