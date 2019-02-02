@@ -86,9 +86,17 @@
 #    - "{{ downloads_dir }}/mongodb-3.0.1x/tools/*"
 #  when: internet_available and is_rpi
 
+- name: Create Linux group mongodb (rpi)
+  group:
+    name: mongodb
+    state: present
+  when: is_rpi
+
 - name: Create Linux user mongodb (rpi)
   user:
     name: mongodb
+    group: mongodb    # primary group
+    groups: mongodb
     home: /var/lib/mongodb
     shell: /usr/sbin/nologin
   when: is_rpi
@@ -96,15 +104,17 @@
 
 # 2. CONFIGURE FOR IIAB
 
-- name: 'Create 3 dirs for MongoDB: /var/run/mongodb, {{ mongodb_db_path }}, /var/log/mongodb'
+- name: 'Create 3 dirs for MongoDB: /var/lib/mongodb, /var/log/mongodb, {{ mongodb_db_path }}'
   file:
     state: directory
-    path: "{{ item.path }}"
+    path: "{{ item }}"
     owner: mongodb
+    group: mongodb
   with_items:
-    - { path: '/var/run/mongodb' }
-    - { path: "{{ mongodb_db_path }}" }    # == /library/dbdata/mongodb/
-    - { path: '/var/log/mongodb' }
+    #- { path: '/var/run/mongodb' }
+    - /var/lib/mongodb
+    - /var/log/mongodb
+    - "{{ mongodb_db_path }}"    # i.e. /library/dbdata/mongodb/
 
 - name: Install /etc/mongod.conf, mongodb.service, /usr/bin/iiab-mongodb-repair-if-no-lock from templates
   template:
@@ -114,7 +124,7 @@
     group: root
     mode: "{{ item.mode }}"
   with_items:
-    - { src: 'mongod.conf.j2', dest: "{{ mongodb_conf }}", mode: '0644' }    # /etc/mongod.conf
+    - { src: 'mongod.conf.j2', dest: "{{ mongodb_conf }}", mode: '0644' }    # i.e. /etc/mongod.conf
     - { src: 'mongodb.service.j2', dest: '/etc/systemd/system/mongodb.service', mode: '0644' }
     - { src: 'iiab-mongodb-repair-if-no-lock.j2', dest: '/usr/bin/iiab-mongodb-repair-if-no-lock', mode: '0755' }
 
@@ -132,6 +142,7 @@
 - name: Disable 'mongodb' service, if not mongodb_enabled
   systemd:
     name: mongodb
+    daemon_reload: yes
     enabled: no
     state: stopped
   when: not mongodb_enabled
