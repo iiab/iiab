@@ -1,24 +1,122 @@
-- name: 'Install packages: mongodb, mongodb-server'
+# 1. INSTALL MongoDB PACKAGES OR BINARIES
+
+- name: "Install packages: mongodb, mongodb-server (not rpi)"
   package:
     name:
       - mongodb-server
-      - mongodb
+      - mongodb    # 2019-01-31: this package does not exist on (cannot be installed on) Debian 10, SEE #1437
     state: present
-  when: internet_available
+  when: internet_available and not is_rpi
   tags:
     - download
 
-- name: Create 3 dirs for MongoDB
+# 2019-02-02: Sugarizer with Node.js 10.x requires MongoDB 2.6+ so
+# https://andyfelong.com/2017/08/mongodb-3-0-14-for-raspbian-stretch/
+# is being used on RPi, all I found! (Raspbian's apt pkg is MongoDB 2.4.14)
+#
+# mongodb_stretch_3_0_14_core.zip (20M) & mongodb_stretch_3_0_14_tools.zip (15M)
+# were backed up from andyfelong.com to http://download.iiab.io/packages/
+#
+# CLARIF: mongodb_stretch_3_0_14_core.zip IS IN FACT 3.0.14 (core) BUT...
+#         mongodb_stretch_3_0_14_tools.zip IS REALLY 3.0.15 (tools)
+
+- name: Create dir /tmp/mongodb-3.0.1x (rpi)
+  file:
+    path: /tmp/mongodb-3.0.1x
+    state: directory
+  when: internet_available and is_rpi
+
+- name: Download & unzip 20MB http://download.iiab.io/packages/mongodb_stretch_3_0_14_core.zip to /tmp/mongodb-3.0.1x (rpi)
+  unarchive:
+    remote_src: yes
+    src: "{{ iiab_download_url }}/mongodb_stretch_3_0_14_core.zip"
+    dest: /tmp/mongodb-3.0.1x
+  when: internet_available and is_rpi
+
+- name: Install (move) its 3 CORE binaries from /tmp/mongodb-3.0.1x/core to /usr/bin (rpi)
+  shell: mv /tmp/mongodb-3.0.1x/core/* /usr/bin
+  when: internet_available and is_rpi
+
+- name: Download & unzip 15MB http://download.iiab.io/packages/mongodb_stretch_3_0_14_tools.zip [IN FACT THIS ONE'S 3.0.15] to /tmp/mongodb-3.0.1x (rpi)
+  unarchive:
+    remote_src: yes
+    src: "{{ iiab_download_url }}/mongodb_stretch_3_0_14_tools.zip"
+    dest: /tmp/mongodb-3.0.1x
+  when: internet_available and is_rpi
+
+- name: Install (move) its 9 TOOLS binaries from /opt/iiab/downloads/mongodb-3.0.1x/tools to /usr/bin (rpi)
+  shell: mv /tmp/mongodb-3.0.1x/tools/* /usr/bin
+  when: internet_available and is_rpi
+
+# OLD WAY / MUCH SLOWER: had put unnec duplicate copies in /opt/iiab/downloads/mongodb-3.0.1x
+#
+#- name: Create dir /opt/iiab/downloads/mongodb-3.0.1x (rpi)
+#  file:
+#    path: "{{ downloads_dir }}/mongodb-3.0.1x"
+#    state: directory
+#  when: internet_available and is_rpi
+#
+#- name: Download & unzip MongoDB 3.0.14's 3 core binaries to /opt/iiab/downloads/mongodb-3.0.1x (rpi)
+#  unarchive:
+#    remote_src: yes
+#    src: "{{ iiab_download_url }}/mongodb_stretch_3_0_14_core.zip"
+#    dest: "{{ downloads_dir }}/mongodb-3.0.1x"
+#  when: internet_available and is_rpi
+#
+#- name: Install (copy) 3 binaries from /opt/iiab/downloads/mongodb-3.0.1x/core to /usr/bin (rpi)
+#  copy:
+#    src: "{{ item }}"
+#    dest: /usr/bin
+#  with_fileglob:
+#    - "{{ downloads_dir }}/mongodb-3.0.1x/core/*"
+#  when: internet_available and is_rpi
+#
+#- name: Download & unzip MongoDB 3.0.15's 9 tools binaries to /opt/iiab/downloads/mongodb-3.0.1x (rpi)
+#  unarchive:
+#    remote_src: yes
+#    src: "{{ iiab_download_url }}/mongodb_stretch_3_0_14_tools.zip"
+#    dest: "{{ downloads_dir }}/mongodb-3.0.1x"
+#  when: internet_available and is_rpi
+#
+#- name: Install (copy) 9 binaries from /opt/iiab/downloads/mongodb-3.0.1x/tools to /usr/bin (rpi)
+#  copy:
+#    src: "{{ item }}"
+#    dest: /usr/bin
+#  with_fileglob:
+#    - "{{ downloads_dir }}/mongodb-3.0.1x/tools/*"
+#  when: internet_available and is_rpi
+
+- name: Create Linux group mongodb (rpi)
+  group:
+    name: mongodb
+    state: present
+  when: is_rpi
+
+- name: Create Linux user mongodb (rpi)
+  user:
+    name: mongodb
+    group: mongodb    # primary group
+    groups: mongodb
+    home: /var/lib/mongodb
+    shell: /usr/sbin/nologin
+  when: is_rpi
+
+
+# 2. CONFIGURE FOR IIAB
+
+- name: 'Create 3 dirs for MongoDB: /var/lib/mongodb, /var/log/mongodb, {{ mongodb_db_path }}'
   file:
     state: directory
-    path: "{{ item.path }}"
+    path: "{{ item }}"
     owner: mongodb
+    group: mongodb
   with_items:
-    - { path: '/var/run/mongodb' }
-    - { path: "{{ mongodb_db_path }}" }    # == /library/dbdata/mongodb/
-    - { path: '/var/log/mongodb' }
+    #- { path: '/var/run/mongodb' }
+    - /var/lib/mongodb
+    - /var/log/mongodb
+    - "{{ mongodb_db_path }}"    # i.e. /library/dbdata/mongodb/
 
-- name: Populate & position /etc/mongod.conf, mongodb.service, /usr/bin/iiab-mongodb-repair-if-no-lock
+- name: Install /etc/mongod.conf, mongodb.service, /usr/bin/iiab-mongodb-repair-if-no-lock from templates
   template:
     src: "{{ item.src }}"
     dest: "{{ item.dest }}"
@@ -26,24 +124,31 @@
     group: root
     mode: "{{ item.mode }}"
   with_items:
-    - { src: 'mongod.conf.j2', dest: "{{ mongodb_conf }}", mode: '0644' }
+    - { src: 'mongod.conf.j2', dest: "{{ mongodb_conf }}", mode: '0644' }    # i.e. /etc/mongod.conf
     - { src: 'mongodb.service.j2', dest: '/etc/systemd/system/mongodb.service', mode: '0644' }
     - { src: 'iiab-mongodb-repair-if-no-lock.j2', dest: '/usr/bin/iiab-mongodb-repair-if-no-lock', mode: '0755' }
+
+
+# 3. ENABLE/DISABLE
 
 - name: Enable & Restart 'mongodb' systemd service if mongodb_enabled, incl daemon-reload (in case mongodb.service changed?)
   systemd:
     name: mongodb
+    daemon_reload: yes
     enabled: yes
     state: restarted
-    daemon_reload: yes
   when: mongodb_enabled
 
 - name: Disable 'mongodb' service, if not mongodb_enabled
   systemd:
     name: mongodb
+    daemon_reload: yes
     enabled: no
     state: stopped
   when: not mongodb_enabled
+
+
+# 4. DOCUMENT IN /etc/iiab/iiab.ini
 
 - name: Add 'mongodb' variable values to {{ iiab_ini_file }}
   ini_file:
