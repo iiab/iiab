@@ -15,16 +15,10 @@ Prior to installing IIAB, make sure your `/etc/iiab/local_vars.yml <http://wiki.
 
   pbx_install: True
   pbx_enabled: True
-  nodejs_version: 10.x
 
 Optionally, you may want to enable `chan_dongle <https://github.com/wdoekes/asterisk-chan-dongle>`_, which is a channel driver for Huawei UMTS cards allowing regular voice calls over GSM. You will need to configure a dongle post install for it to be recognized properly::
 
   asterisk_chan_dongle: True
-
-As a dependency the following *must* be set::
-  
-  sugarizer_install: False
-  sugarizer_enabled: False
 
 After installing PBX as part IIAB, please log in to http://pbx.lan and proceed with inital configuration.
 
@@ -40,4 +34,3 @@ Dependencies
 ------------
 
 1. This playbooks compiles and installs asterisk and freepbx from source, so running this feature involves significant bandwidth and compute time.
-2. This playbook is also incompatible with sugarizer, and nodejs-8.x. Therefore if either of those are set to be install, this playbook will gracefully fail with a message requesting the user to fix those incompatibilites. 
