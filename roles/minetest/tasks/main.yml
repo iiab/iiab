@@ -1,37 +1,20 @@
-# Give message and end play for unsupported platforms
-# For now only support rpi
-
-- name: No install except Raspberry Pi for now
-  debug:
-    msg: "No install except Raspberry Pi for now."
-  when: not is_rpi
-
-# CAUTION: this stanza causes iiab-install to exit on Ubuntu/Debian/etc -- without completing roles/network
-- name: Terminate play if not Raspberry Pi
-  meta: end_play
-  when: not is_rpi
-
-- include_tasks: calc_vars.yml
-
-- name: Ensure Linux group '{{ minetest_runas_group }}' exists
-  group:
-    name: "{{ minetest_runas_group }}"
-    state: present
-  when: minetest_runas_user != 'root'
-
-- name: Ensure Linux user '{{ minetest_runas_user }}' exists
-  user:
-    name: "{{ minetest_runas_user }}"
-    groups: "{{ minetest_runas_group }}"
-    state: present
-    createhome: no
-    shell: /bin/false
-  when: minetest_runas_user != 'root'
-
 - name: Check for minetest world file ({{ minetest_world_dir }}/world.mt)
   stat:
     path: "{{ minetest_world_dir }}/world.mt"
   register: minetest_world
+
+- name: Create dirs /etc/minetest and /library/games
+  file:
+    state: directory
+    path: "{{ item }}"
+    owner: root
+    group: root
+    mode: 0755
+  with_items:
+    - /etc/minetest
+    - /library/games
+    - /var/log/minetest
+  when: minetest_install
 
 # rpi only
 - include_tasks: rpi_minetest_install.yml
@@ -58,6 +41,19 @@
       url: https://github.com/minetest-mods/pipeworks/archive/master.zip
     - name: Minetest-WorldEdit
       url: https://github.com/Uberi/Minetest-WorldEdit/archive/master.zip
+  when: minetest_install
+
+- name: Create /etc/minetest/minetest.conf and minetest-serve.service
+  template:
+    backup: no
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: root
+    group: root
+    mode: 0644
+  with_items:
+    - { src: 'minetest.conf.j2', dest: '/etc/minetest/minetest.conf' }
+    - { src: 'minetest-serve.service.j2', dest: '/etc/systemd/system/minetest-serve.service' }
   when: minetest_install
 
 # enable or disable
