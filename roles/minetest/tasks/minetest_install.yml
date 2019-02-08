@@ -1,65 +1,71 @@
 # For non-rpi installs
 # Still a work in progress
 
+# COMPARE tasks/calc_vars.yml
 - name: Set some facts
   set_fact:
     minetest_server_bin: /usr/lib/minetest/minetestserver
 #    minetest_world_dir: /var/games/minetest-server/.minetest/worlds/world/ should be in library
     minetest_mods_dir: /usr/share/games/minetest_game/mods/
 
-- name: Ensure group minetest exists
-  group:
-    name: "{{ minetest_runas_group }}"
-    state: present
+# Taken care of near top of tasks/main.yml
+#
+#- name: Ensure Linux group '{{ minetest_runas_group }}' exists
+#  group:
+#    name: "{{ minetest_runas_group }}"
+#    state: present
+#  when: minetest_runas_user != 'root'
+#
+#- name: Ensure Linux user '{{ minetest_runas_user }}' exists
+#  user:
+#    name: "{{ minetest_runas_user }}"
+#    groups: "{{ minetest_runas_group }}"
+#    state: present
+#    createhome: no
+#    shell: /bin/false
+#  when: minetest_runas_user != 'root'
 
-- name: Create minetest user
-  user:
-    name: "{{ minetest_runas_user }}"
-    groups: "{{ minetest_runas_group }}"
-    state: present
-    createhome: no
+# SEE "Check for minetest world file" in tasks/main.yml
+#
+#- name: Create dir minetest_world_dir ({{ minetest_world_dir }})
+#  file:
+#    state: directory
+#    path: "{{ minetest_world_dir }}"
+#    owner: "{{ minetest_runas_user }}"
+#    group: "{{ minetest_runas_group }}"
+#    mode: 0755
 
-- name: Create minetest world directory
-  file: path={{ item }}
-        mode=0755
-        owner={{ minetest_runas_user }}
-        group={{ minetest_runas_group }}
-        state=directory
-  with_items:
-    - "{{ minetest_world_dir }}"
+#- name: Warn if not Raspberry Pi
+#  debug:
+#    msg: "No install except Raspberry Pi for now."
+#  when: not is_rpi
 
-- name: Install minetest package
-  debug:
-        msg: "No install except Raspberry Pi for now."
-  when: not is_rpi
-
-- name: Download minetest if not package
+- name: Download Minetest if not package
   get_url:
     url: "{{ rpi_src_url }}"
     dest: "{{ downloads_dir }}/{{ rpi_src }}"
     timeout: "{{ download_timeout }}"
-  when: is_rpi
+  #when: is_rpi
 
-- name: Install minetest if not package
+- name: Install Minetest if not package
   debug:
-        msg: "placeholder."
-  when: is_rpi
+    msg: "placeholder."
+  #when: is_rpi
 
 - name: Create /etc/minetest
-  file: path={{ item }}
-        mode=0755
-        owner=root
-        group=root
-        state=directory
-  with_items:
-    - /etc/minetest
+  file:
+    state: directory
+    path: /etc/minetest
+    owner: root
+    group: root
+    mode: 0755
 
 # - name: move files to world dir
 
-- name: Change binary name if not rpi
+- name: 'Change minetest_server_bin: /usr/bin/minetest-server if not RPi'
   set_fact:
     minetest_server_bin: /usr/bin/minetest-server
-  when: not is_rpi
+  #when: not is_rpi
 
 - name: Create minetest-server service and minetest.conf file
   template:
@@ -68,9 +74,9 @@
     dest: "{{ item.dest }}"
     owner: root
     group: root
-    mode: "{{ item.mode }}"
+    mode: 0644
   with_items:
-  - { src: 'minetest.conf.j2', dest: '/etc/minetest/minetest.conf', mode: '0644'}
-  - { src: 'minetest-serve.service.j2', dest: '/etc/systemd/system/minetest-serve.service', mode: '0644'}
+    - { src: 'minetest.conf.j2', dest: '/etc/minetest/minetest.conf' }
+    - { src: 'minetest-serve.service.j2', dest: '/etc/systemd/system/minetest-serve.service' }
 
 # - name: Start minetest
