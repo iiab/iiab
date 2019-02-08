@@ -2,17 +2,23 @@
 Minetest README
 ===============
 
-For the first release the minetest server can only be installed in a Raspberry Pi.
+For the first release, the Minetest server can only be installed on a Raspberry Pi.
 
-To connect to the server, you will first need to download Minetest client software for each of your client devices, e.g. from: https://www.minetest.net/downloads/
+Please note that the initial configuration is for creative mode, and a number of mods are installed (see the list in `tasks/main.yml <tasks/main.yml>`_).
 
-The port is nominally the standard 30000 but can be changed using the variable ``minetest_port`` and
-the admin user is the usual ``Admin``.  Note that no password is required.
+Connecting to the Server
+------------------------
 
-Please note that the initial configuration is for creative mode and there are a number of mods installed. (see the list in `tasks/main.yml <tasks/main.yml>`_)
+To connect to the server, you will also need to download Minetest client software for each of your client devices, e.g. from: https://www.minetest.net/downloads/
 
-Locations on the Raspberry Pi
------------------------------
+The port is nominally the standard 30000.  This can be changed in `/etc/iiab/local_vars.yml <http://wiki.laptop.org/go/IIAB/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it.3F>`_ using variable: ``minetest_port``
 
-- The config file is ``/etc/minetest/minetest.conf``
-- The rest of the files are a normal layout based in ``/library/games/minetest``
+The admin user is the usual: ``Admin``
+
+No password is required.
+
+File Locations on Raspberry Pi
+------------------------------
+
+- The config file is: ``/etc/minetest/minetest.conf``
+- The rest of the files are a normal layout based in: ``/library/games/minetest``
