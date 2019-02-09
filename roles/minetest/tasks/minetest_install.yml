@@ -3,5 +3,34 @@
 
 - name: Install Minetest package
   package:
-    name: minetest
+    name: minetest-server
     state: present
+
+- name: Add some parameters to /etc/minetest/minetest.conf that was automatically created
+  lineinfile:
+    path: /etc/minetest/minetest.conf
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+  with_items:
+    - { regexp: '^server_name = ', line: 'server_name = Internet in a Box Minetest Server' }
+    - { regexp: '^name = ', line: 'name = Admin' }
+    - { regexp: '^creative_mode = ', line: 'creative_mode = true' }
+    - { regexp: '^port = ', line: 'port = {{ minetest_port }}' }
+
+- name: Create /library/games/minetest/worlds/world
+  file:
+    state: directory
+    path: "{{ item }}"
+    owner: "{{ minetest_default_runas_user }}"
+    group: "{{ minetest_default_runas_group }}"
+    mode: 0755
+  with_items:
+    - "{{ minetest_world_dir }}"
+
+- name: Change exec line in generated unit file
+  lineinfile:
+    path: /lib/systemd/system/minetest-server.service
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+  with_items:
+    - { regexp: '^ExecStart=/usr/lib/minetest/minetestserver', line: 'ExecStart=/usr/lib/minetest/minetestserver --config /etc/minetest/minetest.conf --logfile /var/log/minetest/minetest.log --world "{{ minetest_world_dir }}"' }
