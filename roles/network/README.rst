@@ -10,10 +10,10 @@ Specifically, this 'network' stage is run:
 - automatically by IIAB's Admin Console (http://box/admin) if you click ``Configure`` menu -> ``Install Configured Options`` — this is similar to the above, but only runs Stage 0, then Stage 4-to-9, and then finally this 'network' stage (thanks to `iiab-from-console.yml <../../iiab-from-console.yml>`_)
 - or manually, if you run ``cd /opt/iiab/iiab`` then `./iiab-network <../../iiab-network>`_ (which is much the same as running ``./runrole network``)
 
-For more info, please see:
+Many IIAB networking questions can be answered in these 2 documents:
 
-- https://github.com/iiab/iiab/wiki/IIAB-Networking
-- http://FAQ.IIAB.IO including answers to common questions like:
+- `IIAB Networking <https://github.com/iiab/iiab/wiki/IIAB-Networking>`_ is a high-level summary, that reviews IIAB's 3 modes of operation distinguishing WAN from LAN, `common ports <https://github.com/iiab/iiab/wiki/IIAB-Networking#list-of-open-ports--services>`_, DNS name resolution and some common customizations.
+- http://FAQ.IIAB.IO includes answers to common questions like:
 
   - How do I provide Wi-Fi (wireless) to all my kids?
   - Can I create a Wi-Fi hotspot using an old laptop?
