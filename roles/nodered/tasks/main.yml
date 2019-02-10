@@ -46,13 +46,59 @@
     mode: 0666
   when: nodered_install
 
-- name: Enable & Start node-red service
+- name: Install Apache's sites-available/nodered.conf from template
+  template:
+    backup: yes
+    src: nodered.conf.j2
+    dest: /etc/apache2/sites-available/nodered.conf
+    owner: root
+    group: root
+    mode: 0666
+  when: nodered_install
+
+- name: Create symlink nodered.conf from sites-enabled to sites-available, for short URL http://box/nodered (if nodered_enabled)
+  file:
+    src: /etc/apache2/sites-available/nodered.conf
+    dest: /etc/apache2/sites-enabled/nodered.conf
+    owner: root
+    group: root
+    state: link
+  when: nodered_enabled
+
+- name: Remove symlink /etc/apache2/sites-enabled/nodered.conf (if not nodered_enabled)
+  file:
+    path: /etc/apache2/sites-enabled/nodered.conf
+    state: absent
+  when: not nodered_enabled
+
+- name: Enable proxy_wstunnel apache2 module
+  apache2_module:
+    state: present
+    name: proxy_wstunnel
+  when: nodered_install
+
+- name: Restart Apache service ({{ apache_service }}) to enable/disable http://box/nodered (not just http://box:{{ nodered_port }})
+  systemd:
+    #daemon_reload: yes
+    name: "{{ apache_service }}"    # httpd or apache2
+    state: restarted
+  when: nodered_install
+
+- name: Enable & (Re)start 'node-red' systemd service (if nodered_enabled)
   systemd:
     daemon_reload: yes
     name: node-red
     enabled: yes
-    state: started
+    state: restarted
   when: nodered_enabled
+
+- name: Disable & Stop 'node-red' systemd service (if not nodered_enabled)
+  systemd:
+    daemon_reload: yes
+    name: node-red
+    enabled: no
+    state: stopped
+  when: not nodered_enabled
 
 - name: Add 'nodered' variable values to {{ iiab_ini_file }}
   ini_file:

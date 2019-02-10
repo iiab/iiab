@@ -14,7 +14,7 @@ Prior to installing IIAB, make sure your `/etc/iiab/local_vars.yml <http://wiki.
   nodered_install: True
   nodered_enabled: True
 
-After installing Node-RED as part IIAB, please log in to http://box:1880 with:
+After installing Node-RED as part IIAB, please log in to http://box/nodered or http://box.lan:1880 with:
 
 Username: ``Admin``
 

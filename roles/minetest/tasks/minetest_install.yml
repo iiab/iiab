@@ -1,82 +1,45 @@
 # For non-rpi installs
-# Still a work in progress
 
-# COMPARE tasks/calc_vars.yml
-- name: Set some facts
-  set_fact:
-    minetest_server_bin: /usr/lib/minetest/minetestserver
-#    minetest_world_dir: /var/games/minetest-server/.minetest/worlds/world/ should be in library
-    minetest_mods_dir: /usr/share/games/minetest_game/mods/
+- name: Install Minetest package
+  package:
+    name: minetest-server
+    state: present
 
-# Taken care of near top of tasks/main.yml
-#
-#- name: Ensure Linux group '{{ minetest_runas_group }}' exists
-#  group:
-#    name: "{{ minetest_runas_group }}"
-#    state: present
-#  when: minetest_runas_user != 'root'
-#
-#- name: Ensure Linux user '{{ minetest_runas_user }}' exists
-#  user:
-#    name: "{{ minetest_runas_user }}"
-#    groups: "{{ minetest_runas_group }}"
-#    state: present
-#    createhome: no
-#    shell: /bin/false
-#  when: minetest_runas_user != 'root'
+- name: Add some parameters to /etc/minetest/minetest.conf that was automatically created
+  lineinfile:
+    path: /etc/minetest/minetest.conf
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+  with_items:
+    - { regexp: '^server_name = ', line: 'server_name = Internet in a Box Minetest Server' }
+    - { regexp: '^name = ', line: 'name = Admin' }
+    - { regexp: '^creative_mode = ', line: 'creative_mode = true' }
+    - { regexp: '^port = ', line: 'port = {{ minetest_port }}' }
+    - { regexp: '^default_game = ', line: 'default_game = {{ minetest_default_game }}' }
 
-# SEE "Check for minetest world file" in tasks/main.yml
-#
-#- name: Create dir minetest_world_dir ({{ minetest_world_dir }})
-#  file:
-#    state: directory
-#    path: "{{ minetest_world_dir }}"
-#    owner: "{{ minetest_runas_user }}"
-#    group: "{{ minetest_runas_group }}"
-#    mode: 0755
+- name: Set mapgen engine to flat if enabled
+  lineinfile:
+    path: /etc/minetest/minetest.conf
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+  with_items:
+    - { regexp: '^mg_name = ', line: 'mg_name = flat' }
+  when: minetest_flat_world
 
-#- name: Warn if not Raspberry Pi
-#  debug:
-#    msg: "No install except Raspberry Pi for now."
-#  when: not is_rpi
-
-- name: Download Minetest if not package
-  get_url:
-    url: "{{ rpi_src_url }}"
-    dest: "{{ downloads_dir }}/{{ rpi_src }}"
-    timeout: "{{ download_timeout }}"
-  #when: is_rpi
-
-- name: Install Minetest if not package
-  debug:
-    msg: "placeholder."
-  #when: is_rpi
-
-- name: Create /etc/minetest
+- name: Create /library/games/minetest/worlds/world
   file:
     state: directory
-    path: /etc/minetest
-    owner: root
-    group: root
+    path: "{{ item }}"
+    owner: "{{ minetest_runas_user }}"
+    group: "{{ minetest_runas_group }}"
     mode: 0755
-
-# - name: move files to world dir
-
-- name: 'Change minetest_server_bin: /usr/bin/minetest-server if not RPi'
-  set_fact:
-    minetest_server_bin: /usr/bin/minetest-server
-  #when: not is_rpi
-
-- name: Create minetest-server service and minetest.conf file
-  template:
-    backup: no
-    src: "{{ item.src }}"
-    dest: "{{ item.dest }}"
-    owner: root
-    group: root
-    mode: 0644
   with_items:
-    - { src: 'minetest.conf.j2', dest: '/etc/minetest/minetest.conf' }
-    - { src: 'minetest-serve.service.j2', dest: '/etc/systemd/system/minetest-serve.service' }
+    - "{{ minetest_world_dir }}"
 
-# - name: Start minetest
+- name: Change exec line in generated unit file
+  lineinfile:
+    path: /lib/systemd/system/minetest-server.service
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+  with_items:
+    - { regexp: '^ExecStart=/usr/lib/minetest/minetestserver', line: 'ExecStart=/usr/lib/minetest/minetestserver --config /etc/minetest/minetest.conf --logfile /var/log/minetest/minetest.log --world "{{ minetest_world_dir }}"' }
