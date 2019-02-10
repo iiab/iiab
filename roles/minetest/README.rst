@@ -24,3 +24,10 @@ File Locations on Raspberry Pi
 
 - The config file is: ``/etc/minetest/minetest.conf``
 - The rest of the files are a normal layout based in: ``/library/games/minetest``
+
+Possible Future Additions
+-------------------------
+
+- Minetest client software for Windows and Android, included in IIAB for offline communities (`#1465 <https://github.com/iiab/iiab/issues/1465>`_)
+- `Carbone NG <https://github.com/Calinou/carbone-ng>`_ engine
+- flat world
