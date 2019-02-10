@@ -19,8 +19,35 @@ The admin user is the usual: ``Admin``
 
 No password is required.
 
+Configurable Parameters
+-----------------------
+
+- minetest_install: set minetest up to install; default is False
+- minetest_enabled: set minetest up to be enabled; default is False
+- minetest_port: port on which client should connect; default is 30000
+- minetest_server_admin: user with all permissions on minetest server; default is Admin
+
+- minetest_default_game: only carbone-ng and minetest are supported; default is carbone-ng
+- minetest_flat_world: use a flat mapgen engine to lower computation on client; default is False
+
+File Locations
+--------------
+- The config file is: ``/etc/minetest/minetest.conf``
+- The world files are at ``/library/games/minetest/worlds/world``
+
 File Locations on Raspberry Pi
 ------------------------------
+- The server binary is ``/library/games/minetest/bin/minetestserver``
+- The working directory is ``//library/games/minetest``
+- mods are in  ``/library/games/minetest/games/<game>/mods
+``
+File Locations on Other Platforms
+---------------------------------
+- The server binary is ``/usr/lib/minetest/minetestserver``
+- The working directory is ``/usr/share/games/minetest``
+- mods are in  ``/usr/share/games/minetest/games/<game>/mods
 
-- The config file is: ``/etc/minetest/minetest.conf``
-- The rest of the files are a normal layout based in: ``/library/games/minetest``
+To Do
+-----
+- Add more mods - currently only the default mods are there in carbone-ng
+- Add more games
