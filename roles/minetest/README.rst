@@ -45,7 +45,7 @@ File Locations on Other Platforms
 ---------------------------------
 - The server binary is ``/usr/lib/minetest/minetestserver``
 - The working directory is ``/usr/share/games/minetest``
-- mods are in  ``/usr/share/games/minetest/games/<game>/mods
+- mods are in  ``/usr/share/games/minetest/games/<game>/mods``
 
 To Do
 -----
