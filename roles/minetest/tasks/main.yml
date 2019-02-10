@@ -1,37 +1,18 @@
-# Give message and end play for unsupported platforms
-# For now only support rpi
-
-- name: No install except Raspberry Pi for now
-  debug:
-    msg: "No install except Raspberry Pi for now."
-  when: not is_rpi
-
-# CAUTION: this stanza causes iiab-install to exit on Ubuntu/Debian/etc -- without completing roles/network
-- name: Terminate play if not Raspberry Pi
-  meta: end_play
-  when: not is_rpi
-
-- include_tasks: calc_vars.yml
-
-- name: Ensure Linux group '{{ minetest_runas_group }}' exists
-  group:
-    name: "{{ minetest_runas_group }}"
-    state: present
-  when: minetest_runas_user != 'root'
-
-- name: Ensure Linux user '{{ minetest_runas_user }}' exists
-  user:
-    name: "{{ minetest_runas_user }}"
-    groups: "{{ minetest_runas_group }}"
-    state: present
-    createhome: no
-    shell: /bin/false
-  when: minetest_runas_user != 'root'
-
 - name: Check for minetest world file ({{ minetest_world_dir }}/world.mt)
   stat:
     path: "{{ minetest_world_dir }}/world.mt"
   register: minetest_world
+
+- name: Create /library/games
+  file:
+    state: directory
+    path: "{{ item }}"
+    owner: root
+    group: root
+    mode: 0755
+  with_items:
+    - /library/games
+  when: minetest_install
 
 # rpi only
 - include_tasks: rpi_minetest_install.yml
@@ -61,18 +42,18 @@
   when: minetest_install
 
 # enable or disable
-- name: Enable & Restart 'minetest-serve' service
+- name: Enable & Restart 'minetest-server' service
   systemd:
     daemon_reload: yes
-    name: minetest-serve
+    name: minetest-server
     enabled: yes
     state: restarted
   when: minetest_install and minetest_enabled
 
-- name: Disable 'minetest-serve' service
+- name: Disable 'minetest-server' service
   systemd:
     daemon_reload: yes
-    name: minetest-serve
+    name: minetest-server
     enabled: no
     state: stopped
   when: minetest_install and not minetest_enabled
@@ -84,15 +65,15 @@
     option: "{{ item.option }}"
     value: "{{ item.value }}"
   with_items:
-  - option: name
-    value: Minetest Server
-  - option: description
-    value: '"Minetest is an open source clone of the Minecraft building blocks game."'
-  - option: minetest_world_dir
-    value: "{{ minetest_world_dir }}"
-  - option: minetest_port
-    value: "{{ minetest_port }}"
-  - option: minetest_enabled
-    value: "{{ minetest_enabled }}"
-  - option: minetest_world_dir
-    value: "{{ minetest_world_dir }}"
+    - option: name
+      value: Minetest Server
+    - option: description
+      value: '"Minetest is an open source clone of the Minecraft building blocks game."'
+    - option: minetest_world_dir
+      value: "{{ minetest_world_dir }}"
+    - option: minetest_port
+      value: "{{ minetest_port }}"
+    - option: minetest_enabled
+      value: "{{ minetest_enabled }}"
+    - option: minetest_world_dir
+      value: "{{ minetest_world_dir }}"
