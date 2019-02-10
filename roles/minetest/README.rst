@@ -2,7 +2,8 @@
 Minetest README
 ===============
 
-`Minetest <https://www.minetest.net/>`_ is an open source clone of `Minecraft <https://en.wikipedia.org/wiki/Minecraft>`_, the creative/explorational building blocks game.
+`Minetest <https://www.minetest.net/>`_ is a `Minecraft <https://en.wikipedia.org/wiki/Minecraft>`_-inspired creative/explorational building blocks game, written from scratch and licensed
+under the LGPL (version 2.1 or later).  It supports both survival and creative modes along with multiplayer support, dynamic lighting, and an "infinite" map generator.
 
 The Minetest multiplayer server can be installed as part of Internet-in-a-Box (IIAB) on Raspberry Pi, Ubuntu 18.04 and possibly also Debian.
 
@@ -22,8 +23,8 @@ No password is required.
 Configurable Parameters
 -----------------------
 
-- ``minetest_install:`` set minetest up to install; default is False
-- ``minetest_enabled:`` set minetest up to be enabled; default is False
+- ``minetest_install:`` set Minetest up to install; default is False
+- ``minetest_enabled:`` set Minetest up to be enabled; default is False
 - ``minetest_port:`` port on which client should connect; default is 30000
 - ``minetest_server_admin:`` user with all permissions on minetest server; default is Admin
 
@@ -33,7 +34,7 @@ Configurable Parameters
 File Locations
 --------------
 
-- The config file is: ``/etc/minetest/minetest.conf``
+- The config file is ``/etc/minetest/minetest.conf``
 - The world files are at ``/library/games/minetest/worlds/world``
 
 File Locations on Raspberry Pi
