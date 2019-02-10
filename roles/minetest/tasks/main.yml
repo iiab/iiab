@@ -1,3 +1,6 @@
+# Calculate local variables
+- include_tasks: calc_vars.yml
+
 - name: Check for minetest world file ({{ minetest_world_dir }}/world.mt)
   stat:
     path: "{{ minetest_world_dir }}/world.mt"
@@ -12,15 +15,36 @@
     mode: 0755
   with_items:
     - /library/games
-  when: minetest_install
 
 # rpi only
 - include_tasks: rpi_minetest_install.yml
-  when: minetest_install and not minetest_world.stat.exists and is_rpi
+  when: not minetest_world.stat.exists and is_rpi
 
 # not rpi
 - include_tasks: minetest_install.yml
-  when: minetest_install and not minetest_world.stat.exists and not is_rpi
+  when: not minetest_world.stat.exists and not is_rpi
+
+- git:
+    repo: https://github.com/Calinou/carbone-ng.git
+    dest: "{{ minetest_game_dir }}"
+    depth: 1
+  when: minetest_default_game == "carbone-ng"
+
+- name: Give minetest user ownership of carbone-ng
+  file:
+    state: directory
+    path: "{{ minetest_game_dir }}"
+    recurse: yes
+    owner: "{{ minetest_runas_user }}"
+    group: "{{ minetest_runas_group }}"
+    mode: 0755
+  when: minetest_default_game == "carbone-ng"
+
+# Install games
+#- include: minetest_install_games.yml
+#  with_items:
+#    - name: carbone-ng
+#      url: https://github.com/Calinou/carbone-ng
 
 # Install mods
 - include: minetest_install_mods.yml
@@ -39,7 +63,13 @@
       url: https://github.com/minetest-mods/pipeworks/archive/master.zip
     - name: Minetest-WorldEdit
       url: https://github.com/Uberi/Minetest-WorldEdit/archive/master.zip
-  when: minetest_install
+  when: minetest_default_game == "minetest"
+
+- name: Remove mod from carbone-ng that prevents our Admin name
+  file:
+    state: absent
+    path: "{{ minetest_game_dir }}/mods/name_restrictions"
+  when: minetest_default_game == "carbone-ng"
 
 # enable or disable
 - name: Enable & Restart 'minetest-server' service
@@ -48,7 +78,7 @@
     name: minetest-server
     enabled: yes
     state: restarted
-  when: minetest_install and minetest_enabled
+  when: minetest_enabled
 
 - name: Disable 'minetest-server' service
   systemd:
@@ -56,7 +86,7 @@
     name: minetest-server
     enabled: no
     state: stopped
-  when: minetest_install and not minetest_enabled
+  when: not minetest_enabled
 
 - name: Add 'minetest' variable values to {{ iiab_ini_file }}
   ini_file:
