@@ -27,7 +27,7 @@ Configurable Parameters
 - ``minetest_port:`` port on which client should connect; default is 30000
 - ``minetest_server_admin:`` user with all permissions on minetest server; default is Admin
 
-- ``minetest_default_game:`` only `carbone-ng <https://github.com/Calinou/carbone-ng>`_ and minetest engines are supported; default is carbone-ng
+- ``minetest_default_game:`` only carbone-ng and minetest are supported; default is `carbone-ng <https://github.com/Calinou/carbone-ng>`_
 - ``minetest_flat_world:`` use a flat mapgen engine to lower computation on client; default is False
 
 File Locations
