@@ -25,7 +25,7 @@ Optionally, you may want to enable `chan_dongle <https://github.com/wdoekes/aste
 
   asterisk_chan_dongle: True
 
-After installing PBX as part of IIAB, please visit http://pbx.lan/freepbx and proceed with initial configuration (no login/password is required initially — you will be asked to set this up).
+After installing PBX as part of IIAB, please visit http://pbx.lan/freepbx and proceed with initial configuration (no login/password is required initially — you will be asked to set this up).  **CAUTION: as of 2019-02-10 it is sometimes necessary to put "[ACTUAL IP ADDRESS] pbx.lan" into the 'hosts' file on the client machine (where the browser is being used) to get http://pbx.lan/freepbx name resolution to work.**
 
 You can monitor the PBX service with command::
 
