@@ -2,9 +2,9 @@
 Minetest README
 ===============
 
-Minetest is an open source clone of `Minecraft <https://en.wikipedia.org/wiki/Minecraft>`_, the creative/explorational building blocks game.
+`Minetest <https://www.minetest.net/>`_ is an open source clone of `Minecraft <https://en.wikipedia.org/wiki/Minecraft>`_, the creative/explorational building blocks game.
 
-For the first release, the Minetest server can only be installed on a Raspberry Pi.
+The Minetest multiplayer server can be installed as part of Internet-in-a-Box (IIAB) on Raspberry Pi, Ubuntu 18.04 and possibly also Debian.
 
 Please note that the initial configuration is for creative mode, and a number of mods are installed (see the list in `tasks/main.yml <tasks/main.yml>`_).
 
