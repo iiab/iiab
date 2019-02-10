@@ -41,7 +41,7 @@ File Locations on Raspberry Pi
 ------------------------------
 
 - The server binary is ``/library/games/minetest/bin/minetestserver``
-- The working directory is ``//library/games/minetest``
+- The working directory is ``/library/games/minetest``
 - mods are in  ``/library/games/minetest/games/<game>/mods``
 
 File Locations on Other Platforms
