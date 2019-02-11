@@ -6,12 +6,12 @@ This 'pbx' playbook adds `Asterisk <https://asterisk.org/>`_ and `FreePBX <https
 
 This initial release (for IIAB 6.7 in February 2019) supports Ubuntu 18.04, Debian 9 "Stretch" — and experimentally supports Raspberry Pi: `#1467 <https://github.com/iiab/iiab/issues/1467>`_
 
-Explanation
------------
+What Asterisk & FreePBX Do
+--------------------------
 
 Asterisk is a software implementation of a private branch exchange (PBX).  In conjunction with suitable telephony hardware interfaces and network applications, Asterisk is used to establish and control telephone calls between telecommunication endpoints, such as customary telephone sets, destinations on the public switched telephone network (PSTN), and devices or services on Voice over Internet Protocol (VoIP) networks.  Its name comes from the asterisk (*) symbol for a signal used in dual-tone multi-frequency (DTMF) dialing. 
 
-FreePBX is a web-based open source GUI (graphical user interface) that controls and manages Asterisk (PBX), an open source communication server.
+FreePBX is a web-based open source GUI (graphical user interface) that controls and manages Asterisk (PBX), the open source communication server.
 
 Using It
 --------
