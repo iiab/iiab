@@ -2,7 +2,7 @@
 usb-lib README
 ==============
 
-PLEASE SEE "Can teachers display their own content?" WITHIN http://FAQ.IIAB.IO FOR UP-TO-DATE DOCUMENTATION.
+**PLEASE SEE "Can teachers display their own content?" WITHIN http://FAQ.IIAB.IO FOR UP-TO-DATE DOCUMENTATION.**
 
 This role implements functionality similar to LibraryBox, to mount "teacher content" from USB drives.
 
