@@ -4,7 +4,7 @@ PBX README
 
 This 'pbx' playbook adds `Asterisk <https://asterisk.org/>`_ and `FreePBX <https://freepbx.org/>`_ to Internet-in-a-Box (IIAB) for VoIP and SIP functionality e.g. for rural telephony.
 
-This initial release (for IIAB 6.7 in February 2019) supports Ubuntu 18.04 and Debian 9 "Stretch" — in future Raspberry Pi (Raspbian) might also be possible! (`#1467 <https://github.com/iiab/iiab/issues/1467>`_)
+This initial release (for IIAB 6.7 in February 2019) supports Ubuntu 18.04, Debian 9 "Stretch" — and experimentally supports for Raspberry Pi: `#1467 <https://github.com/iiab/iiab/issues/1467>`_
 
 Explanation
 -----------
@@ -27,7 +27,7 @@ Optionally, you may want to enable `chan_dongle <https://github.com/wdoekes/aste
 
 After installing PBX as part of IIAB, please visit http://pbx.lan/freepbx and proceed with initial configuration (no login/password is required initially — you will be asked to set this up).
 
-**CAUTION: it is sometimes necessary to put "[ACTUAL IP ADDRESS] pbx.lan" into the 'hosts' file on the client machine (where the browser is being used) to get http://pbx.lan/freepbx to work.**  Typically this is ``/etc/hosts`` or ``c:\Windows\System32\Drivers\etc\hosts`` (conversely, customizing the hosts file is *not* necessary if your browser is accessing the `'LAN' side <https://github.com/iiab/iiab/wiki/IIAB-Networking#internet-in-a-box-iiab-networking>`_ of your IIAB server).
+**CAUTION: it is sometimes necessary to put "[ACTUAL IP ADDRESS] pbx.lan" into the 'hosts' file on the client machine (where the browser is being used) to get http://pbx.lan/freepbx to work.**  This file is ``/etc/hosts`` on Linux and macOS, or ``c:\Windows\System32\Drivers\etc\hosts`` on most Windows machines (conversely, customizing the hosts file is *not* necessary if your browser is able to access the `'LAN' side <https://github.com/iiab/iiab/wiki/IIAB-Networking#internet-in-a-box-iiab-networking>`_ of your IIAB server).
 
 You can monitor the PBX service with command::
 
