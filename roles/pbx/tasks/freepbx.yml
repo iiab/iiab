@@ -91,7 +91,7 @@
     group: asterisk
     recurse: yes
  
-- name: FreePBX - Install (just run once) - CAN TAKE 2 MIN OR LONGER!
+- name: FreePBX - Install (just run once) - CAN TAKE 12 MIN OR LONGER!
   command: "{{ item }}"
   args:
     chdir: "{{ freepbx_src_dir }}"
@@ -108,7 +108,7 @@
     group: root
     mode: 0644
 
-- name: FreePBX - Copy freepbx.conf
+- name: FreePBX - Install Apache's sites-available/freepbx.conf from template
   template:
     src: freepbx.conf.j2
     dest: /etc/apache2/sites-available/freepbx.conf
@@ -116,37 +116,26 @@
     group: www-data
     mode: 0644
 
-- name: FreePBX - Link freepbx.conf apache file to sites-enabled
+- name: FreePBX - Create symlink freepbx.conf from sites-enabled to sites-available (if pbx_enabled)
   file: 
     src: /etc/apache2/sites-available/freepbx.conf
     dest: /etc/apache2/sites-enabled/freepbx.conf
     state: link
   when: pbx_enabled
 
-- name: FreePBX - Unlink freepbx.conf apachefile from sites-enabled
+- name: FreePBX - Remove symlink /etc/apache2/sites-enabled/freepbx.conf (if not pbx_enabled)
   file: 
     path: /etc/apache2/sites-enabled/freepbx.conf
     state: absent
-  when: (not pbx_enabled)
+  when: not pbx_enabled
 
-- name: FreePBX - Copy systemd unit file
+- name: FreePBX - Restart Apache service ({{ apache_service }})
+  systemd:
+    name: "{{ apache_service }}"    # httpd or apache2
+    state: restarted
+
+- name: FreePBX - Install /etc/systemd/system/freepbx.service systemd unit file from template
   template:
     src: freepbx.service.j2
     dest: /etc/systemd/system/freepbx.service
     mode: 755
-
-- name: FreePBX - Enable and Start freepbx service
-  systemd:
-    daemon_reload: yes
-    name: freepbx
-    enabled: yes
-    state: started
-  when: pbx_enabled
-
-- name: FreePBX - Disable & Stop freepbx service
-  systemd:
-    daemon_reload: yes
-    name: freepbx
-    enabled: no
-    state: stopped
-  when: (not pbx_enabled)
