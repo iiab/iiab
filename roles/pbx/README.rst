@@ -29,7 +29,7 @@ After installing PBX as part of IIAB, please visit http://pbx.lan/freepbx and pr
 
 **CAUTION: it is sometimes necessary to put "[ACTUAL IP ADDRESS] pbx.lan" into the 'hosts' file on the client machine (where the browser is being used) to get http://pbx.lan/freepbx to work.**  This file is ``/etc/hosts`` on Linux and macOS, or ``c:\Windows\System32\Drivers\etc\hosts`` on most Windows machines (conversely, customizing the hosts file is *not* necessary if your browser is able to access the `'LAN' side <https://github.com/iiab/iiab/wiki/IIAB-Networking#internet-in-a-box-iiab-networking>`_ of your IIAB server).
 
-You can monitor the PBX service with command::
+You can monitor the FreePBX service with command::
 
   systemctl status freepbx
 
