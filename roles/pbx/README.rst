@@ -4,7 +4,7 @@ PBX README
 
 This 'pbx' playbook adds `Asterisk <https://asterisk.org/>`_ and `FreePBX <https://freepbx.org/>`_ to Internet-in-a-Box (IIAB) for VoIP and SIP functionality e.g. for rural telephony.
 
-This initial release (for IIAB 6.7 in February 2019) supports Ubuntu 18.04, Debian 9 "Stretch" — and experimentally supports for Raspberry Pi: `#1467 <https://github.com/iiab/iiab/issues/1467>`_
+This initial release (for IIAB 6.7 in February 2019) supports Ubuntu 18.04, Debian 9 "Stretch" — and experimentally supports Raspberry Pi: `#1467 <https://github.com/iiab/iiab/issues/1467>`_
 
 Explanation
 -----------
