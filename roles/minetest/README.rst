@@ -35,7 +35,7 @@ If changes are necessary, please edit `/etc/iiab/local_vars.yml <http://wiki.lap
 
 After installation, you can monitor the 'minetest-server' service with command::
 
-  systemctl minetest-server freepbx
+  systemctl status minetest-server
 
 File Locations
 --------------
