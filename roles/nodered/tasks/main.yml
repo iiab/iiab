@@ -1,15 +1,53 @@
 # 2019-01-16: @jvonau's PR #1403 moved installation of Node.js (8.x for now) &
 # npm to roles/nodejs/tasks/main.yml, triggered by roles/nodered/meta/main.yml
 
-# BRUTAL but ensures consistency across OS's / distros like Raspbian Desktop & Ubermix that often include an older version of Node-RED
-- name: ASK apt/yum/dnf TO REMOVE PRE-EXISTING Node-RED (IF IT WAS INSTALLED BY OS PKG MANAGER)
-  package:
-    name: nodered
-    state: absent
+# Too brutal, as this removed customizations on graphical desktop OS's e.g.
+# Raspbian Desktop's:
+#   1. Node-RED's icon (Raspberry Menu in top-left -> Programming -> Node-RED)
+#   2. scripts like {node-red-start, node-red-stop, node-red-log} in /usr/bin
+#   3. other changes per /usr/bin/update-nodejs-and-nodered summarized at
+#      https://nodered.org/docs/hardware/raspberrypi for example low-memory
+#      flag --max_old_space_size=256 for unit file (any reason we use 128?)
+## BRUTAL but ensures consistency across OS's / distros like Raspbian Desktop & Ubermix that often include an older version of Node-RED
+#- name: ASK apt/yum/dnf TO REMOVE PRE-EXISTING Node-RED (IF IT WAS INSTALLED BY OS PKG MANAGER)
+#  package:
+#    name: nodered
+#    state: absent
+#  when: nodered_install
+
+#- name: 'npm install node-red packages globally: node-red, node-red-admin, node-red-dashboard'
+#  shell: npm install -g --unsafe-perm node-red node-red-admin node-red-dashboard
+#  when: nodered_install
+
+# To protect pre-installed packages within /usr/lib/node_modules in graphical
+# desktop OS's like Raspbian Desktop & Ubermix, we now only install those that
+# are missing -- among the 3 below.  WARNING: THIS COULD POTENTIALLY LEAD TO
+# INCOMPATIBILITIES, IF OS'S /usr/lib/node_modules/node-red GETS OUT OF DATE!
+
+# /usr/lib/node_modules/node-red is PRE-INSTALLED by Raspbian Desktop, even if
+# their package (42MB, 0.19.4) is a bit out of date compared to npm's (55MB,
+# 0.19.5) as of 2019-02-12.  Among others in /usr/lib/node_modules, pre-placed
+# by Raspbian Desktop's apt package 'nodered':
+#   node-red-contrib-ibm-watson-iot, node-red-contrib-play-audio,
+#   node-red-node-ledborg, node-red-node-ping, node-red-node-pi-sense-hat
+#   node-red-node-random, node-red-node-serialport, node-red-node-smooth
+- name: Globally 'npm install' pkg 'node-red' if /usr/lib/node_modules/node-red missing (most OS's except for Raspbian Desktop)
+  command: npm install -g --unsafe-perm node-red
+  creates: /usr/lib/node_modules/node-red
   when: nodered_install
 
-- name: 'npm install node-red packages globally: node-red, node-red-admin, node-red-dashboard'
-  shell: npm install -g --unsafe-perm node-red node-red-admin node-red-dashboard
+# NOT pre-installed by Raspbian Desktop as of 2019-02-12...so we install this
+# on most all OS's:
+- name: Globally 'npm install' pkg 'node-red-admin' if /usr/lib/node_modules/node-red-admin missing (most OS's)
+  command: npm install -g --unsafe-perm node-red-admin
+  creates: /usr/lib/node_modules/node-red-admin
+  when: nodered_install
+
+# NOT pre-installed by Raspbian Desktop as of 2019-02-12...so we install this
+# on most all OS's:
+- name: Globally 'npm install' pkg 'node-red-dashboard' if /usr/lib/node_modules/node-red-dashboard missing (most OS's)
+  command: npm install -g --unsafe-perm node-red-dashboard
+  creates: /usr/lib/node_modules/node-red-dashboard
   when: nodered_install
 
 - name: Ensure Linux group 'nodered' exists
@@ -117,7 +155,7 @@
     - option: name
       value: Node-RED
     - option: description
-      value: '"Node-RED is a flow-based development tool for visual programming developed originally by IBM for wiring together hardware devices, APIs and online services as part of the Internet of Things. Node-RED provides a web browser-based flow editor, which can be used to create JavaScript functions."'
+      value: '"Node-RED is a flow-based development tool for visual programming developed originally by IBM for wiring together hardware devices, APIs and online services as part of the Internet of Things.  Node-RED provides a web browser-based flow editor, which can be used to create JavaScript functions."'
     - option: nodered_install
       value: "{{ nodered_install }}"
     - option: nodered_enabled
