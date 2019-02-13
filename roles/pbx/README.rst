@@ -36,7 +36,7 @@ You can monitor the FreePBX service with command::
 Raspberry Pi Zero W Warning
 ---------------------------
 
-Node.js applications like Sugarizer, Node-RED and Asterisk/FreePBX `won't work <https://nodered.org/docs/hardware/raspberrypi#swapping-sd-cards>`_ on Raspberry Pi Zero W (ARM6) if you installed Node.js while on RPi 3 or 3 B+ (ARM7).  If absolutely necessary, run "./runrole nodejs" from the Pi Zero W itself, before proceeding to install Sugarizer, Node-RED and/or Asterisk/FreePBX.
+Node.js applications like Asterisk/FreePBX, Node-RED and Sugarizer `won't work <https://nodered.org/docs/hardware/raspberrypi#swapping-sd-cards>`_ on Raspberry Pi Zero W (ARM6) if you installed Node.js while on RPi 3 or 3 B+ (ARM7).  If absolutely necessary, run ``cd /opt/iiab/iiab`` then `./runrole nodejs <https://github.com/iiab/iiab/blob/master/roles/nodejs/tasks/main.yml>`_ from the Pi Zero W itself, before proceeding to install Sugarizer, Node-RED and/or Asterisk/FreePBX.
 
 Attribution
 -----------
