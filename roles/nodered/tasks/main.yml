@@ -1,80 +1,138 @@
 # 2019-01-16: @jvonau's PR #1403 moved installation of Node.js (8.x for now) &
 # npm to roles/nodejs/tasks/main.yml, triggered by roles/nodered/meta/main.yml
 
-# Too brutal, as this removed customizations on graphical desktop OS's e.g.
-# Raspbian Desktop's:
+# BRUTAL but ensures consistency across OS's / distros like Raspbian Desktop &
+# Ubermix that often include an older version of Node-RED.  Brutal, as this
+# removes customizations on graphical desktop OS's e.g. Raspbian Desktop's:
 #   1. Node-RED's icon (Raspberry Menu in top-left -> Programming -> Node-RED)
 #   2. scripts like {node-red-start, node-red-stop, node-red-log} in /usr/bin
 #   3. other changes per /usr/bin/update-nodejs-and-nodered summarized at
 #      https://nodered.org/docs/hardware/raspberrypi for example low-memory
-#      flag --max_old_space_size=256 for unit file (any reason we use 128?)
-## BRUTAL but ensures consistency across OS's / distros like Raspbian Desktop & Ubermix that often include an older version of Node-RED
-#- name: ASK apt/yum/dnf TO REMOVE PRE-EXISTING Node-RED (IF IT WAS INSTALLED BY OS PKG MANAGER)
-#  package:
-#    name: nodered
-#    state: absent
-#  when: nodered_install
-
-#- name: 'npm install node-red packages globally: node-red, node-red-admin, node-red-dashboard'
-#  shell: npm install -g --unsafe-perm node-red node-red-admin node-red-dashboard
-#  when: nodered_install
-
-# To protect pre-installed packages within /usr/lib/node_modules in graphical
-# desktop OS's like Raspbian Desktop & Ubermix, we now only install those that
-# are missing -- among the 3 below.  WARNING: THIS COULD POTENTIALLY LEAD TO
-# INCOMPATIBILITIES, IF OS'S /usr/lib/node_modules/node-red GETS OUT OF DATE!
-
-# /usr/lib/node_modules/node-red is PRE-INSTALLED by Raspbian Desktop, even if
-# their package (42MB, 0.19.4) is a bit out of date compared to npm's (55MB,
-# 0.19.5) as of 2019-02-12.  Among others in /usr/lib/node_modules, pre-placed
-# by Raspbian Desktop's apt package 'nodered':
-#   node-red-contrib-ibm-watson-iot, node-red-contrib-play-audio,
-#   node-red-node-ledborg, node-red-node-ping, node-red-node-pi-sense-hat
-#   node-red-node-random, node-red-node-serialport, node-red-node-smooth
-- name: Globally 'npm install' pkg 'node-red' if /usr/lib/node_modules/node-red missing (most OS's except for Raspbian Desktop)
-  command: npm install -g --unsafe-perm node-red
-  args:
-    creates: /usr/lib/node_modules/node-red
+#      flag --max_old_space_size=256 for unit file (we're using 128 on RPi)
+# That we'll reconstitute below!
+- name: ASK apt/yum/dnf TO REMOVE PRE-EXISTING 'nodered' (IF PREVIOUSLY INSTALLED BY OS PKG MANAGER)
+  package:
+    name: nodered
+    state: absent
   when: nodered_install
 
-# NOT pre-installed by Raspbian Desktop as of 2019-02-12...so we install this
-# on most all OS's:
-- name: Globally 'npm install' pkg 'node-red-admin' if /usr/lib/node_modules/node-red-admin missing (most OS's)
-  command: npm install -g --unsafe-perm node-red-admin
-  args:
-    creates: /usr/lib/node_modules/node-red-admin
-  when: nodered_install
+- name: "Globally 'npm install' 3 Node-RED packages: node-red, node-red-admin, node-red-dashboard"
+  command: npm install -g --unsafe-perm node-red node-red-admin node-red-dashboard
+  when: nodered_install and internet_available
 
-# NOT pre-installed by Raspbian Desktop as of 2019-02-12...so we install this
-# on most all OS's:
-- name: Globally 'npm install' pkg 'node-red-dashboard' if /usr/lib/node_modules/node-red-dashboard missing (most OS's)
-  command: npm install -g --unsafe-perm node-red-dashboard
-  args:
-    creates: /usr/lib/node_modules/node-red-dashboard
-  when: nodered_install
+- name: "Globally 'npm install' 8 Node-RED learning examples for RPi: node-red-contrib-ibm-watson-iot, node-red-contrib-play-audio, node-red-node-ledborg, node-red-node-ping, node-red-node-pi-sense-hat, node-red-node-random, node-red-node-serialport, node-red-node-smooth"
+  command: npm install -g --unsafe-perm node-red-contrib-ibm-watson-iot node-red-contrib-play-audio node-red-node-ledborg node-red-node-ping node-red-node-pi-sense-hat node-red-node-random node-red-node-serialport node-red-node-smooth
+  when: nodered_install and internet_available and is_rpi
 
-- name: Ensure Linux group 'nodered' exists
+# TEST UNNEC ICON/MENU FILE PLACEMENT ON RASPIAN LITE TOO !
+- name: 'Download/Install 4 useful items for RPi: Node-RED icon, start menu item, /etc/logrotate.d/nodered, tweaked "Pi cpu temperature.json"'
+  get_url:
+    url: "{{ item.url }}"
+    dest: "{{ item.dest }}"
+  with_items:
+    - url: https://raw.githubusercontent.com/node-red/raspbian-deb-package/master/resources/node-red-icon.svg
+      dest: /usr/share/icons/hicolor/scalable/apps/node-red-icon.svg
+    - url: https://raw.githubusercontent.com/node-red/raspbian-deb-package/master/resources/Node-RED.desktop
+      dest: /usr/share/applications/Node-RED.desktop
+    - url: https://raw.githubusercontent.com/node-red/raspbian-deb-package/master/resources/nodered.rotate
+      dest: /etc/logrotate.d/nodered
+    - url: 'https://raw.githubusercontent.com/node-red/raspbian-deb-package/master/resources/Pi%20cpu%20temperature.json'
+      dest: '/usr/lib/node_modules/node-red-contrib-ibm-watson-iot/examples/Pi cpu temperature.json'
+  when: nodered_install and internet_available and is_rpi
+
+#- name: Replace/Tweak "node-red-contrib-ibm-watson-iot/examples/Pi cpu temperature.json" (rpi)
+#  command: 'curl -sL -o /usr/lib/node_modules/node-red-contrib-ibm-watson-iot/examples/Pi\ cpu\ temperature.json https://raw.githubusercontent.com/node-red/raspbian-deb-package/master/resources/Pi%20cpu%20temperature.json'
+#  when: nodered_install and internet_available and is_rpi
+
+- name: 'Download/Install 4 RPi executables to /usr/bin: node-red-start, node-red-stop, node-red-restart, node-red-log'
+  get_url:
+    url: "{{ item }}"
+    dest: /usr/bin
+    mode: a+x
+  with:
+    - https://raw.githubusercontent.com/node-red/raspbian-deb-package/master/resources/node-red-start
+    - https://raw.githubusercontent.com/node-red/raspbian-deb-package/master/resources/node-red-stop
+    - https://raw.githubusercontent.com/node-red/raspbian-deb-package/master/resources/node-red-restart
+    - https://raw.githubusercontent.com/node-red/raspbian-deb-package/master/resources/node-red-log
+  when: nodered_install and internet_available and is_rpi
+
+## To protect pre-installed packages within /usr/lib/node_modules in graphical
+## desktop OS's like Raspbian Desktop & Ubermix, we now only install those that
+## are missing -- among the 3+8 below.  WARNING: THIS COULD POTENTIALLY LEAD TO
+## INCOMPATIBILITIES, IF OS'S /usr/lib/node_modules/node-red GETS OUT OF DATE!
+#
+## /usr/lib/node_modules/node-red is PRE-INSTALLED by Raspbian Desktop, even if
+## their package (42MB, 0.19.4) is a bit out of date compared to npm's (55MB,
+## 0.19.5) as of 2019-02-12.  Among others in /usr/lib/node_modules, pre-placed
+## by Raspbian Desktop's apt package 'nodered':
+##   node-red-contrib-ibm-watson-iot, node-red-contrib-play-audio,
+##   node-red-node-ledborg, node-red-node-ping, node-red-node-pi-sense-hat
+##   node-red-node-random, node-red-node-serialport, node-red-node-smooth
+#- name: Globally 'npm install' pkg 'node-red' if /usr/lib/node_modules/node-red missing (most OS's except for Raspbian Desktop)
+#  #command: npm install -g --unsafe-perm node-red
+#  command: npm install -g --unsafe-perm node-red@latest
+#  args:
+#    creates: /usr/lib/node_modules/node-red
+#  when: nodered_install and internet_available
+#
+## NOT pre-installed by Raspbian Desktop as of 2019-02-12...so we install this
+## on most all OS's:
+#- name: Globally 'npm install' pkg 'node-red-admin' if /usr/lib/node_modules/node-red-admin missing (most OS's)
+#  command: npm install -g --unsafe-perm node-red-admin
+#  args:
+#    creates: /usr/lib/node_modules/node-red-admin
+#  when: nodered_install and internet_available
+#
+## NOT pre-installed by Raspbian Desktop as of 2019-02-12...so we install this
+## on most all OS's:
+#- name: Globally 'npm install' pkg 'node-red-dashboard' if /usr/lib/node_modules/node-red-dashboard missing (most OS's)
+#  command: npm install -g --unsafe-perm node-red-dashboard
+#  args:
+#    creates: /usr/lib/node_modules/node-red-dashboard
+#  when: nodered_install and internet_available
+
+
+- name: Create /home/pi/.node-red/ directory (rpi)
+  file:
+    path: /home/pi/.node-red
+    state: directory
+    owner: pi
+    group: pi
+    mode: 0775
+  when: nodered_install and is_rpi
+
+- name: Install /home/pi/.node-red/settings.js from template, with authentication (rpi)
+  template:
+    backup: yes
+    src: settings.js.j2
+    dest: /home/pi/.node-red/settings.js
+    owner: pi
+    group: pi
+    mode: 0755
+  when: nodered_install and is_rpi
+
+- name: Ensure Linux group 'nodered' exists (if not rpi)
   group:
     name: nodered
     state: present
-  when: nodered_install
+  when: nodered_install and not is_rpi
 
-- name: Ensure Linux user 'nodered' exists and is added to group 'nodered'
+- name: Ensure Linux user 'nodered' exists and is added to group 'nodered' (if not rpi)
   user:
     name: nodered
     group: nodered
-  when: nodered_install
+  when: nodered_install and not is_rpi
 
-- name: Create /home/nodered/.node-red/ directory
+- name: Ensure directory /home/nodered/.node-red/ exists (if not rpi)
   file:
     path: /home/nodered/.node-red
     state: directory
     owner: nodered
     group: nodered
     mode: 0775
-  when: nodered_install
+  when: nodered_install and not is_rpi
 
-- name: Install /home/nodered/.node-red/settings.js from template, with authentication
+- name: Install /home/nodered/.node-red/settings.js from template, with authentication (if not rpi)
   template:
     backup: yes
     src: settings.js.j2
@@ -82,13 +140,14 @@
     owner: nodered
     group: nodered
     mode: 0755
-  when: nodered_install
+  when: nodered_install and not is_rpi
 
-- name: Install /etc/systemd/system/node-red.service systemd unit file from template
+
+- name: Install /etc/systemd/system/nodered.service systemd unit file from template
   template:
     backup: yes
-    src: node-red.service.j2
-    dest: /etc/systemd/system/node-red.service
+    src: nodered.service.j2
+    dest: /etc/systemd/system/nodered.service
     owner: root
     group: root
     mode: 0666
@@ -132,21 +191,22 @@
     state: restarted
   when: nodered_install
 
-- name: Enable & (Re)start 'node-red' systemd service (if nodered_enabled)
+- name: Enable & (Re)start 'nodered' systemd service (if nodered_enabled)
   systemd:
     daemon_reload: yes
-    name: node-red
+    name: nodered
     enabled: yes
     state: restarted
   when: nodered_enabled
 
-- name: Disable & Stop 'node-red' systemd service (if not nodered_enabled)
+- name: Disable & Stop 'nodered' systemd service (if not nodered_enabled)
   systemd:
     daemon_reload: yes
-    name: node-red
+    name: nodered
     enabled: no
     state: stopped
   when: not nodered_enabled
+
 
 - name: Add 'nodered' variable values to {{ iiab_ini_file }}
   ini_file:
