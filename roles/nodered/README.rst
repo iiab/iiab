@@ -20,9 +20,11 @@ Username: ``Admin``
 
 Password: ``changeme``
 
+To change this password, please see: `roles/nodered/defaults/main.yml <defaults/main.yml#L10-L25>`_
+
 You can monitor the Node-RED service with command::
 
-  systemctl status node-red
+  systemctl status nodered
 
 Raspberry Pi Zero W Warning
 ---------------------------
