@@ -34,4 +34,4 @@ Node.js applications like Asterisk/FreePBX, Node-RED and Sugarizer `won't work <
 See Also
 --------
 
-`Mosquitto (MQTT) <../mosquitto/README.rst>`_
+`Mosquitto (MQTT) <../mosquitto#mosquitto-readme>`_
