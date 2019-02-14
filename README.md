@@ -1,6 +1,6 @@
 # Internet-in-a-Box (IIAB)
 
-Welcome to the GitHub repository for Internet-in-a-Box (IIAB).  IIAB is a small and inexpensive device which provides essential Internet resources (Wikipedia, OpenStreetMap, Khan Academy and others) *usable even when offline!*.
+Welcome to the GitHub repository for Internet-in-a-Box (IIAB).  IIAB is a small and inexpensive device which provides essential Internet resources (Wikipedia, OpenStreetMap, Khan Academy and others) *usable even when offline!*
 
 Create the digital library needed by your school, your medical clinic, your region and/or your very own family — accessible with any nearby smartphone, tablet or laptop.
 
