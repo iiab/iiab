@@ -33,6 +33,13 @@ You can monitor the FreePBX service with command::
 
   systemctl status freepbx
 
+Raspberry Pi Known Issue
+------------------------
+
+As of 2019-02-14, "systemctl restart freepbx" fails more than 50% of the time when run on a BIG-sized install of IIAB 6.7.
+
+It is possible that FreePBX restarts much more reliably when run on a MIN-sized install of IIAB?  Please `contact us <http://wiki.laptop.org/go/IIAB/FAQ#What_are_the_best_places_for_community_support.3F>`_ if you can assist here in any way: `#1493 <https://github.com/iiab/iiab/issues/1493>`_
+
 Raspberry Pi Zero W Warning
 ---------------------------
 
