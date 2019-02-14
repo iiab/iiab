@@ -27,4 +27,4 @@ You can monitor it with command::
 See Also
 --------
 
-`Node-RED <../nodered/README.rst>`_
+`Node-RED <../nodered#node-red-readme>`_

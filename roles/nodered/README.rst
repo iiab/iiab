@@ -20,11 +20,18 @@ Username: ``Admin``
 
 Password: ``changeme``
 
+To change this password, please see: `roles/nodered/defaults/main.yml <defaults/main.yml#L10-L25>`_
+
 You can monitor the Node-RED service with command::
 
-  systemctl status node-red
+  systemctl status nodered
+
+Raspberry Pi Zero W Warning
+---------------------------
+
+Node.js applications like Asterisk/FreePBX, Node-RED and Sugarizer `won't work <https://nodered.org/docs/hardware/raspberrypi#swapping-sd-cards>`_ on Raspberry Pi Zero W (ARM6) if you installed Node.js while on RPi 3 or 3 B+ (ARM7).  If necessary, run ``apt remove nodejs`` then ``cd /opt/iiab/iiab`` then `./runrole nodejs <https://github.com/iiab/iiab/blob/master/roles/nodejs/tasks/main.yml>`_ *on the Raspberry Pi Zero W itself* — before proceeding to install Asterisk/FreePBX, Node-RED and/or Sugarizer.
 
 See Also
 --------
 
-`Mosquitto (MQTT) <../mosquitto/README.rst>`_
+`Mosquitto (MQTT) <../mosquitto#mosquitto-readme>`_
