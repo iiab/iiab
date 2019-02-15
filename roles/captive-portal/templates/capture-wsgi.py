@@ -228,8 +228,8 @@ def android(environ, start_response):
     else: 
         ip = environ['REMOTE_ADDR'].strip()
     system,system_version = platform_info(ip)
-    if not system_version:
-        put_302(environ, start_response)
+    if system_version is None:
+       return  put_302(environ, start_response)
     if system_version[0:1] < '6':
         logger.debug("system < 6:%s"%system_version)
         location = '/android_splash'
@@ -340,7 +340,7 @@ def banner(environ, start_response):
     status = '200 OK'
     headers = [('Content-type', 'image/png')]
     start_response(status, headers)
-    image = open("%s/iiab-menu/menu-files/images/iiab_banner6.png"%doc_root, "rb").read() 
+    image = open("%s/js-menu/menu-files/images/iiab_banner6.png"%doc_root, "rb").read()
     return [image]
 
 def bootstrap(environ, start_response):
