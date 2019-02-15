@@ -340,7 +340,7 @@ def banner(environ, start_response):
     status = '200 OK'
     headers = [('Content-type', 'image/png')]
     start_response(status, headers)
-    image = open("%s/iiab-menu/menu-files/images/iiab_banner6.png"%doc_root, "rb").read() 
+    image = open("%s/js-menu/menu-files/images/iiab_banner6.png"%doc_root, "rb").read()
     return [image]
 
 def bootstrap(environ, start_response):
