@@ -228,8 +228,8 @@ def android(environ, start_response):
     else: 
         ip = environ['REMOTE_ADDR'].strip()
     system,system_version = platform_info(ip)
-    if not system_version:
-        put_302(environ, start_response)
+    if system_version is None:
+       return  put_302(environ, start_response)
     if system_version[0:1] < '6':
         logger.debug("system < 6:%s"%system_version)
         location = '/android_splash'
