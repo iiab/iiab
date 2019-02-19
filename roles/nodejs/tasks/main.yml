@@ -1,10 +1,10 @@
-# 2019-02-03: SEE VAR nodejs_version: 10.x (FOR NOW!) IN vars/default_vars.yml
+# 2019-02-12: SEE VAR nodejs_version: 10.x (FOR NOW!) IN vars/default_vars.yml
 # AND IF NEC OVERRIDE THIS IN /etc/iiab/local_vars.yml
 
-# 2019-01-16: duplicate Node.js code originally unified by @jvonau. It's used by:
-#   roles/nodered/tasks/main.yml   with roles/nodered/meta/main.yml
-#   roles/pbx/tasks/main.yml       with roles/pbx/meta/main.yml  (for Asterisk with FreePBX, forthcoming early in 2019, see PR #1405)
-#   roles/sugarizer/tasks/main.yml with roles/sugarizer/meta/main.yml
+# Duplicate Node.js code unified by @jvonau.  Revised by @holta.  Now used by:
+#  roles/nodered/tasks/main.yml   w/ roles/nodered/meta/main.yml
+#  roles/pbx/tasks/main.yml       w/ roles/pbx/meta/main.yml (Asterisk/FreePBX)
+#  roles/sugarizer/tasks/main.yml w/ roles/sugarizer/meta/main.yml
 
 
 # 1. TEST IF Node.js ALEADY INSTALLED & WARN AS NEC
@@ -29,14 +29,21 @@
 # nodejs_version_installed.stderr == "/bin/sh: 1: nodejs: not found"
 # BOTH ABOVE (incl non-null stderr) are USED BELOW to confirm install is nec!
 
-- name: "ENFORCE PRECONDITION: Stop installing (intentionally fail) IF an installed 'nodejs' version isn't {{ nodejs_version }}"
-  fail:
-    msg: >
-      PLEASE REMOVE 'nodejs' VERSION {{ nodejs_version_installed.stdout }} AS
-      IT DOES NOT MATCH THE REQUIRED nodejs_version: {{ nodejs_version }} --
-      as set in /opt/iiab/iiab/vars/default_vars.yml and/or
-      /etc/iiab/local_vars.yml -- then re-run this IIAB installer.
-  when: nodejs_version_installed is defined and nodejs_version_installed.stdout != nodejs_version and nodejs_version_installed.stderr == ""
+#- name: "ENFORCE PRECONDITION: Stop installing (intentionally fail) IF an installed 'nodejs' version isn't {{ nodejs_version }}"
+#  fail:
+#    msg: >
+#      PLEASE REMOVE 'nodejs' VERSION {{ nodejs_version_installed.stdout }} AS
+#      IT DOES NOT MATCH THE REQUIRED nodejs_version: {{ nodejs_version }} --
+#      as set in /opt/iiab/iiab/vars/default_vars.yml and/or
+#      /etc/iiab/local_vars.yml -- then re-run this IIAB installer.
+#  when: nodejs_version_installed is defined and nodejs_version_installed.stdout != nodejs_version and nodejs_version_installed.stderr == ""
+
+# BRUTAL but ensures consistency across OS's / distros like Raspbian Desktop & Ubermix that often include an older version of Node.js
+- name: ASK apt/yum/dnf TO REMOVE PRE-EXISTING Node.js {{ nodejs_version_installed.stdout }} (IF IT'S NOT {{ nodejs_version }})
+  package:
+    name: nodejs
+    state: absent
+  when: nodejs_version_installed is defined and nodejs_version_installed.stdout != nodejs_version and nodejs_version_installed.stdout != ""
 
 - name: Warn if Node.js {{ nodejs_version}} already installed & might be updated
   debug:
@@ -45,6 +52,15 @@
 
 
 # 2. INSTALL Node.js USING nodesource.com
+
+# 2019-02-12: Should not be nec, as stanza below it should overwrite
+# /etc/apt/sources.list.d/nodesource.list regardless!
+#
+#- name: Clear prior /etc/apt/sources.list.d/nodesource.list (permitting Node.js downgrade if nec)
+#  file:
+#    path: /etc/apt/sources.list.d/nodesource.list
+#    state: absent
+#  when: internet_available and is_debuntu
 
 - name: Set up Node.js {{ nodejs_version }} apt sources (debuntu)
   shell: curl -sL https://deb.nodesource.com/setup_{{ nodejs_version }} | bash -

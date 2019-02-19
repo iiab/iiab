@@ -33,6 +33,18 @@ You can monitor the FreePBX service with command::
 
   systemctl status freepbx
 
+Raspberry Pi Known Issue
+------------------------
+
+As of 2019-02-14, "systemctl restart freepbx" fails more than 50% of the time when run on a `BIG-sized <http://wiki.laptop.org/go/IIAB/FAQ#What_services_.28IIAB_apps.29_are_suggested_during_installation.3F>`_ install of IIAB 6.7 on RPi 3 or RPi 3 B+.
+
+It is possible that FreePBX restarts much more reliably when run on a MIN-sized install of IIAB?  Please `contact us <http://wiki.laptop.org/go/IIAB/FAQ#What_are_the_best_places_for_community_support.3F>`_ if you can assist here in any way: `#1493 <https://github.com/iiab/iiab/issues/1493>`_
+
+Raspberry Pi Zero W Warning
+---------------------------
+
+Node.js applications like Asterisk/FreePBX, Node-RED and Sugarizer `won't work <https://nodered.org/docs/hardware/raspberrypi#swapping-sd-cards>`_ on Raspberry Pi Zero W (ARM6) if you installed Node.js while on RPi 3 or 3 B+ (ARM7).  If necessary, run ``apt remove nodejs`` then ``cd /opt/iiab/iiab`` then `./runrole nodejs <https://github.com/iiab/iiab/blob/master/roles/nodejs/tasks/main.yml>`_ *on the Raspberry Pi Zero W itself* — before proceeding to install Asterisk/FreePBX, Node-RED and/or Sugarizer.
+
 Attribution
 -----------
 
