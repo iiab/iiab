@@ -8,7 +8,7 @@ Internet-in-a-Box provides you the tools to DIY (download and customize) a local
 
 Schools can also choose among [30 powerful educational apps](http://wiki.laptop.org/go/IIAB/FAQ#What_services_.28IIAB_apps.29_are_suggested_during_installation.3F) for teachers and students, optionally with a complete LMS (learning management system).
 
-FYI this community product is enabled by professional volunteers working side-by-side with schools, clinics and libraries around the world.  *Thank you for being a part of our grassroots technology movement!*
+FYI this community product is enabled by professional volunteers working [side-by-side](http://wiki.laptop.org/go/IIAB/FAQ#What_are_the_best_places_for_community_support.3F) with schools, clinics and libraries around the world.  *Thank you for being a part of our grassroots technology movement!*
 
 ## Installation
 
@@ -30,7 +30,7 @@ FYI we use [Ansible](http://wiki.laptop.org/go/IIAB/FAQ#What_is_Ansible_and_what
 
 We greatly welcome contributions from educators, librarians *and* IT/UX/QA people of all kinds!
 
-Please see "How can I help?" at: http://FAQ.IIAB.IO
+Please see "[How can I help?](http://wiki.laptop.org/go/IIAB/FAQ#How_can_I_help.3F)" at: http://FAQ.IIAB.IO
 
 Check out our [Contributors Guide](https://github.com/iiab/iiab/wiki/IIAB-Contributors-Guide) to learn more about contributing directly to Internet-in-a-Box (IIAB) software and its open community architecture for education.
 
