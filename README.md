@@ -38,7 +38,9 @@ Check out our [Contributors Guide](https://github.com/iiab/iiab/wiki/IIAB-Contri
 
 ## Versions
 
-Pre-releases of Internet-in-a-Box (IIAB) undergo continuous QA / continuous deployment and are strongly recommended.  Install our latest pre-release using the 1-line installer at: http://download.iiab.io
+Pre-releases of Internet-in-a-Box (IIAB) undergo continuous QA / continuous deployment and are strongly recommended.
+
+Install our latest pre-release using the 1-line installer at: http://download.iiab.io
 
 You can also consider the <!--latest Internet-in-a-Box (IIAB)--> official releases at: [github.com/iiab/iiab/releases](https://github.com/iiab/iiab/releases)
 
