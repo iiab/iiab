@@ -177,27 +177,7 @@ def set_lasttimestamp(ip):
     conn.commit()
 
 #  ###################  Action routines based on OS  ################3
-def microsoft_splash(environ,start_response):
-    en_txt={ 'message':"Click on the button to go to the IIAB home page",\
-            "FQDN": fully_qualified_domain_name, \
-            'btn1':"GO TO IIAB HOME PAGE",'doc_root':get_iiab_env("WWWROOT")}
-    es_txt={ 'message':"Haga clic en el botón para ir a la página de inicio de IIAB",\
-            "FQDN": fully_qualified_domain_name, \
-            'btn1':"IIAB",'doc_root':get_iiab_env("WWWROOT")}
-    txt = en_txt
-    if lang == "en":
-        txt = en_txt
-    elif lang == "es":
-        txt = es_txt
-    response_body = str(j2_env.get_template("simple.template").render(**txt))
-    status = '200 OK'
-    response_headers = [('Content-type','text/html'),
-            ('Content-Length',str(len(response_body)))]
-    start_response(status, response_headers)
-    return [response_body]
-
 def microsoft(environ,start_response):
-    global MICROSOFT_TRIGGERED
     # firefox -- seems both mac and Windows use it
     agent = environ.get('HTTP_USER_AGENT','default_agent')
     if agent.startswith('Mozilla'):
@@ -205,7 +185,7 @@ def microsoft(environ,start_response):
     logger.debug("sending microsoft redirect")
     response_body = ""
     status = '302 Moved Temporarily'
-    response_headers = [('Location','/microsoft_splash'),
+    response_headers = [('Location','http://box.lan/home'),
             ('Content-type','text/html'),
             ('Content-Length',str(len(response_body)))]
     start_response(status, response_headers)
@@ -228,8 +208,8 @@ def android(environ, start_response):
     else: 
         ip = environ['REMOTE_ADDR'].strip()
     system,system_version = platform_info(ip)
-    if not system_version:
-        put_302(environ, start_response)
+    if system_version is None:
+       return  put_302(environ, start_response)
     if system_version[0:1] < '6':
         logger.debug("system < 6:%s"%system_version)
         location = '/android_splash'
@@ -340,7 +320,7 @@ def banner(environ, start_response):
     status = '200 OK'
     headers = [('Content-type', 'image/png')]
     start_response(status, headers)
-    image = open("%s/iiab-menu/menu-files/images/iiab_banner6.png"%doc_root, "rb").read() 
+    image = open("%s/js-menu/menu-files/images/iiab_banner6.png"%doc_root, "rb").read()
     return [image]
 
 def bootstrap(environ, start_response):
@@ -542,10 +522,6 @@ def application (environ, start_response):
       return android(environ, start_response) 
 
    # microsoft
-   if  environ['PATH_INFO'] == "/microsoft_splash":
-     return microsoft_splash(environ, start_response) 
-   if  environ['PATH_INFO'] == "/connecttest.txt" and not is_inactive(ip):
-     return microsoft_connect(environ, start_response) 
    if environ['HTTP_HOST'] == "ipv6.msftncsi.com" or\
      environ['HTTP_HOST'] == "detectportal.firefox.com" or\
      environ['HTTP_HOST'] == "ipv6.msftncsi.com.edgesuite.net" or\
@@ -557,7 +533,7 @@ def application (environ, start_response):
      environ['HTTP_HOST'] == "teredo.ipv6.microsoft.com.nsatc.net": 
      return microsoft(environ, start_response) 
 
-   logger.debug("executing the default 204 response. [%s"%data)
+   logger.debug("executing the default 302 response. [%s"%data)
    return put_302(environ,start_response)
 
 # Instantiate the server

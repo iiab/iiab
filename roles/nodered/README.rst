@@ -14,13 +14,13 @@ Prior to installing IIAB, make sure your `/etc/iiab/local_vars.yml <http://wiki.
   nodered_install: True
   nodered_enabled: True
 
-After installing Node-RED as part IIAB, please log in to http://box/nodered or http://box.lan:1880 with:
+After installing Node-RED as part IIAB, please log in to http://box/nodered or http://box:1880/nodered with:
 
 Username: ``Admin``
 
 Password: ``changeme``
 
-To change this password, please see: `roles/nodered/defaults/main.yml <defaults/main.yml#L10-L25>`_
+To change this password, please see: `roles/nodered/defaults/main.yml <defaults/main.yml#L11-L26>`_
 
 You can monitor the Node-RED service with command::
 
