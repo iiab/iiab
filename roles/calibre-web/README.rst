@@ -74,6 +74,8 @@ See also::
 
   /library/calibre-web/metadata_db_prefs_backup.json
 
+See the official docs on Calibre-Web's `Runtime Configuration Options <https://github.com/janeczku/calibre-web/wiki/Configuration>`_.
+
 Back Up Everything
 ------------------
 
