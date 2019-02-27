@@ -2,9 +2,9 @@
 Gitea README
 =============
 
-This Ansible role installs Gitea.
+This Ansible role installs Gitea - a self-hosted Git service written in Go.
 
 Using It
 --------
 
-Lokole should be accessible at http://box/gitea/.
+Gitea should be accessible at http://box/gitea/.
