@@ -37,7 +37,7 @@ To learn about our software architecture, check out our [Contributors Guide](htt
 
 To learn more about our open community architecture for "offline" education, start by reviewing "[What technical documentation exists?](http://wiki.laptop.org/go/IIAB/FAQ#What_technical_documentation_exists.3F)"
 
-*Thank you for helping us enable offline access to the Internet's open knowledge jewels, as well as "Sneakernet-of-Alexandria" distribution of local/indigenous content, when mass media channels do not serve grassroots voices.*
+*Thank you for helping us enable offline access to the Internet's free/open knowledge jewels, as well as "Sneakernet-of-Alexandria" distribution of local/indigenous content, when mass media channels do not serve grassroots voices.*
 
 ## Versions
 
