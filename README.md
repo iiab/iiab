@@ -9,16 +9,16 @@ You can build your own tiny, affordable server (an offline digital library) for 
 
 Internet-in-a-Box gives you the DIY tools to:
 1. Download and present the [very best of the World’s Free Knowledge](http://internet-in-a-box.org/#quality-content).
-2. Exchange local/indigenous knowledge with nearby communities, using our [Manage Content](https://github.com/iiab/iiab-admin-console/blob/master/roles/console/files/help/InstContent.rst#manage-content) interface and possible mesh networking.
-3. Choose among [30 powerful educational apps](http://wiki.laptop.org/go/IIAB/FAQ#What_services_.28IIAB_apps.29_are_suggested_during_installation.3F) for learning/teaching communities, optionally with a complete LMS (learning management system).
+2. Choose among [30 powerful educational apps](http://wiki.laptop.org/go/IIAB/FAQ#What_services_.28IIAB_apps.29_are_suggested_during_installation.3F) for your school or learning/teaching community, optionally with a complete LMS (learning management system).
+3. Exchange local/indigenous knowledge with nearby communities, using our [Manage Content](https://github.com/iiab/iiab-admin-console/blob/master/roles/console/files/help/InstContent.rst#manage-content) interface and possible mesh networking.
 
-FYI this community product is enabled by professional volunteers working [side-by-side](http://wiki.laptop.org/go/IIAB/FAQ#What_are_the_best_places_for_community_support.3F) with schools, clinics and libraries around the world.  *Thank you for being a part of our http://OFF.NETWORK grassroots technology movement!*
+FYI this [community product](https://en.wikipedia.org/wiki/Internet-in-a-Box) is enabled by professional volunteers working [side-by-side](http://wiki.laptop.org/go/IIAB/FAQ#What_are_the_best_places_for_community_support.3F) with schools, clinics and libraries around the world.  *Thank you for being a part of our http://OFF.NETWORK grassroots technology [movement](https://meta.wikimedia.org/wiki/Internet-in-a-Box)!*
 
 ## Installation
 
 Install Internet-in-a-Box (IIAB) from [download.iiab.io](http://download.iiab.io/)
 
-Please see [FAQ.IIAB.IO](http://FAQ.IIAB.IO) which has 40+ questions and answers to help you along the way, as you put together the <!--digital--> "learning hotspot" most suitable for your own teaching/learning community.
+Please see [FAQ.IIAB.IO](http://FAQ.IIAB.IO) which has 40+ questions and answers to help you along the way, as you put together the <!--digital--> "local learning hotspot" most suitable for your own teaching/learning community.
 
 Our [HOW-TO videos](https://www.youtube.com/channel/UC0cBGCxr_WPBPa3IqPVEe3g) can be very helpful and the [Installation](https://github.com/iiab/iiab/wiki/IIAB-Installation) wiki page has more intricate details e.g. if you're trying to install Internet-in-a-Box (IIAB) onto a [different Linux](https://github.com/iiab/iiab/wiki/IIAB-Platforms) that has not yet been tried.
 
