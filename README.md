@@ -17,21 +17,21 @@ FYI this community product is enabled by professional volunteers working [side-b
 
 ## Installation
 
-Install Internet-in-a-Box (IIAB) from http://download.iiab.io
+Install Internet-in-a-Box (IIAB) from [download.iiab.io](http://download.iiab.io/)
 
-Please see http://FAQ.IIAB.IO which has 40+ questions and answers to help you along the way, as you put together the <!--digital--> "learning hotspot" most suitable for your own teaching/learning community.
+Please see [FAQ.IIAB.IO](http://FAQ.IIAB.IO) which has 40+ questions and answers to help you along the way, as you put together the <!--digital--> "learning hotspot" most suitable for your own teaching/learning community.
 
 The [Installation](https://github.com/iiab/iiab/wiki/IIAB-Installation) wiki page has more intricate details e.g. if you're trying to install Internet-in-a-Box (IIAB) on a [different platform](https://github.com/iiab/iiab/wiki/IIAB-Platforms) that has not yet been tried.
 
 Then you [add content](https://github.com/iiab/iiab/wiki/IIAB-Installation#add-content), which can of course take time when downloading multi-gigabyte Content Packs!
 
-Finally, you can [customize your Internet-in-a-Box home page](http://wiki.laptop.org/go/IIAB/FAQ#How_do_I_customize_my_Internet-in-a-Box_home_page.3F) (typically http://box or http://box.lan) using our drag-and-drop Admin Console (http://box/admin) &mdash; to arrange Content Packs and IIAB Apps (services) for your local community's needs.
+Finally, you can [customize your Internet-in-a-Box home page](http://wiki.laptop.org/go/IIAB/FAQ#How_do_I_customize_my_Internet-in-a-Box_home_page.3F) (typically http://box or http://box.lan) using our **drag-and-drop** Admin Console (http://box/admin) &mdash; to arrange Content Packs and IIAB Apps (services) for your local community's needs.
 
 ## Community
 
 Internet-in-a-Box (IIAB) greatly welcomes contributions from educators, librarians *and* IT/UX/QA people of all kinds!
 
-Please see "[How can I help?](http://wiki.laptop.org/go/IIAB/FAQ#How_can_I_help.3F)" at: http://FAQ.IIAB.IO
+Please see "[How can I help?](http://wiki.laptop.org/go/IIAB/FAQ#How_can_I_help.3F)" at: [FAQ.IIAB.IO](http://FAQ.IIAB.IO)
 
 To learn about our open community architecture for "offline" education, start by reviewing "[What technical documentation exists?](http://wiki.laptop.org/go/IIAB/FAQ#What_technical_documentation_exists.3F)"
 
@@ -43,7 +43,7 @@ To learn more about our software architecture, check out our [Contributors Guide
 
 Pre-releases of Internet-in-a-Box (IIAB) undergo continuous QA / continuous deployment and are strongly recommended.
 
-Install our latest pre-release using the 1-line installer at: http://download.iiab.io
+Install our latest pre-release using the 1-line installer at: [download.iiab.io](http://download.iiab.io/)
 
 You can also consider the <!--latest Internet-in-a-Box (IIAB)--> official releases at: [github.com/iiab/iiab/releases](https://github.com/iiab/iiab/releases)
 
