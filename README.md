@@ -21,9 +21,9 @@ Install Internet-in-a-Box (IIAB) from [download.iiab.io](http://download.iiab.io
 
 Please see [FAQ.IIAB.IO](http://FAQ.IIAB.IO) which has 40+ questions and answers to help you along the way, as you put together the <!--digital--> "learning hotspot" most suitable for your own teaching/learning community.
 
-The [Installation](https://github.com/iiab/iiab/wiki/IIAB-Installation) wiki page has more intricate details e.g. if you're trying to install Internet-in-a-Box (IIAB) on a [different platform](https://github.com/iiab/iiab/wiki/IIAB-Platforms) that has not yet been tried.
+Our [HOW-TO videos](https://www.youtube.com/channel/UC0cBGCxr_WPBPa3IqPVEe3g) can be very helpful and the [Installation](https://github.com/iiab/iiab/wiki/IIAB-Installation) wiki page has more intricate details e.g. if you're trying to install Internet-in-a-Box (IIAB) on a [different platform](https://github.com/iiab/iiab/wiki/IIAB-Platforms) that has not yet been tried.
 
-Then you [add content](https://github.com/iiab/iiab/wiki/IIAB-Installation#add-content), which can of course take time when downloading multi-gigabyte Content Packs!
+After you've installed the software, you should [add content](https://github.com/iiab/iiab/wiki/IIAB-Installation#add-content), which can of course take time when downloading multi-gigabyte Content Packs!
 
 Finally, you can [customize your Internet-in-a-Box home page](http://wiki.laptop.org/go/IIAB/FAQ#How_do_I_customize_my_Internet-in-a-Box_home_page.3F) (typically http://box or http://box.lan) using our **drag-and-drop** Admin Console (http://box/admin) &mdash; to arrange Content Packs and IIAB Apps (services) for your local community's needs.
 
@@ -33,9 +33,9 @@ Internet-in-a-Box (IIAB) greatly welcomes contributions from educators, libraria
 
 Please see "[How can I help?](http://wiki.laptop.org/go/IIAB/FAQ#How_can_I_help.3F)" at: [FAQ.IIAB.IO](http://FAQ.IIAB.IO)
 
-To learn about our open community architecture for "offline" education, start by reviewing "[What technical documentation exists?](http://wiki.laptop.org/go/IIAB/FAQ#What_technical_documentation_exists.3F)"
+To learn about our software architecture, check out our [Contributors Guide](https://github.com/iiab/iiab/wiki/IIAB-Contributors-Guide).  FYI we use [Ansible](http://wiki.laptop.org/go/IIAB/FAQ#What_is_Ansible_and_what_version_should_I_use.3F) <!--as the underlying technology--> to install, deploy, configure and manage the various software components.
 
-To learn more about our software architecture, check out our [Contributors Guide](https://github.com/iiab/iiab/wiki/IIAB-Contributors-Guide).  FYI we use [Ansible](http://wiki.laptop.org/go/IIAB/FAQ#What_is_Ansible_and_what_version_should_I_use.3F) <!--as the underlying technology--> to install, deploy, configure and manage the various software components.
+To learn more about our open community architecture for "offline" education, start by reviewing "[What technical documentation exists?](http://wiki.laptop.org/go/IIAB/FAQ#What_technical_documentation_exists.3F)"
 
 *Thank you for helping us enable offline access to the Internet's open knowledge jewels, as well as "Sneakernet-of-Alexandria" distribution of local/indigenous content, when mass media channels do not serve grassroots voices.*
 
