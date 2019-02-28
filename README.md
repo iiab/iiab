@@ -12,9 +12,9 @@ FYI this community product is enabled by professional volunteers working [side-b
 
 ## Installation
 
-Pre-releases of Internet-in-a-Box (IIAB) are available from http://download.iiab.io — click on the highest version number and then launch the 1-line installer.
+Install Internet-in-a-Box (IIAB) from http://download.iiab.io
 
-Please see "What are the best places for community support?" at http://FAQ.IIAB.IO which has 40+ questions and answers to help you along the way, as you put together the digital knowledge hotspot most suitable for your own community.
+Please see http://FAQ.IIAB.IO which has 40+ questions and answers to help you along the way, as you put together the <!--digital--> "learning hotspot" most suitable for your own community.
 
 The [Installation](https://github.com/iiab/iiab/wiki/IIAB-Installation) wiki page has more intricate details e.g. if you're trying to install Internet-in-a-Box (IIAB) on a [different platform](https://github.com/iiab/iiab/wiki/IIAB-Platforms) that has not yet been tried.
 
