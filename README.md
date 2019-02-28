@@ -9,7 +9,7 @@ You can build your own tiny, affordable server (offline digital library) as need
 
 Internet-in-a-Box gives you the tools to:
 1. DIY (download and customize) this "local learning hotspot" or server, using the [very best of the World’s Free Knowledge](http://internet-in-a-box.org/#quality-content).
-2. Exchange local/indigenous knowledge with nearby communities, using out [Manage Content](https://github.com/iiab/iiab-admin-console/blob/master/roles/console/files/help/InstContent.rst#manage-content) interface and possible mesh networking.
+2. Exchange local/indigenous knowledge with nearby communities, using our [Manage Content](https://github.com/iiab/iiab-admin-console/blob/master/roles/console/files/help/InstContent.rst#manage-content) interface and possible mesh networking.
 
 Schools can also choose among [30 powerful educational apps](http://wiki.laptop.org/go/IIAB/FAQ#What_services_.28IIAB_apps.29_are_suggested_during_installation.3F) for teachers and students, optionally with a complete LMS (learning management system).
 
