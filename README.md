@@ -8,7 +8,7 @@
 You can build your own tiny, affordable server (an offline digital library) for your school, your medical clinic, your prison, your region and/or your very own family — accessible with any nearby smartphone, tablet or laptop.
 
 Internet-in-a-Box gives you the DIY tools to:
-1. Download and present the [very best of the World’s Free Knowledge](http://internet-in-a-box.org/#quality-content).
+1. Download then drag-and-drop to arrange the [very best of the World’s Free Knowledge](http://internet-in-a-box.org/#quality-content).
 2. Choose among [30 powerful educational apps](http://wiki.laptop.org/go/IIAB/FAQ#What_services_.28IIAB_apps.29_are_suggested_during_installation.3F) for your school or learning/teaching community, optionally with a complete LMS (learning management system).
 3. Exchange local/indigenous knowledge with nearby communities, using our [Manage Content](https://github.com/iiab/iiab-admin-console/blob/master/roles/console/files/help/InstContent.rst#manage-content) interface and possible mesh networking.
 
