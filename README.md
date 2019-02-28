@@ -25,7 +25,7 @@ Our [HOW-TO videos](https://www.youtube.com/channel/UC0cBGCxr_WPBPa3IqPVEe3g) ca
 
 After you've installed the software, you should [add content](https://github.com/iiab/iiab/wiki/IIAB-Installation#add-content), which can of course take time when downloading multi-gigabyte Content Packs!
 
-Finally, you can [customize your Internet-in-a-Box home page](http://wiki.laptop.org/go/IIAB/FAQ#How_do_I_customize_my_Internet-in-a-Box_home_page.3F) (typically http://box or http://box.lan) using our **drag-and-drop** Admin Console (http://box/admin) &mdash; to arrange Content Packs and IIAB Apps (services) for your local community's needs.
+Finally, you can [customize your Internet-in-a-Box home page](http://wiki.laptop.org/go/IIAB/FAQ#How_do_I_customize_my_Internet-in-a-Box_home_page.3F) (typically http://box or http://box.lan) using our **drag-and-drop** Admin Console (http://box.lan/admin) &mdash; to arrange Content Packs and IIAB Apps (services) for your local community's needs.
 
 ## Community
 
