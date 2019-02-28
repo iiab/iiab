@@ -47,4 +47,4 @@ Install our latest pre-release using the 1-line installer at: [download.iiab.io]
 
 You can also consider the <!--latest Internet-in-a-Box (IIAB)--> official releases at: [github.com/iiab/iiab/releases](https://github.com/iiab/iiab/releases)
 
-Finally, older versions are here: [github.com/xsce](http://github.com/xsce), [schoolserver.org](http://schoolserver.org)
+For older versions, see: [github.com/xsce](http://github.com/xsce), [schoolserver.org](http://schoolserver.org)
