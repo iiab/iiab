@@ -21,7 +21,7 @@ Install Internet-in-a-Box (IIAB) from [download.iiab.io](http://download.iiab.io
 
 Please see [FAQ.IIAB.IO](http://FAQ.IIAB.IO) which has 40+ questions and answers to help you along the way, as you put together the <!--digital--> "learning hotspot" most suitable for your own teaching/learning community.
 
-Our [HOW-TO videos](https://www.youtube.com/channel/UC0cBGCxr_WPBPa3IqPVEe3g) can be very helpful and the [Installation](https://github.com/iiab/iiab/wiki/IIAB-Installation) wiki page has more intricate details e.g. if you're trying to install Internet-in-a-Box (IIAB) on a [different platform](https://github.com/iiab/iiab/wiki/IIAB-Platforms) that has not yet been tried.
+Our [HOW-TO videos](https://www.youtube.com/channel/UC0cBGCxr_WPBPa3IqPVEe3g) can be very helpful and the [Installation](https://github.com/iiab/iiab/wiki/IIAB-Installation) wiki page has more intricate details e.g. if you're trying to install Internet-in-a-Box (IIAB) onto a [different Linux](https://github.com/iiab/iiab/wiki/IIAB-Platforms) that has not yet been tried.
 
 After you've installed the software, you should [add content](https://github.com/iiab/iiab/wiki/IIAB-Installation#add-content), which can of course take time when downloading multi-gigabyte Content Packs!
 
