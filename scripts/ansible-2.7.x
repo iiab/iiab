@@ -1,7 +1,7 @@
 #!/bin/bash -e
 
 CURR_VER="undefined"    # Ansible version you currently have installed
-GOOD_VER="2.7.0"    # For XO laptops (pip install) & CentOS (yum install rpm)
+GOOD_VER="2.7.8"    # For XO laptops (pip install) & CentOS (yum install rpm)
 # On other OS's we attempt the latest from PPA, which might be more recent
 
 export DEBIAN_FRONTEND=noninteractive
@@ -71,7 +71,7 @@ elif [ -f /etc/debian_version ]; then    # Includes Debian, Ubuntu & Raspbian
     echo "deb http://ppa.launchpad.net/ansible/ansible-2.7/ubuntu xenial main" \
          > /etc/apt/sources.list.d/iiab-ansible.list
 
-    echo -e '\nIF YOU FACE ERROR "signatures couldn'"'"'t be verified because the public key is not available" THEN REPEATEDLY RE-RUN "apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 93C4A3FD7BB9C367"\n'
+    echo -e '\nIF YOU FACE ERROR "signatures couldn'"'"'t be verified because the public key is not available" THEN REPEATEDLY RE-RUN "sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 93C4A3FD7BB9C367"\n'
     apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 93C4A3FD7BB9C367
 
     echo -e "\napt update; apt install ansible\n"

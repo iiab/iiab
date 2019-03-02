@@ -1,6 +1,6 @@
-# Setup specific to the Raspberry Pi
+# Specific to Raspberry Pi
 
-- name: Add a udev rule to transfer hwclock to system clock at dev creation
+- name: Install udev rule /etc/udev/rules.d/92-rtc-i2c.rules from template, to transfer hwclock to system clock at dev creation, if rtc_id is defined and rtc_id != "none"
   template:
     src: 92-rtc-i2c.rules
     dest: /etc/udev/rules.d/92-rtc-i2c.rules
@@ -10,42 +10,43 @@
   when: rtc_id is defined and rtc_id != "none"
 
 # RTC requires a change to the device tree (and reboot)
-- name: Check for needing to enable i2c rtc device in config.txt
+- name: Enable i2c-rtc device (with "dtoverlay=i2c-rtc,{{ rtc_id }}=on" in /boot/config.txt, requires reboot!) if rtc_id is defined and rtc_id != "none"
   lineinfile:
-    dest: /boot/config.txt
+    path: /boot/config.txt
     line: "dtoverlay=i2c-rtc,{{ rtc_id }}=on"
     state: present
-  register: rpiconfig
-  when: rtc_id != "none"
+  register: rpiconfig    # HMMM REGISTER "rpiconfig" IS *COMPLETELY UNUSED* AS OF 2018-11-02
+  when: rtc_id is defined and rtc_id != "none"
 
-- name: Add a udev rule to transfer hwclock to system clock at dev creation
-  template:
-    src: 92-rtc-i2c.rules
-    dest: /etc/udev/rules.d/92-rtc-i2c.rules
-    owner: root
-    group: root
-    mode: 0644
-  when: rtc_id != "none"
+#- name: Install udev rule /etc/udev/rules.d/92-rtc-i2c.rules from template, to transfer hwclock to system clock at dev creation, if rtc_id != "none"
+#  template:
+#    src: 92-rtc-i2c.rules
+#    dest: /etc/udev/rules.d/92-rtc-i2c.rules
+#    owner: root
+#    group: root
+#    mode: 0644
+#  when: rtc_id != "none"
 
-- name: Pre-install packages
+- name: Install latest ntp package
   package:
-    name: "{{ item }}"
+    name: ntp
     state: latest
-  with_items:
-    - ntp
 
-- name: Increase the swap file size, as kalite pip download fails (debuntu)
+- name: Increase swap file size (to CONF_SWAPSIZE=500 in /etc/dphys-swapfile) as kalite pip download fails (debuntu)
   lineinfile:
+    path: /etc/dphys-swapfile
     regexp: "^CONF_SWAPSIZE"
     line: CONF_SWAPSIZE=500
-    dest: /etc/dphys-swapfile
   when: is_debuntu
 
-- name: Restart the swap service (debuntu)
-  command: /etc/init.d/dphys-swapfile restart
+- name: Restart swap service "dphys-swapfile" (debuntu)
+  #command: /etc/init.d/dphys-swapfile restart
+  service:    # A rare/legacy service that is NOT systemd
+    name: dphys-swapfile
+    state: restarted
   when: is_debuntu
 
-- name: Add RPi rootfs resizing service
+- name: Install RPi rootfs resizing (iiab-rpi-max-rootfs.sh) and its systemd service (iiab-rpi-root-resize.service), from templates
   template:
     src: "{{ item.src }}"
     dest: "{{ item.dest }}"
@@ -56,7 +57,7 @@
     - { src: 'iiab-rpi-max-rootfs.sh', dest: '/usr/sbin/iiab-rpi-max-rootfs.sh', mode: '0755'}
     - { src: 'iiab-rpi-root-resize.service', dest: '/etc/systemd/system/iiab-rpi-root-resize.service', mode: '0644'}
 
-- name: Enable rootfs resizing service
-  service:
+- name: Enable RPi rootfs resizing (systemd service iiab-rpi-root-resize.service)
+  systemd:
     name: iiab-rpi-root-resize
     enabled: yes

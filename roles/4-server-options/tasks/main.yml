@@ -3,26 +3,34 @@
 - name: ...IS BEGINNING ==================================
   command: echo
 
-- name: Installing dnsmasq
+- name: Install dnsmasq
   include_tasks: roles/network/tasks/dnsmasq.yml
   when: dnsmasq_install
   tags: base, domain, dnsmasq, network
 
-- name: Installing named
+- name: Install named / BIND
   include_tasks: roles/network/tasks/named.yml
   when: named_install
   tags: base, named, network, domain
+
+- name: Installing captive portal
+  include_tasks: roles/captive-portal/tasks/main.yml
+  when: captive_portal_install
+  tags: base, captive-portal, network, domain
 
 - name: Installing dhcpd
   include_tasks: roles/network/tasks/dhcpd.yml
   when: dhcpd_install
   tags: base, dhcpd, network, domain
 
-- name: Installing Squid
+- name: Install Squid (and DansGuardian if dansguardian_install)
   include_tasks: roles/network/tasks/squid.yml
   when: squid_install
   tags: base, squid, network, domain
 
+# NETWORK moved to the very end, after Stage 9 (9-LOCAL-ADDONS)
+# It can also be run manually using: cd /opt/iiab/iiab; ./iiab-network
+#
 #- name: NETWORK
 #  include_role:
 #    name: network
@@ -42,10 +50,11 @@
   when: postgresql_install
   tags: postgresql, pathagar, moodle
 
+# UNMAINTAINED
 - name: AUTHSERVER
   include_role:
     name: authserver
-  when: authserver_install
+  when: authserver_install is defined and authserver_install
   tags: olpc, authserver
 
 - name: CUPS
@@ -66,13 +75,7 @@
   when: usb_lib_install
   tags: usb-lib
 
-# MANDATORY SO PERHAPS THIS BELONGS IN 3-BASE-SERVER ?
-- name: Create a Python interface to iiab.env
-  template:
-    src: roles/1-prep/templates/iiab_env.py.j2
-    dest: /etc/iiab/iiab_env.py
-
-- name: Run /usr/bin/iiab-refresh-wiki-docs (scraper script) to create http://box/info offline documentation (script was installed at the beginning of Stage 3 = roles/3-base-server/tasks/main.yml, which runs the HTTPD playbook = roles/httpd/tasks/main.yml)
+- name: Run /usr/bin/iiab-refresh-wiki-docs (scraper script) to create http://box/info offline documentation.  (This script was installed at the beginning of Stage 3 = roles/3-base-server/tasks/main.yml, which ran Apache playbook = roles/httpd/tasks/main.yml)
   command: /usr/bin/iiab-refresh-wiki-docs
   when: not nodocs
 

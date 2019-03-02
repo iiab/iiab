@@ -1,0 +1,52 @@
+# For rpi installs
+
+- name: Install 'libhiredis-dev' package for Minetest
+  package:
+    name: libhiredis-dev
+    state: present
+
+- name: Download Minetest {{ minetest_rpi_src_url }} for RPi
+  get_url:
+    url: "{{ minetest_rpi_src_url }}"
+    dest: "{{ downloads_dir }}/{{ minetest_rpi_src }}"
+    timeout: "{{ download_timeout }}"
+
+# we need to create these for rpi, but package creates them for other OSes
+- name: Create dirs /etc/minetest and /library/games
+  file:
+    state: directory
+    path: "{{ item }}"
+    owner: root
+    group: root
+    mode: 0755
+  with_items:
+    - /etc/minetest
+    - /var/log/minetest
+
+- name: Extract {{ downloads_dir }}/{{ rpi_src }} into /library/games
+  unarchive:
+    src: "{{ downloads_dir }}/{{ minetest_rpi_src }}"
+    dest: /library/games
+    owner: root
+    group: root
+
+- name: Create symbolic link /library/games/minetest
+  file:
+    state: link
+    src: /library/games/0.4.17.1
+    dest: /library/games/minetest
+    owner: root
+    group: root
+
+- name: Create /etc/minetest/minetest.conf and minetest-server.service
+  template:
+    backup: no
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: root
+    group: root
+    mode: 0644
+  with_items:
+    - { src: 'minetest.conf.j2', dest: '/etc/minetest/minetest.conf' }
+    - { src: 'minetest-server.service.j2', dest: '/etc/systemd/system/minetest-server.service' }
+  when: minetest_install

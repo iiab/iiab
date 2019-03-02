@@ -55,14 +55,22 @@ gui_port={{ gui_port }}
 iiab_gateway_enabled={{ iiab_gateway_enabled }}
 services_externally_visible={{ services_externally_visible }}
 calibre_port={{ calibre_port }}
+calibreweb_port={{ calibreweb_port }}
 kiwix_port={{ kiwix_port }}
 kalite_server_port={{ kalite_server_port }}
 kolibri_http_port={{ kolibri_http_port }}
+cups_port={{ cups_port }}
 transmission_http_port={{ transmission_http_port }}
 transmission_peer_port={{ transmission_peer_port }}
 sugarizer_port={{ sugarizer_port }}
+nodered_port={{ nodered_port }}
+mosquitto_port={{ mosquitto_port }}
+minetest_port={{ minetest_port }}
+pbx_signaling_ports_chan_sip={{ pbx_signaling_ports_chan_sip }}
+pbx_signaling_ports_chan_pjsip={{ pbx_signaling_ports_chan_pjsip }}
+pbx_data_ports={{ pbx_data_ports }}
+pbx_enabled={{ pbx_enabled }}
 block_DNS={{ block_DNS }}
-py_captive_portal_enabled={{ py_captive_portal_enabled }}
 
 echo "LAN is $lan and WAN is $wan"
 #
@@ -94,9 +102,20 @@ if [ "$services_externally_visible" == "True" ]; then
     $IPTABLES -A INPUT -p tcp --dport $kalite_server_port -m state --state NEW -i $wan -j ACCEPT
     $IPTABLES -A INPUT -p tcp --dport $kolibri_http_port -m state --state NEW -i $wan -j ACCEPT
     $IPTABLES -A INPUT -p tcp --dport $calibre_port -m state --state NEW -i $wan -j ACCEPT
+    $IPTABLES -A INPUT -p tcp --dport $calibreweb_port -m state --state NEW -i $wan -j ACCEPT
+    $IPTABLES -A INPUT -p tcp --dport $cups_port -m state --state NEW -i $wan -j ACCEPT
     $IPTABLES -A INPUT -p tcp --dport $sugarizer_port -m state --state NEW -i $wan -j ACCEPT
+    $IPTABLES -A INPUT -p tcp --dport $nodered_port -m state --state NEW -i $wan -j ACCEPT
+    $IPTABLES -A INPUT -p tcp --dport $mosquitto_port -m state --state NEW -i $wan -j ACCEPT
     $IPTABLES -A INPUT -p tcp --dport $transmission_http_port -m state --state NEW -i $wan -j ACCEPT
     $IPTABLES -A INPUT -p tcp --dport $transmission_peer_port -m state --state NEW -i $wan -j ACCEPT
+    $IPTABLES -A INPUT -p udp --dport $minetest_port -m state --state NEW -i $wan -j ACCEPT
+
+    if [ "$pbx_enabled" == "True" ]; then
+        $IPTABLES -A INPUT -p udp --dport $pbx_signaling_ports_chan_sip -m state --state NEW -i $wan -j ACCEPT
+        $IPTABLES -A INPUT -p udp --dport $pbx_signaling_ports_chan_pjsip -m state --state NEW -i $wan -j ACCEPT
+        $IPTABLES -A INPUT -p udp --dport $pbx_data_ports -m state --state NEW -i $wan -j ACCEPT
+    fi
 fi
 
 if [ "$iiab_gateway_enabled" == "True" ]; then
@@ -111,9 +130,8 @@ if [  "$gw_block_https" == "True" ]; then
 fi
 
 # Allow outgoing connections from the LAN side.
-if ! [ "$py_captive_portal_enabled" == "True" ]; then
-    $IPTABLES -A FORWARD -i $lan -o $wan -j ACCEPT
-fi
+$IPTABLES -A FORWARD -i $lan -o $wan -j ACCEPT
+
 # Don't forward from the outside to the inside.
 $IPTABLES -A FORWARD -i $wan -o $lan -j DROP
 $IPTABLES -A INPUT -i $wan -j DROP
@@ -121,10 +139,6 @@ $IPTABLES -A INPUT -i $wan -j DROP
 if [ "$block_DNS" == "True" ]; then
     $IPTABLES -t nat -A PREROUTING -i $lan -p tcp --dport 53 ! -d {{ lan_ip }} -j DNAT --to {{ lan_ip }}:53
     $IPTABLES -t nat -A PREROUTING -i $lan -p udp --dport 53 ! -d {{ lan_ip }} -j DNAT --to {{ lan_ip }}:53
-fi
-
-if [ "$py_captive_portal_enabled" == "True" ]; then
-    $IPTABLES  -t nat  -A PREROUTING -i $lan -p tcp --dport 80 ! -d {{ lan_ip }} -j DNAT --to {{ lan_ip }}:{{ py_captive_portal_port }}
 fi
 
 if [ "$HTTPCACHE_ON" == "True" ]; then

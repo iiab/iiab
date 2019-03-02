@@ -1,47 +1,46 @@
-- name: Download DokuWiki software
+- name: Download {{ iiab_download_url }}/{{ dokuwiki_version }}.tgz    # iiab_download_url is http://download.iiab.io/packages
   get_url:
     url: "{{ iiab_download_url }}/{{ dokuwiki_version }}.tgz"
     dest: "{{ downloads_dir }}/"
     timeout: "{{ download_timeout }}"
   when: internet_available
 
-- name: Copy it to permanent location /library
+- name: Unarchive (unpack) it to /library/{{ dokuwiki_version }}
   unarchive:
     src: "{{ downloads_dir }}/{{ dokuwiki_version }}.tgz"
     dest: /library
     creates: "/library/{{ dokuwiki_version }}/VERSION"
 
-- name: Symlink /library/{{ dokuwiki_version }} from /library/dokuwiki
+- name: Symlink /library/dokuwiki to /library/{{ dokuwiki_version }}
   #shell: if [ ! -d /library/dokuwiki ]; then ln -sf /library/{{ dokuwiki_version }} /library/dokuwiki; fi
   #shell: ln -sf /library/{{ dokuwiki_version }} /library/dokuwiki
   #BOTH LINES ABOVE FAIL TO UPDATE LINK; Ansible approach below works
   file:
-    path: /library/dokuwiki
     src: /library/{{ dokuwiki_version }}
+    path: /library/dokuwiki
     state: link
     force: yes
 
-- name: Install config file for DokuWiki in Apache
+- name: Install /etc/{{ apache_config_dir }}/dokuwiki.conf from template, for DokuWiki's http://box/wiki
   template:
     src: dokuwiki.conf.j2
     dest: "/etc/{{ apache_config_dir }}/dokuwiki.conf"
   when: dokuwiki_enabled
 
-- name: Enable the DokuWiki (debuntu)
+- name: Symlink /etc/apache2/sites-enabled/dokuwiki.conf to /etc/apache2/sites-available/dokuwiki.conf if dokuwiki_enabled (debuntu)
   file:
     src: /etc/apache2/sites-available/dokuwiki.conf
-    dest: /etc/apache2/sites-enabled/dokuwiki.conf
+    path: /etc/apache2/sites-enabled/dokuwiki.conf
     state: link
   when: dokuwiki_enabled and is_debuntu
 
-- name: Disable the DokuWiki (debuntu)
+- name: Remove symlink /etc/apache2/sites-enabled/dokuwiki.conf if not dokuwiki_enabled (debuntu)
   file:
     path: /etc/apache2/sites-enabled/dokuwiki.conf
     state: absent
   when: not dokuwiki_enabled and is_debuntu
 
-
-- name: Change permissions on engine directory so Apache can write
+- name: Set /library/{{ dokuwiki_version }} owner to {{ apache_user }} and permissions to 0755 (recursively)
   file:
     path: "/library/{{ dokuwiki_version }}"
     owner: "{{ apache_user }}"
@@ -49,7 +48,7 @@
     state: directory
     recurse: yes
 
-- name: Restart Apache, so it picks up the new aliases
-  service:
+- name: Restart Apache ({{ apache_service }}) to enable/disable DokuWiki's http://box/wiki
+  systemd:
     name: "{{ apache_service }}"
     state: restarted

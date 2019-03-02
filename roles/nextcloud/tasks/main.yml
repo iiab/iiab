@@ -1,110 +1,104 @@
-- name: See if Nextcloud version page exists
+- name: Does /opt/nextcloud/version.php exist?
   stat:
     path: "{{ nextcloud_prefix }}/nextcloud/version.php"
-#   path: "{{ nextcloud_prefix }}/nextcloud/index.php"
   register: nextcloud_page
 
-- name: FORCE INSTALL OR REINSTALL OR UPGRADE IF /opt/nextcloud/version.php DOESN'T EXIST
+- name: FORCE INSTALL OR REINSTALL OR UPGRADE IF {{ nextcloud_prefix }}/nextcloud/version.php DOESN'T EXIST
   set_fact:
     nextcloud_force_install: True
   when: not nextcloud_page.stat.exists
 
 # - debug:
+#     var: nextcloud_force_install
+
+# - debug:
 #     msg: "nextcloud_force_install: {{ nextcloud_force_install }}"
 
-
-- name: Download latest Nextcloud software to /opt/iiab/download/{{ nextcloud_src_file }}
+- name: Download {{ nextcloud_dl_url }}/{{ nextcloud_orig_src_file }} to {{ downloads_dir }}/{{ nextcloud_src_file }}
   get_url:
     url: "{{ nextcloud_dl_url }}/{{ nextcloud_orig_src_file }}"
     dest: "{{ downloads_dir }}/{{ nextcloud_src_file }}"
+    timeout: "{{ download_timeout }}"
     force: yes
     #validate_certs: False    # TEMPORARY ON/AFTER 2018-07-22 AS download.nextcloud.com CERT EXPIRED: https://github.com/iiab/iiab/issues/954
-    timeout: "{{ download_timeout }}"
   when: internet_available and nextcloud_force_install
-  async: 1800
-  poll: 10
+  #async: 1800
+  #poll: 10
   tags:
     - download
 
-- name: Ubuntu and Debian treat names differently (Debian)
+# Ubuntu and Debian treat names differently
+- name: Install 3 php packages (debian)
   package:
-    name: "{{ item }}"
+    name:
+      - "libapache2-mod-php{{ php_version }}"
+      - "php{{ php_version }}-mbstring"
+      - "php{{ php_version }}-zip"
     state: present
-  with_items:
-    - "libapache2-mod-php{{ php_version }}"
-    - "php{{ php_version }}-mbstring"
-    - "php{{ php_version }}-zip"
   when: is_debian
 
-- name: Ubuntu and Debian treat names differently (Ubuntu)
+# Ubuntu and Debian treat names differently
+- name: Install 4 php packages (ubuntu)
   package:
-    name: "{{ item }}"
+    name:
+      - libapache2-mod-php
+      - php-imagick
+      - php-zip
+      - php-mbstring
     state: present
-  with_items:
-    - libapache2-mod-php
-    - php-imagick
-    - php-zip
-    - php-mbstring
   when: is_ubuntu
 
-- name: Install list of packages (debuntu)
+- name: Install 5 more php packages (debuntu)
   package:
-    name: "{{ item }}"
+    name:
+      - "php{{ php_version }}-gd"
+      - "php{{ php_version }}-json"
+      - "php{{ php_version }}-mysql"
+      - "php{{ php_version }}-curl"
+      - "php{{ php_version }}-intl"
     state: present
-  with_items:
-    - "php{{ php_version }}-gd"
-    - "php{{ php_version }}-json"
-    - "php{{ php_version }}-mysql"
-    - "php{{ php_version }}-curl"
-    - "php{{ php_version }}-intl"
   when: is_debuntu
 
-- name: In php7.2, php dropped mcrypt
+- name: 'Install php{{ php_version }}-mcrypt IF this is a "pre-2018" distro in the debuntu family. NOTE: PHP 7.1 deprecated mcrypt 1-Dec-2016 and PHP 7.2 dropped it completely 30-Nov-2017, as it should no longer be nec.'
   package:
     name: "php{{ php_version }}-mcrypt"
     state: present
-  when: is_debuntu and not is_ubuntu_18
+  when: is_debian_8 or is_debian_9 or is_ubuntu_16 or is_ubuntu_17
+  # NOT NEC TO TEST FOR is_raspbian_8 OR is_raspbian_9 AS /opt/iiab/iiab/vars/<OS>.yml
+  # DEFINES THESE AS SUBSETS OF is_debian_8 OR is_debian_9 (FOR NOW!)
 
 # we need to install the rpm in order to get the dependencies
 # but we only need to do this the first time
 
-- name: Install list of packages (redhat)
+- name: Install 7 php packages (redhat)
   package:
-    name: "{{ item }}"
+    name:
+      - php
+      - php-gd
+      - php-json
+      - php-mysql
+      - php-curl
+      - php-intl
+      - php-mcrypt
+      # CentOS does not have a package for php-imagick
+      #- php-imagick
     state: present
-  with_items:
-    - php
-    - php-gd
-    - php-json
-    - php-mysql
-    - php-curl
-    - php-intl
-    - php-mcrypt
-# centos does not have a package for php-imagick
-#    - php-imagick
   when: is_redhat
 
-- name: Copy it to permanent location /opt (OS's other than Fedora 18)
+- name: Unarchive {{ nextcloud_src_file }} to permanent location {{ nextcloud_prefix }}/nextcloud    # e.g. unpack nextcloud_latest-14.tar.bz2 to /opt/nextcloud
   unarchive:
     src: "{{ downloads_dir }}/{{ nextcloud_src_file }}"
     dest: "{{ nextcloud_prefix }}"
-#   creates: "{{ nextcloud_prefix }}/nextcloud/version.php"
-  when: not is_F18 and nextcloud_force_install
+    #creates: "{{ nextcloud_prefix }}/nextcloud/version.php"
+  when: nextcloud_force_install
 
-# Ansible 1.4.1 does not have "creates" (but hopefully has "when")
-- name: Copy it to permanent location /opt (Fedora 18)
-  unarchive:
-    src: "{{ downloads_dir }}/{{ nextcloud_src_file }}"
-    dest: "{{ nextcloud_prefix }}"
-  when: is_F18 and nextcloud_force_install
-
-- name: In CentOS, the following config dir is symlink to /etc/nextcloud
+- name: Create dir /etc/nextcloud (centos) for a subsequent config dir that's symlinked to /etc/nextcloud ?
   file:
     path: /etc/nextcloud
     state: directory
   when: is_centos
 
-- name: Add autoconfig file (CentOS)
+- name: Install {{ nextcloud_prefix }}/nextcloud/config/autoconfig.php from template (centos)
   template:
     src: autoconfig.php.j2
     dest: "{{ nextcloud_prefix }}/nextcloud/config/autoconfig.php"
@@ -113,7 +107,7 @@
     mode: 0640
   when: is_centos
 
-- name: Make Apache owner
+- name: chown -R {{ apache_user }}:{{ apache_user }} {{ nextcloud_prefix }}/nextcloud
   file:
     path: "{{ nextcloud_prefix }}/nextcloud"
     owner: "{{ apache_user }}"
@@ -121,22 +115,20 @@
     recurse: yes
     state: directory
 
-- name: Create data directory library
+- name: Create data directory {{ nextcloud_data_dir }}    # /opt/nextcloud/data
   file:
-    path: "{{ item }}"
+    path: "{{ nextcloud_data_dir }}"
     owner: "{{ apache_user }}"
     group: "{{ apache_user }}"
     mode: 0750
     state: directory
-  with_items:
-    - "{{ nextcloud_data_dir }}"
 
-- name: Create a MySQL database for Nextcloud
+- name: 'Create MySQL database with name: {{ nextcloud_dbname }}'
   mysql_db:
     name: "{{ nextcloud_dbname }}"
   when: mysql_enabled and nextcloud_enabled
 
-- name: Create a user to access the Nextcloud database
+- name: Add username/password to the MySQL database (associated with trusted IP's like localhost)
   mysql_user:
     name: "{{ nextcloud_dbuser }}"
     host: "{{ item }}"
@@ -149,22 +141,20 @@
     - localhost
   when: mysql_enabled and nextcloud_enabled
 
+# Appears unnec as nextcloud_enabled.yml (just below) does the same
+#- name: Restart Apache
+#  service:
+#    name: "{{ apache_service }}"
+#    state: restarted
+## when: nextcloud_enabled     # taken care of by nextcloud_enabled.yml below
+#  when: not nextcloud_enabled
 
-- name: Restart Apache, so it picks up the new aliases
-  service:
-    name: "{{ apache_service }}"
-    state: restarted
-# when: nextcloud_enabled     # taken care of by nextcloud_enabled.yml below
-  when: not nextcloud_enabled
-
-# Enable nextcloud by copying template to httpd config
-
-# following enables and disables
+# Enables or disable Nextcloud!
 - include_tasks: nextcloud_enabled.yml
 
-- name: Add 'nextcloud' to list of services at {{ iiab_ini_file }}
+- name: Add 'nextcloud' variable values to {{ iiab_ini_file }}
   ini_file:
-    dest: "{{ iiab_ini_file }}"
+    path: "{{ iiab_ini_file }}"
     section: Nextcloud
     option: "{{ item.option }}"
     value: "{{ item.value }}"
@@ -175,7 +165,11 @@
       value: '"NextCloud is a local server-based facility for sharing files, photos, contacts, calendars, etc."'
     - option: path
       value: "{{ nextcloud_prefix }}/nextcloud"
-    - option: source
+    - option: nextcloud_force_install
+      value: "{{ nextcloud_force_install }}"
+    - option: nextcloud_orig_src_file
+      value: "{{ nextcloud_orig_src_file }}"
+    - option: nextcloud_src_file
       value: "{{ nextcloud_src_file }}"
-    - option: enabled
+    - option: nextcloud_enabled
       value: "{{ nextcloud_enabled }}"

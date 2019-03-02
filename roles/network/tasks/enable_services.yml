@@ -11,7 +11,7 @@
     enabled: yes
   when: dhcpd_enabled and dhcpd_install
 
-- name: Copy /etc/sysconfig/dhcpd file
+- name: Install /etc/sysconfig/dhcpd, /etc/dhcpd-iiab.conf from templates
   template:
     src: "{{ item.src }}"
     dest: "{{ item.dest }}"
@@ -23,7 +23,7 @@
    - { src: 'dhcp/dhcpd-iiab.conf.j2', dest: '/etc/dhcpd-iiab.conf', mode: '0644' }
   when: dhcpd_enabled and dhcpd_install
 
-- name: Copy named file
+- name: Install /etc/named-iiab.conf and two *.zone.db files into /var/named-iiab
   template:
     src: "{{ item.src }}"
     dest: "{{ item.dest }}"
@@ -34,64 +34,71 @@
    - { src: 'named/named-iiab.conf.j2', dest: '/etc/named-iiab.conf', mode: '0644' }
    - { src: 'named/school.local.zone.db', dest: '/var/named-iiab/', mode: '0644' }
    - { src: 'named/school.internal.zone.db', dest: '/var/named-iiab/', mode: '0644' }
+  when: named_enabled and named_install
 
-- name: Enable named service
-  service:
+- name: Enable named service ({{ dns_service }}) if named_enabled
+  systemd:
     name: "{{ dns_service }}"
     enabled: yes
   when: named_enabled and named_install
 
-- name: Disable named service
-  service:
+- name: Disable named service ({{ dns_service }}) if not named_enabled
+  systemd:
     name: "{{ dns_service }}"
     enabled: no
   when: not named_enabled and named_install
 
-- name: Disable dnsmasq
-  service:
-    name: dnsmasq
-    enabled: no
-  when: not dnsmasq_enabled and dnsmasq_install
-
-- name: Copy dnsmasq.conf to /etc
+- name: Install /etc/dnsmasq.d/iiab.conf from template, when dnsmasq_enabled and isn't Appliance
   template:
     src: network/dnsmasq.conf.j2
-    dest: /etc/dnsmasq.conf
-  when: dnsmasq_enabled and dnsmasq_install
+    dest: /etc/dnsmasq.d/iiab.conf
+  when: dnsmasq_enabled and dnsmasq_install and (iiab_network_mode != "Appliance")
 
-- name: Enable dnsmasq
-  service:
-    name: dnsmasq
+- name: Remove /etc/dnsmasq.d/iiab.conf, when not dnsmasq_enabled or is Appliance
+  file:
+    path: /etc/dnsmasq.d/iiab.conf
+    state: absent
+  when: (not dnsmasq_enabled) or (iiab_network_mode == "Appliance")
+
+- name: Enable iiab-dnsmasq systemd service, if dnsmasq_enabled
+  systemd:
+    name: iiab-dnsmasq
     enabled: yes
   when: dnsmasq_enabled and dnsmasq_install
 
-- name: Enable DansGuardian
-  service:
+- name: Disable iiab-dnsmasq, if not dnsmasq_enabled
+  systemd:
+    name: iiab-dnsmasq
+    enabled: no
+  when: not dnsmasq_enabled and dnsmasq_install
+
+- name: Enable DansGuardian systemd service, if dansguardian_enabled
+  systemd:
     name: dansguardian
     enabled: yes
   when: dansguardian_enabled and dansguardian_install
 
-- name: Disable DansGuardian
-  service:
+- name: Disable DansGuardian, if not dansguardian_enabled
+  systemd:
     name: dansguardian
     enabled: no
   when: not dansguardian_enabled and dansguardian_install
 
-- name: Create xs_httpcache flag
+- name: Mandate 'HTTPCACHE_ON=True' in {{ iiab_env_file }}, if squid_enabled
   lineinfile:
-    dest: "{{ iiab_env_file }}"
+    path: "{{ iiab_env_file }}"
     regexp: '^HTTPCACHE_ON=*'
     line: 'HTTPCACHE_ON=True'
     state: present
   when: squid_enabled and squid_install
 
-- name: Enable Squid service
-  service:
+- name: Enable Squid systemd service ({{ proxy }}) if squid_enabled
+  systemd:
     name: "{{ proxy }}"
     enabled: yes
   when: squid_enabled and squid_install
 
-- name: Copy init script and config file
+- name: Install /etc/{{ proxy }}/squid-iiab.conf from template, owned by {{ proxy_user }}:{{ proxy_user }}
   template:
     src: "{{ item.src }}"
     dest: "{{ item.dest }}"
@@ -106,20 +113,20 @@
       mode: 0644
   when: squid_enabled and squid_install
 
-- name: Point to Squid config file from startup file
+- name: Point to Squid config file from startup file, if squid_enabled (debuntu)
   lineinfile:
     regexp: '^CONFIG'
     line: "CONFIG=/etc/{{ proxy }}/squid-iiab.conf"
-    dest: "/etc/init.d/{{ proxy }}"
+    path: "/etc/init.d/{{ proxy }}"
   when: squid_enabled and squid_install and is_debuntu
 
-- name: Disable Squid service
-  service:
+- name: Disable Squid service, if not squid_enabled
+  systemd:
     name: "{{ proxy }}"
     enabled: no
   when: not squid_enabled and squid_install
 
-- name: Remove xs_httpcache flag
+- name: Revert to 'HTTPCACHE_ON=False' if not squid_enabled
   lineinfile:
     dest: "{{ iiab_env_file }}"
     regexp: '^HTTPCACHE_ON=*'
@@ -127,32 +134,30 @@
     state: present
   when: not squid_enabled
 
-- name: Enable Wondershaper service
-  service:
+- name: Enable Wondershaper service, if wondershaper_enabled
+  systemd:
     name: wondershaper
     enabled: yes
   when: wondershaper_enabled and wondershaper_install
 
-- name: Disable Wondershaper service
-  service:
+- name: Disable Wondershaper service, if not wondershaper_enabled
+  systemd:
     name: wondershaper
     enabled: no
   when: not wondershaper_enabled and wondershaper_install
 
 # check-LAN should be iptables.yml remove later
-- name: Grab clean copy of iiab-gen-iptables
+- name: Install clean copy of /usr/bin/iiab-gen-iptables from template
   template:
-    src: "{{ item.0 }}"
-    dest: "{{ item.1 }}"
+    src: gateway/iiab-gen-iptables
+    dest: /usr/bin/iiab-gen-iptables
     owner: root
     group: root
     mode: 0755
-  with_items:
-   - { 0: 'gateway/iiab-gen-iptables', 1: '/usr/bin/iiab-gen-iptables' }
 
-- name: Add 'squid' to list of services at {{ iiab_ini_file }}
+- name: Add 'squid' variable values to {{ iiab_ini_file }}
   ini_file:
-    dest: "{{ iiab_ini_file }}"
+    path: "{{ iiab_ini_file }}"
     section: squid
     option: "{{ item.option }}"
     value: "{{ item.value }}"
@@ -160,9 +165,9 @@
     - option: enabled
       value: "{{ squid_enabled }}"
 
-- name: Add 'dansguardian' to list of services at {{ iiab_ini_file }}
+- name: Add 'dansguardian' variable values to {{ iiab_ini_file }}
   ini_file:
-    dest: "{{ iiab_ini_file }}"
+    path: "{{ iiab_ini_file }}"
     section: dansguardian
     option: "{{ item.option }}"
     value: "{{ item.value }}"
@@ -170,9 +175,9 @@
     - option: enabled
       value: "{{ dansguardian_enabled }}"
 
-- name: Add 'wondershaper' to list of services at {{ iiab_ini_file }}
+- name: Add 'wondershaper' variable values to {{ iiab_ini_file }}
   ini_file:
-    dest: "{{ iiab_ini_file }}"
+    path: "{{ iiab_ini_file }}"
     section: wondershaper
     option: "{{ item.option }}"
     value: "{{ item.value }}"

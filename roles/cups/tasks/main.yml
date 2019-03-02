@@ -1,32 +1,30 @@
 # administer this service by browsing to localhost:631
-- name: Get the CUPS package installed
+- name: Install 'cups' package
   package:
-    name: "{{ item }}"
+    name: cups
     state: present
-  with_items:
-    - cups
   when: cups_install
   tags:
     - download
 
-- name: Put our own /etc/cups/cupsd.conf in place, to permit local LAN admin
+- name: Install our own /etc/cups/cupsd.conf from template, to permit local LAN admin
   template:
     src: cupsd.conf
     dest: /etc/cups/cupsd.conf
 
-- name: Put an apache2 config file in place
+- name: Install /etc/{{ apache_config_dir }}/cups.conf from template
   template:
     src: cups.conf
     dest: "/etc/{{ apache_config_dir }}/"
 
-- name: Create the link for sites-enabled (debuntu)
+- name: Create symlink cups.conf from sites-enabled to sites-available (debuntu)
   file:
     src: /etc/apache2/sites-available/cups.conf
     dest: /etc/apache2/sites-enabled/cups.conf
     state: link
   when: cups_enabled and is_debuntu
 
-- name: Enable services for CUPS (OS's other than Fedora 18)
+- name: Enable & Start services 'cups' and 'cups-browsed' (OS's other than Fedora 18)
   service:
     name: "{{ item }}"
     state: started
@@ -36,8 +34,8 @@
     - cups-browsed
   when: cups_enabled and not is_F18
 
-- name: Enable services for CUPS (Fedora 18, for XO laptops)
-  service:
+- name: Enable & Start service 'cups' (Fedora 18, for XO laptops)
+  systemd:
     name: cups
     state: started
     enabled: yes
@@ -47,8 +45,8 @@
   shell: "cupsctl --remote-admin"
   when: cups_enabled
 
-- name: Disable services for CUPS (OS's other than Fedora 18)
-  service:
+- name: Disable both CUPS services (OS's other than Fedora 18)
+  systemd:
     name: "{{ item }}"
     state: stopped
     enabled: no
@@ -58,15 +56,15 @@
   when: not cups_enabled and not is_F18
 
 - name: Disable services for CUPS (Fedora 18, for XO laptops)
-  service:
+  systemd:
     name: cups
     state: stopped
     enabled: no
   when: not cups_enabled and is_F18
 
-- name: Add 'cups' to list of services at {{ iiab_ini_file }}
+- name: Add 'cups' variable values to {{ iiab_ini_file }}
   ini_file:
-    dest: "{{ iiab_ini_file }}"
+    path: "{{ iiab_ini_file }}"
     section: cups
     option: "{{ item.option }}"
     value: "{{ item.value }}"
@@ -77,5 +75,5 @@
       value: '"CUPS (Common UNIX Printing System) is a modular printing system that allows a computer to act as a print server. A computer running CUPS is a host that can accept print jobs from client computers, process them, and send them to the appropriate printer."'
     - option: installed
       value: "{{ cups_install }}"
-    - option: enabled
+    - option: cups_enabled
       value: "{{ cups_enabled }}"
