@@ -74,6 +74,8 @@ See also::
 
   /library/calibre-web/metadata_db_prefs_backup.json
 
+See the official docs on Calibre-Web's `Runtime Configuration Options <https://github.com/janeczku/calibre-web/wiki/Configuration>`_.
+
 Back Up Everything
 ------------------
 
@@ -149,5 +151,9 @@ Known Issues
   occasionally arise, when upstream developers change its master branch without
   warning.
   
+* Imagemagick policy prevents generating thumbnails for PDF's during upload: `#1530 <https://github.com/iiab/iiab/issues/1530>`_ `janeczku/calibre-web#827 <https://github.com/janeczku/calibre-web/issues/827>`_
+
+* Upload of not supported file formats gives no feedback to the user: `janeczku/calibre-web#828 <https://github.com/janeczku/calibre-web/issues/828>`_
+
 * *Please assist us in reporting serious issues here:*
   https://github.com/janeczku/calibre-web/issues
