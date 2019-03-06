@@ -59,4 +59,4 @@ Known Issues
 
 * Loading channels can take a long time on a Raspberry Pi.  When generating channel contents for Khan Academy, the step indicated as “Generating channel listing.  This could take a few minutes…” could mean ~30 minutes.  The device’s computation power is the bottleneck.  You might get logged out while waiting, but this is harmless and the process will continue.  Sit tight!
 
-* More up-to-date list of Kolibri issues being worked on, as of March 2019: `#1545 https://github.com/iiab/iiab/issues/1545>`_
+* More up-to-date list of Kolibri issues being worked on, as of March 2019: `#1545 <https://github.com/iiab/iiab/issues/1545>`_
