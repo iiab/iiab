@@ -58,3 +58,5 @@ Known Issues
 * Kolibri migrations can take a long time on a Raspberry Pi.  These long-running migrations could cause kolibri service timeouts.  Try running migrations manually using command ``kolibri manage migrate`` after following the troubleshooting instructions above.  Kolibri developers are trying to address this issue.  (See `learningequality/kolibri#4310 <https://github.com/learningequality/kolibri/issues/4310>`_)
 
 * Loading channels can take a long time on a Raspberry Pi.  When generating channel contents for Khan Academy, the step indicated as “Generating channel listing.  This could take a few minutes…” could mean ~30 minutes.  The device’s computation power is the bottleneck.  You might get logged out while waiting, but this is harmless and the process will continue.  Sit tight!
+
+* More up-to-date list of Kolibri issues being worked on, as of March 2019: `#1545 <https://github.com/iiab/iiab/issues/1545>`_
