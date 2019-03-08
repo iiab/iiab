@@ -14,11 +14,17 @@ Configuration
 
 Gitea has been configured to work with MySQL; it can also be used with SQLite or
 Postgres. If you want to use it with a different database, change the 
-``DB_TYPE`` property in ``app.ini`` and change the line ``After=mysqld.service``
-in ``gitea.service`` to one of the following:
+``DB_TYPE`` property in ``/etc/gitea/app.ini`` [1] and change the line ``After=mysqld.service``
+in ``/etc/systemd/system/gitea.service`` [2] to one of the following:
 
 * SQLite: comment it out.
 * Postgres: ``After=postgresql.service``
 
-Further information about configuring Gitea can be found at the
-`documentation <https://docs.gitea.io/en-us/>`.
+[1] Prior to installing Gitea, instead edit ``/opt/iiab/iiab/roles/gitea/templates/app.ini.j2``
+
+[2] Priot to installing Gitea, instead edit ``/opt/iiab/iiab/roles/gitea/templates/gitea.service.j2``
+
+Documentation
+-------------
+
+Further info on configuring: `https://docs.gitea.io <https://docs.gitea.io/>`_
