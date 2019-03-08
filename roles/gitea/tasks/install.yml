@@ -1,0 +1,190 @@
+# Prepare to install Gitea: create user and directory structure
+
+- name: Shut down existing Gitea instance (if we're reinstalling)
+  systemd:
+    name: gitea
+    state: stopped
+  tags:
+    - pre-install
+  ignore_errors: yes
+
+- name: Ensure group gitea exists
+  group:
+    name: gitea
+    state: present
+  tags:
+    - pre-install
+
+- name: Create user gitea
+  user:
+    name: gitea
+    comment: Gitea daemon account
+    groups: gitea
+    home: "{{ gitea_home }}"
+  tags:
+    - pre-install
+
+- name: Create Gitea directory structure
+  file:
+    path: "{{ gitea_root_directory }}/{{ item }}"
+    state: directory
+    owner: gitea
+    group: gitea
+  with_items: "{{ gitea_subdirectories }}"
+  tags:
+    - pre-install
+
+- name: Make directories data, indexers, and log writable
+  file:
+    path: "{{ gitea_root_directory }}/{{ item }}"
+    mode: 0750
+  with_items:
+    - data
+    - indexers
+    - log
+  tags:
+    - pre-install
+
+# Download, verify, and link Gitea binary
+
+- name: Fail if we detect unknown architecture
+  fail:
+    msg: "Could not find a binary for the CPU architecture \"{{ ansible_architecture }}\""
+  when: gitea_iset_suffix == "unknown"
+
+- name: Download Gitea binary
+  get_url:
+    url: "{{ gitea_download_url }}"
+    dest: "{{ gitea_install_path }}"
+    mode: 0775
+  tags:
+    - install
+  when: internet_available
+
+- name: Download Gitea GPG signature
+  get_url:
+    url: "{{ gitea_integrity_url }}"
+    dest: "{{ gitea_checksum_path }}"
+  tags:
+    - never
+    - verify
+  when: internet_available
+
+- name: Verify Gitea binary with GPG signature
+  shell: |
+    gpg --keyserver pgp.mit.edu --recv {{ gitea_gpg_key }}
+    gpg --verify {{ gitea_checksum_path }} {{ gitea_install_path }}
+  tags:
+    - never
+    - verify
+  ignore_errors: yes
+
+- name: Link Gitea
+  file:
+    src: "{{ gitea_install_path }}"
+    dest: "{{ gitea_link_path }}"
+    owner: gitea
+    group: gitea
+    state: link
+  tags:
+    - install
+
+# Configure Gitea
+
+# For security reasons, the Gitea developers recommend removing group write
+# permissions from /etc/gitea/ and /etc/gitea/app.ini after the first run of 
+# Gitea. User gitea needs write permissions during the first run but not 
+# subsequent runs.
+
+- name: Create Gitea config directory
+  file:
+    path: /etc/gitea
+    state: directory
+    owner: root
+    group: gitea
+    mode: 0770
+  tags:
+    - config
+
+- name: Create app.ini
+  template:
+    src: app.ini.j2
+    dest: /etc/gitea/app.ini
+    owner: root
+    group: gitea
+    mode: 0664
+  tags:
+    - config
+
+# Create systemd service
+
+- name: Create 'gitea' service
+  template:
+    src: gitea.service.j2
+    dest: "/etc/systemd/system/gitea.service"
+  tags:
+    - systemd
+
+- name: Enable 'gitea' service
+  systemd:
+    daemon_reload: yes
+    name: gitea
+    enabled: yes
+    state: restarted
+  when: gitea_enabled
+
+- name: Disable 'gitea' service
+  systemd:
+    name: gitea
+    enabled: no
+    state: stopped
+  when: not gitea_enabled
+
+# Configure HTTPD
+
+- name: Copy gitea httpd conf file
+  template:
+    src: gitea.conf.j2
+    dest: "/etc/{{ apache_config_dir }}/gitea.conf"
+
+- name: Enable httpd conf file (debuntu)
+  file:
+    src: /etc/{{ apache_config_dir }}/gitea.conf
+    dest: /etc/apache2/sites-enabled/gitea.conf
+    state: link
+  when: gitea_enabled and is_debuntu
+
+- name: Remove httpd conf file (OS's other than debuntu)
+  file:
+    path: /etc/apache2/sites-enabled/gitea.conf
+    state: absent
+  when: not gitea_enabled and is_debuntu
+
+- name: >-
+    Restart Apache ({{ apache_service }}) to {% if gitea_enabled %}enable{% 
+    else %}disable{% endif %} http://box/gitea
+  service:
+    name: "{{ apache_service }}"
+    state: restarted
+
+# Add Gitea to registry
+
+- name: Add 'gitea' to list of services at {{ iiab_ini_file }}
+  ini_file:
+    dest: "{{ iiab_ini_file }}"
+    section: gitea
+    option: "{{ item.option }}"
+    value: "{{ item.value }}"
+  with_items:
+    - option: name
+      value: gitea
+    - option: description
+      value: '"Gitea: Git with a cup of tea"'
+    - option: gitea_run_directory
+      value: "{{ gitea_run_directory }}"
+    - option: gitea_url
+      value: "{{ gitea_url }}"
+    - option: gitea_full_url
+      value: "{{ gitea_full_url }}"
+    - option: gitea_enabled
+      value: "{{ gitea_enabled }}"
