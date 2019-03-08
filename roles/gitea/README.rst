@@ -22,7 +22,7 @@ in ``/etc/systemd/system/gitea.service`` [2] to one of the following:
 
 [1] Prior to installing Gitea, instead edit ``/opt/iiab/iiab/roles/gitea/templates/app.ini.j2``
 
-[2] Priot to installing Gitea, instead edit ``/opt/iiab/iiab/roles/gitea/templates/gitea.service.j2``
+[2] Prior to installing Gitea, instead edit ``/opt/iiab/iiab/roles/gitea/templates/gitea.service.j2``
 
 Documentation
 -------------
