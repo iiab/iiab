@@ -9,6 +9,22 @@ Using It
 
 Gitea should be accessible at: http://box/gitea
 
+Installation and Setup
+----------------------
+
+Simply run ``sudo ./runrole gitea`` to install Gitea. After installing, Gitea 
+will be live at http://box/gitea.
+
+The first time you access the Gitea web interface, the home page will appear. 
+Clicking on "Register" or "Sign In" in the upper right corner will take you to 
+the setup page. The recommended settings have been configured for you, but you 
+can change them if you want. For example, you may want to change the site title 
+to match the name of your organization.
+
+After finishing the setup process, you will be directed to a page where you can 
+create a user account. The first account created after setting up Gitea will be 
+an admin account.
+
 Configuration
 -------------
 
