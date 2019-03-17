@@ -12,13 +12,13 @@ Gitea should be accessible at: http://box/gitea
 Configuration
 -------------
 
-Gitea has been configured to work with MySQL; it can also be used with SQLite or
+Gitea has been configured to work with SQLite; it can also be used with MySQL or
 PostgreSQL. If you want to use it with a different database, change the 
-``DB_TYPE`` property in ``/etc/gitea/app.ini`` [1] and change the line ``After=mysqld.service``
-in ``/etc/systemd/system/gitea.service`` [2] to one of the following:
+``DB_TYPE`` property in ``/etc/gitea/app.ini`` [1] and add one of the following 
+lines to the ``[Unit]`` section of ``/etc/systemd/system/gitea.service`` [2]:
 
-* SQLite: comment it out.
-* Postgres: ``After=postgresql.service``
+* MySQL: ``After=mysqld.service``
+* PostgreSQL: ``After=postgresql.service``
 
 [1] Prior to installing Gitea, instead edit: ``/opt/iiab/iiab/roles/gitea/templates/app.ini.j2``
 
