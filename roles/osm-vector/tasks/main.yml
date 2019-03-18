@@ -1,0 +1,65 @@
+- name: Fetch the javascript bundle with openlayers module, and map.js
+  get_url:
+     url: "{{ iiab_maps_url }}/map.js"
+     dest: "{{ doc_root }}/common/assets/"
+
+- name: Fetch the bounding box description for maps
+  get_url:
+     url: "{{ iiab_maps_url }}/regions.json"
+     dest: "{{ iiab_dir }}/regions.json"
+
+- name: Install the script to update maps from map catalog
+  template:
+    src: iiab-update-maps
+    dest: /usr/bin/iiab-update-maps
+    mode: "0755"
+
+- name: Generate the bounding bboxes.geojson file
+  shell: /usr/bin/iiab-update-maps
+ 
+- name: Copy the Countries geojson to assets
+  copy: 
+    src: countries.json
+    dest: "{{ doc_root }}/common/assets/"
+
+- name: Install /etc/{{ apache_config_dir }}/osm-vect.conf from template
+  template:
+    src: osm-vector.conf
+    dest: "/etc/{{ apache_config_dir }}/osm-vector.conf"
+
+- name: Create symlink osm-vector.conf from sites-enabled to sites-available (debuntu, not nec for redhat)
+  file:
+    src: /etc/apache2/sites-available/osm-vector.conf
+    path: /etc/apache2/sites-enabled/osm-vector.conf
+    state: link
+  when: osm_vector_enabled and is_debuntu
+
+- name: Remove symlink /etc/apache2/sites-enabled/osm-vector.conf (debuntu)
+  file:
+    path: /etc/apache2/sites-enabled/osm-vector.conf
+    state: absent
+  when: not osm_vector_enabled and is_debuntu
+
+- name: Make sure the osm-vector directory exists
+  file: 
+    path: '{{ osm_vector_path }}/splash'
+    state: directory
+    owner: '{{ apache_user }}'
+    group: '{{ apache_user }}'
+    mode: '0755'
+
+- name: Copy the splash page for maps to apache root for maps
+  template: 
+    src: splash-index.html
+    dest: "{{ osm_vector_path }}/splash/index.html"
+
+- name: Copy the javascript for the splash page to assets
+  template: 
+    src: main.js
+    dest: "{{ osm_vector_path }}/splash/"
+
+- name: Copy the php redirect to the  splash page
+  template: 
+    src: splash-index.html
+    dest: "{{ osm_vector_path }}/index.html"
+
