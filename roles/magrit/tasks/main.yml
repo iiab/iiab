@@ -44,6 +44,15 @@
      warn: false
   when: internet_available and is_rpi
       
+- name: Clone magrit repo
+  git:
+    repo: https://github.com/riatelab/magrit
+    dest: "{{ magrit_dir }}"
+    version: master
+    update: yes
+    force: yes
+  when: internet_available and is_rpi and magrit_install
+
 - name: Install magrit with dependencies using pip, into virtualenv (debuntu)
   pip:
     name: numpy
@@ -51,12 +60,24 @@
     virtualenv_python: python3.5
   when: internet_available and is_rpi
 
-- name: Clone magrit repo
-  git:
-    repo: https://github.com/riatelab/magrit
-    dest: "{{ magrit_venv }}"
-    version: master
-  when: internet_available and is_rpi and magrit_install
+- name: Install the magrit requirements
+  pip:
+    requirements: '{{ magrit_dir }}/reguirements/dev.txt
+    virtualenv: "{{ magrit_venv }}"
+
+- name: Edit the socket definition
+  lineinfile:
+      regexp: "if sock.connect_ex(("0.0.0.0", port_nb)) == 0:"
+      line: "if sock.connect_ex(("{{ lan_ip }}", port_nb)) == 0:"
+      path: "{{ magrit_dir }}/magrit_app/app.py"
+
+- name: Edit the host adapter
+  lineinfile:
+      regexp: "handler, '0.0.0.0', port)"
+      line: "handler, '{{ llan_ip }}', port)
+      path: "{{ magrit_dir }}/magrit_app/app.py"
+
+
 
 - name: Put systemd service file
   template:
@@ -68,11 +89,11 @@
       enabled: True
       started: True
   when:
-      magrit_enable: True
+      magrit_enabled: True
 
 - name: Enable systemd for magrit
   systemd:
       enabled: False
       started: False
   when:
-      magrit_enable == True
+      magrit_enabled == True
