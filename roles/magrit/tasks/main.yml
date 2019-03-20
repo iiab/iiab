@@ -1,0 +1,78 @@
+- name: Install packages reqpured for magrit thematic mapping https://github.com/riatelab/magrit
+  package:
+    name:
+      - libpython3.5-dev 
+      - python3.5 
+      - python3.5-dev 
+      - python3-pip
+      - libopenblas-dev 
+      - libopenblas-base 
+      - libfreetype6-dev 
+      - libfreetype6 
+      - libproj-dev
+      - libspatialindex-dev 
+      - libv8-3.14-dev 
+      - libffi-dev 
+      - node-gyp
+      - libuv1-dev
+      - libxslt1-dev 
+      - libxml2 
+      - libxml2-dev 
+      - libkml-dev 
+      - libgeos-dev
+      - redis-server 
+      - libatlas-base-dev
+    state: present
+  when: internet_available and is_rpi
+  tags:
+    - download
+
+- name: Download our compiled version of Geospatial Data Abstraction lIbrary (GDAL)
+  geturl:
+    url: '{{ iiab_download_dir }}/gdal_2.2.3-1_armhf.deb'
+    dest: '{{ downloads_dir }}'
+  when: internet_available and is_rpi
+
+- name: Install GDAL
+  package:
+      name: '{{ dowloads_dir }}/gdal_2.2.3-1_armhf.deb'
+      state: present
+  when: internet_available and is_rpi
+
+- name: Install magrit with dependencies using pip, into virtualenv (debuntu)
+  pip:
+    name: "{{ item }}"
+    virtualenv: "{{ magrit_venv }}"
+    virtualenv_site_packages: no
+    extra_args: "--no-cache-dir"
+  with_items:
+    - numby
+  when: internet_available and is_rpi
+
+- name: Clone magrit repo
+  git:
+    repo: https://github.com/riatelab/magrit
+    dest: "{{ magrit_venv }}"
+    update: yes
+    version: master
+  when: internet_available and is_rpi and magrit_install
+
+
+- name: Enable systemd for magrit
+  systemd:
+      enabled: True
+      started: True
+  when:
+      magrit_enable: True
+
+- name: Put systemd service file
+  template:
+      src: magrit.service.j2
+      dest: /etc/systemd/system/magrit.service
+
+- name: Enable systemd for magrit
+  systemd:
+      enabled: False
+      started: False
+  when:
+      magrit_enable == True
