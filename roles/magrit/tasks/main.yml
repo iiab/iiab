@@ -27,36 +27,41 @@
   tags:
     - download
 
+- name: Check if our package is already downloaded
+  stat: 
+      path: '{{ downloads_dir }}/gdal_2.2.3-1_armhf.deb'
+  register: p
+
 - name: Download our compiled version of Geospatial Data Abstraction lIbrary (GDAL)
-  geturl:
-    url: '{{ iiab_download_dir }}/gdal_2.2.3-1_armhf.deb'
+  get_url:
+    url: '{{ iiab_download_url }}/gdal_2.2.3-1_armhf.deb'
     dest: '{{ downloads_dir }}'
-  when: internet_available and is_rpi
+  when: p.stat.isdir is defined and p.stat.isdir and  internet_available and is_rpi
 
 - name: Install GDAL
-  package:
-      name: '{{ dowloads_dir }}/gdal_2.2.3-1_armhf.deb'
-      state: present
+  shell: "apt-get install {{ downloads_dir }}/gdal_2.2.3-1_armhf.deb"
+  args:
+     warn: false
   when: internet_available and is_rpi
-
+      
 - name: Install magrit with dependencies using pip, into virtualenv (debuntu)
   pip:
-    name: "{{ item }}"
+    name: numpy
     virtualenv: "{{ magrit_venv }}"
-    virtualenv_site_packages: no
-    extra_args: "--no-cache-dir"
-  with_items:
-    - numby
+    virtualenv_python: python3.5
   when: internet_available and is_rpi
 
 - name: Clone magrit repo
   git:
     repo: https://github.com/riatelab/magrit
     dest: "{{ magrit_venv }}"
-    update: yes
     version: master
   when: internet_available and is_rpi and magrit_install
 
+- name: Put systemd service file
+  template:
+      src: magrit.service.j2
+      dest: /etc/systemd/system/magrit.service
 
 - name: Enable systemd for magrit
   systemd:
@@ -64,11 +69,6 @@
       started: True
   when:
       magrit_enable: True
-
-- name: Put systemd service file
-  template:
-      src: magrit.service.j2
-      dest: /etc/systemd/system/magrit.service
 
 - name: Enable systemd for magrit
   systemd:
