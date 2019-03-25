@@ -7,20 +7,36 @@ import json
 import os
 import sys
 import fnmatch
+import re
 
+#IIAB_PATH='{{ iiab_dir }}'
 IIAB_PATH='/etc/iiab'
 if not IIAB_PATH in sys.path:
     sys.path.append(IIAB_PATH)
 from iiab_env import get_iiab_env
 
+SCRIPT_DIR = '/opt/admin/cmdsrv/scripts'
+if not SCRIPT_DIR in sys.path:
+    sys.path.append(SCRIPT_DIR)
+import iiab_update_menus as update_menus
+
 doc_root = get_iiab_env('WWWROOT')
 menuDefs = doc_root + "/js-menu/menu-files/menu-defs/"
+osm_vector_idx_dir = doc_root + "/common/assets/"
+map_doc_root = '/library/osm-vector'
+# map_catalog will be global, assumed always available
 map_catalog = {}
 map_menu_defs ={}
+
 def main():
    global map_menu_defs
    get_map_catalog()
+   #print(json.dumps(map_catalog,indent=2))
    map_menu_defs = get_menu_def_names()
+   #print(json.dumps(map_menu_defs,indent=2))
+   installed_maps = get_installed_maps()
+   print(installed_maps)
+   write_osm_vector_idx(installed_maps)
 
 def get_map_catalog():
    global map_catalog
@@ -45,10 +61,58 @@ def get_menu_def_names(intended_use='map'):
             print(readstr)
          if data.get('intended_use','') != intended_use:
             continue
-         mapname = data.get('name','')
-         if mapname != '':
-            menu_def_dict[data['map_name']] = menuDefs + filename
+         map_name = data.get('name','')
+         if map_name != '':
+            menu_def_dict[data['name']] = menuDefs + filename
    return menu_def_dict
+
+def get_installed_maps():
+   installed = []
+   os.chdir(map_doc_root)
+   for filename in os.listdir('.'):
+      if fnmatch.fnmatch(filename, '??-osm-omt*'):
+         print filename
+         region = re.sub(r'^..-osm-omt_(.*)',r'\1',filename)
+         print(region)
+         installed.append(region)
+   return installed
+
+def write_osm_vector_idx(installed_maps):
+   map_list = []
+   for map in installed_maps:
+      data_dict = map_catalog['regions'].get(map,'')
+      map_list.append(data_dict)
+   print(map,data_dict)
+
+def create_menu_def(perma_ref,default_name,intended_use='map'):
+   if default_name.find('.') > -1:
+       default_name = default_name[:-5].replace('.','_') + '.json'
+   item = map_catalog[perma_ref]
+   if len(item.get('language','')) > 2:
+     lang = item['language'][:2]
+   else: # default to english
+     lang = 'en'
+   filename = lang + '-' + perma_ref + '.json'
+   # create a stub for this zim
+   menuDef = {}
+   default_logo = get_default_logo(perma_ref,lang)
+   menuDef["intended_use"] = "map"
+   menuDef["lang"] = lang
+   menuDef["logo_url"] = default_logo
+   menuitem = lang + '-' + perma_ref
+   menuDef["menu_item_name"] = default_name[:-5]
+   menuDef["title"] = item.get('title','')
+   menuDef["zim_name"] = perma_ref
+   menuDef["start_url"] = ''
+   menuDef["description"] = '<p>' + item.get('description','') + '</p>'
+   menuDef["description"] += '<p>Size: ##SIZE##, Articles: ##ARTICLE_COUNT##, Media: ##MEDIA_COUNT##, Tags; [##tags##], Language: ##language##, Date: ##zim_date##</p>'
+   menuDef["extra_html"] = ""
+   menuDef["automatically_generated"] = "true"
+   if not os.path.isfile(menuDefs + default_name): # logic to here can still overwrite existing menu def
+       print("creating %s"%menuDefs + default_name)
+       with open(menuDefs + default_name,'w') as menufile:
+          menufile.write(json.dumps(menuDef,indent=2))
+   return default_name[:-5]
 
 def human_readable(num):
     # return 3 significant digits and unit specifier
