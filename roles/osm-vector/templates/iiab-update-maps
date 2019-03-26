@@ -34,9 +34,14 @@ def main():
    #print(json.dumps(map_catalog,indent=2))
    map_menu_defs = get_menu_def_names()
    #print(json.dumps(map_menu_defs,indent=2))
-   installed_maps = get_installed_maps()
-   print(installed_maps)
+   installed_maps = get_installed_regions()
+   #print(installed_maps)
    write_osm_vector_idx(installed_maps)
+   for region in installed_maps:
+      print('checking for %s region'%region)
+      if not region in map_menu_defs:
+         item = map_catalog['regions'][region]
+         create_menu_def(region,item['perma_ref'])
 
 def get_map_catalog():
    global map_catalog
@@ -66,51 +71,48 @@ def get_menu_def_names(intended_use='map'):
             menu_def_dict[data['name']] = menuDefs + filename
    return menu_def_dict
 
-def get_installed_maps():
+def get_installed_regions():
    installed = []
    os.chdir(map_doc_root)
    for filename in os.listdir('.'):
       if fnmatch.fnmatch(filename, '??-osm-omt*'):
-         print filename
          region = re.sub(r'^..-osm-omt_(.*)',r'\1',filename)
-         print(region)
          installed.append(region)
    return installed
 
 def write_osm_vector_idx(installed_maps):
-   map_list = []
+   map_dict ={} 
+   map_dict['regions'] = {}
    for map in installed_maps:
       data_dict = map_catalog['regions'].get(map,'')
-      map_list.append(data_dict)
-   print(map,data_dict)
+      map_dict['regions'][map] = data_dict
+   with open(osm_vector_idx_dir + '/osm-vector-idx.json','w') as idx:
+      idx.write(json.dumps(map_dict,indent=2)) 
 
-def create_menu_def(perma_ref,default_name,intended_use='map'):
-   if default_name.find('.') > -1:
-       default_name = default_name[:-5].replace('.','_') + '.json'
-   item = map_catalog[perma_ref]
+def create_menu_def(region,default_name,intended_use='map'):
+   item = map_catalog['regions'][region]
    if len(item.get('language','')) > 2:
      lang = item['language'][:2]
    else: # default to english
      lang = 'en'
-   filename = lang + '-' + perma_ref + '.json'
+   filename = lang + '-' + item['perma_ref'] + '.json'
    # create a stub for this zim
    menuDef = {}
-   default_logo = get_default_logo(perma_ref,lang)
+   default_logo = 'osm.jpg'
    menuDef["intended_use"] = "map"
    menuDef["lang"] = lang
    menuDef["logo_url"] = default_logo
-   menuitem = lang + '-' + perma_ref
-   menuDef["menu_item_name"] = default_name[:-5]
+   menuitem = lang + '-' + item['perma_ref']
+   menuDef["menu_item_name"] = default_name
    menuDef["title"] = item.get('title','')
-   menuDef["zim_name"] = perma_ref
+   menuDef["map_name"] = item['perma_ref']
    menuDef["start_url"] = ''
-   menuDef["description"] = '<p>' + item.get('description','') + '</p>'
-   menuDef["description"] += '<p>Size: ##SIZE##, Articles: ##ARTICLE_COUNT##, Media: ##MEDIA_COUNT##, Tags; [##tags##], Language: ##language##, Date: ##zim_date##</p>'
+   menuDef["description"] = '<p>Open Street Map of ' + item.get('title','') + '</p>'
    menuDef["extra_html"] = ""
    menuDef["automatically_generated"] = "true"
    if not os.path.isfile(menuDefs + default_name): # logic to here can still overwrite existing menu def
        print("creating %s"%menuDefs + default_name)
-       with open(menuDefs + default_name,'w') as menufile:
+       with open(menuDefs + default_name + '.json','w') as menufile:
           menufile.write(json.dumps(menuDef,indent=2))
    return default_name[:-5]
 
