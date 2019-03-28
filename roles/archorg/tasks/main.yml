@@ -1,0 +1,88 @@
+# We need a recent version of node
+
+- name: FAIL (STOP INSTALLING) IF nodejs_version is not set to 10.x
+  fail:
+    msg: "Archorg install cannot proceeed, as it currently requires Node.js 10.x, and your nodejs_version is set to {{ nodejs_version }}.  Please check the value of nodejs_version in /opt/iiab/iiab/vars/default_vars.yml and possibly also /etc/iiab/local_vars.yml"
+  when: archorg_install and (nodejs_version != "10.x")
+
+- name: Clone distributed web mirror supported by Internet Archive
+  git:
+    repo: https://github.com/internetarchive/dweb-mirror
+    dest: "{{ archorg_dir }}"
+    force: yes
+    depth: 1
+  when: internet_available
+
+- name: Run 'npm install --allow-root --unsafe-perm=true' to create /opt/iiab/archorg/node_modules (CAN TAKE ~5 MINUTES)
+  command: npm install --allow-root --unsafe-perm=true
+  args:
+    chdir: "{{ archorg_dir }}"
+
+
+
+# CONFIG FILES
+
+- name: "Install from templates: archorg.service (systemd), archorg.conf (Apache)"
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    mode: 0644
+    owner: root
+    group: root
+  with_items:
+    - { src: 'archorg.service', dest: '/etc/systemd/system/archorg.service' }
+    - { src: 'archorg.conf.j2', dest: '/etc/apache2/sites-available/archorg.conf' }
+
+
+- name: Create symlink archorg.conf from sites-enabled to sites-available, for short URLs http://box/sugar & http://box/archorg (if archorg_enabled)
+  file:
+    src: /etc/apache2/sites-available/archorg.conf
+    path: /etc/apache2/sites-enabled/archorg.conf
+    state: link
+  when: archorg_enabled and is_debuntu
+
+- name: Remove symlink /etc/apache2/sites-enabled/archorg.conf (if not archorg_enabled)
+  file:
+    path: /etc/apache2/sites-enabled/archorg.conf
+    state: absent
+  when: not archorg_enabled and is_debuntu
+
+
+# RESTART/STOP SYSTEMD SERVICE
+
+# with "systemctl daemon-reload" in case mongodb.service changed, etc
+- name: Enable & Restart 'archorg' systemd service (if archorg_enabled)
+  systemd:
+    name: archorg
+    daemon_reload: yes
+    enabled: yes
+    state: restarted
+  when: archorg_enabled
+  
+- name: Disable & Stop 'archorg' systemd service (if not archorg_enabled)
+  systemd:
+    name: archorg
+    daemon_reload: yes
+    enabled: no
+    state: stopped
+  when: not archorg_enabled
+
+- name: Restart Apache service ({{ apache_service }}) to enable/disable http://box/archorg (not just http://box:{{ archorg_port }})
+  systemd:
+    name: "{{ apache_service }}"    # httpd or apache2
+    state: restarted
+  when: archorg_enabled
+
+- name: Add 'archorg' variable values to {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"
+    section: archorg
+    option: "{{ item.option }}"
+    value: "{{ item.value }}"
+  with_items:
+    - option: name
+      value: Archive Org Distributed Web
+    - option: description
+      value: '"Dweb-mirror is intended to make the Internet Archive experience and UI available offline."'
+    - option: archorg_enabled
+      value: "{{ archorg_enabled }}"
