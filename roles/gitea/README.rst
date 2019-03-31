@@ -23,7 +23,8 @@ to match the name of your organization.
 
 After finishing the setup process, you will be directed to a page where you can 
 create a user account. The first account created after setting up Gitea will be 
-an admin account.
+an admin account. You can also create an admin account from the setup page 
+under "Administrator Account Settings."
 
 Configuration
 -------------
@@ -35,6 +36,10 @@ lines to the ``[Unit]`` section of ``/etc/systemd/system/gitea.service`` [2]:
 
 * MySQL: ``After=mysqld.service``
 * PostgreSQL: ``After=postgresql.service``
+
+For MySQL and PostgreSQL, you need to specify the server address, the database 
+name, and the user credentials that Gitea will use to access the database. 
+**Make sure the user exists on the database server first.**
 
 [1] Prior to installing Gitea, instead edit: ``/opt/iiab/iiab/roles/gitea/templates/app.ini.j2``
 
