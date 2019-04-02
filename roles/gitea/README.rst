@@ -9,6 +9,10 @@ Using It
 
 Gitea should be accessible at: http://box/gitea
 
+Gitea repositories can be cloned using either HTTP or SSH. When cloning with 
+HTTP, the clone URL will start with ``http://box.lan/gitea/``. SSH clone URLs 
+start with ``gitea@box.lan``.
+
 Installation and Setup
 ----------------------
 
