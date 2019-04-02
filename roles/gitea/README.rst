@@ -1,6 +1,6 @@
-=============
+============
 Gitea README
-=============
+============
 
 This Ansible role installs Gitea - a self-hosted Git service written in Go.
 
@@ -16,8 +16,8 @@ start with ``gitea@box.lan``.
 Installation and Setup
 ----------------------
 
-Simply run ``sudo ./runrole gitea`` to install Gitea. After installing, Gitea 
-will be live at http://box/gitea.
+Simply run ``cd /opt/iiab/iiab`` then ``sudo ./runrole gitea`` to install
+Gitea. After installing, Gitea will be live at http://box/gitea
 
 The first time you access the Gitea web interface, the home page will appear. 
 Clicking on "Register" or "Sign In" in the upper right corner will take you to 
