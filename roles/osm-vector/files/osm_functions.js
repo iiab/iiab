@@ -1,4 +1,4 @@
-// osm_functions.js
+// osm_functions.js  -- (non authoritative see below) src = iiab/roles/files/
 // copyright 2019 George Hunt
 // CAUTION -- this file is duplicate to admin-console/console/files/js/osm_fuctions.js -- please think of admin-console as authoritative
 //     Placed here in duplicate to ease debugging, and simplify dependences
@@ -7,6 +7,7 @@ var regionGeojson = {};
 var regionList = [];
 var regionInstalled = [];
 var commonAssetsDir = '/common/assets/';
+var mapAssetsDir = '/osm-vector/assets/';
 var iiab_config_dir = '/etc/iiab/';
 var onChangeFunc = "setSize";
 var osmCatalog = {};
@@ -50,7 +51,7 @@ function readOsmCatalog(checkbox){
    regionList = [];
   var resp = $.ajax({
     type: 'GET',
-    url: commonAssetsDir + 'regions.json',
+    url: mapAssetsDir + 'regions.json',
     dataType: 'json'
   })
   .done(function( data ) {
