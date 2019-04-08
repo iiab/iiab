@@ -17,7 +17,11 @@ from iiab_env import get_iiab_env
 SCRIPT_DIR = '/opt/admin/cmdsrv/scripts'
 if not SCRIPT_DIR in sys.path:
     sys.path.append(SCRIPT_DIR)
-import iiab_update_menus as menus
+if os.path.exists(os.path.join(SCRIPT_DIR,'iiab_update_menus.py')):
+   import iiab_update_menus as menus
+   console_installed = True
+else:
+   console_installed = False
 
 doc_root = get_iiab_env('WWWROOT')
 menuDefs = doc_root + "/js-menu/menu-files/menu-defs/"
@@ -29,22 +33,26 @@ map_catalog = {}
 map_menu_def_list = []
 
 def main():
-   global map_menu_defs
+   global map_menu_def_list
    get_map_catalog()
    #print(json.dumps(map_catalog,indent=2))
+   
    map_menu_def_list = get_menu_def_names()
-   #print(json.dumps(map_menu_defs,indent=2))
+   print(json.dumps(map_menu_def_list,indent=2))
+
    installed_maps = get_installed_regions()
    print(installed_maps)
+
    write_osm_vector_idx(installed_maps)
    for region in installed_maps:
-      #print('checking for %s region'%region)
-      if region != 'assets':
+      print('checking for %s region'%region)
+      if region != 'maplist':
          item = map_catalog['regions'][region]
          menu_ref = item['perma_ref']
       else:
          menu_ref = 'en-map_test'
-      if region != 'assets' and not (region in map_menu_def_list):
+         item = { "perma_ref" : "en-map_test" }
+      if region != 'maplist' and not (region in map_menu_def_list):
          print('creating menu def for %s'%item['perma_ref'])
          create_menu_def(region,item['perma_ref'] + '.json')
       if fetch_menu_json_value('autoupdate_menu'):
@@ -90,14 +98,14 @@ def get_installed_regions():
          installed.append(region)
    # add the splash page if no other maps are present
    if len(installed) == 0:
-         installed.append('assets')
+         installed.append('maplist')
    return installed
 
 def write_osm_vector_idx(installed_maps):
    map_dict ={} 
    map_dict['regions'] = {}
    for map in installed_maps:
-      if map == 'assets': continue # not a real region
+      if map == 'maplist': continue # not a real region
       data_dict = map_catalog['regions'].get(map,'')
       map_dict['regions'][map] = data_dict
    with open(osm_vector_idx_dir + '/osm-vector-idx.json','w') as idx:
@@ -150,4 +158,5 @@ def fetch_menu_json_value(key):
 
       
 if __name__ == '__main__':
-   main()
+   if console_installed:
+      main()
