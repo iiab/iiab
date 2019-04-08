@@ -7,7 +7,7 @@ var regionGeojson = {};
 var regionList = [];
 var regionInstalled = [];
 var commonAssetsDir = '/common/assets/';
-var mapAssetsDir = '/osm-vector/assets/';
+var mapAssetsDir = '/osm-vector/maplist/assets/';
 var iiab_config_dir = '/etc/iiab/';
 var onChangeFunc = "setSize";
 var osmCatalog = {};
@@ -138,9 +138,9 @@ function jsonErrhandler (jqXHR, textStatus, errorThrown)
     displayServerCommandStatus("Json Errhandler: " + textStatus + ", " + errorThrown);
   }
   //consoleLog("In Error Handler logging jqXHR");
-  consoleLog(textStatus);
-  consoleLog(errorThrown);
-  consoleLog(jqXHR);
+  console.log(textStatus);
+  console.log(errorThrown);
+  console.log(jqXHR);
 
   return false;
 }
