@@ -44,24 +44,28 @@ def main():
    print(installed_maps)
 
    write_osm_vector_idx(installed_maps)
+
+   # For installed regions, check that a menu def exists, and it's on home page
    for fname in installed_maps:
       region = extract_region_from_filename(fname)
       print('checking for %s region'%region)
-      if region != 'maplist':
-         item = map_catalog['regions'][region]
-         menu_ref = item['perma_ref']
-      else:
+      if region == 'maplist': # it is the splash page, display only if no others
          menu_ref = 'en-map_test'
          item = { "perma_ref" : "en-map_test" }
-      if region != 'maplist' and not (region in map_menu_def_list):
-         print('creating menu def for %s'%item['perma_ref'])
-         create_menu_def(region,item['perma_ref'] + '.json')
+         if len(installed_maps) == 1:
+            menus.update_menu_json(menu_ref)
+            return
+      else:
+          item = map_catalog['regions'][region]
+          menu_ref = item['perma_ref']
+          if not (region in map_menu_def_list):
+             print('creating menu def for %s'%item['perma_ref'])
+             create_menu_def(region,item['perma_ref'] + '.json')
       if fetch_menu_json_value('autoupdate_menu'):
-         print('fetch_menu returned %s'%fetch_menu_json_value('autoupdate_menu'))
-         # add this new menu def to home page
-         print('calling to insert %s.json'%menu_ref)
+         print('autoudate of menu items is enabled:%s. Adding %s'%(\
+                    fetch_menu_json_value('autoupdate_menu'),region,))
+         # verify this menu def is on home page
          menus.update_menu_json(menu_ref)
-      print('fetch_menu returned %s'%fetch_menu_json_value('autoupdate_menu'))
 
 def get_map_catalog():
    global map_catalog
@@ -104,22 +108,20 @@ def get_installed_regions():
 
 def write_osm_vector_idx(installed_maps):
    map_dict ={} 
-   map_dict['regions'] = {}
    idx_dict = {}
    for fname in installed_maps:
       region = extract_region_from_filename(fname)
       if map == 'maplist': continue # not a real region
-      data_dict = map_catalog['regions'].get(region,'')
-      map_dict['regions'][region] = data_dict
-      if data_dict == '': continue
+      map_dict = map_catalog['regions'].get(region,'')
+      if map_dict == '': continue
 
       # Create the idx file in format required bo js-menu system
       idx_dict[region] = {}
-      idx_dict[region]['file_name'] = os.path.basename(map_dict[region][:-4])
-      idx_dict[region]['menu_item'] = map_dict[region]['perma_ref']
-      idx_dict[region]['size'] = map_dict[region]['size']
-      idx_dict[region]['zim_date'] = map_dict[region]['date']
-      idx_dict[region]['language'] = map_dict[region]['perma_ref'][:2]
+      idx_dict[region]['file_name'] = os.path.basename(map_dict['url'][:-4])
+      idx_dict[region]['menu_item'] = map_dict['perma_ref']
+      idx_dict[region]['size'] = map_dict['size']
+      idx_dict[region]['date'] = map_dict['date']
+      idx_dict[region]['language'] = map_dict['perma_ref'][:2]
 
    with open(osm_vector_idx_dir + '/osm-vector-idx.json','w') as idx:
       idx.write(json.dumps(idx_dict,indent=2)) 
