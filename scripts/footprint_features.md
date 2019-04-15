@@ -23,4 +23,4 @@ contents of following directories:
 
 #### Suggested Usage ####
 1. Use a FAT formatted USB stick (FAT format is recognized by both Windows and Mac) to move /etc/iiab/footprint/<footprint.tgz> to a machine that has internet access and a browser.
-2. Upload the footprint to  https://filebin.ca, record the returned URL, and email that URL, along with a description of the symptoms, to xsce-devel@googlegroups.com.
+2. Upload the footprint to  https://filebin.ca, record the returned URL, and email that URL, along with a description of the symptoms, to bugs@iiab.io.
