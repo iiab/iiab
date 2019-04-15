@@ -22,7 +22,7 @@ contents of following directories:
 4. /etc/systemd/network/
 
 #### Suggested Usage ####
-1. Upload the footprint you have just generate to pastebinit
+1. Upload the footprint you have just generated to pastebinit.
 ```
 pbput /etc/iiab/footprint/<footprint file name>
 ```
