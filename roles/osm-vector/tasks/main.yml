@@ -1,0 +1,101 @@
+- name: Make sure the osm-vector directory exists
+  file: 
+    path: '{{ osm_vector_path }}/maplist/assets'
+    state: directory
+    owner: '{{ apache_user }}'
+    group: '{{ apache_user }}'
+    mode: '0755'
+
+- name: Fetch the catalog for osm maps
+  get_url:
+     url: "{{ iiab_osm_url }}/assets/regions.json"
+     dest: '{{ osm_vector_path }}/maplist/assets/'
+
+- name: Create a link to osm catalog in /common/assets
+  file:
+      src: "{{ osm_vector_path }}/maplist/assets/regions.json"
+      dest: "{{ doc_root }}/common/assets/regions.json"
+      state: link
+
+- name: Fetch the javascript bundle with openlayers for test page
+  get_url:
+     url: "{{ iiab_osm_url }}/../main.js"
+     dest: '{{ osm_vector_path }}/maplist/'
+
+- name: Fetch the index.html for test page
+  template:
+     src: "index.html"
+     dest: '{{ osm_vector_path }}/maplist/index.html'
+
+# Bboxes are currently square.  But geofabrik has non-rectangular bboxes 
+#  So bring the bounding box definition from cloud (bboxes.geojson is big)
+- name: Fetch the bounding box description for osm maps
+  get_url:
+     url: "{{ iiab_osm_url }}/assets/bboxes.geojson"
+     dest: '{{ osm_vector_path }}/maplist/assets/'
+
+- name: Install a package that helps with geojson
+  package:
+    name:
+      - python-geojson
+    state: present
+
+- name: Install the script to update osm catalog
+  template:
+    src: iiab-update-osm
+    dest: /usr/bin/iiab-update-osm
+    mode: "0755"
+
+- name: Run the script that does osm-vector housekeeping
+  shell: /usr/bin/iiab-update-osm
+ 
+- name: Copy the Countries geojson to assets
+  copy: 
+    src: countries.json
+    dest: '{{ osm_vector_path }}/maplist/assets'
+
+#  It is too complicated to use a single file for both iiab and admin-console
+- name: Copy the duplicated javascript to assets
+  copy: 
+    src: osm_functions.js
+    dest: '{{ osm_vector_path }}/maplist/assets'
+
+- name: Install /etc/{{ apache_config_dir }}/osm-vect.conf from template
+  template:
+    src: osm-vector.conf
+    dest: "/etc/{{ apache_config_dir }}/osm-vector.conf"
+
+- name: Create symlink osm-vector.conf from sites-enabled to sites-available (debuntu, not nec for redhat)
+  file:
+    src: /etc/apache2/sites-available/osm-vector.conf
+    path: /etc/apache2/sites-enabled/osm-vector.conf
+    state: link
+  when: osm_vector_enabled and is_debuntu
+
+- name: Remove symlink /etc/apache2/sites-enabled/osm-vector.conf (debuntu)
+  file:
+    path: /etc/apache2/sites-enabled/osm-vector.conf
+    state: absent
+  when: not osm_vector_enabled and is_debuntu
+
+- name: Copy the redirect to the test page -- delete this if more than one map
+  copy: 
+    src: test-index.redirect
+    dest: "{{ osm_vector_path }}/index.html"
+
+- name: Create a directory for map menu-def
+  file: 
+    path: '{{ menu_def_dir }}'
+    state: directory
+
+- name: Determine status of splash menu def
+  stat:
+    path: '{{ menu_def_dir }}/en-map_test.json'
+  ignore_errors: True
+  register: menu_def
+
+- name: Do not overwrite if it already exists
+  copy:
+     src: en-map_test.json
+     dest: '{{ menu_def_dir }}/en-map_test.json'
+  when: menu_def.stat.exists is defined and not menu_def.stat.exists
