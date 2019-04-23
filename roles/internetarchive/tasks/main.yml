@@ -12,18 +12,35 @@
          - cmake
       state: present
 
-- name: Create top level {{ internetarchive_dir }} if reqd
-  command: mkdir -p {{ internetarchive_dir }}
+- name: Setup for yarn install from its own repo 1/2
+  command: curl -sL https://dl.yarnpkg.com/debian/pubkey.gpg | sudo apt-key add -
   args:
     chdir: "{{ iiab_base }}"
   when: internet_available
 
-- name: Run 'sudo npm install dweb-archive dweb-mirror --allow-root --unsafe-perm=true' to create /opt/iiab/internetarchive/node_modules (CAN TAKE ~5 MINUTES)
-  command: sudo npm install dweb-archive dweb-mirror --allow-root --unsafe-perm=true
+- name: Setup for yarn install from its own repo 2/2
+  command: echo "deb https://dl.yarnpkg.com/debian/ stable main" | sudo tee /etc/apt/sources.list.d/yarn.list
+  args:
+    chdir: "{{ iiab_base }}"
+  when: internet_available
+
+- name: Install yarn
+  package:
+    name:
+      - yarn
+    state: present
+
+- name: Create directory {{ internetarchive_dir }}
+  file:
+    path: "{{ internetarchive_dir }}"
+    state: directory
+    owner: "root"
+
+- name: Run yarn install to get needed modules (CAN TAKE ~5 MINUTES)
+  command: sudo yarn add @internetarchive/dweb-archive @internetarchive/dweb-mirror
   args:
     chdir: "{{ internetarchive_dir }}"
   when: internet_available
-
 
 # CONFIG FILES
 
