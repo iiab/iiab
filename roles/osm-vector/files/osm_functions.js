@@ -96,21 +96,21 @@ function genRegionItem(region,checkbox) {
   console.log("in genRegionItem: " + region.name);
   var itemId = region.title;
   var ksize = region.size / 1000;
-//console.log(html);
-  html += '<div  class="extract" data-region={"name":"' + region.name + '"}>';
-  html += ' <label>';
+  //console.log(html);
+  html += '<div class="extract" data-region={"name":"' + region.name + '"}> ';
+  html += '<label>';
   if ( checkbox ) {
-      if (selectedOsmItems.indexOf(region.name) != -1)
-         checked = 'checked';
-      else
-         checked = '';
+    if (selectedOsmItems.indexOf(region.name) != -1)
+      checked = 'checked';
+    else
+      checked = '';
       html += '<input type="checkbox" name="' + region.name + '"';
-      html += ' onChange="updateOsmSpace(this)" ' + checked + '>';
+      html += ' onChange="updateOsmSpace(this)" ' + checked + '> ';
   }
-      html += itemId;
-  if ( checkbox ) { html +=  '</input>';};
+  html += itemId;
+  if ( checkbox ) { html += '</input>';};
   html += '</label>'; // end input
-  html += ' Size: ' + readableSize(ksize);
+  html += ' ' + readableSize(ksize);
   html += '</div>';
   //console.log(html);
 
