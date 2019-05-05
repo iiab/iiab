@@ -18,22 +18,12 @@ This is an ongoing project, continually adding support for new Internet Archive 
 ## Using it
 
 ### Starting server
-(Not required on IIAB)
-```
-cd <wherever>/dweb-mirror && ./internetarchive --server &
-```
-The startup is a little slow but you'll see some debugging when its live
-On IIAB the server is started and restarted automatically.  
+The server is started and restarted automatically.  
 It can be turned on or off at a terminal window with `service internetarchive start` or  `service internetarchive stop` 
 
 ### Browsing
 
-If you are working directly on the machine (e.g. its your Mac) then
-browse to [http://localhost:4244] which will open the UI in the browser and it should see the Archive UI.
-
-If you are remote from the machine, then browser to: `http://<IP of machine>:4244`
-
-On IIAB the server can be accessed at [http://box.net:4244] (try [http://box.local:4244] if that doesn't work)
+The server can be accessed at [http://box.lan:4244] (try [http://box.local:4244] if that doesn't work)
 
 If you don’t get a Archive UI then look at the server log (in browser console) to see for any “FAILING” log lines which indicate a problem. 
 
@@ -61,9 +51,9 @@ for a collection this also means getting the thumbnails and metadata for the top
 The server checks for disks in all the likely places, the list of places it checks, in an unmodified installation can be seen at 
 `https://github.com/internetarchive/dweb-mirror/blob/master/configDefaults.yaml#L7`
 
-This includes top level directories on usb drives on most machines either at `/Volumes/*/archiveorg` or on IIAB at `/media/pi/*/archiveorg`
+This includes top level directories on usb drives at `/media/pi/*/archiveorg`
 
-You can override this in `dweb-mirror.config.yaml` in the home directory of the user that runs the server e.g. on IIAB this is currently `/root/dweb-mirror.config.yaml` (see 'Advanced' below )
+You can override this in `dweb-mirror.config.yaml` in the home directory of the user that runs the server, this is currently `/root/dweb-mirror.config.yaml` (see 'Advanced' below )
 
 Items are stored in subdirectories of the first of these directories found, but read from any of the locations. 
 
@@ -76,8 +66,8 @@ If you are worried about corruption, or after for example hand-editing or moving
 ```
 # Run everything as root
 sudo sh
-# cd into location for your installation - which varies between platforms
-cd /opt/iiab/internetarchive/node_modules/@internetarchive/dweb-mirror || cd /usr/local/node_modules/@internetarchive/dweb-mirror
+# cd into location for your installation
+cd /opt/iiab/internetarchive/node_modules/@internetarchive/dweb-mirror
 ./internetarchive -m
 ```
 This will usually take about 5-10 minutes depending on the amount of material cached, 
@@ -103,19 +93,13 @@ Note that this file is also edited automatically when the Crawl button described
 
 As the project develops, this file will be editable via a UI. 
 
-## Installation
-Dweb-Mirror is installable on most Linux based systems. Specific installation instructions are available for: 
- [RACHEL 3+ from World Possible](INSTALLATION-rachel.md); [Internet In A Box on Raspberry Pi](INSTALLATION-iiab-raspberry.md); and [directly on Raspberry PI](INSTALLATION-raspberrypi.md). 
- 
-For anything else (incuding MacOSX), please follow [generic instructions](INSTALLATION.md) and please let us know how it went.
-
 ## Update
 Dweb-mirror is under rapid development, as is the Javascript UI. Its recommended to update frequently. 
 
 From a Terminal window
 ```
 sudo sh # Run all commands as root
-cd /opt/iiab/internetarchive || cd /usr/local
+cd /opt/iiab/internetarchive
 yarn upgrade  # Currently this can take up to about 20 minutes to run, we hope to reduce that time
 ```
 
@@ -129,8 +113,8 @@ In a shell
 # Run all commands as root from dweb-mirror's directory
 sudo sh
 
-# cd into location for your installation - which varies between platforms
-cd /opt/iiab/internetarchive/node_modules/@internetarchive/dweb-mirror || cd /usr/local/node_modules/@internetarchive/dweb-mirror
+# cd into location for your installation 
+cd /opt/iiab/internetarchive/node_modules/@internetarchive/dweb-mirror
 
 # To get a full list of possible arguments
 ./internetarchive --help
@@ -152,11 +136,10 @@ There are two logs of relevance, the browser and the server.
 **Browser**: If using Chrome then this is at View / Developer Tools / Javascript Console or something similar.
 
 **Server**: 
-On IIAB from a Terminal window. 
+From a Terminal window. 
 ```
 journalctl -u internetarchive
 ```
-TODO find log files on other platforms
 
 ## Known Issues
 See [github dweb-mirror issues](https://github.com/internetarchive/dweb-mirror/issues); and [github dweb-archive issues](https://github.com/internetarchive/dweb-archive/issues);
