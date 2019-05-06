@@ -7,7 +7,7 @@ var regionGeojson = {};
 var regionList = [];
 var regionInstalled = [];
 var commonAssetsDir = '/common/assets/';
-var mapAssetsDir = '/vector-map/maplist/assets/';
+var mapAssetsDir = '/vector-maps/maplist/assets/';
 var iiab_config_dir = '/etc/iiab/';
 var onChangeFunc = "setSize";
 var osmCatalog = {};
@@ -27,7 +27,7 @@ function readOsmIdx(){
 	//consoleLog ("in readOsmIdx");
   var resp = $.ajax({
     type: 'GET',
-    url: consoleJsonDir + 'vector-map-idx.json',
+    url: consoleJsonDir + 'vector-maps-idx.json',
     dataType: 'json'
   })
   .done(function( data ) {
