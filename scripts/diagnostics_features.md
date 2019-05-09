@@ -22,8 +22,8 @@ contents of following directories:
 4. /etc/systemd/network/
 
 #### Suggested Usage ####
-1. Upload the footprint you have just generated to pastebinit.
+1. Upload the diagnostics you have just generated to pastebinit.
 ```
-pbput /etc/iiab/footprint/<footprint file name>
+pbput /etc/iiab/diagnostics/<diagnostics file name>
 ```
 2. Email a description of the symptoms, and how to generate them, along with the URL which was returned by the "pbput" command, to bugs@iiab.io.
