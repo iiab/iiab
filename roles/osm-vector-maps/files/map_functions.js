@@ -1,6 +1,6 @@
 // map_functions.js  -- (non authoritative see below) src = iiab/roles/files/
 // copyright 2019 George Hunt
-// CAUTION -- this file is duplicate to admin-console/console/files/js/map_fuctions.js -- please think of admin-console as authoritative
+// CAUTION -- this file is duplicate to admin-console/console/files/js/map_functions.js -- please think of admin-console as authoritative
 //     Placed here in duplicate to ease debugging, and simplify dependences
 
 var regionGeojson = {};
