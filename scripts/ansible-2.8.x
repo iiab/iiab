@@ -68,7 +68,7 @@ elif [ -f /etc/debian_version ]; then    # Includes Debian, Ubuntu & Raspbian
     echo -e "\napt update; install dirmngr; PPA to /etc/apt/sources.list.d/iiab-ansible.list\n"
     apt update
     apt -y install dirmngr    # Raspbian needs.  Formerly: python-pip python-setuptools python-wheel patch
-    echo "deb http://ppa.launchpad.net/ansible/ansible-2.7/ubuntu xenial main" \
+    echo "deb http://ppa.launchpad.net/ansible/ansible-2.8/ubuntu xenial main" \
          > /etc/apt/sources.list.d/iiab-ansible.list
 
     echo -e '\nIF YOU FACE ERROR "signatures couldn'"'"'t be verified because the public key is not available" THEN REPEATEDLY RE-RUN "sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 93C4A3FD7BB9C367"\n'
@@ -88,7 +88,7 @@ elif [ -f /etc/debian_version ]; then    # Includes Debian, Ubuntu & Raspbian
     #wget http://download.iiab.io/packages/ansible_2.4.2.0-1ppa~xenial_all.deb
     #apt -y --allow-downgrades install ./ansible_2.4.2.0-1ppa~xenial_all.deb
 
-    echo -e 'PPA source "deb http://ppa.launchpad.net/ansible/ansible-2.7/ubuntu xenial main"'
+    echo -e 'PPA source "deb http://ppa.launchpad.net/ansible/ansible-2.8/ubuntu xenial main"'
     echo -e "successfully saved to /etc/apt/sources.list.d/iiab-ansible.list\n"
     
     echo -e "IF *OTHER* ANSIBLE SOURCES APPEAR BELOW, PLEASE MANUALLY REMOVE THEM TO"
