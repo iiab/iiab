@@ -32,14 +32,19 @@ map_doc_root = '/library/www/osm-vector-maps'
 # map_catalog will be global, assumed always available
 map_catalog = {}
 map_menu_def_list = []
+previous_idx = {} # track new regions so we don't thrash on adding to menu
 
 def main():
    global map_menu_def_list
+   global previous_idx
+
    get_map_catalog()
    #print(json.dumps(map_catalog,indent=2))
 
    map_menu_def_list = get_menu_def_names()
    print(json.dumps(map_menu_def_list,indent=2))
+
+   read_vector_map_idx()
 
    installed_maps = get_installed_regions()
    print(installed_maps)
@@ -59,13 +64,13 @@ def main():
       else:
           item = map_catalog['regions'][region]
           menu_ref = item['perma_ref']
-          if not (region in map_menu_def_list):
+          if not (menu_ref in map_menu_def_list):
              print('creating menu def for %s'%item['perma_ref'])
              create_menu_def(region,item['perma_ref'] + '.json')
-      if fetch_menu_json_value('autoupdate_menu'):
+      # if autoupdate allowed and this is a new region then add to home menu
+      if fetch_menu_json_value('autoupdate_menu') and item['perma_ref'] not in previous_idx:
          print('autoudate of menu items is enabled:%s. Adding %s'%(\
                     fetch_menu_json_value('autoupdate_menu'),region,))
-         # verify this menu def is on home page
          menus.update_menu_json(menu_ref)
 
 def get_map_catalog():
@@ -90,9 +95,9 @@ def get_menu_def_names(intended_use='map'):
             print(readstr)
          if data.get('intended_use','') != intended_use:
             continue
-         map_name = data.get('name','')
+         map_name = data.get('map_name','')
          if map_name != '':
-            menu_def_list.append(data['name'])
+            menu_def_list.append(map_name)
    return menu_def_list
 
 def get_installed_regions():
@@ -106,6 +111,12 @@ def get_installed_regions():
    if len(installed) == 0:
          installed.append('maplist')
    return installed
+
+def read_vector_map_idx():
+   global previous_idx
+   with open(vector_map_idx_dir + '/vector-map-idx.json','r') as idx:
+      str = idx.read()
+      previous_idx = json.loads(str)
 
 def write_vector_map_idx(installed_maps):
    map_dict ={}
