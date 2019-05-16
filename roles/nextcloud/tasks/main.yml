@@ -14,7 +14,21 @@
 # - debug:
 #     msg: "nextcloud_force_install: {{ nextcloud_force_install }}"
 
-- name: Download {{ nextcloud_dl_url }}/{{ nextcloud_orig_src_file }} to {{ downloads_dir }}/{{ nextcloud_src_file }}
+- name: Download {{ nextcloud_dl_url }}/{{ nextcloud_orig_src_file_old }} to {{ downloads_dir }}/{{ nextcloud_src_file_old }} on older OS's lacking PHP 7.1+
+  get_url:
+    url: "{{ nextcloud_dl_url }}/{{ nextcloud_orig_src_file_old }}"
+    dest: "{{ downloads_dir }}/{{ nextcloud_src_file_old }}"
+    timeout: "{{ download_timeout }}"
+    force: yes
+    #validate_certs: False    # TEMPORARY ON/AFTER 2018-07-22 AS download.nextcloud.com CERT EXPIRED: https://github.com/iiab/iiab/issues/954
+  when: internet_available and nextcloud_force_install
+  #async: 1800
+  #poll: 10
+  tags:
+    - download
+  when: is_debian_9 or is_raspbian_9
+
+- name: Download {{ nextcloud_dl_url }}/{{ nextcloud_orig_src_file }} to {{ downloads_dir }}/{{ nextcloud_src_file }} on newer OS's that have PHP 7.1+
   get_url:
     url: "{{ nextcloud_dl_url }}/{{ nextcloud_orig_src_file }}"
     dest: "{{ downloads_dir }}/{{ nextcloud_src_file }}"
@@ -26,6 +40,7 @@
   #poll: 10
   tags:
     - download
+  when: not (is_debian_9 or is_raspbian_9)
 
 # Ubuntu and Debian treat names differently
 - name: Install 3 php packages (debian)
@@ -85,12 +100,19 @@
     state: present
   when: is_redhat
 
-- name: Unarchive {{ nextcloud_src_file }} to permanent location {{ nextcloud_prefix }}/nextcloud    # e.g. unpack nextcloud_latest-14.tar.bz2 to /opt/nextcloud
+- name: Unarchive {{ nextcloud_src_file_old }} to permanent location {{ nextcloud_prefix }}/nextcloud on older OS's lacking PHP 7.1+    # e.g. unpack nextcloud_latest-15.tar.bz2 to /opt/nextcloud
+  unarchive:
+    src: "{{ downloads_dir }}/{{ nextcloud_src_file_old }}"
+    dest: "{{ nextcloud_prefix }}"
+    #creates: "{{ nextcloud_prefix }}/nextcloud/version.php"
+  when: nextcloud_force_install and (is_debian_9 or is_raspbian_9)
+
+- name: Unarchive {{ nextcloud_src_file }} to permanent location {{ nextcloud_prefix }}/nextcloud on newer OS's that have PHP 7.1+    # e.g. unpack nextcloud_latest-16.tar.bz2 to /opt/nextcloud
   unarchive:
     src: "{{ downloads_dir }}/{{ nextcloud_src_file }}"
     dest: "{{ nextcloud_prefix }}"
     #creates: "{{ nextcloud_prefix }}/nextcloud/version.php"
-  when: nextcloud_force_install
+  when: nextcloud_force_install and not (is_debian_9 or is_raspbian_9)
 
 - name: Create dir /etc/nextcloud (centos) for a subsequent config dir that's symlinked to /etc/nextcloud ?
   file:
