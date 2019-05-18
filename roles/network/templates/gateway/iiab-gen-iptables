@@ -1,4 +1,5 @@
 #!/bin/bash -x
+
 source {{ iiab_env_file }}
 {% if is_debuntu %}
 IPTABLES=/sbin/iptables
@@ -16,27 +17,27 @@ $IPTABLES -F
 $IPTABLES -t nat -F
 $IPTABLES -X
 
-# first match wins
+# First match wins
 # Always accept loopback traffic
 $IPTABLES -A INPUT -i lo -j ACCEPT
 
 # Always drop rpc
 $IPTABLES -A INPUT -p tcp --dport 111 -j DROP
 $IPTABLES -A INPUT -p udp --dport 111 -j DROP
-# mysql
+# MySQL
 $IPTABLES -A INPUT -p tcp --dport 3306 -j DROP
 $IPTABLES -A INPUT -p udp --dport 3306 -j DROP
-# postgres - not needed listens on lo only
+# PostgreSQL - not needed listens on lo only
 $IPTABLES -A INPUT -p tcp --dport 5432 -j DROP
 $IPTABLES -A INPUT -p udp --dport 5432 -j DROP
-# couchdb
+# CouchDB
 $IPTABLES -A INPUT -p tcp --dport 5984 -j DROP
 $IPTABLES -A INPUT -p udp --dport 5984 -j DROP
 }
 
-if [  "x$WANIF" == "xnone" ] || [ "$MODE" == "Appliance" ]; then
+if [ "x$WANIF" == "xnone" ] || [ "$MODE" == "Appliance" ]; then
     clear_fw
-    # save the rule set
+    # Save the rule set
 	{% if is_debuntu %}
 	netfilter-persistent save
 	{% else %}
@@ -47,7 +48,7 @@ fi
 lan=$LANIF
 wan=$WANIF
 
-# Good thing we replace this file should be treated like squid below
+# Good thing we replace this file; should be treated like Squid (that used to be?) below
 gw_block_https={{ gw_block_https }}
 ssh_port={{ ssh_port }}
 gui_wan={{ gui_wan }}
@@ -77,10 +78,8 @@ samba_tcp_mports={{ samba_tcp_mports }}
 block_DNS={{ block_DNS }}
 
 echo "LAN is $lan and WAN is $wan"
-#
-# delete all existing rules.
-#
 
+# Delete all existing rules
 /sbin/modprobe ip_tables
 /sbin/modprobe iptable_filter
 /sbin/modprobe ip_conntrack
@@ -94,7 +93,7 @@ $IPTABLES -A INPUT -m state --state NEW -i  $lan -j ACCEPT
 # Allow mDNS
 $IPTABLES -A INPUT -p udp --dport 5353 -j ACCEPT
 
-#when run as gateway
+# When run as gateway
 $IPTABLES -A INPUT -p tcp --dport $ssh_port -m state --state NEW -i $wan -j ACCEPT
 
 if [ "$gui_wan" == "True" ]; then
@@ -133,15 +132,15 @@ fi
 
 $IPTABLES -A FORWARD -i $wan -o $lan -m state --state ESTABLISHED,RELATED -j ACCEPT
 
-#Block https traffic except if directed at server
-if [  "$gw_block_https" == "True" ]; then
+# Block https traffic except if directed at server
+if [ "$gw_block_https" == "True" ]; then
     $IPTABLES -A FORWARD -p tcp ! -d {{ lan_ip }} --dport 443 -j DROP
 fi
 
-# Allow outgoing connections from the LAN side.
+# Allow outgoing connections from the LAN side
 $IPTABLES -A FORWARD -i $lan -o $wan -j ACCEPT
 
-# Don't forward from the outside to the inside.
+# Don't forward from the outside to the inside
 $IPTABLES -A FORWARD -i $wan -o $lan -j DROP
 $IPTABLES -A INPUT -i $wan -j DROP
 
@@ -154,9 +153,9 @@ if [ "$HTTPCACHE_ON" == "True" ]; then
     $IPTABLES  -t nat  -A PREROUTING -i $lan -p tcp --dport 80 ! -d {{ lan_ip }} -j DNAT --to {{ lan_ip }}:3128
 fi
 
-# Enable routing.
+# Enable routing
 echo 1 > /proc/sys/net/ipv4/ip_forward
-# save the whole rule set now
+# Save the whole rule set now
 {% if is_debuntu %}
 netfilter-persistent save
 {% else %}
