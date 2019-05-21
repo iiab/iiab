@@ -77,13 +77,13 @@ elif [ "$ports_externally_visible" -lt 0 ] || [ "$ports_externally_visible" -gt 
     exit 1
 fi
 
-if [ "$wan" != "none" ] && [ "$network_mode" != "Appliance" ]; then
-    # Load iptables kernel modules
-    /sbin/modprobe ip_tables
-    /sbin/modprobe iptable_filter
-    /sbin/modprobe ip_conntrack
-    /sbin/modprobe iptable_nat
-fi
+#if [ "$wan" != "none" ] && [ "$network_mode" != "Appliance" ]; then
+# Load iptables kernel modules
+/sbin/modprobe ip_tables
+/sbin/modprobe iptable_filter
+/sbin/modprobe ip_conntrack
+/sbin/modprobe iptable_nat
+#fi
 
 # Delete all existing firewall rules
 $IPTABLES -F
@@ -110,90 +110,81 @@ $IPTABLES -A INPUT -p udp --dport 5432 -j DROP
 $IPTABLES -A INPUT -p tcp --dport 5984 -j DROP
 $IPTABLES -A INPUT -p udp --dport 5984 -j DROP
 
-save_rules_and_exit() {
-{% if is_debuntu %}
-    netfilter-persistent save
-{% else %}
-    iptables-save > $IPTABLES_DATA
-{% endif %}
-
-    exit 0
-}
-
-if [ "$wan" == "none" ] || [ "$network_mode" == "Appliance" ]; then
-    save_rules_and_exit
-fi
-
 # Allow established connections, and those not coming from the outside
 $IPTABLES -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
 $IPTABLES -A INPUT -m state --state NEW -i $lan -j ACCEPT
 
-# Allow mDNS from WAN-side too (WHY OUT OF CURIOSITY?)
+# Allow mDNS from WAN-side too (ON PURPOSE? WHY OUT OF CURIOSITY?)
 $IPTABLES -A INPUT -p udp --dport 5353 -j ACCEPT
 
-# 1 = ssh only
-if [ "$ports_externally_visible" -ge 1 ]; then
-    $IPTABLES -A INPUT -p tcp --dport $ssh_port -m state --state NEW -i $wan -j ACCEPT
-fi
+#if [ "$wan" != "none" ] && [ "$network_mode" != "Appliance" ]; then
+if [ "$wan" != "none" ]; then
 
-# For now this is implemented using Admin Console variable "gui_port" from:
-# https://github.com/iiab/iiab/blob/master/roles/0-init/tasks/main.yml#L87-L95
-#
-# 2 = ssh + http-or-https (for Admin Console's box.lan/admin too)
-if [ "$ports_externally_visible" -ge 2 ]; then
-    $IPTABLES -A INPUT -p tcp --dport $gui_port -m state --state NEW -i $wan -j ACCEPT
-fi
-
-# 3 = ssh + http-or-https + common IIAB services
-if [ "$ports_externally_visible" -ge 3 ]; then
-    $IPTABLES -A INPUT -p tcp --dport $kiwix_port -m state --state NEW -i $wan -j ACCEPT
-    $IPTABLES -A INPUT -p tcp --dport $kalite_server_port -m state --state NEW -i $wan -j ACCEPT
-    $IPTABLES -A INPUT -p tcp --dport $kolibri_http_port -m state --state NEW -i $wan -j ACCEPT
-    $IPTABLES -A INPUT -p tcp --dport $calibre_port -m state --state NEW -i $wan -j ACCEPT
-    $IPTABLES -A INPUT -p tcp --dport $calibreweb_port -m state --state NEW -i $wan -j ACCEPT
-    $IPTABLES -A INPUT -p tcp --dport $cups_port -m state --state NEW -i $wan -j ACCEPT
-    $IPTABLES -A INPUT -p tcp --dport $sugarizer_port -m state --state NEW -i $wan -j ACCEPT
-    $IPTABLES -A INPUT -p tcp --dport $nodered_port -m state --state NEW -i $wan -j ACCEPT
-    $IPTABLES -A INPUT -p tcp --dport $mosquitto_port -m state --state NEW -i $wan -j ACCEPT
-    $IPTABLES -A INPUT -p tcp --dport $transmission_http_port -m state --state NEW -i $wan -j ACCEPT
-    $IPTABLES -A INPUT -p tcp --dport $transmission_peer_port -m state --state NEW -i $wan -j ACCEPT
-    $IPTABLES -A INPUT -p udp --dport $minetest_port -m state --state NEW -i $wan -j ACCEPT
-
-    if [ "$pbx_enabled" == "True" ]; then
-        $IPTABLES -A INPUT -p udp --dport $pbx_signaling_ports_chan_sip -m state --state NEW -i $wan -j ACCEPT
-        $IPTABLES -A INPUT -p udp --dport $pbx_signaling_ports_chan_pjsip -m state --state NEW -i $wan -j ACCEPT
-        $IPTABLES -A INPUT -p udp --dport $pbx_data_ports -m state --state NEW -i $wan -j ACCEPT
+    # 1 = ssh only
+    if [ "$ports_externally_visible" -ge 1 ]; then
+        $IPTABLES -A INPUT -p tcp --dport $ssh_port -m state --state NEW -i $wan -j ACCEPT
     fi
-fi
 
-# 4 = ssh + http-or-https + common IIAB services + Samba
-if [ "$ports_externally_visible" -ge 4 ]; then
-    $IPTABLES -A INPUT -p udp --dport $samba_udp_ports -m state --state NEW -i $wan -j ACCEPT
-    $IPTABLES -A INPUT -p tcp -m multiport --dports $samba_tcp_mports -m state --state NEW -i $wan -j ACCEPT
-fi
+    # For now this is implemented using Admin Console variable "gui_port" from:
+    # https://github.com/iiab/iiab/blob/master/roles/0-init/tasks/main.yml#L87-L95
+    #
+    # 2 = ssh + http-or-https (for Admin Console's box.lan/admin too)
+    if [ "$ports_externally_visible" -ge 2 ]; then
+        $IPTABLES -A INPUT -p tcp --dport $gui_port -m state --state NEW -i $wan -j ACCEPT
+    fi
 
-# Typically False, to keep students off the Internet
-if [ "$iiab_gateway_enabled" == "True" ]; then
-    $IPTABLES -A POSTROUTING -t nat -o $wan -j MASQUERADE
-fi
+    # 3 = ssh + http-or-https + common IIAB services
+    if [ "$ports_externally_visible" -ge 3 ]; then
+        $IPTABLES -A INPUT -p tcp --dport $kiwix_port -m state --state NEW -i $wan -j ACCEPT
+        $IPTABLES -A INPUT -p tcp --dport $kalite_server_port -m state --state NEW -i $wan -j ACCEPT
+        $IPTABLES -A INPUT -p tcp --dport $kolibri_http_port -m state --state NEW -i $wan -j ACCEPT
+        $IPTABLES -A INPUT -p tcp --dport $calibre_port -m state --state NEW -i $wan -j ACCEPT
+        $IPTABLES -A INPUT -p tcp --dport $calibreweb_port -m state --state NEW -i $wan -j ACCEPT
+        $IPTABLES -A INPUT -p tcp --dport $cups_port -m state --state NEW -i $wan -j ACCEPT
+        $IPTABLES -A INPUT -p tcp --dport $sugarizer_port -m state --state NEW -i $wan -j ACCEPT
+        $IPTABLES -A INPUT -p tcp --dport $nodered_port -m state --state NEW -i $wan -j ACCEPT
+        $IPTABLES -A INPUT -p tcp --dport $mosquitto_port -m state --state NEW -i $wan -j ACCEPT
+        $IPTABLES -A INPUT -p tcp --dport $transmission_http_port -m state --state NEW -i $wan -j ACCEPT
+        $IPTABLES -A INPUT -p tcp --dport $transmission_peer_port -m state --state NEW -i $wan -j ACCEPT
+        $IPTABLES -A INPUT -p udp --dport $minetest_port -m state --state NEW -i $wan -j ACCEPT
 
-# 3 or 4 IP forwarding rules
-$IPTABLES -A FORWARD -i $wan -o $lan -m state --state ESTABLISHED,RELATED -j ACCEPT
-# Block https traffic except if directed at server
-if [ "$gw_block_https" == "True" ]; then
-    $IPTABLES -A FORWARD -p tcp ! -d {{ lan_ip }} --dport 443 -j DROP
-fi
-# Allow outgoing connections from the LAN side
-$IPTABLES -A FORWARD -i $lan -o $wan -j ACCEPT
-# Don't forward from the outside to the inside
-$IPTABLES -A FORWARD -i $wan -o $lan -j DROP
-# Enable routing (kernel IP forwarding)
-echo 1 > /proc/sys/net/ipv4/ip_forward
+        if [ "$pbx_enabled" == "True" ]; then
+            $IPTABLES -A INPUT -p udp --dport $pbx_signaling_ports_chan_sip -m state --state NEW -i $wan -j ACCEPT
+            $IPTABLES -A INPUT -p udp --dport $pbx_signaling_ports_chan_pjsip -m state --state NEW -i $wan -j ACCEPT
+            $IPTABLES -A INPUT -p udp --dport $pbx_data_ports -m state --state NEW -i $wan -j ACCEPT
+        fi
+    fi
 
-# 5 = "all but databases"
-if [ "$ports_externally_visible" -lt 5 ]; then
-    # Drop everything else arriving via WAN
-    $IPTABLES -A INPUT -i $wan -j DROP
+    # 4 = ssh + http-or-https + common IIAB services + Samba
+    if [ "$ports_externally_visible" -ge 4 ]; then
+        $IPTABLES -A INPUT -p udp --dport $samba_udp_ports -m state --state NEW -i $wan -j ACCEPT
+        $IPTABLES -A INPUT -p tcp -m multiport --dports $samba_tcp_mports -m state --state NEW -i $wan -j ACCEPT
+    fi
+
+    # Typically False, to keep client machines (e.g. students) off the Internet
+    if [ "$iiab_gateway_enabled" == "True" ]; then
+        $IPTABLES -A POSTROUTING -t nat -o $wan -j MASQUERADE
+    fi
+
+    # 3 or 4 IP forwarding rules
+    $IPTABLES -A FORWARD -i $wan -o $lan -m state --state ESTABLISHED,RELATED -j ACCEPT
+    # Block https traffic except if directed at server
+    if [ "$gw_block_https" == "True" ]; then
+        $IPTABLES -A FORWARD -p tcp ! -d {{ lan_ip }} --dport 443 -j DROP
+    fi
+    # Allow outgoing connections from the LAN side
+    $IPTABLES -A FORWARD -i $lan -o $wan -j ACCEPT
+    # Don't forward from the outside to the inside
+    $IPTABLES -A FORWARD -i $wan -o $lan -j DROP
+    # Enable routing (kernel IP forwarding)
+    echo 1 > /proc/sys/net/ipv4/ip_forward
+
+    # 5 = "all but databases"
+    if [ "$ports_externally_visible" -lt 5 ]; then
+        # Drop everything else arriving via WAN
+        $IPTABLES -A INPUT -i $wan -j DROP
+    fi
+
 fi
 
 # TCP & UDP block of DNS port 53 if truly nec
@@ -202,10 +193,16 @@ if [ "$block_DNS" == "True" ]; then
     $IPTABLES -t nat -A PREROUTING -i $lan -p udp --dport 53 ! -d {{ lan_ip }} -j DNAT --to {{ lan_ip }}:53
 fi
 
-# If Squid enabled, indicated by /etc/iiab/iiab.env
+# If Squid enabled, as indicated by "HTTPCACHE_ON=True" in /etc/iiab/iiab.env
 if [ "$HTTPCACHE_ON" == "True" ]; then
     $IPTABLES -t nat -A PREROUTING -i $lan -p tcp --dport 80 ! -d {{ lan_ip }} -j DNAT --to {{ lan_ip }}:3128
 fi
 
 # Save the whole rule set
-save_rules_and_exit
+{% if is_debuntu %}
+netfilter-persistent save
+{% else %}
+iptables-save > $IPTABLES_DATA
+{% endif %}
+
+exit 0
