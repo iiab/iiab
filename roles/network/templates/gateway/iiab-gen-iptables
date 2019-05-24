@@ -166,30 +166,31 @@ if [ "$wan" != "none" ]; then
         $IPTABLES -A INPUT -p tcp -m multiport --dports $samba_tcp_mports -m state --state NEW -i $wan -j ACCEPT
     fi
 
-    # Typically False, to keep client machines (e.g. students) off the Internet
-    if [ "$iiab_gateway_enabled" == "True" ] && [ "$lan" != "none" ]; then
-        $IPTABLES -A POSTROUTING -t nat -o $wan -j MASQUERADE
-    fi
+    if [ "$lan" != "none" ]; then
+        # Typically False, to keep client machines (e.g. students) off the Internet
+        if [ "$iiab_gateway_enabled" == "True" ]; then
+            $IPTABLES -A POSTROUTING -t nat -o $wan -j MASQUERADE
+        fi
 
-    # 3 or 4 IP forwarding rules
-    $IPTABLES -A FORWARD -i $wan -o $lan -m state --state ESTABLISHED,RELATED -j ACCEPT
-    # Block https traffic except if directed at server
-    if [ "$gw_block_https" == "True" ]; then
-        $IPTABLES -A FORWARD -p tcp ! -d {{ lan_ip }} --dport 443 -j DROP
+        # 3 or 4 IP forwarding rules
+        $IPTABLES -A FORWARD -i $wan -o $lan -m state --state ESTABLISHED,RELATED -j ACCEPT
+        # Block https traffic except if directed at server
+        if [ "$gw_block_https" == "True" ]; then
+            $IPTABLES -A FORWARD -p tcp ! -d {{ lan_ip }} --dport 443 -j DROP
+        fi
+        # Allow outgoing connections from the LAN side
+        $IPTABLES -A FORWARD -i $lan -o $wan -j ACCEPT
+        # Don't forward from the outside to the inside
+        $IPTABLES -A FORWARD -i $wan -o $lan -j DROP
+        # Enable routing (kernel IP forwarding)
+        echo 1 > /proc/sys/net/ipv4/ip_forward
     fi
-    # Allow outgoing connections from the LAN side
-    $IPTABLES -A FORWARD -i $lan -o $wan -j ACCEPT
-    # Don't forward from the outside to the inside
-    $IPTABLES -A FORWARD -i $wan -o $lan -j DROP
-    # Enable routing (kernel IP forwarding)
-    echo 1 > /proc/sys/net/ipv4/ip_forward
 
     # 5 = "all but databases"
     if [ "$ports_externally_visible" -lt 5 ]; then
         # Drop everything else arriving via WAN
         $IPTABLES -A INPUT -i $wan -j DROP
     fi
-
 fi
 
 # TCP & UDP block of DNS port 53 if truly nec
