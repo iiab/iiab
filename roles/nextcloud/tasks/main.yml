@@ -21,12 +21,11 @@
     timeout: "{{ download_timeout }}"
     force: yes
     #validate_certs: False    # TEMPORARY ON/AFTER 2018-07-22 AS download.nextcloud.com CERT EXPIRED: https://github.com/iiab/iiab/issues/954
-  when: internet_available and nextcloud_force_install
   #async: 1800
   #poll: 10
   tags:
     - download
-  when: is_debian_9 or is_raspbian_9
+  when: internet_available and nextcloud_force_install and (is_debian_9 or is_raspbian_9)
 
 - name: Download {{ nextcloud_dl_url }}/{{ nextcloud_orig_src_file }} to {{ downloads_dir }}/{{ nextcloud_src_file }} on newer OS's that have PHP 7.1+
   get_url:
@@ -35,12 +34,11 @@
     timeout: "{{ download_timeout }}"
     force: yes
     #validate_certs: False    # TEMPORARY ON/AFTER 2018-07-22 AS download.nextcloud.com CERT EXPIRED: https://github.com/iiab/iiab/issues/954
-  when: internet_available and nextcloud_force_install
   #async: 1800
   #poll: 10
   tags:
     - download
-  when: not (is_debian_9 or is_raspbian_9)
+  when: internet_available and nextcloud_force_install and not (is_debian_9 or is_raspbian_9)
 
 # Ubuntu and Debian treat names differently
 - name: Install 3 php packages (debian)
@@ -50,7 +48,7 @@
       - "php{{ php_version }}-mbstring"
       - "php{{ php_version }}-zip"
     state: present
-  when: is_debian
+  when: is_debian | bool
 
 # Ubuntu and Debian treat names differently
 - name: Install 4 php packages (ubuntu)
@@ -61,7 +59,7 @@
       - php-zip
       - php-mbstring
     state: present
-  when: is_ubuntu
+  when: is_ubuntu | bool
 
 - name: Install 5 more php packages (debuntu)
   package:
@@ -72,7 +70,7 @@
       - "php{{ php_version }}-curl"
       - "php{{ php_version }}-intl"
     state: present
-  when: is_debuntu
+  when: is_debuntu | bool
 
 - name: 'Install php{{ php_version }}-mcrypt IF this is a "pre-2018" distro in the debuntu family. NOTE: PHP 7.1 deprecated mcrypt 1-Dec-2016 and PHP 7.2 dropped it completely 30-Nov-2017, as it should no longer be nec.'
   package:
@@ -98,7 +96,7 @@
       # CentOS does not have a package for php-imagick
       #- php-imagick
     state: present
-  when: is_redhat
+  when: is_redhat | bool
 
 - name: Unarchive {{ nextcloud_src_file_old }} to permanent location {{ nextcloud_prefix }}/nextcloud on older OS's lacking PHP 7.1+    # e.g. unpack nextcloud_latest-15.tar.bz2 to /opt/nextcloud
   unarchive:
@@ -118,7 +116,7 @@
   file:
     path: /etc/nextcloud
     state: directory
-  when: is_centos
+  when: is_centos | bool
 
 - name: Install {{ nextcloud_prefix }}/nextcloud/config/autoconfig.php from template (centos)
   template:
@@ -127,7 +125,7 @@
     owner: "{{ apache_user }}"
     group: "{{ apache_user }}"
     mode: 0640
-  when: is_centos
+  when: is_centos | bool
 
 - name: chown -R {{ apache_user }}:{{ apache_user }} {{ nextcloud_prefix }}/nextcloud
   file:
@@ -168,7 +166,7 @@
 #  service:
 #    name: "{{ apache_service }}"
 #    state: restarted
-## when: nextcloud_enabled     # taken care of by nextcloud_enabled.yml below
+## when: nextcloud_enabled | bool    # taken care of by nextcloud_enabled.yml below
 #  when: not nextcloud_enabled
 
 # Enables or disable Nextcloud!
