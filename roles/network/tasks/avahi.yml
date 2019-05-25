@@ -3,7 +3,7 @@
     name: avahi
     createhome: no
     shell: /bin/false
-  when: is_debuntu
+  when: is_debuntu | bool
 
 - name: Install avahi announce config file /etc/avahi/services/schoolserver.service
   template:
@@ -12,13 +12,19 @@
     owner: avahi
     group: avahi
     mode: 0640
-  when: 'gui_wan == True'
+  #when: 'gui_wan == True'
+  when: ports_externally_visible|int >= 2
+  # Where "2" means "ssh + http-or-https (for Admin Console's box.lan/admin too)"
+  # SEE ~18 line explanation in box near:
+  # https://github.com/iiab/iiab/blob/master/roles/network/templates/gateway/iiab-gen-iptables#L3-L20
+  # IF >= 2, Admin Console $gui_port from 0-init determines which port (http-or-https) is opened here:
+  # https://github.com/iiab/iiab/blob/master/roles/network/templates/gateway/iiab-gen-iptables#L133-L138
 
 - name: Find avahi_ver for clean copy of ssh.service (not debuntu)
   shell: "ls /usr/share/doc/ | grep avahi | head -n1"
   register: avahi_ver
   ignore_errors: True
-  changed_when: false
+  changed_when: False
   # when: not is_debuntu    # would cause failures 6 lines below
 
 - name: Grab a clean copy of ssh.service (not debuntu)
@@ -31,7 +37,7 @@
   copy:
     src: /usr/share/doc/avahi-daemon/examples/ssh.service
     dest: /etc/avahi/services/
-  when: is_debuntu
+  when: is_debuntu | bool
 
 - name: Set ssh port for avahi
   lineinfile:

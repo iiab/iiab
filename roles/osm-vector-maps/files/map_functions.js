@@ -1,16 +1,16 @@
-// osm_functions.js  -- (non authoritative see below) src = iiab/roles/files/
+// map_functions.js  -- (non authoritative see below) src = iiab/roles/files/
 // copyright 2019 George Hunt
-// CAUTION -- this file is duplicate to admin-console/console/files/js/osm_fuctions.js -- please think of admin-console as authoritative
+// CAUTION -- this file is duplicate to admin-console/console/files/js/map_functions.js -- please think of admin-console as authoritative
 //     Placed here in duplicate to ease debugging, and simplify dependences
 
 var regionGeojson = {};
 var regionList = [];
 var regionInstalled = [];
 var commonAssetsDir = '/common/assets/';
-var mapAssetsDir = '/osm-vector/maplist/assets/';
+var mapAssetsDir = '/osm-vector-maps/maplist/assets/';
 var iiab_config_dir = '/etc/iiab/';
 var onChangeFunc = "setSize";
-var osmCatalog = {};
+var mapCatalog = {};
 
 // following 2 lines an experiment to see if test page and console can be common
 //var jquery = require("./assets/jquery.min");
@@ -19,7 +19,7 @@ var osmCatalog = {};
 function getOsmStat(){
   // called during the init
   console.log('in getOsmStat');
-  readOsmCatalog( true ); // we want checkboxes
+  readMapCatalog( true ); // we want checkboxes
   readOsmIdx();
 }
   
@@ -27,25 +27,25 @@ function readOsmIdx(){
 	//consoleLog ("in readOsmIdx");
   var resp = $.ajax({
     type: 'GET',
-    url: consoleJsonDir + 'osm-vector-idx.json',
+    url: consoleJsonDir + 'osm-vector-maps-idx.json',
     dataType: 'json'
   })
   .done(function( data ) {
-  	osmInstalled = data['regions'];
+  	mapInstalled = data['regions'];
    regionInstalled = [];
    for (region in data['regions']) {
     if (data['regions'].hasOwnProperty(region)) {
         regionInstalled.push(region);
     }
 }
-    //consoleLog(osmInstalled + '');
+    //consoleLog(mapInstalled + '');
   })
   .fail(jsonErrhandler);
 
   return resp;
 }
 
-function readOsmCatalog(checkbox){
+function readMapCatalog(checkbox){
    checkbox = checkbox || true;
 	console.log ("in readOsmCalalog");
    regionList = [];
@@ -56,11 +56,11 @@ function readOsmCatalog(checkbox){
   })
   .done(function( data ) {
   	 regionJson = data;
-    osmCatalog = regionJson['regions'];
-    for(var key in osmCatalog){
-      //console.log(key + '  ' + osmCatalog[key]['title']);
-      osmCatalog[key]['name'] = key;
-      regionList.push(osmCatalog[key]);
+    mapCatalog = regionJson['regions'];
+    for(var key in mapCatalog){
+      //console.log(key + '  ' + mapCatalog[key]['title']);
+      mapCatalog[key]['name'] = key;
+      regionList.push(mapCatalog[key]);
     }
   })
   .fail(jsonErrhandler);
@@ -120,13 +120,13 @@ function genRegionItem(region,checkbox) {
 function instOsmItem(name) {
   var command = "INST-OSM-VECT-SET";
   var cmd_args = {};
-  cmd_args['osm_vect_id'] = name;
+  cmd_args['map_vect_id'] = name;
   cmd = command + " " + JSON.stringify(cmd_args);
   sendCmdSrvCmd(cmd, genericCmdHandler);
-  osmDownloading.push(name);
-  if ( osmWip.indexOf(name) != -1 )
-     osmWip.push(osmCatalog[name]);
-  console.log('osmWip: ' + osmWip);
+  mapDownloading.push(name);
+  if ( mapWip.indexOf(name) != -1 )
+     mapWip.push(mapCatalog[name]);
+  console.log('mapWip: ' + mapWip);
   return true;
 }
 
@@ -161,19 +161,19 @@ function updateOsmSpace(cb){
 }
 
 function updateOsmSpaceUtil(region, checked){
-  var size =  parseInt(osmCatalog[region].size);
+  var size =  parseInt(mapCatalog[region].size);
 
   var modIdx = selectedOsmItems.indexOf(region);
 
   if (checked){
     if (regionInstalled.indexOf(region) == -1){ // only update if not already installed mods
-      sysStorage.osm_selected_size += size;
+      sysStorage.map_selected_size += size;
       selectedOsmItems.push(region);
     }
   }
   else {
     if (modIdx != -1){
-      sysStorage.osm_selected_size -= size;
+      sysStorage.map_selected_size -= size;
       selectedOsmItems.splice(modIdx, 1);
     }
   }
@@ -188,29 +188,29 @@ function totalSpace(){
   $( ".extract" ).each(function(ind,elem){
     var data = JSON.parse($(this).attr('data-region'));
     var region = data.name;
-    var size = parseInt(osmCatalog[region]['size']);
+    var size = parseInt(mapCatalog[region]['size']);
     var chk = $( this ).find(':checkbox').prop("checked") == true;
     if (chk && typeof size !== 'undefined')
         sum += size;
     });
    var ksize = sum / 1000;
-  $( "#osmDiskSpace" ).html(readableSize(ksize));
+  $( "#mapDiskSpace" ).html(readableSize(ksize));
 }
 
 $( '#instOsmRegion').on('click', function(evnt){
-   readOsmCatalog();
-   osm.render();
+   readMapCatalog();
+   map.render();
 });
 */
 function renderOsm(){
    console.log('in renderOsm');
-   window.map.setTarget($("#osm-container")[0]);
+   window.map.setTarget($("#map-container")[0]);
    window.map.render();
    renderRegionList(true);
 }
 function initOsm(){
 var dummy = 0;
-   sysStorage.osm_selected_size = 0;
-   $.when(readOsmCatalog(true)).then(renderRegionList);
+   sysStorage.map_selected_size = 0;
+   $.when(readMapCatalog(true)).then(renderRegionList);
 }
 

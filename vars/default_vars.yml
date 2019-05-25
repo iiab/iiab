@@ -2,10 +2,16 @@
 # PUT YOUR CUSTOMIZATIONS HERE: /etc/iiab/local_vars.yml
 # READ "What is local_vars.yml and how do I customize it?" IN http://FAQ.IIAB.IO
 
-# By convention we use True/False to indicate boolean values.
+# Internet-in-a-Box (IIAB) uses True/False to indicate boolean values.
 
-# Configuration Files
+# IIAB (PRE-)release version number, for {{ iiab_env_file }}
+iiab_base_ver: 7.0
+iiab_revision: 0
+
+# Main configuration file
 iiab_local_vars_file: /etc/iiab/local_vars.yml
+
+# Installation status files
 iiab_env_file: /etc/iiab/iiab.env
 iiab_ini_file: /etc/iiab/iiab.ini
 
@@ -15,7 +21,6 @@ pip_packages_dir: "{{ iiab_base }}/pip-packages"
 yum_packages_dir: "{{ iiab_base }}/yum-packages"
 downloads_dir: "{{ iiab_base }}/downloads"
 iiab_download_url: http://download.iiab.io/packages
-iiab_osm_url : http://download.iiab.io/content/OSM/vector-tiles/maplist/hidden
 
 content_base: "/library"
 doc_base: "{{ content_base }}/www"
@@ -92,10 +97,20 @@ gui_wan: True
 adm_cons_force_ssl: False
 adm_cons_allow_downloads: False
 
-# Enables "campus access" to kiwix (3000), kalite (8008) & calibre (8010 or
-# 8080) on WAN side of server. See network/templates/gateway/iiab-gen-iptables
-# within github.com/iiab/iiab/blob/master/roles/
-services_externally_visible: True
+# Enable "campus access" to ~10 common IIAB services like Kiwix (3000), KA Lite
+# (8008) and Calibre (8010 or 8080) etc, on the WAN side of your IIAB server.
+# Only 1 of the 6 lines below should be uncommented:
+#
+#ports_externally_visible: 0    # none
+#ports_externally_visible: 1    # ssh only
+#ports_externally_visible: 2    # ssh + http-or-https (for Admin Console's box.lan/admin too)
+ports_externally_visible: 3     # ssh + http-or-https + common IIAB services
+#ports_externally_visible: 4    # ssh + http-or-https + common IIAB services + Samba
+#ports_externally_visible: 5    # all but databases
+#
+# Or further customize your iptables firewall by editing:
+# /opt/iiab/iiab/roles/network/templates/gateway/iiab-gen-iptables
+# And then run: cd /opt/iiab/iiab; ./iiab-network
 
 # Gateway and Filters
 # Most all implementations use "iiab_gateway_enabled: False" within
@@ -166,7 +181,7 @@ sshd_enabled: True
 openvpn_install: True
 openvpn_enabled: False
 # For /etc/iiab/openvpn_handle
-openvpn_handle: ""
+openvpn_handle:
 # cron seems necessary on CentOS:
 openvpn_cron_enabled: False
 # General OpenVPN settings
@@ -218,10 +233,6 @@ dansguardian_enabled: False
 postgresql_install: False
 postgresql_enabled: False
 
-# Unmaintained
-# authserver_install: False
-# authserver_enabled: False
-
 # Common UNIX Printing System (CUPS)
 cups_install: False
 cups_enabled: False
@@ -230,6 +241,8 @@ cups_port: 631
 # Samba.  Do a security audit seriously before deploying this.
 samba_install: False
 samba_enabled: False
+samba_udp_ports: "137:138"
+samba_tcp_mports: "139,445"
 shared_dir : "{{ content_base }}/public"    # /library/public
 
 # usb-lib
@@ -345,16 +358,17 @@ moodle_enabled: False
 # If using Moodle intensively, set apache_high_php_limits in 3-BASE-SERVER
 
 # MongoDB (/library/dbdata/mongodb) is used by Sugarizer:
-# Its 2 settings below are auto-set to True (in roles/0-init/tasks/main.yml) when: sugarizer_enabled
+# Its 2 settings below are auto-set to True (in roles/0-init/tasks/main.yml) when: sugarizer_enabled | bool
 # The mongodb playbook itself is later invoked by roles/sugarizer/meta/main.yml
 mongodb_install: False
 mongodb_enabled: False
 mongodb_port: 27018
 
 # Regional OSM vector maps use much less disk space than bitmap/raster versions
-osm_vector_install: True
-osm_vector_enabled: True
-osm_vector_path: '{{ content_base }}/www/osm-vector'
+osm_vector_maps_install: True
+osm_vector_maps_enabled: True
+iiab_map_url : http://download.iiab.io/content/OSM/vector-tiles/maplist/hidden
+vector_map_path: "{{ content_base }}/www/osm-vector-maps"
 
 # roles/sugarizer/meta/main.yml auto-invokes 2 above prereqs: mongodb & nodejs
 # Might stall MongoDB on Power Failure: github.com/xsce/xsce/issues/879
@@ -474,6 +488,13 @@ minetest_default_game: carbone-ng    # only carbone-ng and minetest are supporte
 minetest_flat_world: False
 
 
+# =============================================================================
+# UNMAINTAINED LEGACY VARIABLES: YOU'RE TAKING BIG RISKS IF YOU USE ANY HERE...
+
+# Unmaintained
+# authserver_install: False
+# authserver_enabled: False
+
 # CONSIDER THESE 2 NEW OPENSTREETMAP (OSM) APPROACHES INSTEAD, AS OF 2018:
 # - http://download.iiab.io/content/OSM/vector-tiles/
 # - http://oer2go.org/viewmod/en-worldmap-10
@@ -538,13 +559,14 @@ minetest_flat_world: False
 # rachel_content_found: False
 # #rachel_url: /rachel
 # rachel_doc_root: "{{ doc_root }}/modules"
+# =============================================================================
 
-# ================================================================
 
-# Platforms - turn all off and let /opt/iiab/iiab/vars/<OS>.yml turn on as appropriate
+# PLATFORMS:
+# TURN ALL OFF AND LET /opt/iiab/iiab/vars/<OS>.yml TURN ON AS APPROPRIATE...
 
 # Wide to narrow (insofar as poss)
-is_debuntu: False    # covers all 3: Ubuntu, Debian, Raspbian
+is_debuntu: False    # Covers all 3: Ubuntu, Debian, Raspbian
 
 is_ubuntu: False
 is_ubuntu_19: False
@@ -552,18 +574,18 @@ is_ubuntu_18: False
 is_ubuntu_17: False
 is_ubuntu_16: False
 
-is_debian: False    # covers both: Debian, Raspbian
+is_debian: False    # Covers both: Debian, Raspbian
 is_debian_10: False
 is_debian_9: False
 is_debian_8: False
 
-is_raspbian: False    # covers RPi HW and non-RPi HW versions of Raspbian
+is_raspbian: False    # Covers RPi HW and non-RPi HW versions of Raspbian
 is_raspbian_10: False
 is_raspbian_9: False
 is_raspbian_8: False
-is_rpi: False    # 2019-03-23 - doesn't yet test for RPi HW, but hopefully soon: https://github.com/iiab/iiab/issues/1406
+is_rpi: False    # 2019-03-23: Doesn't yet test for RPi HW, but hopefully soon: https://github.com/iiab/iiab/issues/1406
 
-is_redhat: False    # not well supported as of 2019, see: https://github.com/iiab/iiab/issues/1434
+is_redhat: False    # Not well supported as of 2019, see: https://github.com/iiab/iiab/issues/1434
 is_centos: False
 is_centos_7: False
 is_fedora: False
