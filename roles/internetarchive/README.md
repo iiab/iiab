@@ -1,7 +1,12 @@
-# Internet Archive - Universal Library project README 
+# Internet Archive Universal Library / Decentralized Web README
+
+The Internet Archive (http://archive.org) is famous for their WayBack Machine
+that has saved 362+ Billion web pages, and more recently their Decentralized
+Web project.
 
 This Ansible role installs the Internet Archive's dweb-mirror project on
-Internet-in-a-Box (IIAB).
+Internet-in-a-Box (IIAB).  Use this to build up a dynamic offline library
+arising from the materials you can explore at http://dweb.archive.org
 
 The project is a local server that allows users to browse resources from the
 Internet Archive stored on local drives - including USB drives.  
@@ -24,16 +29,24 @@ content types; new platforms; and new decentralized transports.
 
 ### Starting server
 
-The server is started and restarted automatically.  
-It can be turned on or off at a terminal window with `service internetarchive
-start` or  `service internetarchive stop` 
+The server is started and restarted automatically.  It can be turned on or off
+at a terminal window with `service internetarchive start` or `service
+internetarchive stop` 
 
 ### Browsing
 
-The server can be accessed at [http://box.lan:4244] (try
-[http://box.local:4244] if that doesn't work)
+The server can be accessed at [http://box:4244](http://box:4244) or
+[http://box.lan:4244](http://box.lan:4244) (try
+[http://box.local:4244](http://box.local:4244) via mDNS over a local network,
+if you don't have name resolution set up to reach your Internet-in-a-Box).
 
-If you don’t get a Archive UI then look at the server log (in browser console)
+_If future, we also hope to get [http://box/archive](http://box/archive) and
+[http://box.lan/archive](http://box.lan/archive) working (as of 2019-05-25 the
+error "Cannot GET /archive" appears — if you can help us fix
+[/etc/apache2/sites-available/internetarchive.conf](https://github.com/iiab/iiab/blob/master/roles/internetarchive/templates/internetarchive.conf)
+that would be incredible!)_
+
+If you don’t get an Archive UI then look at the server log (in browser console)
 to see for any “FAILING” log lines which indicate a problem. 
 
 Expect to see errors in the Browser log for
@@ -47,12 +60,12 @@ first time, refresh after a little while and most should appear.
 
 Administration is carried out through the same User Interface as browsing. 
 
-Access [http://localhost:4244/local] to see a display of local content, this
-interface is under development and various admin tools will be added here.
-*At some point this will become the default page*.
+Access [http://localhost:4244/local](http://localhost:4244/local) to see a
+display of local content, this interface is under development and various admin
+tools will be added here.  *At some point this will become the default page*.
 
-Access [http://localhost:4244] to get the Internet Archive main interface if
-connected to the net. 
+Access [http://localhost:4244](http://localhost:4244) to get the Internet
+Archive main interface if connected to the net. 
 
 While viewing an item or collection, the "Crawl" button in the top bar
 indicates whether the item is being crawled or not.  Clicking it will cycle
@@ -67,9 +80,9 @@ through three levels:
 
 ### Disks
 
-The server checks for caches of content in directories called `archiveorg` in all the likely places, 
-in particular it looks in `/media/pi/*archiveorg` for any inserted USB drives,
-and if none are found, it uses `/library/archiveorg`.
+The server checks for caches of content in directories called `archiveorg` in
+all the likely places, in particular it looks in `/media/pi/*archiveorg` for
+any inserted USB drives, and if none are found, it uses `/library/archiveorg`.
 
 The list of places it checks, in an unmodified installation can be seen at 
 `https://github.com/internetarchive/dweb-mirror/blob/master/configDefaults.yaml#L7`.
@@ -78,15 +91,16 @@ You can override this in `dweb-mirror.config.yaml` in the home directory of the
 user that runs the server, this is currently `/root/dweb-mirror.config.yaml`
 (see 'Advanced' below)
 
-Archive's `Items` are stored in subdirectories of the first of these directories found, but
-are read from any of the locations. 
+Archive's `Items` are stored in subdirectories of the first of these
+directories found, but are read from any of the locations. 
 
-If you disk space is getting full, its perfectly safe to delete any subdirectories, or to move them 
-to an attached USB.  Its also safe to move attached USB's from one device to another.
+If you disk space is getting full, its perfectly safe to delete any
+subdirectories, or to move them to an attached USB.  Its also safe to move
+attached USB's from one device to another.
 
-The one directory you should not move or delete is `archiveorg/.hashstore` in any of these locations,
-the server will refetch anything else it needs if you browse to the item again when connected to
-the internet. 
+The one directory you should not move or delete is `archiveorg/.hashstore` in
+any of these locations, the server will refetch anything else it needs if you
+browse to the item again when connected to the internet. 
 
 ### Maintenance
 
@@ -107,8 +121,10 @@ cached,  just to rebuild a table of checksums.
 Most functionality of the tool is controlled by two YAML files, the second of
 which you can edit if you have access to the shell. 
 
-You can view the current configuration by going to [http://box.lan:4244/info]
-or [http://localhost:4244/info] depending on how you are connected.
+You can view the current configuration by going to
+[http://box.lan:4244/info](http://box.lan:4244/info) or
+[http://localhost:4244/info](http://localhost:4244/info) depending on how you
+are connected.
 
 The default, and user configurations are displayed as the `0` and `1` item in
 the `/info` call. 
@@ -172,6 +188,7 @@ cd /opt/iiab/internetarchive/node_modules/@internetarchive/dweb-mirror
 ./internetarchive --copydirectory /media/pi/xyz/archiveorg --crawl --rows 10 --level details prelinger
 ```
 ## Troubleshooting
+
 There are two logs of relevance, the browser and the server.
 
 **Browser**: If using Chrome then this is at View / Developer Tools /
