@@ -1,46 +1,119 @@
-# "How do i fail a task in Ansible if the variable contains a boolean value?
-# I want to perform input validation for Ansible playbooks"
-# https://stackoverflow.com/questions/46664127/how-do-i-fail-a-task-in-ansible-if-the-variable-contains-a-boolean-value-i-want/46667499#46667499
+- name: Make sure the Map Test Page directory exists
+  file:
+    path: '{{ vector_map_path }}/maplist'
+    state: directory
+    mode: '0755'
 
-# We assume 0-init/tasks/validate_vars.yml has DEFINITELY been run, so no need
-# to re-check whether vars are defined here.  As Ansible vars cannot be unset:
-# https://serverfault.com/questions/856729/how-to-destroy-delete-unset-a-variable-value-in-ansible
+- name: Make space for the viewer
+  file:
+    path: '{{ vector_map_path }}/viewer/assets'
+    state: directory
+    mode: '0755'
 
-- name: Assert that "osm_vector_maps_install is sameas true" (boolean not string etc)
-  assert:
-    that: osm_vector_maps_install is sameas true
-    fail_msg: "PLEASE SET 'osm_vector_maps_install: True' e.g. IN: /etc/iiab/local_vars.yml"
-    quiet: yes
+- name: Download map catalog {{ iiab_map_url }}/assets/regions.json to {{ vector_map_path }}/maplist/assets/
+  get_url:
+    url: "{{ osm_map_url }}/resources/regions.json"
+    dest: /etc/iiab/
 
-- name: Assert that "osm_vector_maps_enabled | type_debug == 'bool'" (boolean not string etc)
-  assert:
-    that: osm_vector_maps_enabled | type_debug == 'bool'
-    fail_msg: "PLEASE GIVE VARIABLE 'osm_vector_maps_enabled' A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
-    quiet: yes
+- name: Symlink catalog {{ doc_root }}/common/assets/regions.json -> {{ vector_map_path }}/maplist/assets/regions.json
+  file:
+    src: "/etc/iiab/regions.json"
+    dest: "{{ doc_root }}/common/assets/regions.json"
+    state: link
 
+- name: Download the JavaScript bundle with OpenLayers (main.js) for test page http://box/maps/maplist
+  get_url:
+    url: "{{ osm_map_url }}/osm-source/test_page/build/main.js"
+    dest: '{{ vector_map_path }}/maplist/'
 
-- name: Install OSM Vector Maps if 'osm_vector_maps_installed' not defined, e.g. in {{ iiab_state_file }}    # /etc/iiab/iiab_state.yml
-  include_tasks: install.yml
-  when: osm_vector_maps_installed is undefined
+- name: Install {{ vector_map_path }}/maplist/index.html from template, for test page http://box/maps/maplist
+  template:
+    src: "index.html"
+    dest: '{{ vector_map_path }}/maplist/index.html'
 
+- name: Fetch the javascript bundle with openlayers for Viewer page
+  get_url:
+    url: "{{ osm_map_url }}/osm-source/regional-base/build/main.js"
+    dest: '{{ vector_map_path }}/viewer/'
 
-- name: Enable/Disable/Reload NGINX for OSM, if nginx_enabled
-  include_tasks: nginx.yml
-  when: nginx_enabled | bool
+- name: Fetch the index.html for test page
+  get_url:
+    url: "{{ osm_map_url }}/osm-source/regional-base/build/index.html"
+    dest: '{{ vector_map_path }}/maplist/index.html'
 
+# Bboxes (bounding boxes) are currently square.  But geofabrik has non-rectangular bboxes.
+# So bring the bounding box definition from cloud (bboxes.geojson is big)
+- name: Download bounding box definitions (bboxes.geojson) to {{ vector_map_path }}/maplist/assets/
+  get_url:
+    url: "{{ osm_map_url }}/resources/bboxes.geojson"
+    dest: '{{ vector_map_path }}/viewer/assets/'
 
-- name: Add 'osm-vector-maps' variable values to {{ iiab_ini_file }}
-  ini_file:
-    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
-    section: osm-vector-maps
-    option: "{{ item.option }}"
-    value: "{{ item.value | string }}"
-  with_items:
-    - option: name
-      value: OSM Vector Maps
-    - option: description
-      value: '"OpenStreetMap is like Google Maps but better, for schools especially, as it works offline and avoids all the advertising.  Download detailed ''vector maps'' for an entire continent, or the entire world!  Also includes 10+ zoom levels of satellite imagery!"'
-    - option: install
-      value: "{{ osm_vector_maps_install }}"
-    - option: enabled
-      value: "{{ osm_vector_maps_enabled }}"
+- name: Copy the common assets for the general purpose map viewer
+  copy: src={{ item }}
+        dest="{{ vector_map_path }}/viewer/assets"
+        mode=0644
+        owner=root
+        group=root
+  with_fileglob:
+        - assets/*
+
+# REMOVE this stanza once the transition to Python 3 is confirmed
+#- name: Install python-geojson package (OS's prior to Ubuntu 19.10)
+#  package:
+#    name: python-geojson
+#    state: present
+#  when: is_raspbian_9 or is_raspbian_10 or is_ubuntu_16 or is_ubuntu_18 or is_debian_9 or is_debian_10
+
+# 2019-10-19: Above python-geojson does not exist on Ubuntu 19.10, so let's
+# begin the transition to Python 3... currently unused
+#- name: Install python3-geojson package (especially for new OS's like Ubuntu 19.10+)
+#  package:
+#    name: python3-geojson    # 2019-10-19: available across most/all recent
+#    state: present           # OS's, but not yet used by osm-vector-maps code?
+
+- name: Install /usr/bin/iiab-update-map for updating of Map Pack catalog & descriptions
+  template:
+    src: iiab-update-map
+    dest: /usr/bin/iiab-update-map
+    mode: "0755"
+
+- name: Copy the Countries geojson to assets
+  copy:
+    src: countries.json
+    dest: '{{ vector_map_path }}/viewer/assets'
+
+#  It is too complicated to use a single file for both iiab and admin-console
+- name: Copy the duplicated JavaScript (map_functions.js) to {{ vector_map_path }}/maplist/assets
+  copy:
+    src: map_functions.js
+    dest: '{{ vector_map_path }}/viewer'/
+
+- name: Install /etc/nginx/conf.d/osm-vector-maps.conf from template
+  template:
+    src: osm-vector-maps-nginx.conf
+    dest: "/etc/nginx/conf.d/osm-vector-maps-nginx.conf"
+  when: osm_vector_maps_enabled | bool
+
+- name: Remove config /etc/nginx/conf,d/osm-vector-maps.conf (debuntu)
+  file:
+    path: /etc/nginx/conf.d/osm-vector-maps-nginx.conf
+    state: absent
+  when: not osm_vector_maps_enabled | bool
+
+#- name: Does the {{ vector_map_path }}/index.html redirect already exist?
+#  stat:
+#    path: "{{ vector_map_path }}/index.html"
+#  register: osm_redirect
+
+#Copy the redirect to the test page -- delete this later if more than one map
+- name: Install {{ vector_map_path }}/index.html redirect for http://box/maps -> http://box/osm-vector-maps/maplist/ if no redirect exists
+  copy:
+    force: no
+    src: test-index.redirect
+    dest: "{{ vector_map_path }}/index.html"
+  #when: not osm_redirect.stat.exists
+
+- name: Reload Apache service ({{ apache_service }})    # e.g. apache2
+  systemd:
+    name: "{{ apache_service }}"
+    state: reloaded
