@@ -1,13 +1,95 @@
-Install nginx dependencies
-Download nginx source
-Extract nginx source
-Download nginx-rtmp-module source
-Extract nginx-rtmp-module source
-Nginx - run configure
-Nginx - make
-Nginx - make install
-Copy nginx init script
-Update rc.d after copying init script
-Copy nginx service configuration
-Configure nginx cross-domain
-Restart nginx
+- name: Cham - Create streaming root directory
+  file: 
+    path: "{{ streaming_root }}"
+    state: directory
+
+- name: Cham - Create hls directory
+  file: 
+    path: "{{ streaming_root }}/{{ hls_dir }}"
+    state: directory
+
+- name: Cham - Install nginx dependencies
+  package:
+    name:
+      - build-essential
+      - libpcre3
+      - libpcre3-dev
+      - libssl-dev
+    state: latest
+
+- name: Cham - Download nginx source
+  get_url:
+    url: "{{ nginx_url }}/{{ nginx_src_file }}"
+    dest: "{{ downloads_dir }}/{{ nginx_src_file }}"
+    timeout: "{{ download_timeout }}"
+  when: internet_available | bool
+
+- name: Cham - Download nginx-rtmp-module source
+  get_url:
+    url: "{{ nginx_rtmp_module_url }}/{{ nginx_rtmp_module_src_file }}"
+    dest: "{{ downloads_dir }}/{{ nginx_rtmp_module_src_file }}"
+    timeout: "{{ download_timeout }}"
+  when: internet_available | bool
+
+- name: Cham - Extract nginx source
+  unarchive: 
+    src: "{{ downloads_dir }}/{{ nginx_src_file }}"
+    dest: "{{ downloads_dir }}/{{ nginx_src_dir }}"
+    owner: root
+    group: root
+    extra_opts: [--strip-components=1]
+
+- name: Cham - Extract nginx-rtmp-module source
+  unarchive: 
+    src: "{{ downloads_dir }}/{{ nginx_rtmp_module_src_file }}"
+    dest: "{{ downloads_dir }}/{{ nginx_rtmp_module_src_dir }}"
+    owner: root
+    group: root
+    extra_opts: [--strip-components=1]
+
+- name: Cham - Nginx - run configure
+  command: "./configure --add-module={{ downloads_dir }}/{{ nginx_rtmp_module_src_dir }}"
+  args:
+    chdir: "{{ downloads_dir }}/{{ nginx_src_dir }}"
+
+- name: Cham - Nginx - make
+  command: make 
+  args:
+    chdir: "{{ downloads_dir }}/{{ nginx_src_dir }}"
+
+- name: Cham - Nginx - make install
+  command: make install
+  args:
+    chdir: "{{ downloads_dir }}/{{ nginx_src_dir }}"
+
+- name: Cham - Copy nginx init script
+  template:
+    src: nginx
+    dest: /etc/init.d/nginx
+    owner: root
+    group: root
+    mode: 0755
+
+- name: Cham - Update rc.d after copying init script
+  command: update-rc.d nginx defaults
+
+- name: Cham - Copy nginx service configuration
+  template:
+    src: nginx.conf.j2
+    dest: /usr/local/nginx/conf/nginx.conf
+    owner: root
+    group: root
+    mode: 0755
+
+- name: Cham - Configure nginx cross-domain
+  template:
+    src: crossdomain.xml
+    dest: /usr/local/nginx/html/crossdomain.xml
+    owner: root
+    group: root
+    mode: 0755
+
+- name: Cham - Restart nginx
+  systemd:
+    name: nginx
+    state: restarted
