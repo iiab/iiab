@@ -1,0 +1,141 @@
+- name: FreePBX - Install dependencies
+  include: freepbx_dependencies.yml
+
+- name: FreePBX - Download software to /opt/iiab/downloads
+  get_url:
+    url: "{{ freepbx_url }}/{{ freepbx_src_file }}"
+    dest: "{{ downloads_dir }}/{{ freepbx_src_file }}"
+    timeout: "{{ download_timeout }}"
+  when: internet_available | bool
+
+- name: FreePBX - Check for {{ downloads_dir }}/{{ freepbx_src_file }}
+  stat:
+    path: "{{ downloads_dir }}/{{ freepbx_src_file }}"
+  register: freepbx_src
+
+- name: FreePBX - FAIL (force Ansible to exit) IF {{ downloads_dir }}/{{ freepbx_src_file }} doesn't exist
+  fail:
+    msg: "{ downloads_dir }}/{{ freepbx_src_file }} is REQUIRED in order to install."
+  when: not freepbx_src.stat.exists
+
+- name: FreePBX - Create install source directory
+  file: 
+    path: "{{ freepbx_src_dir }}"
+    state: directory
+
+- name: FreePBX - Extract source
+  unarchive: 
+    src: "{{ downloads_dir }}/{{ freepbx_src_file }}"
+    dest: "{{ freepbx_src_dir }}"
+    owner: root
+    group: root
+    extra_opts: [--strip-components=1]
+    creates: "{{ freepbx_src_dir }}/install"
+
+- name: FreePBX - Disable & Stop asterisk service
+  systemd:
+    daemon_reload: yes
+    name: asterisk
+    enabled: no
+    state: stopped
+
+- name: FreePBX - Add mysql user
+  mysql_user:
+    name: "{{ asterisk_db_user }}"
+    password: "{{ asterisk_db_password }}"
+    priv: "{{ asterisk_db_dbname }}.*:ALL/{{ asterisk_db_cdrdbname }}.*:ALL"
+    login_host: "{{ asterisk_db_host }}"
+    login_user: "root"
+    login_password: "{{ mysql_root_password }}"
+    host: "{{ (asterisk_db_host == 'localhost') | ternary('localhost', ansible_default_ipv4.address) }}"
+    state: present
+
+- name: FreePBX - Add mysql db
+  mysql_db:
+    name: "{{ asterisk_db_dbname }}"
+    encoding: utf8
+    collation: utf8_general_ci
+    login_host: "{{ asterisk_db_host }}"
+    login_user: "root"
+    login_password: "{{ mysql_root_password }}"
+    state: present
+
+- name: FreePBX - Add cdr mysql db
+  mysql_db:
+    name: "{{ asterisk_db_cdrdbname }}"
+    encoding: utf8
+    collation: utf8_general_ci
+    login_host: "{{ asterisk_db_host }}"
+    state: present
+
+- name: FreePBX - Don't let freepbx take over the php sessions dir
+  blockinfile:
+    content: |
+      [blacklist]
+      directory = /var/lib/php/sessions
+    marker: "; {mark} ANSIBLE MANAGED BLOCK"
+    dest: /etc/asterisk/freepbx_chown.conf
+    owner: asterisk
+    group: asterisk
+    create: yes
+
+- name: FreePBX - Create php sessions directory
+  file: 
+    path: "/var/lib/php/asterisk_sessions/"
+    state: directory
+
+- name: FreePBX - Set ownership for php sessions directory
+  file: 
+    dest: "/var/lib/php/asterisk_sessions/" 
+    owner: asterisk 
+    group: asterisk
+    recurse: yes
+ 
+- name: FreePBX - Install (just run once) - CAN TAKE 12 MIN OR LONGER!
+  command: "{{ item }}"
+  args:
+    chdir: "{{ freepbx_src_dir }}"
+    creates: "{{ freepbx_install_dir }}"
+  with_items:
+    - ./start_asterisk start
+    - ./install -n --webroot {{ freepbx_install_dir }} --dbuser {{ asterisk_db_user }} --dbpass {{ asterisk_db_password }} --dbname {{ asterisk_db_dbname }} --cdrdbname {{ asterisk_db_cdrdbname }}
+
+- name: FreePBX - Create /etc/odbc.ini
+  template:
+    src: odbc.ini.j2
+    dest: /etc/odbc.ini
+    owner: root
+    group: root
+    mode: 0644
+
+- name: FreePBX - Install Apache's sites-available/freepbx.conf from template
+  template:
+    src: freepbx.conf.j2
+    dest: /etc/apache2/sites-available/freepbx.conf
+    owner: www-data
+    group: www-data
+    mode: 0644
+
+- name: FreePBX - Create symlink freepbx.conf from sites-enabled to sites-available (if pbx_enabled)
+  file: 
+    src: /etc/apache2/sites-available/freepbx.conf
+    dest: /etc/apache2/sites-enabled/freepbx.conf
+    state: link
+  when: pbx_enabled | bool
+
+- name: FreePBX - Remove symlink /etc/apache2/sites-enabled/freepbx.conf (if not pbx_enabled)
+  file: 
+    path: /etc/apache2/sites-enabled/freepbx.conf
+    state: absent
+  when: not pbx_enabled
+
+- name: FreePBX - Restart Apache service ({{ apache_service }})
+  systemd:
+    name: "{{ apache_service }}"    # httpd or apache2
+    state: restarted
+
+- name: FreePBX - Install /etc/systemd/system/freepbx.service systemd unit file from template
+  template:
+    src: freepbx.service.j2
+    dest: /etc/systemd/system/freepbx.service
+    mode: 755
