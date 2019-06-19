@@ -5,55 +5,62 @@ error_log  logs/rtmp_error.log debug;
 pid        logs/nginx.pid;
 
 events {
-    worker_connections  1024;
+	worker_connections  1024;
 }
 
 http {
-    include     mime.types;
-    default_type application/octet-stream;
-    
-    server {
-        listen       {{ nginx_port }};
-        server_name  localhost;
+	include     mime.types;
+	default_type application/octet-stream;
 
-        location /hls {
-            # Serve HLS fragments
+	server {
+		listen       {{ nginx_port }};
+		server_name  localhost;
 
-            # CORS setup
-            add_header 'Access-Control-Allow-Origin' '*' always;
-            add_header 'Access-Control-Expose-Headers' 'Content-Length';
+		location /hls {
+			# Serve HLS fragments
 
-            # allow CORS preflight requests
-            if ($request_method = 'OPTIONS') {
-                add_header 'Access-Control-Allow-Origin' '*';
-                add_header 'Access-Control-Max-Age' 1728000;
-                add_header 'Content-Type' 'text/plain charset=UTF-8';
-                add_header 'Content-Length' 0;
-                return 204;
-            }
+			# CORS setup
+			add_header 'Access-Control-Allow-Origin' '*' always;
+			add_header 'Access-Control-Expose-Headers' 'Content-Length';
+
+			# allow CORS preflight requests
+			if ($request_method = 'OPTIONS') {
+				add_header 'Access-Control-Allow-Origin' '*';
+				add_header 'Access-Control-Max-Age' 1728000;
+				add_header 'Content-Type' 'text/plain charset=UTF-8';
+				add_header 'Content-Length' 0;
+				return 204;
+			}
 
 
-            types {
-                application/vnd.apple.mpegurl m3u8;
-                video/mp2t ts;
-            }
-            root {{ streaming_root }};
-            add_header Cache-Control no-cache;
-        }
-    }
+			types {
+				application/vnd.apple.mpegurl m3u8;
+				video/mp2t ts;
+			}
+			root {{ streaming_root }};
+			add_header Cache-Control no-cache;
+		}
+	}
 }
 
 rtmp {
-        server {
-                listen 1935;
-                chunk_size 8192;
+	server {
+		listen 1935;
+		chunk_size 8192;
 
-                application hls {
-                        live on;
-                        meta copy;
-                        allow publish all;
-                        hls on;
-                        hls_path {{ streaming_root }}/{{ hls_dir }};
-        }
-    }
+		application hls {
+			live on;
+			meta copy;
+			allow publish all;
+			hls on;
+			hls_path {{ streaming_root }}/{{ hls_dir }};
+
+			#record the stream
+                        record all;
+                        record_path {{ streaming_root }}/{{ flv_dir }};
+			#append current timestamp to filename
+                        record_suffix _%Y-%m-%d_%H-%M-%S.flv;
+                        exec_record_done /usr/bin/ffmpeg -y -i $path -acodec libmp3lame -ar 44100 -ac 1 -vcodec libx264 -movflags +faststart -crf 27 -preset veryfast {{ streaming_root }}/{{ recordings_dir }}/$basename.mp4 && rm $path;
+		}
+	}
 }
