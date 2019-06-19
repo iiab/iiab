@@ -16,7 +16,7 @@ Using It
   * You'll need a client side streaming application. I will share settings for OBS (Open Broadcaster Studio). 
   * Open OBS. Go to `Settings > Stream`
   * Select `Service` as `Custom`
-  * Server: `rtmp://box.lan/hls`
+  * Server: `rtmp://box.lan/src`
   * Stream key: `stream`
   * Use authentication: No
   * When you click `Start Streaming` OBS should connect to the nginx rtmp/hls endpoint and you will see your streamed video in the video container on the demo page. 

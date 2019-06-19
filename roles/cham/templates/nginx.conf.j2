@@ -48,19 +48,40 @@ rtmp {
 		listen 1935;
 		chunk_size 8192;
 
+		application src {
+			live on;
+
+			exec ffmpeg -i rtmp://localhost/src/$name
+				-c:a libmp3lame -q:a 8 -b:a 28k -tune zerolatency -preset veryfast -crf 28 
+				-c:v libx264 -b:v 128K -vf "scale=240:trunc(ow/a/2)*2" -f flv rtmp://localhost/hls/$name_low
+				-c:a libmp3lame -q:a 6 -b:a 48k -tune zerolatency -preset veryfast -crf 26
+				-c:v libx264 -b:v 256k -vf "scale=480:trunc(ow/a/2)*2" -f flv rtmp://localhost/hls/$name_mid
+				-c:a libmp3lame -q:a 4 -b:a 96k -tune zerolatency -preset veryfast -crf 24
+				-c:v libx264 -b:v 512K -vf "scale=640:trunc(ow/a/2)*2" -f flv rtmp://localhost/hls/$name_hi
+				-c:a copy                       -tune zerolatency
+				-c:v copy              -f flv rtmp://localhost/hls/$name_src;
+		}
+
 		application hls {
 			live on;
-			meta copy;
-			allow publish all;
+
 			hls on;
 			hls_path {{ streaming_root }}/{{ hls_dir }};
+			hls_nested on;
+
+			hls_variant _low BANDWIDTH=160000;
+			hls_variant _mid BANDWIDTH=320000;
+			hls_variant _hi  BANDWIDTH=640000;
+			hls_variant _src BANDWIDTH=960000;
 
 			#record the stream
-                        record all;
+			record all;
                         record_path {{ streaming_root }}/{{ flv_dir }};
 			#append current timestamp to filename
-                        record_suffix _%Y-%m-%d_%H-%M-%S.flv;
-			exec_record_done /usr/bin/ffmpeg -y -i $path -acodec libmp3lame -ar 44100 -q:a 6 -ac 1 -vcodec libx264 -movflags +faststart -crf 25 -preset veryfast {{ streaming_root }}/{{ recordings_dir }}/$basename.mp4;
+			record_suffix _%Y-%m-%d_%H-%M.flv;
+			exec_record_done /usr/bin/ffmpeg -y -i $path -acodec libmp3lame 
+				-ar 44100 -q:a 6 -ac 1 -vcodec libx264 -movflags +faststart 
+				-crf 25 -preset veryfast {{ streaming_root }}/{{ recordings_dir }}/$basename.mp4;
 		}
 	}
 }
