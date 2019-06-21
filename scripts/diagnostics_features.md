@@ -26,7 +26,7 @@ contents of following directories:
 ```
 sudo iiab-diagnostics
 ```
-(this will generate a new file with the collected information and place it into /etc/iiab/diagnostic/)
+(this will generate a new file with the collected information and place it into /etc/iiab/diagnostics/)
 
 2. Upload the diagnostics you have just generated to pastebinit.
 ```
