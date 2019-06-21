@@ -1,18 +1,18 @@
-#### Objective ####
-* Creates a tgz which includes  user's name, date, operating system in title. Creates tgz less than 1MB. Can be read by vi without untaring.Gathers the following:
+## Objective 
+* Creates a flat file which can be uploaded to pastebinit. Gathers the following:
 
-1. iiab.ini
-2. iiab.env
-3. ip addr
-4. ifconfig
-5. brctl show
+1. /etc/iiab/iiab.ini
+2. /etc/iiab/iiab.env
+3. Output of /sbin/ip addr command
+4. Output of /sbin/ifconfig command
+5. Output of /sbin/brctl show
 6. /etc/resolv.conf
-7. netstat -rn (routing table)
-8. netstat -natp (which services have which ports)
-9. iiab-install.log
-10. iiab-debug.log
-11. iiab-network.log
-12. all ansible variables
+7. Output of /bin/netstat -rn (routing table)
+8. Output from /bin/netstat -natp (which services have which ports)
+9. /opt/iiab/iiab-install.log
+10. /opt/iiab/iiab-debug.log
+11. /opt/iiab-network.log
+12. all ansible facts
 
 contents of following directories:
 
@@ -21,9 +21,15 @@ contents of following directories:
 3. /etc/NetworkManager/system-connections
 4. /etc/systemd/network/
 
-#### Suggested Usage ####
-1. Upload the diagnostics you have just generated to pastebinit.
+#### Suggested Usage 
+1. Create a diagnostic package
 ```
-pbput /etc/iiab/diagnostics/<diagnostics file name>
+sudo iiab-diagnostics
 ```
-2. Email a description of the symptoms, and how to generate them, along with the URL which was returned by the "pbput" command, to bugs@iiab.io.
+(this will generate a new file with the collected information and place it into /etc/iiab/diagnostic/)
+
+2. Upload the diagnostics you have just generated to pastebinit.
+```
+ pastebinit -i /etc/iiab/diagnostics/<name of file you just created>
+```
+3. Email a description of the symptoms, and how to generate them, along with the URL which was returned by the "pastebinit" command, to bugs@iiab.io.
