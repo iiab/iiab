@@ -1,12 +1,11 @@
 #!/bin/bash
-# create a diagnostic footprint of network, and OS settings
+# create a diagnostic collection, and documet OS settings
 
 read -p "\n\nPlease provide a name or nickname: (8 characters or less, no spaces) " who
 if [ -z "$who" ]; then
    who="noname"
 fi
 
-read -p "\n\nIf this is a request for help, what is your email address? " email
 # Build up a meaningful name for transmission back to the development team
 OS_VER=`cat /etc/iiab/iiab.env | grep OS_VER | cut -d'=' -f2`
 pushd /opt/iiab/iiab
@@ -16,160 +15,154 @@ popd
 
 SCRIPTDIR=$(cd `dirname $0` pwd)
 diagnostics_name=${OS_VER}-$YMD-$who
-basket=$diagnostics_name.$$
+outfile=$diagnostics_name.$$
 VARS_VALUES=/tmp/all-vars
 
 # record all the ansible variables
 pushd /opt/iiab/iiab > /dev/null
-   ./runrole all-vars $VARS_VALUES
+#   ./runrole all-vars $VARS_VALUES
 popd > /dev/null
 
 # cat files in this direcory
 function cat_dir(){
-   echo "=========================================================="
-   echo "Printing contents of $1"
-   filelist=$(ls $1)
-   if [ ! -z "$filelist" ]; then
-      pushd $1
-         for f in `ls *`;do
-            echo $f
-            cat $f
-         done
-      popd
+   echo >>/tmp/$outfile
+   echo "=IIAB=====================================================" >> /tmp/$outfile
+   if [ -d "$1" ];then
+      echo "Printing files in $1 directory" >> /tmp/$outfile
+      echo >>/tmp/$outfile
+      filelist=$(ls $1)
+      if [ ! -z "$filelist" ]; then
+         pushd $1
+            for f in `ls *`;do
+               echo "Printing contents of $f" >> /tmp/$outfile
+               echo >>/tmp/$outfile
+               cat $f | iconv -t UTF-8//IGNORE >> /tmp/$outfile
+            done
+         popd
+      fi
+   else
+      echo "Directory $1 does not exist" >> /tmp/$outfile
    fi
 }
 
+function cat_file(){
+   echo >>/tmp/$outfile
+   echo "=IIAB====================================================" >> /tmp/$outfile
+   if [ -f $1 ];then
+      echo "Printing contents of $1" >> /tmp/$outfile
+      echo >>/tmp/$outfile
+      if [ $# -eq 2 ];then
+         echo "Printing last 100 lines" >> /tmp/$outfile
+         tail -100 $1 | iconv -t UTF-8//IGNORE >> /tmp/$outfile
+      else
+         cat $1 | iconv -t UTF-8//IGNORE >> /tmp/$outfile
+      fi
+   else
+      echo "File $1 does not exists" >> /tmp/$outfile
+   fi
+}
+
+function cat_file_list(){
+   for f in $(cat filelist);do
+      cat_file $f
+   done
+}
 # collect all the network info in one place
-mkdir -p /tmp/$basket
-cat << EOF > /tmp/script2overview
+cat << EOF > /tmp/diagnostics_script
 #!/bin/bash
 # generate the body overview part diagnostic package about network
-echo "=========================================================="
+echo "=IIAB====================================================="
 echo Diagnostics submitted by:
 echo $who
-echo $email
-echo "=========================================================="
-echo iiab.env
-cat /etc/iiab/iiab.env
-echo "=========================================================="
-echo /etc/iiab/local_vars.yml
-cat /etc/iiab/local_vars.yml
-echo "=========================================================="
-echo /etc/iiab/openvpn_handle
-cat /etc/iiab/openvpn_handle
-echo "=========================================================="
-echo ifconfig
+echo "Identifier: $diagnostics_name" 
+echo "=IIAB====================================================="
+echo Output from /sbin/ifconfig command
+echo
 ifconfig
 echo
-echo "=========================================================="
-echo ip addr
+echo "=IIAB====================================================="
+echo Output fro /sbin/ip addr
+echo
 ip addr
 echo
-echo "=========================================================="
+echo "=IIAB====================================================="
 echo Checking for information about raspberry pi base image
+echo Output from command 'cat /etc/rpi-issue'
+echo
 if [ -f /etc/rpi-issue ];then
 cat /etc/rpi-issue
-echo "stage 2 = lite; stage 3 = desktop SEE github.com/RPi-Distro/pi-gen#stage-anatomy"
+echo "stage2 = lite; stage5 = desktop SEE https://github.com/RPi-Distro/pi-gen#stage-anatomy"
 else
    echo "not a raspberry pi"
 fi
-echo "=========================================================="
-echo "brctl show"
+echo "=IIAB====================================================="
+echo "/sbin/brctl show"
+echo
 brctl show
 echo
-echo "=========================================================="
-echo "/etc/resolv.conf"
-cat /etc/resolv.conf
-echo
-echo "=========================================================="
-echo "/etc/iiab_ini_file "
-cat /etc/iiab/iiab.ini
-echo
-echo "=========================================================="
+echo "=IIAB====================================================="
+echo Output from /bin/netstat -rn
 echo "routing table"
 netstat -rn
 echo
-echo "=========================================================="
-echo "iptales-save output"
+echo "=IIAB====================================================="
+echo "Output of /sbin/iptables-save"
+echo
 iptables-save
 echo
-echo "=========================================================="
-echo "/usr/bin/iiab-gen-iptable"
-cat /usr/bin/iiab-gen-iptables
+echo "=IIAB====================================================="
+if [ -f /.iiab-image ];then
+echo "Output of /bin/cat /.iiab-image command."
 echo
-echo "=========================================================="
-echo "/.iiab-image"
 cat /.iiab-image
-echo
-echo "=========================================================="
-echo "systemctl status dnsmasq"
-systemctl status dnsmasq
-echo
-echo "=========================================================="
-echo "journalctl -u dnsmasq"
-journalctl -u dnsmasq
-echo
-echo "=========================================================="
-echo "port usage"
-netstat -natp
-echo
-echo "=========================================================="
-echo "install log -- last 50 lines"
-tail -50 /opt/iiab/iiab/iiab-install.log
-echo
-echo "=========================================================="
-echo "iiab-network log -- last 50 lines"
-if [ -f /opt/iiab/iiab/iiab-network.log ]; then
-tail -50 /opt/iiab/iiab/iiab-network.log
-else 
-  echo no iiab-network.log
+else
+   echo /.iiab-image does not exist.
 fi
 echo
-echo "=========================================================="
-echo "Contents of /etc/network/interfaces"
-cat /etc/network/interfaces
-echo "End of Contents of /etc/network/interfaces"
-echo "=========================================================="
-# cat files in this direcory
-function cat_dir(){
-   echo "=========================================================="
-   echo "Printing contents of Directory \$1"
-   filelist=\$(ls \$1)
-   if [ ! -z "\$filelist" ]; then
-         for f in \$filelist;do
-            echo =====  Contents of file: \$base/\$f
-            cat \$1/\$f
-            echo =====  End of Contents of file: \$f
-         done
-   fi
-}
+echo "=IIAB====================================================="
+echo "systemctl status dnsmasq"
+echo
+systemctl status dnsmasq
+echo
+echo "=IIAB====================================================="
+echo "journalctl -u dnsmasq"
+echo
+journalctl -u dnsmasq
+echo
+echo "=IIAB====================================================="
+echo "Output of command /bin/netstat -natp showing port usage"
+echo
+netstat -natp
+echo
+echo "=IIAB====================================================="
+echo "Output of command /ansible -i localhost -m setup showing all local facts."
+echo
+ansible localhost -m setup 2>/dev/null
+echo
+EOF
+chmod 755 /tmp/diagnostics_script
+/tmp/diagnostics_script > /tmp/$outfile
+
+cat_file_list
+
 cat_dir /etc/network/interfaces.d
 cat_dir /etc/systemd/network
 cat_dir /etc/NetworkManager/system-connections
 cat_dir /etc/sysconfig/network-scripts/if-cfg*
-EOF
-chmod 755 /tmp/script2overview
-/tmp/script2overview > /tmp/$basket/overview
 
-if [ -f /opt/iiab/iiab/iiab-debug.log ]; then
-   cp /opt/iiab/iiab/iiab-debug.log /tmp/$basket
-else
-  touch /tmp/$basket/no_iiab-network.log
-fi
+cat_file /opt/iiab/iiab/iiab-debug.log last
+cat_file /opt/iiab/iiab/iiab-install.log last
+cat_file /opt/iiab/iiab-admin-console/admin-install.log last
 
-if [ -f /opt/iiab/iiab/iiab-install.log ]; then
-  cp -p /opt/iiab/iiab/iiab-install.log /tmp/$basket
-fi
-
-if [ -f "$VARS_VALUES" ]; then
-  cp -p "$VARS_VALUES" /tmp/$basket
-fi
+#if [ -f "$VARS_VALUES" ]; then
+#  cat "$VARS_VALUES" >> /tmp/$outfile
+#fi
 
 mkdir -p /etc/iiab/diagnostics
 if [ ! -z $diagnostics_name ];then
   pushd /tmp > /dev/null
-  tar czf /etc/iiab/diagnostics/$basket.tgz $basket/*
+  cp /tmp/$outfile /etc/iiab/diagnostics/
   popd > /dev/null
-  rm -rf /tmp/$basket
+  #rm -rf /tmp/$outfile
   exit 0
 fi
