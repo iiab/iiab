@@ -1,0 +1,168 @@
+#!/bin/bash
+# create a diagnostic collection, and documet OS settings
+
+read -p "\n\nPlease provide a name or nickname: (8 characters or less, no spaces) " who
+if [ -z "$who" ]; then
+   who="noname"
+fi
+
+# Build up a meaningful name for transmission back to the development team
+OS_VER=`cat /etc/iiab/iiab.env | grep OS_VER | cut -d'=' -f2`
+pushd /opt/iiab/iiab
+HASH=`git log --pretty=format:'g%h' -n 1`
+YMD=$(date +%y%m%d)
+popd
+
+SCRIPTDIR=$(cd `dirname $0` pwd)
+diagnostics_name=${OS_VER}-$YMD-$who
+outfile=$diagnostics_name.$$
+VARS_VALUES=/tmp/all-vars
+
+# record all the ansible variables
+pushd /opt/iiab/iiab > /dev/null
+#   ./runrole all-vars $VARS_VALUES
+popd > /dev/null
+
+# cat files in this direcory
+function cat_dir(){
+   echo >>/tmp/$outfile
+   echo "=IIAB=====================================================" >> /tmp/$outfile
+   if [ -d "$1" ];then
+      echo "Printing files in $1 directory" >> /tmp/$outfile
+      echo >>/tmp/$outfile
+      filelist=$(ls $1)
+      if [ ! -z "$filelist" ]; then
+         pushd $1
+            for f in `ls *`;do
+               echo "Printing contents of $f" >> /tmp/$outfile
+               echo >>/tmp/$outfile
+               cat $f | iconv -t UTF-8//IGNORE >> /tmp/$outfile
+            done
+         popd
+      fi
+   else
+      echo "Directory $1 does not exist" >> /tmp/$outfile
+   fi
+}
+
+function cat_file(){
+   echo >>/tmp/$outfile
+   echo "=IIAB====================================================" >> /tmp/$outfile
+   if [ -f $1 ];then
+      echo "Printing contents of $1" >> /tmp/$outfile
+      echo >>/tmp/$outfile
+      if [ $# -eq 2 ];then
+         echo "Printing last 100 lines" >> /tmp/$outfile
+         tail -100 $1 | iconv -t UTF-8//IGNORE >> /tmp/$outfile
+      else
+         cat $1 | iconv -t UTF-8//IGNORE >> /tmp/$outfile
+      fi
+   else
+      echo "File $1 does not exists" >> /tmp/$outfile
+   fi
+}
+
+function cat_file_list(){
+   for f in $(cat filelist);do
+      cat_file $f
+   done
+}
+# collect all the network info in one place
+cat << EOF > /tmp/diagnostics_script
+#!/bin/bash
+# generate the body overview part diagnostic package about network
+echo "=IIAB====================================================="
+echo Diagnostics submitted by:
+echo $who
+echo "Identifier: $diagnostics_name" 
+echo "=IIAB====================================================="
+echo Output from /sbin/ifconfig command
+echo
+ifconfig
+echo
+echo "=IIAB====================================================="
+echo Output fro /sbin/ip addr
+echo
+ip addr
+echo
+echo "=IIAB====================================================="
+echo Checking for information about raspberry pi base image
+echo Output from command 'cat /etc/rpi-issue'
+echo
+if [ -f /etc/rpi-issue ];then
+cat /etc/rpi-issue
+echo "stage2 = lite; stage5 = desktop SEE https://github.com/RPi-Distro/pi-gen#stage-anatomy"
+else
+   echo "not a raspberry pi"
+fi
+echo "=IIAB====================================================="
+echo "/sbin/brctl show"
+echo
+brctl show
+echo
+echo "=IIAB====================================================="
+echo Output from /bin/netstat -rn
+echo "routing table"
+netstat -rn
+echo
+echo "=IIAB====================================================="
+echo "Output of /sbin/iptables-save"
+echo
+iptables-save
+echo
+echo "=IIAB====================================================="
+if [ -f /.iiab-image ];then
+echo "Output of /bin/cat /.iiab-image command."
+echo
+cat /.iiab-image
+else
+   echo /.iiab-image does not exist.
+fi
+echo
+echo "=IIAB====================================================="
+echo "systemctl status dnsmasq"
+echo
+systemctl status dnsmasq
+echo
+echo "=IIAB====================================================="
+echo "journalctl -u dnsmasq"
+echo
+journalctl -u dnsmasq
+echo
+echo "=IIAB====================================================="
+echo "Output of command /bin/netstat -natp showing port usage"
+echo
+netstat -natp
+echo
+echo "=IIAB====================================================="
+echo "Output of command /ansible -i localhost -m setup showing all local facts."
+echo
+ansible localhost -m setup 2>/dev/null
+echo
+EOF
+chmod 755 /tmp/diagnostics_script
+/tmp/diagnostics_script > /tmp/$outfile
+
+cat_file_list
+
+cat_dir /etc/network/interfaces.d
+cat_dir /etc/systemd/network
+cat_dir /etc/NetworkManager/system-connections
+cat_dir /etc/sysconfig/network-scripts/if-cfg*
+
+cat_file /opt/iiab/iiab/iiab-debug.log last
+cat_file /opt/iiab/iiab/iiab-install.log last
+cat_file /opt/iiab/iiab-admin-console/admin-install.log last
+
+#if [ -f "$VARS_VALUES" ]; then
+#  cat "$VARS_VALUES" >> /tmp/$outfile
+#fi
+
+mkdir -p /etc/iiab/diagnostics
+if [ ! -z $diagnostics_name ];then
+  pushd /tmp > /dev/null
+  cp /tmp/$outfile /etc/iiab/diagnostics/
+  popd > /dev/null
+  #rm -rf /tmp/$outfile
+  exit 0
+fi
