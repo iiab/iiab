@@ -25,7 +25,7 @@ Optionally, you may want to enable `chan_dongle <https://github.com/wdoekes/aste
 
   asterisk_chan_dongle: True
 
-After installing PBX as part of IIAB, please visit http://box.lan:8888/freepbx and proceed with initial configuration (no login/password is required initially — you will be asked to set this up).
+After installing PBX as part of IIAB, please visit http://box.lan:83/freepbx and proceed with initial configuration (no login/password is required initially — you will be asked to set this up).
 
 You can monitor the FreePBX service with command::
 
