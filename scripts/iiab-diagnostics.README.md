@@ -4,7 +4,7 @@ To streamline troubleshooting of remote Internet-in-a-Box (IIAB) installations, 
 
 The ``pastebinit`` command can then be used to upload this file, creating a short URL that makes things even easier.
 
-But first off, the file is compiled by harvesting 3 kinds of things:
+But first off, the file is compiled by harvesting 4 kinds of things:
 
 1. Files
    1. /etc/iiab/iiab.env
@@ -12,28 +12,33 @@ But first off, the file is compiled by harvesting 3 kinds of things:
    3. /etc/iiab/local_vars.yml
    4. /etc/iiab/config_vars.yml
    5. /etc/iiab/openvpn_handle
-   6. /opt/iiab/iiab-install.log
-   7. /opt/iiab/iiab-debug.log
-   8. /opt/iiab/iiab-network.log
-   9. /etc/resolv.conf
-   10. /etc/network/interfaces
-   11. /usr/bin/iiab-gen-iptables
+   6. /etc/resolv.conf
+   7. /etc/network/interfaces
+   8. /usr/bin/iiab-gen-iptables
+   9. /.iiab-image
 
-2. Contents of directories:
+2. Contents of Directories:
    1. /etc/network/interfaces.d
    2. /etc/sysconfig/network-scripts/if-cfg*
    3. /etc/NetworkManager/system-connections
    4. /etc/systemd/network/
 
-3. Output from commands:
-   1. ansible localhost -m setup 2>/dev/null    # All Ansible facts
-   2. ip addr    # Network interfaces
-   3. ifconfig    # Older view
-   4. brctl show    # Bridge for LAN side
-   5. netstat -rn    # Routing table
-   6. netstat -natp    # Ports/Services in use
-   7. systemctl status dnsmasq    # Is dnsmasq running?
+3. Output from Commands:
+   1. ip addr    # Network interfaces
+   2. ifconfig    # Network interfaces (old view)
+   3. brctl show    # Bridge for LAN side
+   4. netstat -rn    # Routing table
+   5. netstat -natp    # Ports/Services in use
+   6. iptables-save    # Firewall rules
+   7. systemctl status dnsmasq    # Is dnsmasq Ok?
    8. journalctl -u dnsmasq    # dnsmasq log
+   9. ansible localhost -m setup 2>/dev/null    # All Ansible facts
+
+4. Log Files -- last 100 lines:
+   1. /opt/iiab/iiab-install.log
+   2. /opt/iiab/iiab-network.log
+   3. /opt/iiab/iiab-debug.log
+   4. /opt/iiab/iiab-admin-console/admin-install.log
 
 #### Suggested Usage 
 
