@@ -1,35 +1,58 @@
 ## Objective 
-* Creates a flat file which can be uploaded to pastebinit. Gathers the following:
 
-1. /etc/iiab/iiab.ini
-2. /etc/iiab/iiab.env
-3. Output of /sbin/ip addr command
-4. Output of /sbin/ifconfig command
-5. Output of /sbin/brctl show
-6. /etc/resolv.conf
-7. Output of /bin/netstat -rn (routing table)
-8. Output from /bin/netstat -natp (which services have which ports)
-9. /opt/iiab/iiab-install.log
-10. /opt/iiab/iiab-debug.log
-11. /opt/iiab-network.log
-12. all ansible facts
+Create a flat file which can be uploaded to pastebinit.
 
-contents of following directories:
+File contains 4 kinds of things:
 
-1. /etc/network/interfaces.d (and interfaces)
-2. /etc/sysconfig/network-scripts/if-cfg*
-3. /etc/NetworkManager/system-connections
-4. /etc/systemd/network/
+1. Files
+   1. /etc/iiab/iiab.ini
+   2. /etc/iiab/iiab.env
+   3. /etc/iiab/local_vars.yml
+   4. /etc/iiab/config_vars.yml
+   5. /etc/resolv.conf
+   6. /opt/iiab/iiab-install.log
+   7. /opt/iiab/iiab-debug.log
+   8. /opt/iiab/iiab-network.log
+
+2. Facts:
+   1. All Ansible facts
+
+3. Output from commands:
+   1. Output of /sbin/ip addr
+   2. Output of /sbin/ifconfig
+   3. Output of /sbin/brctl show
+   4. Output of /bin/netstat -rn (routing table)
+   5. Output of /bin/netstat -natp (which services have which ports)
+   ...
+   systemctl status dnsmasq
+   journalctl -u dnsmasq
+
+4. as well as contents of following directories:
+   1. /etc/network/interfaces.d (and interfaces)
+   2. /etc/sysconfig/network-scripts/if-cfg*
+   3. /etc/NetworkManager/system-connections
+   4. /etc/systemd/network/
 
 #### Suggested Usage 
-1. Create a diagnostic package
-```
-sudo iiab-diagnostics
-```
-(this will generate a new file with the collected information and place it into /etc/iiab/diagnostics/)
 
-2. Upload the diagnostics you have just generated to pastebinit.
-```
- pastebinit -i /etc/iiab/diagnostics/<name of file you just created>
-```
-3. Email a description of the symptoms, and how to generate them, along with the URL which was returned by the "pastebinit" command, to bugs@iiab.io.
+1. Run the diagnostics:
+
+   ```
+   sudo iiab-diagnostics
+   ```
+
+   ( This will bundle up all the diagnostics, into a new file places in: /etc/iiab/diagnostics/ )
+
+2. Upload the file using the pastebinit command:
+
+   ```
+   pastebinit < /etc/iiab/diagnostics/<name of file you just created>
+   ```
+   
+   This will generalte a link (URL).
+
+3. Post the link (URL) to a "New issue" at https://github.com/iiab/iiab/issues
+
+   Include a description of the symptoms, and how to reproduce the problem.
+
+4. If you don't understand Step 3, email everything to bugs@iiab.io instead.
