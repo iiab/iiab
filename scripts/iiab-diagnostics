@@ -1,170 +1,200 @@
 #!/bin/bash
-# Create a diagnostic collection, and document OS settings.
+
+# Collect IIAB diagnostic info for easy online/offline circulation
 # PLEASE SEE iiab-diagnostics.README.md
 
-read -p "\n\nPlease provide a name or nickname: (8 characters or less, no spaces) " who
-if [ -z "$who" ]; then
-   who="noname"
+# Build up a meaningful filename for dev/impl/educ team(s)
+OS_VER=`cat /etc/iiab/iiab.env | grep OS_VER | cut -d'=' -f2`
+HASH1=`cd /opt/iiab/iiab; git log --pretty=format:'%H' -n 1`
+HASH2=`cd /opt/iiab/iiab-admin-console; git log --pretty=format:'%H' -n 1`
+YMDT=$(date +%F_%T_%Z)
+
+read -p "\n\nOptionally, please provide a nickname: " nickname
+if [ -z "$nickname" ]; then
+    nickname="NONAME"
 fi
 
-# Build up a meaningful name for transmission to dev team(s)
-OS_VER=`cat /etc/iiab/iiab.env | grep OS_VER | cut -d'=' -f2`
-pushd /opt/iiab/iiab
-HASH=`git log --pretty=format:'g%h' -n 1`
-YMD=$(date +%y%m%d)
-popd
+outfile=/etc/iiab/diagnostics/${OS_VER}-$YMDT-$nickname
+echo "Compiling diagnostics to... $outfile"
 
-SCRIPTDIR=$(cd `dirname $0` pwd)
-diagnostics_name=${OS_VER}-$YMD-$who
-outfile=$diagnostics_name.$$
-VARS_VALUES=/tmp/all-vars
+#SCRIPTDIR=$(cd `dirname $0` pwd)
+#diagnostics_name=${OS_VER}_$YMDT_$nickname
+#outfile=/tmp/$diagnostics_name.$$
+#filelist=/opt/iiab/iiab/scripts/iiab-diagnostics.filelist
+#VARS_VALUES=/tmp/all-vars
 
 # Record all Ansible variables
-# pushd /opt/iiab/iiab > /dev/null
-#   ./runrole all-vars $VARS_VALUES
-# popd > /dev/null
+#pushd /opt/iiab/iiab > /dev/null
+#./runrole all-vars $VARS_VALUES
+#popd > /dev/null
+
+function cat_file() {
+    echo "=IIAB====================================================" >> $outfile
+    if [ -f $1 ]; then
+        if [ $# -eq 1 ]; then
+            echo "FILE $1" >> $outfile
+            echo >> $outfile
+            cat $1 | iconv -t UTF-8//IGNORE >> $outfile
+        else
+            echo "LAST 100 LINES OF FILE $1" >> $outfile
+            echo >> $outfile
+            tail -100 $1 | iconv -t UTF-8//IGNORE >> $outfile
+        fi
+        echo >> $outfile
+    else
+        echo "FILE $1 DOES NOT EXIST" >> $outfile
+    fi
+}
+
+#function cat_file_list() {
+#    for f in $(cat $filelist); do
+#        cat_file $f
+#    done
+#}
 
 # cat files in this direcory
 function cat_dir() {
-    echo >> /tmp/$outfile
-    echo "=IIAB=====================================================" >> /tmp/$outfile
+    echo "=IIAB=====================================================" >> $outfile
     if [ -d "$1" ]; then
-        echo "Printing files in $1 directory" >> /tmp/$outfile
-        echo >> /tmp/$outfile
+        echo "FILES IN DIRECTORY $1 TO FOLLOW..." >> $outfile
         filelist=$(ls $1)
         if [ ! -z "$filelist" ]; then
             pushd $1
             for f in `ls *`; do
-                echo "Printing contents of $f" >> /tmp/$outfile
-                echo >>/tmp/$outfile
-                cat $f | iconv -t UTF-8//IGNORE >> /tmp/$outfile
+                echo "-IIAB-----------------------------------------------------" >> $outfile
+                echo "FILE $1/$f" >> $outfile
+                echo >> $outfile
+                cat $f | iconv -t UTF-8//IGNORE >> $outfile
+                echo >> $outfile
             done
             popd
         fi
     else
-        echo "Directory $1 does not exist" >> /tmp/$outfile
+        echo "DIRECTORY $1 DOES NOT EXIST" >> $outfile
     fi
 }
 
-function cat_file() {
-    echo >> /tmp/$outfile
-    echo "=IIAB====================================================" >> /tmp/$outfile
-    if [ -f $1 ]; then
-        echo "Printing contents of $1" >> /tmp/$outfile
-        echo >> /tmp/$outfile
-        if [ $# -eq 2 ]; then
-            echo "Printing last 100 lines" >> /tmp/$outfile
-            tail -100 $1 | iconv -t UTF-8//IGNORE >> /tmp/$outfile
-        else
-            cat $1 | iconv -t UTF-8//IGNORE >> /tmp/$outfile
-        fi
-    else
-        echo "File $1 does not exists" >> /tmp/$outfile
-    fi
+# cat output of command
+function cat_cmd() {
+    echo "=IIAB=====================================================" >> $outfile
+    path=$(which $bla1 | sed 's/[^/]*$//')
+    echo "$path$1    # $2" >> $outfile
+    echo >> $outfile
+    $(echo $1) >> $outfile
+    echo >> $outfile
 }
 
-function cat_file_list() {
-    for f in $(cat filelist); do
-        cat_file $f
-    done
-}
+# Assemble script to later generate output from ~9 commands
+#cat << EOF > /tmp/iiab-diagnostics.script
+##!/bin/bash
+#echo "=IIAB====================================================="
+#echo -e "/sbin/ip addr    # Network interfaces\n"
+#ip addr
+#echo "=IIAB====================================================="
+#echo -e "/sbin/ifconfig    # Network interfaces (old view)\n"
+#ifconfig
+#echo "=IIAB====================================================="
+#echo -e "/sbin/brctl show    # Bridge for LAN side\n"
+#brctl show
+#echo "=IIAB====================================================="
+#echo -e "/bin/netstat -rn    # Routing table\n"
+#netstat -rn
+#echo "=IIAB====================================================="
+#echo -e "/bin/netstat -natp    # Ports/Services in use\n"
+#netstat -natp
+#echo "=IIAB====================================================="
+#echo -e "/sbin/iptables-save    # Firewall rules\n"
+#iptables-save
+#echo "=IIAB====================================================="
+#echo -e "/bin/systemctl status dnsmasq    # Is dnsmasq Ok?\n"
+#systemctl status dnsmasq
+#echo "=IIAB====================================================="
+#echo -e "/bin/journalctl -u dnsmasq    # dnsmasq log\n"
+#journalctl -u dnsmasq
+#echo "=IIAB====================================================="
+#echo -e "/usr/bin/ansible localhost -m setup 2>/dev/null    # All Ansible facts\n"
+#ansible localhost -m setup 2>/dev/null
+#EOF
+#
+#chmod 755 /tmp/iiab-diagnostics.script
 
-# collect all the network info in one place
-cat << EOF > /tmp/diagnostics_script
-#!/bin/bash
-# generate the body overview part diagnostic package about network
-echo "=IIAB====================================================="
-echo Diagnostics submitted by:
-echo $who
-echo "Identifier: $diagnostics_name" 
-echo "=IIAB====================================================="
-echo Output from /sbin/ifconfig command
-echo
-ifconfig
-echo
-echo "=IIAB====================================================="
-echo Output fro /sbin/ip addr
-echo
-ip addr
-echo
-echo "=IIAB====================================================="
-echo Checking for information about raspberry pi base image
-echo Output from command 'cat /etc/rpi-issue'
-echo
+# Start building up the file that will contain the diagnostics
+mkdir -p /etc/iiab/diagnostics
+mv $outfile $outfile.old    # Not really nec, given unique time stamps
+
+# HARVEST 0: Header & OS
+echo "=IIAB=====================================================" >> $outfile
+echo "This file is: $outfile" >> $outfile
+echo "iiab commit: $HASH1" >> $outfile
+echo "iiab-admin-console commit: $HASH2" >> $outfile
+echo "=IIAB=====================================================" >> $outfile
+echo "Checking /etc/rpi-issue for Raspbian OS version..." >> $outfile
+echo >> $outfile
 if [ -f /etc/rpi-issue ]; then
-cat /etc/rpi-issue
-echo "stage2 = lite; stage5 = desktop SEE https://github.com/RPi-Distro/pi-gen#stage-anatomy"
+    cat /etc/rpi-issue >> $outfile
+    echo >> $outfile
+    echo "stage2 = lite; stage5 = desktop SEE https://github.com/RPi-Distro/pi-gen#stage-anatomy" >> $outfile
 else
-    echo "Not a Raspberry Pi."
+    echo "Not a Raspberry Pi." >> $outfile
 fi
-echo "=IIAB====================================================="
-echo "/sbin/brctl show"
-echo
-brctl show
-echo
-echo "=IIAB====================================================="
-echo Output from /bin/netstat -rn
-echo "routing table"
-netstat -rn
-echo
-echo "=IIAB====================================================="
-echo "Output of /sbin/iptables-save"
-echo
-iptables-save
-echo
-echo "=IIAB====================================================="
-if [ -f /.iiab-image ]; then
-    echo "Output of /bin/cat /.iiab-image command."
-    echo
-    cat /.iiab-image
-else
-   echo /.iiab-image does not exist.
-fi
-echo
-echo "=IIAB====================================================="
-echo "systemctl status dnsmasq"
-echo
-systemctl status dnsmasq
-echo
-echo "=IIAB====================================================="
-echo "journalctl -u dnsmasq"
-echo
-journalctl -u dnsmasq
-echo
-echo "=IIAB====================================================="
-echo "Output of command /bin/netstat -natp showing port usage"
-echo
-netstat -natp
-echo
-echo "=IIAB====================================================="
-echo "Output of command /ansible -i localhost -m setup showing all local facts."
-echo
-ansible localhost -m setup 2>/dev/null
-echo
-EOF
-chmod 755 /tmp/diagnostics_script
-/tmp/diagnostics_script > /tmp/$outfile
 
-cat_file_list
+# HARVEST 1: Files
+#cat_file_list
+cat_file /etc/iiab/iiab.env
+cat_file /etc/iiab/iiab.ini
+cat_file /etc/iiab/local_vars.yml
+cat_file /etc/iiab/config_vars.yml
+cat_file /etc/iiab/openvpn_handle
+cat_file /etc/resolv.conf
+cat_file /etc/network/interfaces
+cat_file /usr/bin/iiab-gen-iptables
+cat_file /.iiab-image
 
+#echo "=IIAB====================================================="
+#if [ -f /.iiab-image ]; then
+#    echo "Output of /bin/cat /.iiab-image command."
+#    echo
+#    cat /.iiab-image
+#else
+#   echo /.iiab-image does not exist.
+#fi
+#echo
+
+# HARVEST 2: Contents of Directories
 cat_dir /etc/network/interfaces.d
 cat_dir /etc/systemd/network
 cat_dir /etc/NetworkManager/system-connections
 cat_dir /etc/sysconfig/network-scripts/if-cfg*
 
-cat_file /opt/iiab/iiab/iiab-debug.log last
-cat_file /opt/iiab/iiab/iiab-install.log last
-cat_file /opt/iiab/iiab-admin-console/admin-install.log last
+# HARVEST 3: Output of Commands
+#/tmp/iiab-diagnostics.script >> $outfile
+cat_cmd "ip addr" "Network interfaces"
+cat_cmd "ifconfig" "Network interfaces (old view)"
+cat_cmd "brctl show" "Bridge for LAN side"
+cat_cmd "netstat -rn" "Routing table"
+cat_cmd "netstat -natp" "Ports/Services in use"
+cat_cmd "iptables-save" "Firewall rules"
+cat_cmd "systemctl status dnsmasq" "Is dnsmasq Ok?"
+cat_cmd "journalctl -u dnsmasq" "dnsmasq log"
+cat_cmd "ansible localhost -m setup 2>/dev/null" "All Ansible facts"
 
 #if [ -f "$VARS_VALUES" ]; then
-#  cat "$VARS_VALUES" >> /tmp/$outfile
+#  cat "$VARS_VALUES" >> $outfile
 #fi
 
-mkdir -p /etc/iiab/diagnostics
-if [ ! -z $diagnostics_name ]; then
-    pushd /tmp > /dev/null
-    cp /tmp/$outfile /etc/iiab/diagnostics/
-    popd > /dev/null
-    #rm -rf /tmp/$outfile
-    exit 0
-fi
+# HARVEST 4: Log Files -- last 100 lines
+cat_file /opt/iiab/iiab/iiab-install.log last
+cat_file /opt/iiab/iiab/iiab-network.log last
+cat_file /opt/iiab/iiab/iiab-debug.log last
+cat_file /opt/iiab/iiab-admin-console/admin-install.log last
+
+#mkdir -p /etc/iiab/diagnostics
+#if [ ! -z $outfile ]; then
+#    pushd /tmp > /dev/null
+#    cp $outfile /etc/iiab/diagnostics/
+#    popd > /dev/null
+#    #rm -rf $outfile
+#    #exit 0
+#fi
+
+echo -e "Complete!  You can now run:\n\npastebinit < $outfile\n"
