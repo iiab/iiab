@@ -2,7 +2,7 @@
 AzuraCast README
 ==========
 
-This 'AzuraCast' playbook adds `AzuraCast <https://azuracast.com/>`_ to Internet-in-a-Box (IIAB) for network radio station functionality.  With 'AzuraCast' you and your community can schedule podcasts, music, and even do live streaming of audio content.  A variety of streaming formats are supported.
+This playbook adds `AzuraCast <https://azuracast.com/>`_ to Internet-in-a-Box (IIAB) for network radio station functionality.  With 'AzuraCast' you and your community can schedule podcasts, music, and even do live streaming of audio content.  A variety of streaming formats are supported.
 
 Currently, this will only run on Ubuntu 18.04, Debian 9, Debian 10. Support for Raspberry pi is experimental, so please test and report any issues.
 
