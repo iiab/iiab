@@ -4,14 +4,16 @@ AzuraCast README
 
 This playbook adds `AzuraCast <https://azuracast.com/>`_ to Internet-in-a-Box (IIAB) for network radio station functionality.  With 'AzuraCast' you and your community can schedule podcasts, music, and even do live streaming of audio content.  A variety of streaming formats are supported.
 
-Currently, this will only run on Ubuntu 18.04, Debian 9, Debian 10. Support for Raspberry pi is experimental, so please test and report any issues.
+Please see AzuraCast's `screenshots <https://www.azuracast.com/about/screenshots.html>`_.
+
+Currently, this will only run on Ubuntu 18.04, Debian 9, Debian 10. Support for Raspberry Pi is experimental, so please test and report any issues.
 
 Using It
 --------
 
-* Do a normal IIAB install (http://download.iiab.io) setting variables ``azuracast_install`` and ``azuracast_enabled`` in ``/etc/iiab/local_vars.yml`` as ``True``.
-* AzuraCast's console will be available at http://box.lan:10080
-* This site will prompt you to complete initial setup: user accounts, managing stations, radio streams, etc.
-* Next, check out some `how-to videos <https://www.youtube.com/watch?v=b1Rxlu5P804>`_ to learn to manage your own radio station.
+* Do a normal IIAB install (http://download.iiab.io), making sure to set both variables ``azuracast_install`` and ``azuracast_enabled`` to ``True`` when it prompts you to edit `/etc/iiab/local_vars.yml <http://FAQ.IIAB.IO#What_is_local_vars.yml_and_how_do_I_customize_it.3F>`_, as you begin the installation. 
+* When the IIAB software install completes, it will ask you to reboot, and AzuraCast's console will then be available at http://box.lan:10080
+* This console site will prompt you to complete AzuraCast's initial setup: user accounts, managing stations, radio streams, etc.
+* Finally, check out some `how-to videos <https://www.youtube.com/watch?v=b1Rxlu5P804>`_ to learn to manage your own radio station!
 
 Note: When creating a station using AzuraCast's console, its default streaming ports for ``station`` and ``autodj`` need to be in the `port range 10000-10100 <https://github.com/iiab/iiab/wiki/IIAB-Networking#list-of-ports--services>`_.
