@@ -1,0 +1,178 @@
+#!/bin/bash
+
+# Collect IIAB diagnostic info into 1 file for easy online/offline circulation!
+# PLEASE SEE iiab-diagnostics.README.md
+
+IIAB_RELEASE=`cat /etc/iiab/iiab.env | grep IIAB_RELEASE | cut -d'=' -f2`
+OS_VER=`cat /etc/iiab/iiab.env | grep OS_VER | cut -d'=' -f2`
+#HASH=`cd /opt/iiab/iiab; git log --pretty=format:'%h' -n 1`
+HASH1=`cd /opt/iiab/iiab; git log --pretty=format:'%H' -n 1`
+HASH2=`cd /opt/iiab/iiab-admin-console; git log --pretty=format:'%H' -n 1`
+YMDT=$(date +%F_%T_%Z)
+
+echo -e "\nAccelerate troubleshooting by collecting your IIAB diagnostics into 1 file:"
+echo -e "\n   sudo iiab-diagnostics"
+echo -e "   sudo iiab-diagnostics PATH/FILE1 PATH/FILE2 ..."
+echo -ne "\nCan you provide a \e[1mshort public nickname:\e[0m (no spaces!) "
+read nickname < /dev/tty
+if [ -z "$nickname" ]; then
+    nickname="NONAME"
+fi
+
+# Build up a meaningful shared filename for DEV / IMPLEM / LEARNING team(s)
+outfile=/etc/iiab/diag/${IIAB_RELEASE}_${OS_VER}_${YMDT}_$nickname
+mkdir -p /etc/iiab/diag
+
+function cat_file_raw() {    # $1 = path/filename; $2 = # of lines, for tail
+    if [ -f $1 ]; then
+        ls -l $1 >> $outfile
+        if [ ! -s $1 ]; then
+            echo >> $outfile
+            echo "FILE EXISTS BUT IS EMPTY!" >> $outfile
+        elif [ $# -eq 1 ]; then
+            echo >> $outfile
+            cat $1 | iconv -t UTF-8//IGNORE >> $outfile
+        else    # e.g. last 100 lines, maximum
+            echo "                        ...ITS LAST $2 LINES FOLLOW..." >> $outfile
+            echo >> $outfile
+            tail -$2 $1 | iconv -t UTF-8//IGNORE >> $outfile
+        fi
+        echo >> $outfile
+    elif [ -h $1 ]; then
+        ls -l $1 >> $outfile
+        echo >> $outfile
+        echo "SYMLINK DOES NOT LEAD TO A REGULAR FILE!" >> $outfile
+        echo >> $outfile
+    elif [ -d $1 ]; then
+        ls -ld $1 >> $outfile
+        echo >> $outfile
+        echo "THIS IS A DIRECTORY NOT A FILE!" >> $outfile
+        echo >> $outfile
+    else
+        echo "FILE DOES NOT EXIST: $1" >> $outfile
+    fi
+}
+
+function cat_file() {
+    echo "     $1"
+    echo "=IIAB==========================================================================" >> $outfile
+    cat_file_raw $1
+}
+
+function cat_dir() {
+    echo "     $1"
+    echo "=IIAB==========================================================================" >> $outfile
+    if [ -d "$1" ]; then
+        echo "DIRECTORY $1 FILES WILL FOLLOW...IF THEY EXIST" >> $outfile
+        for f in $(ls $1); do
+            echo "-IIAB--------------------------------------------------------------------------" >> $outfile
+            cat_file_raw $1/$f 100
+        done
+    else
+        echo "DIRECTORY DOES NOT EXIST: $1" >> $outfile
+    fi
+}
+
+function cat_cmd() {                        # $1 = command + params, $2 = explanation
+    echo "     $1  # $2"
+    echo "=IIAB==========================================================================" >> $outfile
+    cmd=$(echo $1 | sed 's/\s.*$//')        # Keep command on left; Drop params on right
+    pth=$(which $cmd | sed 's/[^/]*$//')    # Keep only path on left; Drop command on right
+    echo "COMMAND: $pth$1    # $2" >> $outfile
+    echo >> $outfile
+    $(echo $1) >> $outfile
+    echo >> $outfile
+}
+
+function cat_tail() {     # $1 = path/filename; $2 = # of lines, for tail
+    echo "     $1"
+    echo "=IIAB==========================================================================" >> $outfile
+    cat_file_raw $1 $2    # e.g. last 100 lines, maximum
+}
+
+# START BUILDING UP THE FILE THAT'LL CONTAIN THE DIAGNOSTICS!
+echo -e "\nCompiling diagnostics..."
+
+echo -e "\n  0. Header/Hashes/OS"
+echo "This is: $outfile" >> $outfile
+echo >> $outfile
+echo "iiab commit:               $HASH1" >> $outfile
+echo "iiab-admin-console commit: $HASH2" >> $outfile
+echo >> $outfile
+echo -n "Checking /etc/rpi-issue for Raspbian OS version... " >> $outfile
+if [ -f /etc/rpi-issue ]; then
+    echo >> $outfile
+    cat /etc/rpi-issue >> $outfile
+    echo >> $outfile
+    echo "stage2 = lite; stage5 = desktop SEE https://github.com/RPi-Distro/pi-gen#stage-anatomy" >> $outfile
+else
+    echo "Not a Raspberry Pi!" >> $outfile
+fi
+echo >> $outfile
+
+echo -e '\n  1. Files specially requested: (for "iiab-diagnostics PATH/FILE1 PATH/FILE2")\n'
+for f in "$@"; do
+    cat_file $f
+done
+
+if [ $# -eq 0 ]; then
+    echo -e "  2. Regular Files:\n"
+else
+    echo -e "\n  2. Regular Files:\n"
+fi
+#cat_file /dev/sda                    # Device "file" test
+#cat_file /nonsense                   # Non-existence test
+#cat_file /opt/iiab/iiab              # Directory test
+#cat_file /tmp/empty-file             # Empty file test
+#cat_file /usr/bin/iiab-support-on    # Symlink test
+cat_file /etc/iiab/openvpn_handle
+cat_file /.iiab-image
+cat_file /etc/iiab/iiab.env
+cat_file /etc/iiab/iiab.ini
+cat_file /etc/iiab/local_vars.yml
+cat_file /etc/iiab/config_vars.yml
+cat_file /etc/resolv.conf
+cat_file /etc/network/interfaces
+cat_file /usr/bin/iiab-gen-iptables
+
+# Record all Ansible variables: SLOW! OUTPUT TOO LARGE?
+#pushd /opt/iiab/iiab > /dev/null
+#./runrole all-vars /tmp/all-ansible-vars
+#popd > /dev/null
+#cat_file /tmp/all-ansible-var
+
+echo -e "\n  3. Content of Directories, 1-level deep:\n"
+cat_dir /etc/network/interfaces.d
+cat_dir /etc/systemd/network
+cat_dir /etc/NetworkManager/system-connections
+cat_dir /etc/netplan
+#cat_dir /etc/sysconfig/network-scripts/if-cfg*    # No longer common.
+#cat_dir /etc/network    # Above file /etc/network/interfaces suffices
+
+echo -e "\n  4. Output of Commands:\n"
+cat_cmd 'uname -a' 'Linux kernel'
+cat_cmd 'free' 'RAM memory'
+cat_cmd 'lscpu' 'CPU details'
+cat_cmd 'df -h' 'Disk usage'
+cat_cmd 'lsblk' 'Partition mount points'
+cat_cmd 'blkid' 'Mount point details'
+cat_cmd 'ip addr' 'Network interfaces'
+cat_cmd 'ifconfig' 'Network interfaces (old view)'
+cat_cmd 'brctl show' 'Bridge for LAN side'
+cat_cmd 'netstat -rn' 'Routing table'
+cat_cmd 'netstat -natp' 'Ports/Services in use'
+cat_cmd 'iptables-save' 'Firewall rules'
+cat_cmd 'systemctl status dnsmasq' 'Is dnsmasq Ok?'
+cat_cmd 'journalctl -u dnsmasq' 'dnsmasq log'
+#cat_cmd 'ansible localhost -m setup 2>/dev/null' 'All Ansible facts'
+
+echo -e "\n  5. Log Files: (last 100 lines of each)\n"
+cat_tail /opt/iiab/iiab/iiab-install.log 100
+cat_tail /opt/iiab/iiab/iiab-network.log 100
+cat_tail /opt/iiab/iiab/iiab-debug.log 100
+cat_tail /opt/iiab/iiab-admin-console/admin-install.log 100
+
+linecount=$(wc -l $outfile | sed 's/\s.*$//')
+sizecount=$(du -h $outfile | sed 's/\s.*$//')
+echo -e "\n\e[32mCOMPLETE! To share this on the web ($sizecount, $linecount lines) run:\e[0m"
+echo -e "\n\e[1mpastebinit < $outfile\e[0m\n"
