@@ -9,7 +9,7 @@ Currently, this will only run on Ubuntu 18.04, Debian 9, Debian 10.  At present,
 Using It
 --------
 
-* Do a normal IIAB install (http://download.iiab.io) keeping variables ``azuracast_install`` and ``azuracast_enabled`` as True.
+* Do a normal IIAB install (http://download.iiab.io) keeping variables ``azuracast_install`` and ``azuracast_enabled`` as ``True``.
 * AzuraCast's console will be available at http://box.lan:10080
 * This site will prompt you to complete initial setup: user accounts, managing stations, radio streams, etc.
 
