@@ -6,7 +6,7 @@ The ``pastebinit`` command can then be used to upload this file, creating a shor
 
 But first off, the file is compiled by harvesting 5 main kinds of things:
 
-1. Files specially requested (if you run ``iiab-diagnostics FILENAME1 FILENAME2``)
+1. Files specially requested (if you run ``sudo iiab-diagnostics PATH/FILE1 PATH/FILE2``)
 
 2. Regular Files
 
@@ -27,20 +27,20 @@ But first off, the file is compiled by harvesting 5 main kinds of things:
    To bundle in more files, run:
 
    ```
-   sudo iiab-diagnostics FILENAME1 FILENAME2
+   sudo iiab-diagnostics PATH/FILE1 PATH/FILE2 ...
    ```
 
-   ( This will bundle up all the diagnostics, into a new file placed in: /etc/iiab/diag/ )
+   ( All diagnostics will be bundled up into a single human-readable file, placed in: /etc/iiab/diag/ )
 
-2. Upload the file using the pastebinit command:
+2. Make sure you're online, and upload the new file using the ``pastebinit`` command:
 
    ```
-   pastebinit < /etc/iiab/diagnostics/<name of file you just created>
+   pastebinit < /etc/iiab/diag/NEW-FILE-NAME
    ```
    
-   This will generalte a link (URL).
+   This will generate an actual web link (URL).
 
-3. Post the link (URL) to a "New issue" at https://github.com/iiab/iiab/issues
+3. Post this link (URL) to a "New issue" at https://github.com/iiab/iiab/issues
 
    Include a description of the symptoms, and how to reproduce the problem.
 
@@ -48,4 +48,4 @@ But first off, the file is compiled by harvesting 5 main kinds of things:
 
 ## Source Code
 
-Please look over the bottom of [iiab-diagnostics](iiab-diagnostics) to learn more about which common IIAB files make rapid troubleshooting possible.
+Please look over the bottom of [iiab-diagnostics](iiab-diagnostics) to learn more about which common IIAB files and commands make this rapid troubleshooting possible.
