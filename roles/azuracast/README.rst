@@ -12,5 +12,6 @@ Using It
 * Do a normal IIAB install (http://download.iiab.io) keeping variables ``azuracast_install`` and ``azuracast_enabled`` as ``True``.
 * AzuraCast's console will be available at http://box.lan:10080
 * This site will prompt you to complete initial setup: user accounts, managing stations, radio streams, etc.
+* Next, check out some how-to _`videos <https://www.youtube.com/watch?v=b1Rxlu5P804>'_ to learn to manage your own radio station.
 
 Note: When creating a station using AzuraCast's console, its default streaming ports for ``station`` and ``autodj`` need to be in the `port range 10000-10100 <https://github.com/iiab/iiab/wiki/IIAB-Networking#list-of-ports--services>`_.
