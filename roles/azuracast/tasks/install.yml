@@ -1,0 +1,64 @@
+- name: AzuraCast - Make AzuraCast config directory
+  file: 
+    path: "{{ azuracast_host_dir }}"
+    state: directory
+
+- name: AzuraCast - Copy over .env template to AzuraCast config directory
+  template:
+    src: env.j2
+    dest: "{{ azuracast_host_dir }}/.env"
+    owner: root
+    group: root
+    mode: 0644
+
+- name: AzuraCast - Copy over docker-compose.override.yml template to AzuraCast config directory
+  template:
+    src: docker-compose.override.yml.j2
+    dest: "{{ azuracast_host_dir }}/docker-compose.override.yml"
+    owner: root
+    group: root
+    mode: 0644
+
+- name: AzuraCast - Download docker.sh script
+  get_url:
+    url: "{{ docker_sh_url }}"
+    dest: "{{ azuracast_host_dir }}/"
+    timeout: "{{ download_timeout }}"
+    mode: 0755
+  when: internet_available | bool
+
+- name: AzuraCast - Download docker-compose.yml
+  get_url: 
+    url: "{{ docker_compose_url }}"
+    dest: "{{ azuracast_host_dir }}/docker-compose.yml"
+    timeout: "{{ download_timeout }}"
+    mode: 0755
+
+- name: AzuraCast - Make changes to docker.sh script so it runs headless
+  lineinfile:
+    path: "{{ azuracast_host_dir }}/docker.sh"
+    regexp: "^(.*)read reply.*"
+    line: "\\1reply='Y'"
+    backrefs: yes
+
+- name: AzuraCast - Make docker container directory
+  file: 
+    path: "{{ docker_container_dir }}"
+    state: directory
+  
+- name: AzuraCast - Link docker container directory
+  file:
+    src: "{{ docker_container_dir }}"
+    dest: "/var/lib/docker"
+    state: link 
+
+- name: Change default port number ranges 8xxx:8xxx to Nxxx:Nxxx icecast-stations in docker-compose.yml (N - azuracast_port_range_prefix)
+  replace:
+    path: "{{ azuracast_host_dir }}/docker-compose.yml"
+    regexp: "^( *- \\')8([0-9]{3})\\:8([0-9]{3}\\'.*)$"
+    replace: "\\g<1>{{ azuracast_port_range_prefix }}\\g<2>:{{ azuracast_port_range_prefix }}\\g<3>"
+
+- name: AzuraCast - Run the installer
+  shell: "/bin/bash docker.sh install"
+  args:
+    chdir: "{{ azuracast_host_dir }}"
