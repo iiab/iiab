@@ -1,0 +1,88 @@
+#user  nobody;
+worker_processes  1;
+
+error_log  logs/rtmp_error.log debug;
+pid        logs/nginx.pid;
+
+events {
+	worker_connections  1024;
+}
+
+http {
+	include     mime.types;
+	default_type application/octet-stream;
+
+	server {
+		listen       {{ nginx_port }};
+		server_name  localhost;
+
+		location /stat {
+			rtmp_stat all;
+			rtmp_stat_stylesheet stat.xsl;
+		}
+		location /stat.xsl {
+			root /usr/local/nginx/html/;
+		}
+		location /hls {
+			# Serve HLS fragments
+
+			# CORS setup
+			add_header 'Access-Control-Allow-Origin' '*' always;
+			add_header 'Access-Control-Expose-Headers' 'Content-Length';
+
+			# allow CORS preflight requests
+			if ($request_method = 'OPTIONS') {
+				add_header 'Access-Control-Allow-Origin' '*';
+				add_header 'Access-Control-Max-Age' 1728000;
+				add_header 'Content-Type' 'text/plain charset=UTF-8';
+				add_header 'Content-Length' 0;
+				return 204;
+			}
+
+
+			types {
+				application/vnd.apple.mpegurl m3u8;
+				video/mp2t ts;
+			}
+			root /library/streaming;
+			add_header Cache-Control no-cache;
+		}
+	}
+}
+
+rtmp {
+	server {
+		listen 1935;
+		chunk_size 8192;
+
+		application src {
+			live on;
+			exec /usr/bin/ffmpeg -hwaccel vaapi -hwaccel_device /dev/dri/renderD128 -hwaccel_output_format vaapi
+				-i rtmp://localhost/src/$name -max_muxing_queue_size 9999
+			       	-c:v h264_vaapi -b:v 80k -vf 'scale_vaapi=w=216:h=-2' -maxrate 120k -c:a aac -b:a 24k -f flv rtmp://localhost/hls/$name_low 
+			       	-c:v h264_vaapi -b:v 250k -vf 'scale_vaapi=w=480:h=-2' -maxrate 350k -c:a aac -b:a 48k -f flv rtmp://localhost/hls/$name_mid 
+			       	-c:v h264_vaapi -b:v 450k -vf 'scale_vaapi=w=640:h=-2' -maxrate 650k -c:a aac -b:a 92k -f flv rtmp://localhost/hls/$name_hi 
+			       	-c:v copy -c:a copy -f flv rtmp://localhost/hls/$name_src;
+		}
+		application hls {
+			live on;
+
+			hls on;
+			hls_path {{ streaming_root }}/{{ hls_dir }};
+			hls_nested on;
+
+			hls_variant _low BANDWIDTH=480000;
+			hls_variant _mid BANDWIDTH=960000;
+			hls_variant _hi  BANDWIDTH=1280000;
+			hls_variant _src BANDWIDTH=2000000;
+
+			#record the stream
+			record all;
+                        record_path /library/streaming/flv;
+			#append current timestamp to filename
+			record_suffix _%Y-%m-%d_%H-%M.flv;
+			exec_record_done /usr/bin/nice -n 10 /usr/bin/ffmpeg -hwaccel vaapi -hwaccel_device /dev/dri/renderD128 -hwaccel_output_format vaapi -i $path
+				-max_muxing_queue_size 9999 -c:a copy -c:v h264_vaapi -qp 24 -movflags +faststart {{ streaming_root }}/{{ recordings_dir }}/$basename.mp4;
+		}
+	}
+}
