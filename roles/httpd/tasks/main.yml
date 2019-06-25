@@ -74,6 +74,39 @@
     - { src: 'proxy_ajp.conf.j2', dest: '/etc/{{ apache_config_dir }}/proxy_ajp.conf' }
     #- { src: 'php.ini.j2', dest: '/etc/php.ini', mode: '0644' }    # @jvonau suggests removing this in https://github.com/iiab/iiab/issues/1147
 
+- name: Install Apache global rate limiter config into /etc/apache2/sites-available, from templates
+  template:
+    src: "000-ratelimit.conf.j2"
+    dest: "/etc/{{ apache_config_dir }}/000-ratelimit.conf"
+    owner: root
+    group: root
+    mode: 0644
+
+- name: Enable apache mod_ratelimit if we are going to limit connection speed globally
+  apache2_module:
+    state: present
+    name: ratelimit
+  when: apache_limit_speed
+
+- name: Enable apache mod_ratelimit if we are going to limit connection speed globally
+  apache2_module:
+    state: absent
+    name: ratelimit
+  when: (not apache_limit_speed)
+
+- name: Symlink 000-ratelimit.conf to sites-enabled when rate limit is turned on
+  file:
+    src: "/etc/{{ apache_config_dir }}/000-ratelimit.conf"
+    path: /etc/apache2/sites-enabled/000-ratelimit.conf
+    state: link
+  when: apache_limit_speed
+
+- name: Remove 000-ratelimit.conf symlink from sites-enabled if rate limit is turned off
+  file:
+    path: "/etc/apache2/sites-enabled/000-ratelimit.conf"
+    state: absent
+  when: (not apache_limit_speed)
+
 # For schools that use WordPress and/or Moodle intensively. See iiab/iiab #1147
 # WARNING: Enabling this might cause excess use of RAM/disk or other resources!
 - name: Enact high limits in /etc/php/{{ php_version }}/{{ apache_service }}/php.ini if using WordPress and/or Moodle intensively
