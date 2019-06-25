@@ -6,7 +6,7 @@ This playbook adds `AzuraCast <https://azuracast.com/>`_ to Internet-in-a-Box (I
 
 Please see AzuraCast's `screenshots <https://www.azuracast.com/about/screenshots.html>`_.
 
-Currently, this will only run on Ubuntu 18.04, Debian 9, Debian 10. Support for Raspberry Pi is experimental, so please test and report any issues.
+As of 2019-06-24, this will only run on Ubuntu 18.04, Debian 9, and tentatively on Debian 10.  Support for Raspberry Pi remains a goal for now; please if you can help everyone solve this challenge: `#1772 <https://github.com/iiab/iiab/issues/1772>`_
 
 Using It
 --------
