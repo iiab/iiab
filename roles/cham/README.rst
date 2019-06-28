@@ -22,6 +22,17 @@ Using It
 * Use authentication: No
 * When you click `Start Streaming` OBS should connect to the nginx rtmp/hls endpoint and you will see your streamed video in the video container on the demo page. 
 
+**Additionally, you can stream an audio only version of the stream to azuracast, if it is present on your IIAB. To do that:**
+
+* Set `cham_stream_to_icecast: True` in your `/etc/iiab/local_vars.yml`.
+* The default streaming settings (These are present in `/opt/iiab/iiab/vars/default_vars.yml`): 
+  * Icecast username: iiab-admin
+  * Icecast password: g0adm1n
+  * Streaming port: 10005
+  * Default bitrate: 64k
+  * Default mount point: live
+* Make sure that autodj in AzuraCast is properly setup with the above settings.
+
 Attribution
 -----------
 
