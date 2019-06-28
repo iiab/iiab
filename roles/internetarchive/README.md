@@ -58,13 +58,14 @@ first time, refresh after a little while and most should appear.
 
 ## Administration
 
-Administration is carried out through the same User Interface as browsing. 
+Administration is carried out mostly through the same User Interface as browsing. 
 
-Access [http://localhost:4244/local](http://localhost:4244/local) to see a
+Access [http://box.lan:4244/local](http://box.lan:4244/local) to see a
 display of local content, this interface is under development and various admin
-tools will be added here.  *At some point this will become the default page*.
+tools will be added here.  Unless your box has been configured differently this 
+should also be the page you get at [http://box.lan:4244/local](http://box.lan:4244/local).
 
-Access [http://localhost:4244](http://localhost:4244) to get the Internet
+Access [http://box.lan:4244/home](http://box.lan:4244/home) to get the Internet
 Archive main interface if connected to the net. 
 
 While viewing an item or collection, the "Crawl" button in the top bar
