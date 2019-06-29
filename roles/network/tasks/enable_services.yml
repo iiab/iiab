@@ -2,14 +2,14 @@
   service:
     name: dhcpd
     enabled: no
-  when: not dhcpd_enabled and dhcpd_install
+  when: dhcpd_install and not dhcpd_enabled
 
 # service is restarted with NM dispatcher.d script
 - name: Enable dhcpd service
   service:
     name: dhcpd
     enabled: yes
-  when: dhcpd_enabled and dhcpd_install
+  when: dhcpd_install and dhcpd_enabled
 
 - name: Install /etc/sysconfig/dhcpd, /etc/dhcpd-iiab.conf from templates
   template:
@@ -21,7 +21,7 @@
   with_items:
    - { src: 'dhcp/dhcpd-env.j2', dest: '/etc/sysconfig/dhcpd', mode: '0644' }
    - { src: 'dhcp/dhcpd-iiab.conf.j2', dest: '/etc/dhcpd-iiab.conf', mode: '0644' }
-  when: dhcpd_enabled and dhcpd_install
+  when: dhcpd_install and dhcpd_enabled
 
 - name: Install /etc/named-iiab.conf and two *.zone.db files into /var/named-iiab
   template:
@@ -34,34 +34,65 @@
    - { src: 'named/named-iiab.conf.j2', dest: '/etc/named-iiab.conf', mode: '0644' }
    - { src: 'named/school.local.zone.db', dest: '/var/named-iiab/', mode: '0644' }
    - { src: 'named/school.internal.zone.db', dest: '/var/named-iiab/', mode: '0644' }
-  when: named_enabled and named_install
+  when: named_install and named_enabled
 
 - name: Enable named service ({{ dns_service }}) if named_enabled
   systemd:
     name: "{{ dns_service }}"
     enabled: yes
-  when: named_enabled and named_install
+  when: named_install and named_enabled
 
 - name: Disable named service ({{ dns_service }}) if not named_enabled
   systemd:
     name: "{{ dns_service }}"
     enabled: no
-  when: not named_enabled and named_install
+  when: named_install and not named_enabled
 
 - name: Install /etc/dnsmasq.d/iiab.conf from template, when dnsmasq_enabled and isn't Appliance
   template:
     src: network/dnsmasq.conf.j2
     dest: /etc/dnsmasq.d/iiab.conf
-  when: dnsmasq_enabled and dnsmasq_install and (iiab_network_mode != "Appliance")
+  when: dnsmasq_install and dnsmasq_enabled and (iiab_network_mode != "Appliance")
 
-- name: Copy script to restart dnsmasq whenever br0 comes up
-  template: 
-    src: "roles/network/templates/network/dnsmasq.sh.j2"
-    dest: "/etc/networkd-dispatcher/routable.d/dnsmasq.sh"
-    mode: "0755"
+## Another way to skin the cat
+##- name: Check if systemd service networkd-dispatcher is enabled
+##  systemd:
+##    name: networkd-dispatcher
+##    state: reloaded
+##  register: systemd_out
+##
+## Yet Another
+## command: systemctl show networkd-dispatcher | grep ^UnitFileState=
+## would yield "UnitFileState=enabled"
+##
+#- name: Check if systemd service networkd-dispatcher is enabled
+#  command: systemctl is-enabled networkd-dispatcher
+#  register: nd_enabled
+#  ignore_errors: True
+#
+#- debug:
+#    var: nd_enabled
+
+- name: Check if /etc/networkd-dispatcher/routable.d exists
+  stat:
+    path: /etc/networkd-dispatcher/routable.d
+  register: nd_dir
+
+#- debug:
+#    var: nd_dir
+
+#- name: To restart dnsmasq whenever br0 comes up, install /etc/networkd-dispatcher/routable.d/dnsmasq.sh from template (if isn't Appliance, and networkd-dispatcher is enabled, and directory /etc/networkd-dispatcher/routable.d exists, i.e. OS's like Ubuntu 18.04)
+- name: To restart dnsmasq whenever br0 comes up, install /etc/networkd-dispatcher/routable.d/dnsmasq.sh from template (if isn't Appliance, and directory /etc/networkd-dispatcher/routable.d exists, i.e. OS's like Ubuntu 18.04)
+  template:
+    src: roles/network/templates/network/dnsmasq.sh.j2
+    dest: /etc/networkd-dispatcher/routable.d/dnsmasq.sh
+    mode: 0755
     owner: root
     group: root
-  when: dnsmasq_enabled and dnsmasq_install and (iiab_network_mode != "Appliance") and (not is_rpi)
+  when: dnsmasq_install and dnsmasq_enabled and nd_dir.stat.exists and nd_dir.stat.isdir and (iiab_network_mode != "Appliance")
+  #when: dnsmasq_install and dnsmasq_enabled and nd_enabled is defined and nd_enabled.stdout == "enabled" and nd_dir.stat.exists and nd_dir.stat.isdir and (iiab_network_mode != "Appliance")
+  #when: dnsmasq_install and dnsmasq_enabled and systemd_out.status.UnitFileState == "enabled" and networkd_dir.stat.exists and networkd_dir.stat.isdir and (iiab_network_mode != "Appliance")
+  #when: dnsmasq_enabled and dnsmasq_install and (iiab_network_mode != "Appliance") and (not is_rpi) and (not is_ubuntu_16)
 
 - name: Remove /etc/dnsmasq.d/iiab.conf, when not dnsmasq_enabled or is Appliance
   file:
@@ -73,25 +104,25 @@
   systemd:
     name: iiab-dnsmasq
     enabled: yes
-  when: dnsmasq_enabled and dnsmasq_install
+  when: dnsmasq_install and dnsmasq_enabled
 
 - name: Disable iiab-dnsmasq, if not dnsmasq_enabled
   systemd:
     name: iiab-dnsmasq
     enabled: no
-  when: not dnsmasq_enabled and dnsmasq_install
+  when: dnsmasq_install and not dnsmasq_enabled
 
 - name: Enable DansGuardian systemd service, if dansguardian_enabled
   systemd:
     name: dansguardian
     enabled: yes
-  when: dansguardian_enabled and dansguardian_install
+  when: dansguardian_install and dansguardian_enabled
 
 - name: Disable DansGuardian, if not dansguardian_enabled
   systemd:
     name: dansguardian
     enabled: no
-  when: not dansguardian_enabled and dansguardian_install
+  when: dansguardian_install and not dansguardian_enabled
 
 - name: Mandate 'HTTPCACHE_ON=True' in {{ iiab_env_file }}, if squid_enabled
   lineinfile:
@@ -99,13 +130,13 @@
     regexp: '^HTTPCACHE_ON=*'
     line: 'HTTPCACHE_ON=True'
     state: present
-  when: squid_enabled and squid_install
+  when: squid_install and squid_enabled
 
 - name: Enable Squid systemd service ({{ proxy }}) if squid_enabled
   systemd:
     name: "{{ proxy }}"
     enabled: yes
-  when: squid_enabled and squid_install
+  when: squid_install and squid_enabled
 
 - name: Install /etc/{{ proxy }}/squid-iiab.conf from template, owned by {{ proxy_user }}:{{ proxy_user }}
   template:
@@ -120,20 +151,20 @@
       owner: "{{ proxy_user }}"
       group: "{{ proxy_user }}"
       mode: 0644
-  when: squid_enabled and squid_install
+  when: squid_install and squid_enabled
 
 - name: Point to Squid config file from startup file, if squid_enabled (debuntu)
   lineinfile:
     regexp: '^CONFIG'
     line: "CONFIG=/etc/{{ proxy }}/squid-iiab.conf"
     path: "/etc/init.d/{{ proxy }}"
-  when: squid_enabled and squid_install and is_debuntu
+  when: squid_install and squid_enabled and is_debuntu
 
 - name: Disable Squid service, if not squid_enabled
   systemd:
     name: "{{ proxy }}"
     enabled: no
-  when: not squid_enabled and squid_install
+  when: squid_install and not squid_enabled
 
 - name: Revert to 'HTTPCACHE_ON=False' if not squid_enabled
   lineinfile:
@@ -141,19 +172,19 @@
     regexp: '^HTTPCACHE_ON=*'
     line: 'HTTPCACHE_ON=False'
     state: present
-  when: not squid_enabled
+  when: squid_install and not squid_enabled
 
 - name: Enable Wondershaper service, if wondershaper_enabled
   systemd:
     name: wondershaper
     enabled: yes
-  when: wondershaper_enabled and wondershaper_install
+  when: wondershaper_install and wondershaper_enabled
 
 - name: Disable Wondershaper service, if not wondershaper_enabled
   systemd:
     name: wondershaper
     enabled: no
-  when: not wondershaper_enabled and wondershaper_install
+  when: wondershaper_install and not wondershaper_enabled
 
 # check-LAN should be iptables.yml remove later
 - name: Install clean copy of /usr/bin/iiab-gen-iptables from template
