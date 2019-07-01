@@ -1,4 +1,4 @@
-- name: Make sure the osm-vector-maps directory exists
+- name: Ensure directory {{ vector_map_path }}/maplist/assets exists
   file:
     path: '{{ vector_map_path }}/maplist/assets'
     state: directory
@@ -6,30 +6,30 @@
     group: '{{ apache_user }}'
     mode: '0755'
 
-- name: Fetch the catalog for osm maps
+- name: Download map catalog {{ iiab_map_url }}/assets/regions.json to {{ vector_map_path }}/maplist/assets/
   get_url:
     url: "{{ iiab_map_url }}/assets/regions.json"
     dest: '{{ vector_map_path }}/maplist/assets/'
 
-- name: Create a link to osm catalog in /common/assets
+- name: Symlink catalog {{ doc_root }}/common/assets/regions.json -> {{ vector_map_path }}/maplist/assets/regions.json
   file:
     src: "{{ vector_map_path }}/maplist/assets/regions.json"
     dest: "{{ doc_root }}/common/assets/regions.json"
     state: link
 
-- name: Fetch the javascript bundle with openlayers for test page
+- name: Download the JavaScript bundle with OpenLayers (main.js) for test page http://box/maps/maplist
   get_url:
     url: "{{ iiab_map_url }}/../main.js"
     dest: '{{ vector_map_path }}/maplist/'
 
-- name: Fetch the index.html for test page
+- name: Install {{ vector_map_path }}/maplist/index.html from template, for test page http://box/maps/maplist
   template:
     src: "index.html"
     dest: '{{ vector_map_path }}/maplist/index.html'
 
 # Bboxes (bounding boxes) are currently square.  But geofabrik has non-rectangular bboxes.
 # So bring the bounding box definition from cloud (bboxes.geojson is big)
-- name: Fetch the bounding box description for osm maps
+- name: Download bounding box definitions (bboxes.geojson) to {{ vector_map_path }}/maplist/assets/
   get_url:
     url: "{{ iiab_map_url }}/assets/bboxes.geojson"
     dest: '{{ vector_map_path }}/maplist/assets/'
@@ -39,7 +39,7 @@
     name: python-geojson
     state: present
 
-- name: Install the script to update osm catalog
+- name: Install /usr/bin/iiab-update-map for updating of Map Pack catalog
   template:
     src: iiab-update-map
     dest: /usr/bin/iiab-update-map
@@ -49,13 +49,13 @@
 #- name: Run the script that does osm-vector-maps housekeeping
 #  shell: /usr/bin/iiab-update-map
 
-- name: Copy the Countries geojson to assets
+- name: Copy countries.json (geojson) to {{ vector_map_path }}/maplist/assets
   copy:
     src: countries.json
     dest: '{{ vector_map_path }}/maplist/assets'
 
 #  It is too complicated to use a single file for both iiab and admin-console
-- name: Copy the duplicated javascript to assets
+- name: Copy the duplicated JavaScript (map_functions.js) to {{ vector_map_path }}/maplist/assets
   copy:
     src: map_functions.js
     dest: '{{ vector_map_path }}/maplist/assets'
@@ -78,8 +78,7 @@
     state: absent
   when: not osm_vector_maps_enabled and is_debuntu
 
-- name: Copy the redirect to the test page -- delete this if more than one map
+- name: Copy the redirect to the test page -- delete this later if more than one map
   copy:
     src: test-index.redirect
     dest: "{{ vector_map_path }}/index.html"
-
