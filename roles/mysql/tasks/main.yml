@@ -59,10 +59,18 @@
   tags:
     - download
 
-### lineinfile to add 'TimeoutStartSec=180' to /lib/systemd/system/mariadb.service here
-# - if file exists!
-# - avoid adding it repeatedly!
-# - daemon_reload below...
+- name: Check if /lib/systemd/system/mariadb.service exists
+  stat:
+    path: /lib/systemd/system/mariadb.service
+  register: mariadb_unit_file
+
+- name: Set systemd boot timeout to 180 seconds for slow machines, if TimeoutStartSec not already set in /lib/systemd/system/mariadb.service
+  lineinfile:
+    path: /lib/systemd/system/mariadb.service
+    insertafter: '[Service]'
+    regexp: TimeoutStartSec
+    line: '\n# 2019-07-03: @jvonau @holta doubled the default boot timeout from 90s to 180s\n# for slow machines like this Ubuntu 18.04.2 VM:\n# https://github.com/iiab/iiab/issues/1802\n# https://mariadb.com/kb/en/library/what-to-do-if-mariadb-doesnt-start/#systemd\nTimeoutStartSec=180'
+  when: mariadb_unit_file.stat.exists
 
 # Name of MySQL service varies by OS, so hardcoded in /opt/iiab/iiab/vars/<OS>.yml (formerly in roles/0-init/tasks/main.yml)
 - name: Enable & Start MySQL systemd service ({{ mysql_service }}) if mysql_enabled
