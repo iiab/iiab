@@ -59,19 +59,42 @@
   tags:
     - download
 
-- name: Check if /lib/systemd/system/mariadb.service exists
-  stat:
-    path: /lib/systemd/system/mariadb.service
-  register: mariadb_unit_file
-
 # 2019-07-03: @jvonau @holta doubled the default boot timeout from 90s to 180s
 # for slow machines like this Ubuntu 18.04.2 VM:
 # https://github.com/iiab/iiab/issues/1802
 # https://mariadb.com/kb/en/library/what-to-do-if-mariadb-doesnt-start/#systemd
 
-- name: Set systemd boot timeout to 180 seconds for slow machines, in /lib/systemd/system/mariadb.service
-  lineinfile:
+- name: Check if /lib/systemd/system/mariadb.service exists
+  stat:
     path: /lib/systemd/system/mariadb.service
+  register: mariadb_unit_file
+
+- name: Copy pkg's /lib/systemd/system/mariadb.service to /etc/systemd/system/ to be customized
+  copy:
+    force: yes
+    src: /lib/systemd/system/mariadb.service
+    dest: /etc/systemd/system/
+  when: mariadb_unit_file.stat.exists
+
+- name: Symlink /etc/systemd/system/mysql.service -> /etc/systemd/system/mariadb.service
+  file:
+    state: link
+    force: yes
+    src: /etc/systemd/system/mariadb.service
+    path: /etc/systemd/system/mysql.service
+  when: mariadb_unit_file.stat.exists
+
+- name: Symlink /etc/systemd/system/mysqld.service -> /etc/systemd/system/mariadb.service
+  file:
+    state: link
+    force: yes
+    src: /etc/systemd/system/mariadb.service
+    path: /etc/systemd/system/mysqld.service
+  when: mariadb_unit_file.stat.exists
+
+- name: Set systemd boot timeout to 180 seconds for slow machines, in /etc/systemd/system/mariadb.service
+  lineinfile:
+    path: /etc/systemd/system/mariadb.service
     insertafter: '^\[Service\]$'
     regexp: '^TimeoutStartSec='
     line: "TimeoutStartSec=180"
