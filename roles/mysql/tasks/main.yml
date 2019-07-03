@@ -64,12 +64,21 @@
     path: /lib/systemd/system/mariadb.service
   register: mariadb_unit_file
 
-- name: Set systemd boot timeout to 180 seconds for slow machines, if TimeoutStartSec not already set in /lib/systemd/system/mariadb.service
+# 2019-07-03: @jvonau @holta doubled the default boot timeout from 90s to 180s
+# for slow machines like this Ubuntu 18.04.2 VM:
+# https://github.com/iiab/iiab/issues/1802
+# https://mariadb.com/kb/en/library/what-to-do-if-mariadb-doesnt-start/#systemd
+
+- name: Set systemd boot timeout to 180 seconds for slow machines, in /lib/systemd/system/mariadb.service
   lineinfile:
     path: /lib/systemd/system/mariadb.service
-    insertafter: '[Service]'
-    regexp: TimeoutStartSec
-    line: '\n# 2019-07-03: @jvonau @holta doubled the default boot timeout from 90s to 180s\n# for slow machines like this Ubuntu 18.04.2 VM:\n# https://github.com/iiab/iiab/issues/1802\n# https://mariadb.com/kb/en/library/what-to-do-if-mariadb-doesnt-start/#systemd\nTimeoutStartSec=180'
+    insertafter: '^\[Service\]$'
+    regexp: '^TimeoutStartSec='
+    line: "TimeoutStartSec=180"
+    # LINE BELOW WOULD BE NICE...BUT ANSIBLE POLLUTES EACH TIME :(
+    # Hence Ansible's 'blockinfile', but this pollutes config files in its own
+    # way.  Still, it might be nec in future, so config files are *READABLE* !
+    #line: "\n# 2019-07-03: @jvonau @holta doubled the default boot timeout from 90s to 180s\n# for slow machines like this Ubuntu 18.04.2 VM:\n# https://github.com/iiab/iiab/issues/1802\n# https://mariadb.com/kb/en/library/what-to-do-if-mariadb-doesnt-start/#systemd\nTimeoutStartSec=180"
   when: mariadb_unit_file.stat.exists
 
 # Name of MySQL service varies by OS, so hardcoded in /opt/iiab/iiab/vars/<OS>.yml (formerly in roles/0-init/tasks/main.yml)
