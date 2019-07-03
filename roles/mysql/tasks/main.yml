@@ -59,8 +59,9 @@
   tags:
     - download
 
-# 2019-07-03: @jvonau @holta doubled the default boot timeout from 90s to 180s
-# for slow machines like this Ubuntu 18.04.2 VM:
+
+# 2019-07-03 @jvonau @holta: the next 50 lines (6 stanzas) double MariaDB's
+# default boot timeout (90s to 180s) for slow CPUs like this Ubuntu 18.04.2 VM:
 # https://github.com/iiab/iiab/issues/1802
 # https://mariadb.com/kb/en/library/what-to-do-if-mariadb-doesnt-start/#systemd
 
@@ -69,7 +70,7 @@
     path: /lib/systemd/system/mariadb.service
   register: mariadb_unit_file
 
-- name: Copy pkg's /lib/systemd/system/mariadb.service to /etc/systemd/system/ to be customized (CREATES TIMETAMPED BACKUP OF /etc/systemd/system/mariadb.service e.g. IF OPERATOR CUSTOMIZED IT)
+- name: Copy pkg's /lib/systemd/system/mariadb.service to /etc/systemd/system/ to be customized (CREATES TIMETAMPED BACKUPS OF /etc/systemd/system/mariadb.service e.g. IF OPERATOR CUSTOMIZED IT, EVEN DESPITE WARNING BELOW!)
   copy:
     force: yes
     backup: yes
@@ -93,17 +94,25 @@
     path: /etc/systemd/system/mysqld.service
   when: mariadb_unit_file.stat.exists
 
+- name: "WARN OPERATOR: Changes made to /etc/systemd/system/mariadb.service WILL BE LOST whenever 'mysql' playbook is run"
+  lineinfile:
+    path: /etc/systemd/system/mariadb.service
+    insertbefore: BOF    # Beginning of file
+    line: "# WARNING: CHANGES TO THIS FILE WILL BE REGULARLY *OVERWRITTEN* BY:\n# /opt/iiab/iiab/roles/mysql/tasks/main.yml\n"
+  when: mariadb_unit_file.stat.exists
+
 - name: Set systemd boot timeout to 180 seconds for slow machines, in /etc/systemd/system/mariadb.service
   lineinfile:
     path: /etc/systemd/system/mariadb.service
     insertafter: '^\[Service\]$'
-    regexp: '^TimeoutStartSec='
+    regexp: "^TimeoutStartSec="
     line: "TimeoutStartSec=180"
     # LINE BELOW WOULD BE NICE...BUT ANSIBLE POLLUTES EACH TIME :(
     # Hence Ansible's 'blockinfile', but this pollutes config files in its own
     # way.  Still, it might be nec in future, so config files are *READABLE* !
     #line: "\n# 2019-07-03: @jvonau @holta doubled the default boot timeout from 90s to 180s\n# for slow machines like this Ubuntu 18.04.2 VM:\n# https://github.com/iiab/iiab/issues/1802\n# https://mariadb.com/kb/en/library/what-to-do-if-mariadb-doesnt-start/#systemd\nTimeoutStartSec=180"
   when: mariadb_unit_file.stat.exists
+
 
 # Name of MySQL service varies by OS, so hardcoded in /opt/iiab/iiab/vars/<OS>.yml (formerly in roles/0-init/tasks/main.yml)
 - name: Enable & Start MySQL systemd service ({{ mysql_service }}) if mysql_enabled
