@@ -18,11 +18,11 @@
   tags:
     - download
 
-- name: Install php{{ php_version }}-xml (ubuntu or debian-9)
+- name: Install php{{ php_version }}-xml (ubuntu or debian 9+)
   package:
     name: "php{{ php_version }}-xml"
     state: present
-  when: is_ubuntu or is_debian_9
+  when: is_ubuntu or (is_debian and not is_debian_8)
 
 - name: Install php-xml-parser (debian-8)
   package:
@@ -59,16 +59,69 @@
   tags:
     - download
 
-# Name of MySQL service varies by OS so softcoded in 1-prep
-- name: 'Start MySQL systemd service: {{ mysql_service }}'
-  systemd:
-    name: "{{ mysql_service }}"
-    state: started
-  when: mysql_enabled | bool
 
-- name: Enable MySQL systemd service (upon subsequent boots) if mysql_enabled
+# 2019-07-03 @jvonau @holta: the next 50 lines (6 stanzas) double MariaDB's
+# default boot timeout (90s to 180s) for slow CPUs like this Ubuntu 18.04.2 VM:
+# https://github.com/iiab/iiab/issues/1802
+# https://mariadb.com/kb/en/library/what-to-do-if-mariadb-doesnt-start/#systemd
+
+- name: Check if /lib/systemd/system/mariadb.service exists
+  stat:
+    path: /lib/systemd/system/mariadb.service
+  register: mariadb_unit_file
+
+- name: Copy pkg's /lib/systemd/system/mariadb.service to /etc/systemd/system/ to be customized (CREATES TIMETAMPED BACKUPS OF /etc/systemd/system/mariadb.service e.g. IF OPERATOR CUSTOMIZED IT, EVEN DESPITE WARNING BELOW!)
+  copy:
+    force: yes
+    backup: yes
+    src: /lib/systemd/system/mariadb.service
+    dest: /etc/systemd/system/
+  when: mariadb_unit_file.stat.exists
+
+- name: Symlink /etc/systemd/system/mysql.service -> /etc/systemd/system/mariadb.service
+  file:
+    state: link
+    force: yes
+    src: /etc/systemd/system/mariadb.service
+    path: /etc/systemd/system/mysql.service
+  when: mariadb_unit_file.stat.exists
+
+- name: Symlink /etc/systemd/system/mysqld.service -> /etc/systemd/system/mariadb.service
+  file:
+    state: link
+    force: yes
+    src: /etc/systemd/system/mariadb.service
+    path: /etc/systemd/system/mysqld.service
+  when: mariadb_unit_file.stat.exists
+
+- name: "WARN OPERATOR: Changes made to /etc/systemd/system/mariadb.service WILL BE LOST whenever 'mysql' playbook is run"
+  lineinfile:
+    path: /etc/systemd/system/mariadb.service
+    insertbefore: BOF    # Beginning of file
+    line: "# WARNING: CHANGES TO THIS FILE WILL BE REGULARLY *OVERWRITTEN* BY:\n# /opt/iiab/iiab/roles/mysql/tasks/main.yml\n"
+  when: mariadb_unit_file.stat.exists
+
+- name: Set systemd boot timeout to 180 seconds for slow machines, in /etc/systemd/system/mariadb.service
+  lineinfile:
+    path: /etc/systemd/system/mariadb.service
+    insertafter: '^\[Service\]$'
+    regexp: "^TimeoutStartSec="
+    line: "\n# 2019-07-03: @jvonau @holta doubled MariaDB's default boot timeout, from\n# 90 seconds to 180 seconds, for slow machines like this Ubuntu 18.04.2 VM:\n# https://github.com/iiab/iiab/issues/1802\n# https://mariadb.com/kb/en/library/what-to-do-if-mariadb-doesnt-start/#systemd\nTimeoutStartSec=180\n"
+    # If the line above were to be run repeatedly (never happens here!) Ansible
+    # would pollute MariaDB's systemd unit file.  As multi-line regexp's are
+    # not allowed (both regexp's should match, for idempotency).  If nec, use
+    # the 1-liner below, or Ansible's 'blockinfile' which pollutes config files
+    # in its own way...surrounding blocks with marker lines.
+    # line: "TimeoutStartSec=180"
+  when: mariadb_unit_file.stat.exists
+
+
+# Name of MySQL service varies by OS, so hardcoded in /opt/iiab/iiab/vars/<OS>.yml (formerly in roles/0-init/tasks/main.yml)
+- name: Enable & Start MySQL systemd service ({{ mysql_service }}) if mysql_enabled
   systemd:
     name: "{{ mysql_service }}"
+    daemon_reload: yes
+    state: restarted
     enabled: yes
   when: mysql_enabled | bool
 

@@ -1,9 +1,9 @@
-- name: AzuraCast - Make AzuraCast config directory
+- name: AzuraCast - Make config directory {{ azuracast_host_dir }}
   file: 
     path: "{{ azuracast_host_dir }}"
     state: directory
 
-- name: AzuraCast - Copy over .env template to AzuraCast config directory
+- name: AzuraCast - Install {{ azuracast_host_dir }}/.env from template
   template:
     src: env.j2
     dest: "{{ azuracast_host_dir }}/.env"
@@ -11,7 +11,7 @@
     group: root
     mode: 0644
 
-- name: AzuraCast - Copy over docker-compose.override.yml template to AzuraCast config directory
+- name: AzuraCast - Install {{ azuracast_host_dir }}/docker-compose.override.yml from template
   template:
     src: docker-compose.override.yml.j2
     dest: "{{ azuracast_host_dir }}/docker-compose.override.yml"
@@ -19,7 +19,7 @@
     group: root
     mode: 0644
 
-- name: AzuraCast - Download docker.sh script
+- name: AzuraCast - Download {{ docker_sh_url }} to {{ azuracast_host_dir }}
   get_url:
     url: "{{ docker_sh_url }}"
     dest: "{{ azuracast_host_dir }}/"
@@ -27,12 +27,13 @@
     mode: 0755
   when: internet_available | bool
 
-- name: AzuraCast - Download docker-compose.yml
+- name: AzuraCast - Download AzuraCast's docker-compose.yml sample from GitHub to {{ azuracast_host_dir }}
   get_url: 
     url: "{{ docker_compose_url }}"
     dest: "{{ azuracast_host_dir }}/docker-compose.yml"
     timeout: "{{ download_timeout }}"
     mode: 0755
+  when: internet_available | bool
 
 - name: AzuraCast - Make changes to docker.sh script so it runs headless
   lineinfile:
@@ -41,18 +42,18 @@
     line: "\\1reply='Y'"
     backrefs: yes
 
-- name: AzuraCast - Make docker container directory
+- name: AzuraCast - Make directory {{ docker_container_dir }}
   file: 
     path: "{{ docker_container_dir }}"
     state: directory
   
-- name: AzuraCast - Link docker container directory
+- name: AzuraCast - Symlink /var/lib/docker -> {{ docker_container_dir }}
   file:
     src: "{{ docker_container_dir }}"
-    dest: "/var/lib/docker"
+    path: /var/lib/docker
     state: link 
 
-- name: Change default port number ranges 8xxx:8xxx to Nxxx:Nxxx icecast-stations in docker-compose.yml (N - azuracast_port_range_prefix)
+- name: Change default port number range 8xxx:8xxx to {{ azuracast_port_range_prefix }}xxx:{{ azuracast_port_range_prefix }}xxx icecast-stations in docker-compose.yml
   replace:
     path: "{{ azuracast_host_dir }}/docker-compose.yml"
     regexp: "^( *- \\')8([0-9]{3})\\:8([0-9]{3}\\'.*)$"
