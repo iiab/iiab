@@ -1,12 +1,6 @@
 # CHECK FOR PHP VERSION AUTOMATICALLY, TO DETERMINE WHICH NEXTCLOUD TO INSTALL.
 # INSPIRED BY: github.com/iiab/iiab/blob/master/roles/nodejs/tasks/main.yml#L10-L54
 
-# NOTE: php installation is mandatory due to 0-init/tasks/main.yml, which forces
-# this in roles/mysql/tasks/main.yml, as invoked by 3-base-server/tasks/main.yml
-
-# NOTE: the 3 stanzas below would still work even if php was not installed,
-# correctly setting variable 'php_new' to False.
-
 - name: Try to run 'php -v' to get PHP version
   # e.g. converts multi-line "PHP 7.0.33-0ubuntu0.16.04.5 (cli) ( NTS ) ..." to "7.0.33"
   shell: php -v | head -1 | sed 's/^[^0-9.]*//' | sed 's/[^0-9.].*//'
@@ -16,10 +10,24 @@
 #- debug:
 #    var: php_version_installed
 
-- name: Initialize var 'php_new' to False
-  set_fact:
-    php_new: False
-  #when: php_version_installed.stdout == ""    # WORKS, BUT NOT NEC
+# NOTE: this could easily be made to work even if PHP was not installed, e.g.
+# by pre-initializing variable 'php_new' to False here.  But trapping the
+# absence of PHP (below) is a useful software safety precondition!
+#
+#- name: Initialize var 'php_new' to False
+#  set_fact:
+#    php_new: False
+
+- name: FORCIBLY FAIL, IF PHP (Nextcloud prerequisite) ISN'T INSTALLED
+  fail:
+    msg: >
+      Nextcloud install cannot proceed, as it requires PHP be installed first.
+      Note that as of 2019-07-04, IIAB takes care of this by forcing vars
+      mysql_install and mysql_enabled to True in
+      /opt/iiab/iiab/roles/0-init/tasks/main.yml, which in turn forces the
+      installation of PHP in /opt/iiab/iiab/roles/mysql/tasks/main.yml, as
+      invoked by /opt/iiab/iiab/roles/3-base-server/tasks/main.yml
+  when: php_version_installed.stdout == ""
 
 - name: Set var 'php_new' indicating if installed version of PHP ({{ php_version_installed.stdout }}) >= 7.1, as required by Nextcloud 16
   set_fact:
