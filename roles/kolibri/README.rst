@@ -27,7 +27,7 @@ Automatic Device Provisioning
 When kolibri_provision is enabled (e.g. in `/etc/iiab/local_vars.yml <http://FAQ.IIAB.IO#What_is_local_vars.yml_and_how_do_I_customize_it.3F>`_) the installation will set up the following defaults::
 
   Kolibri Facility name: 'Kolibri-in-a-Box'
-  Kolibri Preset type: formal    # Options: formal, nonformal, informal
+  Kolibri Preset type: formal     # Options: formal, nonformal, informal
   Kolibri default language: en    # Options: ar, bn-bd, en, es-es, fa, fr-fr, hi-in, mr, nyn, pt-br, sw-tz, ta, te, ur-pk, yo, zu
   Kolibri Admin username: Admin
   Kolibri Admin password: changeme
@@ -44,7 +44,7 @@ Troubleshooting
 
 You can run the server manually with the following commands::
 
-  systemctl stop kolibri    # Make sure the systemd service is not running
+  systemctl stop kolibri           # Make sure the systemd service is not running
   export KOLIBRI_HOME=/library/kolibri
   export KOLIBRI_HTTP_PORT=8009    # Otherwise Kolibri will try to run on default port 8080
   kolibri start
