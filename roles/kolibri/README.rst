@@ -4,10 +4,12 @@ Kolibri README
 
 This Ansible role installs `Kolibri <https://learningequality.org/kolibri/>`_ within `Internet-in-a-Box (IIAB) <http://internet-in-a-box.org/>`_.  Kolibri is an open-source educational platform specially designed to provide offline access to a wide range of quality, openly licensed educational contents in low-resource contexts like rural schools, refugee camps, orphanages, and also in non-formal school programs.
 
+Kolibri's online User Guide is here: `https://kolibri.readthedocs.io <https://kolibri.readthedocs.io/>`_
+
 Using It
 --------
 
-If enabled and with the default settings Kolibri should be accessible at http://box:8009 (and in future at http://box/kolibri, work is ongoing in 2018 at `#913 <https://github.com/iiab/iiab/issues/913>`_).
+If enabled and with the default settings, Kolibri should be accessible at: http://box/kolibri
 
 To login to Kolibri enter::
 
@@ -22,7 +24,7 @@ Please look in `roles/kolibri/defaults/main.yml <https://github.com/iiab/iiab/bl
 Automatic Device Provisioning
 -----------------------------
 
-When kolibri_provision is enabled (e.g. in `/etc/iiab/local_vars.yml <http://wiki.laptop.org/go/IIAB/local_vars.yml>`_) the installation will set up the following defaults::
+When kolibri_provision is enabled (e.g. in `/etc/iiab/local_vars.yml <http://FAQ.IIAB.IO#What_is_local_vars.yml_and_how_do_I_customize_it.3F>`_) the installation will set up the following defaults::
 
   Kolibri Facility name: 'Kolibri-in-a-Box'
   Kolibri Preset type: formal    # Options: formal, nonformal, informal
@@ -47,7 +49,7 @@ You can run the server manually with the following commands::
   export KOLIBRI_HTTP_PORT=8009    # Otherwise Kolibri will try to run on default port 8080
   kolibri start
 
-To return to using the systemd unit::
+To return to using the systemd unit file::
 
   kolibri stop
   systemctl start kolibri
@@ -59,4 +61,4 @@ Known Issues
 
 * Loading channels can take a long time on a Raspberry Pi.  When generating channel contents for Khan Academy, the step indicated as “Generating channel listing.  This could take a few minutes…” could mean ~30 minutes.  The device’s computation power is the bottleneck.  You might get logged out while waiting, but this is harmless and the process will continue.  Sit tight!
 
-* More up-to-date list of Kolibri issues being worked on, as of March 2019: `#1545 <https://github.com/iiab/iiab/issues/1545>`_
+* Active list of Kolibri issues, as of July 2019: `#1545 <https://github.com/iiab/iiab/issues/1545>`_
