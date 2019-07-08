@@ -9,7 +9,7 @@
     system: yes
     create_home: no
 
-- name: Create {{ kolibri_home }} (for data) and {{ kolibri_venv_path }} (for program/config)
+- name: Create {{ kolibri_home }} (for data) and {{ kolibri_venv_path }} (venv for program/config)
   file:
     path: "{{ item }}"
     owner: "{{ kolibri_user }}"
@@ -17,10 +17,10 @@
     mode: 0755
     state: directory
   with_items:
-    - "{{ kolibri_home }}"
-    - "{{ kolibri_venv_path }}"
+    - "{{ kolibri_home }}"         # /library/kolibri
+    - "{{ kolibri_venv_path }}"    # /usr/local/kolibri
 
-- name: Install latest kolibri using pip
+- name: Install latest Kolibri using pip, to venv
   pip:
     name: kolibri
     virtualenv: "{{ kolibri_venv_path }}"
@@ -29,7 +29,7 @@
     extra_args: --no-cache-dir
   when: internet_available and not (kolibri_version is defined)
 
-- name: Install kolibri {{ kolibri_version }} using pip
+- name: Install Kolibri {{ kolibri_version }} using pip, to venv
   pip:
     name: kolibri
     virtualenv: "{{ kolibri_venv_path }}"
@@ -38,7 +38,25 @@
     extra_args: --no-cache-dir
   when: internet_available and kolibri_version is defined
 
-- name: Run Kolibri migrations
+- name: 'Install from templates: kolibri.service unit file for systemd & sites-available/kolibri.conf for Apache'
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: root
+    group: root
+    mode: 0644
+  with_items:
+    - { src: 'kolibri.service.j2', dest: '/etc/systemd/system/kolibri.service' }
+    - { src: 'kolibri.conf.j2', dest: '/etc/apache2/sites-available/kolibri.conf' }
+
+- name: Enable 'kolibri' systemd service (for reboots) but ensure it's stopped for Kolibri provisioning
+  systemd:
+    name: kolibri
+    daemon_reload: yes
+    enabled: yes
+    state: stopped
+
+- name: Run Kolibri migrations (WHY? WHAT DOES THIS DO?)
   shell: export KOLIBRI_HOME="{{ kolibri_home }}" && "{{ kolibri_exec_path }}" manage migrate
   ignore_errors: yes
   when: kolibri_provision | bool
@@ -63,49 +81,35 @@
     owner: "{{ kolibri_user }}"
     group: "{{ apache_user }}"
     recurse: yes
+  when: kolibri_provision | bool
 
-- name: Create kolibri systemd service unit file
-  template:
-    src: "{{ item.src }}"
-    dest: "{{ item.dest }}"
-    mode: "{{ item.mode }}"
-    owner: root
-    group: root
-  with_items:
-    - { src: 'kolibri.service.j2', dest: '/etc/systemd/system/kolibri.service', mode: '0644' }
-    - { src: 'kolibri.conf.j2', dest: '/etc/apache2/sites-available/kolibri.conf', mode: '0644' }
-
-- name: Enable & (Re)Start kolibri service
+- name: Start 'kolibri' systemd service, if kolibri_enabled
   systemd:
     name: kolibri
-    enabled: yes
-    state: restarted
-    daemon_reload: yes
+    state: started
   when: kolibri_enabled | bool
 
-# Default: http://box/kolibri
-- name: Enable http://box{{ kolibri_url }} with Apache
+- name: Enable http://box{{ kolibri_url }} with Apache (a2ensite) if kolibri_enabled    # i.e. http://box/kolibri
   command: a2ensite kolibri.conf
   when: kolibri_enabled | bool
 
-- name: Disable kolibri service
+- name: Disable & Stop 'kolibri' systemd service if not kolibri_enabled
   systemd:
     name: kolibri
     enabled: no
     state: stopped
   when: not kolibri_enabled
 
-- name: Disable http://box{{ kolibri_url }} with Apache
+- name: Disable http://box{{ kolibri_url }} with Apache (a2dissite) if not kolibri_enabled
   command: a2dissite kolibri.conf
   when: not kolibri_enabled
 
-# {{ apache_service }} is almost always apache2
-- name: Restart Apache service ({{ apache_service }})
+- name: Restart Apache service ({{ apache_service }})    # e.g. apache2
   systemd:
     name: "{{ apache_service }}"
     state: restarted
 
-- name: Add 'kolibri' variable values to {{ iiab_ini_file }}
+- name: Add 'kolibri' variable values to {{ iiab_ini_file }}    # /etc/iiab/iiab.ini
   ini_file:
     path: "{{ iiab_ini_file }}"
     section: kolibri
