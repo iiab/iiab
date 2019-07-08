@@ -19,7 +19,7 @@ To login to Kolibri enter::
 Configuration Parameters
 ------------------------
 
-Please look in `roles/kolibri/defaults/main.yml <https://github.com/iiab/iiab/blob/master/roles/kolibri/defaults/main.yml>`_ for the default values of the various install parameters.  Everything in this README assumes the default values.
+Please look in `/opt/iiab/iiab/roles/kolibri/defaults/main.yml <defaults/main.yml>`_ for the default values of the various install parameters.  Everything in this README assumes the default values.
 
 Automatic Device Provisioning
 -----------------------------
