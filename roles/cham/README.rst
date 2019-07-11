@@ -36,4 +36,4 @@ Using It
 Attribution
 -----------
 
-This 'cham' playbook is a contribution of the `EKA foundation <https://github.com/eka-foundaiton>`.
+This 'cham' playbook is a contribution of the `EKA foundation <https://github.com/eka-foundation>`.
