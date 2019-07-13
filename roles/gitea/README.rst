@@ -52,4 +52,5 @@ name, and the user credentials that Gitea will use to access the database.
 Documentation
 -------------
 
-Further info on configuring: `https://docs.gitea.io <https://docs.gitea.io/>`_
+- Further info on configuring: `https://docs.gitea.io <https://docs.gitea.io/>`_
+- Gitea supporting materials [best CS learning for developing countries?] `#1556 <https://github.com/iiab/iiab/issues/1556>`_
