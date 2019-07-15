@@ -215,7 +215,7 @@ def write_zim_versions_idx():
            get_substitution_data(perma_ref, zims_installed, path_to_id_map)
       zim_versions[perma_ref]['article_count'] = articlecount
       zim_versions[perma_ref]['media_count'] = mediacount
-      size = human_readable(size * 1024) # kiwix reports in K
+      size = human_readable(float(size) * 1024) # kiwix reports in K
       zim_versions[perma_ref]['size'] = size
       zim_versions[perma_ref]['tags'] = tags
       zim_versions[perma_ref]['language'] = lang
