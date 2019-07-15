@@ -215,7 +215,7 @@ def write_zim_versions_idx():
            get_substitution_data(perma_ref, zims_installed, path_to_id_map)
       zim_versions[perma_ref]['article_count'] = articlecount
       zim_versions[perma_ref]['media_count'] = mediacount
-      size = human_readable(size)
+      size = human_readable(float(size) * 1024) # kiwix reports in K
       zim_versions[perma_ref]['size'] = size
       zim_versions[perma_ref]['tags'] = tags
       zim_versions[perma_ref]['language'] = lang
@@ -228,7 +228,7 @@ def write_zim_versions_idx():
          fp.close()
    else:
       print zim_version_idx_dir + " not found."
-      
+
 def get_substitution_data(perma_ref,zims_installed, path_to_id_map):
    #reconstruct the path in the id map
    path = 'content/' + zim_versions[perma_ref]['file_name'] + '.zim'
@@ -290,6 +290,7 @@ def get_kiwix_catalog_item(perma_ref):
 
 def human_readable(num):
     # return 3 significant digits and unit specifier
+    # TFM 7/15/2019 change to factor of 1024, not 1000 to match similar calcs elsewhere
     num = float(num)
     units = [ '','K','M','G']
     for i in range(4):
@@ -299,7 +300,7 @@ def human_readable(num):
             return "%.1f%s"%(num,units[i])
         if num < 1000.0:
             return "%.0f%s"%(num,units[i])
-        num /= 1000.0
+        num /= 1024.0
 
 # Now start the application
 if __name__ == "__main__":
