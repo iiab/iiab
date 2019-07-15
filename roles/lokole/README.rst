@@ -68,8 +68,8 @@ To reset the database, run the following command::
 
 This command will remove all users and all emails from the system.
 
-Connecting to the Internet
---------------------------
+Nightly Internet Email Sync (Not Easy!)
+---------------------------------------
 
 The Lokole software can be configured to access the Internet via USB modem, SIM card, or Ethernet, by setting the environment variable ``OPWEN_SIM_TYPE`` in the configuration file ``/etc/apache2/sites-enabled/lokole.conf``.  By default, this installation of Lokole is set to local-only (offline) mode, in which users can only send emails to other users on the same installation and cannot send emails over the Internet.  This has been done by setting ``OPWEN_SIM_TYPE`` to ``LocalOnly``.
 
