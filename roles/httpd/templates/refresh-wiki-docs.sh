@@ -37,11 +37,11 @@ lynx -reload -source https://github.com/XSCE/xsce/wiki/IIAB-6.2-Release-Notes > 
 lynx -reload -source https://github.com/XSCE/xsce/blob/release-6.2/ReleaseNotes6.0.md > $DESTPATH/ReleaseNotes6.0.html
 lynx -reload -source https://github.com/XSCE/xsce/blob/release-6.2/ReleaseNotes6.1.md > $DESTPATH/ReleaseNotes6.1.html
 
-# Get raspberry pi resources
-wget -P $DESTPATH https://www.raspberrypi.org/magpi-issues/Beginners_Guide_v1.pdf 
-wget -P $DESTPATH https://dn.odroid.com/IoT/other_doc.pdf 
+# Download Raspberry Pi guides
+wget -nc -P $DESTPATH https://www.raspberrypi.org/magpi-issues/Beginners_Guide_v1.pdf
+wget -nc -P $DESTPATH https://dn.odroid.com/IoT/other_doc.pdf
 
-# update the link to pi resources on the info splash page
+# Update Raspberry Pi guide links on main page (http://box/info)
 sed -i -r "s|https://www.raspberrypi.org/magpi-issues/Beginners_Guide_v1.pdf|Beginners_Guide_v1.pdf|g" $DESTPATH/index.html
 sed -i -r "s|https://dn.odroid.com/IoT/other_doc.pdf|other_doc.pdf|g" $DESTPATH/index.html
 
