@@ -53,6 +53,9 @@ menuDefs = doc_root + "/js-menu/menu-files/menu-defs/"
 menuImages = doc_root + "/js-menu/menu-files/images/"
 menuJsonPath = doc_root + "/home/menu.json"
 
+assets_dir = doc_root + "/common/assets/"
+lang_codes_path = assets_dir + "lang_codes.json"
+lang_codes = {}
 old_zim_map = {"bad.zim" : "unparseable name"}
 
 # Working variables
@@ -184,6 +187,16 @@ def add_libr_xml(kiwix_library_xml, zim_path, zimname, zimidx):
         #print 'skipping ' + zimname
         pass
 
+def read_lang_codes():
+   global lang_codes
+   with open(lang_codes_path,"r") as f:
+      reads = f.read()
+      #print("menu.json:%s"%reads)
+      lang_codes = json.loads(reads)
+
+def kiwix_lang_to_iso2(zim_lang_code):
+    return lang_codes[zim_lang_code]['iso2']
+
 def init():
 
     global iiab_base_path
@@ -197,6 +210,7 @@ def init():
     zim_path = config.get('kiwix','iiab_zim_path')
     kiwix_library_xml = config.get('kiwix','kiwix_library_xml')
     kiwix_manage = iiab_base_path + "/kiwix/bin/kiwix-manage"
+    read_lang_codes()
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Create library.xml for Kiwix.")
@@ -218,6 +232,7 @@ def write_zim_versions_idx():
       size = human_readable(float(size) * 1024) # kiwix reports in K
       zim_versions[perma_ref]['size'] = size
       zim_versions[perma_ref]['tags'] = tags
+
       zim_versions[perma_ref]['language'] = lang
       zim_versions[perma_ref]['zim_date'] = date
 
@@ -234,16 +249,16 @@ def get_substitution_data(perma_ref,zims_installed, path_to_id_map):
    path = 'content/' + zim_versions[perma_ref]['file_name'] + '.zim'
    id = path_to_id_map[path]
    item = zims_installed[id]
+
    if len(item) != 0 or perma_ref == 'test':
       mediacount = item.get('mediaCount','')
       articlecount = item.get('articleCount','')
       size = item.get('size','')
       tags = item.get('tags','')
-      lang = item.get('language','')
-      if len(lang) > 2:
-         lang = lang[:2]
+      zim_lang = item.get('language')
+      menu_def_lang = kiwix_lang_to_iso2(zim_lang)
       date =  item.get('date','')
-      return (articlecount,mediacount,size,tags,lang,date)
+      return (articlecount,mediacount,size,tags,menu_def_lang,date)
    return ('0','0','0','0','0','0')
 
 def get_menu_def_zimnames(intended_use='zim'):
