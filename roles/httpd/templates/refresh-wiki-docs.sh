@@ -37,6 +37,14 @@ lynx -reload -source https://github.com/XSCE/xsce/wiki/IIAB-6.2-Release-Notes > 
 lynx -reload -source https://github.com/XSCE/xsce/blob/release-6.2/ReleaseNotes6.0.md > $DESTPATH/ReleaseNotes6.0.html
 lynx -reload -source https://github.com/XSCE/xsce/blob/release-6.2/ReleaseNotes6.1.md > $DESTPATH/ReleaseNotes6.1.html
 
+# Download Raspberry Pi guides
+wget -nc -P $DESTPATH https://www.raspberrypi.org/magpi-issues/Beginners_Guide_v1.pdf
+wget -nc -P $DESTPATH https://dn.odroid.com/IoT/other_doc.pdf
+
+# Update Raspberry Pi guide links on main page (http://box/info)
+sed -i -r "s|https://www.raspberrypi.org/magpi-issues/Beginners_Guide_v1.pdf|Beginners_Guide_v1.pdf|g" $DESTPATH/index.html
+sed -i -r "s|https://dn.odroid.com/IoT/other_doc.pdf|other_doc.pdf|g" $DESTPATH/index.html
+
 # Make links refer to local items
 for f in $DESTPATH/*.html; do
     sed -i -r "s|https://github.com/iiab/iiab/wiki/([-.A-Za-z0-9]*)|\1.html|g" $f
