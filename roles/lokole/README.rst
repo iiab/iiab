@@ -80,7 +80,7 @@ Lokole and Internet-in-a-Box would welcome a business plan (whether volunteer-ba
 Troubleshooting
 ---------------
 
-For further usage information and troubleshooting, refer to the `Lokole user manual <https://github.com/iiab/iiab/raw/master/roles/lokole/The%20Lokole-IIAB%20User's%20Manual.pdf>`_.
+For further usage information and troubleshooting, refer to the `Lokole user manual <Lokole-IIAB_Users_Manual.pdf>`_.
 
 Known Issues
 ------------
