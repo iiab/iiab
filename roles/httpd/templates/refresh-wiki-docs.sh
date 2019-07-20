@@ -44,8 +44,8 @@ lynx -reload -source https://github.com/XSCE/xsce/blob/release-6.2/ReleaseNotes6
 lynx -reload -source https://github.com/XSCE/xsce/blob/release-6.2/ReleaseNotes6.1.md > $DESTPATH/ReleaseNotes6.1.html
 
 # Download Raspberry Pi guides
-wget -nc https://www.raspberrypi.org/magpi-issues/Beginners_Guide_v1.pdf -O $DOCSPATH/Raspberry_Pi_Beginners_Guide_v1.pdf
-wget -nc https://dn.odroid.com/IoT/other_doc.pdf -O $DOCSPATH/Raspberry_Pi_User_Guide_v4.pdf
+wget -nc https://www.raspberrypi.org/magpi-issues/Beginners_Guide_v1.pdf -O $DOCSPATH/Raspberry_Pi_Beginners_Guide_v1.pdf || true    # Overrides set -e
+wget -nc https://dn.odroid.com/IoT/other_doc.pdf -O $DOCSPATH/Raspberry_Pi_User_Guide_v4.pdf || true
 
 cp -p "{{ iiab_dir }}/roles/lokole/The Lokole-IIAB User's Manual.pdf" $DOCSPATH    # /opt/iiab/iiab
 
