@@ -10,7 +10,7 @@ set -e                           # Exit on error (avoids snowballing)
 source {{ iiab_env_file }}       # /etc/iiab/iiab.env
 INPUT=/tmp/iiab-wiki
 OUTPUT=/tmp/iiab-wiki.out
-DESTPATH="{{ doc_root }}/info    # /library/www/html/info
+DESTPATH={{ doc_root }}/info     # /library/www/html/info
 DOCSPATH=$DESTPATH/docs          # /library/www/html/info/docs
 
 rm -rf $INPUT
