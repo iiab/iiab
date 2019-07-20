@@ -1,7 +1,10 @@
 #!/bin/bash -x
 
-# Pull down iiab/iiab repo's entire Tech Docs Wiki (and scrape/download other
-# docs!) to create IIAB's offline docs collection: http://box/info
+# This /opt/iiab/iiab/roles/httpd/templates/refresh-wiki-docs.sh becomes
+# /usr/bin/iiab-refresh-wiki-docs during IIAB's install.
+
+# This pulls down iiab/iiab repo's entire Tech Docs Wiki (and scrapes/downloads
+# other docs!) to create IIAB's offline docs collection: http://box/info
 
 set -e                           # Exit on error (avoids snowballing)
 source {{ iiab_env_file }}       # /etc/iiab/iiab.env
