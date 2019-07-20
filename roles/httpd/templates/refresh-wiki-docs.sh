@@ -52,7 +52,7 @@ cp -p "{{ iiab_dir }}/roles/lokole/The Lokole-IIAB User's Manual.pdf" $DOCSPATH 
 # Update Raspberry Pi guide links on main page (http://box/info)
 sed -i -r "s|https://www.raspberrypi.org/magpi-issues/Beginners_Guide_v1.pdf|docs/Raspberry_Pi_Beginners_Guide_v1.pdf|g" $DESTPATH/index.html
 sed -i -r "s|https://dn.odroid.com/IoT/other_doc.pdf|docs/Raspberry_Pi_User_Guide_v4.pdf|g" $DESTPATH/index.html
-sed -i -r "s|https://github.com/iiab/iiab/blob/master/roles/lokole/The%20Lokole-IIAB%20User&#39;s%20Manual.pdf|docs/The%20Lokole-IIAB%20User\&#39;s%20Manual.pdf|g" $DESTPATH/index.html
+sed -i -r "s|https://github.com/iiab/iiab/blob/master/roles/lokole/Lokole-IIAB_Users_Manual.pdf|docs/Lokole-IIAB_Users_Manual.pdf|g" $DESTPATH/index.html
 
 # Make links refer to local items
 for f in $DESTPATH/*.html; do
