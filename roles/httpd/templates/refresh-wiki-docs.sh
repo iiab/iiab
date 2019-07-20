@@ -3,15 +3,17 @@
 # Pull down repo's entire wiki (and similar) to create offline docs
 
 set -e
-source {{ iiab_env_file }}
+source {{ iiab_env_file }}       # /etc/iiab/iiab.env
 INPUT=/tmp/iiab-wiki
 OUTPUT=/tmp/iiab-wiki.out
-DESTPATH=/library/www/html/info
+DESTPATH="{{ doc_root }}/info    # /library/www/html/info
+DOCSPATH=$DESTPATH/docs          # /library/www/html/info/docs
 
 rm -rf $INPUT
 rm -rf $OUTPUT
 mkdir -p $INPUT
 mkdir -p $OUTPUT
+mkdir -p $DOCSPATH
 
 git clone https://github.com/iiab/iiab.wiki.git $INPUT
 
@@ -38,12 +40,12 @@ lynx -reload -source https://github.com/XSCE/xsce/blob/release-6.2/ReleaseNotes6
 lynx -reload -source https://github.com/XSCE/xsce/blob/release-6.2/ReleaseNotes6.1.md > $DESTPATH/ReleaseNotes6.1.html
 
 # Download Raspberry Pi guides
-wget -nc -P $DESTPATH https://www.raspberrypi.org/magpi-issues/Beginners_Guide_v1.pdf
-wget -nc -P $DESTPATH https://dn.odroid.com/IoT/other_doc.pdf
+wget -nc https://www.raspberrypi.org/magpi-issues/Beginners_Guide_v1.pdf -O $DOCSPATH/Raspberry_Pi_Beginners_Guide_v1.pdf
+wget -nc https://dn.odroid.com/IoT/other_doc.pdf -O $DOCSPATH/Raspberry_Pi_User_Guide_v4.pdf
 
 # Update Raspberry Pi guide links on main page (http://box/info)
-sed -i -r "s|https://www.raspberrypi.org/magpi-issues/Beginners_Guide_v1.pdf|Beginners_Guide_v1.pdf|g" $DESTPATH/index.html
-sed -i -r "s|https://dn.odroid.com/IoT/other_doc.pdf|other_doc.pdf|g" $DESTPATH/index.html
+sed -i -r "s|https://www.raspberrypi.org/magpi-issues/Beginners_Guide_v1.pdf|docs/Raspberry_Pi_Beginners_Guide_v1.pdf|g" $DESTPATH/index.html
+sed -i -r "s|https://dn.odroid.com/IoT/other_doc.pdf|docs/Raspberry_Pi_User_Guide_v4.pdf|g" $DESTPATH/index.html
 
 # Make links refer to local items
 for f in $DESTPATH/*.html; do
