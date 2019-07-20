@@ -1,8 +1,9 @@
 #!/bin/bash -x
 
-# Pull down repo's entire wiki (and similar) to create offline docs
+# Pull down iiab/iiab repo's entire Tech Docs Wiki (and scrape/download other
+# docs!) to create IIAB's offline docs collection: http://box/info
 
-set -e
+set -e                           # Exit on error (avoids snowballing)
 source {{ iiab_env_file }}       # /etc/iiab/iiab.env
 INPUT=/tmp/iiab-wiki
 OUTPUT=/tmp/iiab-wiki.out
@@ -43,9 +44,12 @@ lynx -reload -source https://github.com/XSCE/xsce/blob/release-6.2/ReleaseNotes6
 wget -nc https://www.raspberrypi.org/magpi-issues/Beginners_Guide_v1.pdf -O $DOCSPATH/Raspberry_Pi_Beginners_Guide_v1.pdf
 wget -nc https://dn.odroid.com/IoT/other_doc.pdf -O $DOCSPATH/Raspberry_Pi_User_Guide_v4.pdf
 
+cp -p "{{ iiab_dir }}/roles/lokole/The Lokole-IIAB User's Manual.pdf" $DOCSPATH    # /opt/iiab/iiab
+
 # Update Raspberry Pi guide links on main page (http://box/info)
 sed -i -r "s|https://www.raspberrypi.org/magpi-issues/Beginners_Guide_v1.pdf|docs/Raspberry_Pi_Beginners_Guide_v1.pdf|g" $DESTPATH/index.html
 sed -i -r "s|https://dn.odroid.com/IoT/other_doc.pdf|docs/Raspberry_Pi_User_Guide_v4.pdf|g" $DESTPATH/index.html
+sed -i -r "s|https://github.com/iiab/iiab/blob/master/roles/lokole/The%20Lokole-IIAB%20User's%20Manual.pdf|docs/The Lokole-IIAB User's Manual.pdf|g" $DESTPATH/index.html
 
 # Make links refer to local items
 for f in $DESTPATH/*.html; do
