@@ -6,6 +6,9 @@
 # This pulls down iiab/iiab repo's entire Tech Docs Wiki (and scrapes/downloads
 # other docs!) to create IIAB's offline docs collection: http://box/info
 
+# TO DO: find more pages to download/scrape and offline links to fix,
+# based on "fieldback" from truly remote implementer/operators.
+
 set -e                           # Exit on error (avoids snowballing)
 source {{ iiab_env_file }}       # /etc/iiab/iiab.env
 INPUT=/tmp/iiab-wiki
@@ -29,8 +32,6 @@ done
 
 rsync -av $OUTPUT/ $DESTPATH
 
-# To Do: find more pages to d/l and offline links to fix, based on "fieldback" from truly remote implementer/operators
-
 # Download FAQ etc
 lynx -reload -source http://wiki.laptop.org/go/IIAB/FAQ > $DESTPATH/FAQ.html
 lynx -reload -source http://wiki.laptop.org/go/IIAB/Security > $DESTPATH/Security.html
@@ -47,14 +48,17 @@ lynx -reload -source https://github.com/XSCE/xsce/blob/release-6.2/ReleaseNotes6
 wget -nc https://www.raspberrypi.org/magpi-issues/Beginners_Guide_v1.pdf -O $DOCSPATH/Raspberry_Pi_Beginners_Guide_v1.pdf || true    # Overrides set -e
 wget -nc https://dn.odroid.com/IoT/other_doc.pdf -O $DOCSPATH/Raspberry_Pi_User_Guide_v4.pdf || true
 
-cp -p "{{ iiab_dir }}/roles/lokole/Lokole-IIAB_Users_Manual.pdf" $DOCSPATH    # /opt/iiab/iiab
+# Copy PDF from Lokole playbook
+cp -p "{{ iiab_dir }}/roles/lokole/Lokole-IIAB_Users_Manual.pdf" $DOCSPATH    # From /opt/iiab/iiab
 
-# Update Raspberry Pi guide links on main page (http://box/info)
+# MAKE LINKS REFER TO LOCAL ITEMS...
+
+# ...on main page (http://box/info)
 sed -i -r "s|https://www.raspberrypi.org/magpi-issues/Beginners_Guide_v1.pdf|docs/Raspberry_Pi_Beginners_Guide_v1.pdf|g" $DESTPATH/index.html
 sed -i -r "s|https://dn.odroid.com/IoT/other_doc.pdf|docs/Raspberry_Pi_User_Guide_v4.pdf|g" $DESTPATH/index.html
 sed -i -r "s|https://github.com/iiab/iiab/blob/master/roles/lokole/Lokole-IIAB_Users_Manual.pdf|docs/Lokole-IIAB_Users_Manual.pdf|g" $DESTPATH/index.html
 
-# Make links refer to local items
+# ...and within subpages
 for f in $DESTPATH/*.html; do
     sed -i -r "s|https://github.com/iiab/iiab/wiki/([-.A-Za-z0-9]*)|\1.html|g" $f
 
