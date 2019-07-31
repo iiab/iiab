@@ -4,7 +4,7 @@
 - name: Setting XO has WiFi gateway
   set_fact:
     user_wan_iface: "{{ discovered_wan_iface }}"
-  when: discovered_wan_iface != "none" and xo_model != "none" and has_ifcfg_gw == "none"
+  when: not (discovered_wan_iface == "none") and not (xo_model == "none") and has_ifcfg_gw == "none"
 
 #- name: Checking for NetworkManager-config-server
 #  shell: rpm -qa | grep  NetworkManager-config-server | wc -l
@@ -23,19 +23,19 @@
 - name: XO laptop wants USB WiFi interface as AP mode
   set_fact:
     iiab_wireless_lan_iface: "{{ discovered_lan_iface }}"
-  when: num_wifi_interfaces >= "2" and xo_model != "none" and discovered_wan_iface != "none" and discovered_wireless_iface == "eth0"
+  when: num_wifi_interfaces >= "2" and not (xo_model == "none") and not (discovered_wan_iface == "none") and discovered_wireless_iface == "eth0"
 
 # static backout suppy new template file
 - name: gui-static-wan
   set_fact:
     wan_ip: dhcp
     gui_static_wan_ip: undefined
-  when: gui_static_wan_ip != "unset" and not gui_static_wan
+  when: not (gui_static_wan_ip == "unset") and not gui_static_wan
 
 - name: Undo gui-static-wan by requesting new template file
   set_fact:
     has_WAN: False
-  when: gui_static_wan_ip != "unset" and not gui_static_wan
+  when: not (gui_static_wan_ip == "unset") and not gui_static_wan
 
 # figure out more than one interfaces to detect.
 - name: Using GUI_STATIC info
@@ -46,7 +46,7 @@
     wan_netmask: "{{ gui_static_wan_netmask }}"
     wan_gateway: "{{ gui_static_wan_gateway }}"
     wan_nameserver: "{{ gui_static_wan_nameserver }}"
-  when: gui_static_wan or user_wan_iface != "auto"
+  when: gui_static_wan or not (user_wan_iface == "auto")
 
 # we need to have an interface name for ifcfg-WAN to be able to change gateway
 # the DEVICE from the gui. Thanks to George for proving my point about knowing
@@ -61,7 +61,6 @@
   set_fact:
     user_wan_iface: "none"
   when: not iiab_wan_enabled
-  #when: 'not iiab_wan_enabled'
 
 # gui wants LanController # keeps ifcfg-WAN but onboot=no
 # the change over might be a little bumpy ATM.
@@ -79,19 +78,19 @@
 - name: Setting user_lan_iface for 'LanController' for single interface
   set_fact:
     user_lan_iface: "{{ discovered_wan_iface }}"
-  when: discovered_wan_iface != "none" and num_lan_interfaces == "0" and gui_desired_network_role is defined and gui_desired_network_role == "LanController"
+  when: not (discovered_wan_iface == "none") and num_lan_interfaces == "0" and gui_desired_network_role is defined and gui_desired_network_role == "LanController"
 
 # override with user_wan_iface setting if no longer in auto
 - name: Setting user WAN fact
   set_fact:
     iiab_wan_iface: "{{ user_wan_iface }}"
-  when: user_wan_iface != "auto"
+  when: not (user_wan_iface == "auto")
 
 # user disabled interface - overriding all other entries
 - name: Checking iiab_lan_enabled
   set_fact:
     user_lan_iface: "none"
-  when: 'not iiab_lan_enabled'
+  when: not iiab_lan_enabled
 
 # gui wants Appliance Note: could of used iiab_lan_enabled false
 - name: Setting GUI wants 'Appliance'
@@ -105,7 +104,7 @@
   set_fact:
     user_lan_iface: "auto"
     user_wan_iface: "{{ iiab_wan_iface }}"
-  when: gui_desired_network_role is defined and gui_desired_network_role == "Gateway" and iiab_wan_iface != "none"
+  when: gui_desired_network_role is defined and gui_desired_network_role == "Gateway" and not (iiab_wan_iface == "none")
 
 # make it so number 2 vars should use user_wan_iface but we can cover a single
 # wired if dhcp fails the interface should revert to LAN, static address should
@@ -121,7 +120,7 @@
 - name: Use old gateway device info if not detected and using static ip
   set_fact:
     iiab_wan_iface: "{{ device_gw }}"
-  when: wan_ip != "dhcp" and iiab_wan_iface == "none"
+  when: not (wan_ip == "dhcp") and iiab_wan_iface == "none"
 
 - name: No LAN configured - 'Appliance' mode
   set_fact:
@@ -131,12 +130,12 @@
 - name: LAN configured - 'LanController' mode
   set_fact:
     iiab_network_mode: "LanController"
-  when: iiab_lan_iface != "none" and iiab_wan_iface == "none"
+  when: not (iiab_lan_iface == "none") and iiab_wan_iface == "none"
 
 - name: LAN configured - 'Gateway' mode
   set_fact:
     iiab_network_mode: "Gateway"
-  when: (iiab_lan_iface != "none" and iiab_wan_iface != "none") or is_rpi
+  when: is_rpi or (not (iiab_lan_iface == "none") and not (iiab_wan_iface == "none"))
 
 - name: Force iiab_lan_iface if is_rpi
   set_fact:
@@ -147,13 +146,13 @@
 - name: Enable hostapd if discovered_wireless_iface is not WAN
   set_fact:
     hostapd_enabled: True
-  when: is_rpi and iiab_wan_iface != discovered_wireless_iface
+  when: is_rpi and not (iiab_wan_iface == discovered_wireless_iface)
 
 # override with user_lan_iface setting if no longer in auto
 - name: Setting user LAN fact
   set_fact:
     iiab_lan_iface: "{{ user_lan_iface }}"
-  when: 'user_lan_iface != "auto"'
+  when: not (user_lan_iface == "auto")
 
 # so this works
 - name: Interface count
