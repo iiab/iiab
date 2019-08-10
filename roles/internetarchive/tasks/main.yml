@@ -37,12 +37,6 @@
     internetarchive_upgrade: True
   when: reinstall is defined
 
-- name: 'Update pre-existing install: sudo yarn upgrade'
-  command: sudo yarn upgrade
-  args:
-    chdir: "{{ internetarchive_dir }}"
-  when: not internetarchive_installing.changed and internetarchive_upgrade
-
 
 # CONFIG FILES
 
@@ -71,7 +65,25 @@
   when: is_debuntu and not internetarchive_enabled
 
 
-# RESTART/STOP SYSTEMD SERVICE
+# STOP SYSTEMD SERVICE
+- name: Stop 'internetarchive' systemd service
+  systemd:
+    name: internetarchive
+    daemon_reload: yes
+    state: stopped
+
+- name: 'Update pre-existing install: sudo yarn upgrade'
+  command: sudo yarn upgrade
+  args:
+    chdir: "{{ internetarchive_dir }}"
+  when: not internetarchive_installing.changed and internetarchive_upgrade
+
+ # RESTART/ENABLE SYSTEMD SERVICE
+- name: Disable 'internetarchive' systemd service (if not internetarchive_enabled)
+  systemd:
+    name: internetarchive
+    enabled: no
+  when: not internetarchive_enabled
 
 # with "systemctl daemon-reload" in case mongodb.service changed, etc
 - name: Enable & Restart 'internetarchive' systemd service (if internetarchive_enabled)
@@ -81,14 +93,6 @@
     enabled: yes
     state: restarted
   when: internetarchive_enabled | bool
-
-- name: Disable & Stop 'internetarchive' systemd service (if not internetarchive_enabled)
-  systemd:
-    name: internetarchive
-    daemon_reload: yes
-    enabled: no
-    state: stopped
-  when: not internetarchive_enabled
 
 - name: Restart Apache service ({{ apache_service }}) to enable/disable http://box/archive (not just http://box:{{ internetarchive_port }})
   systemd:
