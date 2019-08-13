@@ -19,16 +19,23 @@
     owner: "root"
 
 - name: Run yarn install to get needed modules (CAN TAKE ~15 MINUTES)
-  command: sudo yarn add @internetarchive/dweb-archive @internetarchive/dweb-mirror
+  command: yarn add @internetarchive/dweb-archive @internetarchive/dweb-mirror
   args:
     chdir: "{{ internetarchive_dir }}"
+    creates: "{{ internetarchive_dir }}/node_modules/@internetarchive/dweb-mirror/internetarchive"
   when: internet_available | bool
+  register: internetarchive_installing
 
 - name: Create directory /library/archiveorg
   file:
     path: "/library/archiveorg"
     state: directory
     owner: "root"
+
+- name: Set --reinstall fact
+  set_fact:
+    internetarchive_upgrade: True
+  when: reinstall is defined
 
 
 # CONFIG FILES
@@ -58,7 +65,25 @@
   when: is_debuntu and not internetarchive_enabled
 
 
-# RESTART/STOP SYSTEMD SERVICE
+# STOP SYSTEMD SERVICE
+- name: Stop 'internetarchive' systemd service
+  systemd:
+    name: internetarchive
+    daemon_reload: yes
+    state: stopped
+
+- name: 'Update pre-existing install: yarn upgrade'
+  command: yarn upgrade
+  args:
+    chdir: "{{ internetarchive_dir }}"
+  when: not internetarchive_installing.changed and internetarchive_upgrade
+
+ # RESTART/ENABLE SYSTEMD SERVICE
+- name: Disable 'internetarchive' systemd service (if not internetarchive_enabled)
+  systemd:
+    name: internetarchive
+    enabled: no
+  when: not internetarchive_enabled
 
 # with "systemctl daemon-reload" in case mongodb.service changed, etc
 - name: Enable & Restart 'internetarchive' systemd service (if internetarchive_enabled)
@@ -68,14 +93,6 @@
     enabled: yes
     state: restarted
   when: internetarchive_enabled | bool
-
-- name: Disable & Stop 'internetarchive' systemd service (if not internetarchive_enabled)
-  systemd:
-    name: internetarchive
-    daemon_reload: yes
-    enabled: no
-    state: stopped
-  when: not internetarchive_enabled
 
 - name: Restart Apache service ({{ apache_service }}) to enable/disable http://box/archive (not just http://box:{{ internetarchive_port }})
   systemd:
