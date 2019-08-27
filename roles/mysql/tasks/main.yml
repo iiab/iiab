@@ -115,84 +115,20 @@
     # line: "TimeoutStartSec=180"
   when: mariadb_unit_file.stat.exists
 
-
-# Name of MySQL service varies by OS, so hardcoded in /opt/iiab/iiab/vars/<OS>.yml (formerly in roles/0-init/tasks/main.yml)
-- name: Enable & Start MySQL systemd service ({{ mysql_service }}) if mysql_enabled
-  systemd:
-    name: "{{ mysql_service }}"
-    daemon_reload: yes
-    state: restarted
-    enabled: yes
-  when: mysql_enabled | bool
-
-# 'localhost' needs to be the last item for idempotency, see
-# http://ansible.cc/docs/modules.html#mysql-user
-# unfortunately it still doesn't work
-- name: Update MySQL root password for localhost root accounts, if mysql_enabled
-  mysql_user:
-    name: root
-    host: localhost
-    password: "{{ mysql_root_password }}"
-    priv: "*.*:ALL,GRANT"
-  when: mysql_enabled | bool
-
-- name: Install .my.cnf file from template, with root password credentials, if mysql_enabled
+- name: Use custom systemd unit file to call runrole db-setup on boot
   template:
-    src: my.cnf.j2
-    dest: /root/.my.cnf
+    src: iiab-setup-db.service
+    dest: /etc/systemd/system/iiab-setup-db.service
     owner: root
-    mode: 0600
-  when: mysql_enabled | bool
+    group: root
+    mode: 0644
 
-- name: Update MySQL root password for all remaining root accounts (127.0.0.1, ::1) if mysql_enabled
-  mysql_user:
-    name: root
-    host: "{{ item }}"
-    password: "{{ mysql_root_password }}"
-    priv: "*.*:ALL,GRANT"
-  with_items:
-    #- "{{ iiab_hostname }}.{{ iiab_domain }}"
-    - 127.0.0.1
-    - ::1
-  when: mysql_enabled | bool
-
-- name: Delete anonymous MySQL server user for {{ ansible_hostname }}, if mysql_enabled
-  mysql_user:
-    user: ""
-    host: "{{ ansible_hostname }}"
-    state: absent
-  when: mysql_enabled | bool
-
-- name: Delete anonymous MySQL server user for localhost, if mysql_enabled
-  mysql_user:
-    user: ""
-    state: absent
-  when: mysql_enabled | bool
-
-- name: Remove the MySQL 'test' database, if mysql_enabled
-  mysql_db:
-    db: test
-    state: absent
-  when: mysql_enabled | bool
-
-# we had to start mysql in order to configure it, now turn if off if not enabled
-- name: Config is done but now DISABLE MySQL service, if not mysql_enabled
+- name: Enable iiab-setup-db.service for reboot
   systemd:
-    name: "{{ mysql_service }}"
-    enabled: no
-    state: stopped
-  when: not mysql_enabled
+    name: iiab-setup-db.service
+    enabled: yes
+  when: installing | bool
 
-- name: Add 'mysql' variable values to {{ iiab_ini_file }}
-  ini_file:
-    path: "{{ iiab_ini_file }}"
-    section: mysql
-    option: "{{ item.option }}"
-    value: "{{ item.value }}"
-  with_items:
-    - option: name
-      value: MySQL
-    - option: description
-      value: '"MySQL is a widely used free and open source (GPLv2) database, offered by most web hosting services, on a diversity of platforms."'
-    - option: enabled
-      value: "{{ mysql_enabled }}"
+- name: Provison the DB
+  include_tasks: prov-db.yml
+  when: not installing | bool
