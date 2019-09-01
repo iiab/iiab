@@ -1,0 +1,84 @@
+- name: 'Create MySQL database with name: {{ nextcloud_dbname }}'
+  mysql_db:
+    name: "{{ nextcloud_dbname }}"
+
+- name: Add username/password to the MySQL database (associated with trusted IP's like localhost)
+  mysql_user:
+    name: "{{ nextcloud_dbuser }}"
+    host: "{{ item }}"
+    password: "{{ nextcloud_dbpassword }}"
+    priv: "{{ nextcloud_dbname }}.*:ALL,GRANT"
+  with_items:
+    - "{{ nextcloud_dbhost }}"
+    - 127.0.0.1
+    - ::1
+    - localhost
+
+# the install wizard does not succeed if already installed
+- name: Determine if Nextcloud is installed
+  shell: >
+    php {{ nextcloud_prefix }}/nextcloud/occ status |
+    gawk '/installed:/ { print $3 }'
+  become: yes
+  become_user: "{{ apache_user }}"
+  register: returned
+
+- name: Run Nextcloud initial install wizard
+  shell: >
+    cd {{ nextcloud_prefix }}/nextcloud;
+    php occ maintenance:install
+    --database "mysql"
+    --database-name "{{ nextcloud_dbname }}"
+    --database-user "{{ nextcloud_dbuser }}"
+    --database-pass "{{ nextcloud_dbpassword }}"
+    --admin-user "{{ nextcloud_admin_user }}"
+    --admin-pass "{{ nextcloud_admin_password }}"
+  become: yes
+  become_user: "{{ apache_user }}"
+  when: nextcloud_enabled and returned.stdout == "false"
+
+- name: Allow access from all hosts and ips
+  command: php {{ nextcloud_prefix }}/nextcloud/occ config:system:set trusted_domains 1 --value=*
+  become: yes
+  become_user: "{{ apache_user }}"
+  when: nextcloud_enabled and returned.stdout == "false"
+
+# Code below was NEVER RUNNING as of 2018-10-29, as "wc | cut -d' ' -f1" ALWAYS
+# returns null (rather than the intended returned_count !)  This line could
+# be replaced by ALTERNATIVE 1 or ALTERNATIVE 2 below IF it truly needs fixing.
+#
+# Or perhaps default user/password nextcloud/nextcloudmysql (from variables
+# nextcloud_user/nextcloud_user_password) is just not needed in the end...
+#
+# NOTE: COMMENTS (FOLLOWING '#' SIGN) WITHIN A SHELL COMMAND CAUSE IT TO *FAIL*
+# 
+#- name: Determine if Nextcloud user exists already
+#  shell: >
+#    php {{ nextcloud_prefix }}/nextcloud/occ user:list |
+#    grep {{ nextcloud_user }} | wc | cut -d' ' -f1        # USELESS
+#    #grep {{ nextcloud_user }} | wc -l                    # ALTERNATIVE 1
+#    #grep {{ nextcloud_user }} | wc | awk '{print $1}'    # ALTERNATIVE 2
+#  become: yes
+#  become_user: "{{ apache_user }}"
+#  register: returned_count
+#
+# debug:
+#   var: returned_count
+#
+## nextcloud wants to make users rather than just mysql users and not done
+#- name: Create the default user
+#  shell: >
+#    OC_PASS={{ nextcloud_user_password }};
+#    php {{ nextcloud_prefix }}/nextcloud/occ user:add
+#    --password-from-env --display-name={{ nextcloud_user }}
+#    --group="users" {{ nextcloud_user }}
+#  become: yes
+#  become_user: "{{ apache_user }}"
+#  when: nextcloud_enabled and returned_count == "0"
+
+# 2019-09-04: NEXT 5 LINES APPEAR INEFFECTIVE DURING 1ST INSTALL? (possibly "overwrite.cli.url" appears later, when Nextcloud's web install completes using http://box/nextcloud ?)
+- name: Try to remove overwrite.cli.url line (Rewrite URL) from /opt/nextcloud/config/config.php
+  lineinfile:
+    regexp: "overwrite.cli.url"
+    state: absent
+    path: "{{ nextcloud_prefix }}/nextcloud/config/config.php"
