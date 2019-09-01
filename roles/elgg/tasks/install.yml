@@ -1,0 +1,94 @@
+# Assume we only get here if elgg_install: True
+# Assume MySQL is running
+
+- name: Download {{ iiab_download_url }}/elgg-{{ elgg_version }}.zip to {{ downloads_dir }}
+  #shell: wget {{ iiab_download_url }}/elgg-{{ elgg_version }}.zip -c -P {{ downloads_dir }}
+  #args:
+  #  creates: "{{ downloads_dir }}/elgg-{{ elgg_version }}.zip"
+  get_url:
+    url: "{{ iiab_download_url }}/elgg-{{ elgg_version }}.zip"
+    dest: "{{ downloads_dir }}"
+    timeout: "{{ download_timeout }}"
+  when: internet_available | bool
+
+- name: Check for existence of /opt/elgg-{{ elgg_version }}/index.php
+  stat:
+    path: "/opt/elgg-{{ elgg_version }}/index.php"
+  register: elgg
+
+- name: Unpack (unarchive) .zip to /opt, if above index.php doesn't exist
+  #shell: "/usr/bin/unzip -o {{ downloads_dir }}/elgg-{{ elgg_version }}.zip -d /opt"
+  unarchive:
+    #remote_src: yes
+    #src: "{{ iiab_download_url }}/elgg-{{ elgg_version }}.zip"
+    src: "{{ downloads_dir }}/elgg-{{ elgg_version }}.zip"
+    dest: /opt
+    owner: "{{ apache_user }}"
+    group: "{{ apache_user }}"
+  when: elgg.stat.exists is defined and not elgg.stat.exists
+
+- name: Create softlink from /opt/elgg to /opt/elgg-{{ elgg_version }}
+  file:
+    src: "./elgg-{{ elgg_version }}"
+    path: /opt/elgg
+    owner: "{{ apache_user }}"
+    group: "{{ apache_user }}"
+    state: link
+    force: yes
+
+- name: 'Install /opt/elgg/elgg-config/settings.php from template (WARNING: overwrites manual settings!)'
+  template:
+    src: "settings.php.j2"
+    dest: "/opt/{{ elgg_xx }}/elgg-config/settings.php"
+    owner: "{{ apache_user }}"
+    group: "{{ apache_user }}"
+
+# The name of this file changed from 1.9 to 1.10.
+- name: Copy default .htaccess into /opt/{{ elgg_xx }}, root of Elgg tree
+  copy:
+    src: "/opt/{{ elgg_xx }}/vendor/elgg/elgg/install/config/htaccess.dist"
+    dest: "/opt/{{ elgg_xx }}/.htaccess"
+    mode: 0644
+    owner: "{{ apache_user }}"
+    group: "{{ apache_user }}"
+
+#regexp='^#RewriteBase'
+- name: Change .htaccess to include RewriteBase for http://box/elgg
+  lineinfile:
+    backup: no
+    path: "/opt/{{ elgg_xx }}/.htaccess"
+    state: present
+    insertafter: '^#RewriteBase'
+    line: "RewriteBase {{ elgg_url }}/"
+
+- name: Set /opt/elgg/engine directory permissions to 0755 so Apache can write there
+  file:
+    path: /opt/elgg/engine/
+    owner: "{{ apache_user }}"
+    mode: 0755
+    state: directory
+
+- name: Change /opt/elgg-{{ elgg_version }} ownership to {{ apache_user }}:{{ apache_user }} (likely not nec, as unarchive & all do this above)
+  file:
+    path: "/opt/elgg-{{ elgg_version }}"
+    owner: "{{ apache_user }}"
+    group: "{{ apache_user }}"
+    recurse: yes
+    state: directory
+
+- name: Create upload directory {{ elgg_upload_path }} that Apache (and Elgg) can write to
+  file:
+    path: "{{ elgg_upload_path }}"
+    state: directory
+    owner: "{{ apache_user }}"
+
+- name: Install /etc/{{ apache_config_dir }}/elgg.conf from template, for http://box/elgg
+  template:
+    src: elgg.conf
+    dest: "/etc/{{ apache_config_dir }}/elgg.conf"
+
+- name: Add 'elgg_installed' variable values to {{ iiab_installed }}
+  ini_file:
+    path: "{{ iiab_installed }}"
+    value: elgg_installed
+
