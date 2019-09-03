@@ -39,13 +39,19 @@ slaac private
 
 # IIAB
 
-# always support Ethernet-to-Internet on RPi (avoid "denyinterfaces eth0")
+# How many seconds to wait for DHCP (e.g. from cablemodem) before IIAB's
+# Ethernet falls back to Static IP below (e.g. for Mexican schools with
+# Static IP-based Ethernet networks)
+timeout {{ dhcp_timeout }}
+
+# Always support Ethernet-to-Internet on RPi, to facilitate field updates
+# (avoid "denyinterfaces eth0" below!)
 {% if is_rpi and hostapd_enabled %}
-denyinterfaces {% if discovered_wireless_iface != "none" %} {{ discovered_wireless_iface }} {% endif %}
+denyinterfaces{% if discovered_wireless_iface != "none" %} {{ discovered_wireless_iface }}{% endif %}
 {% elif is_rpi %}
-#denyinterfaces {% if discovered_wireless_iface != "none" %} {{ discovered_wireless_iface }} {% endif %}
+#denyinterfaces{% if discovered_wireless_iface != "none" %} {{ discovered_wireless_iface }}{% endif %}
 {% else %}
-denyinterfaces {% if iiab_wireless_lan_iface is defined %} {{ iiab_wireless_lan_iface }} {% endif %} {% if iiab_wired_lan_iface is defined %} {{ iiab_wired_lan_iface }} {% endif %}
+denyinterfaces{% if iiab_wireless_lan_iface is defined %} {{ iiab_wireless_lan_iface }}{% endif %}{% if iiab_wired_lan_iface is defined %} {{ iiab_wired_lan_iface }}{% endif %}
 {% endif %}
 
 {# {% if iiab_lan_iface != "br0" %} {{ iiab_lan_iface }} {% endif %} #}
@@ -56,10 +62,20 @@ static ip_address={{ lan_ip }}/19
 static domain_name_servers=127.0.0.1
 {% endif %}
 
-# IIAB static IP configuration:
+# IIAB static IP configuration, alongside optional DHCP & link-local
 {% if wan_ip != "dhcp" %}
-interface {{ iiab_wan_iface }}
+profile {{ wan_gateway }}
 static ip_address={{ wan_ip }}/24
 static routers={{ wan_gateway }}
 static domain_name_servers={{ wan_nameserver }}
+{% if wan_can_use_dhcp_ip %}
+
+interface {{ iiab_wan_iface }}
+{% if not wan_link_local %}
+arping 192.0.2.1    # Set Ethernet IP per "cablemodem" DHCP, if DHCP's on wire (after arp request to non-existent IP 192.0.2.1 fails on purpose, per RFC5737)
+fallback {{ wan_gateway }}    # If DHCP not detected after {{ dhcp_timeout }} seconds, set Ethernet Static IP per above "profile {{ wan_gateway }}"
+{% else %}
+arping {{ wan_gateway }}    # Perform up to 3 steps: 1. arp <wan_gateway> (if detected, set Ethernet Static IP per "profile {{ wan_gateway }}") 2. Set Ethernet IP per "cablemodem" DHCP, if DHCP's on wire 3. If nec, set Ethernet IP to a link-local address (169.254.x.y)
+{% endif %}
+{% endif %}
 {% endif %}
