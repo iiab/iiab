@@ -1,6 +1,6 @@
 # Nextcloud
 
-This Ansible playbook was derived from an earlier ownCloud playbook thanks to Josh Dennis in ~2017.
+This Ansible playbook was derived from an earlier ownCloud playbook thanks to [Josh Dennis](https://github.com/floydianslips) in 2016/2017.
 
 Going forward, should Internet-in-a-Box consider integrating optimizations (or more!) from these below?
 - https://github.com/nextcloud/nextcloudpi
