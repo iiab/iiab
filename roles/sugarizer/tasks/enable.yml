@@ -1,0 +1,86 @@
+- name: Create symlink sugarizer.conf from sites-enabled to sites-available, for short URLs http://box/sugar & http://box/sugarizer (if sugarizer_enabled)
+  file:
+    src: /etc/apache2/sites-available/sugarizer.conf
+    path: /etc/apache2/sites-enabled/sugarizer.conf
+    state: link
+  when: sugarizer_enabled | bool and not nginx_enabled | bool
+
+- name: Remove symlink /etc/apache2/sites-enabled/sugarizer.conf (if not sugarizer_enabled)
+  file:
+    path: /etc/apache2/sites-enabled/sugarizer.conf
+    state: absent
+  when: not sugarizer_enabled | bool  or nginx_enabled | bool
+
+- name: "Install sugarizer-nginx.conf (nginx)"
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    mode: "{{ item.mode }}"
+    owner: root
+    group: root
+  with_items:
+    - { src: 'sugarizer-nginx.conf', dest: '/etc/nginx/conf.d/sugarizer-nginx.conf' , mode: '0644' }
+  when: sugarizer_enabled | bool and nginx_enabled | bool
+
+# 6. RESTART/STOP SYSTEMD SERVICE
+
+# with "systemctl daemon-reload" in case mongodb.service changed, etc
+- name: Enable & Restart 'sugarizer' systemd service (if sugarizer_enabled)
+  systemd:
+    name: sugarizer
+    daemon_reload: yes
+    enabled: yes
+    state: restarted
+  when: sugarizer_enabled | bool
+  
+- name: Disable & Stop 'sugarizer' systemd service (if not sugarizer_enabled)
+  systemd:
+    name: sugarizer
+    daemon_reload: yes
+    enabled: no
+    state: stopped
+  when: not sugarizer_enabled
+
+#- name: Enable services (all OS's)
+#  service:
+#    name: "{{ item.name }}"
+#    enabled: yes
+#    state: restarted
+#  with_items:
+##   - { name: mongodb }    # 2018-07-14: NICE TRY, but still doesn't bring http://box:8089 to life reliably, as a reboot usually does!  (Is a "systemctl daemon-reload" or some such nec?)
+#    - { name: sugarizer }
+#  when: sugarizer_enabled | bool
+
+#- name: Disable service (all OS's)
+#  service:
+#    name: sugarizer
+#    enabled: no
+#    state: stopped
+#  when: not sugarizer_enabled
+
+- name: Restart Apache service ({{ apache_service }}) to enable/disable http://box/sugarizer (not just http://box:{{ sugarizer_port }})
+  systemd:
+    name: "{{ apache_service }}"    # httpd or apache2
+    state: restarted
+  when: sugarizer_enabled | bool and not nginx_enabled | bool
+
+- name: Restart nginx when enabled
+  systemd:
+    name: nginx
+    state: restarted
+    daemon_reload: yes
+  when: sugarizer_enabled and nginx_enabled
+
+- name: Add 'sugarizer' variable values to {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"
+    section: sugarizer
+    option: "{{ item.option }}"
+    value: "{{ item.value }}"
+  with_items:
+    - option: name
+      value: Sugarizer
+    - option: description
+      value: '"The Sugar Learning Platform began with the famous One Laptop Per Child project, written in Python. Sugarizer is the new HTML/JavaScript implementation of Sugar, usable in most all browsers."'
+    - option: sugarizer_enabled
+      value: "{{ sugarizer_enabled }}"
