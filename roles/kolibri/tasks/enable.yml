@@ -1,0 +1,69 @@
+- name: Start 'kolibri' systemd service, if kolibri_enabled
+  systemd:
+    name: kolibri
+    state: started
+    enabled: yes
+  when: kolibri_enabled | bool
+
+- name: Enable http://box{{ kolibri_url }} with Apache (a2ensite) if kolibri_enabled    # i.e. http://box/kolibri
+  command: a2ensite kolibri.conf
+  when: kolibri_enabled | bool and not nginx_enabled | bool
+
+- name: Disable & Stop 'kolibri' systemd service if not kolibri_enabled
+  systemd:
+    name: kolibri
+    enabled: no
+    state: stopped
+  when: not kolibri_enabled
+
+- name: Disable http://box{{ kolibri_url }} with Apache (a2dissite) if not kolibri_enabled
+  command: a2dissite kolibri.conf
+  when: not kolibri_enabled or nginx_enabled | bool
+
+- name: Supply /etc/nginx/conf.d/kolibri-nginx.conf when nginx_enabled
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    mode: "{{ item.mode }}"
+    owner: root
+    group: root
+  with_items:
+    - { src: 'kolibri-nginx.conf.j2', dest: '/etc/nginx/conf.d/kolibri-nginx.c
+onf', mode: '0644' }
+  when: kolibri_enabled | bool and nginx_enabled | bool
+
+- name: Disable http://box{{ kolibri_url }} with Apache (a2dissite) if not kolibri_enabled
+  command: a2dissite kolibri.conf
+  when: not kolibri_enabled or nginx_enabled | bool
+
+- name: Restart Apache service ({{ apache_service }})    # e.g. apache2
+  systemd:
+    name: "{{ apache_service }}"
+    state: restarted
+  when: not nginx_enabled | bool
+
+- name: Restart nginx service
+  systemd:
+    name: nginx
+    state: restarted
+  when: nginx_enabled | bool
+
+- name: Add 'kolibri' variable values to {{ iiab_ini_file }}    # /etc/iiab/iiab.ini
+  ini_file:
+    path: "{{ iiab_ini_file }}"
+    section: kolibri
+    option: "{{ item.option }}"
+    value: "{{ item.value }}"
+  with_items:
+    - option: name
+      value: kolibri
+    - option: description
+      value: '"Kolibri is an open-source educational platform specially designed to provide offline access to a wide range of quality, openly licensed educational contents in low-resource contexts like rural schools, refugee camps, orphanages, and also in non-formal school programs."'
+    - option: kolibri_url
+      value: "{{ kolibri_url }}"
+    - option: kolibri_path
+      value: "{{ kolibri_exec_path }}"
+    - option: kolibri_port
+      value: "{{ kolibri_http_port }}"
+    - option: kolibri_enabled
+      value: "{{ kolibri_enabled }}"
