@@ -1,0 +1,90 @@
+- name: Create softlink kiwix.conf from sites-enabled to sites-available - for Kiwix Proxy in Apache - is disabled by turning off service kiwix-serve (debuntu)
+  file:
+    src: /etc/apache2/sites-available/kiwix.conf
+    path: /etc/apache2/sites-enabled/kiwix.conf
+    state: link
+  when: kiwix_enabled | bool and not nginx_enabled | bool
+
+- name: Install nginx support
+  template:
+    backup: no
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  with_items:
+    - { src: 'kiwix-nginx.conf', dest: '/etc/nginx/conf.d/kiwix-nginx.conf', mode: '0644' }
+  when: kiwix_enabled | bool and nginx_enabled | bool
+
+- name: Remove symlink /etc/apache2/sites-enabled/kiwix.conf
+  file:
+    path: /etc/apache2/sites-enabled/kiwix.conf
+    state: absent
+  when: not kiwix_enabled | bool or nginx_enabled | bool
+
+- name: Enable & Restart 'kiwix-serve' service
+  systemd:
+    daemon_reload: yes
+    name: kiwix-serve
+    enabled: yes
+    state: restarted
+  when: kiwix_enabled | bool
+
+- name: Disable 'kiwix-serve' service
+  systemd:
+    name: kiwix-serve
+    enabled: no
+    state: stopped
+  when: not kiwix_enabled
+# IN THEORY: BOTH CRON ENTRIES BELOW *SHOULD* BE DELETED "when: not kiwix_enabled"
+
+# In the past kiwix-serve did not stay running, so we'd been doing this hourly.
+# @mgautierfr & others suggest kiwix-serve might be auto-restarted w/o cron in
+# future, whenever service fails, if this really catches all cases??
+# https://github.com/iiab/iiab/issues/484#issuecomment-342151726
+- name: Make a crontab entry to restart kiwix-serve at 4AM (debuntu)
+  lineinfile:
+         # mn hr dy mo day-of-week[Sunday=0] username command-to-be-executed
+    line: "0  4  *  *  * root /bin/systemctl restart kiwix-serve.service"
+    dest: /etc/crontab
+  when: kiwix_enabled and is_debuntu
+
+- name: Make a crontab entry to restart kiwix-serve at 4AM (redhat)
+# *  *  *  *  * user-name  command to be executed
+  lineinfile:
+         # mn hr dy mo day-of-week[Sunday=0] username command-to-be-executed
+    line: "0  4  *  *  * root /usr/bin/systemctl restart kiwix-serve.service"
+    dest: /etc/crontab
+  when: kiwix_enabled and is_redhat
+
+- name: Restart Apache, so it picks up kiwix.conf
+  service:
+    name: "{{ apache_service }}"
+    state: restarted
+
+# 5. FINALIZE
+
+- name: Add 'kiwix' variable values to {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"
+    section: kiwix
+    option: "{{ item.option }}"
+    value: "{{ item.value }}"
+  with_items:
+  - option: name
+    value: Kiwix
+  - option: description
+    value: '"Part of https://github.com/kiwix/kiwix-tools/ - kiwix-serve is the most used web server for ZIM files."'
+  - option: kiwix_url
+    value: "{{ kiwix_url }}"
+  - option: kiwix_path
+    value: "{{ kiwix_path }}"
+  - option: kiwix_port
+    value: "{{ kiwix_port }}"
+  - option: iiab_zim_path
+    value: "{{ iiab_zim_path }}"
+  - option: kiwix_library_xml
+    value: "{{ kiwix_library_xml }}"
+  - option: kiwix_enabled
+    value: "{{ kiwix_enabled }}"
