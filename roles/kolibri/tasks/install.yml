@@ -1,0 +1,118 @@
+- name: Create Linux user {{ kolibri_user }} and add it to groups {{ apache_user }}, disk
+  user:
+    name: "{{ kolibri_user }}"
+    groups:
+      - "{{ apache_user }}"
+      - disk
+    state: present
+    shell: /bin/false
+    system: yes
+    create_home: no
+
+- name: Create {{ kolibri_home }} (for Kolibri content, configuration, sqlite3 databases)
+  file:
+    path: "{{ kolibri_home }}"     # /library/kolibri
+    owner: "{{ kolibri_user }}"    # kolibri
+    group: "{{ apache_user }}"     # www-data (on Debian/Ubuntu/Raspbian)
+    mode: 0755
+    state: directory
+
+- name: Create /etc/kolibri
+  file:
+    name: /etc/kolibri
+    state: directory
+    owner: root
+    group: root
+    mode: 0755
+
+- name: Save kolibri_user ({{ kolibri_user }}) to /etc/kolibri/username
+  copy:
+    content: "{{ kolibri_user }}"
+    dest: /etc/kolibri/username
+    owner: root
+    group: root
+    mode: 0644
+
+- name: Save kolibri_home (KOLIBRI_HOME="{{ kolibri_home }}") to /etc/kolibri/daemon.conf
+  copy:
+    content: 'KOLIBRI_HOME="{{ kolibri_home }}"'
+    dest: /etc/kolibri/daemon.conf
+    owner: root
+    group: root
+    mode: 0644
+
+- name: apt install latest Kolibri .deb from {{ kolibri_deb_url }} (populates {{ kolibri_home }}, migrates database)    # i.e. /library/kolibri
+  apt:
+    deb: "{{ kolibri_deb_url }}"    # https://learningequality.org/r/kolibri-deb-latest
+  environment:
+    KOLIBRI_HOME: "{{ kolibri_home }}"    # these don't do a thing for now but
+    KOLIBRI_USER: "{{ kolibri_user }}"    # both can't hurt & Might Help Later
+  when: internet_available | bool
+
+- name: 'Install from templates: kolibri.service unit file for systemd & sites-available/kolibri.conf for Apache'
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: root
+    group: root
+    mode: 0644
+  with_items:
+    - { src: 'kolibri.service.j2', dest: '/etc/systemd/system/kolibri.service' }
+    - { src: 'kolibri.conf.j2', dest: '/etc/apache2/sites-available/kolibri.conf' }
+
+- name: Enable 'kolibri' systemd service (for reboots) but ensure it's stopped for Kolibri provisioning
+  systemd:
+    name: kolibri
+    daemon_reload: yes
+    enabled: yes
+    state: stopped
+
+
+# 2019-10-01: Should no longer be nec, thanks to /etc/kolibri/daemon.conf
+#             containing KOLIBRI_HOME="/library/kolibri" (above)
+#- name: Run Kolibri migrations to begin populating {{ kolibri_home }}    # i.e. /library/kolibri
+#  shell: export KOLIBRI_HOME="{{ kolibri_home }}" && "{{ kolibri_exec_path }}" manage migrate
+#  ignore_errors: yes
+#  become: yes
+#  become_user: "{{ kolibri_user }}"
+#  when: kolibri_provision | bool
+
+- name: Set Kolibri default language ({{ kolibri_language }})
+  shell: export KOLIBRI_HOME="{{ kolibri_home }}" && "{{ kolibri_exec_path }}" language setdefault "{{ kolibri_language }}"
+  ignore_errors: yes
+  become: yes
+  become_user: "{{ kolibri_user }}"
+  when: kolibri_provision | bool
+
+- name: 'Provision Kolibri, while setting: facility name, admin acnt / password, preset type, and language'
+  shell: >
+    export KOLIBRI_HOME="{{ kolibri_home }}" &&
+    "{{ kolibri_exec_path }}" manage provisiondevice --facility "{{ kolibri_facility }}"
+    --superusername "{{ kolibri_admin_user }}" --superuserpassword "{{ kolibri_admin_password }}"
+    --preset "{{ kolibri_preset }}" --language_id "{{ kolibri_language }}"
+    #--preset "{{ kolibri_preset }}" --language_id "{{ kolibri_language }}" --verbosity 0 --noinput
+  ignore_errors: yes
+  become: yes
+  become_user: "{{ kolibri_user }}"
+  when: kolibri_provision | bool
+
+- name: chown -R {{ kolibri_user }}:{{ apache_user }} {{ kolibri_home }} for good measure?
+  file:
+    path: "{{ kolibri_home }}"     # /library/kolibri
+    owner: "{{ kolibri_user }}"    # kolibri
+    group: "{{ apache_user }}"     # www-data (on Debian/Ubuntu/Raspbian)
+    recurse: yes
+  when: kolibri_provision | bool
+
+
+# 2019-10-07: Moved to roles/httpd/tasks/main.yml
+# 2019-09-29: roles/kiwix/tasks/kiwix_install.yml installs 4 Apache modules
+# for similar purposes (not all nec?)  Only 1 (proxy_http) is needed here.
+#- name: Enable Apache module proxy_http for http://box{{ kolibri_url }}    # i.e. http://box/kolibri
+#  apache2_module:
+#    name: proxy_http
+
+- name: Add 'kolibri_installed' variable values to {{ iiab_installed }}
+  ini_file:
+    path: "{{ iiab_installed }}"
+    value: kolibri_installed
