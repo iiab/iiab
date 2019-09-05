@@ -1,12 +1,33 @@
 # Nextcloud
 
-Students and teachers can store their documents, calendars, contacts and photos locally within [Nextcloud](https://nextcloud.com), which is much like having a (local) version of Dropbox or Google Drive on your very own Internet-in-a-Box.
+Students and teachers can store their documents, calendars, contacts and photos locally within [Nextcloud](https://nextcloud.com), which is much like having a (local) version of Dropbox or Google Drive on your very own [Internet-in-a-Box](http://internet-in-a-box.org).
 
 This Ansible playbook was derived from an earlier ownCloud playbook thanks to [Josh Dennis](https://github.com/floydianslips) in 2016/2017.
 
+### Install It
+
+(1) Set these 2 variable in [/etc/iiab/local_vars.yml](http://FAQ.IIAB.IO#What_is_local_vars.yml_and_how_do_I_customize_it.3F) prior to installing Internet-in-a-Box:
+
+    nextcloud_install: True
+    nextcloud_enabled: True
+
+(2) If you want to access Nextcloud from public IPv4 addresses, then also set:
+
+    nextcloud_allow_public_ips: True
+
+(3) Strongly consider setting `apache_high_php_limits: True` in the 3-BASE-SERVER section, to allocate important RAM/resources to PHP.  Of course, enabling this might cause excess use of RAM/disk or other resources if not calibrated to your hardware!  So after install is complete, verify and evaluate these 5 settings in /etc/php/<VERSION>/apache2/php.ini:
+
+- upload_max_filesize
+- post_max_size
+- memory_limit (Nextcloud recommends 512+ MB)
+- max_execution_time
+- max_input_time
+
+Some thoughtful PHP recommendations (while largely tailored to WordPress!) can be found here: https://github.com/iiab/iiab/blob/master/roles/httpd/tasks/main.yml#L80-L84
+
 ### Using It
 
-Administrators verify that Nextcloud is installed on your Internet-in-a-Box (check [/etc/iiab/local_vars.yml](http://FAQ.IIAB.IO#What_is_local_vars.yml_and_how_do_I_customize_it.3F)) and then log in to Nextcloud at http://box/nextcloud, http://box.lan/nextcloud, http://172.18.96.1/nextcloud (or similar) using:
+Log in to Nextcloud at http://box/nextcloud, http://box.lan/nextcloud, http://172.18.96.1/nextcloud (or similar) using:
 
     Username: Admin
     Password: changeme
