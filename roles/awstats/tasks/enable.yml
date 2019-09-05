@@ -1,0 +1,58 @@
+- name: Create symlink awstats.conf from sites-enabled to sites-available (debuntu)
+  file:
+    src: /etc/apache2/sites-available/awstats.conf
+    path: /etc/apache2/sites-enabled/awstats.conf
+    state: link
+  when: awstats_enabled and is_debuntu
+
+- name: Remove symlink from sites-enabled, to disable AWStats (debuntu)
+  file:
+    path: /etc/apache2/sites-enabled/awstats.conf
+    state: absent
+  when: not awstats_enabled and is_debuntu
+  
+- name: Restart Apache service ({{ apache_service }})
+  systemd:
+    name: "{{ apache_service }}"
+    state: restarted
+
+- name: Install /etc/awstats/awstats.schoolserver.conf
+  template:
+    src: awstats.schoolserver.conf.j2
+    dest: /etc/awstats/awstats.schoolserver.conf
+    owner: root
+    group: root
+    mode: 0644
+  when: awstats_enabled | bool
+
+- name: Create a symlink /etc/awstats/awstats.conf for access by IP address
+  file:
+    src: /etc/awstats/awstats.schoolserver.conf
+    path: /etc/awstats/awstats.conf
+    state: link
+  when: awstats_enabled | bool
+
+- name: On first enabling of AWStats, summarize httpd logs up to now (OS's other than debuntu)
+  shell: /bin/perl /usr/share/awstats/wwwroot/cgi-bin/awstats.pl -config=schoolserver -update
+  when: awstats_enabled and not is_debuntu
+
+- name: On first enabling of AWStats, summarize httpd logs up to now (debuntu)
+  shell: /usr/bin/perl /usr/lib/cgi-bin/awstats.pl -config=schoolserver -update
+  when: awstats_enabled and is_debuntu
+
+- name: Add 'awstats' variable values to {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"
+    section: awstats
+    option: "{{ item.option }}"
+    value: "{{ item.value }}"
+  with_items:
+    - option: name
+      value: AWStats
+    - option: description
+      value: '"AWStats (originally known as Advanced Web Statistics) is a package written in Perl which generates static or dynamic html summaries based upon web server logs."'
+    - option: installed
+      value: "{{ awstats_install }}"
+    - option: enabled
+      value: "{{ awstats_enabled }}"
+

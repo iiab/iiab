@@ -21,6 +21,7 @@
     - download
   when: not is_debuntu
 
+##### nginx only #####
 - name: Install /etc/munin/munin.conf and Apache's munin24.conf, from templates
   template:
     src: "{{ item.src }}"
@@ -67,6 +68,36 @@
     - /usr/share/munin/plugins/mysql_slowqueries
     - /usr/share/munin/plugins/mysql_threads
   when: mysql_enabled | bool
+
+- name: Create symlink for awstats.pl from cgi-bin/awstats/awstats.pl to ../ so that the old apache links to awstats will work after change to nginx
+  file:
+    src: /usr/lib/cgi-bin/awstats.pl
+    path: /usr/lib/cgi-bin/awstats/awstats.pl
+    state: link
+
+- name: Install /etc/awstats/awstats.schoolserver.conf
+  template:
+    src: awstats.schoolserver.conf.j2
+    dest: /etc/awstats/awstats.schoolserver.conf
+    owner: root
+    group: root
+    mode: 0644
+  when: awstats_enabled | bool
+
+- name: Create a symlink /etc/awstats/awstats.conf for access by IP address
+  file:
+    src: /etc/awstats/awstats.schoolserver.conf
+    path: /etc/awstats/awstats.conf
+    state: link
+  when: awstats_enabled | bool
+
+- name: On first enabling of AWStats, summarize httpd logs up to now (OS's other than debuntu)
+  shell: /bin/perl /usr/share/awstats/wwwroot/cgi-bin/awstats.pl -config=schoolserver -update
+  when: awstats_enabled and not is_debuntu
+
+- name: On first enabling of AWStats, summarize httpd logs up to now (debuntu)
+  shell: /usr/bin/perl /usr/lib/cgi-bin/awstats.pl -config=schoolserver -update
+  when: awstats_enabled and is_debuntu
 
 - name: Add 'munin' variable values to {{ iiab_ini_file }}
   ini_file:
