@@ -1,0 +1,144 @@
+- name: "Install packages: python-psycopg2, php-pgsql (OS's other than debuntu)"
+  package:
+    name:
+      - python-psycopg2
+      - php-pgsql
+    state: present
+  when: not is_debuntu
+
+- name: Install 4 php packages (debuntu)
+  package:
+    name:
+      - php{{ php_version }}-pgsql
+      - php{{ php_version }}-curl
+      #- php{{ php_version }}-zip
+      - php{{ php_version }}-gd
+      #- php{{ php_version }}-mbstring
+      # mbstring is now included in php-cli
+      - php{{ php_version }}-cli
+    state: present
+  when: is_debuntu | bool
+
+- name: "Install package: php{{ php_version }}-zip (ubuntu or debian-9+)"
+  package:
+    name: "php{{ php_version }}-zip"
+  when: is_ubuntu or (is_debian and not is_debian_8)
+
+- name: "Install package: php-pclzip (debian-8)"
+  package:
+    name: php-pclzip
+  when: is_debian_8 | bool
+
+- name: Determine if Moodle is already downloaded
+  stat:
+    path: "{{ moodle_base }}/config-dist.php"
+  register: moodle
+
+- name: Download the latest Moodle repo
+  git:
+    repo: "{{ moodle_repo_url }}"
+    dest: "{{ moodle_base }}"
+    depth: 1
+    force: yes
+    version: "MOODLE_{{ moodle_version }}_STABLE"
+    #version: master   # TEMPORARY DURING MAY 2018 TESTING, installed 3.5beta+ = https://download.moodle.org/releases/development/
+  #ignore_errors: yes
+  when: internet_available and moodle.stat.exists is defined and not moodle.stat.exists
+
+- name: Create dir {{ moodle_base }} owned by {{ apache_user }} (for config file?)
+  file:
+    path: "{{ moodle_base }}"
+    owner: "{{ apache_user }}"
+    recurse: yes
+    state: directory
+
+- name: Create dir {{ content_base }}/dbdata/moodle owned by {{ apache_user }} with write permission 0755
+  file:
+    path: "{{ content_base }}/dbdata/moodle"
+    owner: "{{ apache_user }}"
+    mode: 0755
+    state: directory
+
+- name: Create dir {{ moodle_data }} owned by {{ apache_user }}:{{ apache_user }} with write permission 0770    # /library/moodle
+  file:
+    path: "{{ moodle_data }}"
+    owner: "{{ apache_user }}"
+    group: "{{ apache_user }}"
+    mode: 0770
+    state: directory
+
+- name: Remove Apache's stock moodle.conf
+  file:
+    path: "/etc/{{ apache_config_dir }}/moodle.conf"
+    state: absent
+
+- name: Install Apache's 022-moodle.conf from template, if moodle_enabled
+  template:
+    src: 022-moodle.j2
+    dest: "/etc/{{ apache_config_dir }}/022-moodle.conf"
+    owner: root
+    group: root
+    mode: 0644
+
+- name: Restart postgresql-iiab
+  service:
+    name: postgresql-iiab
+    state: restarted
+
+- name: Create PostgreSQL db user Admin/changeme
+  postgresql_user:
+    name: Admin
+    password: changeme
+    encrypted: yes   # Required by PostgreSQL 10+ e.g. Ubuntu 18.04's PostgreSQL 10.3+, see https://github.com/iiab/iiab/issues/759
+    role_attr_flags: NOSUPERUSER,NOCREATEROLE,NOCREATEDB
+    state: present
+  become: yes
+  become_user: postgres
+
+- name: 'Create database: {{ moodle_database_name }}'
+  postgresql_db:
+    name: "{{ moodle_database_name }}"
+    encoding: utf8
+    owner: Admin
+    template: template1
+    state: present
+  become: yes
+  become_user: postgres
+
+- name: Install {{ moodle_base }}/moodle_installer from template
+  template:
+    src: moodle_installer
+    dest: "{{ moodle_base }}"
+    mode: 0755
+
+- name: Enable & Restart postgresql-iiab
+  service:
+    name: postgresql-iiab
+    state: restarted
+    enabled: yes
+  when: moodle_enabled | bool
+
+- name: Restart Apache service ({{ apache_service }})
+  service:
+    name: "{{ apache_service }}"
+    state: restarted
+
+- name: Does {{ moodle_base }}/config.php exist?
+  stat:
+    path: "{{ moodle_base }}/config.php"
+  register: config
+
+- name: Execute {{ moodle_base }}/moodle_installer
+  shell: "{{ moodle_base }}/moodle_installer"
+  when: config.stat.exists is defined and not config.stat.exists
+
+- name: Give read permission 0644 to {{ moodle_base }}/config.php    # /opt/iiab/moodle/config.php
+  #command: chown -R {{ apache_user }} {{ moodle_base }}
+  file:
+    path: "{{ moodle_base }}/config.php"
+    mode: 0644
+
+- name: Add 'moodle_installed' variable values to {{ iiab_installed }}
+  ini_file:
+    path: "{{ iiab_installed }}"
+    value: moodle_installed
