@@ -28,18 +28,29 @@
     url: "{{ iiab_download_url }}/{{ kiwix_src_file }}"
     dest: "{{ downloads_dir }}/{{ kiwix_src_file }}"
     timeout: "{{ download_timeout }}"
-  when: internet_available | bool
+  when: internet_available | bool and kiwix_install | bool and not kiwix_installed is defined
 
 - name: Check for /opt/iiab/downloads/{{ kiwix_src_file }}
   stat:
     path: "{{ downloads_dir }}/{{ kiwix_src_file }}"
   register: kiwix_src
 
-- name: FAIL (force Ansible to exit) IF /opt/iiab/downloads/{{ kiwix_src_file }} doesn't exist
-  fail:
-    msg: "{ downloads_dir }}/{{ kiwix_src_file }} is REQUIRED in order to install Kiwix."
-  when: not kiwix_src.stat.exists
+- name: Check for /opt/iiab/kiwix/bin/kiwix-serve binary
+  stat:
+    path: "{{ kiwix_path }}/bin/kiwix-serve"
+  register: kiwix_bin
+
+- name: Set fact kiwix_force_install if kiwix-serve not found
+  set_fact:
+    kiwix_force_install: True
+  when: not kiwix_bin.stat.exists
 
 - include_tasks: kiwix_install.yml
+  when: kiwix_install | bool and (not kiwix_installed is defined or kiwix_force_install | bool)
+  tags:
+    - kiwix
+
+- include_tasks: kiwix_enable.yml
+  when: kiwix_install | bool or kiwix_installed is defined
   tags:
     - kiwix
