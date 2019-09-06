@@ -8,9 +8,9 @@ This Ansible playbook was derived from an earlier ownCloud playbook thanks to [J
 
 The Nextcloud suite is divided into three main categories:
 
-- Nextcloud Files &ndash; Enterprise File Sync and Share
-- Nextcloud Talk &ndash; Calls, chat and web meetings
-- Nextcloud Groupware &ndash; Calendar, Contacts & Mail
+- [Nextcloud Files](https://nextcloud.com/files/) &ndash; Enterprise File Sync and Share
+- [Nextcloud Talk](https://nextcloud.com/talk/) &ndash; Calls, chat and web meetings
+- [Nextcloud Groupware](https://nextcloud.com/groupware/) &ndash; Calendar, Contacts & Mail
 
 ## Install It
 
