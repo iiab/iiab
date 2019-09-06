@@ -4,7 +4,15 @@ Students and teachers can store their documents, calendars, contacts and photos 
 
 This Ansible playbook was derived from an earlier ownCloud playbook thanks to [Josh Dennis](https://github.com/floydianslips) in 2016/2017.
 
-### Install It
+## What's Included
+
+The Nextcloud suite is divided into three main categories:
+
+- Nextcloud Files &ndash; Enterprise File Sync and Share
+- Nextcloud Talk &ndash; Calls, chat and web meetings
+- Nextcloud Groupware &ndash; Calendar, Contacts & Mail
+
+## Install It
 
 (1) Set these 2 variable in [/etc/iiab/local_vars.yml](http://FAQ.IIAB.IO#What_is_local_vars.yml_and_how_do_I_customize_it.3F) prior to installing Internet-in-a-Box:
 
@@ -27,14 +35,14 @@ To further refine Nextcloud access controls based on IPv4 addresses, you can edi
 
 Useful PHP recommendations for these settings (while largely tailored to WordPress, and aimed at very low-end hardware) can be found here: [/opt/iiab/iiab/roles/httpd/tasks/main.yml](https://github.com/iiab/iiab/blob/master/roles/httpd/tasks/main.yml#L80-L84)
 
-### Using It
+## Using It
 
 Log in to Nextcloud at http://box/nextcloud, http://box.lan/nextcloud, http://172.18.96.1/nextcloud (or similar) using:
 
     Username: Admin
     Password: changeme
 
-### Future Directions
+## Future Directions
 
 Going forward, should Internet-in-a-Box consider integrating optimizations (or more!) from these below?
 
