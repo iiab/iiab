@@ -1,0 +1,87 @@
+# 1. INSTALL THE LATEST CALIBRE 3.X+ (calibre, calibredb, calibre-server etc) ON ALL OS'S
+
+- name: Does /usr/bin/calibre exist?
+  stat:
+    path: "/usr/bin/calibre"
+  register: calib_executable
+
+- name: "Install OS's latest packages: calibre, calibre-bin (IF not rpi AND /usr/bin/calibre MISSING)"
+  package:
+    name:
+      - calibre
+      - calibre-bin
+    state: latest
+  when: internet_available and not is_rpi and (not calib_executable.stat.exists)
+
+- name: Install Calibre .debs IF calibre_via_debs (AND /usr/bin/calibre WAS MISSING)
+  include_tasks: debs.yml
+  when: calibre_via_debs and (not calib_executable.stat.exists)
+
+- name: Install Calibre via calibre-installer.py IF calibre_via_python (AND /usr/bin/calibre WAS MISSING)
+  include_tasks: py-installer.yml
+  when: calibre_via_python and (not calib_executable.stat.exists)
+
+# SEE calibre_via_python's value vars/default_vars.yml, vars/ubuntu-18.yml &
+# vars/raspbian-9.yml: try to AVOID Python installer on Raspbian since its
+# .deb's (http://raspbian.raspberrypi.org/raspbian/pool/main/c/calibre/)
+# are updated within about 10 days of Calibre's quasi-monthly releases!
+#
+# BUT IF ABSOLUTELY NEC: (SEE roles/calibre/tasks/debs.yml)
+# - run testing branch for RPi: scripts/calibre-install-latest-rpi.sh
+# - run testing branch for Ubuntu 16.04: scripts/calibre-install-latest.sh
+# - run unstable branch for Debian etc: scripts/calibre-install-unstable.sh
+
+- name: Create calibre-serve.service and calibre.conf (IF /usr/bin/calibre WAS MISSING)
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+    backup: no
+  #register: calibre_config
+  with_items:
+    - { src: 'calibre-serve.service.j2', dest: '/etc/systemd/system/calibre-serve.service', mode: '0644'}
+    - { src: 'calibre.conf', dest: '/etc/{{ apache_config_dir }}', mode: '0644'}
+  when: (not calib_executable.stat.exists)
+
+- name: Stop service 'calibre-serve' (/usr/bin/calibre-server by Kovid Goyal)
+  systemd:
+    name: calibre-serve
+    state: stopped
+    daemon_reload: yes
+
+# 3. CREATE USER DATABASE
+
+- name: Create /library/calibre (mandatory since Calibre 3.x)
+  file:
+    path: "{{ calibre_dbpath }}"
+    state: directory
+    #mode: 0755
+
+- name: Copy template userdb to /library/calibre/users.sqlite (IF /usr/bin/calibre WAS MISSING)
+  copy:
+    src: /opt/iiab/iiab/roles/calibre/templates/users.sqlite
+    dest: "{{ calibre_userdb }}"
+    owner: root
+    group: root
+    mode: 0644
+  when: (not calib_executable.stat.exists)
+
+# 4. CREATE CONTENT DATABASE WITH A SAMPLE BOOK (REQUIRED AS OF CALIBRE 3.x)
+
+- name: Does /library/calibre/metadata.db exist?
+  stat:
+    path: "{{ calibre_dbpath }}/metadata.db"
+  register: calibre_db
+
+- name: Create database (required since Calibre 3.x) with a sample book
+  include_tasks: create-db.yml
+  when: not calibre_db.stat.exists
+
+- name: Add 'calibre_installed' variable values to {{ iiab_installed }}
+  lineinfile:
+    dest: "{{ iiab_installed }}"
+    regexp: '^calibreweb_installed'
+    line: 'calibre_installed'
+    state: present
