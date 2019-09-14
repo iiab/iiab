@@ -1,0 +1,80 @@
+# Calculate local variables
+- include_tasks: calc_vars.yml
+
+- name: Check for minetest world file ({{ minetest_world_dir }}/world.mt)
+  stat:
+    path: "{{ minetest_world_dir }}/world.mt"
+  register: minetest_world
+
+- name: Create /library/games
+  file:
+    state: directory
+    path: "{{ item }}"
+    owner: root
+    group: root
+    mode: 0755
+  with_items:
+    - /library/games
+
+# rpi only
+- include_tasks: rpi_minetest_install.yml
+  when: not minetest_world.stat.exists and is_rpi
+
+# not rpi
+- include_tasks: minetest_install.yml
+  when: not minetest_world.stat.exists and not is_rpi
+
+- git:
+    repo: https://github.com/Calinou/carbone-ng.git
+    dest: "{{ minetest_game_dir }}"
+    depth: 1
+  when: not minetest_world.stat.exists and minetest_default_game == "carbone-ng"
+
+- name: Give minetest user ownership of carbone-ng
+  file:
+    state: directory
+    path: "{{ minetest_game_dir }}"
+    recurse: yes
+    owner: "{{ minetest_runas_user }}"
+    group: "{{ minetest_runas_group }}"
+    mode: 0755
+  when: minetest_default_game == "carbone-ng"
+
+# Install games
+#- include: minetest_install_games.yml
+#  with_items:
+#    - name: carbone-ng
+#      url: https://github.com/Calinou/carbone-ng
+
+# Install mods
+- include: minetest_install_mods.yml
+  with_items:
+    - name: moreblocks
+      url: https://github.com/minetest-mods/moreblocks/archive/master.zip
+    - name: moreores
+      url: https://github.com/Calinou/moreores/archive/master.zip
+    - name: basic_materials
+      url: https://gitlab.com/VanessaE/basic_materials/-/archive/master/basic_materials-master.zip
+    - name: mesecons
+      url: https://github.com/minetest-mods/mesecons/archive/master.zip
+    - name: digilines
+      url: https://github.com/minetest-mods/digilines/archive/master.zip
+    - name: pipeworks
+      url: https://github.com/minetest-mods/pipeworks/archive/master.zip
+    - name: Minetest-WorldEdit
+      url: https://github.com/Uberi/Minetest-WorldEdit/archive/master.zip
+  when: minetest_default_game == "minetest"
+
+- name: Remove mod from carbone-ng that prevents our Admin name
+  file:
+    state: absent
+    path: "{{ minetest_game_dir }}/mods/name_restrictions"
+  when: minetest_default_game == "carbone-ng"
+
+- name: Add 'minetest_installed' variable values to {{ iiab_installed }}
+  lineinfile:
+    dest: "{{ iiab_installed }}"
+    regexp: '^minetest_installed'
+    line: 'minetest_installed: True'
+    state: present
+
