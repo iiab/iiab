@@ -1,0 +1,58 @@
+- name: If MySQL is enabled, let Munin monitor it
+  copy:
+    src: "{{ item }}"
+    dest: /etc/munin/plugins/
+  with_items:
+    - /usr/share/munin/plugins/mysql_
+    - /usr/share/munin/plugins/mysql_bytes
+    - /usr/share/munin/plugins/mysql_innodb
+    - /usr/share/munin/plugins/mysql_isam_space_
+    - /usr/share/munin/plugins/mysql_queries
+    - /usr/share/munin/plugins/mysql_slowqueries
+    - /usr/share/munin/plugins/mysql_threads
+  when: mysql_enabled | bool
+
+- name: Enable & Start munin-node systemd service
+  systemd:
+    name: munin-node
+    enabled: yes
+    state: started
+  when: munin_enabled | bool
+
+- name: Disable munin-node service if not munin_enabled
+  systemd:
+    name: munin-node
+    enabled: no
+    state: stopped
+  when: not munin_enabled
+
+- name: Create symlink munin24.conf from sites-enabled to sites-available (debuntu)
+  file:
+    src: /etc/apache2/sites-available/munin24.conf
+    path: /etc/apache2/sites-enabled/munin24.conf
+    state: link
+  when: munin_enabled and is_debuntu
+
+- name: Remove symlink /etc/apache2/sites-enabled/munin24.conf if not munin_enabled (debuntu)
+  file:
+    path: /etc/apache2/sites-enabled/munin24.conf
+    state: absent
+  when: not munin_enabled and is_debuntu
+
+# should have an apache restart here but whatever..
+
+- name: Add 'munin' variable values to {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"
+    section: munin
+    option: "{{ item.option }}"
+    value: "{{ item.value }}"
+  with_items:
+    - option: name
+      value: Munin
+    - option: description
+      value: '"Munin is a networked resource monitoring tool that can help analyze resource trends and \"what just happened to kill our performance?\" problems."'
+    - option: installed
+      value: "{{ munin_install }}"
+    - option: enabled
+      value: "{{ munin_enabled }}"
