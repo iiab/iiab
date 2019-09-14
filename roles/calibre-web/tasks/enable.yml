@@ -1,0 +1,86 @@
+- name: Enable & Restart 'calibre-web' systemd service
+  systemd:
+    name: calibre-web
+    daemon_reload: yes
+    enabled: yes
+    state: restarted
+  when: calibreweb_enabled | bool
+
+# Default: http://box/books
+# SEE ALSO: https://github.com/janeczku/calibre-web/wiki/Setup-Reverse-Proxy
+- name: Enable http://box{{ calibreweb_url1 }}, http://box{{ calibreweb_url2 }}, http://box{{ calibreweb_url3 }} with Apache
+  command: a2ensite calibre-web.conf
+  when: calibreweb_enabled | bool
+
+#- name: Restart Apache after enabling calibre-web httpd2 site
+#  command: apachectl -k graceful
+#  when: calibreweb_enabled | bool
+
+- name: Disable 'calibre-web' systemd service
+  systemd:
+    name: calibre-web
+    daemon_reload: yes
+    enabled: no
+    state: stopped
+  when: not calibreweb_enabled
+
+- name: Disable http://box{{ calibreweb_url1 }}, http://box{{ calibreweb_url2 }}, http://box{{ calibreweb_url3 }} with Apache
+  command: a2dissite calibre-web.conf
+  when: not calibreweb_enabled or nginx_enabled | bool
+
+#- name: Restart Apache after disabling calibre-web httpd2 site
+#  command: apachectl -k graceful
+#  when: not calibreweb_enabled
+
+- name: Install /etc/nginx/conf.d/calibre-web-nginx.conf
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    mode: "{{ item.mode }}"
+    owner: root
+    group: root
+  with_items:
+    - { src: 'calibre-web-nginx.conf.j2', dest: '/etc/nginx/conf.d/calibre-web-$
+  when: calibreweb_enabled | bool and nginx_enabled | bool
+
+- name: Restart nginx systemd service
+  systemd:
+    name: nginx
+    state: restarted
+  when: calibreweb_enabled | bool and nginx_enabled | bool
+
+- name: Restart Apache systemd service ({{ apache_service }})
+  systemd:
+    name: "{{ apache_service }}"    # httpd or apache2
+    state: restarted
+  when: not nginx_enabled | bool
+
+- name: Add 'calibre-web' variable values to {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"
+    section: calibre-web
+    option: "{{ item.option }}"
+    value: "{{ item.value }}"
+  with_items:
+    - option: name
+      value: calibre-web
+    - option: description
+      value: '"calibre-web is a web app providing a clean interface for browsing, reading and downloading e-books."'
+    - option: calibreweb_url1
+      value: "{{ calibreweb_url1 }}"
+    - option: calibreweb_url2
+      value: "{{ calibreweb_url2 }}"
+    - option: calibreweb_url3
+      value: "{{ calibreweb_url3 }}"
+    - option: calibreweb_path
+      value: "{{ calibreweb_venv_path }}"
+    - option: calibreweb_home
+      value: "{{ calibreweb_home }}"
+    - option: calibreweb_port
+      value: "{{ calibreweb_port }}"
+    - option: calibreweb_database
+      value: "{{ calibreweb_database }}"
+    - option: calibreweb_enabled
+      value: "{{ calibreweb_enabled }}"
+#   - option: calibreweb_provision
+#     value: "{{ calibreweb_provision }}"
