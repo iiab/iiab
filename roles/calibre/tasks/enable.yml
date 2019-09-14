@@ -1,0 +1,54 @@
+# 5. WRAP UP: ENABLE CALIBRE SERVICE, http://box/books ETC
+
+# http://box:8080 & http://box:8080/mobile WORK BUT OTHER URL'S LIKE http://box/calibre ARE A MESS (BOOKS RARELY DISPLAY)
+#
+# 2018-08-27 POSSIBLE FIX...CONSIDER THIS ProxyPass / ProxyPassReverse TECHNIQUE:
+# https://github.com/iiab/iiab/tree/master/roles/calibre-web/templates/calibre-web.conf.j2
+#    (anyway this works great for calibre-web, allowing http://box/books
+#    to work even better than http://box:8083 when box == 192.168.0.x !)
+- name: Create symlink calibre.conf from sites-enabled to sites-available, for UNTESTED http://box/calibre etc (debuntu)
+  file:
+    src: /etc/apache2/sites-available/calibre.conf
+    dest: /etc/apache2/sites-enabled/calibre.conf
+    state: link
+  when: calibre_enabled and is_debuntu
+
+- name: Remove symlink /etc/apache2/sites-enabled/calibre.conf (debuntu)
+  file:
+    dest: /etc/apache2/sites-enabled/calibre.conf
+    state: absent
+  when: (not calibre_enabled) and is_debuntu
+
+- name: Enable & Start service 'calibre-serve' (/usr/bin/calibre-server by Kovid Goyal)
+  service:
+    name: calibre-serve
+    enabled: yes
+    state: started
+  when: calibre_enabled | bool
+  #async: 900
+  #poll: 5
+
+- name: Reload Apache service ({{ apache_service }})
+  systemd:
+    name: "{{ apache_service }}"
+    state: reloaded
+
+- name: Add 'calibre' variable values to {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"
+    section: calibre
+    option: "{{ item.option }}"
+    value: "{{ item.value }}"
+  with_items:
+  - option: name
+    value: Calibre
+  - option: description
+    value: '"Calibre is an extremely popular personal library system for e-books."'
+  - option: url
+    value: "{{ calibre_src_url }}"
+  - option: database
+    value: "{{ calibre_dbpath }}"
+  - option: port
+    value: "{{ calibre_port }}"
+  - option: calibre_enabled
+    value: "{{ calibre_enabled }}"
