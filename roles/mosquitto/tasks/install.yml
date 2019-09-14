@@ -1,0 +1,38 @@
+- name: "Install packages: mosquitto, mosquitto-clients"
+  package:
+    name: "{{ item }}"
+    state: present
+  with_items:
+    - mosquitto
+    - mosquitto-clients
+  tags: download
+
+- name: Disable & Stop 'mosquitto' service
+  systemd:
+    name: mosquitto
+    enabled: no
+    state: stopped
+
+- name: Create (touch) file /etc/mosquitto/passwd
+  file:
+    path: /etc/mosquitto/passwd
+    state: touch
+    mode: "u=rw,g=r,o=r"    # 0644
+
+- name: Populate /etc/mosquitto/passwd with actual username/password
+  shell: mosquitto_passwd -b /etc/mosquitto/passwd "{{ mosquitto_user }}" "{{ mosquitto_password  }}"
+
+- name: Install /etc/mosquitto/conf.d/websockets.conf from template
+  template:
+    src: websockets.conf.j2
+    dest: /etc/mosquitto/conf.d/websockets.conf
+    owner: root
+    group: root
+    mode: 0755
+
+- name: Add 'mosquitto_installed' variable values to {{ iiab_installed }}
+  lineinfile:
+    dest: "{{ iiab_installed }}"
+    regexp: '^mosquitto_installed'
+    line: 'mosquitto_installed'
+    state: present
