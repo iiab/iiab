@@ -1,0 +1,63 @@
+- name: "Install bluetooth packages"
+  package:
+    name:
+      - bluetooth
+      - bluez
+      - bluez-tools
+    state: present
+
+- name: Create bluetooth services
+  template:
+    backup: no
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: root
+    group: root
+    mode: 0644
+  with_items:
+    - { src: 'bt-agent.service.j2', dest: '/etc/systemd/system/bt-agent.service' }
+    - { src: 'bt-pan.service.j2', dest: '/etc/systemd/system/bt-pan.service' }
+    - { src: 'bt-term.service.j2', dest: '/etc/systemd/system/bt-term.service' }
+    - { src: 'network.conf.j2', dest: '/etc/bluetooth/network.conf' }
+
+- name: Create bluetooth utility scripts
+  template:
+    backup: no
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: root
+    group: root
+    mode: 0755
+  with_items:
+    - { src: 'iiab-bt-pan-on.j2', dest: '/usr/bin/iiab-bt-pan-on' }
+    - { src: 'iiab-bt-pan-off.j2', dest: '/usr/bin/iiab-bt-pan-off' }
+    - { src: 'iiab-bt-pan-discoverable-on.j2', dest: '/usr/bin/iiab-bt-pan-discoverable-on' }
+    - { src: 'iiab-bt-term-on.j2', dest: '/usr/bin/iiab-bt-term-on' }
+    - { src: 'iiab-bt-term-off.j2', dest: '/usr/bin/iiab-bt-term-off' }
+
+# Bluetooth service needs /usr/lib/bluetooth/bluetoothd -C --noplugin=sap
+# Copy and patch it
+
+- name: Copy the bluetooth service
+  template:
+    dest: /etc/systemd/system/bluetooth.service
+    src: /lib/systemd/system/bluetooth.service
+
+- name: Add  -C --noplugin=sap to execStart of bluetooth service
+  lineinfile:
+    path: /etc/systemd/system/bluetooth.service
+    regexp: '^ExecStart=/usr/lib/bluetooth/bluetoothd'
+    line: 'ExecStart=/usr/lib/bluetooth/bluetoothd -C --noplugin=sap'
+
+- name: Set discoverable not to timeout
+  lineinfile:
+    path: /etc/bluetooth/main.conf
+    regexp: '^#DiscoverableTimeout'
+    line: 'DiscoverableTimeout = 0'
+
+- name: Add 'pan_bluetooth_installed' variable values to {{ iiab_installed }}
+  lineinfile:
+    dest: "{{ iiab_installed }}"
+    regexp: '^pan_bluetooth_installed'
+    line: 'pan_bluetooth_installed'
+    state: present
