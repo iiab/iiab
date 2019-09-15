@@ -1,0 +1,106 @@
+# 2019-01-16: @jvonau's PR #1403 moved installation of Node.js (8.x for now) &
+# npm to roles/nodejs/tasks/main.yml, triggered by roles/nodered/meta/main.yml
+
+# BRUTAL but ensures consistency across OS's / distros like Raspbian Desktop &
+# Ubermix that often include an older version of Node-RED.  Brutal, as this
+# removes customizations on graphical desktop OS's e.g. Raspbian Desktop's:
+#   1. Node-RED's icon (Raspberry Menu in top-left -> Programming -> Node-RED)
+#   2. scripts like {node-red-start, node-red-stop, node-red-log} in /usr/bin
+#   3. other changes per /usr/bin/update-nodejs-and-nodered summarized at
+#      https://nodered.org/docs/hardware/raspberrypi for example low-memory
+#      flag --max_old_space_size=256 for unit file (we're using 128 on RPi)
+# That we'll reconstitute below!
+- name: ASK apt/yum/dnf TO REMOVE PRE-EXISTING 'nodered' (IF PREVIOUSLY INSTALLED BY OS PKG MANAGER)
+  package:
+    name: nodered
+    state: absent
+  when: nodered_install | bool
+
+# 2012-02-13: the 6 RPi stanzas below recreate Raspbian Desktop's Node-RED
+# environment, inspired by:
+# https://nodered.org/docs/hardware/raspberrypi
+# https://github.com/node-red/raspbian-deb-package/blob/master/resources/update-nodejs-and-nodered
+# https://github.com/iiab/iiab/pull/1497
+
+- name: "Globally 'npm install' 3 Node-RED packages: node-red, node-red-admin, node-red-dashboard"
+  command: npm install -g --unsafe-perm node-red node-red-admin node-red-dashboard
+  #command: npm install -g --unsafe-perm node-red@latest node-red-admin@latest node-red-dashboard@latest
+  # Above "@latest" is recommended by https://nodered.org/docs/hardware/raspberrypi (SHOULD WE CONSIDER?)
+  when: nodered_install and internet_available
+
+- name: "Globally 'npm install' 8 Node-RED learning examples for RPi: node-red-contrib-ibm-watson-iot, node-red-contrib-play-audio, node-red-node-ledborg, node-red-node-ping, node-red-node-pi-sense-hat, node-red-node-random, node-red-node-serialport, node-red-node-smooth"
+  command: npm install -g --unsafe-perm node-red-contrib-ibm-watson-iot node-red-contrib-play-audio node-red-node-ledborg node-red-node-ping node-red-node-pi-sense-hat node-red-node-random node-red-node-serialport node-red-node-smooth
+  when: nodered_install and internet_available and is_rpi
+
+## To protect pre-installed packages within /usr/lib/node_modules in graphical
+## desktop OS's like Raspbian Desktop & Ubermix, we now only install those that
+## are missing -- among the 3+8 below.  WARNING: THIS COULD POTENTIALLY LEAD TO
+## INCOMPATIBILITIES, IF OS'S /usr/lib/node_modules/node-red GETS OUT OF DATE!
+#
+## /usr/lib/node_modules/node-red is PRE-INSTALLED by Raspbian Desktop, even if
+## their package (42MB, 0.19.4) is a bit out of date compared to npm's (55MB,
+## 0.19.5) as of 2019-02-12.  Among others in /usr/lib/node_modules, pre-placed
+## by Raspbian Desktop's apt package 'nodered':
+##   node-red-contrib-ibm-watson-iot, node-red-contrib-play-audio,
+##   node-red-node-ledborg, node-red-node-ping, node-red-node-pi-sense-hat
+##   node-red-node-random, node-red-node-serialport, node-red-node-smooth
+#- name: Globally 'npm install' pkg 'node-red' if /usr/lib/node_modules/node-red missing (most OS's except for Raspbian Desktop)
+#  #command: npm install -g --unsafe-perm node-red
+#  command: npm install -g --unsafe-perm node-red@latest
+#  args:
+#    creates: /usr/lib/node_modules/node-red
+#  when: nodered_install and internet_available
+#
+## NOT pre-installed by Raspbian Desktop as of 2019-02-12...so we install this
+## on most all OS's:
+#- name: Globally 'npm install' pkg 'node-red-admin' if /usr/lib/node_modules/node-red-admin missing (most OS's)
+#  command: npm install -g --unsafe-perm node-red-admin
+#  args:
+#    creates: /usr/lib/node_modules/node-red-admin
+#  when: nodered_install and internet_available
+#
+## NOT pre-installed by Raspbian Desktop as of 2019-02-12...so we install this
+## on most all OS's:
+#- name: Globally 'npm install' pkg 'node-red-dashboard' if /usr/lib/node_modules/node-red-dashboard missing (most OS's)
+#  command: npm install -g --unsafe-perm node-red-dashboard
+#  args:
+#    creates: /usr/lib/node_modules/node-red-dashboard
+#  when: nodered_install and internet_available
+
+- include_tasks: group.yml
+  when: nodered_install and not is_rpi
+
+- include_tasks: rpi_desk.yml
+  when: nodered_install and internet_available and is_rpi
+
+- name: Install /etc/systemd/system/nodered.service systemd unit file from template
+  template:
+    backup: yes
+    src: nodered.service.j2
+    dest: /etc/systemd/system/nodered.service
+    owner: root
+    group: root
+    mode: 0666
+
+- name: Install Apache's sites-available/nodered.conf from template
+  template:
+    backup: yes
+    src: nodered.conf.j2
+    dest: /etc/apache2/sites-available/nodered.conf
+    owner: root
+    group: root
+    mode: 0666
+
+# SEE ALSO THE apache2_module SECTION IN roles/httpd/tasks/main.yml
+- name: Enable proxy_wstunnel apache2 module
+  apache2_module:
+    state: present
+    name: proxy_wstunnel
+
+- name: Add 'nodered_installed' variable values to {{ iiab_installed }}
+  lineinfile:
+    dest: "{{ iiab_installed }}"
+    regexp: '^nodered_installed'
+    line: 'nodered_installed'
+    state: present
+
