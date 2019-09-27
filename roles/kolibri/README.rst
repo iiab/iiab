@@ -40,7 +40,7 @@ Cloning Content
 Kolibri 0.10 introduced ``kolibri manage deprovision`` which will remove user configurations, leaving content intact — i.e. if student and teacher privacy requires their records be deleted.  You can then copy or clone /library/kolibri to a new location, or to a new school entirely.
 
 Troubleshooting
-----------------
+---------------
 
 You can run the server manually with the following commands::
 
@@ -55,10 +55,10 @@ To return to using the systemd unit file::
   systemctl start kolibri
 
 Known Issues
--------------
+------------
 
 * Kolibri migrations can take a long time on a Raspberry Pi.  These long-running migrations could cause kolibri service timeouts.  Try running migrations manually using command ``kolibri manage migrate`` after following the troubleshooting instructions above.  Kolibri developers are trying to address this issue.  (See `learningequality/kolibri#4310 <https://github.com/learningequality/kolibri/issues/4310>`_)
 
 * Loading channels can take a long time on a Raspberry Pi.  When generating channel contents for Khan Academy, the step indicated as “Generating channel listing.  This could take a few minutes…” could mean ~30 minutes.  The device’s computation power is the bottleneck.  You might get logged out while waiting, but this is harmless and the process will continue.  Sit tight!
 
-* Active list of Kolibri issues, as of July 2019: `#1545 <https://github.com/iiab/iiab/issues/1545>`_
+* Active list of Kolibri issues, as of September 2019: `#1545 <https://github.com/iiab/iiab/issues/1545>`_
