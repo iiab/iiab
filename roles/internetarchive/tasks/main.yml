@@ -1,15 +1,14 @@
 # We need a recent version of node
 
-- name: FAIL (STOP INSTALLING) IF nodejs_version is not set to 10.x
+- name: FAIL (STOP INSTALLING) IF nodejs_version is not set to 10.x or 12.x
   fail:
-    msg: "Internet Archive install cannot proceed, as it currently requires Node.js 10.x, and your nodejs_version is set to {{ nodejs_version }}.  Please check the value of nodejs_version in /opt/iiab/iiab/vars/default_vars.yml and possibly also /etc/iiab/local_vars.yml"
-  when: internetarchive_install and (nodejs_version != "10.x")
+    msg: "Internet Archive install cannot proceed, as it currently requires Node.js 10.x or 12.x, and your nodejs_version is set to {{ nodejs_version }}.  Please check the value of nodejs_version in /opt/iiab/iiab/vars/default_vars.yml and possibly also /etc/iiab/local_vars.yml"
+  when: internetarchive_install and ((nodejs_version != "10.x") or (nodejs_version != "12.x"))
 
 - name: Install packages needed by Distributed Web
   package:
     name:
       - libsecret-1-dev
-      - cmake
     state: present
 
 - name: Create directory {{ internetarchive_dir }}
@@ -19,9 +18,7 @@
     owner: "root"
 
 - name: Run yarn install to get needed modules (CAN TAKE ~15 MINUTES)
-  command: yarn add @internetarchive/dweb-archive @internetarchive/dweb-mirror
-  #command: sudo yarn add @internetarchive/dweb-archive @internetarchive/dweb-mirror
-  #become: yes    # Escalate to root, similar to 'sudo'
+  shell: yarn config set child-concurrency 1 && yarn add @internetarchive/dweb-mirror
   args:
     chdir: "{{ internetarchive_dir }}"
     creates: "{{ internetarchive_dir }}/node_modules/@internetarchive/dweb-mirror/internetarchive"
@@ -75,9 +72,7 @@
     state: stopped
 
 - name: 'Update pre-existing install: yarn upgrade'
-  command: yarn upgrade
-  #command: sudo yarn upgrade
-  #become: yes    # Escalate to root, similar to 'sudo'
+  shell: yarn config set child-concurrency 1 && yarn install && yarn upgrade
   args:
     chdir: "{{ internetarchive_dir }}"
   when: not internetarchive_installing.changed and internetarchive_upgrade
@@ -113,7 +108,7 @@
     value: "{{ item.value }}"
   with_items:
     - option: name
-      value: Internet Archive Distributed Web
+      value: Internet Archive Offline
     - option: description
       value: '"Dweb-mirror is intended to make the Internet Archive experience and UI available offline."'
     - option: internetarchive_enabled
