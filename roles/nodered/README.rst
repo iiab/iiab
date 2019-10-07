@@ -20,7 +20,7 @@ Username: ``Admin``
 
 Password: ``changeme``
 
-To change this password, please see: `roles/nodered/defaults/main.yml <defaults/main.yml#L11-L26>`_
+To change this password, please see: `roles/nodered/defaults/main.yml <defaults/main.yml#L12-L27>`_
 
 You can monitor the Node-RED service with command::
 
@@ -29,7 +29,7 @@ You can monitor the Node-RED service with command::
 Raspberry Pi Zero W Warning
 ---------------------------
 
-Node.js applications like Asterisk/FreePBX, Node-RED and Sugarizer `won't work <https://nodered.org/docs/hardware/raspberrypi#swapping-sd-cards>`_ on Raspberry Pi Zero W (ARM6) if you installed Node.js while on RPi 3 or 3 B+ (ARM7).  If necessary, run ``apt remove nodejs`` then ``cd /opt/iiab/iiab`` then `./runrole nodejs <https://github.com/iiab/iiab/blob/master/roles/nodejs/tasks/main.yml>`_ *on the Raspberry Pi Zero W itself* — before proceeding to install Asterisk/FreePBX, Node-RED and/or Sugarizer.
+Node.js applications like Asterisk/FreePBX, Node-RED and Sugarizer *won't work* on Raspberry Pi Zero W (ARMv6) if you installed Node.js while on RPi 3, 3 B+ (ARMv7) or RPi 4 (ARMv8).  If necessary, run ``apt remove nodejs`` then (`attempt! <https://nodered.org/docs/hardware/raspberrypi#swapping-sd-cards>`_) things like ``cd /opt/iiab/iiab; ./runrole nodejs`` to `install Node.js <https://github.com/iiab/iiab/blob/master/roles/nodejs/tasks/main.yml>`_ *on the Raspberry Pi Zero W itself* — before proceeding to install Asterisk/FreePBX, Node-RED and/or Sugarizer.
 
 See Also
 --------
