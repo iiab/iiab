@@ -1,4 +1,4 @@
-# Internet Archive Universal Library / Decentralized Web README
+# Internet Archive Offline / Universal Library / Decentralized Web README
 
 The Internet Archive (http://archive.org) is famous for their WayBack Machine
 that has saved 362+ Billion web pages, and more recently their Decentralized
