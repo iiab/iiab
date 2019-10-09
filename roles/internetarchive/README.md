@@ -1,7 +1,7 @@
-# Internet Archive Universal Library / Decentralized Web README
+# Internet Archive Offline / Universal Library / Decentralized Web README
 
 The Internet Archive (http://archive.org) is famous for their WayBack Machine
-that has saved 362+ Billion web pages, and more recently their Decentralized
+that has saved 384+ Billion web pages, and more recently their Decentralized
 Web project.
 
 This Ansible role installs the Internet Archive's dweb-mirror project on
