@@ -2,7 +2,7 @@
 
 To streamline troubleshooting of remote Internet-in-a-Box (IIAB) installations, we bundle up common machine/software diagnostics, all together in 1 human-readable small file, that can be easily circulated online AND offline.
 
-The ``pastebinit`` command can then be used to upload this file, creating a short URL that makes it easier to pass around.
+The ``pastebinit`` command can then be used to auto-upload this file, creating a short URL that makes it easier to pass around.
 
 But first off, the file is compiled by harvesting 5 main kinds of things:
 
@@ -21,10 +21,16 @@ But first off, the file is compiled by harvesting 5 main kinds of things:
 1. Run it as follows:
 
    ```
+   iiab-diagnostics
+   ```
+
+   Better yet, for [more complete results](https://github.com/iiab/iiab/pull/2000#issue-327506999), run it as root:
+
+   ```
    sudo iiab-diagnostics
    ```
 
-   To bundle in more files, run:
+   To bundle in yet more files, run:
 
    ```
    sudo iiab-diagnostics PATH/FILE1 PATH/FILE2 ...
@@ -32,13 +38,15 @@ But first off, the file is compiled by harvesting 5 main kinds of things:
 
    ( All diagnostics will be bundled up into a single human-readable file, placed in: /etc/iiab/diag/ )
 
-2. Make sure you're online, and upload the new file using the ``pastebinit`` command:
+2. Make sure you're online, as you will be prompted to auto-publish your newly-compiled diagnostics file to a web pastebin.
+
+   Or, you can later/manually upload it using the ``pastebinit`` command:
 
    ```
    pastebinit < /etc/iiab/diag/NEW-FILE-NAME
    ```
-   
-   This will generate an actual web link (URL).
+
+   Either way, this will generate an actual web link (URL).
 
 3. Post this link (URL) to a "New issue" at https://github.com/iiab/iiab/issues
 
@@ -48,4 +56,4 @@ But first off, the file is compiled by harvesting 5 main kinds of things:
 
 ## Source Code
 
-Please look over the bottom of [iiab-diagnostics](iiab-diagnostics) to learn more about which common IIAB files and commands make this rapid troubleshooting possible.
+Please look over the bottom of [iiab-diagnostics](iiab-diagnostics) (lines 100-180 especially) to learn more about which common IIAB files and commands make this rapid troubleshooting possible.
