@@ -10,10 +10,13 @@ HASH1=`cd /opt/iiab/iiab; git log --pretty=format:'%H' -n 1`
 HASH2=`cd /opt/iiab/iiab-admin-console; git log --pretty=format:'%H' -n 1`
 YMDT=$(date +%F_%T_%Z)
 
-echo -e "\nAccelerate troubleshooting by collecting your IIAB diagnostics into 1 file:"
-echo -e "\n   sudo iiab-diagnostics"
-echo -e "   sudo iiab-diagnostics PATH/FILE1 PATH/FILE2 ..."
-echo -ne "\nCan you provide a \e[1mshort public nickname:\e[0m (no spaces!) "
+echo -e "\nGathers IIAB diagnostics into 1 file, to accelerate troubleshooting.  USAGE:"
+echo
+echo -e "   iiab-diagnostics"
+echo -e "   sudo iiab-diagnostics                                # USE 'sudo' FOR MORE"
+echo -e "   sudo iiab-diagnostics PATH/FILE1 PATH/FILE2 ...      # COMPLETE RESULTS !!"
+echo
+echo -ne "Can you provide a \e[1mshort public nickname:\e[0m (no spaces!) "
 read nickname < /dev/tty
 if [ -z "$nickname" ]; then
     nickname="NONAME"
@@ -21,8 +24,10 @@ fi
 
 # Build up a meaningful shared filename for DEV / IMPLEM / LEARNING team(s)
 outfile=/etc/iiab/diag/${IIAB_RELEASE}_${OS_VER}_${YMDT}_$nickname
-# System "snapshots" (time-stamped output from this 'iiab-diagnostics' command) will be stored in this directory.  A bit like system logs, but only on request.
-mkdir -p /etc/iiab/diag
+
+# System "snapshots" (time-stamped output from this 'iiab-diagnostics' command)
+# will be stored in globally-writable directory /etc/iiab/diag as created by
+# roles/0-init/tasks/main.yml.  A bit like system logs, but only on request.
 
 function cat_file_raw() {    # $1 = path/filename; $2 = # of lines, for tail
     if [ -f $1 ]; then
@@ -175,5 +180,25 @@ cat_tail /opt/iiab/iiab-admin-console/admin-install.log 100
 
 linecount=$(wc -l $outfile | sed 's/\s.*$//')
 sizecount=$(du -h $outfile | sed 's/\s.*$//')
-echo -e "\n\e[32mCOMPLETE! To share this on the web ($sizecount, $linecount lines) run:\e[0m"
-echo -e "\n\e[1mpastebinit < $outfile\e[0m\n"
+echo -e "\n\e[32m\e[1mCOMPLETE! Your diagnostics file ($sizecount, $linecount lines) is:"
+echo
+echo -e "   $outfile\e[0m"
+
+#if [ "$1" == "-y" ]; then
+#    ans="y"    # if user ran "iiab-diganostics -y" to avoid interactive prompt
+#else
+echo
+echo -ne "\e[42;1mPublish it to a web pastebin? [Y/n]\e[0m "
+read ans < /dev/tty
+#fi
+
+echo -e "\e[1m"
+if [ "$ans" == "" ] || [ "$ans" == "y" ] || [ "$ans" == "Y" ]; then
+    echo -ne "PUBLISHING TO URL... "
+    pastebinit < $outfile
+else
+    echo -e "If you later decide to publish it, run:"
+    echo
+    echo -e "   pastebinit < $outfile"
+fi
+echo -e "\e[0m"
