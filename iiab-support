@@ -1,5 +1,8 @@
 #!/bin/bash
 
+PLAYBOOK="install-support.yml"
+INVENTORY="ansible_hosts"
+
 # openvpn_handle is stored in 2 files on disk, one slightly stripped down (from
 # the other) due to Ansible.  So we emulate Ansible's behavior, when reading from
 # (and later writing to) disk, removing outer cruft as explained on Lines 31-33:
@@ -46,15 +49,25 @@ fi
 if grep -q '^openvpn_install: True' /etc/iiab/local_vars.yml; then
     echo -e "Your IIAB installation appears normal, with OpenVPN already installed...\n"
 else
-    echo -e "Please wait a few minutes as IIAB Stage 1 (1-prep) & OpenVPN are installed...\n"
+    echo -e "Plz wait a few minutes as sshd, iiab-admin & OpenVPN are confirmed/installed...\n"
     if grep -q '^openvpn_install:' /etc/iiab/local_vars.yml; then
         sed -i "s/^openvpn_install:.*/openvpn_install: True/" /etc/iiab/local_vars.yml
     else
         echo "openvpn_install: True" >> /etc/iiab/local_vars.yml
     fi
-    cd /opt/iiab/iiab
-    ./runrole 1-prep
-    echo
+    
+    if [ -d /opt/iiab/iiab ]; then
+        cd /opt/iiab/iiab
+        #CWD=`pwd`
+        #export ANSIBLE_LOG_PATH="$CWD/iiab-install.log"
+        export ANSIBLE_LOG_PATH="/opt/iiab/iiab/iiab-install.log"
+        ansible-playbook -i $INVENTORY $PLAYBOOK --connection=local
+        # Above is tighter/better than running all of "./runrole 1-prep"
+        echo
+    else
+        echo -e " \e[41m       Directory /opt/iiab/iiab does not exist: CANNOT INSTALL OPENVPN!       \e[0m\n"
+        exit 1
+    fi
 fi
 
 echo -e "Now let's (re)enable OpenVPN...\n"
@@ -79,7 +92,7 @@ echo -e "  2. Check your OpenVPN connection: run 'ping 10.8.0.1'"
 echo -e "  3. Run 'ip a' and look for a 'tun0' IP address like 10.8.0.x"
 echo -e "  4. If necessary, run 'systemctl restart openvpn' which should"
 echo -e "     run 'systemctl restart openvpn@xscenet' for you."
-echo -e "  5. Sometimes waiting a minute helps -- retry steps 2 and 3 to monitor."
+echo -e "  5. SOMETIMES WAITING A MINUTE HELPS -- retry steps 2 and 3 to monitor."
 echo -e "  6. If in future you want to disable OpenVPN connections to-and-from your"
 echo -e "     Internet-in-a-Box (IIAB) please run 'iiab-support-off' at that time."
 echo -e "  7. Read 'How can I remotely manage my Internet-in-a-Box?' at"
@@ -103,4 +116,5 @@ if [ "$vpnip" != "" ]; then
     echo -e "\nYour OpenVPN IP address (which can change) is: \e[32m$vpnip\e[0m\n"
 else
     echo -e "\n \e[41m       ERROR: OpenVPN IP address not ready - PLEASE TRY THE ABOVE TIPS        \e[0m\n"
+    exit 1
 fi
