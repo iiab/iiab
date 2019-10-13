@@ -4,17 +4,21 @@ To streamline troubleshooting of remote Internet-in-a-Box (IIAB) installations, 
 
 The ``pastebinit`` command can then be used to auto-upload this file, creating a short URL that makes it easier to pass around.
 
-But first off, the file is compiled by harvesting 5 main kinds of things:
+But first off, the file is compiled by harvesting 1 + 6 kinds of things:
+
+0. Filename Header + Git Hashes + OS
 
 1. Files specially requested (if you run ``sudo iiab-diagnostics PATH/FILE1 PATH/FILE2``)
 
 2. Regular Files
 
-3. Output of Commands
+3. Content of Directories (1-level deep)
 
-4. Content of Directories, 1-level deep
+4. Output of Commands
 
-5. Log Files: (last 100 lines of each)
+5. Firewall Rules
+
+6. Log Files (last 100 lines of each)
 
 ## Usage 
 
@@ -56,4 +60,4 @@ But first off, the file is compiled by harvesting 5 main kinds of things:
 
 ## Source Code
 
-Please look over the bottom of [iiab-diagnostics](iiab-diagnostics) (lines 100-180 especially) to learn more about which common IIAB files and commands make this rapid troubleshooting possible.
+Please look over the bottom of [iiab-diagnostics](iiab-diagnostics) (lines 100-197 especially) to learn more about which common IIAB files and commands make this rapid troubleshooting possible.
