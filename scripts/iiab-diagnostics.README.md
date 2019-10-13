@@ -6,7 +6,7 @@ The ``pastebinit`` command can then be used to auto-upload this file, creating a
 
 But first off, the file is compiled by harvesting 1 + 6 kinds of things:
 
-0. Filename Header + Git Hashes + OS
+0. Filename Header + Git Hashes + Raspberry Pi Model + OS
 
 1. Files specially requested (if you run ``sudo iiab-diagnostics PATH/FILE1 PATH/FILE2``)
 
