@@ -10,9 +10,9 @@ But first off, the file is compiled by harvesting 5 main kinds of things:
 
 2. Regular Files
 
-3. Content of Directories, 1-level deep
+3. Output of Commands
 
-4. Output of Commands
+4. Content of Directories, 1-level deep
 
 5. Log Files: (last 100 lines of each)
 
