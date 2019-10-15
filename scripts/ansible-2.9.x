@@ -1,12 +1,12 @@
 #!/bin/bash -e
 
 CURR_VER="undefined"    # Ansible version you currently have installed
-GOOD_VER="2.8.5"    # For XO laptops (pip install) & CentOS (yum install rpm)
+GOOD_VER="2.9.0"    # For XO laptops (pip install) & CentOS (yum install rpm)
 # On other OS's we attempt the latest from PPA, which might be more recent
 
 export DEBIAN_FRONTEND=noninteractive
 
-echo -e "\n\nYOU ARE RUNNING: /opt/iiab/iiab/scripts/ansible-2.8.x (TO INSTALL ANSIBLE)"
+echo -e "\n\nYOU ARE RUNNING: /opt/iiab/iiab/scripts/ansible-2.9.x (TO INSTALL ANSIBLE)"
 echo -e 'Alternative:     /opt/iiab/iiab/scripts/ansible ("for the very latest Ansible")\n'
 
 echo -e "RECOMMENDED PREREQUISITES:"
