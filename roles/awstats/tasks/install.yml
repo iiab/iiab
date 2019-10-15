@@ -18,7 +18,6 @@
   tags:
     - download
 
-# SEE ALSO THE apache2_module SECTION IN roles/httpd/tasks/main.yml
 - name: Enable cgi execution (debuntu)
   command: a2enmod cgi
   when: is_debuntu | bool
@@ -35,24 +34,20 @@
   with_items:
     - "{{ awstats_data_dir }}"
     - "{{ apache_log_dir }}"
+    - /usr/lib/cgi-bin/awstats   # create backward compatible path for awstats
 
-- name: Install Apache's awstats.conf from template (debuntu)
+- name: Install nginx's awstats.conf from template (debuntu)
   template:
-    src: apache.conf
-    dest: "/etc/{{ apache_config_dir }}/awstats.conf"
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
     owner: root
     group: root
     mode: 0644
+  with_items:
+     - { src: "awstats-nginx.conf", dest: "/etc/nginx/conf.d/" }
+     - { src: "cgi-bin.php", dest: "/etc/nginx/" }
+#     - { src: "apache-awstats.conf", dest: "/etc/{{ apache_config_dir }}/awstats.conf" }
   when: awstats_enabled and is_debuntu
-
-- name: Install Apache's awstats.conf from template (OS's other than debuntu)
-  template:
-    src: apache-awstats.conf
-    dest: "/etc/{{ apache_config_dir }}/awstats.conf"
-    owner: root
-    group: root
-    mode: 0644
-  when: awstats_enabled and not is_debuntu
 
 - name: Ensure logrotate doesn't make logs unreadable (debuntu)
   template:
@@ -69,24 +64,11 @@
   command: mv /etc/awstats/awstats.conf /etc/awstats/awstats.conf.dist
   when: awstats.stat.islnk is defined and not awstats.stat.islnk
 
-- name: Create symlink awstats.conf from sites-enabled to sites-available (debuntu)
+- name: Create symlink for awstats.pl from cgi-bin/awstats/awstats.pl to ../ so that the old apache links to awstats will work after change to nginx
   file:
-    src: /etc/apache2/sites-available/awstats.conf
-    path: /etc/apache2/sites-enabled/awstats.conf
+    src: /usr/lib/cgi-bin/awstats.pl
+    path: /usr/lib/cgi-bin/awstats/awstats.pl
     state: link
-  when: awstats_enabled and is_debuntu
-
-- name: Remove symlink from sites-enabled, to disable AWStats (debuntu)
-  file:
-    path: /etc/apache2/sites-enabled/awstats.conf
-    state: absent
-  when: not awstats_enabled and is_debuntu
-  
-- name: Restart Apache service ({{ apache_service }})
-  systemd:
-    name: "{{ apache_service }}"
-    state: restarted
-
 
 - name: Install /etc/awstats/awstats.schoolserver.conf
   template:
