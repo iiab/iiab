@@ -138,7 +138,7 @@
 
 # 5. CONFIG FILES
 
-- name: "Install from templates: sugarizer.service (systemd), sugarizer.conf (Apache)"
+- name: "Install from templates: sugarizer.service (systemd), sugarizer-nginx.conf (nginx)"
   template:
     src: "{{ item.src }}"
     dest: "{{ item.dest }}"
@@ -147,7 +147,7 @@
     group: root
   with_items:
     - { src: 'sugarizer.service', dest: '/etc/systemd/system/sugarizer.service' }
-    - { src: 'sugarizer.conf.j2', dest: '/etc/apache2/sites-available/sugarizer.conf' }
+    - { src: 'sugarizer-nginx.conf', dest: '/etc/nginx/conf.d/sugarizer-nginx.conf' }
     #- { src: 'sugarizer.ini.j2', dest: '{{ iiab_base }}/sugarizer-server/env/sugarizer.ini' }
     #- { src: 'sugarizer.js', dest: '{{ iiab_base }}/sugarizer-server' }
 
@@ -223,14 +223,7 @@
 
 - name: Create symlink sugarizer.conf from sites-enabled to sites-available, for short URLs http://box/sugar & http://box/sugarizer (if sugarizer_enabled)
   file:
-    src: /etc/apache2/sites-available/sugarizer.conf
-    path: /etc/apache2/sites-enabled/sugarizer.conf
-    state: link
-  when: sugarizer_enabled and is_debuntu
-
-- name: Remove symlink /etc/apache2/sites-enabled/sugarizer.conf (if not sugarizer_enabled)
-  file:
-    path: /etc/apache2/sites-enabled/sugarizer.conf
+    path: /etc/nginx/conf.d/sugarizer-nginx.conf
     state: absent
   when: not sugarizer_enabled and is_debuntu
 
@@ -276,6 +269,12 @@
 #    enabled: no
 #    state: stopped
 #  when: not sugarizer_enabled
+
+- name: Restart nginx when enabled
+  service:
+    name: nginx
+    state: restarted
+  when: sugarizer_enabled and nginx_enabled
 
 - name: Add 'sugarizer' variable values to {{ iiab_ini_file }}
   ini_file:

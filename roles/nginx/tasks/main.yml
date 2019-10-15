@@ -1,0 +1,62 @@
+- name: Insure that apache2 is not running -- we may need port swap
+  service: 
+      name: apache2
+      enabled: False 
+      state: stopped
+  ignore_errors: True
+
+- name: Install nginx required  and helper packages
+  package: name={{ item }} state=present
+  with_items:
+    - nginx-extras
+    - uwsgi
+    - uwsgi-plugin-python
+    - php-fpm
+    - libnginx-mod-http-subs-filter
+
+- name: Put the config file in place
+  template: 
+      src: '{{ item.src}}'  
+      dest: '{{ item.dest }}'
+  with_items:
+     - { src: "server.conf",dest: "/etc/nginx/" }
+     - { src: "nginx.conf",dest: "/etc/nginx/" }
+     - { src: "usb-lib.conf",dest: "/etc/nginx/conf.d/" }
+     - { src: "admin-console.ini",dest: "/etc/uwsgi/apps-enabled/" }
+     - { src: "uwsgi.unit",dest: "/etc/systemd/system/" }
+# optional services
+     - { src: "kiwix.conf",dest: "/etc/nginx/conf.d/" }
+
+- name: Add http server  user to shadow group, so it can authenticate Admin Console
+  user:
+      name: "{{ apache_user }}"
+      groups: shadow
+
+- name: Remove the nginx default config
+  file: path=/etc/nginx/sites-enabled/default state=absent
+
+- name: Install config for Admin Console
+  template: 
+        src: admin-console-nginx.conf
+# Comment one or the other to revert from nginx back to apache2, if required
+#        src: admin-console-apache.conf
+        dest: /etc/nginx/conf.d/admin-console.conf
+  when: admin_console_enabled | bool
+
+- name: Enable the uwsgi systemd service
+  service:
+      name: uwsgi
+      state: started
+      enabled: True
+
+- name: Make sure nginx picks up the config 
+  service: 
+      name: nginx 
+      state: restarted
+  when: nginx_enabled | bool
+          
+# it might not be installed yet, so ignore errors
+- name: Since we stopped apache2, start it again
+  service: name=apache2 state=started enabled=True
+  when: apache_enabled | bool
+  ignore_errors: True
