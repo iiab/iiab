@@ -1,68 +1,17 @@
 # We need a recent version of node
-
 - name: FAIL (STOP INSTALLING) IF nodejs_version is not set to 10.x or 12.x
   fail:
     msg: "Internet Archive install cannot proceed, as it currently requires Node.js 10.x or 12.x, and your nodejs_version is set to {{ nodejs_version }}.  Please check the value of nodejs_version in /opt/iiab/iiab/vars/default_vars.yml and possibly also /etc/iiab/local_vars.yml"
   when: internetarchive_install and (nodejs_version != "10.x") and (nodejs_version != "12.x")
 
-- name: Install packages needed by Internet Archive Offline
-  package:
-    name:
-      - libsecret-1-dev
-    state: present
-
-- name: Create directory {{ internetarchive_dir }}
-  file:
-    path: "{{ internetarchive_dir }}"
-    state: directory
-    owner: "root"
-
-- name: Run yarn install to get needed modules (CAN TAKE ~15 MINUTES)
-  shell: yarn config set child-concurrency 1 && yarn add @internetarchive/dweb-mirror
-  args:
-    chdir: "{{ internetarchive_dir }}"
-    creates: "{{ internetarchive_dir }}/node_modules/@internetarchive/dweb-mirror/internetarchive"
-  when: internet_available | bool
-  register: internetarchive_installing
-
-- name: Create directory /library/archiveorg
-  file:
-    path: "/library/archiveorg"
-    state: directory
-    owner: "root"
+- name: Install Yarn and Internet Archive
+  include_tasks: install.yml
+  when: internetarchive_install and not internetarchive_installed is defined
 
 - name: Set --reinstall fact
   set_fact:
     internetarchive_upgrade: True
   when: reinstall is defined
-
-
-# CONFIG FILES
-
-- name: "Install from templates: internetarchive.service (systemd), internetarchive.conf (Apache)"
-  template:
-    src: "{{ item.src }}"
-    dest: "{{ item.dest }}"
-    mode: 0644
-    owner: root
-    group: root
-  with_items:
-    - { src: 'internetarchive.service.j2', dest: '/etc/systemd/system/internetarchive.service' }
-    - { src: 'internetarchive.conf', dest: '/etc/apache2/sites-available/internetarchive.conf' }
-
-- name: Create symlink internetarchive.conf from sites-enabled to sites-available, for short URL http://box/archive (if debuntu and internetarchive_enabled)
-  file:
-    src: /etc/apache2/sites-available/internetarchive.conf
-    path: /etc/apache2/sites-enabled/internetarchive.conf
-    state: link
-  when: is_debuntu and internetarchive_enabled
-
-- name: Remove symlink /etc/apache2/sites-enabled/internetarchive.conf (if debuntu and not internetarchive_enabled)
-  file:
-    path: /etc/apache2/sites-enabled/internetarchive.conf
-    state: absent
-  when: is_debuntu and not internetarchive_enabled
-
 
 # STOP SYSTEMD SERVICE
 - name: Stop 'internetarchive' systemd service
@@ -70,46 +19,14 @@
     name: internetarchive
     daemon_reload: yes
     state: stopped
+  when: internetarchive_enabled and internetarchive_upgrade
 
 - name: 'Update pre-existing install: yarn upgrade'
   shell: yarn config set child-concurrency 1 && yarn install && yarn upgrade
   args:
     chdir: "{{ internetarchive_dir }}"
-  when: not internetarchive_installing.changed and internetarchive_upgrade
+  when: internetarchive_enabled and internetarchive_upgrade
 
- # RESTART/ENABLE SYSTEMD SERVICE
-- name: Disable 'internetarchive' systemd service (if not internetarchive_enabled)
-  systemd:
-    name: internetarchive
-    enabled: no
-  when: not internetarchive_enabled
-
-# with "systemctl daemon-reload" in case mongodb.service changed, etc
-- name: Enable & Restart 'internetarchive' systemd service (if internetarchive_enabled)
-  systemd:
-    name: internetarchive
-    daemon_reload: yes
-    enabled: yes
-    state: restarted
-  when: internetarchive_enabled | bool
-
-- name: Restart Apache service ({{ apache_service }}) to enable/disable http://box/archive (not just http://box:{{ internetarchive_port }})
-  systemd:
-    name: "{{ apache_service }}"    # httpd or apache2
-    state: restarted
-  when: internetarchive_enabled | bool
-
-
-- name: Add 'internetarchive' variable values to {{ iiab_ini_file }}
-  ini_file:
-    path: "{{ iiab_ini_file }}"
-    section: internetarchive
-    option: "{{ item.option }}"
-    value: "{{ item.value }}"
-  with_items:
-    - option: name
-      value: Internet Archive Offline
-    - option: description
-      value: '"Dweb-mirror is intended to make the Internet Archive experience and UI available offline."'
-    - option: internetarchive_enabled
-      value: "{{ internetarchive_enabled }}"
+- name: Enable Internet Archive
+  include_tasks: enable.yml
+  when: internetarchive_install or internetarchive_installed is defined
