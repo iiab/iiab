@@ -4,11 +4,42 @@ INVENTORY="ansible_hosts"
 PLAYBOOK="iiab-from-cmdline.yml"
 CWD=`pwd`
 APPS=/etc/iiab/config_vars2.yml
+ENV=/etc/iiab/iiab.env
 if [ ! -f $PLAYBOOK ]; then
-    echo "Exiting: IIAB Playbook not found."
-    echo "Please run this in /opt/iiab/iiab (top level of the git repo)."
+    echo -e "\nExiting: IIAB Playbook not found."
+    echo -e "\nPlease run this in /opt/iiab/iiab (top level of the git repo)."
     exit 1
 fi
+if [ -f $ENV ]; then
+    STAGE=0
+    if grep -q STAGE= /etc/iiab/iiab.env ; then
+        source /etc/iiab/iiab.env
+        echo -e "\nExtracted STAGE="$STAGE" (counter) from /etc/iiab/iiab.env"
+        if ! [ "$STAGE" -eq "$STAGE" ] 2> /dev/null; then
+            echo -e "\nEXITING: STAGE (counter) value == "$STAGE" is non-integer"
+            exit 1
+        elif [ "$STAGE" -lt 0 ] || [ "$STAGE" -gt 9 ]; then
+            echo -e "\nEXITING: STAGE (counter) value == "$STAGE" is out-of-range"
+            exit 1
+        elif [ "$STAGE" -lt 3 ]; then
+            echo -e "\nEXITING: STAGE (counter) value == "$STAGE""
+            echo -e "\nIIAB stage 3 not complete"
+            echo -e "\nPlease run iiab-install"
+            exit 1
+        fi
+    else
+        echo -e "\nEXITING: STAGE (counter) not found"
+        echo -e "\nIIAB not installed"
+        echo -e "\nPlease run iiab-install"
+        exit 1
+    fi
+else
+    echo -e "\nEXITING: /etc/iiab/iiab.env not found"
+    echo -e "\nIIAB not installed"
+    echo -e "\nPlease run iiab-install"
+    exit 1
+fi
+# workaround for image go away later
 if grep -q sugar $APPS; then
     if ! grep -q mongodb $APPS; then
         echo "mongodb_installed: True" >> $APPS
