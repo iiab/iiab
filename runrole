@@ -4,6 +4,7 @@ INVENTORY="ansible_hosts"
 PLAYBOOK="run-one-role.yml"
 ARGS=""
 CWD=`pwd`
+APPS=/etc/iiab/config_vars2.yml
 if [ ! -f $PLAYBOOK ]; then
     echo "Exiting: IIAB Playbook not found."
     echo "Please run this in /opt/iiab/iiab (top level of the git repo)."
@@ -18,19 +19,25 @@ if [[ $# -eq 0 ]] ; then
     exit 0
 fi
 
+# needed for stage 1-3 if not installed yet
+if [ ! -f $APPS ]; then
+    mkdir -p /etc/iiab
+    touch $APPS
+fi
+
 if [ "$1" == "--reinstall" ]; then
     ARGS="$ARGS --extra-vars reinstall=True"
     if [ ! $2 == "internetarchive" ]; then # special handling
         if [ $2 == "calibre-web" ]; then # role directory & installed marker differ
-            sed -i -e '/^calibreweb/d' /etc/iiab/config_vars2.yml
+            sed -i -e '/^calibreweb/d' $APPS
         fi
         if [ $2 == "captive-portal" ]; then # role directory & installed marker differ
-            sed -i -e '/^captiveportal/d' /etc/iiab/config_vars2.yml
+            sed -i -e '/^captiveportal/d' $APPS
         fi
         if [ $2 == "bluetooth" ]; then # role directory & installed marker differ
-            sed -i -e '/^pan_bluetooth/d' /etc/iiab/config_vars2.yml
+            sed -i -e '/^pan_bluetooth/d' $APPS
         fi
-        sed -i -e "/^$2/d" /etc/iiab/config_vars2.yml
+        sed -i -e "/^$2/d" $APPS
     fi
     shift 1
 fi
@@ -40,13 +47,6 @@ if [ $# -eq 2 ]; then
 else
    export ANSIBLE_LOG_PATH="$CWD/iiab-debug.log"
 fi
-
-# Is the following stanza nec?
-if [ ! -f /etc/iiab/config_vars2.yml ]; then
-    mkdir -p /etc/iiab
-    echo "{}" > /etc/iiab/config_vars2.yml
-fi
-
 
 ansible -m setup -i $INVENTORY localhost ${ARGS} --connection=local | grep python
 ansible-playbook -i $INVENTORY $PLAYBOOK ${ARGS} --connection=local -e "role_to_run=$1"
