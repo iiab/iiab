@@ -147,7 +147,7 @@
     group: root
   with_items:
     - { src: 'sugarizer.service', dest: '/etc/systemd/system/sugarizer.service' }
-    - { src: 'sugarizer-nginx.conf', dest: '/etc/nginx/conf.d/sugarizer-nginx.conf' }
+    - { src: 'sugarizer.conf.j2', dest: '/etc/apache2/sites-available/sugarizer.conf' }
     #- { src: 'sugarizer.ini.j2', dest: '{{ iiab_base }}/sugarizer-server/env/sugarizer.ini' }
     #- { src: 'sugarizer.js', dest: '{{ iiab_base }}/sugarizer-server' }
 
@@ -223,10 +223,27 @@
 
 - name: Create symlink sugarizer.conf from sites-enabled to sites-available, for short URLs http://box/sugar & http://box/sugarizer (if sugarizer_enabled)
   file:
-    path: /etc/nginx/conf.d/sugarizer-nginx.conf
-    state: absent
-  when: not sugarizer_enabled and is_debuntu
+    src: /etc/apache2/sites-available/sugarizer.conf
+    path: /etc/apache2/sites-enabled/sugarizer.conf
+    state: link
+  when: sugarizer_enabled | bool and not nginx_enabled | bool
 
+- name: Remove symlink /etc/apache2/sites-enabled/sugarizer.conf (if not sugarizer_enabled)
+  file:
+    path: /etc/apache2/sites-enabled/sugarizer.conf
+    state: absent
+  when: not sugarizer_enabled | bool  or nginx_enabled | bool
+
+- name: "Install sugarizer-nginx.conf (nginx)"
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    mode: "{{ item.mode }}"
+    owner: root
+    group: root
+  with_items:
+    - { src: 'sugarizer-nginx.conf', dest: '/etc/nginx/conf.d/sugarizer-nginx.conf' , mode: '0644' }
+  when: nginx_enabled | bool
 
 # 6. RESTART/STOP SYSTEMD SERVICE
 
@@ -251,7 +268,7 @@
   systemd:
     name: "{{ apache_service }}"    # httpd or apache2
     state: restarted
-  #when: sugarizer_enabled | bool
+  when: sugarizer_enabled | bool and not nginx_enabled | bool
 
 #- name: Enable services (all OS's)
 #  service:
@@ -271,9 +288,10 @@
 #  when: not sugarizer_enabled
 
 - name: Restart nginx when enabled
-  service:
+  systemd:
     name: nginx
     state: restarted
+    daemon_reload: yes
   when: sugarizer_enabled and nginx_enabled
 
 - name: Add 'sugarizer' variable values to {{ iiab_ini_file }}
