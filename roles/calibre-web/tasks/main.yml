@@ -71,7 +71,7 @@
     mode: 0644
   with_items:
     - { src: 'calibre-web.service.j2', dest: '/etc/systemd/system/calibre-web.service' }
-    - { src: 'calibre-web-nginx.conf.j2', dest: '/etc/nginx/conf.d/calibre-web-nginx.conf' }
+    - { src: 'calibre-web.conf.j2', dest: '/etc/apache2/sites-available/calibre-web.conf' }
 
 - name: Does /library/calibre-web/metadata.db exist?
   stat:
@@ -111,17 +111,11 @@
     state: restarted
   when: calibreweb_enabled | bool
 
-- name: Restart nginx systemd service
-  systemd:
-    name: nginx
-    state: restarted
-  when: calibreweb_enabled | bool
-
 # Default: http://box/books
 # SEE ALSO: https://github.com/janeczku/calibre-web/wiki/Setup-Reverse-Proxy
-#- name: Enable http://box{{ calibreweb_url1 }}, http://box{{ calibreweb_url2 }}, http://box{{ calibreweb_url3 }} with Apache
-#  command: a2ensite calibre-web.conf
-#  when: calibreweb_enabled | bool
+- name: Enable http://box{{ calibreweb_url1 }}, http://box{{ calibreweb_url2 }}, http://box{{ calibreweb_url3 }} with Apache
+  command: a2ensite calibre-web.conf
+  when: calibreweb_enabled | bool and not nginx_enabled | bool
 
 #- name: Restart Apache after enabling calibre-web httpd2 site
 #  command: apachectl -k graceful
@@ -136,17 +130,35 @@
   when: not calibreweb_enabled | bool
 
 - name: Disable http://box{{ calibreweb_url1 }}, http://box{{ calibreweb_url2 }}, http://box{{ calibreweb_url3 }} with Apache
-  command: rm /etc/nginx/conf.d/calibre-web-nginx.conf
-  when: not calibreweb_enabled
+  command: a2dissite calibre-web.conf
+  when: not calibreweb_enabled or nginx_enabled | bool
 
 #- name: Restart Apache after disabling calibre-web httpd2 site
 #  command: apachectl -k graceful
 #  when: not calibreweb_enabled
 
+- name: Install /etc/nginx/conf.d/calibre-web-nginx.conf
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    mode: "{{ item.mode }}"
+    owner: root
+    group: root
+  with_items:
+    - { src: 'calibre-web-nginx.conf.j2', dest: '/etc/nginx/conf.d/calibre-web-nginx.conf', mode: '0644' }
+  when: calibreweb_enabled | bool and nginx_enabled | bool
+
+- name: Restart nginx systemd service
+  systemd:
+    name: nginx
+    state: restarted
+  when: calibreweb_enabled | bool and nginx_enabled | bool
+
 - name: Restart Apache systemd service ({{ apache_service }})
   systemd:
     name: "{{ apache_service }}"    # httpd or apache2
     state: restarted
+  when: not nginx_enabled | bool
 
 - name: Add 'calibre-web' variable values to {{ iiab_ini_file }}
   ini_file:
