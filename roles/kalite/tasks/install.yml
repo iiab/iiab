@@ -1,16 +1,14 @@
-# This is for an OS other than Fedora 18
+# For OS's other than Fedora 18
 
-- name: Install missing packages required for KA Lite startup
+- name: Install package python-virtualenv required for KA Lite startup
   package:
-    name: "{{ item }}"
+    name: python-virtualenv
     state: present
-  with_items:
-    - python-virtualenv
 
-- name: Download KA Lite's requirements file
+- name: Download {{ kalite_requirements }} to {{ pip_packages_dir }}/kalite.txt
   get_url:
     url: "{{ kalite_requirements }}"
-    dest: "{{ pip_packages_dir }}/kalite.txt"
+    dest: "{{ pip_packages_dir }}/kalite.txt"    # /opt/iiab/pip-packages/kalite.txt
     timeout: "{{ download_timeout }}"
   when: internet_available | bool
 
@@ -22,7 +20,7 @@
 #       extra_args="--disable-pip-version-check"
 #  when: internet_available and is_debuntu
 
-- name: Install KA Lite static with pip (debuntu)
+- name: Install KA Lite static to {{ kalite_venv }}, using pip (debuntu)
   pip:
     name: ka-lite-static
     version: "{{ kalite_version }}"
@@ -40,7 +38,7 @@
 #       extra_args="--disable-pip-version-check"
 #  when: internet_available and not is_debuntu
 
-- name: Install KA Lite static with pip (OS's other than debuntu)
+- name: Install KA Lite static to {{ kalite_venv }}, using pip (OS's other than debuntu)
   pip:
     name: ka-lite-static
     version: "{{ kalite_version }}"
@@ -57,6 +55,7 @@
 - name: Remove libgeos-* pkgs, avoiding KA Lite Django failure on Ubermix
   shell: apt -y remove "libgeos-*"
 
+# 2019-10-20: For Fedora 18 legacy (XO laptops) specially
 - name: Default is to have cronserve started with KA Lite
   set_fact:
     job_scheduler_stanza: ""
@@ -66,7 +65,7 @@
     job_scheduler_stanza: "--skip-job-scheduler "
   when: not kalite_cron_enabled
 
-- name: Create 'kalite-serve' service, kalite.sh and kalite.conf
+- name: "Install from template: venv wrapper /usr/bin/kalite, systemd unit file kalite-serve.service, Apache's kalite.conf"
   template:
     backup: no
     src: "{{ item.src }}"
@@ -75,8 +74,8 @@
     group: root
     mode: "{{ item.mode }}"
   with_items:
-    - { src: 'kalite-serve.service.j2', dest: '/etc/systemd/system/kalite-serve.service', mode: '0644'}
     - { src: 'kalite.sh.j2', dest: '/usr/bin/kalite', mode: '0755'}
+    - { src: 'kalite-serve.service.j2', dest: '/etc/systemd/system/kalite-serve.service', mode: '0644'}
     - { src: 'kalite.conf', dest: '/etc/{{ apache_config_dir }}', mode: '0644'}
 
 - name: Fix KA Lite bug in regex parsing ifconfig output, for @m-anish's network names that contain dashes
