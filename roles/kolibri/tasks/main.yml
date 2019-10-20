@@ -71,7 +71,6 @@
     enabled: yes
     state: stopped
 
-
 # 2019-10-01: Should no longer be nec, thanks to /etc/kolibri/daemon.conf
 #             containing KOLIBRI_HOME="/library/kolibri" (above)
 #- name: Run Kolibri migrations to begin populating {{ kolibri_home }}    # i.e. /library/kolibri
@@ -118,7 +117,7 @@
 #  apache2_module:
 #    name: proxy_http
 
-- name: Start 'kolibri' systemd service, if kolibri_enabled
+- name: Supply /etc/nginx/conf.d/kolibri-nginx.conf when nginx_enabled
   template:
     src: "{{ item.src }}"
     dest: "{{ item.dest }}"
@@ -126,9 +125,8 @@
     owner: root
     group: root
   with_items:
-    - { src: 'kolibri.service.j2', dest: '/etc/systemd/system/kolibri.service', mode: '0644' }
-    - { src: 'kolibri.conf.j2', dest: '/etc/apache2/sites-available/kolibri.conf', mode: '0644' }
     - { src: 'kolibri-nginx.conf.j2', dest: '/etc/nginx/conf.d/kolibri-nginx.conf', mode: '0644' }
+  when: kolibri_enabled | bool and nginx_enabled | bool
 
 - name: Enable & (Re)Start kolibri service
   systemd:
@@ -138,7 +136,7 @@
 
 - name: Enable http://box{{ kolibri_url }} with Apache (a2ensite) if kolibri_enabled    # i.e. http://box/kolibri
   command: a2ensite kolibri.conf
-  when: kolibri_enabled | bool
+  when: kolibri_enabled | bool and not nginx_enabled | bool
 
 - name: Disable & Stop 'kolibri' systemd service if not kolibri_enabled
   systemd:
@@ -149,12 +147,19 @@
 
 - name: Disable http://box{{ kolibri_url }} with Apache (a2dissite) if not kolibri_enabled
   command: a2dissite kolibri.conf
-  when: not kolibri_enabled
+  when: not kolibri_enabled or nginx_enabled | bool
 
 - name: Restart Apache service ({{ apache_service }})    # e.g. apache2
   systemd:
     name: "{{ apache_service }}"
     state: restarted
+  when: not nginx_enabled | bool
+
+- name: Restart nginx service
+  systemd:
+    name: nginx
+    state: restarted
+  when: nginx_enabled | bool
 
 - name: Add 'kolibri' variable values to {{ iiab_ini_file }}    # /etc/iiab/iiab.ini
   ini_file:
@@ -171,7 +176,7 @@
       value: "{{ kolibri_url }}"
     - option: kolibri_exec_path
       value: "{{ kolibri_exec_path }}"
-    - option: kolibri_port
+    - option: kolibri_http_port
       value: "{{ kolibri_http_port }}"
     - option: kolibri_enabled
       value: "{{ kolibri_enabled }}"
