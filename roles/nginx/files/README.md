@@ -5,18 +5,20 @@
     1. Principal functions migrated to nginx.
          * Admin Console
          * Awstats
-         * kiwix -- goes directly to port 3000
          * kalite -- goes directly to port 8009
-         * calibre-web
-         * kolibri
          * usb-lib
          * maps
-    2. Still proxied to Apache
+    2. Dual support
+         * kiwix -- goes directly to port 3000
+         * calibre-web
+         * kolibri
+         * sugarizer
+    3. Still proxied to Apache
          * mediawiki
          * elgg
          * nodered
          * nextcloud
          * wordpress
          * moodle
-    3. Not dealt with yet
+    4. Not dealt with yet
          * archive.org
