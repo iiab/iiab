@@ -55,21 +55,37 @@
     enabled: True
   when: admin_console_enabled | bool and nginx_enabled | bool
 
-- name: Disable apache port  {{ apache_port }} localhost only
-  file:
-    path: /etc/{{ apache_service }}/ports.conf
-    state: absent
-  when: not nginx_enabled | bool
-
 # the below slides in nginx's proxypass config files for apache on localhost
 # via the ports.conf file installed above
 - name: Install proxpass to apache running on localhost port {{ apache_port }}
   include_tasks: uses_apache.yml
+  when: nginx_enabled | bool
 
 # the below task contains the same logic contained in the playbooks to enable
-# 'runrole nginx' to do the right thing.
-- name: Install proxpass to apache running on localhost
+# 'runrole nginx' to do the right thing but with the 'src' path set to role's
+# templates path ie roles/<rolename>/template/
+
+- name: Install proxpass to other services 'dual mode' roles
   include_tasks: only_nginx.yml
+  when: nginx_enabled | bool
+
+- name: Stop and disable nginx when not nginx_enabled
+  systemd:
+    name: nginx
+    state: stopped
+    enabled: false
+  when: not nginx_enabled | bool
+
+- name: Disable apache port  {{ apache_port }} localhost only
+  template:
+    dest: /etc/{{ apache_service }}/ports.conf
+    src: stock-apache-ports.conf
+  when: not nginx_enabled | bool
+
+# should have the logic to handle both modes in the playbook
+- name: Rerun 'dual mode' roles by calling role's main.yml file when ngix is disabled
+  include_tasks: disable.yml
+  when: not nginx_enabled | bool
 
 - name: Since we stopped apache2, start it again
   systemd:
