@@ -10,7 +10,7 @@
 # SEE ALSO: https://github.com/janeczku/calibre-web/wiki/Setup-Reverse-Proxy
 - name: Enable http://box{{ calibreweb_url1 }}, http://box{{ calibreweb_url2 }}, http://box{{ calibreweb_url3 }} with Apache
   command: a2ensite calibre-web.conf
-  when: calibreweb_enabled | bool
+  when: not calibreweb_enabled and not nginx_enabled | bool
 
 #- name: Restart Apache after enabling calibre-web httpd2 site
 #  command: apachectl -k graceful
@@ -26,16 +26,40 @@
 
 - name: Disable http://box{{ calibreweb_url1 }}, http://box{{ calibreweb_url2 }}, http://box{{ calibreweb_url3 }} with Apache
   command: a2dissite calibre-web.conf
-  when: not calibreweb_enabled
+  when: not calibreweb_enabled or nginx_enabled | bool
+
+- name: Install /etc/nginx/conf.d/calibre-web-nginx.conf for nginx
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    mode: "{{ item.dest }}"
+    owner: root
+    group: root
+  with_items:
+    - { src: 'calibre-web-nginx.conf.j2', dest: '/etc/nginx/conf.d/calibre-web-nginx.conf', mode: '0644' }
+  when: calibreweb_enabled | bool and nginx_enabled | bool
+
+- name: Remove nginx support for calibre-web when not calibre_enabled
+  file:
+    path: /etc/nginx/conf.d/calibre-web-nginx.conf
+    state: absent
+  when: not calibreweb_enabled | bool
 
 #- name: Restart Apache after disabling calibre-web httpd2 site
 #  command: apachectl -k graceful
 #  when: not calibreweb_enabled
 
+- name: Restart nginx systemd service
+  systemd:
+    name: nginx
+    state: restarted
+  when: calibreweb_enabled | bool and nginx_enabled | bool
+
 - name: Restart Apache systemd service ({{ apache_service }})
   systemd:
     name: "{{ apache_service }}"    # httpd or apache2
     state: restarted
+  when: calibreweb_enabled | bool and not nginx_enabled | bool
 
 - name: Add 'calibre-web' variable values to {{ iiab_ini_file }}
   ini_file:

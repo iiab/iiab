@@ -3,13 +3,30 @@
     src: /etc/apache2/sites-available/sugarizer.conf
     path: /etc/apache2/sites-enabled/sugarizer.conf
     state: link
-  when: sugarizer_enabled and is_debuntu
+  when: sugarizer_enabled | bool and not nginx_enabled | bool
 
 - name: Remove symlink /etc/apache2/sites-enabled/sugarizer.conf (if not sugarizer_enabled)
   file:
     path: /etc/apache2/sites-enabled/sugarizer.conf
     state: absent
-  when: not sugarizer_enabled and is_debuntu
+  when: not sugarizer_enabled | bool  or nginx_enabled | bool
+
+- name: "Install sugarizer-nginx.conf (nginx)"
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    mode: "{{ item.mode }}"
+    owner: root
+    group: root
+  with_items:
+    - { src: 'sugarizer-nginx.conf', dest: '/etc/nginx/conf.d/sugarizer-nginx.conf' , mode '0644' }
+  when: nginx_enabled | bool
+
+- name: Remove nginx support for sugarizer
+  file:
+    path: /etc/nginx/conf.d/sugarizer-nginx.conf
+    state: absent
+  when: not sugarizer_enabled | bool
 
 # 6. RESTART/STOP SYSTEMD SERVICE
 
@@ -34,7 +51,14 @@
   systemd:
     name: "{{ apache_service }}"    # httpd or apache2
     state: restarted
-  #when: sugarizer_enabled | bool
+  when: sugarizer_enabled | bool and not nginx_enabled | bool
+
+- name: Restart nginx when enabled
+  systemd:
+    name: nginx
+    state: restarted
+    daemon_reload: yes
+  when: sugarizer_enabled and nginx_enabled
 
 #- name: Enable services (all OS's)
 #  service:
