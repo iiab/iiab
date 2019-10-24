@@ -1,12 +1,12 @@
 #!/bin/bash -e
 
 CURR_VER="undefined"    # Ansible version you currently have installed
-GOOD_VER="2.7.13"    # For XO laptops (pip install) & CentOS (yum install rpm)
+GOOD_VER="2.9.0"    # For XO laptops (pip install) & CentOS (yum install rpm)
 # On other OS's we attempt the latest from PPA, which might be more recent
 
 export DEBIAN_FRONTEND=noninteractive
 
-echo -e "\n\nYOU ARE RUNNING: /opt/iiab/iiab/scripts/ansible-2.7.x (TO INSTALL ANSIBLE)"
+echo -e "\n\nYOU ARE RUNNING: /opt/iiab/iiab/scripts/ansible-2.9.x (TO INSTALL ANSIBLE)"
 echo -e 'Alternative:     /opt/iiab/iiab/scripts/ansible ("for the very latest Ansible")\n'
 
 echo -e "RECOMMENDED PREREQUISITES:"
@@ -68,7 +68,7 @@ elif [ -f /etc/debian_version ]; then    # Includes Debian, Ubuntu & Raspbian
     echo -e "\napt update; install dirmngr; PPA to /etc/apt/sources.list.d/iiab-ansible.list\n"
     apt update
     apt -y install dirmngr    # Raspbian needs.  Formerly: python-pip python-setuptools python-wheel patch
-    echo "deb http://ppa.launchpad.net/ansible/ansible-2.7/ubuntu xenial main" \
+    echo "deb http://ppa.launchpad.net/ansible/ansible-2.9/ubuntu bionic main" \
          > /etc/apt/sources.list.d/iiab-ansible.list
 
     echo -e '\nIF YOU FACE ERROR "signatures couldn'"'"'t be verified because the public key is not available" THEN REPEATEDLY RE-RUN "sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 93C4A3FD7BB9C367"\n'
@@ -88,7 +88,7 @@ elif [ -f /etc/debian_version ]; then    # Includes Debian, Ubuntu & Raspbian
     #wget http://download.iiab.io/packages/ansible_2.4.2.0-1ppa~xenial_all.deb
     #apt -y --allow-downgrades install ./ansible_2.4.2.0-1ppa~xenial_all.deb
 
-    echo -e 'PPA source "deb http://ppa.launchpad.net/ansible/ansible-2.7/ubuntu xenial main"'
+    echo -e 'PPA source "deb http://ppa.launchpad.net/ansible/ansible-2.9/ubuntu bionic main"'
     echo -e "successfully saved to /etc/apt/sources.list.d/iiab-ansible.list\n"
     
     echo -e "IF *OTHER* ANSIBLE SOURCES APPEAR BELOW, PLEASE MANUALLY REMOVE THEM TO"

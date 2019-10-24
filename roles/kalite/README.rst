@@ -22,7 +22,7 @@ After your Internet-in-a-Box (IIAB) is completely installed, log in to KA Lite t
 Bulk Downloading Videos
 -----------------------
 
-Videos and their corresponding PNG thumbnail images can be copied into /library/ka-lite/content and will be recognized the next time KA Lite is started.
+Videos and their corresponding PNG thumbnail images can be copied into /library/ka-lite/content — then log in to http://box.lan:8008 and click the "Videos" tab -> "Scan content folder for videos" (which might take a few minutes to complete!)
 
 Please see http://FAQ.IIAB.IO ("KA Lite Administration: What tips & tricks exist?") to use BitTorrent to download compressed KA Lite videos, that are much smaller than the ones downloaded via KA Lite's administrative interface.
 
@@ -36,7 +36,7 @@ Look at `role/kalite/defaults/main.yml <https://github.com/iiab/iiab/blob/master
 Troubleshooting
 ---------------
 
-Starting with KA Lite 0.15 (October 2015) you can run the server manually with the following commands:
+Starting with KA Lite 0.15 (October 2015) you could run the server manually with the following commands:
 
 * systemctl stop kalite-serve (make sure the systemd service is not running)
 * export KALITE_HOME=/library/ka-lite (point kalite to the right environment)
