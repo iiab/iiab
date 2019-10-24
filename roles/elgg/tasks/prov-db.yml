@@ -1,0 +1,36 @@
+- name: Create Elgg's MySQL database {{ dbname }}, to be populated below - can be run more than once
+  mysql_db:
+    name: "{{ dbname }}"
+  register: create_elgg_database
+
+- name: Create user/password to access Elgg database - can be run more than once
+  mysql_user:
+    name: "{{ dbuser }}"
+    host: "{{ item }}"
+    password: "{{ dbpassword }}"
+    priv: "{{ dbname }}.*:ALL"
+  with_items:
+    - 127.0.0.1
+    - ::1
+    - localhost
+
+- name: Create /tmp/elggdb.sql from template, to load database
+  template:
+    src: "elggdb.sql.j2"
+    dest: "/tmp/elggdb.sql"
+
+# elggdb.sql obtained with mysqldump --skip-add-drop-table elggdb > elggdb.sql
+# tar up a mysqldump of freshly installed database and use it in the install to avoid the startup
+# form, which worries me a lot. (/var/lib/mysql/elggdb)
+
+- name: Populate Elgg's MySQL database {{ dbname }}, from /tmp/elggdb.sql
+  mysql_db:
+    name: "{{ dbname }}"
+    state: import
+    target: /tmp/elggdb.sql
+  when: create_elgg_database.changed
+
+- name: Remove database dump /tmp/elggdb.sql
+  file:
+    name: /tmp/elggdb.sql
+    state: absent
