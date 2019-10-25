@@ -3,9 +3,9 @@
 # Add cmdline options for passing to ansible
 # Todo add proper shift to gobble up --debug --reinstall
 
-PLAYBOOK="iiab-stages.yml"
-INVENTORY="ansible_hosts"
-APPS=/etc/iiab/iiab_state.yml
+PLAYBOOK=iiab-stages.yml
+INVENTORY=ansible_hosts
+IIAB_STATE_FILE=/etc/iiab/iiab_state.yml
 ARGS=""
 CWD=`pwd`
 OS=`grep ^ID= /etc/*release|cut -d= -f2`
@@ -31,7 +31,7 @@ if [ ! -f /etc/iiab/local_vars.yml ]; then
     echo -e "(2) MIN/MEDIUM/BIG samples are included in /opt/iiab/iiab/vars" >&2
     echo -e "(3) NO TIME FOR DETAILS?  RUN INTERNET-IN-A-BOX'S FRIENDLY 1-LINE INSTALLER:\n" >&2
 
-    echo -e '    http://download.iiab.io   (click on "6.7" or a more recent version!)\n' >&2
+    echo -e '    http://download.iiab.io   (click on "7.0" or a more recent version!)\n' >&2
 
     exit 1
 fi
@@ -54,10 +54,11 @@ fi
 
 if [ "$1" != "--debug" ] && [ "$1" != "--reinstall" ] && [ "$1" != "" ]; then
     echo "Use './iiab-install' for regular installs, or to continue an install."
-    echo "Use './iiab-install --reinstall' to force running all Stages 0-9."
-    echo "Use './iiab-install --debug' to run Stage 0, followed by Stages 3-9."
-    echo "Use './runrole' to run a single Stage or Role."
-    echo "Use './iiab-network' to run Network sections."
+    echo "Use './iiab-install --reinstall' to force running all Stages 0-9, followed by the Network Role."
+    echo "Use './iiab-install --debug' to run Stage 0, followed by Stages 3-9, followed by the Network Role."
+    echo "Use './iiab-configure' to run Stage 0, followed by Stages 4-9."
+    echo "Use './runrole' to run Stage 0, followed by a single Stage or Role."
+    echo "Use './iiab-network' to run Stage 0, followed by the Network Role."
     exit 1
 fi
 
@@ -109,21 +110,17 @@ STAGE=0
 if [ -f /etc/iiab/iiab.env ]; then
     if grep -q STAGE= /etc/iiab/iiab.env ; then
         source /etc/iiab/iiab.env
-        echo "Extracted STAGE="$STAGE" (counter) from /etc/iiab/iiab.env"
+        echo "Extracted STAGE=$STAGE (counter) from /etc/iiab/iiab.env"
         if ! [ "$STAGE" -eq "$STAGE" ] 2> /dev/null; then
-            echo -e "\nEXITING: STAGE (counter) value == "$STAGE" is non-integer in /etc/iiab/iiab.env"
+            echo -e "\nEXITING: STAGE (counter) value == $STAGE is non-integer in /etc/iiab/iiab.env"
             exit 1
         elif [ "$STAGE" -lt 0 ] || [ "$STAGE" -gt 9 ]; then
-            echo -e "\nEXITING: STAGE (counter) value == "$STAGE" is out-of-range in /etc/iiab/iiab.env"
+            echo -e "\nEXITING: STAGE (counter) value == $STAGE is out-of-range in /etc/iiab/iiab.env"
             exit 1
         fi
     fi
-# if XSCE is present resolveconf will not be
-    if grep -q XSCE /etc/iiab/iiab.env ; then
-        STAGE=0
-        rm /etc/iiab/iiab.env
-        echo "Removed /etc/iiab/iiab.env effectively resetting STAGE (counter)."
-    elif [ "$1" == "--reinstall" ]; then
+
+    if [ "$1" == "--reinstall" ]; then
         STAGE=0
         ARGS="$ARGS --extra-vars reinstall=True"
         sed -i 's/^STAGE=.*/STAGE=0/' /etc/iiab/iiab.env
@@ -134,40 +131,42 @@ if [ -f /etc/iiab/iiab.env ]; then
         echo "Wrote STAGE=2 (counter) to /etc/iiab/iiab.env"
     elif [ "$STAGE" -eq 9 ]; then
         echo -e "\nEXITING: STAGE (counter) in /etc/iiab/iiab.env shows Stage 9 Is Already Done."
-        echo -e "Use './iiab-install --reinstall' to force running all Stages 0-9."
-        echo -e "Use './iiab-install --debug' to run Stage 0, followed by Stages 3-9."
-        echo -e "Use './runrole' to run a single Stage or Role."
-        echo -e "Use './iiab-network' to run Network sections.\n\n"
-        echo -e "Use './iiab-configure' to turn installed service on|off via local_vars.yml.\n\n"
-        exit 0    # allows rerunning http://download.iiab.io/6.7/install.txt
+        echo -e "Use './iiab-install --reinstall' to force running all Stages 0-9, followed by the Network Role."
+        echo -e "Use './iiab-install --debug' to run Stage 0, followed by Stages 3-9, followed by the Network Role."
+        echo -e "Use './iiab-configure' to run Stage 0, followed by Stages 4-9."
+        echo -e "Use './runrole' to run Stage 0, followed by a single Stage or Role."
+        echo -e "Use './iiab-network' to run Stage 0, followed by the Network Role.\n\n"
+
+        exit 0    # Allows rerunning http://download.iiab.io/install.txt
     fi
 fi
 if [ "$STAGE" -lt 2 ] && [ "$1" == "--debug" ]; then
     echo -e "\n'--debug' *ignored* as STAGE (counter) < 2."
 fi
 
-# to catch up images to current code to benefit from pre-installed apps
+# TEMPORARY: Catch images up to current code to benefit from pre-installed apps
 if [ -f /etc/iiab/config_vars2.yml ]; then
-    mv /etc/iiab/config_vars2.yml $APPS
+    mv /etc/iiab/config_vars2.yml $IIAB_STATE_FILE
 fi
 
-if [ -f $APPS ]; then
-    if grep -q sugar $APPS; then
-        if ! grep -q mongodb $APPS; then
-            echo "mongodb_installed: True" >> $APPS
+# Assumes /etc/iiab/iiab_state.yml is not created until (prior run of) Stage 4.
+if [ -f $IIAB_STATE_FILE ]; then
+    if grep -q sugar $IIAB_STATE_FILE; && ! grep -q mongodb $IIAB_STATE_FILE; then
+        echo "mongodb_installed: True" >> $IIAB_STATE_FILE
     fi
 
     if [ "$STAGE" -eq 2 ]; then
-        echo -e "\n completing stage 3 from iiab image"
+        echo -e "\nCompleting Stage 3 from IIAB image (starts systemd service iiab-setup-db to run the 'mysql' role)."
         systemctl start iiab-setup-db
     fi
-    PLAYBOOK="iiab-from-console.yml"
-    ARGS=""
+
+    PLAYBOOK="iiab-from-console.yml"    # Stage 4-9 then Network Role
+    ARGS=""    # Removes '--extra-vars reinstall=True' if --reinstall, BUT WHY?
 fi
 
 echo -e "\nTRY TO RERUN './iiab-install' IF IT FAILS DUE TO CONNECTIVITY ISSUES ETC!\n"
 
-echo -e "Running local playbooks....Stage 0 will now run....followed by Stages $(($STAGE + 1))-9"
+echo -e "Running local Ansible playbooks...\n...Stage 0 will now run\n...followed by Stages $(($STAGE + 1))-9\n...and then the Network Role.\n"
 
 export ANSIBLE_LOG_PATH="$CWD/iiab-install.log"
 
