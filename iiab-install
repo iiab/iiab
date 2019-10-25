@@ -145,16 +145,20 @@ if [ "$STAGE" -lt 2 ] && [ "$1" == "--debug" ]; then
 fi
 
 # TEMPORARY: Catch images up to current code to benefit from pre-installed apps
+# Workaround for (web-published) images; will go away later
+# Assumes /etc/iiab/iiab_state.yml is not created until (prior run of) Stage 4 but
+# config_vars2.yml is present with the stage counter altered by pi-gen to be 2.
 if [ -f /etc/iiab/config_vars2.yml ]; then
     mv /etc/iiab/config_vars2.yml $IIAB_STATE_FILE
-fi
 
-# Assumes /etc/iiab/iiab_state.yml is not created until (prior run of) Stage 4.
-if [ -f $IIAB_STATE_FILE ]; then
-    # Workaround for (web-published) images; will go away later
+# Fix up prior values in state file
+# mongo role improved post image creation
     if grep -q sugar $IIAB_STATE_FILE; && ! grep -q mongodb $IIAB_STATE_FILE; then
         echo "mongodb_installed: True" >> $IIAB_STATE_FILE
     fi
+
+# another change to accout for
+    sed -i -e 's/pan_bluetooth/bluetooth/' $IIAB_STATE_FILE
 
     if [ "$STAGE" -eq 2 ]; then
         echo -e "\nCompleting Stage 3 from IIAB image (starts systemd service iiab-setup-db to run the 'mysql' role)."
@@ -163,6 +167,11 @@ if [ -f $IIAB_STATE_FILE ]; then
 
     PLAYBOOK="iiab-from-console.yml"    # Stage 4-9 then Network Role
     ARGS=""    # Removes '--extra-vars reinstall=True' if --reinstall, BUT WHY?
+# the same as --reinstall execpt stage 3 is not run as there are no other functional
+# changes in stage 3 to account for post image creation once the above is run.
+# reinstall=True would force kiwix to re-download and re-install in commit
+# ce2ec3b0cad76449caf3299003b5d297a3164181
+## End image catch up
 fi
 
 echo -e "\nTRY TO RERUN './iiab-install' IF IT FAILS DUE TO CONNECTIVITY ISSUES ETC!\n"
