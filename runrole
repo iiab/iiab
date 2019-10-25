@@ -1,12 +1,12 @@
 #!/bin/bash
 
-INVENTORY="ansible_hosts"
-PLAYBOOK="run-one-role.yml"
+INVENTORY=ansible_hosts
+PLAYBOOK=run-one-role.yml
 ARGS=""
 REINSTALL=0
 CWD=`pwd`
-APPS=/etc/iiab/iiab_state.yml
-VARS=/etc/iiab/local_vars.yml
+IIAB_STATE_FILE=/etc/iiab/iiab_state.yml
+LOCAL_VARS_FILE=/etc/iiab/local_vars.yml
 
 if [ ! -f $PLAYBOOK ]; then
     echo "Exiting: IIAB Playbook not found."
@@ -15,25 +15,30 @@ if [ ! -f $PLAYBOOK ]; then
 fi
 
 if [[ $# -eq 0 ]] ; then
-    echo " usage: ./runrole <name of role>"
-    echo " usage: ./runrole --reinstall <name of role>"
-    echo " Last variable would be full path to log file."
-    echo " If ommited current directory is used."
+    echo "Usage: ./runrole <name of role>"
+    echo "Usage: ./runrole --reinstall <name of role>"
+    echo
+    echo "Optional 2nd parameter is full PATH/FILENAME for logging."
+    echo "If omitted, <current directory>/iiab-debug.log is used."
     exit 0
+fi
+
+if ! grep -q "^""$1""_install: True" $LOCAL_VARS_FILE; then
+    echo "ERROR: $LOCAL_VARS_FILE must contain '""$1""_install: True'"
+    exit 1
 fi
 
 clear_marker(){
     if [ ! $1 == "internetarchive" ]; then # special handling
         if [ $1 == "calibre-web" ]; then # role directory & installed marker differ
-            sed -i -e '/^calibreweb/d' $APPS
-
+            sed -i -e '/^calibreweb/d' $IIAB_STATE_FILE
         elif [ $1 == "captive-portal" ]; then # role directory & installed marker differ
-            sed -i -e '/^captiveportal/d' $APPS
-
-        elif [ $1 == "bluetooth" ]; then # role directory & installed marker differ
-            sed -i -e '/^pan_bluetooth/d' $APPS
-        fi
-        sed -i -e "/^$1/d" $APPS
+            sed -i -e '/^captiveportal/d' $IIAB_STATE_FILE
+        #elif [ $1 == "bluetooth" ]; then # role directory & installed marker differ
+        #    sed -i -e '/^pan_bluetooth/d' $IIAB_STATE_FILE
+        else
+            sed -i -e "/^$1/d" $IIAB_STATE_FILE
+	fi
     fi
 }
 
