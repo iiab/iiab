@@ -79,6 +79,7 @@ elif [ -f /etc/debian_version ]; then    # Includes Debian, Ubuntu & Raspbian
     apt update
     apt -y --allow-downgrades install ansible python3-pymysql python3-psycopg2 \
         python3-passlib python3-pip python3-setuptools virtualenv
+
     echo -e "\nSUCCESS: verify Ansible using 'ansible --version' and/or 'apt -a list ansible'\n\n"
 
     # TEMPORARILY USE ANSIBLE 2.4.4 (REMOVE IT WITH "pip uninstall ansible")
