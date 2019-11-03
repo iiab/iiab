@@ -1,3 +1,5 @@
+Please read "What is Ansible and what version should I use?" at [http://FAQ.IIAB.IO](http://FAQ.IIAB.IO)
+
 Starting in November 2019, IIAB's Ansible installer ([/opt/iiab/iiab/scripts/ansible](https://github.com/iiab/iiab/blob/master/scripts/ansible)) began installing these python3-* apt packages, in support of the following Ansible modules:
 
 1. Ansible module: [pip](https://docs.ansible.com/ansible/latest/modules/pip_module.html)
@@ -12,14 +14,14 @@ Starting in November 2019, IIAB's Ansible installer ([/opt/iiab/iiab/scripts/ans
 2. Ansible modules: [mysql_db](https://docs.ansible.com/ansible/latest/modules/mysql_db_module.html) and [mysql_user](https://docs.ansible.com/ansible/latest/modules/mysql_user_module.html) (for [roles/mysql](https://github.com/iiab/iiab/tree/master/roles/mysql))
 
    IIAB installs apt package:
-   - **python3-pymysql** (see [iiab/iiab#1714](https://github.com/iiab/iiab/issues/1714) and [ansible/ansible#47736](https://github.com/ansible/ansible/issues/47736))
+   - **python3-pymysql** (see sudo's password-changing failure [iiab/iiab#1714](https://github.com/iiab/iiab/issues/1714) and [ansible/ansible#47736](https://github.com/ansible/ansible/issues/47736))
 
-4. Ansible modules: [postgresql_db](https://docs.ansible.com/ansible/latest/modules/postgresql_db_module.html) and [postgresql_dbuser](https://docs.ansible.com/ansible/latest/modules/postgresql_user_module.html)
+3. Ansible modules: [postgresql_db](https://docs.ansible.com/ansible/latest/modules/postgresql_db_module.html) and [postgresql_dbuser](https://docs.ansible.com/ansible/latest/modules/postgresql_user_module.html)
 
    IIAB installs apt package:
    - **python3-psycopg2** (does Moodle still need this now that Pathagar is on its way out?)
 
-5. Ansible module: [htpasswd](https://docs.ansible.com/ansible/latest/modules/htpasswd_module.html)
+4. Ansible module: [htpasswd](https://docs.ansible.com/ansible/latest/modules/htpasswd_module.html)
 
    IIAB installs apt package:
    - **python3-passlib** (for [roles/munin](https://github.com/iiab/iiab/tree/master/roles/munin))
