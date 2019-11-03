@@ -1,24 +1,26 @@
-In order to use optional modules that ansible is capable of the libraries
-need to be installed, we make use of the following ansible modules:
+Starting in November 2019, IIAB's Ansible installer ([/opt/iiab/iiab/scripts/ansible](https://github.com/iiab/iiab/blob/master/scripts/ansible)) began installing these python3-* apt packages, in support of the following Ansible modules:
 
-1. pip: we install python3-pip python3-setuptools virtualenv
-   as per https://docs.ansible.com/ansible/latest/modules/pip_module.html
-   virtualenv is python3 only and pulls in python3-distutils python3-virtualenv
-   `apt show virtualenv` Depends: python3, python3-virtualenv
-   `apt show python3-virtualenv` Depends: python-pip-whl (>= 8.1.1-2), python3, python3-distutils, python3-pkg-resources
+1. Ansible module: [pip](https://docs.ansible.com/ansible/latest/modules/pip_module.html)
 
-2. mysql_db: python3-pymysql
-   https://docs.ansible.com/ansible/latest/modules/mysql_db_module.html#mysql-db-module
+   IIAB installs apt packages:
+   - **python3-pip** (for IIAB's [Admin Console](https://github.com/iiab/iiab-admin-console))
+   - **python3-setuptools**
+   - **virtualenv** (is Python 3 only, for [roles/kalite](https://github.com/iiab/iiab/tree/master/roles/kalite) & [roles/calibre-web](https://github.com/iiab/iiab/tree/master/roles/calibre-web) ?) and pulls in additional packages... (`apt show virtualenv` shows "Depends: python3, python3-virtualenv")
+      - **python3-virtualenv** and pulls in additional package... (`apt show python3-virtualenv` shows "Depends: python-pip-whl (>= 8.1.1-2), python3, python3-distutils, python3-pkg-resources") 
+         - **python3-distutils**
 
-3. mysql_user: python3-pymysql
-   https://docs.ansible.com/ansible/latest/modules/mysql_user_module.html#mysql-user-module
-   https://github.com/ansible/ansible/issues/47736
+2. Ansible modules: [mysql_db](https://docs.ansible.com/ansible/latest/modules/mysql_db_module.html) and [mysql_user](https://docs.ansible.com/ansible/latest/modules/mysql_user_module.html) (for [roles/mysql](https://github.com/iiab/iiab/tree/master/roles/mysql))
 
-4. postgresql_db: python3-psycopg2
-   https://docs.ansible.com/ansible/latest/modules/postgresql_db_module.html#postgresql-db-module
+   IIAB installs apt packages:
+   - **python3-pymysql**
+   - **python3-pymysql** (see [iiab/iiab#1714](https://github.com/iiab/iiab/issues/1714) and [ansible/ansible#47736](https://github.com/ansible/ansible/issues/47736))
 
-5. postgresql_dbuser: python3-psycopg2
-   https://docs.ansible.com/ansible/latest/modules/postgresql_user_module.html#postgresql-user-module
+4. Ansible modules: [postgresql_db](https://docs.ansible.com/ansible/latest/modules/postgresql_db_module.html) and [postgresql_dbuser](https://docs.ansible.com/ansible/latest/modules/postgresql_user_module.html)
 
-6. htpasswd: python3-passlib
-   https://docs.ansible.com/ansible/latest/modules/htpasswd_module.html?highlight=htpasswd
+   IIAB installs apt package:
+   - **python3-psycopg2** (does Moodle still need this now that Pathagar is on its way out?)
+
+5. Ansible module: [htpasswd](https://docs.ansible.com/ansible/latest/modules/htpasswd_module.html)
+
+   IIAB installs apt package:
+   - **python3-passlib** (for [roles/munin](https://github.com/iiab/iiab/tree/master/roles/munin))
