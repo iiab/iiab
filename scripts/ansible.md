@@ -11,7 +11,7 @@ Starting in November 2019, IIAB's Ansible installer ([/opt/iiab/iiab/scripts/ans
 
 2. Ansible modules: [mysql_db](https://docs.ansible.com/ansible/latest/modules/mysql_db_module.html) and [mysql_user](https://docs.ansible.com/ansible/latest/modules/mysql_user_module.html) (for [roles/mysql](https://github.com/iiab/iiab/tree/master/roles/mysql))
 
-   IIAB installs apt packages:
+   IIAB installs apt package:
    - **python3-pymysql** (see [iiab/iiab#1714](https://github.com/iiab/iiab/issues/1714) and [ansible/ansible#47736](https://github.com/ansible/ansible/issues/47736))
 
 4. Ansible modules: [postgresql_db](https://docs.ansible.com/ansible/latest/modules/postgresql_db_module.html) and [postgresql_dbuser](https://docs.ansible.com/ansible/latest/modules/postgresql_user_module.html)
