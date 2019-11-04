@@ -21,7 +21,7 @@ Starting in November 2019, IIAB's Ansible installer ([/opt/iiab/iiab/scripts/ans
 3. Ansible modules: [postgresql_db](https://docs.ansible.com/ansible/latest/modules/postgresql_db_module.html) and [postgresql_dbuser](https://docs.ansible.com/ansible/latest/modules/postgresql_user_module.html)
 
    IIAB installs apt package:
-   - **python3-psycopg2** (does Moodle still need this now that Pathagar is on its way out?)
+   - **python3-psycopg2** (for [roles/moodle](https://github.com/iiab/iiab/tree/master/roles/moodle))
 
 4. Ansible module: [htpasswd](https://docs.ansible.com/ansible/latest/modules/htpasswd_module.html)
 
