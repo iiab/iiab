@@ -1,5 +1,7 @@
 Please read "What is Ansible and what version should I use?" at [http://FAQ.IIAB.IO](http://FAQ.IIAB.IO)
 
+Read https://github.com/iiab/iiab/wiki/IIAB-Contributors-Guide#ansible to learn more about how IIAB uses Ansible.
+
 Starting in November 2019, IIAB's Ansible installer ([/opt/iiab/iiab/scripts/ansible](https://github.com/iiab/iiab/blob/master/scripts/ansible)) began installing these python3-* apt packages, in support of the following Ansible modules:
 
 1. Ansible module: [pip](https://docs.ansible.com/ansible/latest/modules/pip_module.html)
