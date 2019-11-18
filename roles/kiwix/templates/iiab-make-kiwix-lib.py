@@ -153,7 +153,7 @@ def read_library_xml(lib_xml_file, kiwix_exclude_attr=[""]): # duplicated from i
             #xml_item_no += 1 # hopefully this is the array number
             attributes = {}
             if 'id' not in child.attrib: # is this necessary? implies there are records with no book id which would break index for removal
-                  print "xml record missing Book Id"
+                  print ("xml record missing Book Id")
             id = child.attrib['id']
             for attr in child.attrib:
                 if attr not in kiwix_exclude_attr:
@@ -172,7 +172,7 @@ def rem_libr_xml(id):
         outp = subprocess.check_output(args)
     except subprocess.CalledProcessError as e:
         if e.returncode != 2: # skip bogus file open error in kiwix-manage
-            print outp
+            print (outp)
 
 def add_libr_xml(kiwix_library_xml, zim_path, zimname, zimidx):
     command = kiwix_manage + " " + kiwix_library_xml + " add " + zim_path + "/" + zimname
@@ -242,7 +242,7 @@ def write_zim_versions_idx():
          fp.write(json.dumps(zim_versions,indent=2 ))
          fp.close()
    else:
-      print zim_version_idx_dir + " not found."
+      print (zim_version_idx_dir + " not found.")
 
 def get_substitution_data(perma_ref,zims_installed, path_to_id_map):
    #reconstruct the path in the id map
