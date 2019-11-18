@@ -1,4 +1,4 @@
-#!/opt/admin/venv27/bin/python2.7
+#!/opt/admin/cmdsrv/venv3/bin/python3
 
 """
 
