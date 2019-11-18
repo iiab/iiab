@@ -19,7 +19,8 @@ import yaml
 import re
 import subprocess
 import shlex
-import ConfigParser
+#import ConfigParser
+import configparser
 import xml.etree.ElementTree as ET
 import argparse
 import fnmatch
@@ -204,7 +205,8 @@ def init():
     global kiwix_library_xml
     global kiwix_manage
 
-    config = ConfigParser.SafeConfigParser()
+#    config = ConfigParser.SafeConfigParser()
+    config = configparser.ConfigParser()
     config.read(iiab_ini_file)
     iiab_base_path = config.get('location','iiab_base')
     zim_path = config.get('kiwix','iiab_zim_path')
