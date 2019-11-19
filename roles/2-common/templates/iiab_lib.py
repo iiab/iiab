@@ -146,7 +146,7 @@ def get_iiab_env(name):
     iiab_env = {}
     iiab_env_var = ''
     try:
-        fd = open("/etc/iiab/iiab.env","r")
+        fd = open(cons.iiab_env_file,"r")
         for line in fd:
             line = line.lstrip()
             line = line.rstrip('\n')
