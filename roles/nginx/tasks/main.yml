@@ -10,7 +10,7 @@
 # the above should be enough once uwsgi is started
 #    - { src: "uwsgi.unit",dest: "/etc/systemd/system/uwsgi.socket" }
     - { src: 'ports.conf' , dest: '/etc/{{ apache_service }}/' , mode: '0644' }
-  when: nginx_enabled | bool
+  when: nginx_enabled
 
 - name: Insure that apache2 is not running -- we may need port swap
   systemd:
@@ -24,20 +24,20 @@
 # Comment one or the other to revert from nginx back to apache2, if required
 #    src: admin-console-apache.conf
     dest: /etc/nginx/conf.d/admin-console.conf
-  when: admin_console_enabled | bool and nginx_enabled | bool
+  when: admin_console_enabled and nginx_enabled
 
 - name: Enable the uwsgi systemd service
   systemd:
     name: uwsgi
     state: started
     enabled: True
-  when: admin_console_enabled | bool and nginx_enabled | bool
+  when: admin_console_enabled and nginx_enabled
 
 # the below slides in nginx's proxypass config files for apache on localhost
 # via the ports.conf file installed above
 - name: Install proxpass to apache running on localhost port {{ apache_port }}
   include_tasks: uses_apache.yml
-  when: nginx_enabled | bool
+  when: nginx_enabled
 
 # the below task contains the same logic contained in the playbooks to enable
 # 'runrole nginx' to do the right thing but with the 'src' path set to role's
@@ -45,25 +45,25 @@
 
 - name: Install proxpass to other services 'dual mode' roles
   include_tasks: only_nginx.yml
-  when: nginx_enabled | bool
+  when: nginx_enabled
 
 - name: Stop and disable nginx when not nginx_enabled
   systemd:
     name: nginx
     state: stopped
     enabled: false
-  when: not nginx_enabled | bool
+  when: not nginx_enabled
 
 - name: Disable apache port  {{ apache_port }} localhost only
   template:
     dest: /etc/{{ apache_service }}/ports.conf
     src: stock-apache-ports.conf
-  when: not nginx_enabled | bool
+  when: not nginx_enabled
 
 # should have the logic to handle both modes in the playbook
-- name: Rerun 'dual mode' roles by calling role's main.yml file when ngix is disabled
+- name: Enable Apache (a2ensite) for 'dual mode' for the role when NGINX is diabled
   include_tasks: disable.yml
-  when: not nginx_enabled | bool
+  when: not nginx_enabled
 
 - name: Since we stopped apache2, start it again
   systemd:
@@ -71,7 +71,7 @@
     state: restarted
     enabled: true
     daemon_reload: yes
-  when: apache_enabled | bool
+  when: apache_enabled
 
 - name: Restart nginx to pick up the config files installed
   systemd:
@@ -79,4 +79,4 @@
     state: restarted
     enabled: true
     daemon_reload: yes
-  when: nginx_enabled | bool
+  when: nginx_enabled
