@@ -14,7 +14,7 @@ import shlex
 import configparser
 import xml.etree.ElementTree as ET
 import argparse
-import iiab.iiab_const as cons
+import iiab.iiab_const as CONST
 
 lang_codes = {}
 
@@ -39,8 +39,8 @@ def get_zim_list(path):
                 files_processed[zimname] = zimidx
                 zimname = content + filename + ".zim"
                 zimidx = index + filename + ".zim.idx"
-                if filename in cons.old_zim_map: # handle old names that don't parse
-                    perma_ref = cons.old_zim_map[filename]
+                if filename in CONST.old_zim_map: # handle old names that don't parse
+                    perma_ref = CONST.old_zim_map[filename]
                 else:
                     ulpos = filename.rfind("_")
                     # but old gutenberg and some other names are not canonical
@@ -78,7 +78,7 @@ def read_library_xml(lib_xml_file, kiwix_exclude_attr=[""]): # duplicated from i
     return zims_installed, path_to_id_map
 
 def rem_libr_xml(id):
-    command = cons.kiwix_manage + " " + kiwix_library_xml + " remove " + id
+    command = CONST.kiwix_manage + " " + kiwix_library_xml + " remove " + id
     #print command
     args = shlex.split(command)
     try:
@@ -88,7 +88,7 @@ def rem_libr_xml(id):
             print(outp)
 
 def add_libr_xml(kiwix_library_xml, zim_path, zimname, zimidx):
-    command = cons.kiwix_manage + " " + kiwix_library_xml + " add " + cons.zim_path + "/" + zimname
+    command = CONST.kiwix_manage + " " + kiwix_library_xml + " add " + CONST.zim_path + "/" + zimname
     if zimidx:
         command += " -i " + zim_path + "/" + zimidx
     #print command
@@ -102,7 +102,7 @@ def add_libr_xml(kiwix_library_xml, zim_path, zimname, zimidx):
 
 def read_lang_codes():
     global lang_codes
-    with open(cons.lang_codes_path,"r") as f:
+    with open(CONST.lang_codes_path,"r") as f:
         reads = f.read()
         #print("menu.json:%s"%reads)
         lang_codes = json.loads(reads)
@@ -146,7 +146,7 @@ def get_iiab_env(name):
     iiab_env = {}
     iiab_env_var = ''
     try:
-        fd = open(cons.iiab_env_file,"r")
+        fd = open("/etc/iiab/iiab.env","r")
         for line in fd:
             line = line.lstrip()
             line = line.rstrip('\n')
