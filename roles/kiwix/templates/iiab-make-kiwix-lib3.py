@@ -17,15 +17,16 @@ import iiab.iiab_lib as iiab
 
 try:
     import iiab.adm_lib as adm
-    zim_version_idx_dir = adm.CONST.zim_version_idx_dir
     adm_cons_installed = True
 except:
-    zim_version_idx_dir = ""
     adm_cons_installed = False
     pass
 
 def main():
     zim_path = iiab.CONST.zim_path
+    zim_version_idx_dir = ""
+    if adm_cons_installed:
+        zim_version_idx_dir = adm.CONST.zim_version_idx_dir
 
     args = parse_args()
     # args.device is either value or None
