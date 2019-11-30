@@ -55,7 +55,7 @@ def main():
     remove_list_str = ""
     for item in path_to_id_map:
         if item not in zim_files:
-            iiab.rem_libr_xml(path_to_id_map[item])
+            iiab.rem_libr_xml(path_to_id_map[item], kiwix_library_xml)
 
     # Add zims from file system that are not in library.xml
     for item in zim_files:
@@ -66,7 +66,8 @@ def main():
     if adm_cons_installed:
         print("Writing zim_versions_idx")
         iiab.read_lang_codes() # needed by following
-        adm.write_zim_versions_idx(zim_versions, kiwix_library_xml, zim_version_idx_dir)
+        zim_menu_defs = adm.get_zim_menu_defs() # read all menu defs
+        adm.write_zim_versions_idx(zim_versions, kiwix_library_xml, zim_version_idx_dir, zim_menu_defs)
     sys.exit()
 
 def parse_args():

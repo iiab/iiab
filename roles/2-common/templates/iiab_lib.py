@@ -77,7 +77,7 @@ def read_library_xml(lib_xml_file, kiwix_exclude_attr=[""]): # duplicated from i
         zims_installed = {}
     return zims_installed, path_to_id_map
 
-def rem_libr_xml(id):
+def rem_libr_xml(id, kiwix_library_xml):
     command = CONST.kiwix_manage + " " + kiwix_library_xml + " remove " + id
     #print command
     args = shlex.split(command)
