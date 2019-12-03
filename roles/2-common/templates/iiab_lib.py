@@ -2,18 +2,11 @@
 # common functions for IIAB
 # Admin Console functions are in adm_lib.py
 
-import os, sys, syslog
-import pwd, grp
-import time
-from datetime import date, datetime
+import os
 import json
-import yaml
-import re
 import subprocess
 import shlex
-import configparser
 import xml.etree.ElementTree as ET
-import argparse
 import iiab.iiab_const as CONST
 
 lang_codes = {}
@@ -34,7 +27,7 @@ def get_zim_list(path):
             zimname = "content/" + filename + ".zim"
             zimidx = "index/" + filename + ".zim.idx"
             if zimname not in files_processed:
-                if not os.path.isdir (path + "/" + zimidx): # only declare index if exists (could be embedded)
+                if not os.path.isdir(path + "/" + zimidx): # only declare index if exists (could be embedded)
                     zimidx = None
                 files_processed[zimname] = zimidx
                 zimname = content + filename + ".zim"
@@ -67,18 +60,18 @@ def read_library_xml(lib_xml_file, kiwix_exclude_attr=[""]): # duplicated from i
             attributes = {}
             if 'id' not in child.attrib: # is this necessary? implies there are records with no book id which would break index for removal
                 print("xml record missing Book Id")
-            id = child.attrib['id']
+            zim_id = child.attrib['id']
             for attr in child.attrib:
                 if attr not in kiwix_exclude_attr:
                     attributes[attr] = child.attrib[attr] # copy if not id or in exclusion list
-            zims_installed[id] = attributes
-            path_to_id_map[child.attrib['path']] = id
+            zims_installed[zim_id] = attributes
+            path_to_id_map[child.attrib['path']] = zim_id
     except IOError:
         zims_installed = {}
     return zims_installed, path_to_id_map
 
-def rem_libr_xml(id, kiwix_library_xml):
-    command = CONST.kiwix_manage + " " + kiwix_library_xml + " remove " + id
+def rem_libr_xml(zim_id, kiwix_library_xml):
+    command = CONST.kiwix_manage + " " + kiwix_library_xml + " remove " + zim_id
     #print command
     args = shlex.split(command)
     try:
@@ -102,7 +95,7 @@ def add_libr_xml(kiwix_library_xml, zim_path, zimname, zimidx):
 
 def read_lang_codes():
     global lang_codes
-    with open(CONST.lang_codes_path,"r") as f:
+    with open(CONST.lang_codes_path, "r") as f:
         reads = f.read()
         #print("menu.json:%s"%reads)
         lang_codes = json.loads(reads)
@@ -129,14 +122,14 @@ def human_readable(num):
     # return 3 significant digits and unit specifier
     # TFM 7/15/2019 change to factor of 1024, not 1000 to match similar calcs elsewhere
     num = float(num)
-    units = [ '','K','M','G']
+    units = ['', 'K', 'M', 'G']
     for i in range(4):
-        if num<10.0:
-            return "%.2f%s"%(num,units[i])
-        if num<100.0:
-            return "%.1f%s"%(num,units[i])
+        if num < 10.0:
+            return "%.2f%s"%(num, units[i])
+        if num < 100.0:
+            return "%.1f%s"%(num, units[i])
         if num < 1000.0:
-            return "%.0f%s"%(num,units[i])
+            return "%.0f%s"%(num, units[i])
         num /= 1024.0
 
 # Environment Functions
@@ -146,7 +139,7 @@ def get_iiab_env(name):
     iiab_env = {}
     iiab_env_var = ''
     try:
-        fd = open("/etc/iiab/iiab.env","r")
+        fd = open("/etc/iiab/iiab.env", "r")
         for line in fd:
             line = line.lstrip()
             line = line.rstrip('\n')
