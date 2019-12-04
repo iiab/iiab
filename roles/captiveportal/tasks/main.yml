@@ -1,0 +1,110 @@
+- name: Download & install python-dateutil, sqlite3
+  package:
+    name: "{{ item }}"
+    state: present
+  with_items:
+    - python3-dateutil
+    - python3-jinja2
+
+- name: Create directory /opt/iiab/captiveportal for scripts & templates
+  file:
+    path: /opt/iiab/captiveportal
+    state: directory
+    owner: "{{ apache_user }}"
+
+- name: 'Copy scripts: checkurls, capture-wsgi.py'
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    mode: "{{ item.mode }}"
+  with_items:
+    - { src: checkurls, mode: '0644', dest: /opt/iiab/captiveportal/ }
+    - { src: capture-wsgi.py, mode: '0755', dest: /opt/iiab/captiveportal/ }
+    - { src: iiab-make-cp-servers.py, mode: '0755', dest: /usr/sbin/ }
+    - { src: iiab-divert-to-nginx, mode: '0755', dest: /usr/sbin/ }
+
+- name: 'Copy templates: simple.template, mac.template'
+  copy:
+    src: "{{ item }}"
+    dest: /opt/iiab/captiveportal/
+  with_items:
+    - roles/captiveportal/files/simple.template
+    - roles/captiveportal/files/mac.template
+
+- name: Copy uWSGI config file
+  template:
+    src: captiveportal.ini
+    dest: /etc/uwsgi/apps-available/
+
+- name: Enable uwsgi config for captiveportal
+  file:
+    src: /etc/uwsgi/apps-available/captiveportal.ini
+    path: /etc/uwsgi/apps-enabled/captiveportal.ini
+    state: link
+  when: captiveportal_enabled | bool
+
+- name: Copy unit file for uWSGI service
+  template:
+    src: uwsgi-captiveportal.service
+    dest: /etc/systemd/system/
+
+- name: Start or restart server which responds to browsers trying to detect a captive portal
+  systemd: 
+    name: uwsgi-captiveportal.service
+    state: restarted
+  when: captiveportal_enabled | bool
+
+- name: Stop uWSGI server if captive portal has been disabled
+  systemd: 
+    name: uwsgi-captiveportal.service
+    state: stopped
+  when: not captiveportal_enabled | bool
+
+- name: Run divert to generate diversion lists for nginx
+  shell: iiab-divert-to-nginx
+     
+- name: Run script to generate nginx servers from checkurls input list
+  shell: iiab-make-cp-servers.py
+     
+- name: Install nginx's captiveportal.conf from template if captiveportal_enabled
+  template:
+    src: roles/captiveportal/templates/captiveportal-nginx.conf
+    dest: /etc/nginx/conf.d/
+    owner: root
+    group: root
+    mode: 0644
+  when: captiveportal_enabled | bool
+
+- name: Make sure dnsmasq is not diverting if not captiveportal_enabled
+  file:
+    path: /etc/dnsmasq.d/capture
+    state: absent
+  when: not captiveportal_enabled
+
+- name: Add 'captiveportal_installed' variable values to {{ iiab_state_file }}
+  lineinfile:
+    dest: "{{ iiab_state_file }}"
+    regexp: '^captiveportal_installed'
+    line: 'captiveportal_installed: True'
+    state: present
+
+#- name: Restart dnsmasq
+#  systemd:
+#    name: dnsmasq
+#    state: restarted
+#  when: dnsmasq_enabled | bool
+
+# ABOVE DOES NOT WORK ON UBUNTU 16.04 -- what follows is a crude hack (seems to work!)
+
+- name: Stop dnsmasq
+  systemd:
+    name: dnsmasq
+    state: stopped
+  when: dnsmasq_enabled | bool
+
+- name: Start dnsmasq
+  systemd:
+    name: dnsmasq
+    state: started
+  when: dnsmasq_enabled | bool
+  
