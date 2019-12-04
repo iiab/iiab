@@ -4,8 +4,7 @@
 import os
 outstr = ''
 
-#os.chdir('{{ iiab_dir }}/roles/captiveportal/templates')
-os.chdir('/opt/iiab/iiab/roles/captiveportal/templates')
+os.chdir('{{ iiab_dir }}/roles/captiveportal/templates')
 with open('checkurls','r') as urls:
    for line in urls:
       line = line.replace('*','.*')
