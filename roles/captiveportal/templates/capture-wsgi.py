@@ -1,4 +1,4 @@
-#! /usr/bin/env python
+#! /usr/bin/env python3
 # -*- coding: utf-8 -*-
 # using Python's bundled WSGI server
 
@@ -23,7 +23,7 @@ import re
 # 
 
 # Create the jinja2 environment.
-CAPTIVE_PORTAL_BASE = "/opt/iiab/captive-portal"
+CAPTIVE_PORTAL_BASE = "/opt/iiab/captiveportal"
 j2_env = Environment(loader=FileSystemLoader(CAPTIVE_PORTAL_BASE),trim_blocks=True)
 
 # Define time outs
@@ -40,45 +40,15 @@ doc_root = get_iiab_env("WWWROOT")
 fully_qualified_domain_name = get_iiab_env("FQDN")
 
 
+loggingLevel = "DEBUG"
 # set up some logging -- selectable for diagnostics
-# Create dummy iostream to capture stderr and stdout
-class StreamToLogger(object):
-    """
-    Fake file-like stream object that redirects writes to a logger instance.
-    """
-    def __init__(self, logger, log_level=logging.INFO):
-        self.logger = logger
-        self.log_level = log_level
-        self.linebuf = ''
-
-    def write(self, buf):
-        for line in buf.rstrip().splitlines():
-            self.logger.log(self.log_level, line.rstrip())
-
-#if len(sys.argv) > 1 and sys.argv[1] == '-l':
-if True:
-    loggingLevel = logging.DEBUG
-    try:
-      os.remove('/var/log/apache2/portal.log')
-    except:
-      pass
-else:
-    loggingLevel = logging.ERROR
-
-# divert stdout and stderr to logger
 logging.basicConfig(filename='/var/log/apache2/portal.log',format='%(asctime)s.%(msecs)03d:%(name)s:%(message)s', datefmt='%M:%S',level=loggingLevel)
 logger = logging.getLogger('/var/log/apache2/portal.log')
 handler = RotatingFileHandler("/var/log/apache2/portal.log", maxBytes=100000, backupCount=2)
 logger.addHandler(handler)
 
-stdout_logger = logging.getLogger('STDOUT')
-sl = StreamToLogger(stdout_logger, logging.ERROR)
-sys.stdout = sl
-
-stderr_logger = logging.getLogger('STDERR')
-sl = StreamToLogger(stderr_logger, logging.ERROR)
-sys.stderr = sl
-PORT={{ captive_portal_port }}
+#PORT={{ captiveportal_port }}
+PORT=9090
 
 
 # Define globals
@@ -178,12 +148,13 @@ def set_lasttimestamp(ip):
 
 #  ###################  Action routines based on OS  ################3
 def microsoft(environ,start_response):
+    print('in microsoft')
     # firefox -- seems both mac and Windows use it
     agent = environ.get('HTTP_USER_AGENT','default_agent')
     if agent.startswith('Mozilla'):
        return home(environ, start_response) 
     logger.debug("sending microsoft redirect")
-    response_body = ""
+    response_body = b""
     status = '302 Moved Temporarily'
     response_headers = [('Location','http://box.lan/home'),
             ('Content-type','text/html'),
@@ -193,7 +164,7 @@ def microsoft(environ,start_response):
 
 def home(environ,start_response):
     logger.debug("sending direct to home")
-    response_body = ""
+    response_body = b""
     status = '302 Moved Temporarily'
     response_headers = [('Location','http://' + fully_qualified_domain_name + '/home'),
             ('Content-type','text/html'),
@@ -220,7 +191,7 @@ def android(environ, start_response):
         #set_204after(ip,20)
         location = '/android_https'
     agent = environ.get('HTTP_USER_AGENT','default_agent')
-    response_body = "hello"
+    response_body = b"hello"
     status = '302 Moved Temporarily'
     response_headers = [('Location',location)]
     start_response(status, response_headers)
@@ -240,6 +211,7 @@ def android_splash(environ, start_response):
     elif lang == "es":
         txt = es_txt
     response_body = str(j2_env.get_template("simple.template").render(**txt))
+    response_body = response_body.encode()
     status = '200 OK'
     response_headers = [('Content-type','text/html'),
             ('Content-Length',str(len(response_body)))]
@@ -261,6 +233,7 @@ def android_https(environ, start_response):
     elif lang == "es":
         txt = es_txt
     response_body = str(j2_env.get_template("simple.template").render(**txt))
+    response_body = response_body.encode()
     status = '200 OK'
     response_headers = [('Content-type','text/html'),
             ('Content-Length',str(len(response_body)))]
@@ -268,9 +241,10 @@ def android_https(environ, start_response):
     return [response_body]
 
 def mac_splash(environ,start_response):
+    print('in mac_splash')
     logger.debug("in function mac_splash")
-    en_txt={ 'message':"Click on the button to go to the IIAB home page",\
-            'btn1':"GO TO IIAB HOME PAGE",'success_token': 'Success',
+    en_txt={ 'message': "Click on the button to go to the IIAB home page",\
+            'btn1': "GO TO IIAB HOME PAGE",'success_token': 'Success',
             "FQDN": fully_qualified_domain_name, \
             'doc_root':get_iiab_env("WWWROOT")}
     es_txt={ 'message':"Haga clic en el botón para ir a la página de inicio de IIAB",\
@@ -283,6 +257,7 @@ def mac_splash(environ,start_response):
         txt = es_txt
     set_lasttimestamp(ip)
     response_body = str(j2_env.get_template("mac.template").render(**txt))
+    response_body = response_body.encode()
     status = '200 Success'
     response_headers = [('Content-type','text/html'),
             ('Content-Length',str(len(response_body)))]
@@ -290,6 +265,7 @@ def mac_splash(environ,start_response):
     return [response_body]
 
 def macintosh(environ, start_response):
+    print('in macintosh')
     global ip
     logger.debug("in function mcintosh")
     #print >> sys.stderr , "Geo Print to stderr" + environ['HTTP_HOST']
@@ -302,18 +278,13 @@ def macintosh(environ, start_response):
         response_body = """<html><head><script>
             window.location.reload(true)
             </script></body></html>"""
+        response_body = response_body.encode()
         status = '302 Moved Temporarily'
         response_headers = [('content','text/html')]
         start_response(status, response_headers)
         return [response_body]
     else:
         return mac_splash(environ,start_response)
-
-def microsoft_connect(environ,start_response):
-    status = '200 ok'
-    headers = [('Content-type', 'text/html')]
-    start_response(status, headers)
-    return ["Microsoft Connect Test"]
 
 # =============  Return html pages  ============================
 def banner(environ, start_response):
@@ -351,18 +322,18 @@ def null(environ, start_response):
     status = '404 Not Found'
     headers = [('Content-type', 'text/html')]
     start_response(status, headers)
-    return [""]
+    return [b""]
 
 def success(environ, start_response):
     status = '200 ok'
-    html = '<html><head><title>Success</title></head><body>Success</body></html>'
+    html = b'<html><head><title>Success</title></head><body>Success</body></html>'
     headers = [('Content-type', 'text/html')]
     start_response(status, headers)
     return [html]
 
 def put_204(environ, start_response):
     status = '204 No Data'
-    response_body = ''
+    response_body = b''
     response_headers = [('Content-type','text/html'),
             ('Content-Length',str(len(response_body)))]
     start_response(status, response_headers)
@@ -371,7 +342,7 @@ def put_204(environ, start_response):
 
 def put_302(environ, start_response):
     status = '302 Moved Temporarily'
-    response_body = ''
+    response_body = b''
     location = "http://" + fully_qualified_domain_name + "/home"
     response_headers = [('Content-type','text/html'),
             ('Location',location), 
@@ -545,5 +516,5 @@ if __name__ == "__main__":
     )
 
     httpd.serve_forever()
-#vim: tabstop=3 expandtab shiftwidth=3 softtabstop=3 background=dark
+#vim: tabstop=4 expandtab shiftwidth=4 softtabstop=4 background=dark
 
