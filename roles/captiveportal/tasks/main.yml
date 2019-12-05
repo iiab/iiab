@@ -18,10 +18,10 @@
     dest: "{{ item.dest }}"
     mode: "{{ item.mode }}"
   with_items:
-    - { src: checkurls, mode: '0644', dest: /opt/iiab/captiveportal/ }
-    - { src: capture-wsgi.py, mode: '0755', dest: /opt/iiab/captiveportal/ }
-    - { src: iiab-make-cp-servers.py, mode: '0755', dest: /usr/sbin/ }
-    - { src: iiab-divert-to-nginx, mode: '0755', dest: /usr/sbin/ }
+    - { src: roles/captiveportal/templates/checkurls, mode: '0644', dest: /opt/iiab/captiveportal/ }
+    - { src: roles/captiveportal/templates/capture-wsgi.py, mode: '0755', dest: /opt/iiab/captiveportal/ }
+    - { src: roles/captiveportal/templates/iiab-make-cp-servers.py, mode: '0755', dest: /usr/sbin/ }
+    - { src: roles/captiveportal/templates/iiab-divert-to-nginx, mode: '0755', dest: /usr/sbin/ }
 
 - name: 'Copy templates: simple.template, mac.template'
   copy:
@@ -33,7 +33,7 @@
 
 - name: Copy uWSGI config file
   template:
-    src: captiveportal.ini
+    src: roles/captiveportal/templates/captiveportal.ini
     dest: /etc/uwsgi/apps-available/
 
 - name: Enable uwsgi config for captiveportal
@@ -43,9 +43,16 @@
     state: link
   when: captiveportal_enabled | bool
 
+- name: Enable nginx to service the sites in checkurls list
+  file:
+    src: /etc/nginx/sites-available/capture.conf
+    path: /etc/nginx/sites-enabled/capture.conf
+    state: link
+  when: captiveportal_enabled | bool
+
 - name: Copy unit file for uWSGI service
   template:
-    src: uwsgi-captiveportal.service
+    src: roles/captiveportal/templates/uwsgi-captiveportal.service
     dest: /etc/systemd/system/
 
 - name: Start or restart server which responds to browsers trying to detect a captive portal
@@ -61,10 +68,10 @@
   when: not captiveportal_enabled | bool
 
 - name: Run divert to generate diversion lists for nginx
-  shell: iiab-divert-to-nginx
+  shell: /usr/sbin/iiab-divert-to-nginx
      
 - name: Run script to generate nginx servers from checkurls input list
-  shell: iiab-make-cp-servers.py
+  shell: /usr/sbin/iiab-make-cp-servers.py
      
 - name: Install nginx's captiveportal.conf from template if captiveportal_enabled
   template:
