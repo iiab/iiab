@@ -58,7 +58,7 @@ logger.debug("")
 logger.debug('##########################################')
 # what language are we speaking?
 lang = os.environ['LANG'][0:2]
-logger.debug('speaking: %s'%lang)
+logger.debug('speaking: {}'.format(lang))
 
 def tstamp(dtime):
     '''return a UNIX style seconds since 1970 for datetime input'''
@@ -111,8 +111,7 @@ def timeout_info(ip):
 def is_inactive(ip):
     ts=tstamp(datetime.datetime.now(tzutc()))
     current_ts, last_ts, send204after = timeout_info(ip) 
-    logger.debug("In is_inactive. current_ts:%s. last_ts:%s. send204after:%s"%\
-            (current_ts,last_ts,send204after,))
+    logger.debug("In is_inactive. current_ts:{}. last_ts:{}. send204after:{}".format(current_ts,last_ts,send204after,))
     if not last_ts:
         return True
     if ts - int(last_ts) > INACTIVITY_TO:
@@ -124,7 +123,7 @@ def is_after204_timeout(ip):
     ts=tstamp(datetime.datetime.now(tzutc()))
     current_ts, last_ts, send204after = timeout_info(ip) 
     if send204after == 0: return False
-    logger.debug("function: is_after204_timeout send204after:%s current: %s"%(send204after,ts,))
+    logger.debug("function: is_after204_timeout send204after:{} current: {}".format((send204after,ts,)))
     if not send204after:
         return False
     if ts - int(send204after) > 0:
@@ -182,7 +181,7 @@ def android(environ, start_response):
     if system_version is None:
        return  put_302(environ, start_response)
     if system_version[0:1] < '6':
-        logger.debug("system < 6:%s"%system_version)
+        logger.debug("system < 6:{}".format(system_version))
         location = '/android_splash'
         set_204after(ip,0)
     elif system_version[:1] >= '7':
@@ -291,7 +290,7 @@ def banner(environ, start_response):
     status = '200 OK'
     headers = [('Content-type', 'image/png')]
     start_response(status, headers)
-    image = open("%s/js-menu/menu-files/images/iiab_banner6.png"%doc_root, "rb").read()
+    image = open("{}/js-menu/menu-files/images/iiab_banner6.png".format(doc_root), "rb").read()
     return [image]
 
 def bootstrap(environ, start_response):
@@ -299,7 +298,7 @@ def bootstrap(environ, start_response):
     status = '200 OK'
     headers = [('Content-type', 'text/javascript')]
     start_response(status, headers)
-    boot = open("%s/common/js/bootstrap.min.js"%doc_root, "rb").read() 
+    boot = open("{}/common/js/bootstrap.min.js".format(doc_root), "rb").read() 
     return [boot]
 
 def jquery(environ, start_response):
@@ -307,7 +306,7 @@ def jquery(environ, start_response):
     status = '200 OK'
     headers = [('Content-type', 'text/javascript')]
     start_response(status, headers)
-    boot = open("%s/common/js/jquery.min.js"%doc_root, "rb").read() 
+    boot = open("{}/common/js/jquery.min.js".format(doc_root), "rb").read() 
     return [boot]
 
 def bootstrap_css(environ, start_response):
@@ -315,7 +314,7 @@ def bootstrap_css(environ, start_response):
     status = '200 OK'
     headers = [('Content-type', 'text/css')]
     start_response(status, headers)
-    boot = open("%s/common/css/bootstrap.min.css"%doc_root, "rb").read() 
+    boot = open("{}/common/css/bootstrap.min.css".format(doc_root), "rb").read() 
     return [boot]
 
 def null(environ, start_response):
@@ -388,18 +387,18 @@ def application (environ, start_response):
    if  'HTTP_X_FORWARDED_FOR' in environ:
       ip = environ['HTTP_X_FORWARDED_FOR'].strip()
    else:
-      data = ['%s: %s\n' % (key, value) for key, value in sorted(environ.items()) ]
-      #logger.debug("need the correct ip:%s"%data)
+      data = ['{}: {}\n'.format(key, value) for key, value in sorted(environ.items()) ]
+      #logger.debug("need the correct ip:{}".format(data))
       ip = environ['REMOTE_ADDR'].strip()
-   cmd="arp -an %s|gawk \'{print $4}\'" % ip
+   cmd="arp -an {}|gawk \'{print $4}\'".format(ip)
    mac = subprocess.check_output(cmd, shell=True)
    data = []
-   data.append("host: %s\n"%environ['HTTP_HOST'])
-   data.append("path: %s\n"%environ['PATH_INFO'])
-   data.append("query: %s\n"%environ['QUERY_STRING'])
-   data.append("ip: %s\n"%ip)
+   data.append("host: {}\n".format(environ['HTTP_HOST']))
+   data.append("path: {}\n".format(environ['PATH_INFO']))
+   data.append("query: {}\n".format(environ['QUERY_STRING']))
+   data.append("ip: {}\n".format(ip))
    agent = environ.get('HTTP_USER_AGENT','default_agent')
-   data.append("AGENT: %s\n"%agent)
+   data.append("AGENT: {}\n".format(agent))
    logger.debug(data)
    #print(data)
    found = False
@@ -412,7 +411,7 @@ def application (environ, start_response):
    sql = "UPDATE users SET current_ts = ? where ip = ?" 
    c.execute(sql,(ts,ip,))
    if c.rowcount == 0:
-      logger.debug("failed UPDATE  users SET current_ts = %s WHERE ip = %s"%(ts,ip,)) 
+      logger.debug("failed UPDATE  users SET current_ts = {} WHERE ip = {}".format(ts,ip,)) 
    conn.commit()
    ymd=datetime.datetime.today().strftime("%y%m%d-%H%M")
 
@@ -441,8 +440,8 @@ def application (environ, start_response):
       # the js link to home page triggers this ajax url 
       # mark the sign-in conversation completed, return 204 or Success or Success
       ANDROID_TRIGGERED = True
-      #data = ['%s: %s\n' % (key, value) for key, value in sorted(environ.items()) ]
-      #logger.debug("need the correct ip:%s"%data)
+      #data = ['{}: {}\n'.format(key, value) for key, value in sorted(environ.items()) ]
+      #logger.debug("need the correct ip:{}".format(data))
       logger.debug("function: home_selected. Setting flag to return_204")
       #print("setting flag to return_204")
       set_204after(ip,PORTAL_TO)
@@ -485,7 +484,7 @@ def application (environ, start_response):
       environ['PATH_INFO'] == "/gen_204" or\
       environ['HTTP_HOST'] == "connectivitycheck.gstatic.com":
       current_ts, last_ts, send204after = timeout_info(ip) 
-      logger.debug("current_ts: %s last_ts: %s send204after: %s"%(current_ts, last_ts, send204after,))
+      logger.debug("current_ts: {} last_ts: {} send204after: {}".formmat(current_ts, last_ts, send204after,))
       if not last_ts or (ts - int(last_ts) > INACTIVITY_TO):
           return android(environ, start_response) 
       elif is_after204_timeout(ip):
@@ -504,7 +503,7 @@ def application (environ, start_response):
      environ['HTTP_HOST'] == "teredo.ipv6.microsoft.com.nsatc.net": 
      return microsoft(environ, start_response) 
 
-   logger.debug("executing the default 302 response. [%s"%data)
+   logger.debug("executing the default 302 response. [{}".format(data))
    return put_302(environ,start_response)
 
 # Instantiate the server
