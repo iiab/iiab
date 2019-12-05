@@ -123,7 +123,7 @@ def is_after204_timeout(ip):
     ts=tstamp(datetime.datetime.now(tzutc()))
     current_ts, last_ts, send204after = timeout_info(ip) 
     if send204after == 0: return False
-    logger.debug("function: is_after204_timeout send204after:{} current: {}".format(send204after,ts,))
+    logger.debug("function: is_after204_timeout send204after:{} current: {}".format((send204after,ts,)))
     if not send204after:
         return False
     if ts - int(send204after) > 0:
@@ -390,7 +390,7 @@ def application (environ, start_response):
       data = ['{}: {}\n'.format(key, value) for key, value in sorted(environ.items()) ]
       #logger.debug("need the correct ip:{}".format(data))
       ip = environ['REMOTE_ADDR'].strip()
-   cmd="arp -an %s|gawk \'{print $4}\'"%(ip)
+   cmd="arp -an {}|gawk \'{print $4}\'".format(ip)
    mac = subprocess.check_output(cmd, shell=True)
    data = []
    data.append("host: {}\n".format(environ['HTTP_HOST']))
@@ -484,7 +484,7 @@ def application (environ, start_response):
       environ['PATH_INFO'] == "/gen_204" or\
       environ['HTTP_HOST'] == "connectivitycheck.gstatic.com":
       current_ts, last_ts, send204after = timeout_info(ip) 
-      logger.debug("current_ts: {} last_ts: {} send204after: {}".format(current_ts, last_ts, send204after,))
+      logger.debug("current_ts: {} last_ts: {} send204after: {}".formmat(current_ts, last_ts, send204after,))
       if not last_ts or (ts - int(last_ts) > INACTIVITY_TO):
           return android(environ, start_response) 
       elif is_after204_timeout(ip):
