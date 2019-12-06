@@ -484,7 +484,7 @@ def application (environ, start_response):
       environ['PATH_INFO'] == "/gen_204" or\
       environ['HTTP_HOST'] == "connectivitycheck.gstatic.com":
       current_ts, last_ts, send204after = timeout_info(ip) 
-      logger.debug("current_ts: {} last_ts: {} send204after: {}".formmat(current_ts, last_ts, send204after,))
+      logger.debug("current_ts: {} last_ts: {} send204after: {}".format(current_ts, last_ts, send204after,))
       if not last_ts or (ts - int(last_ts) > INACTIVITY_TO):
           return android(environ, start_response) 
       elif is_after204_timeout(ip):
