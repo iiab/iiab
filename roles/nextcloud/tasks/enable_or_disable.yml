@@ -1,18 +1,8 @@
 # This should go in computed_network.yml, but here for now
-# 2019-09-04: THE NEXT 4 LINES ARE UNUSED (due to changes in roles/nextcloud/templates/nextcloud.conf.j2)
-- name: Compute Nextcloud listen ip addr for nextcloud.conf
-  set_fact:
-    nextcloud_required_ip: "{{ ansible_default_ipv4.network }}/{{ ansible_default_ipv4.netmask }}"
-  when: ansible_default_ipv4.network is defined
-
-- name: Install Apache's nextcloud.conf from template, for http://box/nextcloud
-  template:
-    src: nextcloud.conf.j2
-    dest: "/etc/{{ apache_config_dir }}/nextcloud.conf"
-    owner: root
-    group: root
-    mode: 0644
-  when: nextcloud_enabled | bool
+#- name: Compute Nextcloud listen ip addr for nextcloud.conf
+#  set_fact:
+#    nextcloud_required_ip: "{{ ansible_default_ipv4.network }}/{{ ansible_default_ipv4.netmask }}"
+#  when: ansible_default_ipv4.network is defined
 
 - name: Create symlink nextcloud.conf from sites-enabled to sites-available for http://box/nextcloud (debuntu)
   file:
@@ -34,75 +24,29 @@
   when: not nextcloud_enabled and is_redhat
 
 - name: Restart Apache, enabling/disabling http://box/nextcloud
-  service:
+  systemd:
     name: "{{ apache_service }}"
+    daemon-reload: yes
     state: restarted
 
-# the install wizard does not succeed if already installed
-- name: Determine if Nextcloud is installed
-  shell: >
-    php {{ nextcloud_prefix }}/nextcloud/occ status |
-    gawk '/installed:/ { print $3 }'
-  become: yes
-  become_user: "{{ apache_user }}"
-  register: returned
-
-- name: Run Nextcloud initial install wizard
-  shell: >
-    cd {{ nextcloud_prefix }}/nextcloud;
-    php occ maintenance:install
-    --database "mysql"
-    --database-name "{{ nextcloud_dbname }}"
-    --database-user "{{ nextcloud_dbuser }}"
-    --database-pass "{{ nextcloud_dbpassword }}"
-    --admin-user "{{ nextcloud_admin_user }}"
-    --admin-pass "{{ nextcloud_admin_password }}"
-  become: yes
-  become_user: "{{ apache_user }}"
-  when: nextcloud_enabled and returned.stdout == "false"
-
-- name: Allow access from all hosts and ips
-  command: php {{ nextcloud_prefix }}/nextcloud/occ config:system:set trusted_domains 1 --value=*
-  become: yes
-  become_user: "{{ apache_user }}"
-  when: nextcloud_enabled and returned.stdout == "false"
-
-# Code below was NEVER RUNNING as of 2018-10-29, as "wc | cut -d' ' -f1" ALWAYS
-# returns null (rather than the intended returned_count !)  This line could
-# be replaced by ALTERNATIVE 1 or ALTERNATIVE 2 below IF it truly needs fixing.
-#
-# Or perhaps default user/password nextcloud/nextcloudmysql (from variables
-# nextcloud_user/nextcloud_user_password) is just not needed in the end...
-#
-# NOTE: COMMENTS (FOLLOWING '#' SIGN) WITHIN A SHELL COMMAND CAUSE IT TO *FAIL*
-# 
-#- name: Determine if Nextcloud user exists already
-#  shell: >
-#    php {{ nextcloud_prefix }}/nextcloud/occ user:list |
-#    grep {{ nextcloud_user }} | wc | cut -d' ' -f1        # USELESS
-#    #grep {{ nextcloud_user }} | wc -l                    # ALTERNATIVE 1
-#    #grep {{ nextcloud_user }} | wc | awk '{print $1}'    # ALTERNATIVE 2
-#  become: yes
-#  become_user: "{{ apache_user }}"
-#  register: returned_count
-#
-# debug:
-#   var: returned_count
-#
-## nextcloud wants to make users rather than just mysql users and not done
-#- name: Create the default user
-#  shell: >
-#    OC_PASS={{ nextcloud_user_password }};
-#    php {{ nextcloud_prefix }}/nextcloud/occ user:add
-#    --password-from-env --display-name={{ nextcloud_user }}
-#    --group="users" {{ nextcloud_user }}
-#  become: yes
-#  become_user: "{{ apache_user }}"
-#  when: nextcloud_enabled and returned_count == "0"
-
-# 2019-09-04: NEXT 5 LINES APPEAR INEFFECTIVE DURING 1ST INSTALL? (possibly "overwrite.cli.url" appears later, when Nextcloud's web install completes using http://box/nextcloud ?)
-- name: Try to remove overwrite.cli.url line (Rewrite URL) from /opt/nextcloud/config/config.php
-  lineinfile:
-    regexp: "overwrite.cli.url"
-    state: absent
-    path: "{{ nextcloud_prefix }}/nextcloud/config/config.php"
+- name: Add 'nextcloud' variable values to {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"
+    section: Nextcloud
+    option: "{{ item.option }}"
+    value: "{{ item.value }}"
+  with_items:
+    - option: name
+      value: Nextcloud
+    - option: description
+      value: '"NextCloud is a local server-based facility for sharing files, photos, contacts, calendars, etc."'
+    - option: path
+      value: "{{ nextcloud_prefix }}/nextcloud"
+    #- option: nextcloud_force_install
+    #  value: "{{ nextcloud_force_install }}"
+    - option: nextcloud_orig_src_file
+      value: "{{ nextcloud_orig_src_file }}"
+    - option: nextcloud_src_file
+      value: "{{ nextcloud_src_file }}"
+    - option: nextcloud_enabled
+      value: "{{ nextcloud_enabled }}"

@@ -1,27 +1,30 @@
-# iiab_lib.py
-# common functions for IIAB
-# Admin Console functions are in adm_lib.py
-
-import os, sys, syslog
-import pwd, grp
-import time
-from datetime import date, datetime
+'''
+Common functions for IIAB
+Admin Console functions are in adm_lib.py
+'''
+import os
 import json
-import yaml
-import re
 import subprocess
 import shlex
-import configparser
 import xml.etree.ElementTree as ET
-import argparse
-import iiab.iiab_const as cons
+import iiab.iiab_const as CONST
 
 lang_codes = {}
 
 def get_zim_list(path):
+    '''
+    Get a list of installed zims in the passed path
+
+    Args:
+      path (str): The path to search
+
+    Returns:
+      files_processed (dict): A dict all zims found and any index directory (now obsolete)
+      zim_versions (dict): A dict that translates generic zim names to physically installed
+    '''
+
     files_processed = {}
     zim_versions = {} # we don't need this unless adm cons is installed, but easier to compute now
-    zim_list = []
     content = path + "/content/"
     index = path + "/index/"
     flist = os.listdir(content)
@@ -34,13 +37,13 @@ def get_zim_list(path):
             zimname = "content/" + filename + ".zim"
             zimidx = "index/" + filename + ".zim.idx"
             if zimname not in files_processed:
-                if not os.path.isdir (path + "/" + zimidx): # only declare index if exists (could be embedded)
+                if not os.path.isdir(path + "/" + zimidx): # only declare index if exists (could be embedded)
                     zimidx = None
                 files_processed[zimname] = zimidx
                 zimname = content + filename + ".zim"
                 zimidx = index + filename + ".zim.idx"
-                if filename in cons.old_zim_map: # handle old names that don't parse
-                    perma_ref = cons.old_zim_map[filename]
+                if filename in CONST.old_zim_map: # handle old names that don't parse
+                    perma_ref = CONST.old_zim_map[filename]
                 else:
                     ulpos = filename.rfind("_")
                     # but old gutenberg and some other names are not canonical
@@ -52,7 +55,18 @@ def get_zim_list(path):
     return files_processed, zim_versions
 
 def read_library_xml(lib_xml_file, kiwix_exclude_attr=[""]): # duplicated from iiab-cmdsrv
-    # returns dict of library.xml and map of zim id to zim file name (under <dev>/library/zims)
+    '''
+    Read zim properties from library.xml
+    Returns dict of library.xml and map of zim id to zim file name (under <dev>/library/zims)
+
+    Args:
+      lib_xml_file (str): Path to file to read. Can be on removable device
+      kiwix_exclude_attr (list): Zim properties to exclude from return
+
+    Returns:
+      zims_installed (dict): A dictionary holding all installed zims and their attributes
+      path_to_id_map (dict): A dictionary that translates zim ids to physical names
+    '''
 
     kiwix_exclude_attr.append("id") # don't include id
     kiwix_exclude_attr.append("favicon") # don't include large favicon
@@ -61,24 +75,30 @@ def read_library_xml(lib_xml_file, kiwix_exclude_attr=[""]): # duplicated from i
     try:
         tree = ET.parse(lib_xml_file)
         root = tree.getroot()
-        xml_item_no = 0
         for child in root:
-            #xml_item_no += 1 # hopefully this is the array number
             attributes = {}
             if 'id' not in child.attrib: # is this necessary? implies there are records with no book id which would break index for removal
                 print("xml record missing Book Id")
-            id = child.attrib['id']
+            zim_id = child.attrib['id']
             for attr in child.attrib:
                 if attr not in kiwix_exclude_attr:
                     attributes[attr] = child.attrib[attr] # copy if not id or in exclusion list
-            zims_installed[id] = attributes
-            path_to_id_map[child.attrib['path']] = id
+            zims_installed[zim_id] = attributes
+            path_to_id_map[child.attrib['path']] = zim_id
     except IOError:
         zims_installed = {}
     return zims_installed, path_to_id_map
 
-def rem_libr_xml(id):
-    command = cons.kiwix_manage + " " + kiwix_library_xml + " remove " + id
+def rem_libr_xml(zim_id, kiwix_library_xml):
+    '''
+    Remove a zim from library.xml
+
+    Args:
+      zim_id (uuid): Id of the zim to remove
+      lib_xml_file (str): Path to file to read. Can be on removable device
+    '''
+
+    command = CONST.kiwix_manage + " " + kiwix_library_xml + " remove " + zim_id
     #print command
     args = shlex.split(command)
     try:
@@ -88,7 +108,17 @@ def rem_libr_xml(id):
             print(outp)
 
 def add_libr_xml(kiwix_library_xml, zim_path, zimname, zimidx):
-    command = cons.kiwix_manage + " " + kiwix_library_xml + " add " + cons.zim_path + "/" + zimname
+    '''
+    Add a zim to library.xml
+
+    Args:
+      kiwix_library_xml (str): Name (path) of library.xml file
+      zim_path (str): Path to zim file to add
+      zimname (str): Name of zim file to add
+      zimidx (str): Path to separate idx directory (obsolete)
+
+    '''
+    command = CONST.kiwix_manage + " " + kiwix_library_xml + " add " + zim_path + "/" + zimname
     if zimidx:
         command += " -i " + zim_path + "/" + zimidx
     #print command
@@ -101,8 +131,10 @@ def add_libr_xml(kiwix_library_xml, zim_path, zimname, zimidx):
         pass
 
 def read_lang_codes():
+    '''Populate the global lang_codes dictionary from CONST.lang_codes_path json file'''
+
     global lang_codes
-    with open(cons.lang_codes_path,"r") as f:
+    with open(CONST.lang_codes_path, "r") as f:
         reads = f.read()
         #print("menu.json:%s"%reads)
         lang_codes = json.loads(reads)
@@ -110,6 +142,7 @@ def read_lang_codes():
 # there is a different algorithm in get_zim_list above
 
 def calc_perma_ref(uri):
+    '''Given a path or url return the generic zim name'''
     url_slash = uri.split('/')
     url_end = url_slash[-1] # last element
     file_ref = url_end.split('.zim')[0] # true for both internal and external index
@@ -123,30 +156,32 @@ def calc_perma_ref(uri):
     return perma_ref
 
 def kiwix_lang_to_iso2(zim_lang_code):
+    '''Lookup the iso2 equivalent of a zim language code'''
     return lang_codes[zim_lang_code]['iso2']
 
 def human_readable(num):
+    '''Convert a number to a human readable string'''
     # return 3 significant digits and unit specifier
     # TFM 7/15/2019 change to factor of 1024, not 1000 to match similar calcs elsewhere
     num = float(num)
-    units = [ '','K','M','G']
+    units = ['', 'K', 'M', 'G']
     for i in range(4):
-        if num<10.0:
-            return "%.2f%s"%(num,units[i])
-        if num<100.0:
-            return "%.1f%s"%(num,units[i])
+        if num < 10.0:
+            return "%.2f%s"%(num, units[i])
+        if num < 100.0:
+            return "%.1f%s"%(num, units[i])
         if num < 1000.0:
-            return "%.0f%s"%(num,units[i])
+            return "%.0f%s"%(num, units[i])
         num /= 1024.0
 
 # Environment Functions
 
 def get_iiab_env(name):
-    """ read iiab.env file for a value, return "" if does not exist. return all value for *"""
+    ''' read iiab.env file for a value, return "" if does not exist. return all value for *'''
     iiab_env = {}
     iiab_env_var = ''
     try:
-        fd = open(cons.iiab_env_file,"r")
+        fd = open("/etc/iiab/iiab.env", "r")
         for line in fd:
             line = line.lstrip()
             line = line.rstrip('\n')

@@ -1,0 +1,69 @@
+# For schools that use WordPress/Nextcloud/Moodle intensively.  iiab/iiab#1147
+# WARNING: Enabling this might cause excess use of RAM/disk or other resources!
+- name: Enact high limits in /etc/php/{{ php_version }}/{{ apache_service }}/php.ini if using WordPress/Nextcloud/Moodle intensively
+  lineinfile:
+    path: "/etc/php/{{ php_version }}/{{ apache_service }}/php.ini"
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+  when: apache_high_php_limits | bool
+  with_items:
+    - { regexp: '^upload_max_filesize', line: 'upload_max_filesize = 500M    ; default is 2M' }
+    - { regexp: '^post_max_size', line: 'post_max_size = 500M    ; default is 8M' }
+    - { regexp: '^memory_limit', line: 'memory_limit = 256M    ; default is 128M / Nextcloud requests 512M' }
+    - { regexp: '^max_execution_time', line: 'max_execution_time = 300    ; default is 30' }
+    - { regexp: '^max_input_time', line: 'max_input_time = 300    ; default is 60' }
+
+- name: Install Apache's 010-iiab.conf & proxy_ajp.conf into /etc/apache2/sites-available, from templates
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: root
+    group: root
+    mode: 0644
+  with_items:
+    - { src: 'roles/httpd/templates/010-iiab.conf.j2', dest: '/etc/{{ apache_config_dir }}/010-iiab.conf' }
+    - { src: 'roles/httpd/templates/proxy_ajp.conf.j2', dest: '/etc/{{ apache_config_dir }}/proxy_ajp.conf' }
+
+- name: Enable our site, creating 010-iiab.conf symlink from sites-enabled to sites-available (debuntu)
+  file:
+    src: "/etc/{{ apache_config_dir }}/010-iiab.conf"
+    path: /etc/apache2/sites-enabled/010-iiab.conf
+    state: link
+  when: is_debuntu | bool
+
+# SEE https://github.com/iiab/iiab/issues/1143 as the old roles/osm playbook is rarely used as of late 2018 (if anybody still uses roles/osm, they can overwrite osm.conf using the original osm playbook, or in other ways)
+- name: Install /etc/{{ apache_config_dir }}/osm.conf for http://box/maps (all OS's)
+  copy:
+    src: roles/httpd/files/osm.conf
+    dest: "/etc/{{ apache_config_dir }}"
+    owner: root
+    group: root
+    mode: 0644
+  when: osm_vector_maps_install | bool
+
+- name: Symlink /etc/apache2/sites-enabled/osm.conf to /etc/{{ apache_config_dir }}/osm.conf (debuntu)
+  file:
+    src: "/etc/{{ apache_config_dir }}/osm.conf"
+    path: /etc/apache2/sites-enabled/osm.conf
+    state: link
+  when: is_debuntu | bool and osm_vector_maps_enabled | bool
+
+- name: Give {{ apache_user }} (per variable apache_user) permission to poweroff, installing /etc/sudoers.d/020_apache_poweroff from template
+  template:
+    src: roles/httpd/templates/020_apache_poweroff.j2
+    dest: /etc/sudoers.d/020_apache_poweroff
+    mode: 0755
+  when: apache_allow_sudo | bool
+
+- name: Remove {{ apache_user }} (per variable apache_user) permission to poweroff, removing /etc/sudoers.d/020_apache_poweroff
+  file:
+    path: /etc/sudoers.d/020_apache_poweroff
+    state: absent
+  when: not apache_allow_sudo
+
+- name: Restart Apache systemd service ({{ apache_service }})
+  systemd:
+    name: "{{ apache_service }}"
+    state: restarted
+    enabled: yes
+    daemon_reload: yes

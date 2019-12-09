@@ -1,0 +1,52 @@
+- name: Create symlink nodered.conf from sites-enabled to sites-available, for short URL http://box/nodered (if nodered_enabled)
+  file:
+    src: /etc/apache2/sites-available/nodered.conf
+    dest: /etc/apache2/sites-enabled/nodered.conf
+    owner: root
+    group: root
+    state: link
+  when: nodered_enabled | bool
+
+- name: Remove symlink /etc/apache2/sites-enabled/nodered.conf (if not nodered_enabled)
+  file:
+    path: /etc/apache2/sites-enabled/nodered.conf
+    state: absent
+  when: not nodered_enabled
+
+- name: Enable & (Re)start 'nodered' systemd service (if nodered_enabled)
+  systemd:
+    daemon_reload: yes
+    name: nodered
+    enabled: yes
+    state: restarted
+  when: nodered_enabled | bool
+
+- name: Disable & Stop 'nodered' systemd service (if not nodered_enabled)
+  systemd:
+    daemon_reload: yes
+    name: nodered
+    enabled: no
+    state: stopped
+  when: not nodered_enabled
+
+- name: Restart Apache service ({{ apache_service }}) to enable/disable http://box/nodered (not just http://box:{{ nodered_port }}/nodered)
+  systemd:
+    name: "{{ apache_service }}"    # httpd or apache2
+    state: restarted
+  when: nodered_install | bool
+
+- name: Add 'nodered' variable values to {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"
+    section: nodered
+    option: "{{ item.option }}"
+    value: "{{ item.value }}"
+  with_items:
+    - option: name
+      value: Node-RED
+    - option: description
+      value: '"Node-RED is a flow-based development tool for visual programming developed originally by IBM for wiring together hardware devices, APIs and online services as part of the Internet of Things.  Node-RED provides a web browser-based flow editor, which can be used to create JavaScript functions."'
+    - option: nodered_install
+      value: "{{ nodered_install }}"
+    - option: nodered_enabled
+      value: "{{ nodered_enabled }}"
