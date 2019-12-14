@@ -40,7 +40,11 @@ doc_root = get_iiab_env("WWWROOT")
 fully_qualified_domain_name = get_iiab_env("FQDN")
 
 
-loggingLevel = "DEBUG"
+loggingLevel = "ERROR"
+if len(sys.argv) > 1:
+   if sys.argv[1] == '-l':
+      loggingLevel = "DEBUG"
+      
 # set up some logging -- selectable for diagnostics
 logging.basicConfig(filename='/var/log/apache2/portal.log',format='%(asctime)s.%(msecs)03d:%(name)s:%(message)s', datefmt='%M:%S',level=loggingLevel)
 logger = logging.getLogger('/var/log/apache2/portal.log')
@@ -147,7 +151,7 @@ def set_lasttimestamp(ip):
 
 #  ###################  Action routines based on OS  ################3
 def microsoft(environ,start_response):
-    print('in microsoft')
+    logger.debug('in microsoft')
     # firefox -- seems both mac and Windows use it
     agent = environ.get('HTTP_USER_AGENT','default_agent')
     if agent.startswith('Mozilla'):
@@ -240,7 +244,7 @@ def android_https(environ, start_response):
     return [response_body]
 
 def mac_splash(environ,start_response):
-    print('in mac_splash')
+    logger.debug('in mac_splash')
     logger.debug("in function mac_splash")
     en_txt={ 'message': "Click on the button to go to the IIAB home page",\
             'btn1': "GO TO IIAB HOME PAGE",'success_token': 'Success',
@@ -264,7 +268,7 @@ def mac_splash(environ,start_response):
     return [response_body]
 
 def macintosh(environ, start_response):
-    print('in macintosh')
+    logger.debug('in macintosh')
     global ip
     logger.debug("in function mcintosh")
     #print >> sys.stderr , "Geo Print to stderr" + environ['HTTP_HOST']
