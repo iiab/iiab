@@ -19,5 +19,5 @@
  * To discover untrapped urls, "apt-get install tcpdump", and "tcpdump -i br0 capture.tcp". I transfer this file to a machine with a GUI, and wireshark to interpret the conversations on the wire. The DNS packets are the ones to look for.
  
  ## Known Problems
- 1. On Android 5-7, the browser which is brought up, during the association process, is a 'walled garden' and I cannot find a way out. This browser is not very modern, and continuously displays the "sign in to Wi-Fi network" button -- with an annoying beep.
+ 1. On Android 5-7, the browser which is brought up, during the association process, is a 'walled garder' and I cannot find a way out. This browser is not very modern, and continuously displays the "sign in to Wi-Fi network" button -- with an annoying beep.
  2. On Windows 7, the default Internet Explorer (version 11) does not display the home page correctly. (but chrome, and firefox do).
