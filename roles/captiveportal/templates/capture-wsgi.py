@@ -51,8 +51,8 @@ logger = logging.getLogger('/var/log/apache2/portal.log')
 handler = RotatingFileHandler("/var/log/apache2/portal.log", maxBytes=100000, backupCount=2)
 logger.addHandler(handler)
 
-#PORT={{ captiveportal_port }}
-PORT=9090
+PORT={{ captiveportal_port }}
+#PORT=9090
 
 
 # Define globals
@@ -394,7 +394,7 @@ def application (environ, start_response):
       data = ['{}: {}\n'.format(key, value) for key, value in sorted(environ.items()) ]
       #logger.debug("need the correct ip:{}".format(data))
       ip = environ['REMOTE_ADDR'].strip()
-   cmd="arp -an {}|gawk \'{{print $4}}\'".format(ip)
+   cmd="arp -an %s|gawk \'{print $4}\'"%(ip)
    mac = subprocess.check_output(cmd, shell=True)
    data = []
    data.append("host: {}\n".format(environ['HTTP_HOST']))
