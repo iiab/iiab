@@ -5,27 +5,22 @@
   with_items:
     - { src: "server.conf",dest: "/etc/nginx/" }
     - { src: "nginx.conf",dest: "/etc/nginx/" }
-    - { src: "usb-lib.conf",dest: "/etc/nginx/conf.d/" }
-    - { src: "modules.conf",dest: "/etc/nginx/conf.d/" }
-#    - { src: "admin-console.ini",dest: "/etc/uwsgi/apps-enabled/" }
-# the above should be enough once uwsgi is started
-#    - { src: "uwsgi.unit",dest: "/etc/systemd/system/uwsgi.socket" }
-    - { src: 'ports.conf' , dest: '/etc/{{ apache_service }}/' , mode: '0644' }
+    - { src: "ports.conf" , dest: "/etc/{{ apache_service }}/" }
+    - { src: "iiab.conf.j2",dest: "/etc/nginx/conf.d/iiab.conf" }
   when: nginx_enabled
+
+- name: Clean stale config files
+  file:
+      state: absent
+      path: '{{ item.path }}'
+  with_items:
+    - { path: "/etc/nginx/conf.d/usb-lib.conf" }
+    - { path: "/etc/nginx/conf.d/modules.conf" }
 
 - name: Insure that apache2 is not running -- we may need port swap
   systemd:
     name: apache2
     state: stopped
-
-# optional services
-- name: Install config for Admin Console
-  template:
-    src: admin-console-nginx.conf
-# Comment one or the other to revert from nginx back to apache2, if required
-#    src: admin-console-apache.conf
-    dest: /etc/nginx/conf.d/admin-console.conf
-  when: admin_console_enabled and nginx_enabled
 
 # the below slides in nginx's proxypass config files for apache on localhost
 # via the ports.conf file installed above
@@ -73,10 +68,3 @@
     state: restarted
     enabled: true
   when: nginx_enabled
-
-#- name: Enable the uwsgi systemd service
-#  systemd:
-#    name: uwsgi
-#    state: restarted
-#    enabled: true
-#  when: admin_console_enabled and nginx_enabled
