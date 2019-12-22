@@ -39,8 +39,8 @@ doc_root = get_iiab_env("WWWROOT")
 fully_qualified_domain_name = get_iiab_env("FQDN")
 
 
-#loggingLevel = "ERROR"
-loggingLevel = "DEBUG"
+loggingLevel = "ERROR"
+#loggingLevel = "DEBUG"
 if len(sys.argv) > 1:
    if sys.argv[1] == '-l':
       loggingLevel = "DEBUG"
