@@ -13,6 +13,7 @@ import sys
 from jinja2 import Environment, FileSystemLoader
 import sqlite3
 import re
+from iiab.iiab_lib import get_iiab_env
 
 # Notes on timeout strategy
 # every client timestamp is recorded into current_ts
@@ -34,13 +35,12 @@ PORTAL_TO = 20 # delay after triggered by ajax upon click of link to home page
 
 
 # Get the IIAB variables
-sys.path.append('/etc/iiab/')
-from iiab_env import get_iiab_env
 doc_root = get_iiab_env("WWWROOT")
 fully_qualified_domain_name = get_iiab_env("FQDN")
 
 
-loggingLevel = "ERROR"
+#loggingLevel = "ERROR"
+loggingLevel = "DEBUG"
 if len(sys.argv) > 1:
    if sys.argv[1] == '-l':
       loggingLevel = "DEBUG"
@@ -155,24 +155,26 @@ def microsoft(environ,start_response):
     # firefox -- seems both mac and Windows use it
     agent = environ.get('HTTP_USER_AGENT','default_agent')
     if agent.startswith('Mozilla'):
+       logger.debug("sending microsoft redirect for agent Mozilla")
        return home(environ, start_response) 
-    logger.debug("sending microsoft redirect")
     response_body = b""
     status = '302 Moved Temporarily'
-    response_headers = [('Location','http://box.lan/home'),
+    response_headers = [('Location','http://' + fully_qualified_domain_name + '{{ captiveportal_splash_page }}'),
             ('Content-type','text/html'),
             ('Content-Length',str(len(response_body)))]
     start_response(status, response_headers)
+    logger.debug("redirect to home. Status: %s Headers: %s"%(status,repr(response_headers)))
     return [response_body]
 
 def home(environ,start_response):
     logger.debug("sending direct to home")
     response_body = b""
     status = '302 Moved Temporarily'
-    response_headers = [('Location','http://' + fully_qualified_domain_name + '/home'),
+    response_headers = [('Location','http://' + fully_qualified_domain_name + '{{ captiveportal_splash_page }}'),
             ('Content-type','text/html'),
             ('Content-Length',str(len(response_body)))]
     start_response(status, response_headers)
+    logger.debug("redirect to home. Status: %s Headers: %s"%(status,repr(response_headers)))
     return [response_body]
 
 def android(environ, start_response):
@@ -189,7 +191,7 @@ def android(environ, start_response):
         location = '/android_splash'
         set_204after(ip,0)
     elif system_version[:1] >= '7':
-        location = "http://" + fully_qualified_domain_name + "/home"
+        location = "http://" + fully_qualified_domain_name + '{{ captiveportal_splash_page }}'
     else:
         #set_204after(ip,20)
         location = '/android_https'
