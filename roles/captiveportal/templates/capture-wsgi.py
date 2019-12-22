@@ -348,7 +348,7 @@ def put_204(environ, start_response):
 def put_302(environ, start_response):
     status = '302 Moved Temporarily'
     response_body = b''
-    location = "http://" + fully_qualified_domain_name + "/home"
+    location = "http://" + fully_qualified_domain_name + '{{ captiveportal_splash_page }}'
     response_headers = [('Content-type','text/html'),
             ('Location',location), 
             ('Content-Length',str(len(response_body)))]
