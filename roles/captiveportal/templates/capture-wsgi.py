@@ -39,7 +39,8 @@ doc_root = get_iiab_env("WWWROOT")
 fully_qualified_domain_name = get_iiab_env("FQDN")
 
 
-loggingLevel = "ERROR"
+#loggingLevel = "ERROR"
+loggingLevel = "DEBUG"
 if len(sys.argv) > 1:
    if sys.argv[1] == '-l':
       loggingLevel = "DEBUG"
@@ -156,7 +157,6 @@ def microsoft(environ,start_response):
     if agent.startswith('Mozilla'):
        logger.debug("sending microsoft redirect for agent Mozilla")
        return home(environ, start_response) 
-    logger.debug("sending microsoft redirect")
     response_body = b""
     status = '302 Moved Temporarily'
     response_headers = [('Location','http://' + fully_qualified_domain_name + '{{ captiveportal_splash_page }}'),
