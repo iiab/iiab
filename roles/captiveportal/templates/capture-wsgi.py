@@ -205,10 +205,10 @@ def android(environ, start_response):
 def android_splash(environ, start_response):
     en_txt={ 'message':"Click on the button to go to the IIAB home page",\
             'btn1':"GO TO IIAB HOME PAGE", \
-            "FQDN": fully_qualified_domain_name, \
+            "FQDN": fully_qualified_domain_name + '{{ captiveportal_splash_page }}', \
             'doc_root':get_iiab_env("WWWROOT") }
     es_txt={ 'message':"Haga clic en el botón para ir a la página de inicio de IIAB",\
-            "FQDN": fully_qualified_domain_name, \
+            "FQDN": fully_qualified_domain_name, + '{{ captiveportal_splash_page }}' \
             'btn1':"IIAB",'doc_root':get_iiab_env("WWWROOT")}
     txt = en_txt
     if lang == "en":
@@ -227,10 +227,10 @@ def android_https(environ, start_response):
     en_txt={ 'message':"""Please ignore the SECURITY warning which appears after clicking the first button""",\
              'btn2':'Click this first Go to the browser we need',\
              'btn1':'Then click this to go to IIAB home page',\
-             "FQDN": fully_qualified_domain_name, \
+             "FQDN": fully_qualified_domain_name + '{{ captiveportal_splash_page }}', \
             'doc_root':get_iiab_env("WWWROOT") }
     es_txt={ 'message':"Haga clic en el botón para ir a la página de inicio de IIAB",\
-            "FQDN": fully_qualified_domain_name, \
+            "FQDN": fully_qualified_domain_name + '{{ captiveportal_splash_page }}', \
             'btn1':"IIAB",'doc_root':get_iiab_env("WWWROOT")}
     txt = en_txt
     if lang == "en":
@@ -250,10 +250,10 @@ def mac_splash(environ,start_response):
     logger.debug("in function mac_splash")
     en_txt={ 'message': "Click on the button to go to the IIAB home page",\
             'btn1': "GO TO IIAB HOME PAGE",'success_token': 'Success',
-            "FQDN": fully_qualified_domain_name, \
+            "FQDN": fully_qualified_domain_name + '{{ captiveportal_splash_page }}', \
             'doc_root':get_iiab_env("WWWROOT")}
     es_txt={ 'message':"Haga clic en el botón para ir a la página de inicio de IIAB",\
-            "FQDN": fully_qualified_domain_name, \
+            "FQDN": fully_qualified_domain_name + '{{ captiveportal_splash_page }}', \
             'btn1':"IIAB",'doc_root':get_iiab_env("WWWROOT")}
     txt = en_txt
     if lang == "en":
