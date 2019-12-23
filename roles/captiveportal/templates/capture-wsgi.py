@@ -56,7 +56,6 @@ PORT={{ captiveportal_port }}
 
 
 # Define globals
-ANDROID_TRIGGERED=False
 
 logger.debug("")
 logger.debug('##########################################')
@@ -136,12 +135,10 @@ def is_after204_timeout(ip):
         return False
 
 def set_204after(ip,value):
-    global ANDROID_TRIGGERED
     ts=tstamp(datetime.datetime.now(tzutc()))
     sql = 'UPDATE users SET send204after = ?  where ip = ?'
     c.execute(sql,(ts + value,ip,))
     conn.commit()
-    ANDROID_TRIGGERED = False
 
 def set_lasttimestamp(ip):
     ts=tstamp(datetime.datetime.now(tzutc()))
@@ -178,7 +175,6 @@ def home(environ,start_response):
     return [response_body]
 
 def android(environ, start_response):
-    global ANDROID_TRIGGERED
     if  environ.get('HTTP_X_FORWARDED_FOR'):
         ip = environ['HTTP_X_FORWARDED_FOR'].strip()
     else: 
@@ -388,7 +384,6 @@ def application (environ, start_response):
    global CATCH
    global LIST
    global INACTIVITY_TO
-   global ANDROID_TRIGGERED
 
    if  'HTTP_X_FORWARDED_FOR' in environ:
       ip = environ['HTTP_X_FORWARDED_FOR'].strip()
@@ -445,7 +440,6 @@ def application (environ, start_response):
    if  environ['PATH_INFO'] == "/home_selected":
       # the js link to home page triggers this ajax url 
       # mark the sign-in conversation completed, return 204 or Success or Success
-      ANDROID_TRIGGERED = True
       #data = ['{}: {}\n'.format(key, value) for key, value in sorted(environ.items()) ]
       #logger.debug("need the correct ip:{}".format(data))
       logger.debug("function: home_selected. Setting flag to return_204")
