@@ -208,7 +208,7 @@ def android_splash(environ, start_response):
             "FQDN": fully_qualified_domain_name + '{{ captiveportal_splash_page }}', \
             'doc_root':get_iiab_env("WWWROOT") }
     es_txt={ 'message':"Haga clic en el botón para ir a la página de inicio de IIAB",\
-            "FQDN": fully_qualified_domain_name, + '{{ captiveportal_splash_page }}' \
+            "FQDN": fully_qualified_domain_name + '{{ captiveportal_splash_page }}', \
             'btn1':"IIAB",'doc_root':get_iiab_env("WWWROOT")}
     txt = en_txt
     if lang == "en":
@@ -453,9 +453,11 @@ def application (environ, start_response):
       set_204after(ip,PORTAL_TO)
       set_lasttimestamp(ip)
       status = '200 OK'
-      headers = [('Content-type', 'text/html')]
-      start_response(status, headers)
-      return [b""]
+      response_body = b''
+      response_headers = [('Content-type','text/html'),
+            ('Content-Length',str(len(response_body)))]
+      start_response(status, response_headers)
+      return [response_body]
 
    #### parse OS platform based upon URL  ##################
    # mac
