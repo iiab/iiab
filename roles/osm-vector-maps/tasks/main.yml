@@ -15,7 +15,14 @@
     url: "{{ osm_map_url }}/resources/regions.json"
     dest: /etc/iiab/
 
-- name: Symlink catalog {{ doc_root }}/common/assets/regions.json -> {{ vector_map_path }}/maplist/assets/regions.json
+- name: Fetch the city database
+  get_url:
+    url: "{{ iiab_map_url }}/{{ item }}"
+    dest: '{{ vector_map_path }}/viewer/'
+  with_items:
+      - regional-resources/cities1000.sqlite
+
+- name: Create a link to osm catalog in /common/assets
   file:
     src: "/etc/iiab/regions.json"
     dest: "{{ doc_root }}/common/assets/regions.json"
@@ -33,8 +40,11 @@
 
 - name: Fetch the javascript bundle with openlayers for Viewer page
   get_url:
-    url: "{{ osm_map_url }}/osm-source/regional-base/build/main.js"
+    url: "{{ osm_map_url }}/osm-source/regional-base/build/{{ item }}"
     dest: '{{ vector_map_path }}/viewer/'
+  with_items:
+      - main.js
+      - index.html
 
 - name: Fetch the index.html for test page
   get_url:
@@ -45,8 +55,10 @@
 # So bring the bounding box definition from cloud (bboxes.geojson is big)
 - name: Download bounding box definitions (bboxes.geojson) to {{ vector_map_path }}/maplist/assets/
   get_url:
-    url: "{{ osm_map_url }}/resources/bboxes.geojson"
+    url: "{{ osm_map_url }}/resources/{{ item }}"
     dest: '{{ vector_map_path }}/viewer/assets/'
+  with_items:
+      - bboxes.geojson
 
 - name: Copy the common assets for the general purpose map viewer
   copy: src={{ item }}
@@ -57,15 +69,6 @@
   with_fileglob:
         - assets/*
 
-- name: Copy the fonts for the general purpose map viewer
-  copy: src={{ item }}
-        dest="{{ doc_root }}/common/fonts/"
-        mode=0644
-        owner=root
-        group=root
-  with_fileglob:
-        - fonts/*
-
 - name: Copy the php tile server for the general purpose map viewer
   copy: src={{ item }}
         dest="{{ vector_map_path }}/viewer/"
@@ -74,13 +77,7 @@
         group=root
   with_items:
       - tileserver.php
-      - cities1000.sqlite
       - searchapi.php
-
-- name: Install python-geojson package, that helps with geojson
-  package:
-    name: python-geojson
-    state: present
 
 - name: Install the script to update osm catalog
   template:
@@ -99,22 +96,11 @@
     src: map_functions.js
     dest: '{{ vector_map_path }}/viewer/'
 
-- name: Install {{ nginx_config_dir }}/osm-vector-maps.conf from template
+- name: Install /etc/nginx/osm-vector-maps-nginx.conf from template
   template:
-    src: osm-vector-maps-nginx.conf
-    dest: "{{ nginx_config_dir }}/osm-vector-maps-nginx.conf"
-  when: osm_vector_maps_enabled | bool
+    src: osm-vector-maps-nginx.conf.j2
+    dest: "/etc/nginx/conf.d/osm-vector-maps-nginx.conf"
 
-- name: Remove {{ nginx_config_dir }}/osm-vector-maps.conf
-  file:
-    path: "{{ nginx_config_dir }}/osm-vector-maps-nginx.conf"
-    state: absent
-  when: not osm_vector_maps_enabled
-
-#- name: Does the {{ vector_map_path }}/index.html redirect already exist?
-#  stat:
-#    path: "{{ vector_map_path }}/index.html"
-#  register: osm_redirect
 
 #Copy the redirect to the test page -- delete this later if more than one map
 - name: Install {{ vector_map_path }}/index.html redirect for http://box/maps -> http://box/osm-vector-maps/maplist/ if no redirect exists
