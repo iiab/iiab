@@ -1,7 +1,7 @@
 ## Restructure of Map Packages
 1. Separate viewer program functions from map data, and install them separately.
-1. Update vector tiles to reflect data based upon OSM as of Sept 2019.
-2. Rewrite openlayers program to combime multiple regions of the world to maximum zoom 18 on the same map.
+2. Use sql functions to combine map data (to zoom level 10) with more detailed regional data to zoom 18.
 3. Add back in the San Jose region for testing purposes. 
 4. Increase the base install from zoom 9 to 10, so that city search is successful more of the time.
-5. Add a drag and drop feature which permits the student to add additional layers
+5. Include a hash in the installed map data, to facilitate combination of base map and regional data.
+6. Provide a command line tool to increase regional satellite data from zoom 9 to 13.
