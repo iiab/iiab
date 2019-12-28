@@ -15,12 +15,16 @@
     url: "{{ osm_map_url }}/resources/regions.json"
     dest: /etc/iiab/
 
+- name: Check for existenct of cities database
+  stat:
+    path: "{{ vector_map_path }}/cities1000.sqlite"
+  register: cities_installed
+
 - name: Fetch the city database
   get_url:
-    url: "{{ iiab_map_url }}/{{ item }}"
-    dest: '{{ vector_map_path }}/viewer/'
-  with_items:
-      - regional-resources/cities1000.sqlite
+    url: "{{ iiab_map_url }}/regional-resources/cities1000.sqlite"
+    dest: '{{ vector_map_path }}/viewer/cities1000.sqlite'
+  when: not cities_installed.stat.exists
 
 - name: Create a link to osm catalog in /common/assets
   file:
@@ -56,7 +60,7 @@
 - name: Download bounding box definitions (bboxes.geojson) to {{ vector_map_path }}/maplist/assets/
   get_url:
     url: "{{ osm_map_url }}/resources/{{ item }}"
-    dest: '{{ vector_map_path }}/viewer/assets/'
+    dest: '{{ vector_map_path }}/viewer/'
   with_items:
       - bboxes.geojson
 
@@ -68,6 +72,15 @@
         group=root
   with_fileglob:
         - assets/*
+
+- name: Copy the fonts for the general purpose map viewer
+  copy: src={{ item }}
+        dest="{{ doc_root }}/common/fonts/"
+        mode=0644
+        owner=root
+        group=root
+  with_fileglob:
+        - fonts/*
 
 - name: Copy the php tile server for the general purpose map viewer
   copy: src={{ item }}
