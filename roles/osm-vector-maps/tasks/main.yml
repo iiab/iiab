@@ -55,15 +55,6 @@
     url: "{{ osm_map_url }}/osm-source/regional-base/build/index.html"
     dest: '{{ vector_map_path }}/maplist/index.html'
 
-# Bboxes (bounding boxes) are currently square.  But geofabrik has non-rectangular bboxes.
-# So bring the bounding box definition from cloud (bboxes.geojson is big)
-- name: Download bounding box definitions (bboxes.geojson) to {{ vector_map_path }}/maplist/assets/
-  get_url:
-    url: "{{ osm_map_url }}/resources/{{ item }}"
-    dest: '{{ vector_map_path }}/viewer/'
-  with_items:
-      - bboxes.geojson
-
 - name: Copy the common assets for the general purpose map viewer
   copy: src={{ item }}
         dest="{{ vector_map_path }}/viewer/assets"
@@ -98,10 +89,11 @@
     dest: /usr/bin/iiab-update-map
     mode: "0755"
 
-- name: Copy the Countries geojson to assets
-  get_url:
-    url: "{{ osm_map_url }}/resources/countries.json"
-    dest: '{{ vector_map_path }}/viewer/assets'
+- name: Install the script to download map resources
+  copy:
+    src: aggregate.py
+    dest: /usr/bin/iiab-aggregate.py
+    mode: "0755"
 
 #  It is too complicated to use a single file for both iiab and admin-console
 - name: Copy the duplicated JavaScript (map_functions.js) to {{ vector_map_path }}/maplist/assets
@@ -114,6 +106,9 @@
     src: osm-vector-maps-nginx.conf.j2
     dest: "/etc/nginx/conf.d/osm-vector-maps-nginx.conf"
 
+- name: Install certificates for downloading maps via https
+  pip:
+    name: certifi
 
 #Copy the redirect to the test page -- delete this later if more than one map
 - name: Install {{ vector_map_path }}/index.html redirect for http://box/maps -> http://box/osm-vector-maps/maplist/ if no redirect exists
@@ -123,7 +118,8 @@
     dest: "{{ vector_map_path }}/index.html"
   #when: not osm_redirect.stat.exists
 
-- name: Reload Apache service ({{ apache_service }})    # e.g. apache2
-  systemd:
-    name: "{{ apache_service }}"
-    state: reloaded
+- name: Get packages necessary for map installation
+  package:
+      state: present
+      name:
+         - python-urllib3
