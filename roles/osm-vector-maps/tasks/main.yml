@@ -52,15 +52,6 @@
     url: "{{ osm_map_url }}/osm-source/regional-base/build/index.html"
     dest: '{{ vector_map_path }}/maplist/index.html'
 
-# Bboxes (bounding boxes) are currently square.  But geofabrik has non-rectangular bboxes.
-# So bring the bounding box definition from cloud (bboxes.geojson is big)
-- name: Download bounding box definitions (bboxes.geojson) to {{ vector_map_path }}/maplist/assets/
-  get_url:
-    url: "{{ osm_map_url }}/resources/{{ item }}"
-    dest: '{{ vector_map_path }}/viewer/'
-  with_items:
-      - bboxes.geojson
-
 - name: Copy the common assets for the general purpose map viewer
   copy: src={{ item }}
         dest="{{ vector_map_path }}/viewer/assets"
@@ -101,10 +92,11 @@
     dest: /usr/bin/iiab-update-map
     mode: '0755'
 
-- name: Copy the Countries geojson to assets
-  get_url:
-    url: "{{ osm_map_url }}/resources/countries.json"
-    dest: '{{ vector_map_path }}/viewer/assets'
+- name: Install the script to download map resources
+  copy:
+    src: aggregate.py
+    dest: /usr/bin/iiab-aggregate.py
+    mode: "0755"
 
 #  It is too complicated to use a single file for both iiab and admin-console
 - name: Copy the duplicated JavaScript (map_functions.js) to {{ vector_map_path }}/maplist/assets
@@ -118,16 +110,9 @@
     dest: "{{ nginx_config_dir }}/osm-vector-maps-nginx.conf"
   when: osm_vector_maps_enabled | bool
 
-- name: Remove {{ nginx_config_dir }}/osm-vector-maps.conf
-  file:
-    path: "{{ nginx_config_dir }}/osm-vector-maps-nginx.conf"
-    state: absent
-  when: not osm_vector_maps_enabled
-
-#- name: Does the {{ vector_map_path }}/index.html redirect already exist?
-#  stat:
-#    path: "{{ vector_map_path }}/index.html"
-#  register: osm_redirect
+- name: Install certificates for downloading maps via https
+  pip:
+    name: certifi
 
 #Copy the redirect to the test page -- delete this later if more than one map
 - name: Install {{ vector_map_path }}/index.html redirect for http://box/maps -> http://box/osm-vector-maps/maplist/ if no redirect exists
@@ -137,13 +122,8 @@
     dest: "{{ vector_map_path }}/index.html"
   #when: not osm_redirect.stat.exists
 
-- name: Reload 'nginx' systemd service
-  systemd:
-    name: nginx
-    state: reloaded
-
-- name: "Add 'osm_vector_maps_installed: True' to {{ iiab_state_file }}"
-  lineinfile:
-    dest: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
-    regexp: '^osm_vector_maps_installed'
-    line: 'osm_vector_maps_installed: True'
+- name: Get packages necessary for map installation
+  package:
+      state: present
+      name:
+         - python-urllib3
