@@ -32,7 +32,8 @@ sat_file = 'satellite.mbtiles'
 sat_filename = 'satellite_z0-z9_v3.mbtiles'
 internetarchive_url = 'http://10.10.123.13/internetarchive'
 region_path = '/etc/iiab'
-regions = {}
+regions_json = {}
+init = {}
 
 class MBTiles():
    def __init__(self, filename):
@@ -207,13 +208,14 @@ def chop_zoom_and_below(max_to_chop):
    db.Commit()
    
 def get_regions():
-   global regions
+   global regions_json
+   # error out if environment is missing
 
    REGION_INFO = '%s/regions.json'%region_path
    with open(REGION_INFO,'r') as region_fp:
       try:
          data = json.loads(region_fp.read())
-         regions = data['regions']
+         regions_json = data['regions']
       except:
          print("regions.json parse error")
          sys.exit(1)
@@ -284,6 +286,21 @@ def main():
    dest = os.path.join(viewer_path,sat_filename)
    fetcher.get_url_to_disk(src,dest)
 
+   get_regions()
+   if not args.region in regions_json.keys():
+      print('Region not found: %s'%args.region)
+      sys.exit(1)
+   src = '%s/%s'%(viewer_path,base_filename)
+   dest = '%s/%s'%(viewer_path,'base.mbtiles')
+   if os.path.islink(dest):
+      os.unlink(dest)
+   os.symlink(src,dest)
+   src = '%s/%s'%(viewer_path,sat_filename)
+   dest = '%s/%s'%(viewer_path,'satellite.mbtiles')
+   if os.path.islink(dest):
+      os.unlink(dest)
+   os.symlink(src,dest)
+   
    # now see if satellite needs updating
    #dest = viewer_path + '/' + sat_file
    #init_dest(dest)
