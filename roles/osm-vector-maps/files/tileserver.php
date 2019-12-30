@@ -73,16 +73,16 @@ class Server {
 
     //Get config from enviroment
     $envServerTitle = getenv('serverTitle');
-    if($envServerTitle !== FALSE){
+    if($envServerTitle !== false){
       $this->config['serverTitle'] = $envServerTitle;
     }
     $envBaseUrls = getenv('baseUrls');
-    if($envBaseUrls !== FALSE){
+    if($envBaseUrls !== false){
       $this->config['baseUrls'] = is_array($envBaseUrls) ?
               $envBaseUrls : explode(',', $envBaseUrls);
     }
     $envTemplate = getenv('template');
-    if($envBaseUrls !== FALSE){
+    if($envBaseUrls !== false){
       $this->config['template'] = $envTemplate;
     }
   }
@@ -120,7 +120,7 @@ class Server {
       $this->x = $params[1];
       $file = explode('.', $params[0]);
       $this->y = $file[0];
-      $this->ext = isset($file[1]) ? $file[1] : NULL;
+      $this->ext = isset($file[1]) ? $file[1] : null;
     }
   }
 
@@ -136,7 +136,7 @@ class Server {
         return $value;
       }
     }
-    return FALSE;
+    return false;
   }
 
   /**
@@ -146,9 +146,9 @@ class Server {
    */
   public function isDBLayer($layer) {
     if (is_file($this->config['dataRoot'] . $layer . '.mbtiles')) {
-      return TRUE;
+      return true;
     } else {
-      return FALSE;
+      return false;
     }
   }
 
@@ -159,9 +159,9 @@ class Server {
    */
   public function isFileLayer($layer) {
     if (is_dir($layer)) {
-      return TRUE;
+      return true;
     } else {
-      return FALSE;
+      return false;
     }
   }
 
@@ -323,9 +323,9 @@ class Server {
     header('Etag:' . $eTag);
     if (@strtotime($_SERVER['HTTP_IF_MODIFIED_SINCE']) == $lastModifiedTime ||
             @trim($_SERVER['HTTP_IF_NONE_MATCH']) == $eTag) {
-      return TRUE;
+      return true;
     } else {
-      return FALSE;
+      return false;
     }
   }
 
@@ -339,7 +339,7 @@ class Server {
    */
   public function renderTile($tileset, $z, $y, $x, $ext) {
     if ($this->isDBLayer($tileset)) {
-      if ($this->isModified($tileset) == TRUE) {
+      if ($this->isModified($tileset) == true) {
         header('Access-Control-Allow-Origin: *');
         header('HTTP/1.1 304 Not Modified');
         die;
@@ -354,17 +354,17 @@ class Server {
       }
       $result = $this->db->query('select tile_data as t from tiles where zoom_level=' . $z . ' and tile_column=' . $x . ' and tile_row=' . $y);
       $data = $result->fetchColumn();
-      if (!isset($data) || $data === FALSE) {
+      if (!isset($data) || $data === false) {
         //if tile doesn't exist
         //select scale of tile (for retina tiles)
         $result = $this->db->query('select value from metadata where name="scale"');
         $resultdata = $result->fetchColumn();
-        $scale = isset($resultdata) && $resultdata !== FALSE ? $resultdata : 1;
+        $scale = isset($resultdata) && $resultdata !== false ? $resultdata : 1;
         $this->getCleanTile($scale, $ext);
       } else {
         $result = $this->db->query('select value from metadata where name="format"');
         $resultdata = $result->fetchColumn();
-        $format = isset($resultdata) && $resultdata !== FALSE ? $resultdata : 'png';
+        $format = isset($resultdata) && $resultdata !== false ? $resultdata : 'png';
         if ($format == 'jpg') {
           $format = 'jpeg';
         }
@@ -380,11 +380,11 @@ class Server {
     } elseif ($this->isFileLayer($tileset)) {
       $name = './' . $tileset . '/' . $z . '/' . $x . '/' . $y;
       $mime = 'image/';
-      if($ext != NULL){
+      if($ext != null){
         $name .= '.' . $ext;
       }
       if ($fp = @fopen($name, 'rb')) {
-        if($ext != NULL){
+        if($ext != null){
           $mime .= $ext;
         }else{
           //detect image type from file
@@ -421,7 +421,6 @@ class Server {
         header('Access-Control-Allow-Origin: *');
         header('HTTP/1.1 204 No Content');
         header('Content-Type: application/json; charset=utf-8');
-        echo '{"message":"Tile does not exist"}';
         break;
       case 'webp':
         header('Access-Control-Allow-Origin: *');
@@ -451,9 +450,9 @@ class Server {
    * @param integer $y
    * @param integer $x
    */
-  public function renderUTFGrid($tileset, $z, $y, $x, $flip = TRUE) {
+  public function renderUTFGrid($tileset, $z, $y, $x, $flip = true) {
     if ($this->isDBLayer($tileset)) {
-      if ($this->isModified($tileset) == TRUE) {
+      if ($this->isModified($tileset) == true) {
         header('HTTP/1.1 304 Not Modified');
       }
       if ($flip) {
@@ -467,7 +466,7 @@ class Server {
         $result = $this->db->query($query);
         $data = $result->fetch(PDO::FETCH_ASSOC);
 
-        if ($data !== FALSE) {
+        if ($data !== false) {
           $grid = gzuncompress($data['grid']);
           $grid = substr(trim($grid), 0, -1);
 
@@ -757,7 +756,7 @@ class Wmts extends Server {
    */
   public function get() {
     $request = $this->getGlobal('Request');
-    if ($request !== FALSE && $request == 'gettile') {
+    if ($request !== false && $request == 'gettile') {
       $this->getTile();
     } else {
       parent::setDatasets();
@@ -1080,7 +1079,7 @@ class Wmts extends Server {
   public function getTile() {
     $request = $this->getGlobal('Request');
     if ($request) {
-      if (strpos('/', $_GET['Format']) !== FALSE) {
+      if (strpos('/', $_GET['Format']) !== false) {
         $format = explode('/', $_GET['Format']);
         $format = $format[1];
       } else {
@@ -1293,7 +1292,7 @@ class Router {
       if (!isset($config['baseUrls'][0])) {
         $config['baseUrls'][0] = $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI'];
       }
-      if (strpos($_SERVER['REQUEST_URI'], '=') != FALSE) {
+      if (strpos($_SERVER['REQUEST_URI'], '=') != false) {
         $kvp = explode('=', $_SERVER['REQUEST_URI']);
         $_GET['callback'] = $kvp[1];
         $params[0] = 'index';
