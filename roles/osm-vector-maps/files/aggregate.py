@@ -8,7 +8,8 @@ import sqlite3
 import sys, os
 import argparse
 #import curses
-import urllib3
+#import urllib3
+import wget
 #import certifi
 #import tools
 import subprocess
@@ -150,30 +151,16 @@ class MBTiles():
    def Commit(self):
       self.conn.commit()
 
-class GetUrl(object):
 
-   def __init__(self):
-      #self.http = urllib3.PoolManager(cert_reqs='CERT_REQUIRED',\
-      #     ca_certs=certifi.where())
-      self.http = urllib3.PoolManager()
-
-   def get_url_to_disk(self,src,dest):
-      if os.path.isfile(dest):
-         # We might want to check md5 for possible change
-         return
-      try:
-         r = (self.http.request("GET",src,retries=10,preload_content=False))
-      except Exception as e:
-         print('failed to open %s. Error: %s'%(src,e,))
-         sys.exit(1)
-      with open(dest,'wb') as fp:
-         while True:
-            chunk = r.read(1000000)
-            if not chunk:
-               break
-            fp.write(chunk)
-      r.release_conn()
+def get_url_to_disk(src,dest):
+   if os.path.isfile(dest):
+      # We might want to check md5 for possible change
       return
+   try:
+      wget.download(src,dest)
+   except Exception as e:
+      print('failed to open %s. Error: %s'%(src,e,))
+      sys.exit(1)
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Assemble Resources for Maps.")
@@ -276,15 +263,14 @@ def main():
       sys.exit(1)
 
    # Fetch the files required for all maps
-   fetcher = GetUrl()
    src = os.path.join(internetarchive_url,base_filename)
    dest = os.path.join(viewer_path,base_filename)
    print(repr(src), repr(dest))
-   fetcher.get_url_to_disk(src,dest)
+   get_url_to_disk(src,dest)
 
    src = os.path.join(internetarchive_url,sat_filename)
    dest = os.path.join(viewer_path,sat_filename)
-   fetcher.get_url_to_disk(src,dest)
+   get_url_to_disk(src,dest)
 
    get_regions()
    if not args.region in regions_json.keys():
