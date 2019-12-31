@@ -157,6 +157,7 @@ def get_url_to_disk(src,dest):
       # We might want to check md5 for possible change
       return
    try:
+      print("Downloading %s"%src)
       wget.download(src,dest)
    except Exception as e:
       print('failed to open %s. Error: %s'%(src,e,))
@@ -272,10 +273,6 @@ def main():
    dest = os.path.join(viewer_path,sat_filename)
    get_url_to_disk(src,dest)
 
-   get_regions()
-   if not args.region in regions_json.keys():
-      print('Region not found: %s'%args.region)
-      sys.exit(1)
    src = '%s/%s'%(viewer_path,base_filename)
    dest = '%s/%s'%(viewer_path,'base.mbtiles')
    if os.path.islink(dest):
@@ -287,6 +284,21 @@ def main():
       os.unlink(dest)
    os.symlink(src,dest)
    
+   get_regions()
+   if not args.region in regions_json.keys():
+      print('Region not found: %s'%args.region)
+      sys.exit(1)
+
+   src = os.path.join(internetarchive_url,regions_json[args.region]['detail_url'])
+   dest = os.path.join(viewer_path,regions_json[args.region]['detail_url'])
+   get_url_to_disk(src,dest)
+
+   src = '%s/%s'%(viewer_path,regions_json[args.region]['detail_url'])
+   dest = '%s/%s'%(viewer_path,'detail.mbtiles')
+   if os.path.islink(dest):
+      os.unlink(dest)
+   os.symlink(src,dest)
+
    # now see if satellite needs updating
    #dest = viewer_path + '/' + sat_file
    #init_dest(dest)
