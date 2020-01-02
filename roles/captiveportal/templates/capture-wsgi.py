@@ -1,4 +1,4 @@
-#! /usr/bin/env python
+#! /usr/bin/env python3
 # -*- coding: utf-8 -*-
 # using Python's bundled WSGI server
 
@@ -13,6 +13,7 @@ import sys
 from jinja2 import Environment, FileSystemLoader
 import sqlite3
 import re
+from iiab.iiab_lib import get_iiab_env
 
 # Notes on timeout strategy
 # every client timestamp is recorded into current_ts
@@ -23,7 +24,7 @@ import re
 # 
 
 # Create the jinja2 environment.
-CAPTIVE_PORTAL_BASE = "/opt/iiab/captive-portal"
+CAPTIVE_PORTAL_BASE = "/opt/iiab/captiveportal"
 j2_env = Environment(loader=FileSystemLoader(CAPTIVE_PORTAL_BASE),trim_blocks=True)
 
 # Define time outs
@@ -34,61 +35,33 @@ PORTAL_TO = 20 # delay after triggered by ajax upon click of link to home page
 
 
 # Get the IIAB variables
-sys.path.append('/etc/iiab/')
-from iiab_env import get_iiab_env
 doc_root = get_iiab_env("WWWROOT")
 fully_qualified_domain_name = get_iiab_env("FQDN")
 
 
+loggingLevel = "ERROR"
+#loggingLevel = "DEBUG"
+if len(sys.argv) > 1:
+   if sys.argv[1] == '-l':
+      loggingLevel = "DEBUG"
+      
 # set up some logging -- selectable for diagnostics
-# Create dummy iostream to capture stderr and stdout
-class StreamToLogger(object):
-    """
-    Fake file-like stream object that redirects writes to a logger instance.
-    """
-    def __init__(self, logger, log_level=logging.INFO):
-        self.logger = logger
-        self.log_level = log_level
-        self.linebuf = ''
-
-    def write(self, buf):
-        for line in buf.rstrip().splitlines():
-            self.logger.log(self.log_level, line.rstrip())
-
-#if len(sys.argv) > 1 and sys.argv[1] == '-l':
-if True:
-    loggingLevel = logging.DEBUG
-    try:
-      os.remove('/var/log/apache2/portal.log')
-    except:
-      pass
-else:
-    loggingLevel = logging.ERROR
-
-# divert stdout and stderr to logger
 logging.basicConfig(filename='/var/log/apache2/portal.log',format='%(asctime)s.%(msecs)03d:%(name)s:%(message)s', datefmt='%M:%S',level=loggingLevel)
 logger = logging.getLogger('/var/log/apache2/portal.log')
 handler = RotatingFileHandler("/var/log/apache2/portal.log", maxBytes=100000, backupCount=2)
 logger.addHandler(handler)
 
-stdout_logger = logging.getLogger('STDOUT')
-sl = StreamToLogger(stdout_logger, logging.ERROR)
-sys.stdout = sl
-
-stderr_logger = logging.getLogger('STDERR')
-sl = StreamToLogger(stderr_logger, logging.ERROR)
-sys.stderr = sl
-PORT={{ captive_portal_port }}
+PORT={{ captiveportal_port }}
+#PORT=9090
 
 
 # Define globals
-ANDROID_TRIGGERED=False
 
 logger.debug("")
 logger.debug('##########################################')
 # what language are we speaking?
 lang = os.environ['LANG'][0:2]
-logger.debug('speaking: %s'%lang)
+logger.debug('speaking: {}'.format(lang))
 
 def tstamp(dtime):
     '''return a UNIX style seconds since 1970 for datetime input'''
@@ -141,8 +114,7 @@ def timeout_info(ip):
 def is_inactive(ip):
     ts=tstamp(datetime.datetime.now(tzutc()))
     current_ts, last_ts, send204after = timeout_info(ip) 
-    logger.debug("In is_inactive. current_ts:%s. last_ts:%s. send204after:%s"%\
-            (current_ts,last_ts,send204after,))
+    logger.debug("In is_inactive. current_ts:{}. last_ts:{}. send204after:{}".format(current_ts,last_ts,send204after,))
     if not last_ts:
         return True
     if ts - int(last_ts) > INACTIVITY_TO:
@@ -154,7 +126,7 @@ def is_after204_timeout(ip):
     ts=tstamp(datetime.datetime.now(tzutc()))
     current_ts, last_ts, send204after = timeout_info(ip) 
     if send204after == 0: return False
-    logger.debug("function: is_after204_timeout send204after:%s current: %s"%(send204after,ts,))
+    logger.debug("function: is_after204_timeout send204after:{} current: {}".format(send204after,ts,))
     if not send204after:
         return False
     if ts - int(send204after) > 0:
@@ -163,12 +135,10 @@ def is_after204_timeout(ip):
         return False
 
 def set_204after(ip,value):
-    global ANDROID_TRIGGERED
     ts=tstamp(datetime.datetime.now(tzutc()))
     sql = 'UPDATE users SET send204after = ?  where ip = ?'
     c.execute(sql,(ts + value,ip,))
     conn.commit()
-    ANDROID_TRIGGERED = False
 
 def set_lasttimestamp(ip):
     ts=tstamp(datetime.datetime.now(tzutc()))
@@ -178,31 +148,33 @@ def set_lasttimestamp(ip):
 
 #  ###################  Action routines based on OS  ################3
 def microsoft(environ,start_response):
+    logger.debug('in microsoft')
     # firefox -- seems both mac and Windows use it
     agent = environ.get('HTTP_USER_AGENT','default_agent')
     if agent.startswith('Mozilla'):
+       logger.debug("sending microsoft redirect for agent Mozilla")
        return home(environ, start_response) 
-    logger.debug("sending microsoft redirect")
-    response_body = ""
+    response_body = b""
     status = '302 Moved Temporarily'
-    response_headers = [('Location','http://box.lan/home'),
+    response_headers = [('Location','http://' + fully_qualified_domain_name + '{{ captiveportal_splash_page }}'),
             ('Content-type','text/html'),
             ('Content-Length',str(len(response_body)))]
     start_response(status, response_headers)
+    logger.debug("redirect to home. Status: %s Headers: %s"%(status,repr(response_headers)))
     return [response_body]
 
 def home(environ,start_response):
     logger.debug("sending direct to home")
-    response_body = ""
+    response_body = b""
     status = '302 Moved Temporarily'
-    response_headers = [('Location','http://' + fully_qualified_domain_name + '/home'),
+    response_headers = [('Location','http://' + fully_qualified_domain_name + '{{ captiveportal_splash_page }}'),
             ('Content-type','text/html'),
             ('Content-Length',str(len(response_body)))]
     start_response(status, response_headers)
+    logger.debug("redirect to home. Status: %s Headers: %s"%(status,repr(response_headers)))
     return [response_body]
 
 def android(environ, start_response):
-    global ANDROID_TRIGGERED
     if  environ.get('HTTP_X_FORWARDED_FOR'):
         ip = environ['HTTP_X_FORWARDED_FOR'].strip()
     else: 
@@ -211,16 +183,16 @@ def android(environ, start_response):
     if system_version is None:
        return  put_302(environ, start_response)
     if system_version[0:1] < '6':
-        logger.debug("system < 6:%s"%system_version)
+        logger.debug("system < 6:{}".format(system_version))
         location = '/android_splash'
         set_204after(ip,0)
     elif system_version[:1] >= '7':
-        location = "http://" + fully_qualified_domain_name + "/home"
+        location = "http://" + fully_qualified_domain_name + '{{ captiveportal_splash_page }}'
     else:
         #set_204after(ip,20)
         location = '/android_https'
     agent = environ.get('HTTP_USER_AGENT','default_agent')
-    response_body = "hello"
+    response_body = b"hello"
     status = '302 Moved Temporarily'
     response_headers = [('Location',location)]
     start_response(status, response_headers)
@@ -229,10 +201,10 @@ def android(environ, start_response):
 def android_splash(environ, start_response):
     en_txt={ 'message':"Click on the button to go to the IIAB home page",\
             'btn1':"GO TO IIAB HOME PAGE", \
-            "FQDN": fully_qualified_domain_name, \
+            "FQDN": fully_qualified_domain_name + '{{ captiveportal_splash_page }}', \
             'doc_root':get_iiab_env("WWWROOT") }
     es_txt={ 'message':"Haga clic en el botón para ir a la página de inicio de IIAB",\
-            "FQDN": fully_qualified_domain_name, \
+            "FQDN": fully_qualified_domain_name + '{{ captiveportal_splash_page }}', \
             'btn1':"IIAB",'doc_root':get_iiab_env("WWWROOT")}
     txt = en_txt
     if lang == "en":
@@ -240,6 +212,7 @@ def android_splash(environ, start_response):
     elif lang == "es":
         txt = es_txt
     response_body = str(j2_env.get_template("simple.template").render(**txt))
+    response_body = response_body.encode()
     status = '200 OK'
     response_headers = [('Content-type','text/html'),
             ('Content-Length',str(len(response_body)))]
@@ -250,10 +223,10 @@ def android_https(environ, start_response):
     en_txt={ 'message':"""Please ignore the SECURITY warning which appears after clicking the first button""",\
              'btn2':'Click this first Go to the browser we need',\
              'btn1':'Then click this to go to IIAB home page',\
-             "FQDN": fully_qualified_domain_name, \
+             "FQDN": fully_qualified_domain_name + '{{ captiveportal_splash_page }}', \
             'doc_root':get_iiab_env("WWWROOT") }
     es_txt={ 'message':"Haga clic en el botón para ir a la página de inicio de IIAB",\
-            "FQDN": fully_qualified_domain_name, \
+            "FQDN": fully_qualified_domain_name + '{{ captiveportal_splash_page }}', \
             'btn1':"IIAB",'doc_root':get_iiab_env("WWWROOT")}
     txt = en_txt
     if lang == "en":
@@ -261,6 +234,7 @@ def android_https(environ, start_response):
     elif lang == "es":
         txt = es_txt
     response_body = str(j2_env.get_template("simple.template").render(**txt))
+    response_body = response_body.encode()
     status = '200 OK'
     response_headers = [('Content-type','text/html'),
             ('Content-Length',str(len(response_body)))]
@@ -268,13 +242,14 @@ def android_https(environ, start_response):
     return [response_body]
 
 def mac_splash(environ,start_response):
+    logger.debug('in mac_splash')
     logger.debug("in function mac_splash")
-    en_txt={ 'message':"Click on the button to go to the IIAB home page",\
-            'btn1':"GO TO IIAB HOME PAGE",'success_token': 'Success',
-            "FQDN": fully_qualified_domain_name, \
+    en_txt={ 'message': "Click on the button to go to the IIAB home page",\
+            'btn1': "GO TO IIAB HOME PAGE",'success_token': 'Success',
+            "FQDN": fully_qualified_domain_name + '{{ captiveportal_splash_page }}', \
             'doc_root':get_iiab_env("WWWROOT")}
     es_txt={ 'message':"Haga clic en el botón para ir a la página de inicio de IIAB",\
-            "FQDN": fully_qualified_domain_name, \
+            "FQDN": fully_qualified_domain_name + '{{ captiveportal_splash_page }}', \
             'btn1':"IIAB",'doc_root':get_iiab_env("WWWROOT")}
     txt = en_txt
     if lang == "en":
@@ -283,6 +258,7 @@ def mac_splash(environ,start_response):
         txt = es_txt
     set_lasttimestamp(ip)
     response_body = str(j2_env.get_template("mac.template").render(**txt))
+    response_body = response_body.encode()
     status = '200 Success'
     response_headers = [('Content-type','text/html'),
             ('Content-Length',str(len(response_body)))]
@@ -290,6 +266,7 @@ def mac_splash(environ,start_response):
     return [response_body]
 
 def macintosh(environ, start_response):
+    logger.debug('in macintosh')
     global ip
     logger.debug("in function mcintosh")
     #print >> sys.stderr , "Geo Print to stderr" + environ['HTTP_HOST']
@@ -302,6 +279,7 @@ def macintosh(environ, start_response):
         response_body = """<html><head><script>
             window.location.reload(true)
             </script></body></html>"""
+        response_body = response_body.encode()
         status = '302 Moved Temporarily'
         response_headers = [('content','text/html')]
         start_response(status, response_headers)
@@ -309,18 +287,12 @@ def macintosh(environ, start_response):
     else:
         return mac_splash(environ,start_response)
 
-def microsoft_connect(environ,start_response):
-    status = '200 ok'
-    headers = [('Content-type', 'text/html')]
-    start_response(status, headers)
-    return ["Microsoft Connect Test"]
-
 # =============  Return html pages  ============================
 def banner(environ, start_response):
     status = '200 OK'
     headers = [('Content-type', 'image/png')]
     start_response(status, headers)
-    image = open("%s/js-menu/menu-files/images/iiab_banner6.png"%doc_root, "rb").read()
+    image = open("{}/js-menu/menu-files/images/iiab_banner6.png".format(doc_root), "rb").read()
     return [image]
 
 def bootstrap(environ, start_response):
@@ -328,7 +300,7 @@ def bootstrap(environ, start_response):
     status = '200 OK'
     headers = [('Content-type', 'text/javascript')]
     start_response(status, headers)
-    boot = open("%s/common/js/bootstrap.min.js"%doc_root, "rb").read() 
+    boot = open("{}/common/js/bootstrap.min.js".format(doc_root), "rb").read() 
     return [boot]
 
 def jquery(environ, start_response):
@@ -336,7 +308,7 @@ def jquery(environ, start_response):
     status = '200 OK'
     headers = [('Content-type', 'text/javascript')]
     start_response(status, headers)
-    boot = open("%s/common/js/jquery.min.js"%doc_root, "rb").read() 
+    boot = open("{}/common/js/jquery.min.js".format(doc_root), "rb").read() 
     return [boot]
 
 def bootstrap_css(environ, start_response):
@@ -344,25 +316,25 @@ def bootstrap_css(environ, start_response):
     status = '200 OK'
     headers = [('Content-type', 'text/css')]
     start_response(status, headers)
-    boot = open("%s/common/css/bootstrap.min.css"%doc_root, "rb").read() 
+    boot = open("{}/common/css/bootstrap.min.css".format(doc_root), "rb").read() 
     return [boot]
 
 def null(environ, start_response):
     status = '404 Not Found'
     headers = [('Content-type', 'text/html')]
     start_response(status, headers)
-    return [""]
+    return [b""]
 
 def success(environ, start_response):
     status = '200 ok'
-    html = '<html><head><title>Success</title></head><body>Success</body></html>'
+    html = b'<html><head><title>Success</title></head><body>Success</body></html>'
     headers = [('Content-type', 'text/html')]
     start_response(status, headers)
     return [html]
 
 def put_204(environ, start_response):
     status = '204 No Data'
-    response_body = ''
+    response_body = b''
     response_headers = [('Content-type','text/html'),
             ('Content-Length',str(len(response_body)))]
     start_response(status, response_headers)
@@ -371,8 +343,8 @@ def put_204(environ, start_response):
 
 def put_302(environ, start_response):
     status = '302 Moved Temporarily'
-    response_body = ''
-    location = "http://" + fully_qualified_domain_name + "/home"
+    response_body = b''
+    location = "http://" + fully_qualified_domain_name + '{{ captiveportal_splash_page }}'
     response_headers = [('Content-type','text/html'),
             ('Location',location), 
             ('Content-Length',str(len(response_body)))]
@@ -412,23 +384,22 @@ def application (environ, start_response):
    global CATCH
    global LIST
    global INACTIVITY_TO
-   global ANDROID_TRIGGERED
 
    if  'HTTP_X_FORWARDED_FOR' in environ:
       ip = environ['HTTP_X_FORWARDED_FOR'].strip()
    else:
-      data = ['%s: %s\n' % (key, value) for key, value in sorted(environ.items()) ]
-      #logger.debug("need the correct ip:%s"%data)
+      data = ['{}: {}\n'.format(key, value) for key, value in sorted(environ.items()) ]
+      #logger.debug("need the correct ip:{}".format(data))
       ip = environ['REMOTE_ADDR'].strip()
-   cmd="arp -an %s|gawk \'{print $4}\'" % ip
+   cmd="arp -an %s|gawk \'{print $4}\'"%(ip)
    mac = subprocess.check_output(cmd, shell=True)
    data = []
-   data.append("host: %s\n"%environ['HTTP_HOST'])
-   data.append("path: %s\n"%environ['PATH_INFO'])
-   data.append("query: %s\n"%environ['QUERY_STRING'])
-   data.append("ip: %s\n"%ip)
+   data.append("host: {}\n".format(environ['HTTP_HOST']))
+   data.append("path: {}\n".format(environ['PATH_INFO']))
+   data.append("query: {}\n".format(environ['QUERY_STRING']))
+   data.append("ip: {}\n".format(ip))
    agent = environ.get('HTTP_USER_AGENT','default_agent')
-   data.append("AGENT: %s\n"%agent)
+   data.append("AGENT: {}\n".format(agent))
    logger.debug(data)
    #print(data)
    found = False
@@ -441,7 +412,7 @@ def application (environ, start_response):
    sql = "UPDATE users SET current_ts = ? where ip = ?" 
    c.execute(sql,(ts,ip,))
    if c.rowcount == 0:
-      logger.debug("failed UPDATE  users SET current_ts = %s WHERE ip = %s"%(ts,ip,)) 
+      logger.debug("failed UPDATE  users SET current_ts = {} WHERE ip = {}".format(ts,ip,)) 
    conn.commit()
    ymd=datetime.datetime.today().strftime("%y%m%d-%H%M")
 
@@ -469,17 +440,18 @@ def application (environ, start_response):
    if  environ['PATH_INFO'] == "/home_selected":
       # the js link to home page triggers this ajax url 
       # mark the sign-in conversation completed, return 204 or Success or Success
-      ANDROID_TRIGGERED = True
-      #data = ['%s: %s\n' % (key, value) for key, value in sorted(environ.items()) ]
-      #logger.debug("need the correct ip:%s"%data)
+      #data = ['{}: {}\n'.format(key, value) for key, value in sorted(environ.items()) ]
+      #logger.debug("need the correct ip:{}".format(data))
       logger.debug("function: home_selected. Setting flag to return_204")
       #print("setting flag to return_204")
       set_204after(ip,PORTAL_TO)
       set_lasttimestamp(ip)
       status = '200 OK'
-      headers = [('Content-type', 'text/html')]
-      start_response(status, headers)
-      return [""]
+      response_body = b''
+      response_headers = [('Content-type','text/html'),
+            ('Content-Length',str(len(response_body)))]
+      start_response(status, response_headers)
+      return [response_body]
 
    #### parse OS platform based upon URL  ##################
    # mac
@@ -514,7 +486,7 @@ def application (environ, start_response):
       environ['PATH_INFO'] == "/gen_204" or\
       environ['HTTP_HOST'] == "connectivitycheck.gstatic.com":
       current_ts, last_ts, send204after = timeout_info(ip) 
-      logger.debug("current_ts: %s last_ts: %s send204after: %s"%(current_ts, last_ts, send204after,))
+      logger.debug("current_ts: {} last_ts: {} send204after: {}".format(current_ts, last_ts, send204after,))
       if not last_ts or (ts - int(last_ts) > INACTIVITY_TO):
           return android(environ, start_response) 
       elif is_after204_timeout(ip):
@@ -533,7 +505,7 @@ def application (environ, start_response):
      environ['HTTP_HOST'] == "teredo.ipv6.microsoft.com.nsatc.net": 
      return microsoft(environ, start_response) 
 
-   logger.debug("executing the default 302 response. [%s"%data)
+   logger.debug("executing the default 302 response. [{}".format(data))
    return put_302(environ,start_response)
 
 # Instantiate the server
@@ -545,5 +517,5 @@ if __name__ == "__main__":
     )
 
     httpd.serve_forever()
-#vim: tabstop=3 expandtab shiftwidth=3 softtabstop=3 background=dark
+#vim: tabstop=4 expandtab shiftwidth=4 softtabstop=4 background=dark
 
