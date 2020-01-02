@@ -296,6 +296,37 @@ def sec2hms(n):
     seconds = n 
     return '%s days, %s hours, %s minutes %2.1f seconds'%(days,hours,minutes,seconds)
 
+def chop_zoom_and_below(max_to_chop):
+   # chop a copied database
+   total_copied = 0.0
+   if not args.mbtiles:
+      print("Pliease specify sqlite database to chop with -m option")
+      sys.exit(1)
+   if not os.path.isfile(args.mbtiles):
+      print("Failed to open %s"%args.mbtiles)
+      sys.exit(1)
+   dbname = './work/%s'%os.path.basename(args.mbtiles)
+   shutil.copy(args.mbtiles,dbname)
+   # open the database  
+   db = MBTiles(dbname)
+   for zoom in range(args.zoom + 1):
+      sql = 'select * from map where zoom_level = ?'
+      db.c.execute(sql,(zoom,))
+      print("Working on zoom level %s"%zoom)
+      rows = db.c.fetchall()
+      for row in rows:
+         try:
+            db.DeleteTile(row['zoom_level'],row['tile_column'],row['tile_row'])
+            total_copied += 1
+            if total_copied % 100 == 0:
+               print('\rTotal Chopped %.0f'%total_copied)
+         except Exception as e:
+            print('DeleteTile in chop_zoom error:%s'%e)
+            sys.exit(1)
+   print('vacumming database')
+   db.c.execute('vacuum')
+   db.Commit()
+   
 def copy_if_new(src,dest):
    src_db = MBTiles(src)
    dest_db = MBTiles(dest)
@@ -326,10 +357,11 @@ def main():
    # The --zoom option uses MBTiles class to truncate bottom of tile pyramid.
    if args.zoom:
       print("Copying zoom level %s and above"%args.zoom)
-      copy_to_iiab_format(args.zoom)
-      sys.exit(1)
+      #copy_to_iiab_format(args.zoom)
+      chop_zoom_and_below(args.zoom)
       elapsed = time.time() - start_time
       print(sec2hms(elapsed))
+      sys.exit(1)
    
 
    # Fetch the files required for all maps
