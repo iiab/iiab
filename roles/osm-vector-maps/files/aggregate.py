@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from __future__ import generators    # needs to be at the top of your module
 # -*- coding: UTF-8 -*-
 # Assemble an output mbtiles database from multiple input sources (perhaps from openmaptiles.org)
 
@@ -25,6 +26,7 @@ import glob
 # GLOBALS
 args = object
 mbTiles = object
+tile_id_is_valid_hash = False
 viewer_path = '/library/www/osm-vector-maps/viewer'
 input_dir_path = '/library/working/maps'
 base_file = 'osm.mbtiles'
@@ -49,7 +51,8 @@ class MBTiles():
       del self.conn
 
    def GetTile(self, zoomLevel, tileColumn, tileRow):
-      rows = self.c.execute("SELECT tile_data FROM tiles WHERE zoom_level = ? AND tile_column = ? AND tile_row = ?", 
+      rows = self.c.execute("SELECT tile_data FROM tiles WHERE zoom_level = ?"\
+                          " AND tile_column = ? AND tile_row = ?", 
          (zoomLevel, tileColumn, tileRow))
       rows = list(rows)
       if len(rows) == 0:
@@ -77,13 +80,19 @@ class MBTiles():
       if self.c.rowcount == 0:
          raise RuntimeError("Metadata name not found")
 
-   def SetTile(self, zoomLevel, tileColumn, tileRow, data):
+   def SetTile(self, zoomLevel, tileColumn, tileRow, data, hash=None):
       tile_id = self.TileExists(zoomLevel, tileColumn, tileRow)
-      if tile_id: 
-         tile_id = uuid.uuid4().hex
+      if tile_id and tile_id == hash: 
+         return
+      if not hash:
+         hl = hashlib.md5()
+         hl.update(data)
+         tile_id = hl.hexdigest()
+      if tile_id:
          operation = 'update images'
          self.c.execute("DELETE FROM images  WHERE tile_id = ?;", ([tile_id]))
-         self.c.execute("INSERT INTO images (tile_data,tile_id) VALUES ( ?, ?);", (sqlite3.Binary(data),tile_id))
+         self.c.execute("INSERT INTO images (tile_data,tile_id) "\
+                        "VALUES ( ?, ?);", (sqlite3.Binary(data),tile_id))
          if self.c.rowcount != 1:
             raise RuntimeError("Failure %s RowCount:%s"%(operation,self.c.rowcount))
          self.c.execute("""UPDATE map SET tile_id=? where zoom_level = ? AND 
@@ -94,7 +103,7 @@ class MBTiles():
          self.conn.commit()
          return
       else: # this is not an update
-         tile_id = uuid.uuid4().hex
+         tile_id = hash
          self.c.execute("INSERT INTO images ( tile_data,tile_id) VALUES ( ?, ?);", (sqlite3.Binary(data),tile_id))
          if self.c.rowcount != 1:
             raise RuntimeError("Insert image failure")
@@ -105,7 +114,6 @@ class MBTiles():
          raise RuntimeError("Failure %s RowCount:%s"%(operation,self.c.rowcount))
       self.conn.commit()
    
-
    def DeleteTile(self, zoomLevel, tileColumn, tileRow):
       tile_id = self.TileExists(zoomLevel, tileColumn, tileRow)
       if not tile_id:
@@ -165,35 +173,102 @@ def get_url_to_disk(src,dest):
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Assemble Resources for Maps.")
-    parser.add_argument("region", help="Looked up in regions.json")
+    parser.add_argument("region", help="Looked up in regions.json.")
     parser.add_argument("-m", "--mbtiles", help="mbtiles filename.")
-    parser.add_argument('-r',"--remove", help="Tiles below this zoom from MBTILES", type=int)
+    parser.add_argument('-z',"--zoom", help="Start copy from this zoom.", 
+                        type=int)
+    parser.add_argument('-f',"--force", help="Force building database anew.", 
+                        action='store_true',default=False)
     return parser.parse_args()
 
-def chop_zoom_and_below(max_to_chop):
-   # chop a copied database
+# This code require Python 2.2.1 or later
+
+def ResultIter(cursor, arraysize=10000):
+    'An iterator that uses fetchmany to keep memory usage down'
+    while True:
+        results = cursor.fetchmany(arraysize)
+        if not results:
+            break
+        for result in results:
+            yield result
+
+def copy_to_iiab_format(start_from):
+   global tile_id_is_valid_hash 
+   # IIAB format uses md5 hexdigest as link between maps and images
+   total_copied = 0.0
    if not args.mbtiles:
-      print("Pliease specify sqlite database to chop with -m option")
+      print("Please specify sqlite database to operate upon with -m option")
       sys.exit(1)
    if not os.path.isfile(args.mbtiles):
       print("Failed to open %s"%args.mbtiles)
       sys.exit(1)
    dbname = './work/%s'%os.path.basename(args.mbtiles)
-   shutil.copy(args.mbtiles,dbname)
-   # open the database  
-   db = MBTiles(dbname)
-   sql = 'select * from map where zoom_level < ?'
-   db.c.execute(sql,(max_to_chop,))
-   rows = db.c.fetchall()
-   for row in rows:
+   if args.force:
+      # without force, just replace tiles which match on x,y,z and not md5
+      if os.path.isfile(dbname):
+         os.remove(dbname)
+   init_dest(dbname)
+
+   # open the databases
+   try:
+      dest_db = MBTiles(dbname)
+      sql = 'ATTACH DATABASE \'./%s\' as src'%(args.mbtiles,)
+      print(sql)
+      dest_db.c.execute(sql)
+   except Exception as e:
+      print('Failed to attach %s. Error:%s'%(args.mbtiles,e,))
+      sys.exit(1)
+
+   # get another cursor
+   src_cur = dest_db.conn.cursor()
+
+   sql = '''
+    SELECT
+        src.map.zoom_level AS zoom_level,
+        src.map.tile_column AS tile_column,
+        src.map.tile_row AS tile_row,
+        src.map.tile_id AS tile_id,
+        src.images.tile_data AS tile_data
+    FROM src.map
+    JOIN src.images ON src.images.tile_id = src.map.tile_id
+    WHERE src.map.zoom_level >= ? '''
+   src_cur.execute(sql,(str(start_from),))
+   for row in ResultIter(src_cur):
+      if not tile_id_is_valid_hash:
+         hl = hashlib.md5()
+         hl.update(row['tile_data'])
+         hash = hl.hexdigest()
+         if hash == row['tile_id']:
+            tile_id_is_valid_hash = True
+      else:
+         # Just use the tile_id, it's alreay in IIAB format
+         hash = row['tile_id']
+      
+      # If the source and destination hashes match we are done
+      sql = 'select tile_id from map where zoom_level = ? '\
+            'and tile_column = ? and tile_row = ?' 
       try:
-         db.DeleteTile(row['zoom_level'],row['tile_column'],row['tile_row'])
+         dest_db.c.execute(sql,(row['zoom_level'],row['tile_column'],
+            row['tile_row'],))
       except Exception as e:
-         print('DeleteTile in chop_xoom error:%s'%e)
+         print('Failed getting destination tile_id. Error:%s'%e)
          sys.exit(1)
+      dest_row = dest_db.c.fetchone()
+
+      if not dest_row or hash != dest_row['tile_id']:
+         total_copied += 1
+         if total_copied % 100 == 0:
+            print('\rTotal Copied %.0f'%total_copied)
+         try:
+            dest_db.SetTile(row['zoom_level'],row['tile_column'],
+               row['tile_row'], row['tile_data'],hash)
+         except Exception as e:
+            print('Failed getting destination data. Error:%s'%e)
+            sys.exit(1)
+          
    print('vacumming database')
-   db.c.execute('vacuum')
-   db.Commit()
+   dest_db.c.execute('vacuum')
+   dest_db.Commit()
    
 def get_regions():
    global regions_json
@@ -232,21 +307,12 @@ def copy_if_new(src,dest):
          rows = src_db.c.fetchmany(100)
          if not rows: break
          for row in rows:
-            dest_db.SetTile(row['zoom_level'],row['tile_column'],\
+            dest_db.SetTile(row['zoom_level'],row['tile_column'],
                row['tile_row'],row['tile_data'])
   
-def get_src_list(selected):
-   get_regions()
-   file_list = [base_filename]
-   file_list.append(regions[selected]['url'])
-   file_list.append(regions[selected]['sat_url'])
-   return(file_list)
-
- 
 def init_dest(dest_path):
    if not os.path.isfile(dest_path):
       subprocess.run('./create_empty_mbtiles.sh {}'.format(dest_path),shell=True)
-input_list = ['/library/working/maps/osm_z0-z5.mbtiles']
 
 def main():
    global args
@@ -257,11 +323,14 @@ def main():
       os.mkdir('./work')
    
    args = parse_args()
-   # The --remove option uses MBTiles class to truncate bottom of tile pyramid.
-   if args.remove:
-      print("removing below %s"%args.remove)
-      chop_zoom_and_below(args.remove)
+   # The --zoom option uses MBTiles class to truncate bottom of tile pyramid.
+   if args.zoom:
+      print("Copying zoom level %s and above"%args.zoom)
+      copy_to_iiab_format(args.zoom)
       sys.exit(1)
+      elapsed = time.time() - start_time
+      print(sec2hms(elapsed))
+   
 
    # Fetch the files required for all maps
    src = os.path.join(internetarchive_url,base_filename)
@@ -288,21 +357,8 @@ def main():
    if not args.region in regions_json.keys():
       print('Region not found: %s'%args.region)
       sys.exit(1)
-
-   src = os.path.join(internetarchive_url,regions_json[args.region]['detail_url'])
-   dest = os.path.join(viewer_path,regions_json[args.region]['detail_url'])
-   get_url_to_disk(src,dest)
-
-   src = '%s/%s'%(viewer_path,regions_json[args.region]['detail_url'])
-   dest = '%s/%s'%(viewer_path,'detail.mbtiles')
-   if os.path.islink(dest):
-      os.unlink(dest)
-   os.symlink(src,dest)
-
-   # now see if satellite needs updating
-   #dest = viewer_path + '/' + sat_file
-   #init_dest(dest)
-   time.sleep(2)
+   
+   
    elapsed = time.time() - start_time
    print(sec2hms(elapsed))
    
