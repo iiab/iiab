@@ -196,6 +196,7 @@ def copy_to_iiab_format(start_from):
    global tile_id_is_valid_hash 
    # IIAB format uses md5 hexdigest as link between maps and images
    total_copied = 0.0
+   print("Copying zoom level %s and above"%args.zoom)
    if not args.mbtiles:
       print("Please specify sqlite database to operate upon with -m option")
       sys.exit(1)
@@ -299,6 +300,7 @@ def sec2hms(n):
 def chop_zoom_and_below(max_to_chop):
    # chop a copied database
    total_copied = 0.0
+   print("Removing tiles at zoom level %s, and below"%(args.zoom,))
    if not args.mbtiles:
       print("Pliease specify sqlite database to chop with -m option")
       sys.exit(1)
@@ -306,7 +308,8 @@ def chop_zoom_and_below(max_to_chop):
       print("Failed to open %s"%args.mbtiles)
       sys.exit(1)
    dbname = './work/%s'%os.path.basename(args.mbtiles)
-   shutil.copy(args.mbtiles,dbname)
+   if not os.path.isfile(dbname):
+      shutil.copy(args.mbtiles,dbname)
    # open the database  
    db = MBTiles(dbname)
    for zoom in range(args.zoom + 1):
@@ -356,7 +359,6 @@ def main():
    args = parse_args()
    # The --zoom option uses MBTiles class to truncate bottom of tile pyramid.
    if args.zoom:
-      print("Copying zoom level %s and above"%args.zoom)
       #copy_to_iiab_format(args.zoom)
       chop_zoom_and_below(args.zoom)
       elapsed = time.time() - start_time
@@ -389,8 +391,20 @@ def main():
    if not args.region in regions_json.keys():
       print('Region not found: %s'%args.region)
       sys.exit(1)
-   
-   
+
+   src = os.path.join(internetarchive_url,regions_json[args.region]['detail_url'])
+   dest = os.path.join(viewer_path,regions_json[args.region]['detail_url'])
+   get_url_to_disk(src,dest)
+
+   src = '%s/%s'%(viewer_path,regions_json[args.region]['detail_url'])
+   dest = '%s/%s'%(viewer_path,'detail.mbtiles')
+   if os.path.islink(dest):
+      os.unlink(dest)
+   os.symlink(src,dest)
+
+   # now see if satellite needs updating
+   #dest = viewer_path + '/' + sat_file
+   #init_dest(dest)
    elapsed = time.time() - start_time
    print(sec2hms(elapsed))
    
