@@ -3,7 +3,7 @@
     src: /etc/apache2/sites-available/wordpress.conf
     path: /etc/apache2/sites-enabled/wordpress.conf
     state: link
-  when: wordpress_enabled and is_debuntu
+  when: wordpress_enabled and not nginx_enabled
 
 - name: Remove /etc/apache2/sites-enabled/wordpress.conf if not wordpress_enabled (debuntu)
   file:
@@ -11,10 +11,29 @@
     state: absent
   when: not wordpress_enabled and is_debuntu
 
+- name: Install {{ nginx_config_dir }}/wordpress-nginx.conf from template, for http://box{{ wp_url }}
+  template:
+    src: wordpress-nginx.conf.j2
+    dest: "{{ nginx_config_dir }}/wordpress-nginx.conf"
+  when: wordpress_enabled and nginx_enabled
+
+- name: Remove {{ nginx_config_dir }}/wordpress-nginx.conf if not wordpress_enabled (debuntu)
+  file:
+    path: "{{ nginx_config_dir }}/wordpress-nginx.conf"
+    state: absent
+  when: not wordpress_enabled and nginx_enabled
+
 - name: Restart Apache service ({{ apache_service }}) to enable/disable http://box{{ wp_url }}
   systemd:
     name: "{{ apache_service }}"
     state: restarted
+  when: not nginx_enabled
+
+- name: Restart nginx service to enable/disable http://box{{ wp_url }}
+  systemd:
+    name: nginx
+    state: restarted
+  when: nginx_enabled
 
 - name: Add 'wordpress' variable values to {{ iiab_ini_file }}
   ini_file:
