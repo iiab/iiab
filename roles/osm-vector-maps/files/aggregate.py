@@ -159,6 +159,30 @@ class MBTiles():
    def Commit(self):
       self.conn.commit()
 
+class GetUrl(object):
+
+   def __init__(self):
+      #self.http = urllib3.PoolManager(cert_reqs='CERT_REQUIRED',\
+      #     ca_certs=certifi.where())
+      self.http = urllib3.PoolManager()
+
+   def get_url_to_disk(self,src,dest):
+      if os.path.isfile(dest):
+         # We might want to check md5 for possible change
+         return
+      try:
+         r = (self.http.request("GET",src,retries=10,preload_content=False))
+      except Exception as e:
+         print('failed to open %s. Error: %s'%(src,e,))
+         sys.exit(1)
+      with open(dest,'wb') as fp:
+         while True:
+            chunk = r.read(1000000)
+            if not chunk:
+               break
+            fp.write(chunk)
+      r.release_conn()
+      return
 
 def get_url_to_disk(src,dest):
    if os.path.isfile(dest):
