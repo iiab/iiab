@@ -3,7 +3,7 @@
     src: /etc/apache2/sites-available/kiwix.conf
     path: /etc/apache2/sites-enabled/kiwix.conf
     state: link
-  when: kiwix_enabled | bool and not nginx_enabled | bool
+  when: kiwix_enabled and not nginx_enabled
 
 - name: Install nginx support
   template:
@@ -14,14 +14,20 @@
     group: root
     mode: "{{ item.mode }}"
   with_items:
-    - { src: 'kiwix-nginx.conf', dest: '/etc/nginx/conf.d/kiwix-nginx.conf', mode: '0644' }
-  when: kiwix_enabled | bool and nginx_enabled | bool
+    - { src: 'kiwix-nginx.conf', dest: '{{ nginx_config_dir }}/kiwix-nginx.conf', mode: '0644' }
+  when: kiwix_enabled and nginx_enabled
 
 - name: Remove symlink /etc/apache2/sites-enabled/kiwix.conf
   file:
     path: /etc/apache2/sites-enabled/kiwix.conf
     state: absent
-  when: not kiwix_enabled | bool or nginx_enabled | bool
+  when: not kiwix_enabled or nginx_enabled
+
+- name: Remove {{ nginx_config_dir }}/kiwix-nginx.conf
+  file:
+    path: "{{ nginx_config_dir }}/kiwix-nginx.conf"
+    state: absent
+  when: not kiwix_enabled and nginx_enabled
 
 - name: Enable & Restart 'kiwix-serve' service
   systemd:
@@ -29,7 +35,7 @@
     name: kiwix-serve
     enabled: yes
     state: restarted
-  when: kiwix_enabled | bool
+  when: kiwix_enabled
 
 - name: Disable 'kiwix-serve' service
   systemd:
@@ -59,9 +65,19 @@
   when: kiwix_enabled and is_redhat
 
 - name: Restart Apache, so it picks up kiwix.conf
-  service:
+  systemd:
     name: "{{ apache_service }}"
     state: restarted
+    daemon-reload: yes
+  when: not nginx_enabled
+
+- name: Restart nginx service
+  systemd:
+    name: nginx
+    state: restarted
+    daemon-reload: yes
+  when: nginx_enabled
+
 
 # 5. FINALIZE
 
