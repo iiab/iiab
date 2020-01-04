@@ -1,25 +1,10 @@
-- name: Create symlink nodered.conf from sites-enabled to sites-available, for short URL http://box/nodered (if nodered_enabled)
-  file:
-    src: /etc/apache2/sites-available/nodered.conf
-    dest: /etc/apache2/sites-enabled/nodered.conf
-    owner: root
-    group: root
-    state: link
-  when: nodered_enabled | bool
-
-- name: Remove symlink /etc/apache2/sites-enabled/nodered.conf (if not nodered_enabled)
-  file:
-    path: /etc/apache2/sites-enabled/nodered.conf
-    state: absent
-  when: not nodered_enabled
-
 - name: Enable & (Re)start 'nodered' systemd service (if nodered_enabled)
   systemd:
     daemon_reload: yes
     name: nodered
     enabled: yes
     state: restarted
-  when: nodered_enabled | bool
+  when: nodered_enabled
 
 - name: Disable & Stop 'nodered' systemd service (if not nodered_enabled)
   systemd:
@@ -29,11 +14,43 @@
     state: stopped
   when: not nodered_enabled
 
+- name: Create symlink nodered.conf from sites-enabled to sites-available, for short URL http://box/nodered (if nodered_enabled)
+  file:
+    src: /etc/apache2/sites-available/nodered.conf
+    dest: /etc/apache2/sites-enabled/nodered.conf
+    owner: root
+    group: root
+    state: link
+  when: nodered_enabled
+
+- name: Remove symlink /etc/apache2/sites-enabled/nodered.conf (if not nodered_enabled)
+  file:
+    path: /etc/apache2/sites-enabled/nodered.conf
+    state: absent
+  when: not nodered_enabled
+
+- name: Install NodeRed's nginx conf.d file from template
+  template:
+    src: nodered-nginx.conf.j2
+    dest: "{{ nginx_config_dir }}/nodered-nginx.conf"
+    owner: root
+    group: root
+    mode: 0666
+  when: nodered_enabled and nginx_enabled
+
 - name: Restart Apache service ({{ apache_service }}) to enable/disable http://box/nodered (not just http://box:{{ nodered_port }}/nodered)
   systemd:
     name: "{{ apache_service }}"    # httpd or apache2
+    daemon-reload: yes
     state: restarted
-  when: nodered_install | bool
+  when: apache_enabled
+
+- name: Restart nginx to enable/disable http://box/nodered (not just http://box:{{ nodered_port }}/nodered)
+  systemd:
+    name: nginx
+    state: restarted
+    daemon-reload: yes
+  when: nginx_enabled
 
 - name: Add 'nodered' variable values to {{ iiab_ini_file }}
   ini_file:
