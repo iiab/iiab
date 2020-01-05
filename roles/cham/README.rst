@@ -10,6 +10,16 @@ Using It
 * Turn `cham_install` and `cham_enabled` to `true` in vars.
 * Run the playbook.
 * You should see a simple webpage with a video container on `http://box.lan/stream`
+* Videos that are streamed are automatically archived in different quality levels. If you want to make them available on a public location, set `public_recordings` to `true`.
+* If you are also installing the azuracast role to have online radio facility, cham offers the capability to automatically stream to a radio channel incase a live stream is taking place. The following variables are pertinent (and they need to be appropriately set in local_vars):
+  * `cham_stream_to_icecast: False`
+  * `cham_icecast_user: iiab-admin`
+  * `cham_icecast_password: g0adm1n`
+  * `cham_icecast_mount: live`
+  * `cham_icecast_port: {{ (azuracast_port_range_prefix * 1000) + 5 }}`
+  * `cham_icecast_bitrate: 64k`
+* Of the above, `cham_icecast_user`, `cham_icecast_password` are the credentials for the **Streamer/DJ Account** setting of the radio channel. `cham_icecast_mount` and `cham_icecast_port` values need to be the same as they are in the radio channel settings, that is accessible through the Administration Console in azuracast.
+ 
 
 **To stream:**
   
