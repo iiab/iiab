@@ -426,6 +426,16 @@ def main():
       os.unlink(dest)
    os.symlink(src,dest)
 
+   # create init.json which sets initial coords and zoom
+   init = {}
+   init['region'] = args.region
+   init['zoom'] = regions_json[args.region]['zoom'] 
+   init['center_lon'] = regions_json[args.region]['center_lon'] 
+   init['center_lat'] = regions_json[args.region]['center_lat'] 
+   init_fn = viewer_path + '/init.json'
+   with open(init_fn,'w') as init_fp:
+      init_fp.write(json.dumps(init,indent=2))
+
    # now see if satellite needs updating
    #dest = viewer_path + '/' + sat_file
    #init_dest(dest)
