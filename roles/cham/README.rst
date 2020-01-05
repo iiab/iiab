@@ -7,10 +7,9 @@ CHAM README
 Using It
 --------
 
-* Keep a note of the `{{ nginx_port }}` variable's value (default:8081). This is going to be our streaming server's webroot. 
 * Turn `cham_install` and `cham_enabled` to `true` in vars.
 * Run the playbook.
-* You should see a simple webpage with a video container on `http://box.lan:8081`
+* You should see a simple webpage with a video container on `http://box.lan/stream`
 
 **To stream:**
   
