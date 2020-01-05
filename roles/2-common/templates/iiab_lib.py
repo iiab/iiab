@@ -10,6 +10,7 @@ import xml.etree.ElementTree as ET
 import iiab.iiab_const as CONST
 
 lang_codes = {}
+lang_iso2_codes = {}
 
 def get_zim_list(path):
     '''
@@ -139,8 +140,11 @@ def read_lang_codes():
         #print("menu.json:%s"%reads)
         lang_codes = json.loads(reads)
 
-# there is a different algorithm in get_zim_list above
+    # create iso2 index
+    for lang in lang_codes:
+        lang_iso2_codes[lang_codes[lang]['iso2']  ] = lang
 
+# there is a different algorithm in get_zim_list above
 def calc_perma_ref(uri):
     '''Given a path or url return the generic zim name'''
     url_slash = uri.split('/')
