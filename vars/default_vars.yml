@@ -5,15 +5,18 @@
 # Internet-in-a-Box (IIAB) uses True/False to indicate boolean values.
 
 # IIAB (PRE-)release version number, for {{ iiab_env_file }}
-iiab_base_ver: 7.0
+iiab_base_ver: 7.1
 iiab_revision: 0
 
+iiab_etc_path: /etc/iiab
+
 # Main configuration file
-iiab_local_vars_file: /etc/iiab/local_vars.yml
+iiab_local_vars_file: "{{ iiab_etc_path }}/local_vars.yml"
 
 # Installation status files
-iiab_env_file: /etc/iiab/iiab.env
-iiab_ini_file: /etc/iiab/iiab.ini
+iiab_env_file: "{{ iiab_etc_path }}/iiab.env"
+iiab_ini_file: "{{ iiab_etc_path }}/iiab.ini"
+iiab_state_file: "{{ iiab_etc_path }}/iiab_state.yml"
 
 iiab_base: /opt/iiab
 iiab_dir: "{{ iiab_base }}/iiab"
@@ -25,6 +28,9 @@ iiab_download_url: http://download.iiab.io/packages
 content_base: "/library"
 doc_base: "{{ content_base }}/www"
 doc_root: "{{ doc_base }}/html"
+
+# Python 3 dist path
+py3_dist_path: /usr/lib/python3/dist-packages
 
 # Ansible's default timeout for "get_url:" downloads (10 seconds) often fails
 download_timeout: 200
@@ -67,8 +73,9 @@ iiab_domain: lan
 lan_ip: 172.18.96.1
 lan_netmask: 255.255.224.0
 
-# Homepage: set to /home or /wordpress or /mediawiki or /wiki (for DokuWiki)
+# Homepage: set to /home or /wordpress or /wiki (for MediaWiki)
 iiab_home_url: /home
+# You might also want to set captiveportal_splash_page (below!)
 
 # Internal Wi-Fi Access Point
 # Values are used if there is an internal Wi-Fi adapter and hostapd is enabled
@@ -87,11 +94,6 @@ hostapd_enabled: True
 reboot_to_AP: False
 # For those installing IIAB over WiFi: "reboot_to_AP: True" overrides the above
 # detection of WiFi-as-gateway, forcing "hostapd_enabled: True" regardless.
-
-# Bluetooth PAN access to server
-bluetooth_install: True
-bluetooth_enabled: False
-bluetooth_term_enabled: False
 
 # Gateway mode
 iiab_lan_enabled: True
@@ -142,11 +144,18 @@ dns_jail_enabled: False
 
 # Python-based Captive Portal, that @m-anish & @jvonau experimented with in
 # July 2018 (https://github.com/iiab/iiab/pull/870) and that @georgejhunt
-# extensively refined later in 2018 (PRs #1179, #1300, #1327).
-captive_portal_install: False
-captive_portal_enabled: False
-captive_portal_port: 9090
+# extensively later refined (PRs #1179, #1300, #1327, #2070).
+captiveportal_install: True
+captiveportal_enabled: True
+captiveportal_port: 9090
+captiveportal_splash_page: /
+# You might also want to set iiab_home_url (above!)
 # In a pinch, disable Captive Portal using instructions in http://FAQ.IIAB.IO
+
+# Bluetooth PAN access to IIAB server
+bluetooth_install: True
+bluetooth_enabled: False
+bluetooth_term_enabled: False
 
 # Set to "False" if you want to revert to the older Dynamic Menuing system
 # (prior to IIAB 6.7, this had used https://github.com/iiab/iiab-menu)
@@ -160,10 +169,15 @@ wondershaper_enabled: False
 # The following 2 override the detection when not "auto"
 user_wan_iface: auto
 user_lan_iface: auto
-wan_ip: dhcp
-wan_netmask:
-wan_gateway:
-wan_nameserver:
+
+# Ethernet - IF NECESSARY, CUSTOMIZE THESE 4+1 VARS IN /etc/iiab/local_vars.yml
+# See "How do I set a static IP address?" for Ethernet, in http://FAQ.IIAB.IO
+wan_ip: dhcp       # wan_ip: 192.168.1.99
+wan_netmask:       # wan_netmask: 255.255.255.0
+wan_gateway:       # wan_gateway: 192.168.1.254
+wan_nameserver:    # wan_nameserver: 192.168.1.254
+wan_try_dhcp_before_static_ip: True   # Facilitate field updates w/ cablemodems
+# Details @ roles/network/templates/network/dhcpcd.conf.j2 for /etc/dhcpcd.conf
 
 
 # Parameters for Aggregate Roles
@@ -194,9 +208,10 @@ openvpn_server: xscenet.net
 openvpn_server_real_ip: 3.89.148.185
 openvpn_server_virtual_ip: 10.8.0.1
 openvpn_server_port: 1194
-# Newer versions of NMap do not include NCat which is used to announce handle
-# need_ncat is turned true by os-#.yml files that don't have ncat in nmap
-need_ncat: False
+
+# Some prefer 512MB for Zero W, others prefer 2048MB or higher for RPi 3 and 4.
+# Please see recommendations at: https://itsfoss.com/swap-size/
+pi_swap_file_size: 1024
 
 
 # 2-COMMON
@@ -210,13 +225,38 @@ exFAT_enabled: True
 
 
 # 3-BASE-SERVER
+# Variables for Administrative Console
+admin_console_install: True
+admin_console_enabled: True
+
+# variables related to introduction of nginx
+# apache
+apache_install: True
+apache_enabled: True
+apache_port: "8090"
+apache_interface: "127.0.0.1"
+# The following variable, if True, allows Admin Console to poweroff IIAB
+# see below
+#allow_apache_sudo: False
+
+nginx_port: "80"
+nginx_interface: "0.0.0.0"
+nginx_install: True
+nginx_enabled: True
+nginx_config_dir: /etc/nginx/conf.d
+
+# See also Apache vars {default_language, language_priority} @ top of this file
+#
+# For schools that use WordPress/Nextcloud/Moodle intensively:  iiab/iiab#1147
+apache_high_php_limits: False
+# WARNING: Enabling this might cause excess use of RAM/disk or other resources!
+# SO AFTER INSTALLING IIAB, VERIFY THAT THESE 5 SETTINGS...
+# https://github.com/iiab/iiab/blob/master/roles/httpd/tasks/main.yml#L80-L84
+# ...ARE SUITABLE FOR YOUR HARDWARE IN /etc/php/<VERSION>/apache2/php.ini
+#
 
 # Make this False to disable http://box/common/services/power_off.php button:
 apache_allow_sudo: True
-# For schools that use WordPress and/or Moodle intensively, see iiab/iiab #1147
-# WARNING: Enabling this might cause excess use of RAM/disk or other resources!
-apache_high_php_limits: False
-# SEE ALSO VARIABLES NEAR TOP OF THIS FILE: default_language, language_priority
 
 # MySQL MANDATORY - THESE 2 VARS HAVE NO EFFECT - SEE roles/0-init/tasks/main.yml & roles/mysql/tasks/main.yml
 mysql_install: True
@@ -233,7 +273,8 @@ mysql_root_password: fixmysql
 squid_install: False
 squid_enabled: False
 
-# DansGuardian REQUIRES Squid (above) be installed & enabled
+# DansGuardian REQUIRES Squid (above) be installed & enabled.
+# DansGuardian is NO LONGER AVAILABLE in Debian Buster i.e. since June 2019.
 dansguardian_install: False
 dansguardian_enabled: False
 
@@ -293,8 +334,8 @@ azuracast_http_port: 10080
 azuracast_https_port: 10443
 
 # AzuraCast needs many ports in the 8000:8100 range by default, but IIAB services
-# conflict with those ports so this variable below sets a sane prefix. 
-# e.g. setting the below variable to 10 will result in port ranges 10000-10100 
+# conflict with those ports so this variable below sets a sane prefix.
+# e.g. setting the below variable to 10 will result in port ranges 10000-10100
 # being reserved for AzuraCast:
 azuracast_port_range_prefix: 10
 
@@ -311,12 +352,15 @@ cham_icecast_mount: "live"
 cham_icecast_port: "{{ (azuracast_port_range_prefix * 1000) + 5 }}"
 cham_icecast_bitrate: "64k"
 
+# Unmaintained as of January 2020: https://github.com/iiab/iiab/issues/2056
 dokuwiki_install: False
 dokuwiki_enabled: False
+dokuwiki_url: /dokuwiki
 
 mediawiki_install: False
 mediawiki_enabled: False
 
+# Unmaintained as of November 2019
 ejabberd_install: False
 ejabberd_enabled: False
 
@@ -328,6 +372,8 @@ elgg_mysql_password: elgg4kids
 # Gitea (lightweight self-hosted "GitHub") from https://gitea.io
 gitea_install: False
 gitea_enabled: False
+gitea_url: /gitea
+gitea_port: 61734
 
 # Lokole (email for rural communities) from https://ascoderu.ca
 lokole_install: False
@@ -340,7 +386,7 @@ mosquitto_port: 1883
 
 # Node.js version used by roles/nodejs/tasks/main.yml for 3 roles:
 # nodered (Node-RED), pbx (Asterix, FreePBX) & sugarizer (Sugarizer)
-nodejs_version: 10.x    # was 8.x until 2019-02-02
+nodejs_version: 12.x    # was 8.x until 2019-02-02, was 10.x until 2019-12-21
 
 # Flow-based visual programming for wiring together IoT hardware devices etc
 nodered_install: False
@@ -348,8 +394,13 @@ nodered_enabled: False
 nodered_port: 1880
 nodered_web_path: nodered
 
+# Store your docs, calendar, contacts & photos on your local server not cloud!
+# If using WordPress intensively, set apache_high_php_limits in 3-BASE-SERVER
 nextcloud_install: False
 nextcloud_enabled: False
+nextcloud_allow_public_ips: False
+# Configuration tips for IPv4 access controls and tuning RAM/resources:
+# https://github.com/iiab/iiab/blob/master/roles/nextcloud/README.md
 
 # A full-featured PBX (for rural telephony, etc) based on Asterisk and FreePBX.
 # Works on Ubuntu 18.04, Debian 9. Experimental on Rasp/RPi 3. Uses Node.js 10.x
@@ -381,8 +432,10 @@ kalite_password: kalite
 
 kolibri_install: False
 kolibri_enabled: False
+kolibri_language: en    # ar,bn-bd,en,es-es,fa,fr-fr,hi-in,mr,nyn,pt-br,sw-tz,ta,te,ur-pk,yo,zu
 kolibri_http_port: 8009
 
+# kiwix_install: True is REQUIRED, if you install IIAB's Admin Console
 kiwix_install: True
 kiwix_enabled: True
 kiwix_port: 3000
@@ -393,21 +446,24 @@ moodle_enabled: False
 # If using Moodle intensively, set apache_high_php_limits in 3-BASE-SERVER
 
 # MongoDB (/library/dbdata/mongodb) is used by Sugarizer:
-# Its 2 settings below are auto-set to True (in roles/0-init/tasks/main.yml) when: sugarizer_enabled | bool
 # The mongodb playbook itself is later invoked by roles/sugarizer/meta/main.yml
+# 2019-07-08: mongodb_install is completely ignored.  FYI mongodb_enabled: False
+# works but is ineffective, as Sugarizer starts mongodb's systemd svc on its own
 mongodb_install: False
 mongodb_enabled: False
 mongodb_port: 27018
 
-# Regional OSM vector maps use much less disk space than bitmap/raster versions
+# Regional OSM vector maps use far less disk space than bitmap/raster versions.
+# Instructions: https://github.com/iiab/iiab/wiki/IIAB-Maps
 osm_vector_maps_install: True
 osm_vector_maps_enabled: True
 iiab_map_url : http://download.iiab.io/content/OSM/vector-tiles/maplist/hidden
-vector_map_path: "{{ content_base }}/www/osm-vector-maps"
+vector_map_path: "{{ content_base }}/www/osm-vector-maps"    # /library/www/osm-vector-maps
 
 # roles/sugarizer/meta/main.yml auto-invokes 2 above prereqs: mongodb & nodejs
 # Might stall MongoDB on Power Failure: github.com/xsce/xsce/issues/879
 # Sugarizer 1.0.1+ strategies to solve? github.com/iiab/iiab/pull/957
+# 2019-07-08 WARNING: both vars are IGNORED on Debian 10+ due to MongoDB: github.com/iiab/iiab/issues/1437
 sugarizer_install: False
 sugarizer_enabled: False
 sugarizer_port: 8089
@@ -457,6 +513,7 @@ transmission_password: changeme
 awstats_install: True
 awstats_enabled: True
 
+# 2019-07-08 WARNING: both vars are IGNORED on Debian 10+ due to: github.com/iiab/iiab/issues/1849
 monit_install: False
 monit_enabled: False
 watchdog:
@@ -480,6 +537,20 @@ vnstat_enabled: True
 
 # 9-LOCAL-ADDONS
 
+# Internet Archive Decentralized Web - create your own offline version box:4244
+# (or http://box/archive) arising from digital library https://dweb.archive.org
+internetarchive_install: False
+internetarchive_enabled: False
+internetarchive_port: 4244    # for http://box:4244
+
+# Minetest is an open source clone of the Minecraft building blocks game
+minetest_install: False
+minetest_enabled: False
+minetest_port: 30000
+minetest_server_admin: Admin
+minetest_default_game: carbone-ng    # only carbone-ng and minetest are supported
+minetest_flat_world: False
+
 # Calibre E-Book Library
 # WARNING: CALIBRE INSTALLS GRAPHICAL LIBRARIES SIMILAR TO X WINDOWS & OPENGL
 # ON (HEADLESS, SERVER, LITE) OS'S THAT DON'T ALREADY HAVE THESE INSTALLED.
@@ -495,7 +566,7 @@ calibre_port: 8080
 # http://box:8080 & http://box:8080/mobile WORK FOR NOW, but short/mnemonic
 # URL's like http://box/calibre DON'T YET WORK -- BOOKS RARELY DISPLAY:
 calibre_web_path: calibre    # NEEDS WORK: https://github.com/iiab/iiab/issues/529
-# Avoid URL collisions with calibreweb_url: below!
+# Avoid URL collisions w/ calibreweb_url1, calibreweb_url2, calibreweb_url3 below!
 
 # WARNING: Calibre-Web (below) depends on Calibre's own /usr/bin/ebook-convert
 # program, so we recommend you also install Calibre (above!)
@@ -503,54 +574,45 @@ calibre_web_path: calibre    # NEEDS WORK: https://github.com/iiab/iiab/issues/5
 # Calibre-Web alternative to Calibre, offers a clean/modern UX
 calibreweb_install: False
 calibreweb_enabled: False
-calibreweb_port: 8083    # PORT VARIABLE HAS NO EFFECT (as of January 2019)
+calibreweb_port: 8083       # PORT VARIABLE HAS NO EFFECT (as of January 2019)
 # http://box/books works.  Add {box/libros, box/livres, box/livros, box/liv} etc?
-calibreweb_url: /books
+calibreweb_url1: /books     # For SHORT URL http://box/books  (English)
+calibreweb_url2: /libros    # For SHORT URL http://box/libros (Spanish)
+calibreweb_url3: /livres    # For SHORT URL http://box/livres (French)
 calibreweb_home: "{{ content_base }}/calibre-web"    # /library/calibre-web
-
-# Internet Archive Decentralized Web - create your own offline version box:4244
-# (or http://box/archive) arising from digital library https://dweb.archive.org
-internetarchive_install: False
-internetarchive_enabled: False
-internetarchive_port: 4244    # for http://box:4244
-
-# Minetest is an open source clone of the Minecraft building blocks game
-minetest_install: False
-minetest_enabled: False
-minetest_port: 30000
-minetest_server_admin: Admin
-minetest_default_game: carbone-ng    # only carbone-ng and minetest are supported
-minetest_flat_world: False
 
 
 # =============================================================================
 # UNMAINTAINED LEGACY VARIABLES: YOU'RE TAKING BIG RISKS IF YOU USE ANY HERE...
 
+# CONSIDER THESE NEW OPENSTREETMAP (OSM) APPROACHES INSTEAD:
+#
+# 2019: https://github.com/iiab/iiab/wiki/IIAB-Maps SEE ABOVE osm_vector_maps_*
+# 2018: http://download.iiab.io/content/OSM/vector-tiles/
+# 2017: http://oer2go.org/viewmod/en-worldmap-10
+#
 # Unmaintained
-# authserver_install: False
-# authserver_enabled: False
-
-# CONSIDER THESE 2 NEW OPENSTREETMAP (OSM) APPROACHES INSTEAD, AS OF 2018:
-# - http://download.iiab.io/content/OSM/vector-tiles/
-# - http://oer2go.org/viewmod/en-worldmap-10
-#
-# DOWNLOAD EITHER OSM MANUALLY, OR BETTER YET TRY IIAB'S ADMIN CONSOLE:
-#   http://box/admin -> Install Content -> Get OER2GO(RACHEL) Modules
-#
-# Unmaintained:
 # osm_install: False
 # osm_enabled: False
 # Changed in June 2017, from the original:
 # iiab_install: True
 # iiab_enabled: False
 
-# Unmaintained (better to install from http://teamviewer.com or prep scripts at http://download.iiab.io)
-# teamviewer_install: False
-# teamviewer_enabled: False
-
 # Unmaintained
 # docker_install: False
 # docker_enabled: False
+
+# THOSE ABOVE WERE STILL OCCASIONALLY USED AS OF NOVEMBER 2019.
+# =============================================================================
+# THOSE BELOW WERE *NOT* USED FOR YEARS, AS OF NOVEMBER 2019.
+
+# Unmaintained
+# authserver_install: False
+# authserver_enabled: False
+
+# Unmaintained (better to install from http://teamviewer.com or prep scripts at http://download.iiab.io)
+# teamviewer_install: False
+# teamviewer_enabled: False
 
 # Unmaintained
 # schooltool_install: False

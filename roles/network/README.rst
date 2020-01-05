@@ -2,7 +2,7 @@
 Network README
 ==============
 
-This is run by Ansible after it has installed the core of Internet-in-a-Box (IIAB) and its apps/services.
+This is run by Ansible after it has installed the core (`Stages 0-to-9 <https://github.com/iiab/iiab/wiki/IIAB-Contributors-Guide#ansible>`_) of Internet-in-a-Box (IIAB) and its apps/services.
 
 Specifically, this 'network' role is run:
 

@@ -1,0 +1,54 @@
+# this works if (docroot)/mwlink links to install 
+# and LocalSettings.php has
+# $wgScriptPath = "/mwlink";
+# $wgArticlePath = "/wiki/$1";
+# $wgUsePathInfo = true;
+
+location ~ ^/mwlink/(index|load|api|thumb|opensearch_desc)\.php$ {
+		include fastcgi_params;
+		fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+		fastcgi_pass php; # or whatever port your PHP-FPM listens on
+}
+	
+# Images
+location /mwlink/images {
+    # Separate location for images/ so .php execution won't apply
+}
+location /mwlink/images/deleted {
+    # Deny access to deleted images folder
+    deny all;
+}
+# MediaWiki assets (usually images)
+location ~ ^/mwlink/resources/(assets|lib|src) {
+    try_files $uri 404;
+    add_header Cache-Control "public";
+    expires 7d;
+}
+# Assets, scripts and styles from skins and extensions
+location ~ ^/mwlink/(skins|extensions)/.+\.(css|js|gif|jpg|jpeg|png|svg)$ {
+    try_files $uri 404;
+    add_header Cache-Control "public";
+    expires 7d;
+}
+
+
+## Uncomment the following code if you wish to use the installer/updater
+## installer/updater
+#location /mwlink/mw-config/ {
+#	# Do this inside of a location so it can be negated
+#	location ~ \.php$ {
+#		include /etc/nginx/fastcgi_params;
+#		fastcgi_param SCRIPT_FILENAME $document_root/mwlink/mw-config/$fastcgi_script_name;
+#		fastcgi_pass 127.0.0.1:9000; # or whatever port your PHP-FPM listens on
+#	}
+#}
+
+# Handling for the article path (pretty URLs)
+location {{ mediawiki_url }}/ {
+    rewrite ^{{ mediawiki_url }}/(?<pagename>.*)$ /mwlink/index.php;
+}
+
+# Explicit access to the root website, redirect to main page (adapt as needed)
+location = {{ mediawiki_url }} {
+    return 301 {{ mediawiki_url }}/Main_Page;
+}

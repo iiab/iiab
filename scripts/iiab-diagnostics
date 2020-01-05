@@ -1,7 +1,8 @@
 #!/bin/bash
 
 # Collect IIAB diagnostic info into 1 file for easy online/offline circulation!
-# PLEASE SEE iiab-diagnostics.README.md
+# PLEASE SEE /opt/iiab/iiab/scripts/iiab-diagnostics.README.md OR ONLINE HERE:
+# https://github.com/iiab/iiab/blob/master/scripts/iiab-diagnostics.README.md
 
 IIAB_RELEASE=`cat /etc/iiab/iiab.env | grep IIAB_RELEASE | cut -d'=' -f2`
 OS_VER=`cat /etc/iiab/iiab.env | grep OS_VER | cut -d'=' -f2`
@@ -10,10 +11,13 @@ HASH1=`cd /opt/iiab/iiab; git log --pretty=format:'%H' -n 1`
 HASH2=`cd /opt/iiab/iiab-admin-console; git log --pretty=format:'%H' -n 1`
 YMDT=$(date +%F_%T_%Z)
 
-echo -e "\nAccelerate troubleshooting by collecting your IIAB diagnostics into 1 file:"
-echo -e "\n   sudo iiab-diagnostics"
-echo -e "   sudo iiab-diagnostics PATH/FILE1 PATH/FILE2 ..."
-echo -ne "\nCan you provide a \e[1mshort public nickname:\e[0m (no spaces!) "
+echo -e "\nGathers IIAB diagnostics into 1 file, to accelerate troubleshooting.  USAGE:"
+echo
+echo -e "   iiab-diagnostics"
+echo -e "   sudo iiab-diagnostics                                # USE 'sudo' FOR MORE"
+echo -e "   sudo iiab-diagnostics PATH/FILE1 PATH/FILE2 ...      # COMPLETE RESULTS !!"
+echo
+echo -ne "Can you provide a \e[1mshort public nickname:\e[0m (no spaces!) "
 read nickname < /dev/tty
 if [ -z "$nickname" ]; then
     nickname="NONAME"
@@ -21,8 +25,10 @@ fi
 
 # Build up a meaningful shared filename for DEV / IMPLEM / LEARNING team(s)
 outfile=/etc/iiab/diag/${IIAB_RELEASE}_${OS_VER}_${YMDT}_$nickname
-# System "snapshots" (time-stamped output from this 'iiab-diagnostics' command) will be stored in this directory.  A bit like system logs, but only on request.
-mkdir -p /etc/iiab/diag
+
+# System "snapshots" (time-stamped output from this 'iiab-diagnostics' command)
+# will be stored in globally-writable directory /etc/iiab/diag as created by
+# roles/0-init/tasks/main.yml.  A bit like system logs, but only on request.
 
 function cat_file_raw() {    # $1 = path/filename; $2 = # of lines, for tail
     if [ -f $1 ]; then
@@ -94,24 +100,33 @@ function cat_tail() {     # $1 = path/filename; $2 = # of lines, for tail
 # START BUILDING UP THE FILE THAT'LL CONTAIN THE DIAGNOSTICS!
 echo -e "\nCompiling diagnostics..."
 
-echo -e "\n  0. Header/Hashes/OS"
+echo -e "\n  0. Filename Header + Git Hashes + Raspberry Pi Model + OS"
 echo "This is: $outfile" >> $outfile
+echo >> $outfile
+echo -e "\n\n\n\n0. GIT HASHES + RASPBERRY PI MODEL + OS" >> $outfile
 echo >> $outfile
 echo "iiab commit:               $HASH1" >> $outfile
 echo "iiab-admin-console commit: $HASH2" >> $outfile
 echo >> $outfile
-echo -n "Checking /etc/rpi-issue for Raspbian OS version... " >> $outfile
+cat_file /sys/firmware/devicetree/base/model
+cat_file /etc/rpi-issue
+echo "-IIAB-EXPLANATION-OF-THE-ABOVE-------------------------------------------------" >> $outfile
+echo >> $outfile
 if [ -f /etc/rpi-issue ]; then
+    echo "stage2 = Raspbian Lite" >> $outfile
+    echo "stage4 = Raspbian With Desktop" >> $outfile
+    echo "stage5 = Raspbian With Desktop + Recommended Software" >> $outfile
     echo >> $outfile
-    cat /etc/rpi-issue >> $outfile
-    echo >> $outfile
-    echo "stage2 = lite; stage5 = desktop SEE https://github.com/RPi-Distro/pi-gen#stage-anatomy" >> $outfile
+    echo "SEE https://github.com/RPi-Distro/pi-gen#stage-anatomy" >> $outfile
 else
-    echo "Not a Raspberry Pi!" >> $outfile
+    echo "(This is NOT a Raspberry Pi!)" >> $outfile
 fi
 echo >> $outfile
+cat_file /etc/issue.net
+cat_file /etc/debian_version
 
-echo -e '\n  1. Files specially requested: (for "iiab-diagnostics PATH/FILE1 PATH/FILE2")\n'
+echo -e '\n\n  1. Files Specially Requested: (from "iiab-diagnostics PATH/FILE1 PATH/FILE2")\n'
+echo -e '\n\n\n\n1. FILES SPECIALLY REQUESTED (FROM "iiab-diagnostics PATH/FILE1 PATH/FILE2")\n' >> $outfile
 for f in "$@"; do
     cat_file $f
 done
@@ -121,6 +136,7 @@ if [ $# -eq 0 ]; then
 else
     echo -e "\n  2. Regular Files:\n"
 fi
+echo -e "\n\n\n\n2. REGULAR FILES\n" >> $outfile
 #cat_file /dev/sda                    # Device "file" test
 #cat_file /nonsense                   # Non-existence test
 #cat_file /opt/iiab/iiab              # Directory test
@@ -131,10 +147,10 @@ cat_file /.iiab-image
 cat_file /etc/iiab/iiab.env
 cat_file /etc/iiab/iiab.ini
 cat_file /etc/iiab/local_vars.yml
+cat_file /etc/iiab/iiab_state.yml
 cat_file /etc/iiab/config_vars.yml
 cat_file /etc/resolv.conf
 cat_file /etc/network/interfaces
-cat_file /usr/bin/iiab-gen-iptables
 
 # Record all Ansible variables: SLOW! OUTPUT TOO LARGE?
 #pushd /opt/iiab/iiab > /dev/null
@@ -142,7 +158,8 @@ cat_file /usr/bin/iiab-gen-iptables
 #popd > /dev/null
 #cat_file /tmp/all-ansible-vars
 
-echo -e "\n  3. Content of Directories, 1-level deep:\n"
+echo -e "\n  3. Content of Directories: (1-level deep)\n"
+echo -e "\n\n\n\n3. CONTENT OF DIRECTORIES (1-LEVEL DEEP)\n" >> $outfile
 cat_dir /etc/network/interfaces.d
 cat_dir /etc/systemd/network
 cat_dir /etc/NetworkManager/system-connections
@@ -151,6 +168,7 @@ cat_dir /etc/netplan
 #cat_dir /etc/network    # Above file /etc/network/interfaces suffices
 
 echo -e "\n  4. Output of Commands:\n"
+echo -e "\n\n\n\n\n4. OUTPUT OF COMMANDS\n" >> $outfile
 cat_cmd 'uname -a' 'Linux kernel'
 cat_cmd 'free' 'RAM memory'
 cat_cmd 'lscpu' 'CPU details'
@@ -161,13 +179,19 @@ cat_cmd 'ip addr' 'Network interfaces'
 cat_cmd 'ifconfig' 'Network interfaces (old view)'
 cat_cmd 'brctl show' 'Bridge for LAN side'
 cat_cmd 'netstat -rn' 'Routing table'
-cat_cmd 'netstat -natp' 'Ports/Services in use'
-cat_cmd 'iptables-save' 'Firewall rules'
+cat_cmd 'sudo netstat -natp' 'Ports/Services in use'
 cat_cmd 'systemctl status dnsmasq' 'Is dnsmasq Ok?'
-cat_cmd 'journalctl -u dnsmasq' 'dnsmasq log'
-#cat_cmd 'ansible localhost -m setup 2>/dev/null' 'All Ansible facts'    # For cleaner scraping of Ansible vars, see alternative ~20 lines above?
+cat_cmd 'sudo journalctl -u dnsmasq' 'dnsmasq log'
+cat_cmd 'env' 'Environment variables'
+#cat_cmd 'ansible localhost -m setup 2>/dev/null' 'All Ansible facts'    # For cleaner scraping of Ansible vars, consider "./runrole all-vars /tmp/all-ansible-vars" 27-31 lines above?
 
-echo -e "\n  5. Log Files: (last 100 lines of each)\n"
+echo -e "\n  5. Firewall Rules:\n"
+echo -e "\n\n\n\n5. FIREWALL RULES\n" >> $outfile
+cat_file /usr/bin/iiab-gen-iptables
+cat_cmd 'sudo iptables-save' 'Firewall rules'
+
+echo -e "\n  6. Log Files: (last 100 lines of each)\n"
+echo -e "\n\n\n\n6. LOG FILES (LAST 100 LINES OF EACH)\n" >> $outfile
 cat_tail /opt/iiab/iiab/iiab-install.log 100
 cat_tail /opt/iiab/iiab/iiab-network.log 100
 cat_tail /opt/iiab/iiab/iiab-debug.log 100
@@ -175,5 +199,25 @@ cat_tail /opt/iiab/iiab-admin-console/admin-install.log 100
 
 linecount=$(wc -l $outfile | sed 's/\s.*$//')
 sizecount=$(du -h $outfile | sed 's/\s.*$//')
-echo -e "\n\e[32mCOMPLETE! To share this on the web ($sizecount, $linecount lines) run:\e[0m"
-echo -e "\n\e[1mpastebinit < $outfile\e[0m\n"
+echo -e "\n\e[32m\e[1mCOMPLETE! Your diagnostics file ($sizecount, $linecount lines) is:"
+echo
+echo -e "   $outfile\e[0m"
+
+#if [ "$1" == "-y" ]; then
+#    ans="y"    # if user ran "iiab-diganostics -y" to avoid interactive prompt
+#else
+echo
+echo -ne "\e[42;1mPublish it to a web pastebin? [Y/n]\e[0m "
+read ans < /dev/tty
+#fi
+
+echo -e "\e[1m"
+if [ "$ans" == "" ] || [ "$ans" == "y" ] || [ "$ans" == "Y" ]; then
+    echo -ne "PUBLISHING TO URL... "
+    pastebinit < $outfile
+else
+    echo -e "If you later decide to publish it, run:"
+    echo
+    echo -e "   pastebinit < $outfile"
+fi
+echo -e "\e[0m"

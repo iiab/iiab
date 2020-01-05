@@ -29,8 +29,9 @@ iiab_admin_pwd_hash: $6$xsce51$D.IrrEeLBYIuJkGDmi27pZUGOwPFp98qpl3hxMwWV4hXigFGm
 iiab_hostname: box
 iiab_domain: lan
 
-# Homepage: set to /home or /wordpress or /mediawiki or /wiki (for DokuWiki)
+# Homepage: set to /home or /wordpress or /wiki (for MediaWiki)
 iiab_home_url: /home
+# You might also want to set captiveportal_splash_page (below!)
 
 # Raspbian requires WiFi country since March 2018.  Please set it here:
 host_country_code: US
@@ -39,6 +40,13 @@ host_wifi_mode: g
 host_channel: 6
 hostapd_secure: False
 hostapd_password: changeme
+
+# See "How do I set a static IP address?" for Ethernet, in http://FAQ.IIAB.IO
+wan_ip: dhcp       # wan_ip: 192.168.1.99
+wan_netmask:       # wan_netmask: 255.255.255.0
+wan_gateway:       # wan_gateway: 192.168.1.254
+wan_nameserver:    # wan_nameserver: 192.168.1.254
+wan_try_dhcp_before_static_ip: True   # Facilitate field updates w/ cablemodems
 
 # Enable "campus access" to ~10 common IIAB services like Kiwix (3000), KA Lite
 # (8008) and Calibre (8010 or 8080) etc, on the WAN side of your IIAB server.
@@ -74,10 +82,17 @@ dns_jail_enabled: False
 
 # Python-based Captive Portal, that @m-anish & @jvonau experimented with in
 # July 2018 (https://github.com/iiab/iiab/pull/870) and that @georgejhunt
-# extensively refined later in 2018 (PRs #1179, #1300, #1327).
-captive_portal_install: True
-captive_portal_enabled: True
+# extensively later refined (PRs #1179, #1300, #1327, #2070).
+captiveportal_install: True
+captiveportal_enabled: True
+captiveportal_splash_page: /
+# You might also want to set iiab_home_url (above!)
 # In a pinch, disable Captive Portal using instructions in http://FAQ.IIAB.IO
+
+# Bluetooth PAN access to IIAB server
+bluetooth_install: True
+bluetooth_enabled: False
+bluetooth_term_enabled: False
 
 # Set to "False" if you want to revert to the older Dynamic Menuing system
 # (prior to IIAB 6.7, this had used https://github.com/iiab/iiab-menu)
@@ -102,6 +117,10 @@ openvpn_handle:
 # The following seems necessary on CentOS:
 # openvpn_cron_enabled: True
 
+# Some prefer 512MB for Zero W, others prefer 2048MB or higher for RPi 3 and 4.
+# Please see recommendations at: https://itsfoss.com/swap-size/
+pi_swap_file_size: 1024
+
 
 # 2-COMMON
 
@@ -114,12 +133,17 @@ openvpn_handle:
 
 # 3-BASE-SERVER
 
+# See also Apache vars {default_language, language_priority} @ top of this file
+#
+# For schools that use WordPress/Nextcloud/Moodle intensively:  iiab/iiab#1147
+apache_high_php_limits: False
+# WARNING: Enabling this might cause excess use of RAM/disk or other resources!
+# SO AFTER INSTALLING IIAB, VERIFY THAT THESE 5 SETTINGS...
+# https://github.com/iiab/iiab/blob/master/roles/httpd/tasks/main.yml#L80-L84
+# ...ARE SUITABLE FOR YOUR HARDWARE IN /etc/php/<VERSION>/apache2/php.ini
+#
 # Make this False to disable http://box/common/services/power_off.php button:
 apache_allow_sudo: True
-# For schools that use WordPress and/or Moodle intensively, see iiab/iiab #1147
-# WARNING: Enabling this might cause excess use of RAM/disk or other resources!
-apache_high_php_limits: False
-# SEE ALSO VARIABLES NEAR TOP OF THIS FILE: default_language, language_priority
 
 # roles/mysql runs here (mandatory)
 
@@ -132,7 +156,8 @@ apache_high_php_limits: False
 squid_install: False
 squid_enabled: False
 
-# DansGuardian REQUIRES Squid (above) be installed & enabled
+# DansGuardian REQUIRES Squid (above) be installed & enabled.
+# DansGuardian is NO LONGER AVAILABLE in Debian Buster i.e. since June 2019.
 dansguardian_install: False
 dansguardian_enabled: False
 
@@ -193,12 +218,14 @@ cham_icecast_mount: live
 cham_icecast_port: {{ (azuracast_port_range_prefix * 1000) + 5 }}
 cham_icecast_bitrate: 64k
 
-dokuwiki_install: True
-dokuwiki_enabled: True
+# Unmaintained as of January 2020: https://github.com/iiab/iiab/issues/2056
+dokuwiki_install: False
+dokuwiki_enabled: False
 
 mediawiki_install: True
 mediawiki_enabled: True
 
+# Unmaintained as of November 2019
 ejabberd_install: False
 ejabberd_enabled: False
 
@@ -221,8 +248,13 @@ mosquitto_enabled: True
 nodered_install: True
 nodered_enabled: True
 
+# Store your docs, calendar, contacts & photos on your local server not cloud!
+# If using WordPress intensively, set apache_high_php_limits in 3-BASE-SERVER
 nextcloud_install: True
 nextcloud_enabled: True
+nextcloud_allow_public_ips: False
+# Configuration tips for IPv4 access controls and tuning RAM/resources:
+# https://github.com/iiab/iiab/blob/master/roles/nextcloud/README.md
 
 # A full-featured PBX (for rural telephony, etc) based on Asterisk and FreePBX.
 # Works on Ubuntu 18.04, Debian 9. Experimental on Rasp/RPi 3. Uses Node.js 10.x
@@ -245,7 +277,9 @@ kalite_cron_enabled: True
 
 kolibri_install: True
 kolibri_enabled: True
+kolibri_language: en    # ar,bn-bd,en,es-es,fa,fr-fr,hi-in,mr,nyn,pt-br,sw-tz,ta,te,ur-pk,yo,zu
 
+# kiwix_install: True is REQUIRED, if you install IIAB's Admin Console
 kiwix_install: True
 kiwix_enabled: True
 
@@ -254,12 +288,14 @@ moodle_install: True
 moodle_enabled: True
 # If using Moodle intensively, set apache_high_php_limits in 3-BASE-SERVER
 
-# Regional OSM vector maps use much less disk space than bitmap/raster versions
+# Regional OSM vector maps use far less disk space than bitmap/raster versions.
+# Instructions: https://github.com/iiab/iiab/wiki/IIAB-Maps
 osm_vector_maps_install: True
 osm_vector_maps_enabled: True
 
 # Might stall MongoDB on Power Failure: github.com/xsce/xsce/issues/879
 # Sugarizer 1.0.1+ strategies to solve? github.com/iiab/iiab/pull/957
+# 2019-07-08 WARNING: both vars are IGNORED on Debian 10+ due to MongoDB: github.com/iiab/iiab/issues/1437
 sugarizer_install: True
 sugarizer_enabled: True
 
@@ -290,6 +326,7 @@ transmission_kalite_languages:
 awstats_install: True
 awstats_enabled: True
 
+# 2019-07-08 WARNING: both vars are IGNORED on Debian 10+ due to: github.com/iiab/iiab/issues/1849
 monit_install: True
 monit_enabled: True
 
@@ -306,28 +343,6 @@ vnstat_enabled: True
 
 # 9-LOCAL-ADDONS
 
-# Calibre E-Book Library
-# WARNING: CALIBRE INSTALLS GRAPHICAL LIBRARIES SIMILAR TO X WINDOWS & OPENGL
-# ON (HEADLESS, SERVER, LITE) OS'S THAT DON'T ALREADY HAVE THESE INSTALLED.
-calibre_install: False
-calibre_enabled: False
-# Change calibre_port to 8010 if you're using XO laptops needing above idmgr ?
-calibre_port: 8080
-# Change calibre to XYZ to add your own mnemonic URL like: http://box/XYZ
-calibre_web_path: calibre  #NEEDS WORK: https://github.com/iiab/iiab/issues/529
-# Avoid collisions with calibreweb_url: below!
-
-# WARNING: Calibre-Web (below) depends on Calibre's own /usr/bin/ebook-convert
-# program, so we recommend you also install Calibre (above!)
-
-# Calibre-Web alternative to Calibre, offers a clean/modern UX
-calibreweb_install: True
-calibreweb_enabled: True
-calibreweb_port: 8083    # PORT VARIABLE HAS NO EFFECT (as of January 2019)
-# http://box/books works.  Add {box/libros, box/livres, box/livros, box/liv} etc?
-calibreweb_url: /books
-calibreweb_home: "{{ content_base }}/calibre-web"    # /library/calibre-web
-
 # Internet Archive Decentralized Web - create your own offline version box:4244
 # (or http://box/archive) arising from digital library https://dweb.archive.org
 internetarchive_install: True
@@ -337,42 +352,41 @@ internetarchive_enabled: True
 minetest_install: True
 minetest_enabled: True
 
+# Calibre E-Book Library
+# WARNING: CALIBRE INSTALLS GRAPHICAL LIBRARIES SIMILAR TO X WINDOWS & OPENGL
+# ON (HEADLESS, SERVER, LITE) OS'S THAT DON'T ALREADY HAVE THESE INSTALLED.
+calibre_install: False
+calibre_enabled: False
+# Change calibre_port to 8010 if you're using XO laptops needing above idmgr ?
+calibre_port: 8080
+# Change calibre to XYZ to add your own mnemonic URL like: http://box/XYZ
+calibre_web_path: calibre  #NEEDS WORK: https://github.com/iiab/iiab/issues/529
+# Avoid URL collisions w/ calibreweb_url1, calibreweb_url2, calibreweb_url3 below!
 
-# CONSIDER THESE 2 NEW OPENSTREETMAP (OSM) APPROACHES INSTEAD, AS OF 2018:
-# - http://download.iiab.io/content/OSM/vector-tiles/
-# - http://oer2go.org/viewmod/en-worldmap-10
+# WARNING: Calibre-Web (below) depends on Calibre's own /usr/bin/ebook-convert
+# program, so we recommend you also install Calibre (above!)
+
+# Calibre-Web alternative to Calibre, offers a clean/modern UX
+calibreweb_install: True
+calibreweb_enabled: True
+calibreweb_port: 8083       # PORT VARIABLE HAS NO EFFECT (as of January 2019)
+# http://box/books works.  Add {box/libros, box/livres, box/livros, box/liv} etc?
+calibreweb_url1: /books     # For SHORT URL http://box/books  (English)
+calibreweb_url2: /libros    # For SHORT URL http://box/libros (Spanish)
+calibreweb_url3: /livres    # For SHORT URL http://box/livres (French)
+calibreweb_home: "{{ content_base }}/calibre-web"    # /library/calibre-web
+
+
+# CONSIDER THESE NEW OPENSTREETMAP (OSM) APPROACHES INSTEAD:
 #
-# DOWNLOAD EITHER OSM MANUALLY, OR BETTER YET TRY IIAB'S ADMIN CONSOLE:
-#   http://box/admin -> Install Content -> Get OER2GO(RACHEL) Modules
+# 2019: https://github.com/iiab/iiab/wiki/IIAB-Maps SEE ABOVE osm_vector_maps_*
+# 2018: http://download.iiab.io/content/OSM/vector-tiles/
+# 2017: http://oer2go.org/viewmod/en-worldmap-10
 #
 # Unmaintained
 # osm_install: False
 # osm_enabled: False
 
-# Unmaintained (better to install from http://teamviewer.com or prep scripts at http://download.iiab.io)
-# teamviewer_install: False
-# teamviewer_enabled: False
-
 # Unmaintained
 # docker_install: False
 # docker_enabled: False
-
-# Unmaintained
-# schooltool_install: False
-# schooltool_enabled: False
-
-# Unmaintained
-# debian_schooltool_install: False
-# debian_schooltool_enabled: False
-
-# Unmaintained (consider Calibre or Calibre-Web above?)
-# pathagar_install: False
-# pathagar_enabled: False
-
-# Unmaintained
-# sugar_stats_install: False
-# sugar_stats_enabled: False
-
-# Unmaintained
-# xovis_install: False
-# xovis_enabled: False

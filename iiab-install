@@ -3,14 +3,15 @@
 # Add cmdline options for passing to ansible
 # Todo add proper shift to gobble up --debug --reinstall
 
-PLAYBOOK="iiab-stages.yml"
-INVENTORY="ansible_hosts"
+PLAYBOOK=iiab-stages.yml
+INVENTORY=ansible_hosts
+IIAB_STATE_FILE=/etc/iiab/iiab_state.yml
 ARGS=""
 CWD=`pwd`
 OS=`grep ^ID= /etc/*release|cut -d= -f2`
 OS=${OS//\"/}
-MIN_RPI_KERN=4.9.59-v7+
-MIN_ANSIBLE_VER=2.6.16
+MIN_RPI_KERN=4.19.79       # Can be further updated if necessary, when Raspbian's Oct 2019 kernels are more officially fixed such that running 'rpi-update' will no longer be nec soon, see: https://github.com/iiab/iiab/issues/1993
+MIN_ANSIBLE_VER=2.8.7      # Ansible 2.8.3 and 2.8.6 have serious bugs, preventing their use with IIAB.
 
 if [ ! -f /etc/iiab/local_vars.yml ]; then
 
@@ -30,7 +31,7 @@ if [ ! -f /etc/iiab/local_vars.yml ]; then
     echo -e "(2) MIN/MEDIUM/BIG samples are included in /opt/iiab/iiab/vars" >&2
     echo -e "(3) NO TIME FOR DETAILS?  RUN INTERNET-IN-A-BOX'S FRIENDLY 1-LINE INSTALLER:\n" >&2
 
-    echo -e '    http://download.iiab.io   (click on "6.7" or a more recent version!)\n' >&2
+    echo -e '    http://download.iiab.io\n' >&2
 
     exit 1
 fi
@@ -46,17 +47,18 @@ cp ./scripts/local_facts.fact /etc/ansible/facts.d/local_facts.fact
 echo "Placed /etc/ansible/facts.d/local_facts.fact into position."
 
 if [ ! -f $PLAYBOOK ]; then
-    echo "EXITING: IIAB Playbook not found."
-    echo "Please run 'iiab-install' from /opt/iiab/iiab (top level of git repo)."
+    echo "EXITING: IIAB Playbook ""$PLAYBOOK"" not found."
+    echo "Please run './iiab-install' from /opt/iiab/iiab (top level of git repo)."
     exit 1
 fi
 
 if [ "$1" != "--debug" ] && [ "$1" != "--reinstall" ] && [ "$1" != "" ]; then
     echo "Use './iiab-install' for regular installs, or to continue an install."
-    echo "Use './iiab-install --reinstall' to force running all Stages 0-9."
-    echo "Use './iiab-install --debug' to run Stage 0, followed by Stages 3-9."
-    echo "Use './runrole' to run a single Stage or Role."
-    echo "Use './iiab-network' to run Network sections."
+    echo "Use './iiab-install --reinstall' to force running all Stages 0-9, followed by the Network Role."
+    echo "Use './iiab-install --debug' to run Stage 0, followed by Stages 3-9, followed by the Network Role."
+    echo "Use './iiab-configure' to run Stage 0, followed by Stages 4-9."
+    echo "Use './runrole' to run Stage 0, followed by a single Stage or Role."
+    echo "Use './iiab-network' to run Stage 0, followed by the Network Role."
     exit 1
 fi
 
@@ -68,10 +70,11 @@ version_gt() { [ "$(printf '%s\n' "$@" | sort -V | head -1)" != "$1" ]; }
 # Verify that Raspbian is running a recent enough kernel.  As Raspbian
 # updates on 4.9.41-v7+ broke bridging, WiFi AP & OpenVPN in Oct/Nov 2017.
 CURR_KERN=`uname -r`
-echo "Found Kernel "$CURR_KERN""
+echo "Found Kernel ""$CURR_KERN"
 if [ "$OS" == "raspbian" ] && version_gt $MIN_RPI_KERN $CURR_KERN ; then
-    echo -e "\nEXITING: Kernel "$MIN_RPI_KERN" or higher required with Raspbian."
+    echo -e "\nEXITING: Kernel ""$MIN_RPI_KERN"" or higher required with Raspbian."
     echo -e "PLEASE RUN 'apt update' then 'apt install raspberrypi-kernel' then reboot."
+    echo -e "THEN IF NEC run 'rpi-update' to install a more recent kernel, then reboot."
     echo -e "IIAB INSTALL INSTRUCTIONS: https://github.com/iiab/iiab/wiki/IIAB-Installation"
     exit 1
 fi
@@ -89,10 +92,10 @@ if [[ `command -v ansible` ]]; then        # "command -v" is POSIX compliant; it
     #CURR_ANSIBLE_VER=`ansible --version | head -1 | sed -e 's/.* //'`
     #CURR_ANSIBLE_VER=`ansible --version | head -1 | cut -f 2 -d " "`
     CURR_ANSIBLE_VER=`ansible --version | head -1 | awk '{print $2}'`    # to match scripts/ansible
-    echo "Found Ansible "$CURR_ANSIBLE_VER""
+    echo "Found Ansible ""$CURR_ANSIBLE_VER"
 fi
 if version_gt $MIN_ANSIBLE_VER $CURR_ANSIBLE_VER ; then
-    echo -e "\nEXITING: Ansible "$MIN_ANSIBLE_VER" or higher required.\n"
+    echo -e "\nEXITING: Ansible ""$MIN_ANSIBLE_VER"" or higher required.\n"
 
     echo -e "REMOVE PRIOR VERSIONS using 'apt purge ansible' and/or 'pip uninstall ansible'."
     echo -e "THEN RUN 'scripts/ansible' to install the latest Ansible from PPA or RPM."
@@ -108,22 +111,19 @@ STAGE=0
 if [ -f /etc/iiab/iiab.env ]; then
     if grep -q STAGE= /etc/iiab/iiab.env ; then
         source /etc/iiab/iiab.env
-        echo "Extracted STAGE="$STAGE" (counter) from /etc/iiab/iiab.env"
+        echo "Extracted STAGE=""$STAGE"" (counter) from /etc/iiab/iiab.env"
         if ! [ "$STAGE" -eq "$STAGE" ] 2> /dev/null; then
-            echo -e "\nEXITING: STAGE (counter) value == "$STAGE" is non-integer in /etc/iiab/iiab.env"
+            echo -e "\nEXITING: STAGE (counter) value == ""$STAGE"" is non-integer in /etc/iiab/iiab.env"
             exit 1
         elif [ "$STAGE" -lt 0 ] || [ "$STAGE" -gt 9 ]; then
-            echo -e "\nEXITING: STAGE (counter) value == "$STAGE" is out-of-range in /etc/iiab/iiab.env"
+            echo -e "\nEXITING: STAGE (counter) value == ""$STAGE"" is out-of-range in /etc/iiab/iiab.env"
             exit 1
         fi
     fi
-# if XSCE is present resolveconf will not be
-    if grep -q XSCE /etc/iiab/iiab.env ; then
+
+    if [ "$1" == "--reinstall" ]; then
         STAGE=0
-        rm /etc/iiab/iiab.env
-        echo "Removed /etc/iiab/iiab.env effectively resetting STAGE (counter)."
-    elif [ "$1" == "--reinstall" ]; then
-        STAGE=0
+        ARGS="$ARGS"" --extra-vars reinstall=True"
         sed -i 's/^STAGE=.*/STAGE=0/' /etc/iiab/iiab.env
         echo "Wrote STAGE=0 (counter) to /etc/iiab/iiab.env"
     elif [ "$STAGE" -ge 2 ] && [ "$1" == "--debug" ]; then
@@ -132,24 +132,62 @@ if [ -f /etc/iiab/iiab.env ]; then
         echo "Wrote STAGE=2 (counter) to /etc/iiab/iiab.env"
     elif [ "$STAGE" -eq 9 ]; then
         echo -e "\nEXITING: STAGE (counter) in /etc/iiab/iiab.env shows Stage 9 Is Already Done."
-        echo -e "Use './iiab-install --reinstall' to force running all Stages 0-9."
-        echo -e "Use './iiab-install --debug' to run Stage 0, followed by Stages 3-9."
-        echo -e "Use './runrole' to run a single Stage or Role."
-        echo -e "Use './iiab-network' to run Network sections.\n\n"
-        exit 0    # allows rerunning http://download.iiab.io/6.7/install.txt
+        echo -e "Use './iiab-install --reinstall' to force running all Stages 0-9, followed by the Network Role."
+        echo -e "Use './iiab-install --debug' to run Stage 0, followed by Stages 3-9, followed by the Network Role."
+        echo -e "Use './iiab-configure' to run Stage 0, followed by Stages 4-9."
+        echo -e "Use './runrole' to run Stage 0, followed by a single Stage or Role."
+        echo -e "Use './iiab-network' to run Stage 0, followed by the Network Role.\n\n"
+
+        exit 0    # Allows rerunning http://download.iiab.io/install.txt
     fi
 fi
 if [ "$STAGE" -lt 2 ] && [ "$1" == "--debug" ]; then
     echo -e "\n'--debug' *ignored* as STAGE (counter) < 2."
 fi
 
+# TEMPORARY: Catch images up to current code to benefit from pre-installed apps
+# Workaround for (web-published) images; will go away later
+# Assumes /etc/iiab/iiab_state.yml is not created until (prior run of) Stage 4 but
+# config_vars2.yml is present with the stage counter altered by pi-gen to be 2.
+if [ -f /etc/iiab/config_vars2.yml ]; then
+    mv /etc/iiab/config_vars2.yml $IIAB_STATE_FILE
+
+# Fix up prior values in state file
+# mongo role improved post image creation
+    if grep -q sugar $IIAB_STATE_FILE && ! grep -q mongodb $IIAB_STATE_FILE; then
+        echo "mongodb_installed: True" >> $IIAB_STATE_FILE
+    fi
+
+# TEMPORARY: another change to account for
+    sed -i -e 's/pan_bluetooth/bluetooth/' $IIAB_STATE_FILE
+
+    if [ "$STAGE" -eq 2 ]; then
+        echo -e "\nCompleting Stage 3 from IIAB image (starts systemd service iiab-setup-db to run the 'mysql' role)."
+        systemctl start iiab-setup-db
+    fi
+
+    PLAYBOOK="iiab-from-console.yml"    # Stage 4-9 then Network Role
+    ARGS=""    # Removes '--extra-vars reinstall=True' if --reinstall, BUT WHY?
+# The same as --reinstall except Stage 3 is not run as there are no other functional
+# changes in Stage 3 to account for post image creation, once the above is run.
+# reinstall=True would force kiwix to re-download and re-install in commit
+# ce2ec3b0cad76449caf3299003b5d297a3164181
+## End image catch up
+fi
+
+# Allow iiab-install to read IIAB_STATE_FILE to not repeat installs of previous
+# roles that already completed within the stage.
+if [ ! -f  $IIAB_STATE_FILE ]; then
+    touch $IIAB_STATE_FILE
+fi
 echo -e "\nTRY TO RERUN './iiab-install' IF IT FAILS DUE TO CONNECTIVITY ISSUES ETC!\n"
 
-echo -e "Running local playbooks....Stage 0 will now run....followed by Stages $(($STAGE + 1))-9"
+echo -e "Running local Ansible playbooks...\n...Stage 0 will now run\n...followed by Stages $(($STAGE + 1))-9\n...and then the Network Role.\n"
 
-export ANSIBLE_LOG_PATH="$CWD/iiab-install.log"
+export ANSIBLE_LOG_PATH="$CWD""/iiab-install.log"
 
-ansible -m setup -i $INVENTORY localhost --connection=local >> /dev/null
+ansible -m setup -i $INVENTORY localhost --connection=local | grep python
+ansible -m setup -i $INVENTORY localhost --connection=local >> /dev/null    # So vars are recorded in /opt/iiab/iiab/iiab-install.log
 ansible-playbook -i $INVENTORY $PLAYBOOK ${ARGS} --connection=local
 
 echo -e "./iiab-install $* COMPLETED IN $CWD\n\n"

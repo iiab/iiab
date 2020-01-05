@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 
 """
 
@@ -19,7 +19,8 @@ import yaml
 import re
 import subprocess
 import shlex
-import ConfigParser
+#import ConfigParser
+import configparser
 import xml.etree.ElementTree as ET
 import argparse
 import fnmatch
@@ -53,6 +54,9 @@ menuDefs = doc_root + "/js-menu/menu-files/menu-defs/"
 menuImages = doc_root + "/js-menu/menu-files/images/"
 menuJsonPath = doc_root + "/home/menu.json"
 
+assets_dir = doc_root + "/common/assets/"
+lang_codes_path = assets_dir + "lang_codes.json"
+lang_codes = {}
 old_zim_map = {"bad.zim" : "unparseable name"}
 
 # Working variables
@@ -150,7 +154,7 @@ def read_library_xml(lib_xml_file, kiwix_exclude_attr=[""]): # duplicated from i
             #xml_item_no += 1 # hopefully this is the array number
             attributes = {}
             if 'id' not in child.attrib: # is this necessary? implies there are records with no book id which would break index for removal
-                  print "xml record missing Book Id"
+                  print ("xml record missing Book Id")
             id = child.attrib['id']
             for attr in child.attrib:
                 if attr not in kiwix_exclude_attr:
@@ -169,7 +173,7 @@ def rem_libr_xml(id):
         outp = subprocess.check_output(args)
     except subprocess.CalledProcessError as e:
         if e.returncode != 2: # skip bogus file open error in kiwix-manage
-            print outp
+            print (outp)
 
 def add_libr_xml(kiwix_library_xml, zim_path, zimname, zimidx):
     command = kiwix_manage + " " + kiwix_library_xml + " add " + zim_path + "/" + zimname
@@ -184,6 +188,16 @@ def add_libr_xml(kiwix_library_xml, zim_path, zimname, zimidx):
         #print 'skipping ' + zimname
         pass
 
+def read_lang_codes():
+   global lang_codes
+   with open(lang_codes_path,"r") as f:
+      reads = f.read()
+      #print("menu.json:%s"%reads)
+      lang_codes = json.loads(reads)
+
+def kiwix_lang_to_iso2(zim_lang_code):
+    return lang_codes[zim_lang_code]['iso2']
+
 def init():
 
     global iiab_base_path
@@ -191,12 +205,14 @@ def init():
     global kiwix_library_xml
     global kiwix_manage
 
-    config = ConfigParser.SafeConfigParser()
+#    config = ConfigParser.SafeConfigParser()
+    config = configparser.ConfigParser()
     config.read(iiab_ini_file)
     iiab_base_path = config.get('location','iiab_base')
     zim_path = config.get('kiwix','iiab_zim_path')
     kiwix_library_xml = config.get('kiwix','kiwix_library_xml')
     kiwix_manage = iiab_base_path + "/kiwix/bin/kiwix-manage"
+    read_lang_codes()
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Create library.xml for Kiwix.")
@@ -215,9 +231,10 @@ def write_zim_versions_idx():
            get_substitution_data(perma_ref, zims_installed, path_to_id_map)
       zim_versions[perma_ref]['article_count'] = articlecount
       zim_versions[perma_ref]['media_count'] = mediacount
-      size = human_readable(size)
+      size = human_readable(float(size) * 1024) # kiwix reports in K
       zim_versions[perma_ref]['size'] = size
       zim_versions[perma_ref]['tags'] = tags
+
       zim_versions[perma_ref]['language'] = lang
       zim_versions[perma_ref]['zim_date'] = date
 
@@ -227,23 +244,23 @@ def write_zim_versions_idx():
          fp.write(json.dumps(zim_versions,indent=2 ))
          fp.close()
    else:
-      print zim_version_idx_dir + " not found."
-      
+      print (zim_version_idx_dir + " not found.")
+
 def get_substitution_data(perma_ref,zims_installed, path_to_id_map):
    #reconstruct the path in the id map
    path = 'content/' + zim_versions[perma_ref]['file_name'] + '.zim'
    id = path_to_id_map[path]
    item = zims_installed[id]
+
    if len(item) != 0 or perma_ref == 'test':
       mediacount = item.get('mediaCount','')
       articlecount = item.get('articleCount','')
       size = item.get('size','')
       tags = item.get('tags','')
-      lang = item.get('language','')
-      if len(lang) > 2:
-         lang = lang[:2]
+      zim_lang = item.get('language')
+      menu_def_lang = kiwix_lang_to_iso2(zim_lang)
       date =  item.get('date','')
-      return (articlecount,mediacount,size,tags,lang,date)
+      return (articlecount,mediacount,size,tags,menu_def_lang,date)
    return ('0','0','0','0','0','0')
 
 def get_menu_def_zimnames(intended_use='zim'):
@@ -290,6 +307,7 @@ def get_kiwix_catalog_item(perma_ref):
 
 def human_readable(num):
     # return 3 significant digits and unit specifier
+    # TFM 7/15/2019 change to factor of 1024, not 1000 to match similar calcs elsewhere
     num = float(num)
     units = [ '','K','M','G']
     for i in range(4):
@@ -299,7 +317,7 @@ def human_readable(num):
             return "%.1f%s"%(num,units[i])
         if num < 1000.0:
             return "%.0f%s"%(num,units[i])
-        num /= 1000.0
+        num /= 1024.0
 
 # Now start the application
 if __name__ == "__main__":
