@@ -2,7 +2,7 @@
 RACHEL README
 =============
 
-This is the second pass at adding RACHEL (http://www.rachel.worldpossible.org/) to XSCE.
+This is the second pass at adding RACHEL (http://www.rachel.worldpossible.org/) to IIAB.
 It takes RACHEL in its entirety and the download must be copied manually.
 This version is based on rachelusb_32EN_3.1.5.zip.
 
