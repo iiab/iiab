@@ -115,63 +115,6 @@
     # line: "TimeoutStartSec=180"
   when: mariadb_unit_file.stat.exists
 
-
-# 7 STANZAS BELOW...could later be put into setup.yml or config.yml or or provision.yml ?
-
-# Name of MySQL service varies by OS, so hardcoded in /opt/iiab/iiab/vars/<OS>.yml (formerly in roles/0-init/tasks/main.yml)
-- name: Start MySQL systemd service ({{ mysql_service }}) to permit configuration
-  systemd:
-    name: "{{ mysql_service }}"
-    daemon_reload: yes
-    state: restarted
-
-- name: Install /root/.my.cnf file from template, with root password credentials
-  template:
-    src: my.cnf.j2
-    dest: /root/.my.cnf
-    owner: root
-    mode: '0600'
-
-# 'localhost' needs to be the last item for idempotency, see
-# http://ansible.cc/docs/modules.html#mysql-user
-# unfortunately it still doesn't work
-- name: Update MySQL root password for localhost root accounts
-  mysql_user:
-    name: root
-    host: localhost
-    password: "{{ mysql_root_password }}"
-    priv: "*.*:ALL,GRANT"
-
-- name: Update MySQL root password for all remaining root accounts (127.0.0.1, ::1)
-  mysql_user:
-    name: root
-    host: "{{ item }}"
-    password: "{{ mysql_root_password }}"
-    priv: "*.*:ALL,GRANT"
-  with_items:
-    #- "{{ iiab_hostname }}.{{ iiab_domain }}"
-    - 127.0.0.1
-    - ::1
-
-- name: Delete anonymous MySQL server user for {{ ansible_hostname }}
-  mysql_user:
-    user: ""
-    host: "{{ ansible_hostname }}"
-    state: absent
-
-- name: Delete anonymous MySQL server user for localhost
-  mysql_user:
-    user: ""
-    state: absent
-
-- name: Remove the MySQL 'test' database
-  mysql_db:
-    db: test
-    state: absent
-
-
-# RECORD MySQL AS INSTALLED
-
 - name: "Set 'mysql_installed: True'"
   set_fact:
     mysql_installed: True
@@ -181,3 +124,7 @@
     path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
     regexp: '^mysql_installed'
     line: 'mysql_installed: True'
+
+- name: Provison the DB
+  include_tasks: prov-db.yml
+  when: imaging is undefined
