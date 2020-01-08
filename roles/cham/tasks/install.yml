@@ -1,0 +1,124 @@
+- name: Cham - Create streaming root directory
+  file: 
+    path: "{{ streaming_root }}"
+    state: directory
+    owner: root
+    group: root
+    mode: 0777
+
+- name: Cham - Create hls directory
+  file: 
+    path: "{{ streaming_root }}/{{ hls_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: 0777
+
+- name: Cham - Create flv directory
+  file: 
+    path: "{{ streaming_root }}/{{ flv_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: 0777
+
+- name: Cham - Create recordings directory
+  file: 
+    path: "{{ streaming_root }}/{{ recordings_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: 0777
+
+- name: Cham - Link to public recordings directory
+  file:
+    src: "{{ streaming_root }}/{{ recordings_dir }}"
+    dest: "{{ doc_root }}/local_content/{{ recordings_dir }}"
+    state: link
+  when: public_recordings | bool 
+
+- name: Cham - Install nginx-rtmp-module
+  package:
+    name:
+      - libnginx-mod-rtmp
+    state: latest
+
+- name: Cham - Install ffmpeg to allow transcoding of videos
+  package:
+    name:
+      - ffmpeg
+    state: latest
+
+- name: Cham - nginx config - copy http context declarations
+  template:
+    src: cham.conf.j2
+    dest: "{{ nginx_config_dir }}/cham.conf"
+    owner: root
+    group: root
+    mode: 0755
+
+- name: Cham - nginx config - Copy nginx rtmp webserver configuration file (with VAAPI hardware encoding support)
+  template:
+    src: rtmp.vaapi.conf.j2
+    dest: "{{ nginx_etc_dir }}/protocols.d/rtmp.conf"
+    owner: root
+    group: root
+    mode: 0755
+
+- name: Cham - nginx config - Copy nginx rtmp webserver configuration file (without hardware encoding support)
+  template:
+    src: rtmp.conf.j2
+    dest: "{{ nginx_etc_dir }}/protocols.d/rtmp.conf"
+    owner: root
+    group: root
+    mode: 0755
+
+#TODO: Check if these needs to be changed to www-data  
+- name: Cham - Add user 'nobody' to group 'video' to allow it to use the hardware encoding resources on host
+  user:
+    name: nobody
+    groups: video
+    append: yes
+  when: cham_use_vaapi
+
+#TODO: Check if this is still relevant  
+- name: Ensure group "nobody" exists
+  group:
+    name: nobody
+    state: present
+
+- name: Cham - nginx conf - Configure nginx cross-domain
+  template:
+    src: "crossdomain.xml"
+    dest: "{{ doc_root }}/crossdomain.xml"
+    owner: root
+    group: root
+    mode: 0755
+
+- name: Cham - nginx conf - Copy rtmp stat.xsl
+  template:
+    src: "stat.xsl"
+    dest: "{{ doc_root }}/{{ cham_html_dir }}/"
+    owner: root
+    group: root
+    mode: 0755
+
+- name: Cham - Download web-interface to {{ downloads_dir }}
+  get_url:
+    url: "{{ cham_url }}/{{ cham_src_file }}"
+    dest: "{{ downloads_dir }}/{{ cham_src_file }}"
+    timeout: "{{ download_timeout }}"
+  when: internet_available | bool
+
+- name: Cham - Extract video page to cham web root
+  unarchive: 
+    src: "{{ downloads_dir }}/{{ cham_src_file }}"
+    dest: "{{ doc_root }}/{{ cham_html_dir }}/"
+    owner: root
+    group: root
+    extra_opts: [--strip-components=1]
+
+- name: Cham - Restart nginx
+  systemd:
+    name: nginx
+    state: restarted

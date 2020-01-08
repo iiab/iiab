@@ -1,0 +1,48 @@
+rtmp {
+	server {
+		listen 1935;
+		chunk_size 8192;
+
+		application src {
+			live on;
+
+			exec ffmpeg -i rtmp://localhost/src/$name
+				-c:a aac -b:a 24k -tune zerolatency -preset ultrafast -crf 28 
+				-c:v libx264 -b:v 100K -vf "scale=256:trunc(ow/a/2)*2" -f flv rtmp://localhost/hls/$name_low
+				-c:a aac -b:a 48k -tune zerolatency -preset ultrafast -crf 28
+				-c:v libx264 -b:v 256k -vf "scale=480:trunc(ow/a/2)*2" -f flv rtmp://localhost/hls/$name_mid
+				#-c:a aac -b:a 96k -tune zerolatency -preset ultrafast -crf 24
+				#-c:v libx264 -b:v 512K -vf "scale=640:trunc(ow/a/2)*2" -f flv rtmp://localhost/hls/$name_hi
+{% if cham_stream_to_icecast %}
+			       	-c:v copy -c:a copy -f flv rtmp://localhost/hls/$name_src
+				-c:a libmp3lame -b:a {{ cham_icecast_bitrate }} -content_type audio/mpeg 
+				-f mp3 icecast://{{ cham_icecast_user }}:{{ cham_icecast_password }}@localhost:{{ cham_icecast_port }}/{{ cham_icecast_mount }};
+			exec /bin/bash -c '/bin/sleep 5; /usr/bin/curl --user {{ cham_icecast_user }}:{{ cham_icecast_password }} --data-urlencode mount="/{{ cham_icecast_mount }}" --data-urlencode mode="updinfo" --data-urlencode song="$name - Live!" -G "http://localhost:{{ cham_icecast_port }}/admin/metadata"';
+{% else %}
+			       	-c:v copy -c:a copy -f flv rtmp://localhost/hls/$name_src;
+{% endif %}
+		}
+
+		application hls {
+			live on;
+
+			hls on;
+			hls_path {{ streaming_root }}/{{ hls_dir }};
+			hls_nested on;
+
+			hls_variant _low BANDWIDTH=480000;
+			hls_variant _mid BANDWIDTH=960000;
+			#hls_variant _hi  BANDWIDTH=1280000;
+			hls_variant _src BANDWIDTH=2000000;
+
+			#record the stream
+			record all;
+                        record_path {{ streaming_root }}/{{ flv_dir }};
+			#append current timestamp to filename
+			record_suffix _%Y-%m-%d_%H-%M.flv;
+			exec_record_done /usr/bin/nice -n 10 /usr/bin/ffmpeg -y -i $path -acodec libmp3lame 
+				-ar 44100 -q:a 6 -ac 1 -vcodec libx264 -movflags +faststart 
+				-crf 27 -preset veryfast {{ streaming_root }}/{{ recordings_dir }}/$basename.mp4;
+		}
+	}
+}
