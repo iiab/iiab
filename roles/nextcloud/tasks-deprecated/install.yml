@@ -1,0 +1,190 @@
+# CHECK FOR PHP VERSION AUTOMATICALLY, TO DETERMINE WHICH NEXTCLOUD TO INSTALL.
+# INSPIRED BY: github.com/iiab/iiab/blob/master/roles/nodejs/tasks/main.yml#L10-L54
+
+- name: Try to run 'php -v' to get PHP version
+  # e.g. converts multi-line "PHP 7.0.33-0ubuntu0.16.04.5 (cli) ( NTS ) ..." to "7.0.33"
+  shell: php -v | head -1 | sed 's/^[^0-9.]*//' | sed 's/[^0-9.].*//'
+  register: php_version_installed
+  #ignore_errors: yes    # NOT NEC: if php is not installed, php_version_installed.stdout will get set to ""
+
+#- debug:
+#    var: php_version_installed
+
+# NOTE: this could easily be made to work even if PHP was not installed, e.g.
+# by pre-initializing variable 'php_new' to False here.  But trapping the
+# absence of PHP (below) is a useful software safety precondition!
+#
+#- name: Initialize var 'php_new' to False
+#  set_fact:
+#    php_new: False
+
+- name: INTENTIONALLY FAIL, IF PHP (Nextcloud prerequisite) ISN'T INSTALLED
+  fail:
+    msg: >
+      Nextcloud install cannot proceed, as it requires PHP be installed first.
+      Note that as of 2019-07-04, IIAB takes care of this by forcing vars
+      mysql_install and mysql_enabled to True in
+      /opt/iiab/iiab/roles/0-init/tasks/main.yml, which in turn forces the
+      installation of PHP in /opt/iiab/iiab/roles/mysql/tasks/main.yml, as
+      invoked by /opt/iiab/iiab/roles/3-base-server/tasks/main.yml
+  when: php_version_installed.stdout == ""
+
+- name: Set var 'php_new' indicating if installed version of PHP ({{ php_version_installed.stdout }}) >= 7.1, as required by Nextcloud 16
+  set_fact:
+    php_new: "{{ php_version_installed.stdout is version('7.1', '>=') }}"
+    # Ansible's Version Comparison routine:
+    # https://docs.ansible.com/ansible/latest/user_guide/playbooks_tests.html#version-comparison
+  when: php_version_installed.stdout != ""    # i.e. IF ABOVE 'php -v' WORKED
+
+#- debug:
+#    var: php_new
+
+
+- name: Download {{ nextcloud_dl_url }}/{{ nextcloud_orig_src_file_old }} to {{ downloads_dir }}/{{ nextcloud_src_file_old }} on older OS's lacking PHP 7.1+
+  get_url:
+    url: "{{ nextcloud_dl_url }}/{{ nextcloud_orig_src_file_old }}"
+    dest: "{{ downloads_dir }}/{{ nextcloud_src_file_old }}"
+    timeout: "{{ download_timeout }}"
+    force: yes
+    #validate_certs: False    # TEMPORARY ON/AFTER 2018-07-22 AS download.nextcloud.com CERT EXPIRED: https://github.com/iiab/iiab/issues/954
+  #async: 1800
+  #poll: 10
+  tags:
+    - download
+  when: internet_available and not php_new
+  #when: internet_available and nextcloud_force_install and (is_debian_9 or is_raspbian_9 or is_ubuntu_16)
+
+- name: Download {{ nextcloud_dl_url }}/{{ nextcloud_orig_src_file }} to {{ downloads_dir }}/{{ nextcloud_src_file }} on newer OS's that have PHP 7.1+
+  get_url:
+    url: "{{ nextcloud_dl_url }}/{{ nextcloud_orig_src_file }}"
+    dest: "{{ downloads_dir }}/{{ nextcloud_src_file }}"
+    timeout: "{{ download_timeout }}"
+    force: yes
+    #validate_certs: False    # TEMPORARY ON/AFTER 2018-07-22 AS download.nextcloud.com CERT EXPIRED: https://github.com/iiab/iiab/issues/954
+  #async: 1800
+  #poll: 10
+  tags:
+    - download
+  when: internet_available and php_new
+  #when: internet_available and nextcloud_force_install and not (is_debian_9 or is_raspbian_9 or is_ubuntu_16)
+
+# Ubuntu and Debian treat names differently
+- name: Install 4 php packages (debian/raspian)
+  package:
+    name:
+      - "libapache2-mod-php{{ php_version }}"
+      - "php{{ php_version }}-imagick"
+      - "php{{ php_version }}-mbstring"
+      - "php{{ php_version }}-zip"
+    state: present
+  when: is_debian | bool
+
+# Ubuntu and Debian treat names differently
+- name: Install 4 php packages (ubuntu)
+  package:
+    name:
+      - libapache2-mod-php
+      - php-imagick
+      - php-mbstring
+      - php-zip
+    state: present
+  when: is_ubuntu | bool
+
+- name: Install 5 more php packages (debuntu)
+  package:
+    name:
+      - "php{{ php_version }}-gd"
+      - "php{{ php_version }}-json"
+      - "php{{ php_version }}-mysql"
+      - "php{{ php_version }}-curl"
+      - "php{{ php_version }}-intl"
+    state: present
+  when: is_debuntu | bool
+
+- name: 'Install php{{ php_version }}-mcrypt IF this is a "pre-2018" distro in the debuntu family. NOTE: PHP 7.1 deprecated mcrypt 1-Dec-2016 and PHP 7.2 dropped it completely 30-Nov-2017, as it should no longer be nec.'
+  package:
+    name: "php{{ php_version }}-mcrypt"
+    state: present
+  when: is_debian_8 or is_debian_9 or is_ubuntu_16 or is_ubuntu_17
+  # NOT NEC TO TEST FOR is_raspbian_8 OR is_raspbian_9 AS /opt/iiab/iiab/vars/<OS>.yml
+  # DEFINES THESE AS SUBSETS OF is_debian_8 OR is_debian_9 (FOR NOW!)
+
+# we need to install the rpm in order to get the dependencies
+# but we only need to do this the first time
+
+- name: Install 7 php packages (redhat)
+  package:
+    name:
+      - php
+      - php-gd
+      - php-json
+      - php-mysql
+      - php-curl
+      - php-intl
+      - php-mcrypt
+      # CentOS does not have a package for php-imagick
+      #- php-imagick
+    state: present
+  when: is_redhat | bool
+
+- name: Unarchive {{ nextcloud_src_file_old }} to permanent location {{ nextcloud_prefix }}/nextcloud on older OS's lacking PHP 7.1+    # i.e. unpack nextcloud_latest-15.tar.bz2 to /opt/nextcloud
+  unarchive:
+    src: "{{ downloads_dir }}/{{ nextcloud_src_file_old }}"
+    dest: "{{ nextcloud_prefix }}"
+    #creates: "{{ nextcloud_prefix }}/nextcloud/version.php"
+  when: not php_new
+  #when: nextcloud_force_install and (is_debian_9 or is_raspbian_9 or is_ubuntu_16)
+
+- name: Unarchive {{ nextcloud_src_file }} to permanent location {{ nextcloud_prefix }}/nextcloud on newer OS's that have PHP 7.1+    # i.e. unpack nextcloud_latest-16.tar.bz2 to /opt/nextcloud
+  unarchive:
+    src: "{{ downloads_dir }}/{{ nextcloud_src_file }}"
+    dest: "{{ nextcloud_prefix }}"
+    #creates: "{{ nextcloud_prefix }}/nextcloud/version.php"
+  when: php_new | bool
+  #when: nextcloud_force_install and not (is_debian_9 or is_raspbian_9 or is_ubuntu_16)
+
+- name: Create dir /etc/nextcloud (centos) for a subsequent config dir that's symlinked to /etc/nextcloud ?
+  file:
+    path: /etc/nextcloud
+    state: directory
+  when: is_centos | bool
+
+- name: Install {{ nextcloud_prefix }}/nextcloud/config/autoconfig.php from template (centos)
+  template:
+    src: autoconfig.php.j2
+    dest: "{{ nextcloud_prefix }}/nextcloud/config/autoconfig.php"
+    owner: "{{ apache_user }}"
+    group: "{{ apache_user }}"
+    mode: 0640
+  when: is_centos | bool
+
+- name: chown -R {{ apache_user }}:{{ apache_user }} {{ nextcloud_prefix }}/nextcloud
+  file:
+    path: "{{ nextcloud_prefix }}/nextcloud"
+    owner: "{{ apache_user }}"
+    group: "{{ apache_user }}"
+    recurse: yes
+    state: directory
+
+- name: Create data directory {{ nextcloud_data_dir }}    # /opt/nextcloud/data
+  file:
+    path: "{{ nextcloud_data_dir }}"
+    owner: "{{ apache_user }}"
+    group: "{{ apache_user }}"
+    mode: 0750
+    state: directory
+
+- name: Install Apache's nextcloud.conf from template, for http://box/nextcloud
+  template:
+    src: nextcloud.conf.j2
+    dest: "/etc/{{ apache_config_dir }}/nextcloud.conf"
+    owner: root
+    group: root
+    mode: 0644
+
+- name: Add 'nextcloud_installed' variable values to {{ iiab_state_file }}
+  lineinfile:
+    dest: "{{ iiab_state_file }}"
+    regexp: '^nextcloud_installed'
+    line: 'nextcloud_installed: True'
+    state: present

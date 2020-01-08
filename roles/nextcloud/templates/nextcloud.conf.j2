@@ -1,64 +1,131 @@
-# Ansible template that becomes /etc/apache2/sites-available/nextcloud.conf
+location ^~ /nextcloud {
 
-Alias {{ nextcloud_url }} {{ nextcloud_prefix }}/nextcloud
+    ## Add headers to serve security related headers
+    ## Before enabling Strict-Transport-Security headers please read into this
+    ## topic first.
+    ##add_header Strict-Transport-Security "max-age=15768000; includeSubDomains; preload;" always;
+    ##
+    ## WARNING: Only add the preload option once you read about
+    ## the consequences in https://hstspreload.org/. This option
+    ## will add the domain to a hardcoded list that is shipped
+    ## in all major browsers and getting removed from this list
+    ## could take several months.
+    #add_header Referrer-Policy "no-referrer" always;
+    #add_header X-Content-Type-Options "nosniff" always;
+    #add_header X-Download-Options "noopen" always;
+    #add_header X-Frame-Options "SAMEORIGIN" always;
+    #add_header X-Permitted-Cross-Domain-Policies "none" always;
+    #add_header X-Robots-Tag "none" always;
+    #add_header X-XSS-Protection "1; mode=block" always;
 
-<Directory {{ nextcloud_prefix }}/nextcloud/>
-    # 2019-09-04 commenting out towards future removal
-    #Options -Indexes
+    ## Remove X-Powered-By, which is an information leak
+    #fastcgi_hide_header X-Powered-By;
 
-    Options +FollowSymlinks
-    AllowOverride All
+    # Path to the root of your installation
+    root /library/www/html/;
 
-    <IfModule mod_authz_core.c>
-    # Apache 2.4
-    # http://httpd.apache.org/docs/2.4/mod/mod_authz_core.html
+    location = /nextcloud/robots.txt {
+        allow all;
+        log_not_found off;
+        access_log off;
+    }
 
-    # 2019-09-04 commenting out towards future removal
-    #Require host localhost
+    # The following 2 rules are only needed for the user_webfinger app.
+    # Uncomment it if you're planning to use this app.
+    #rewrite ^/.well-known/host-meta /public.php?service=host-meta last;
+    #rewrite ^/.well-known/host-meta.json /public.php?service=host-meta-json last;
 
-{% if nextcloud_allow_public_ips %}
-    # PERMIT ACCESS FROM ALL IPv4 ADDRESSES:
-    Require all granted
-    # PERMIT ACCESS FROM THESE IPv4 ADDRESS RANGES ONLY:
-    #Require ip 127.0.0.1 {{ lan_ip }}/{{ lan_netmask }} 192.168 10
-{% else %}
-    # PERMIT ACCESS FROM ALL IPv4 ADDRESSES:
-    #Require all granted
-    # PERMIT ACCESS FROM THESE IPv4 ADDRESS RANGES ONLY:
-    Require ip 127.0.0.1 {{ lan_ip }}/{{ lan_netmask }} 192.168 10
-{% endif %}
-{# Reminder that {{ lan_ip }}/{{ lan_netmask }} is 172.18.96.1/255.255.224.0 #}
-    # AVOID THIS LINE AS IT OVERLY RESTRICTS SCHOOLS W/ 192.168.1.x, 10.x.y.z:
-    #Require ip 127.0.0.1 {{ lan_ip }}/{{ lan_netmask }} {{ nextcloud_required_ip }} {{ openvpn_server_virtual_ip }}/255.255.255.0
-    </IfModule>
-    
-    # 2019-09-04 commenting out towards future removal
-    #<IfModule !mod_authz_core.c>
-    ## Apache 2.2
-    #Order Deny,Allow
-    #Deny from all
-    #Allow from 127.0.0.1
-    #Allow from ::1
-    #</IfModule>
-    #
-    #ErrorDocument 404 /core/templates/404.php
-    #
-    # 2019-09-04 commenting out towards future removal
-    #<IfModule mod_php5.c>
-    #php_value upload_max_filesize 512M
-    #php_value post_max_size 512M
-    #php_value memory_limit 512M
-    #php_value mbstring.func_overload 0
-    #</IfModule>
-    #
-    #SetEnv htaccessWorking true
-    #
-    #<IfModule pagespeed_module>
-    #ModPagespeed Off
-    #</IfModule>
-    #
-    #RewriteEngine on
-    #RewriteRule .* - [env=HTTP_AUTHORIZATION:%{HTTP:Authorization},last]
-    #RewriteRule ^\.well-known/carddav /remote.php/carddav/ [R]
-    #RewriteRule ^\.well-known/caldav /remote.php/caldav/ [R]
-</Directory>
+    # The following rule is only needed for the Social app.
+    # Uncomment it if you're planning to use this app.
+    #rewrite ^/.well-known/webfinger /public.php?service=webfinger last;
+
+    location = /nextcloud/.well-known/carddav {
+      return 301 $scheme://$host/remote.php/dav;
+    }
+    location = /nextcloud/.well-known/caldav {
+      return 301 $scheme://$host/remote.php/dav;
+    }
+
+    # set max upload size
+    client_max_body_size 512M;
+    fastcgi_buffers 64 4K;
+
+    # Enable gzip but do not remove ETag headers
+    gzip on;
+    gzip_vary on;
+    gzip_comp_level 4;
+    gzip_min_length 256;
+    gzip_proxied expired no-cache no-store private no_last_modified no_etag auth;
+    gzip_types application/atom+xml application/javascript application/json application/ld+json application/manifest+json application/rss+xml application/vnd.geo+json application/vnd.ms-fontobject application/x-font-ttf application/x-web-app-manifest+json application/xhtml+xml application/xml font/opentype image/bmp image/svg+xml image/x-icon text/cache-manifest text/css text/plain text/vcard text/vnd.rim.location.xloc text/vtt text/x-component text/x-cross-domain-policy;
+
+    # Uncomment if your server is build with the ngx_pagespeed module
+    # This module is currently not supported.
+    #pagespeed off;
+
+    location /nextcloud/ {
+        rewrite ^ /nextcloud/index.php;
+    }
+
+    location ~ ^\/nextcloud\/(?:build|tests|config|lib|3rdparty|templates|data)\/ {
+        deny all;
+    }
+    location ~ ^\/nextcloud\/(?:\.|autotest|occ|issue|indie|db_|console) {
+        deny all;
+    }
+
+    location ~ ^\/nextcloud\/(?:index|remote|public|cron|core\/ajax\/update|status|ocs\/v[12]|updater\/.+|oc[ms]-provider\/.+)\.php(?:$|\/) {
+        fastcgi_split_path_info ^(.+?\.php)(\/.*|)$;
+        set $path_info $fastcgi_path_info;
+        try_files $fastcgi_script_name =404;
+        include fastcgi_params;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        fastcgi_param PATH_INFO $path_info;
+        #fastcgi_param HTTPS on;
+        # Avoid sending the security headers twice
+        fastcgi_param modHeadersAvailable true;
+        # Enable pretty urls
+        fastcgi_param front_controller_active true;
+        fastcgi_pass php;
+        fastcgi_intercept_errors on;
+        fastcgi_request_buffering off;
+    }
+
+    location ~ ^\/nextcloud\/(?:updater|oc[ms]-provider)(?:$|\/) {
+        try_files $uri/ =404;
+        index index.php;
+    }
+
+    # Adding the cache control header for js, css and map files
+    # Make sure it is BELOW the PHP block
+    location ~ ^\/nextcloud\/.+[^\/]\.(?:css|js|woff2?|svg|gif|map)$ {
+        try_files $uri /nextcloud/index.php$request_uri;
+        add_header Cache-Control "public, max-age=15778463";
+        # Add headers to serve security related headers (It is intended to
+        # have those duplicated to the ones above)
+        # Before enabling Strict-Transport-Security headers please read into
+        # this topic first.
+        #add_header Strict-Transport-Security "max-age=15768000; includeSubDomains; preload;" always;
+        #
+        # WARNING: Only add the preload option once you read about
+        # the consequences in https://hstspreload.org/. This option
+        # will add the domain to a hardcoded list that is shipped
+        # in all major browsers and getting removed from this list
+        # could take several months.
+        add_header Referrer-Policy "no-referrer" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-Download-Options "noopen" always;
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header X-Permitted-Cross-Domain-Policies "none" always;
+        add_header X-Robots-Tag "none" always;
+        add_header X-XSS-Protection "1; mode=block" always;
+
+        # Optional: Don't log access to assets
+        access_log off;
+    }
+
+    location ~ ^\/nextcloud\/.+[^\/]\.(?:png|html|ttf|ico|jpg|jpeg|bcmap)$ {
+        try_files $uri /nextcloud/index.php$request_uri;
+        # Optional: Don't log access to other assets
+        access_log off;
+    }
+}
