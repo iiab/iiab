@@ -33,7 +33,7 @@ To further refine Nextcloud access controls based on IPv4 addresses, you can edi
 - max_execution_time
 - max_input_time
 
-Useful PHP recommendations for these settings (while largely tailored to WordPress, and aimed at very low-end hardware) can be found here: [/opt/iiab/iiab/roles/httpd/tasks/main.yml](https://github.com/iiab/iiab/blob/master/roles/httpd/tasks/main.yml#L80-L84)
+Useful PHP recommendations for these settings (while largely tailored to WordPress, and aimed at very low-end hardware) can be found here: [/opt/iiab/iiab/roles/httpd/tasks/enable.yml](https://github.com/iiab/iiab/blob/master/roles/httpd/tasks/enable.yml#L1-L14)
 
 ## Using It
 
