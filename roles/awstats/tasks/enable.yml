@@ -1,45 +1,59 @@
-- name: Create symlink awstats.conf from sites-enabled to sites-available (Apache)
-  file:
-    src: /etc/apache2/sites-available/awstats.conf
-    path: /etc/apache2/sites-enabled/awstats.conf
-    state: link
-  when: awstats_enabled and not nginx_enabled
+# Apache
 
-- name: Remove symlink from sites-enabled, to disable AWStats (Apache)
+- name: Remove symlink /etc/apache2/sites-enabled/awstats.conf
   file:
     path: /etc/apache2/sites-enabled/awstats.conf
     state: absent
   when: not awstats_enabled or nginx_enabled
 
-- name: Install nginx's files from template
-  template:
-    src: "{{ item.src }}"
-    dest: "{{ item.dest }}"
-    owner: root
-    group: root
-    mode: 0644
-  with_items:
-     - { src: "awstats-nginx.conf", dest: "{{ nginx_config_dir }}/" }
-     - { src: "cgi-bin.php", dest: "/etc/nginx/" }
-  when: awstats_enabled and nginx_enabled
+#- name: 'Install from template: /etc/{{ apache_config_dir }}/awstats.conf'
+#  template:
+#    src: apache-awstats.conf
+#    dest: "/etc/{{ apache_config_dir }}/awstats.conf"
+#    owner: root    # Not nec? Remove?
+#    group: root    # Not nec? Remove?
+#    mode: 0644    # Not nec? Remove?
+#  when: not nginx_enabled
 
-- name: Remove {{ nginx_config_dir }}/awstats-nginx.conf
+- name: Symlink /etc/apache2/sites-enabled/awstats.conf -> /etc/{{ apache_config_dir }}/awstats.conf
   file:
-    path: "{{ nginx_config_dir }}/awstats-nginx.conf"
-    state: absent
-  when: not awstats_enabled
+    src: "/etc/{{ apache_config_dir }}/awstats.conf"
+    path: /etc/apache2/sites-enabled/awstats.conf
+    state: link
+  when: awstats_enabled and not nginx_enabled
 
-- name: Restart Apache service ({{ apache_service }})
+- name: Restart Apache systemd service ({{ apache_service }})
   systemd:
     name: "{{ apache_service }}"
     state: restarted
   when: awstats_enabled and not nginx_enabled
 
-- name: Restart nginx service
+# NGINX
+
+- name: Remove {{ nginx_config_dir }}/awstats-nginx.conf
+  file:
+    path: "{{ nginx_config_dir }}/awstats-nginx.conf"
+    state: absent
+  when: not awstats_enabled or not nginx_enabled
+
+- name: 'Install from template: /etc/nginx/cgi-bin.php, {{ nginx_config_dir }}/awstats-nginx.conf'
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: root    # Not nec? Remove?
+    group: root    # Not nec? Remove?
+    mode: 0644    # Not nec? Remove?
+  with_items:
+     - { src: "awstats-nginx.conf", dest: "{{ nginx_config_dir }}/" }
+     - { src: "cgi-bin.php", dest: "/etc/nginx/" }
+  when: awstats_enabled and nginx_enabled
+
+- name: Restart nginx systemd service
   systemd:
     name: nginx
+    daemon_reload: yes
     state: restarted
-  when: awstats_enabled and nginx_enabled
+  when: nginx_enabled | bool
 
 - name: Add 'awstats' variable values to {{ iiab_ini_file }}
   ini_file:
