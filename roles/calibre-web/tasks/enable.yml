@@ -14,6 +14,8 @@
     state: stopped
   when: not calibreweb_enabled
 
+# APACHE
+
 # Default: http://box/books
 # SEE ALSO: https://github.com/janeczku/calibre-web/wiki/Setup-Reverse-Proxy
 - name: Enable http://box{{ calibreweb_url1 }}, http://box{{ calibreweb_url2 }}, http://box{{ calibreweb_url3 }} with Apache
@@ -24,34 +26,35 @@
   command: a2dissite calibre-web.conf
   when: (not calibreweb_enabled or nginx_enabled) and apache_install
 
-- name: Install {{ nginx_config_dir }}/calibre-web-nginx.conf
-  template:
-    src: "{{ item.src }}"
-    dest: "{{ item.dest }}"
-    mode: "{{ item.mode }}"
-    owner: root
-    group: root
-  with_items:
-    - { src: 'calibre-web-nginx.conf.j2', dest: '{{ nginx_config_dir }}/calibre-web-nginx.conf', mode: '0644' }
-  when: calibreweb_enabled and nginx_enabled
-
-- name: Remove {{ nginx_config_dir }}/calibre-web-nginx.conf
-  file:
-    path: {{ nginx_config_dir }}/calibre-web-nginx.conf
-    state: absent
-  when: not calibreweb_enabled and nginx_enabled
-
-- name: Restart nginx systemd service
-  systemd:
-    name: nginx
-    state: restarted
-  when: calibreweb_enabled and nginx_enabled
-
 - name: Restart Apache systemd service ({{ apache_service }})
   systemd:
     name: "{{ apache_service }}"    # httpd or apache2
     state: restarted
   when: not nginx_enabled
+
+# NGINX
+
+- name: Remove {{ nginx_config_dir }}/calibre-web-nginx.conf
+  file:
+    path: "{{ nginx_config_dir }}/calibre-web-nginx.conf"
+    state: absent
+  when: not calibreweb_enabled or not nginx_enabled
+
+- name: 'Install from template: {{ nginx_config_dir }}/calibre-web-nginx.conf'
+  template:
+    src: calibre-web-nginx.conf.j2
+    dest: "{{ nginx_config_dir }}/calibre-web-nginx.conf"
+    owner: root    # Not nec? Remove?
+    group: root    # Not nec? Remove?
+    mode: 0644    # Not nec? Remove?
+  when: calibreweb_enabled and nginx_enabled
+
+- name: Restart nginx systemd service
+  systemd:
+    name: nginx
+    daemon_reload: yes
+    state: restarted
+  when: calibreweb_enabled and nginx_enabled
 
 - name: Add 'calibre-web' variable values to {{ iiab_ini_file }}
   ini_file:
