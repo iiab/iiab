@@ -3,11 +3,23 @@
     src: /etc/apache2/sites-available/mediawiki.conf
     dest: /etc/apache2/sites-enabled/mediawiki.conf
     state: link
-  when: mediawiki_enabled and is_debuntu
+  when: mediawiki_enabled and not nginx_enabled
 
 - name: Remove mediawiki.conf if not mediawiki_enabled (debuntu)
   file:
     path: /etc/apache2/sites-enabled/mediawiki.conf
+    state: absent
+  when: not mediawiki_enabled or nginx_enabled
+
+- name: Install {{ nginx_config_dir }}/mediawiki-nginx.conf from template, for http://box{{ mediawiki_url }}
+  template:
+    src: mediawiki-nginx.conf.j2
+    dest: "{{ nginx_config_dir }}/mediawiki-nginx.conf"
+  when: mediawiki_enabled and nginx_enabled
+
+- name: Remove mediawiki-nginx.conf if not mediawiki_enabled (debuntu)
+  file:
+    path: "{{ nginx_config_dir }}/mediawiki-nginx.conf"
     state: absent
   when: not mediawiki_enabled and is_debuntu
 
@@ -16,24 +28,14 @@
     name: "{{ apache_service }}"
     daemon_reload: yes
     state: restarted
-
-- name: Install {{ nginx_config_dir }}/mediawiki-nginx.conf from template, for http://box{{ mediawiki_url }}
-  template:
-    src: mediawiki-nginx.conf.j2
-    dest: "{{ nginx_config_dir }}/mediawiki-nginx.conf"
-  when: mediawiki_enabled
-
-- name: Remove mediawiki-nginx.conf if not mediawiki_enabled (debuntu)
-  file:
-    path: "{{ nginx_config_dir }}/mediawiki-nginx.conf"
-    state: absent
-  when: not mediawiki_enabled and is_debuntu
+  when: mediawiki_enabled and not nginx_enabled
 
 - name: Restart nginx service to enable/disable http://box{{ mediawiki_url }}
   systemd:
     name: nginx
     daemon_reload: yes
     state: restarted
+  when: nginx_enabled
 
 - name: Add 'mediawiki' variable values to {{ iiab_ini_file }}
   ini_file:
