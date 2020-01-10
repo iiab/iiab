@@ -1,4 +1,4 @@
-- name: Enable 'gitea' service
+- name: Enable 'gitea' systemd service
   systemd:
     daemon_reload: yes
     name: gitea
@@ -6,7 +6,7 @@
     state: restarted
   when: gitea_enabled | bool
 
-- name: Disable 'gitea' service
+- name: Disable 'gitea' systemd service
   systemd:
     daemon_reload: yes
     name: gitea
@@ -14,43 +14,53 @@
     state: stopped
   when: not gitea_enabled
 
-# Configure HTTPD
+# Configure Apache
 
-- name: Copy gitea httpd conf file
+- name: Remove softlink /etc/apache2/sites-enabled/gitea.conf
+  file:
+    path: /etc/apache2/sites-enabled/gitea.conf
+    state: absent
+  when: not gitea_enabled or nginx_enabled
+
+- name: 'Install from template: /etc/{{ apache_config_dir }}/gitea.conf'
   template:
     src: gitea.conf.j2
     dest: "/etc/{{ apache_config_dir }}/gitea.conf"
+  when: not nginx_enabled
 
-- name: Enable httpd conf file (apache)
+- name: Enable softlink /etc/apache2/sites-enabled/gitea.conf -> /etc/{{ apache_config_dir }}/gitea.conf
   file:
     src: /etc/{{ apache_config_dir }}/gitea.conf
     dest: /etc/apache2/sites-enabled/gitea.conf
     state: link
   when: gitea_enabled and not nginx_enabled
 
-- name: Remove apache httpd conf file (OS's other than debuntu)
-  file:
-    path: /etc/apache2/sites-enabled/gitea.conf
-    state: absent
-  when: not gitea_enabled or nginx_enabled
+- name: Restart Apache systemd service ({{ apache_service }})
+  systemd:
+    name: "{{ apache_service }}"    # httpd or apache2
+    state: restarted
+  when: not nginx_enabled
 
-- name: Remove nginx httpd conf file
+# Configure NGINX
+
+- name: Remove {{ nginx_config_dir }}/gitea-nginx.conf
   file:
     path: "{{ nginx_config_dir }}/gitea-nginx.conf"
     state: absent
-  when: not gitea_enabled
+  when: not gitea_enabled or not nginx_enabled
 
-- name: Enable nginx httpd conf file
+- name: 'Install from template: {{ nginx_config_dir }}/gitea-nginx.conf'
   template:
     src: gitea-nginx.conf.j2
     dest: "{{ nginx_config_dir }}/gitea-nginx.conf"
   when: gitea_enabled and nginx_enabled
 
-- name: Restart nginx
+- name: Restart nginx systemd service
   systemd:
     name: nginx
     daemon_reload: yes
     state: restarted
+  when: nginx_enabled | bool
 
 # Add Gitea to registry
 
