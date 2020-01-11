@@ -4,25 +4,25 @@
 2. Without PHP available via FastCGI, any function at all for PHP-based applications validates NGINX.
 3. Current state (2020-01-11)
    1. Principal functions migrated to NGINX
-      * Admin Console (http://box.lan/admin)
+      * Admin Console
       * kalite -- goes directly to port 8009
+      * mediawiki
       * osm-vector-maps
       * usb-lib
+      * wordpress
    2. Dual support
-      * awstats
+      * awstats ([#2124](https://github.com/iiab/iiab/issues/2124))
       * calibre-web
       * gitea
       * kiwix -- goes directly to port 3000
       * kolibri
-      * mediawiki
       * sugarizer
-      * wordpress
    3. Still proxied to Apache
-      * dokuwiki
+      * dokuwiki ([#2056](https://github.com/iiab/iiab/issues/2056))
       * elgg
       * lokole
       * moodle
       * nodered
-      * nextcloud
-   4. Not dealt with yet
-      * internetarchive
+      * nextcloud ([PR #2119](https://github.com/iiab/iiab/pull/2119))
+   4. Not yet dealt with
+      * internetarchive ([#2120](https://github.com/iiab/iiab/pull/2120))
