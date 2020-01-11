@@ -1,14 +1,13 @@
-- name: Enable 'gitea' systemd service
+- name: Enable & Restart 'gitea' systemd service
   systemd:
-    daemon_reload: yes
     name: gitea
+    daemon_reload: yes
     enabled: yes
     state: restarted
   when: gitea_enabled | bool
 
-- name: Disable 'gitea' systemd service
+- name: Disable & Restart 'gitea' systemd service
   systemd:
-    daemon_reload: yes
     name: gitea
     enabled: no
     state: stopped
@@ -16,53 +15,40 @@
 
 # Apache
 
-- name: Remove softlink /etc/apache2/sites-enabled/gitea.conf
-  file:
-    path: /etc/apache2/sites-enabled/gitea.conf
-    state: absent
-  when: not gitea_enabled or nginx_enabled
+- name: Enable http://box{{ gitea_url }} via Apache    # i.e. http://box/gitea
+  command: a2ensite gitea.conf
+  when: apache_install and gitea_enabled
 
-- name: 'Install from template: /etc/{{ apache_config_dir }}/gitea.conf'
-  template:
-    src: gitea.conf.j2
-    dest: "/etc/{{ apache_config_dir }}/gitea.conf"
-  when: not nginx_enabled
-
-- name: Softlink /etc/apache2/sites-enabled/gitea.conf -> /etc/{{ apache_config_dir }}/gitea.conf
-  file:
-    src: /etc/{{ apache_config_dir }}/gitea.conf
-    path: /etc/apache2/sites-enabled/gitea.conf
-    state: link
-  when: gitea_enabled and not nginx_enabled
+- name: Disable http://box{{ gitea_url }} via Apache
+  command: a2dissite gitea.conf
+  when: apache_install and not gitea_enabled
 
 - name: Restart Apache systemd service ({{ apache_service }})
   systemd:
-    name: "{{ apache_service }}"    # httpd or apache2
+    name: "{{ apache_service }}"    # apache2 or httpd, as set in /opt/iiab/iiab/vars/<OS>.yml
     state: restarted
-  when: not nginx_enabled
+  when: apache_enabled | bool
 
 # NGINX
 
-- name: Remove {{ nginx_config_dir }}/gitea-nginx.conf
-  file:
-    path: "{{ nginx_config_dir }}/gitea-nginx.conf"
-    state: absent
-  when: not gitea_enabled or not nginx_enabled
-
-- name: 'Install from template: {{ nginx_config_dir }}/gitea-nginx.conf'
+- name: Enable http://box{{ gitea_url }} via NGINX, by installing {{ nginx_config_dir }}/gitea-nginx.conf from template
   template:
     src: gitea-nginx.conf.j2
     dest: "{{ nginx_config_dir }}/gitea-nginx.conf"
-  when: gitea_enabled and nginx_enabled
+  when: nginx_install and gitea_enabled
 
-- name: Restart nginx systemd service
+- name: Disable http://box{{ gitea_url }} via NGINX, by removing {{ nginx_config_dir }}/gitea-nginx.conf
+  file:
+    path: "{{ nginx_config_dir }}/gitea-nginx.conf"
+    state: absent
+  when: nginx_install and not gitea_enabled
+
+- name: Restart 'nginx' systemd service
   systemd:
     name: nginx
-    daemon_reload: yes
     state: restarted
   when: nginx_enabled | bool
 
-# Add Gitea to registry
 
 - name: Add 'gitea' to list of services at {{ iiab_ini_file }}
   ini_file:
