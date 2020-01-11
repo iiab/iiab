@@ -1,81 +1,54 @@
-- name: Create symlink sugarizer.conf from sites-enabled to sites-available, for short URLs http://box/sugar & http://box/sugarizer (if sugarizer_enabled)
-  file:
-    src: /etc/apache2/sites-available/sugarizer.conf
-    path: /etc/apache2/sites-enabled/sugarizer.conf
-    state: link
-  when: sugarizer_enabled and not nginx_enabled
-
-- name: Remove symlink /etc/apache2/sites-enabled/sugarizer.conf (if not sugarizer_enabled)
-  file:
-    path: /etc/apache2/sites-enabled/sugarizer.conf
-    state: absent
-  when: not sugarizer_enabled or nginx_enabled
-
-- name: "Install sugarizer-nginx.conf (nginx)"
-  template:
-    src: "{{ item.src }}"
-    dest: "{{ item.dest }}"
-    mode: "{{ item.mode }}"
-    owner: root
-    group: root
-  with_items:
-    - { src: 'sugarizer-nginx.conf', dest: '{{ nginx_config_dir }}/sugarizer-nginx.conf', mode: '0644' }
-  when: sugarizer_enabled and nginx_enabled
-
-- name: Remove {{ nginx_config_dir }}/sugarizer-nginx.conf (if not sugarizer_enabled)
-  file:
-    path: "{{ nginx_config_dir }}/sugarizer-nginx.conf"
-    state: absent
-  when: not sugarizer_enabled and nginx_enabled
-
-# 6. RESTART/STOP SYSTEMD SERVICE
-
-# with "systemctl daemon-reload" in case mongodb.service changed, etc
-- name: Enable & Restart 'sugarizer' systemd service (if sugarizer_enabled)
+- name: Enable & Restart 'sugarizer' systemd service
   systemd:
     name: sugarizer
-    daemon_reload: yes
+    daemon_reload: yes    # in case mongodb.service changed, etc
     enabled: yes
     state: restarted
   when: sugarizer_enabled
 
-- name: Disable & Stop 'sugarizer' systemd service (if not sugarizer_enabled)
+- name: Disable & Stop 'sugarizer' systemd service
   systemd:
     name: sugarizer
-    daemon_reload: yes
     enabled: no
     state: stopped
   when: not sugarizer_enabled
 
-#- name: Enable services (all OS's)
-#  service:
-#    name: "{{ item.name }}"
-#    enabled: yes
-#    state: restarted
-#  with_items:
-##   - { name: mongodb }    # 2018-07-14: NICE TRY, but still doesn't bring http://box:8089 to life reliably, as a reboot usually does!  (Is a "systemctl daemon-reload" or some such nec?)
-#    - { name: sugarizer }
-#  when: sugarizer_enabled | bool
+# Apache
 
-#- name: Disable service (all OS's)
-#  service:
-#    name: sugarizer
-#    enabled: no
-#    state: stopped
-#  when: not sugarizer_enabled
+- name: Enable http://box/sugarizer & http://box/sugar via Apache
+  command: a2ensite sugarizer.conf
+  when: apache_install and sugarizer_enabled
 
-- name: Restart Apache service ({{ apache_service }}) to enable/disable http://box/sugarizer (not just http://box:{{ sugarizer_port }})
+- name: Disable http://box/sugarizer via Apache
+  command: a2dissite sugarizer.conf
+  when: apache_install and not sugarizer_enabled
+
+- name: Restart Apache systemd service ({{ apache_service }})
   systemd:
-    name: "{{ apache_service }}"    # httpd or apache2
+    name: "{{ apache_service }}"
     state: restarted
-  when: sugarizer_enabled and not nginx_enabled
+  when: apache_enabled | bool
 
-- name: Restart nginx when enabled
+# NGINX
+
+- name: "Enable http://box/sugarizer via NGINX, by installing {{ nginx_config_dir }}/sugarizer-nginx.conf from template"
+  template:
+    src: sugarizer-nginx.conf
+    dest: "{{ nginx_config_dir }}/sugarizer-nginx.conf"
+  when: nginx_install and sugarizer_enabled
+
+- name: "Disable http://box/sugarizer via NGINX, by removing {{ nginx_config_dir }}/sugarizer-nginx.conf"
+  file:
+    path: "{{ nginx_config_dir }}/sugarizer-nginx.conf"
+    state: absent
+  when: nginx_install and not sugarizer_enabled
+
+- name: Restart 'nginx' systemd service
   systemd:
     name: nginx
     state: restarted
-    daemon_reload: yes
-  when: sugarizer_enabled and nginx_enabled
+  when: nginx_enabled | bool
+
 
 - name: Add 'sugarizer' variable values to {{ iiab_ini_file }}
   ini_file:
