@@ -1,35 +1,4 @@
-- name: Create softlink kiwix.conf from sites-enabled to sites-available - for Kiwix Proxy in Apache - is disabled by turning off service kiwix-serve (debuntu)
-  file:
-    src: /etc/apache2/sites-available/kiwix.conf
-    path: /etc/apache2/sites-enabled/kiwix.conf
-    state: link
-  when: kiwix_enabled and not nginx_enabled
-
-- name: Install nginx support
-  template:
-    backup: no
-    src: "{{ item.src }}"
-    dest: "{{ item.dest }}"
-    owner: root
-    group: root
-    mode: "{{ item.mode }}"
-  with_items:
-    - { src: 'kiwix-nginx.conf', dest: '{{ nginx_config_dir }}/kiwix-nginx.conf', mode: '0644' }
-  when: kiwix_enabled and nginx_enabled
-
-- name: Remove symlink /etc/apache2/sites-enabled/kiwix.conf
-  file:
-    path: /etc/apache2/sites-enabled/kiwix.conf
-    state: absent
-  when: not kiwix_enabled or nginx_enabled
-
-- name: Remove {{ nginx_config_dir }}/kiwix-nginx.conf
-  file:
-    path: "{{ nginx_config_dir }}/kiwix-nginx.conf"
-    state: absent
-  when: not kiwix_enabled and nginx_enabled
-
-- name: Enable & Restart 'kiwix-serve' service
+- name: Enable & Restart 'kiwix-serve' systemd service
   systemd:
     daemon_reload: yes
     name: kiwix-serve
@@ -37,13 +6,14 @@
     state: restarted
   when: kiwix_enabled | bool
 
-- name: Disable 'kiwix-serve' service
+- name: Disable 'kiwix-serve' systemd service
   systemd:
     name: kiwix-serve
     enabled: no
     state: stopped
   when: not kiwix_enabled
-# IN THEORY: BOTH CRON ENTRIES BELOW *SHOULD* BE DELETED "when: not kiwix_enabled"
+
+# TO DO: BOTH CRON ENTRIES BELOW *SHOULD* BE DELETED "when: not kiwix_enabled"
 
 # In the past kiwix-serve did not stay running, so we'd been doing this hourly.
 # @mgautierfr & others suggest kiwix-serve might be auto-restarted w/o cron in
@@ -64,6 +34,16 @@
     dest: /etc/crontab
   when: kiwix_enabled and is_redhat
 
+# Apache
+
+- name: Enable http://box/kiwix with Apache proxy
+  command: a2ensite kiwix.conf
+  when: kiwix_enabled and not nginx_enabled
+
+- name: Disable http://box/kiwix with Apache
+  command: a2dissite calibre-web.conf
+  when: not kiwix_enabled or nginx_enabled
+
 - name: Restart Apache systemd service ({{ apache_service }})
   systemd:
     name: "{{ apache_service }}"
@@ -71,15 +51,29 @@
     state: restarted
   when: not nginx_enabled
 
+# NGINX
+
+- name: 'Install from template: {{ nginx_config_dir }}/kiwix-nginx.conf'
+  template:
+    src: kiwix-nginx.conf
+    dest: "{{ nginx_config_dir }}/kiwix-nginx.conf"
+    owner: root    # Not nec? Remove?
+    group: root    # Not nec? Remove?
+    mode: '0644'    # Not nec? Remove?
+  when: kiwix_enabled and nginx_enabled
+
+- name: Remove {{ nginx_config_dir }}/kiwix-nginx.conf
+  file:
+    path: "{{ nginx_config_dir }}/kiwix-nginx.conf"
+    state: absent
+  when: not kiwix_enabled or not nginx_enabled
+
 - name: Restart nginx systemd service
   systemd:
     name: nginx
     daemon-reload: yes
     state: restarted
   when: nginx_enabled | bool
-
-
-# 5. FINALIZE
 
 - name: Add 'kiwix' variable values to {{ iiab_ini_file }}
   ini_file:
