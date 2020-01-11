@@ -1,59 +1,42 @@
 # Apache
 
-- name: Remove symlink /etc/apache2/sites-enabled/awstats.conf
-  file:
-    path: /etc/apache2/sites-enabled/awstats.conf
-    state: absent
-  when: not awstats_enabled or nginx_enabled
+- name: Enable http://box/awstats and/or http://box/awstats/awstats.pl via Apache
+  command: a2ensite awstats.conf
+  when: apache_install and awstats_enabled
 
-#- name: 'Install from template: /etc/{{ apache_config_dir }}/awstats.conf'
-#  template:
-#    src: apache-awstats.conf
-#    dest: "/etc/{{ apache_config_dir }}/awstats.conf"
-#    owner: root    # Not nec? Remove?
-#    group: root    # Not nec? Remove?
-#    mode: 0644    # Not nec? Remove?
-#  when: not nginx_enabled
-
-- name: Symlink /etc/apache2/sites-enabled/awstats.conf -> /etc/{{ apache_config_dir }}/awstats.conf
-  file:
-    src: "/etc/{{ apache_config_dir }}/awstats.conf"
-    path: /etc/apache2/sites-enabled/awstats.conf
-    state: link
-  when: awstats_enabled and not nginx_enabled
+- name: Disable http://box/awstats and/or http://box/awstats/awstats.pl via Apache
+  command: a2dissite awstats.conf
+  when: apache_install and not awstats_enabled
 
 - name: Restart Apache systemd service ({{ apache_service }})
   systemd:
-    name: "{{ apache_service }}"
+    name: "{{ apache_service }}"    # apache2 or httpd, as set in /opt/iiab/iiab/vars/<OS>.yml
     state: restarted
-  when: awstats_enabled and not nginx_enabled
+  when: apache_enabled | bool
 
 # NGINX
 
-- name: Remove {{ nginx_config_dir }}/awstats-nginx.conf
-  file:
-    path: "{{ nginx_config_dir }}/awstats-nginx.conf"
-    state: absent
-  when: not awstats_enabled or not nginx_enabled
-
-- name: 'Install from template: /etc/nginx/cgi-bin.php, {{ nginx_config_dir }}/awstats-nginx.conf'
+- name: Enable http://box/awstats via NGINX, by installing /etc/nginx/cgi-bin.php & {{ nginx_config_dir }}/awstats-nginx.conf from template
   template:
     src: "{{ item.src }}"
     dest: "{{ item.dest }}"
-    owner: root    # Not nec? Remove?
-    group: root    # Not nec? Remove?
-    mode: 0644    # Not nec? Remove?
   with_items:
-     - { src: "awstats-nginx.conf", dest: "{{ nginx_config_dir }}/" }
-     - { src: "cgi-bin.php", dest: "/etc/nginx/" }
-  when: awstats_enabled and nginx_enabled
+    - { src: "awstats-nginx.conf", dest: "{{ nginx_config_dir }}/" }
+    - { src: "cgi-bin.php", dest: "/etc/nginx/" }
+  when: nginx_install and awstats_enabled
 
-- name: Restart nginx systemd service
+- name: Disable http://box/awstats_url via NGINX, by removing {{ nginx_config_dir }}/awstats-nginx.conf
+  file:
+    path: "{{ nginx_config_dir }}/awstats-nginx.conf"
+    state: absent
+  when: nginx_install and not awstats_enabled
+
+- name: Restart 'nginx' systemd service
   systemd:
     name: nginx
-    daemon_reload: yes
     state: restarted
   when: nginx_enabled | bool
+
 
 - name: Add 'awstats' variable values to {{ iiab_ini_file }}
   ini_file:
