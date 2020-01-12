@@ -1,43 +1,19 @@
-- name: Create softlink kiwix.conf from sites-enabled to sites-available - for Kiwix Proxy in Apache - is disabled by turning off service kiwix-serve (debuntu)
-  file:
-    src: /etc/apache2/sites-available/kiwix.conf
-    path: /etc/apache2/sites-enabled/kiwix.conf
-    state: link
-  when: kiwix_enabled | bool and not nginx_enabled | bool
-
-- name: Install nginx support
-  template:
-    backup: no
-    src: "{{ item.src }}"
-    dest: "{{ item.dest }}"
-    owner: root
-    group: root
-    mode: "{{ item.mode }}"
-  with_items:
-    - { src: 'kiwix-nginx.conf', dest: '/etc/nginx/conf.d/kiwix-nginx.conf', mode: '0644' }
-  when: kiwix_enabled | bool and nginx_enabled | bool
-
-- name: Remove symlink /etc/apache2/sites-enabled/kiwix.conf
-  file:
-    path: /etc/apache2/sites-enabled/kiwix.conf
-    state: absent
-  when: not kiwix_enabled | bool or nginx_enabled | bool
-
-- name: Enable & Restart 'kiwix-serve' service
+- name: Enable & Restart 'kiwix-serve' systemd service
   systemd:
-    daemon_reload: yes
     name: kiwix-serve
+    daemon_reload: yes
     enabled: yes
     state: restarted
   when: kiwix_enabled | bool
 
-- name: Disable 'kiwix-serve' service
+- name: Disable & Stop 'kiwix-serve' systemd service
   systemd:
     name: kiwix-serve
     enabled: no
     state: stopped
   when: not kiwix_enabled
-# IN THEORY: BOTH CRON ENTRIES BELOW *SHOULD* BE DELETED "when: not kiwix_enabled"
+
+# TO DO: BOTH CRON ENTRIES BELOW *SHOULD* BE DELETED "when: not kiwix_enabled"
 
 # In the past kiwix-serve did not stay running, so we'd been doing this hourly.
 # @mgautierfr & others suggest kiwix-serve might be auto-restarted w/o cron in
@@ -58,19 +34,50 @@
     dest: /etc/crontab
   when: kiwix_enabled and is_redhat
 
-- name: Restart Apache, so it picks up kiwix.conf
-  service:
-    name: "{{ apache_service }}"
-    state: restarted
+# Apache
 
-# 5. FINALIZE
+- name: Enable http://box{{ kiwix_url_without_slash }} via Apache
+  command: a2ensite kiwix.conf
+  when: apache_install and kiwix_enabled
+
+- name: Disable http://box{{ kiwix_url_without_slash }} via Apache
+  command: a2dissite kiwix.conf
+  when: apache_install and not kiwix_enabled
+
+- name: Restart Apache systemd service ({{ apache_service }})
+  systemd:
+    name: "{{ apache_service }}"
+    daemon-reload: yes
+    state: restarted
+  when: apache_enabled | bool
+
+# NGINX
+
+- name: Enable http://box{{ kiwix_url_without_slash }} via NGINX, by installing {{ nginx_config_dir }}/kiwix-nginx.conf from template
+  template:
+    src: kiwix-nginx.conf
+    dest: "{{ nginx_config_dir }}/kiwix-nginx.conf"
+  when: nginx_install and kiwix_enabled
+
+- name: Disable http://box{{ kiwix_url_without_slash }} via NGINX, by removing {{ nginx_config_dir }}/kiwix-nginx.conf
+  file:
+    path: "{{ nginx_config_dir }}/kiwix-nginx.conf"
+    state: absent
+  when: nginx_install and not kiwix_enabled
+
+- name: Restart 'nginx' systemd service
+  systemd:
+    name: nginx
+    state: restarted
+  when: nginx_enabled | bool
+
 
 - name: Add 'kiwix' variable values to {{ iiab_ini_file }}
   ini_file:
     path: "{{ iiab_ini_file }}"
     section: kiwix
     option: "{{ item.option }}"
-    value: "{{ item.value }}"
+    value: "{{ item.value | string }}"
   with_items:
   - option: name
     value: Kiwix

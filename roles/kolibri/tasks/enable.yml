@@ -1,58 +1,61 @@
-- name: Start 'kolibri' systemd service, if kolibri_enabled
+- name: Enable & Start 'kolibri' systemd service
   systemd:
     name: kolibri
-    state: started
+    daemon_reload: yes
     enabled: yes
+    state: started
   when: kolibri_enabled | bool
 
-- name: Enable http://box{{ kolibri_url }} with Apache (a2ensite) if kolibri_enabled    # i.e. http://box/kolibri
-  command: a2ensite kolibri.conf
-  when: kolibri_enabled | bool and not nginx_enabled | bool
-
-- name: Disable & Stop 'kolibri' systemd service if not kolibri_enabled
+- name: Disable & Stop 'kolibri' systemd service
   systemd:
     name: kolibri
     enabled: no
     state: stopped
   when: not kolibri_enabled
 
-- name: Disable http://box{{ kolibri_url }} with Apache (a2dissite) if not kolibri_enabled
+  # Apache
+
+- name: Enable http://box{{ kolibri_url }} via Apache    # i.e. http://box/kolibri
+  command: a2ensite kolibri.conf
+  when: apache_install and kolibri_enabled
+
+- name: Disable http://box{{ kolibri_url }} via Apache
   command: a2dissite kolibri.conf
-  when: not kolibri_enabled or nginx_enabled | bool
+  when: apache_install and not kolibri_enabled
 
-- name: Supply /etc/nginx/conf.d/kolibri-nginx.conf when nginx_enabled
-  template:
-    src: "{{ item.src }}"
-    dest: "{{ item.dest }}"
-    mode: "{{ item.mode }}"
-    owner: root
-    group: root
-  with_items:
-    - { src: 'kolibri-nginx.conf.j2', dest: '/etc/nginx/conf.d/kolibri-nginx.conf', mode: '0644' }
-  when: kolibri_enabled | bool and nginx_enabled | bool
-
-- name: Disable http://box{{ kolibri_url }} with Apache (a2dissite) if not kolibri_enabled
-  command: a2dissite kolibri.conf
-  when: not kolibri_enabled or nginx_enabled | bool
-
-- name: Restart Apache service ({{ apache_service }})    # e.g. apache2
+- name: Restart Apache systemd service ({{ apache_service }})
   systemd:
-    name: "{{ apache_service }}"
+    name: "{{ apache_service }}"    # apache2 or httpd, as set in /opt/iiab/iiab/vars/<OS>.yml
     state: restarted
-  when: not nginx_enabled | bool
+  when: apache_enabled | bool
 
-- name: Restart nginx service
+# NGINX
+
+- name: Enable http://box{{ kolibri_url }} via NGINX, by installing {{ nginx_config_dir }}/kolibri-nginx.conf from template
+  template:
+    src: kolibri-nginx.conf.j2
+    dest: "{{ nginx_config_dir }}/kolibri-nginx.conf"
+  when: nginx_install and kolibri_enabled
+
+- name: Disable http://box{{ kolibri_url }} via NGINX, by removing {{ nginx_config_dir }}/kolibri-nginx.conf
+  file:
+    path: "{{ nginx_config_dir }}/kolibri-nginx.conf"
+    state: absent
+  when: nginx_install and not kolibri_enabled
+
+- name: Restart 'nginx' systemd service
   systemd:
     name: nginx
     state: restarted
   when: nginx_enabled | bool
+
 
 - name: Add 'kolibri' variable values to {{ iiab_ini_file }}    # /etc/iiab/iiab.ini
   ini_file:
     path: "{{ iiab_ini_file }}"
     section: kolibri
     option: "{{ item.option }}"
-    value: "{{ item.value }}"
+    value: "{{ item.value | string }}"
   with_items:
     - option: name
       value: kolibri
