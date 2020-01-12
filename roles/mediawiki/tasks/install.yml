@@ -29,58 +29,7 @@
     path: "{{ doc_root }}/{{ mediawiki_symlink }}"    # /library/www/html/w
     state: link
 
-- name: Start MySQL systemd service ({{ mysql_service }}) so we can create db
-  systemd:
-    name: "{{ mysql_service }}"
-    state: started
-
-- name: Create MySQL database {{ mediawiki_db_name }}
-  mysql_db:
-    name: "{{ mediawiki_db_name }}"    # iiab_mediawiki
-    #state: present
-
-- name: Create MySQL database user {{ mediawiki_db_user }} with password, and permissions to above db
-  mysql_user:
-    name: "{{ mediawiki_db_user }}"    # iiab_mediawiki_user
-    password: "{{ mediawiki_db_user_password }}"
-    priv: "{{ mediawiki_db_name }}.*:ALL,GRANT"
-    #state: present
-
-- name: Configure MediaWiki, if {{ mediawiki_abs_path }}/LocalSettings.php doesn't exist
-  shell: >
-    php '{{ mediawiki_abs_path }}/maintenance/install.php'
-    --dbname={{ mediawiki_db_name }}
-    --dbserver="localhost"
-    --installdbuser={{ mediawiki_db_user }}
-    --installdbpass={{ mediawiki_db_user_password }}
-    --dbuser={{ mediawiki_db_user }}
-    --dbpass={{ mediawiki_db_user_password }}
-    --scriptpath=/{{ mediawiki_symlink }}
-    --lang=en
-    --pass={{ mediawiki_admin_user_password }}
-    "{{ mediawiki_site_name }}"
-    "{{ mediawiki_admin_user }}"
-  args:
-    chdir: "{{ mediawiki_abs_path }}"    # /library/mediawiki-1.XY.Z
-    creates: "{{ mediawiki_abs_path }}/LocalSettings.php"
-
-- name: Configure wgArticlePath variable in {{ mediawiki_abs_path }}/LocalSettings.php
-  lineinfile:
-    path: "{{ mediawiki_abs_path }}/LocalSettings.php"    # /library/mediawiki-1.XY.Z
-    line: '$wgArticlePath = "/wiki/$1";'
-
-- name: Configure $wgUsePathInfo variable in {{ mediawiki_abs_path }}/LocalSettings.php
-  lineinfile:
-    path: "{{ mediawiki_abs_path }}/LocalSettings.php"    # /library/mediawiki-1.XY.Z
-    line: '$wgUsePathInfo = true;'
-
-- name: Configure $wgServer variable in {{ mediawiki_abs_path }}/LocalSettings.php
-  lineinfile:
-    path: "{{ mediawiki_abs_path }}/LocalSettings.php"    # /library/mediawiki-1.XY.Z
-    regexp: '^\$wgServer ='
-    line: '$wgServer = "//" . $_SERVER["HTTP_HOST"];'
-
-- name: Install /etc/{{ apache_conf_dir }}/mediawiki.conf from template, for http://box{{ mediawiki_url }} via Apache
+- name: Install /etc/{{ apache_config_dir }}/mediawiki.conf from template, for http://box{{ mediawiki_url }} via Apache
   template:
     src: mediawiki.conf.j2
     dest: "/etc/{{ apache_conf_dir }}/mediawiki.conf"    # apache2/sites-available on debuntu
