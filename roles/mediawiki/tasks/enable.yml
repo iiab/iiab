@@ -1,39 +1,40 @@
-- name: Create softlink mediawiki.conf from sites-enabled to sites-available, if mediawiki_enabled (debuntu)
-  file:
-    src: /etc/apache2/sites-available/mediawiki.conf
-    dest: /etc/apache2/sites-enabled/mediawiki.conf
-    state: link
-  when: mediawiki_enabled and is_debuntu
+# Apache
 
-- name: Remove mediawiki.conf if not mediawiki_enabled (debuntu)
-  file:
-    path: /etc/apache2/sites-enabled/mediawiki.conf
-    state: absent
-  when: not mediawiki_enabled and is_debuntu
+- name: Enable http://box{{ mediawiki_url }} via Apache    # i.e. http://box/mediawiki
+  command: a2ensite mediawiki.conf
+  when: apache_install and mediawiki_enabled
 
-- name: Restart Apache service ({{ apache_service }}) to enable/disable http://box{{ mediawiki_url }}
+- name: Disable http://box{{ mediawiki_url }} via Apache
+  command: a2dissite mediawiki.conf
+  when: apache_install and not mediawiki_enabled
+
+- name: Restart Apache systemd service ({{ apache_service }})
   systemd:
-    name: "{{ apache_service }}"
-    daemon_reload: yes
+    name: "{{ apache_service }}"    # apache2 or httpd, as set in /opt/iiab/iiab/vars/<OS>.yml
     state: restarted
+  when: apache_enabled | bool
 
-- name: Install {{ nginx_config_dir }}/mediawiki-nginx.conf from template, for http://box{{ mediawiki_url }}
+
+# NGINX
+
+- name: Enable http://box{{ mediawiki_url }} via NGINX, by installing {{ nginx_config_dir }}/mediawiki-nginx.conf from template
   template:
     src: mediawiki-nginx.conf.j2
     dest: "{{ nginx_config_dir }}/mediawiki-nginx.conf"
-  when: mediawiki_enabled
+  when: nginx_install and mediawiki_enabled
 
-- name: Remove mediawiki-nginx.conf if not mediawiki_enabled (debuntu)
+- name: Disable http://box{{ mediawiki_url }} via NGINX, by removing {{ nginx_config_dir }}/mediawiki-nginx.conf
   file:
     path: "{{ nginx_config_dir }}/mediawiki-nginx.conf"
     state: absent
-  when: not mediawiki_enabled and is_debuntu
+  when: nginx_install and not mediawiki_enabled
 
-- name: Restart nginx service to enable/disable http://box{{ mediawiki_url }}
+- name: Restart 'nginx' systemd service
   systemd:
     name: nginx
-    daemon_reload: yes
     state: restarted
+  when: nginx_enabled | bool
+
 
 - name: Add 'mediawiki' variable values to {{ iiab_ini_file }}
   ini_file:
