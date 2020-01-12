@@ -1,41 +1,39 @@
-- name: Create symlink elgg.conf from sites-enabled to sites-available (debuntu, not nec for redhat)
-  file:
-    src: /etc/apache2/sites-available/elgg.conf
-    path: /etc/apache2/sites-enabled/elgg.conf
-    state: link
-  when: elgg_enabled and is_debuntu
+# Apache
 
-- name: Remove symlink /etc/apache2/sites-enabled/elgg.conf (debuntu)
-  file:
-    path: /etc/apache2/sites-enabled/elgg.conf
-    state: absent
-  when: not elgg_enabled and is_debuntu
+- name: Enable http://box{{ elgg_url }} via Apache    # http://box/elgg
+  command: a2ensite elgg.conf
+  when: apache_install and elgg_enabled
 
-- name: Remove Apache's elgg.conf (redhat)
-  file:
-    dest: "/etc/{{ apache_config_dir }}/elgg.conf"
-    state: absent
-  when: not elgg_enabled and is_redhat
+- name: Disable http://box{{ elgg_url }} via Apache    # http://box/elgg
+  command: a2dissite elgg.conf
+  when: apache_install and not elgg_enabled
 
-- name: Install {{ nginx_config_dir }}/elgg-nginx.conf from template
-  template:
-    src: elgg-nginx.conf
-    dest: "{{ nginx_config_dir }}/elgg-nginx.conf"
-  when: elgg_enabled and nginx_enabled
-
-- name: Restart Apache ({{ apache_service }}) to enable/disable http://box/elgg
+- name: Restart Apache systemd service ({{ apache_service }})
   systemd:
     name: "{{ apache_service }}"
-    daemon_reload: yes
     state: restarted
-  when: apache_enabled
+  when: apache_enabled | bool
 
-- name: Restart nginx to enable/disable http://box/elgg
+# NGINX
+
+- name: "SHIM: Enable http://box{{ elgg_url }} via NGINX, by installing {{ nginx_config_dir }}/elgg-nginx.conf from template"    # http://box/elgg
+  template:
+    src: elgg-nginx.conf.j2
+    dest: "{{ nginx_config_dir }}/elgg-nginx.conf"
+  when: nginx_install and elgg_enabled
+
+- name: "SHIM: Disable http://box{{ elgg_url }} via NGINX, by removing {{ nginx_config_dir }}/elgg-nginx.conf"    # http://box/elgg
+  file:
+    path: "{{ nginx_config_dir }}/elgg-nginx.conf"
+    state: absent
+  when: nginx_install and not elgg_enabled
+
+- name: Restart 'nginx' systemd service
   systemd:
     name: nginx
-    daemon_reload: yes
     state: restarted
-  when: nginx_enabled
+  when: nginx_enabled | bool
+
 
 - name: Add 'elgg' variable values to {{ iiab_ini_file }}
   ini_file:

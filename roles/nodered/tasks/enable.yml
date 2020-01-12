@@ -1,56 +1,55 @@
-- name: Enable & (Re)start 'nodered' systemd service (if nodered_enabled)
+- name: Enable & (Re)start 'nodered' systemd service
   systemd:
-    daemon_reload: yes
     name: nodered
+    daemon_reload: yes
     enabled: yes
     state: restarted
   when: nodered_enabled
 
-- name: Disable & Stop 'nodered' systemd service (if not nodered_enabled)
+- name: Disable & Stop 'nodered' systemd service
   systemd:
-    daemon_reload: yes
     name: nodered
     enabled: no
     state: stopped
   when: not nodered_enabled
 
-- name: Create symlink nodered.conf from sites-enabled to sites-available, for short URL http://box/nodered (if nodered_enabled)
-  file:
-    src: /etc/apache2/sites-available/nodered.conf
-    dest: /etc/apache2/sites-enabled/nodered.conf
-    owner: root
-    group: root
-    state: link
-  when: nodered_enabled
+# Apache
 
-- name: Remove symlink /etc/apache2/sites-enabled/nodered.conf (if not nodered_enabled)
-  file:
-    path: /etc/apache2/sites-enabled/nodered.conf
-    state: absent
-  when: not nodered_enabled
+- name: Enable http://box/nodered via Apache
+  command: a2ensite nodered.conf
+  when: apache_install and nodered_enabled
 
-- name: Install NodeRed's nginx conf.d file from template
+- name: Disable http://box/nodered via Apache
+  command: a2dissite nodered.conf
+  when: apache_install and not nodered_enabled
+
+- name: Restart Apache systemd service ({{ apache_service }})
+  systemd:
+    name: "{{ apache_service }}"
+    state: restarted
+  when: apache_enabled | bool
+
+# NGINX
+
+- name: "SHIM: Enable http://box/nodered_url via NGINX, by installing {{ nginx_config_dir }}/nodered-nginx.conf from template"
   template:
     src: nodered-nginx.conf.j2
     dest: "{{ nginx_config_dir }}/nodered-nginx.conf"
-    owner: root
-    group: root
-    mode: 0666
-  when: nodered_enabled and nginx_enabled
+    # mode: '0666'
+  when: nginx_install and nodered_enabled
 
-- name: Restart Apache service ({{ apache_service }}) to enable/disable http://box/nodered (not just http://box:{{ nodered_port }}/nodered)
-  systemd:
-    name: "{{ apache_service }}"    # httpd or apache2
-    daemon-reload: yes
-    state: restarted
-  when: apache_enabled
+- name: "SHIM: Disable http://box/nodered_url via NGINX, by removing {{ nginx_config_dir }}/nodered-nginx.conf"
+  file:
+    path: "{{ nginx_config_dir }}/nodered-nginx.conf"
+    state: absent
+  when: nginx_install and not nodered_enabled
 
-- name: Restart nginx to enable/disable http://box/nodered (not just http://box:{{ nodered_port }}/nodered)
+- name: Restart 'nginx' systemd service
   systemd:
     name: nginx
     state: restarted
-    daemon-reload: yes
-  when: nginx_enabled
+  when: nginx_enabled | bool
+
 
 - name: Add 'nodered' variable values to {{ iiab_ini_file }}
   ini_file:

@@ -13,8 +13,6 @@
       #- bcrypt does not exist on Ubuntu 19.10
       - python3-bcrypt    # 2019-10-14: should work across modern Linux OS's
     state: present
-  tags:
-    - install
 
 - name: pip install opwen_email_client (Lokole) {{ lokole_version }} from PyPI to {{ lokole_venv }}
   pip:
@@ -23,8 +21,6 @@
     virtualenv: "{{ lokole_venv }}"
     virtualenv_command: python3 -m venv "{{ lokole_venv }}"
     extra_args: --no-cache-dir    # To avoid caching issues e.g. soon after new releases hit https://pypi.org/project/opwen-email-client/
-  tags:
-    - install
   when:
     - internet_available | bool
     - lokole_commit is undefined
@@ -39,8 +35,6 @@
     virtualenv: "{{ lokole_venv }}"
     virtualenv_command: python3 -m venv "{{ lokole_venv }}"
     extra_args: --no-cache-dir    # To avoid caching issues e.g. soon after new releases hit https://pypi.org/project/opwen-email-client/
-  tags:
-    - install
   when:
     - internet_available | bool
     - lokole_commit is defined
@@ -51,56 +45,49 @@
     {{ lokole_venv }}/bin/pybabel compile -d {{ item }}/translations
   with_items:
     - "{{ lokole_venv }}/lib/python${python_version}/site-packages/opwen_email_client/webapp"
-  tags:
-    - install
 
 - name: Create dir {{ lokole_run_directory }}
   file: 
     path: "{{ lokole_run_directory }}"
     state: directory
-  tags:
-    - configure
 
 - name: Install {{ lokole_run_directory }}/webapp_secrets.sh from template, to configure Lokole
   template:
     src: webapp_secrets.sh.j2
     dest: "{{ lokole_run_directory }}/webapp_secrets.sh"
-  tags:
-    - configure
 
 - name: Install {{ lokole_run_directory }}/webapp.sh from template, to configure Gunicorn
   template:
     src: webapp.sh.j2
     dest: "{{ lokole_run_directory }}/webapp.sh"
     mode: a+x
-  tags:
-    - configure
 
 - name: Create admin user
   shell: |
     . {{ lokole_run_directory }}/webapp_secrets.sh
     {{ lokole_venv }}/bin/manage.py createadmin --name='{{ lokole_admin_user }}' --password='{{ lokole_admin_password }}'
-  tags:
-    - configure
 
-- name: Install unit file /etc/systemd/system/lokole.service from template
+- name: Install /etc/{{ apache_config_dir }}/lokole.conf from template, for http://box{{ lokole_url }} via Apache   # http://box/lokole
+  template:
+    src: lokole.conf.j2
+    dest: "/etc/{{ apache_config_dir }}/lokole.conf"
+  when: apache_install | bool
+
+- name: Install /etc/systemd/system/lokole.service unit file from template
   template:
     src: lokole.service.j2
     dest: /etc/systemd/system/lokole.service
-  tags:
-    - systemd
 
-- name: Enable & Restart 'lokole' systemd service, with daemon_reload, if lokole_enabled
-  systemd:
-    daemon_reload: yes
-    name: lokole
-    enabled: yes
-    state: restarted
-  when: lokole_enabled | bool
+# - name: Enable & Restart 'lokole' systemd service, with daemon_reload, if lokole_enabled
+#   systemd:
+#     daemon_reload: yes
+#     name: lokole
+#     enabled: yes
+#     state: restarted
+#   when: lokole_enabled | bool
 
 - name: "Add 'lokole_installed: True' to {{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
   lineinfile:
     dest: "{{ iiab_state_file }}"
     regexp: '^lokole_installed'
     line: 'lokole_installed: True'
-    state: present

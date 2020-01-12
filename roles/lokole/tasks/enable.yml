@@ -1,62 +1,54 @@
-- name: Enable & Restart 'lokole' systemd service, with daemon_reload, if lokole_enabled
+- name: Enable & Restart 'lokole' systemd service
   systemd:
-    daemon_reload: yes
     name: lokole
+    daemon_reload: yes
     enabled: yes
     state: restarted
-  when: lokole_enabled
+  when: lokole_enabled | bool
 
-- name: Disable 'lokole' service, if not lokole_enabled
+- name: Disable & Stop 'lokole' systemd service
   systemd:
-    daemon_reload: yes
     name: lokole
     enabled: no
     state: stopped
   when: not lokole_enabled
 
-- name: Install /etc/{{ apache_config_dir }}/lokole.conf from template, for http://box/lokole
-  template:
-    src: lokole.conf.j2
-    dest: "/etc/{{ apache_config_dir }}/lokole.conf"
+# Apache
 
-- name: Symlink /etc/apache2/sites-enabled/lokole.conf to /etc/{{ apache_config_dir }}/lokole.conf, if lokole_enabled (debuntu)
-  file:
-    src: "/etc/{{ apache_config_dir }}/lokole.conf"
-    path: /etc/apache2/sites-enabled/lokole.conf
-    state: link
-  when: lokole_enabled and is_debuntu
+- name: Enable http://box{{ lokole_url }} via Apache    # http://box/lokole
+  command: a2ensite lokole.conf
+  when: apache_install and lokole_enabled
 
-- name: Remove /etc/apache2/sites-enabled/lokole.conf, if not lokole_enabled (debuntu)
-  file:
-    path: /etc/apache2/sites-enabled/lokole.conf
-    state: absent
-  when: not lokole_enabled and is_debuntu
+- name: Disable http://box{{ lokole_url }} via Apache    # http://box/lokole
+  command: a2dissite lokole.conf
+  when: apache_install and not lokole_enabled
 
-- name: Remove /etc/{{ apache_config_dir }}/lokole.conf, if not lokole_enabled (OS's other than debuntu)
-  file:
-    path: "/etc/{{ apache_config_dir }}/lokole.conf"
-    state: absent
-  when: (not lokole_enabled) and (not is_debuntu)
+- name: Restart Apache systemd service ({{ apache_service }})
+  systemd:
+    name: "{{ apache_service }}"
+    state: restarted
+  when: apache_enabled | bool
 
-- name: Install {{ nginx_config_dir }}/lokole-nginx.conf from template
+# NGINX
+
+- name: "SHIM: Enable http://box{{ lokole_url }} via NGINX, by installing {{ nginx_config_dir }}/lokole-nginx.conf from template"    # http://box/lokole
   template:
     src: lokole-nginx.conf.j2
     dest: "{{ nginx_config_dir }}/lokole-nginx.conf"
-  when: lokole_enabled and nginx_enabled
+  when: nginx_install and lokole_enabled
 
-- name: Restart Apache ({{ apache_service }}) to enable/disable http://box/lokole
-  systemd:
-    name: "{{ apache_service }}"
-    daemon_reload: yes
-    state: restarted
-  when: apache_enabled
+- name: "SHIM: Disable http://box{{ lokole_url }} via NGINX, by removing {{ nginx_config_dir }}/lokole-nginx.conf"    # http://box/lokole
+  file:
+    path: "{{ nginx_config_dir }}/lokole-nginx.conf"
+    state: absent
+  when: nginx_install and not lokole_enabled
 
-- name: Restart nginx to enable/disable http://box/lokole
+- name: Restart 'nginx' systemd service
   systemd:
     name: nginx
-    daemon_reload: yes
     state: restarted
-  when: nginx_enabled
+  when: nginx_enabled | bool
+
 
 - name: Add 'lokole' variable values to {{ iiab_ini_file }}
   ini_file:

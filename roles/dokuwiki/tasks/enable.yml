@@ -1,35 +1,39 @@
-- name: Symlink /etc/apache2/sites-enabled/dokuwiki.conf to /etc/apache2/sites-available/dokuwiki.conf if dokuwiki_enabled (debuntu)
-  file:
-    src: /etc/apache2/sites-available/dokuwiki.conf
-    path: /etc/apache2/sites-enabled/dokuwiki.conf
-    state: link
-  when: dokuwiki_enabled and is_debuntu
+# Apache
 
-- name: Remove symlink /etc/apache2/sites-enabled/dokuwiki.conf if not dokuwiki_enabled (debuntu)
-  file:
-    path: /etc/apache2/sites-enabled/dokuwiki.conf
-    state: absent
-  when: not dokuwiki_enabled and is_debuntu
+- name: Enable http://box{{ dokuwiki_url }} via Apache    # http://box/dokuwiki
+  command: a2ensite dokuwiki.conf
+  when: apache_install and dokuwiki_enabled
 
-- name: Install {{ nginx_config_dir }}/dokuwiki-nginx.conf SHIM from template
-  template:
-    src: dokuwiki-nginx.conf
-    dest: "{{ nginx_config_dir }}/dokuwiki-nginx.conf"
-  when: dokuwiki_enabled and nginx_enabled
+- name: Disable http://box{{ dokuwiki_url }} via Apache    # http://box/dokuwiki
+  command: a2dissite dokuwiki.conf
+  when: apache_install and not dokuwiki_enabled
 
-- name: Restart Apache ({{ apache_service }}) to enable/disable DokuWiki's http://box/wiki
+- name: Restart Apache systemd service ({{ apache_service }})
   systemd:
     name: "{{ apache_service }}"
-    daemon_reload: yes
     state: restarted
-  when: apache_enabled
+  when: apache_enabled | bool
 
-- name: Restart nginx to enable/disable DokuWiki's http://box/wiki
+# NGINX
+
+- name: "SHIM: Enable http://box{{ dokuwiki_url }} via NGINX, by installing {{ nginx_config_dir }}/dokuwiki-nginx.conf from template"    # http://box/dokuwiki
+  template:
+    src: dokuwiki-nginx.conf.j2
+    dest: "{{ nginx_config_dir }}/dokuwiki-nginx.conf"
+  when: nginx_install and dokuwiki_enabled
+
+- name: "SHIM: Disable http://box{{ dokuwiki_url }} via NGINX, by removing {{ nginx_config_dir }}/dokuwiki-nginx.conf"    # http://box/dokuwiki
+  file:
+    path: "{{ nginx_config_dir }}/dokuwiki-nginx.conf"
+    state: absent
+  when: nginx_install and not dokuwiki_enabled
+
+- name: Restart 'nginx' systemd service
   systemd:
     name: nginx
-    daemon_reload: yes
     state: restarted
-  when: nginx_enabled
+  when: nginx_enabled | bool
+
 
 - name: Add 'dokuwiki' variable values to {{ iiab_ini_file }}
   ini_file:
@@ -46,4 +50,3 @@
       value: "{{ dokuwiki_install }}"
     - option: enabled
       value: "{{ dokuwiki_enabled }}"
-
