@@ -17,7 +17,7 @@
       * kiwix -- goes directly to port 3000
       * kolibri
       * sugarizer
-   3. Still proxied to Apache, see: https://github.com/iiab/iiab/blob/master/roles/nginx/tasks/uses_apache.yml
+   3. Still proxied to Apache, see: PR [#2131](https://github.com/iiab/iiab/pull/2131) & https://github.com/iiab/iiab/blob/master/roles/nginx/tasks/uses_apache.yml
       * dokuwiki ([#2056](https://github.com/iiab/iiab/issues/2056))
       * elgg
       * lokole
