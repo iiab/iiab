@@ -4,7 +4,7 @@
     name: lokole
     enabled: yes
     state: restarted
-  when: lokole_enabled | bool
+  when: lokole_enabled
 
 - name: Disable 'lokole' service, if not lokole_enabled
   systemd:
@@ -38,11 +38,25 @@
     state: absent
   when: (not lokole_enabled) and (not is_debuntu)
 
+- name: Install {{ nginx_config_dir }}/lokole-nginx.conf from template
+  template:
+    src: lokole-nginx.conf.j2
+    dest: "{{ nginx_config_dir }}/lokole-nginx.conf"
+  when: lokole_enabled and nginx_enabled
+
 - name: Restart Apache ({{ apache_service }}) to enable/disable http://box/lokole
   systemd:
-    daemon_reload: yes
     name: "{{ apache_service }}"
+    daemon_reload: yes
     state: restarted
+  when: apache_enabled
+
+- name: Restart nginx to enable/disable http://box/lokole
+  systemd:
+    name: nginx
+    daemon_reload: yes
+    state: restarted
+  when: nginx_enabled
 
 - name: Add 'lokole' variable values to {{ iiab_ini_file }}
   ini_file:
