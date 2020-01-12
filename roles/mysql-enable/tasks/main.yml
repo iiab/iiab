@@ -1,0 +1,31 @@
+# Name of MySQL service varies by OS, so hardcoded in /opt/iiab/iiab/vars/<OS>.yml (formerly in roles/0-init/tasks/main.yml)
+- name: Enable & Start MySQL systemd service ({{ mysql_service }}) if mysql_enabled
+  systemd:
+    name: "{{ mysql_service }}"
+    state: started
+    enabled: yes
+
+- name: Set MySQL passwords
+  include_tasks: passwd.yml
+  when: imaging is undefined
+
+- name: Config is done but now DISABLE MySQL service, if not mysql_enabled
+  systemd:
+    name: "{{ mysql_service }}"
+    enabled: no
+    state: stopped
+  when: not mysql_enabled
+
+- name: Add 'mysql' variable values to {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"
+    section: mysql
+    option: "{{ item.option }}"
+    value: "{{ item.value | string }}"
+  with_items:
+    - option: name
+      value: MySQL
+    - option: description
+      value: '"MySQL is a widely used free and open source (GPLv2) database, offered by most web hosting services, on a diversity of platforms."'
+    - option: enabled
+      value: "{{ mysql_enabled }}"
