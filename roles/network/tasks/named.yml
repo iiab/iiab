@@ -5,8 +5,6 @@
       - bind9utils
     state: present
   when: is_debuntu | bool
-  tags:
-    - download
 
 - name: "Install named packages: bind, bind-utils (OS's other than debuntu)"
   package:
@@ -15,8 +13,6 @@
       - bind-utils
     state: present
   when: not is_debuntu
-  tags:
-    - download
 
 # or we have to change the serial number in the config files.
 - name: Stop named before copying files (if first_run and debuntu)
@@ -30,7 +26,7 @@
     path: "{{ item }}"
     owner: "{{ dns_user }}"
     group: root
-    mode: 0755
+    mode: '0755'
     state: directory
   with_items:
     - /var/named-iiab
@@ -72,7 +68,7 @@
   template:
     src: "roles/network/templates/named/{{ dns_service }}.service"
     dest: "/etc/systemd/system/{{ dns_service }}.service"
-    mode: 0644
+    mode: '0644'
 
 - name: "Install /etc/{{ apache_config_dir }}/dns-jail.conf from template: dns-jail redirect requires the named.blackhole, disabling recursion (if dns_jail_enabled)"
 #        in named-iiab.conf, and the redirection of 404 error documents to /
@@ -81,31 +77,19 @@
     dest: "/etc/{{ apache_config_dir }}/"
   when: dns_jail_enabled | bool
 
-- name: Create symlink dns-jail.conf from sites-enabled to sites-available (if debuntu and dns_jail_enabled)
-  file:
-    src: "/etc/{{ apache_config_dir }}/dns-jail.conf"
-    path: "/etc/{{ apache_service }}/sites-enabled/dns-jail.conf"
-    state: link
-  when: is_debuntu and dns_jail_enabled
-
-- name: Remove symlink /etc/{{ apache_service }}/sites-enabled/dns-jail.conf (if debuntu and not dns_jail_enabled)
-  file: 
-    path: "/etc/{{ apache_service }}/sites-enabled/dns-jail.conf"
-    state: absent
-  when: is_debuntu and not dns_jail_enabled
-
-- name: Remove symlink /etc/{{ apache_config_dir }}/dns-jail.conf (if not debuntu and not dns_jail_enabled)
-  file:
-    path: "/etc/{{ apache_config_dir }}/dns-jail.conf"
-    state: absent
-  when: not is_debuntu and not dns_jail_enabled
-
 - name: "Add 'named_installed: True' to {{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
   lineinfile:
     dest: "{{ iiab_state_file }}"
     regexp: '^named_installed'
     line: 'named_installed: True'
-    state: present
+
+- name: Enable dns-jail.conf via Apache
+  command: a2ensite dns-jail.conf
+  when: dns_jail_enabled | bool
+
+- name: Disable dns-jail.conf via Apache
+  command: a2dissite: dns-jail.conf
+  when: not dns_jail_enabled
 
 - name: Start named systemd service
   systemd:
