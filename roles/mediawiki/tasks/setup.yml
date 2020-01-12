@@ -1,0 +1,52 @@
+- name: Start MySQL service, so we can create db
+  systemd:
+    state: started
+    name: "{{ mysql_service }}"
+
+- name: Create MySQL database {{ mediawiki_db_name }}
+  mysql_db:
+    name: "{{ mediawiki_db_name }}"
+    state: present
+
+- name: Create MySQL database user {{ mediawiki_db_user }}
+  mysql_user:
+    name: "{{ mediawiki_db_user }}"
+    password: "{{ mediawiki_db_user_password }}"
+    priv: "{{ mediawiki_db_name }}.*:ALL,GRANT"
+    state: present
+
+- name: Configure MediaWiki, if {{ mediawiki_abs_path }}/LocalSettings.php doesn't exist
+  shell: >
+    php '{{ mediawiki_abs_path }}/maintenance/install.php'
+    --dbname={{ mediawiki_db_name }}
+    --dbserver="localhost"
+    --installdbuser={{ mediawiki_db_user }}
+    --installdbpass={{ mediawiki_db_user_password }}
+    --dbuser={{ mediawiki_db_user }}
+    --dbpass={{ mediawiki_db_user_password }}
+    --scriptpath=/mwlink
+    --lang=en
+    --pass={{ mediawiki_admin_user_password }}
+    "{{ mediawiki_site_name }}"
+    "{{ mediawiki_admin_user }}"
+  args:
+    chdir: "{{ mediawiki_abs_path }}"
+    creates: "{{ mediawiki_abs_path }}/LocalSettings.php"
+
+- name: Configure wgArticlePath variable in {{ mediawiki_abs_path }}/LocalSettings.php
+  lineinfile:
+    dest: "{{ mediawiki_abs_path }}/LocalSettings.php"    
+    line: '$wgArticlePath = "/wiki/$1";'
+    create: yes
+
+- name: Configure wgUsePathInfo variable in {{ mediawiki_abs_path }}/LocalSettings.php
+  lineinfile:
+    dest: "{{ mediawiki_abs_path }}/LocalSettings.php"    
+    line: '$wgUsePathInfo = true;'
+    create: yes
+
+- name: Configure $wgServer variable in {{ mediawiki_abs_path }}/LocalSettings.php
+  lineinfile:
+    dest: "{{ mediawiki_abs_path }}/LocalSettings.php"
+    regexp: '^\$wgServer ='
+    line: '$wgServer = "//" . $_SERVER["HTTP_HOST"];'
