@@ -1,33 +1,39 @@
-# This should go in computed_network.yml, but here for now
-#- name: Compute Nextcloud listen ip addr for nextcloud.conf
-#  set_fact:
-#    nextcloud_required_ip: "{{ ansible_default_ipv4.network }}/{{ ansible_default_ipv4.netmask }}"
-#  when: ansible_default_ipv4.network is defined
+# Apache
 
-- name: Create symlink nextcloud.conf from sites-enabled to sites-available for http://box/nextcloud (debuntu)
-  file:
-    src: "/etc/{{ apache_config_dir }}/nextcloud.conf"
-    path: /etc/apache2/sites-enabled/nextcloud.conf
-    state: link
-  when: nextcloud_enabled and is_debuntu
+- name: Enable http://box{{ nextcloud_url }} via Apache    # http://box/nextcloud
+  command: a2ensite nextcloud.conf
+  when: apache_install and nextcloud_enabled
 
-- name: Remove symlink nextcloud.conf from /etc/apache2/sites-enabled if not nextcloud_enabled (debuntu)
-  file:
-    path: /etc/apache2/sites-enabled/nextcloud.conf
-    state: absent
-  when: not nextcloud_enabled and is_debuntu
+- name: Disable http://box{{ nextcloud_url }} via Apache    # http://box/nextcloud
+  command: a2dissite nextcloud.conf
+  when: apache_install and not nextcloud_enabled
 
-- name: Remove sites-available/nextcloud.conf if not nextcloud_enabled (redhat)
-  file:
-    path: "/etc/{{ apache_config_dir }}/nextcloud.conf"
-    state: absent
-  when: not nextcloud_enabled and is_redhat
-
-- name: Restart {{ apache_service }}, enabling/disabling http://box/nextcloud
+- name: Restart Apache systemd service ({{ apache_service }})
   systemd:
     name: "{{ apache_service }}"
-    daemon-reload: yes
     state: restarted
+  when: apache_enabled | bool
+
+# NGINX
+
+- name: "SHIM: Enable http://box{{ nextcloud_url }} via NGINX, by installing {{ nginx_config_dir }}/nextcloud-nginx.conf from template"    # http://box/nextcloud
+  template:
+    src: nextcloud-nginx.conf.j2
+    dest: "{{ nginx_config_dir }}/nextcloud-nginx.conf"
+  when: nginx_install and nextcloud_enabled
+
+- name: "SHIM: Disable http://box{{ nextcloud_url }} via NGINX, by removing {{ nginx_config_dir }}/nextcloud-nginx.conf"    # http://box/nextcloud
+  file:
+    path: "{{ nginx_config_dir }}/nextcloud-nginx.conf"
+    state: absent
+  when: nginx_install and not nextcloud_enabled
+
+- name: Restart 'nginx' systemd service
+  systemd:
+    name: nginx
+    state: restarted
+  when: nginx_enabled | bool
+
 
 - name: Add 'nextcloud' variable values to {{ iiab_ini_file }}
   ini_file:
