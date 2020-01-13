@@ -1,21 +1,39 @@
-- name: Create symlink 022-moodle.conf from sites-enabled to sites-available, if moodle_enabled (debuntu)
-  file:
-    src: /etc/apache2/sites-available/022-moodle.conf
-    dest: /etc/apache2/sites-enabled/022-moodle.conf
-    state: link
-  when: moodle_enabled and is_debuntu
+# Apache
 
-- name: Remove symlink 022-moodle.conf, if not moodle_enabled (debuntu)
-  file:
-    path: /etc/apache2/sites-enabled/022-moodle.conf
-    state: absent
-  when: not moodle_enabled and is_debuntu
+- name: Enable http://box/moodle via Apache
+  command: a2ensite 022-moodle.conf
+  when: apache_install and moodle_enabled
 
-- name: Restart Apache service ({{ apache_service }})
+- name: Disable http://box/moodle via Apache
+  command: a2dissite 022-moodle.conf
+  when: apache_install and not moodle_enabled
+
+- name: Restart Apache systemd service ({{ apache_service }})
   systemd:
-    name: "{{ apache_service }}"
+    name: "{{ apache_service }}"    # apache2 or httpd, as set in /opt/iiab/iiab/vars/<OS>.yml
     state: restarted
-    daemon-reload: yes
+  when: apache_enabled | bool
+
+# NGINX
+
+- name: Enable http://box/moodle via NGINX, by installing {{ nginx_config_dir }}/moodle-nginx.conf from template
+  template:
+    src: moodle-nginx.conf.j2
+    dest: "{{ nginx_config_dir }}/moodle-nginx.conf"
+  when: nginx_install and moodle_enabled
+
+- name: Disable http://box/moodle via NGINX, by removing {{ nginx_config_dir }}/moodle-nginx.conf
+  file:
+    path: "{{ nginx_config_dir }}/moodle-nginx.conf"
+    state: absent
+  when: nginx_install and not moodle_enabled
+
+- name: Restart 'nginx' systemd service
+  systemd:
+    name: nginx
+    state: restarted
+  when: nginx_enabled | bool
+
 
 - name: Add 'moodle' variable values to {{ iiab_ini_file }}
   ini_file:
