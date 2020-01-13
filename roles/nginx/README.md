@@ -8,7 +8,7 @@
 
    1. Principal functions migrated to NGINX
       * Admin Console
-      * kalite -- goes directly to port 8009
+      * kalite -- goes directly to ports 8006-8008
       * mediawiki
       * osm-vector-maps
       * usb-lib
