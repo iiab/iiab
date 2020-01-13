@@ -6,22 +6,24 @@
 
 3. Current state (2020-01-12).
 
-   1. Principal functions migrated to NGINX
+   1. Principal functions migrated to only NGINX
       * Admin Console
-      * mediawiki
       * osm-vector-maps
       * usb-lib
-      * wordpress
 
-   2. Dual support, see [roles/nginx/tasks/only_nginx.yml](tasks/only_nginx.yml)
+   2. Dual support
       * awstats ([#2124](https://github.com/iiab/iiab/issues/2124))
       * calibre-web
       * gitea
-      * kiwix -- goes directly to port 3000
+      * kiwix
       * kolibri
+      * mediawiki
+      * munin
+      * rachel
       * sugarizer
+      * wordpress
 
-   3. Still proxied to Apache, see [roles/0-init/tasks/main.yml#L108-L112](../0-init/tasks/main.yml#L108-L112) & [roles/nginx/tasks/uses_apache.yml](tasks/uses_apache.yml)
+   3. Still proxied to Apache, see [roles/0-init/tasks/main.yml#L108-L112](../0-init/tasks/main.yml#L108-L112)
       * dokuwiki ([#2056](https://github.com/iiab/iiab/issues/2056))
       * elgg
       * lokole
@@ -30,6 +32,5 @@
       * nextcloud ([PR #2119](https://github.com/iiab/iiab/pull/2119))
 
    4. Not yet dealt with
-      * internetarchive ([PR #2120](https://github.com/iiab/iiab/pull/2120))
-      * kalite -- goes directly to ports 8006-8008
-      * rachel
+      * internetarchive ([PR #2120](https://github.com/iiab/iiab/pull/2120)) menu uses port
+      * kalite  menu goes directly to ports 8006-8008
