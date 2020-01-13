@@ -1,18 +1,7 @@
-- name: "Install from template: /etc/nginx/server.conf, /etc/nginx/nginx.conf, /etc/{{ apache_service }}/ports.conf, {{ nginx_config_dir }}/iiab.conf"
-  template:
-      src: "{{ item.src}}"
-      dest: "{{ item.dest }}"
-  with_items:
-    - { src: "server.conf", dest: "/etc/nginx/" }
-    - { src: "nginx.conf", dest: "/etc/nginx/" }
-    - { src: "ports.conf", dest: "/etc/{{ apache_service }}/" }
-    - { src: "iiab.conf.j2", dest: "{{ nginx_config_dir }}/iiab.conf" }
-  when: nginx_enabled | bool
-
 - name: Remove stale files (usb-lib.conf, modules.conf) from {{ nginx_config_dir }}
   file:
-      state: absent
-      path: "{{ item.path }}"
+    path: "{{ item.path }}"
+    state: absent
   with_items:
     - { path: "{{ nginx_config_dir }}/usb-lib.conf" }
     - { path: "{{ nginx_config_dir }}/modules.conf" }
@@ -22,37 +11,47 @@
     name: "{{ apache_service }}"
     state: stopped
 
+- name: "Install from template: /etc/nginx/server.conf, /etc/nginx/nginx.conf, /etc/{{ apache_service }}/ports.conf, {{ nginx_config_dir }}/iiab.conf"
+  template:
+    src: "{{ item.src}}"
+    dest: "{{ item.dest }}"
+  with_items:
+    - { src: 'server.conf', dest: '/etc/nginx/' }
+    - { src: 'nginx.conf', dest: '/etc/nginx/' }
+    - { src: 'ports.conf', dest: "/etc/{{ apache_service }}/" }
+    - { src: 'iiab.conf.j2', dest: "{{ nginx_config_dir }}/iiab.conf" }
+  when: nginx_enabled | bool
+
 # the below slides in nginx's proxypass config files for apache on localhost
 # via the ports.conf file installed above
-- name: Install proxpass to Apache running on localhost port {{ apache_port }}
-  include_tasks: uses_apache.yml
-  when: nginx_enabled | bool
+#- name: Install proxpass to Apache running on localhost port {{ apache_port }}
+#  include_tasks: uses_apache.yml
+#  when: apache_enabled | bool
 
 # the below task contains the same logic contained in the playbooks to enable
 # 'runrole nginx' to do the right thing but with the 'src' path set to role's
 # templates path ie roles/<rolename>/template/
+#- name: Install proxpass to other services 'dual mode' roles
+#  include_tasks: only_nginx.yml
+#  when: nginx_enabled | bool
 
-- name: Install proxpass to other services 'dual mode' roles
-  include_tasks: only_nginx.yml
-  when: nginx_enabled | bool
-
-- name: Stop and disable NGINX when not nginx_enabled
+- name: Stop & Disable 'nginx' systemd service, when not nginx_enabled
   systemd:
     name: nginx
     state: stopped
     enabled: false
   when: not nginx_enabled
 
-- name: Disable Apache port {{ apache_port }} localhost only
+- name: Disable Apache port {{ apache_port }} localhost only, when not nginx_enabled
   template:
     dest: /etc/{{ apache_service }}/ports.conf
     src: stock-apache-ports.conf
   when: not nginx_enabled
 
 # should have the logic to handle both modes in the playbook
-- name: Enable Apache (a2ensite) for 'dual mode' for the role when NGINX is disabled
-  include_tasks: disable.yml
-  when: not nginx_enabled
+#- name: Enable Apache (a2ensite) for 'dual mode' for the role when NGINX is disabled
+#  include_tasks: disable.yml
+#  when: not nginx_enabled
 
 - name: Enable & Restart Apache, since we stopped it ({{ apache_service }})
   systemd:
@@ -60,7 +59,7 @@
     daemon_reload: yes
     state: restarted
     enabled: true
-  when: apache_enabled | bool
+  when: apache_enabled or not nginx_enabled
 
 - name: Enable & Restart NGINX, to pick up the config files installed
   systemd:
