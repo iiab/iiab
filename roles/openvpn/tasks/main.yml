@@ -1,11 +1,16 @@
+# TO DO: WRAP 10 OR 11 STANZAS BELOW (and saving vars to iiab_ini_file at
+# bottom) INTO install.yml, somehow conditioned by...
+# when: openvpn_install | bool
+#
+# BEWARE: 11th stanza (ssh pubkey deletions) is already conditioned by...
+# when: not openvpn_install
+
 - name: Install OpenVPN and Nmap packages
   package:
     name:
       - openvpn
       - nmap
     state: present
-  #tags:
-  #  - download
 
 # Newer versions of NMap do not include NCat, needed to announce /etc/iiab/openvpn_handle
 - name: Install Ncat package (if Debian > 9 or Ubuntu > 18)
@@ -13,17 +18,12 @@
     name: ncat
     state: present
   when: is_debuntu and not (is_debian_8 or is_debian_9 or is_ubuntu_16 or is_ubuntu_17 or is_ubuntu_18)
-  #when: need_ncat | bool
-  #tags:
-  #  - download
 
 - name: Install ssh public keys for remote support (if openvpn_install)
   lineinfile:
     line: "{{ item.pubkey }}"
     regexp: "{{ item.regexp }}"
     path: /root/.ssh/authorized_keys
-    #backup: yes
-  when: openvpn_install | bool
   with_items:
     - regexp: "LvCSAAcfYIdZPR4ePVpVUZ/IbkGjpQSoRMa5HuVjMO3cZNR27ptqjNjq2husJOyhMFCOBTzo4thioGyTpBr4u3s=$" # Tim Moody
       pubkey: "ssh-rsa AAAAB3NzaC1yc2EAAAABJQAAAIEAhlQIh8ZPx4awdM0O6QNcPbx3qIZ39FHjF2YJ2SX3z7iLnYiz03Ek6Bux9P4HvaVAqlApiz2I68Vq8TfU2s/+LvCSAAcfYIdZPR4ePVpVUZ/IbkGjpQSoRMa5HuVjMO3cZNR27ptqjNjq2husJOyhMFCOBTzo4thioGyTpBr4u3s="
@@ -46,20 +46,16 @@
     regexp: "{{ item }}"
     path: /root/.ssh/authorized_keys
     state: absent
-    #backup: yes
-  when: not openvpn_install
   with_items:
     - "LvCSAAcfYIdZPR4ePVpVUZ/IbkGjpQSoRMa5HuVjMO3cZNR27ptqjNjq2husJOyhMFCOBTzo4thioGyTpBr4u3s=$"
     - "tUM4hl009fbXY4Yy3bAadWL1CquVrZmKfBBWhyhz8zLD6TQ== ghunt@ip-192-168-123-123.ec2.internal$"
     - "heOMXXNU6skxdPh2fcHh0bzQcaCSQ== holt@crank$"
+  when: not openvpn_install
 
 - name: 'Create dirs: /etc/openvpn/keys, /etc/openvpn/scripts'
   file:
     path: "{{ item }}"
     state: directory
-    owner: root
-    group: root
-    mode: 0755
   with_items:
     - /etc/openvpn/keys
     - /etc/openvpn/scripts
@@ -68,8 +64,6 @@
   template:
     src: "{{ item.src }}"
     dest: "{{ item.dest }}"
-    owner: root
-    group: root
     mode: "{{ item.mode }}"
     backup: yes
   with_items:
@@ -83,14 +77,12 @@
     - { src: 'openvpn_handle.j2', dest: '/etc/iiab/openvpn_handle', mode: '0644' }
     - { src: 'iiab-remote-on.j2', dest: '/usr/bin/iiab-remote-on', mode: '0755' }
     - { src: 'iiab-remote-off', dest: '/usr/bin/iiab-remote-off', mode: '0755' }
-    # 2019-10-09: Not recommended for over a year & no longer in use
-    # - { src: 'iiab-handle.j2', dest: '/usr/bin/iiab-handle', mode: '0755' }
 
 - name: Copy /opt/iiab/iiab/iiab-support to /usr/bin/iiab-support, in case git tree deleted e.g. on a smaller IIAB install
   copy:
     src: "{{ iiab_dir }}/iiab-support"
     dest: /usr/bin/
-    mode: 0755
+    mode: '0755'
 
 - name: Create iiab-support-on (symlink to iiab-support for now)
   file:
@@ -116,6 +108,7 @@
     path: /usr/bin/iiab-vpn-off
     state: link
 
+# TO DO: WRAP COMMENTS + 4 ACTIVE STANZAS BELOW INTO enable.yml...
 
 # FIXED SOMETIME PRIOR TO AUGUST 2018: earlier versions of Ansible had not
 # been working with systemd service names that contained the "@" character.
@@ -197,7 +190,6 @@
 #  shell: systemctl stop openvpn@xscenet.service
 #  ignore_errors: True
 #  when: not openvpn_enabled and not installing
-
 
 - name: Add 'openvpn' variable values to {{ iiab_ini_file }}
   ini_file:
