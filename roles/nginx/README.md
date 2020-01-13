@@ -8,13 +8,13 @@
 
    1. Principal functions migrated to NGINX
       * Admin Console
-      * kalite -- goes directly to port 8009
+      * kalite -- goes directly to ports 8006-8008
       * mediawiki
       * osm-vector-maps
       * usb-lib
       * wordpress
 
-   2. Dual support, see https://github.com/iiab/iiab/blob/master/roles/nginx/tasks/only_nginx.yml
+   2. Dual support, see [roles/nginx/tasks/only_nginx.yml](tasks/only_nginx.yml)
       * awstats ([#2124](https://github.com/iiab/iiab/issues/2124))
       * calibre-web
       * gitea
@@ -22,7 +22,7 @@
       * kolibri
       * sugarizer
 
-   3. Still proxied to Apache, see [PR #2131](https://github.com/iiab/iiab/pull/2131) & https://github.com/iiab/iiab/blob/master/roles/nginx/tasks/uses_apache.yml
+   3. Still proxied to Apache, see [roles/0-init/tasks/main.yml#L108-L112](../0-init/tasks/main.yml#L108-L112) & [roles/nginx/tasks/uses_apache.yml](tasks/uses_apache.yml)
       * dokuwiki ([#2056](https://github.com/iiab/iiab/issues/2056))
       * elgg
       * lokole
