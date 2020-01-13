@@ -34,8 +34,8 @@ base_filename = 'osm-planet_z0-z10_2017.mbtiles'
 sat_file = 'satellite.mbtiles'
 sat_filename = 'satellite_z0-z9_v3.mbtiles'
 #internetarchive_url = 'http://10.10.123.13/internetarchive'
-internetarchive_url = 'http://archive.org/downloads'
-region_path = '/etc/iiab'
+internetarchive_url = 'http://archive.org/download'
+region_path = '/opt/iiab/iiab/roles/osm-vector-maps/files'
 regions_json = {}
 init = {}
 
@@ -392,12 +392,12 @@ def main():
    
 
    # Fetch the files required for all maps
-   src = os.path.join(internetarchive_url,base_filename)
+   src = os.path.join(internetarchive_url,base_filename,base_filename)
    dest = os.path.join(viewer_path,base_filename)
    print(repr(src), repr(dest))
    get_url_to_disk(src,dest)
 
-   src = os.path.join(internetarchive_url,sat_filename)
+   src = os.path.join(internetarchive_url,sat_filename,sat_filename)
    dest = os.path.join(viewer_path,sat_filename)
    get_url_to_disk(src,dest)
 
@@ -417,8 +417,8 @@ def main():
       print('Region not found: %s'%args.region)
       sys.exit(1)
 
-   src = os.path.join(internetarchive_url,regions_json[args.region]['detail_url'])
-   dest = os.path.join(viewer_path,regions_json[args.region]['detail_url'])
+   src = regions_json[args.region]['detail_url']
+   dest = os.path.join(viewer_path,os.path.basename(src))
    get_url_to_disk(src,dest)
 
    src = '%s/%s'%(viewer_path,regions_json[args.region]['detail_url'])
