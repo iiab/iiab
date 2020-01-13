@@ -8,7 +8,6 @@
 
    1. Principal functions migrated to NGINX
       * Admin Console
-      * kalite -- goes directly to ports 8006-8008
       * mediawiki
       * osm-vector-maps
       * usb-lib
@@ -32,3 +31,5 @@
 
    4. Not yet dealt with
       * internetarchive ([PR #2120](https://github.com/iiab/iiab/pull/2120))
+      * kalite -- goes directly to ports 8006-8008
+      * rachel
