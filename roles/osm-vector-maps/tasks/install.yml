@@ -4,21 +4,15 @@
     state: directory
     mode: '0755'
 
-- name: Make space for the viewer assets
+- name: Make space for the viewer
   file:
     path: '{{ vector_map_path }}/viewer/assets'
     state: directory
     mode: '0755'
 
-- name: Make space for the viewer tiles
-  file:
-    path: '{{ vector_map_path }}/viewer/tiles'
-    state: directory
-    mode: '0755'
-
-- name: Copy the map catalog to /etc/iiab/map-catalog.json
-  get_url:
-    url: "{{ map_catalog_url }}/map-catalog.json"
+- name: Copy the map catalog  {{ vector_map_path }}/maplist/assets/
+  copy:
+    src: "regions.json"
     dest: /etc/iiab/
 
 - name: Check for existence of cities database
@@ -34,40 +28,35 @@
 
 - name: Create a link to osm catalog in /common/assets
   file:
-    src: "/etc/iiab/map-catalog.json"
-    dest: "{{ doc_root }}/common/assets/map-catalog.json"
+    src: "/etc/iiab/regions.json"
+    dest: "{{ doc_root }}/common/assets/regions.json"
     state: link
 
 - name: Create a link to osm catalog in {{ vector_map_path }}/maplist/assets
   file:
-    src: "/etc/iiab/map-catalog.json"
-    dest: "{{ vector_map_path }}/maplist/assets/map-catalog.json"
+    src: "/etc/iiab/regions.json"
+    dest: "{{ vector_map_path }}/maplist/assets/regions.json"
     state: link
 
 - name: Download the JavaScript bundle with OpenLayers (main.js) for test page http://box/maps/maplist
 # At this point, fetches from github.com/georgejhunt/maps from test branch
   get_url:
-    url: '{{ item }}' 
+    url: "{{ osm_repo_url }}/osm-source/test-page/build/main.js"
     dest: '{{ vector_map_path }}/maplist/'
-  with_items:
-    - "{{ osm_repo_url }}/{{ maps_branch }}/osm-source/test-page/build/main.js"
-    - "{{ osm_repo_url }}/{{ maps_branch }}/osm-source/test-page/build/index.html"
+
+- name: Install {{ vector_map_path }}/maplist/index.html from template, for test page http://box/maps/maplist
+  template:
+    src: "index.html"
+    dest: '{{ vector_map_path }}/maplist/index.html'
 
 - name: Fetch the javascript bundle with openlayers for Viewer page
-# At this point, fetches from github.com/georgejhunt/maps from {{ maps_branch }} branch
+# At this point, fetches from github.com/georgejhunt/maps from test branch
   get_url:
-    url: "{{ osm_repo_url }}/{{ maps_branch }}/osm-source/viewer/build/{{ item }}"
+    url: "{{ osm_repo_url }}/osm-source/viewer/build/{{ item }}"
     dest: '{{ vector_map_path }}/viewer/'
-  with_items:
-      - index.html
-      - main.js
-      #- main.js.map
-      - ../ol-contextmenu.css
-      - ../popup.css
-
-#  get_url:
-#    url: "{{ osm_repo_url }}/osm-source/regional-base/build/index.html"
-#    dest: '{{ vector_map_path }}/maplist/index.html'
+  get_url:
+    url: "{{ osm_repo_url }}/osm-source/regional-base/build/index.html"
+    dest: '{{ vector_map_path }}/maplist/index.html'
 
 - name: Copy the common assets for the general purpose map viewer
   copy: src={{ item }}
@@ -78,19 +67,17 @@
   with_fileglob:
         - assets/*
 
-- name: Place a link to bboxes.geojson for Admin Console
+- name: Place a link to bboxes.json for Admin Console
   file: 
-      src: "{{ vector_map_path }}/viewer/assets/bboxes.geojson"
-      dest: "{{ vector_map_path }}/maplist/assets/bboxes.geojson"
+      src: "{{ vector_map_path }}/viewer/assets/bboxes.json"
+      dest: "{{ vector_map_path }}/maplist/assets/bboxes.json"
       state: link
-      force: True
       
 - name: Place a link to countries.json for Admin Console
   file: 
       src: "{{ vector_map_path }}/viewer/assets/countries.json"
       dest: "{{ vector_map_path }}/maplist/assets/countries.json"
       state: link
-      force: True
       
 - name: Copy the fonts for the general purpose map viewer
   copy: src={{ item }}
@@ -110,7 +97,6 @@
   with_items:
       - tileserver.php
       - searchapi.php
-      - mbtileinfo.php
 
 - name: Install the script to update osm catalog
   template:
@@ -124,6 +110,12 @@
     dest: /usr/bin/iiab-aggregate.py
     mode: "0755"
 
+#  It is too complicated to use a single file for both iiab and admin-console
+- name: Copy the duplicated JavaScript (map_functions.js) to {{ vector_map_path }}/maplist/assets
+  copy:
+    src: map_functions.js
+    dest: '{{ vector_map_path }}/viewer/'
+
 - name: Copy the redirect to the test page -- delete this if more than one map
   copy:
     force: no
@@ -136,15 +128,3 @@
       state: present
       name:
          - python3-wget
-         - "php{{ php_version }}-sqlite3"
-
-- name: Copy a script to download world tiles to zoom 10
-  copy:
-      src: bypass_ac_worldz10
-      dest: /usr/local/sbin/
-      mode: 0755
-  when: osm_vector_maps_enabled | bool
-
-- name: Install the World Map to zoom 10
-  shell: bypass_ac_worldz10
-  when: osm_vector_maps_enabled | bool
