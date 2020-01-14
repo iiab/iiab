@@ -1,54 +1,54 @@
-- name: If MySQL is enabled, let Munin monitor it
-  copy:
-    src: "{{ item }}"
-    dest: /etc/munin/plugins/
-  with_items:
-    - /usr/share/munin/plugins/mysql_
-    - /usr/share/munin/plugins/mysql_bytes
-    - /usr/share/munin/plugins/mysql_innodb
-    - /usr/share/munin/plugins/mysql_isam_space_
-    - /usr/share/munin/plugins/mysql_queries
-    - /usr/share/munin/plugins/mysql_slowqueries
-    - /usr/share/munin/plugins/mysql_threads
-  when: mysql_enabled | bool
-
-- name: Enable & Start munin-node systemd service
+- name: Enable & Start 'munin-node' systemd service
   systemd:
     name: munin-node
+    daemon_reload: yes
     enabled: yes
     state: started
   when: munin_enabled | bool
 
-- name: Disable munin-node service if not munin_enabled
+- name: Disable 'munin-node' systemd service
   systemd:
     name: munin-node
     enabled: no
     state: stopped
   when: not munin_enabled
 
-- name: Create symlink munin24.conf from sites-enabled to sites-available (debuntu)
-  file:
-    src: /etc/apache2/sites-available/munin24.conf
-    path: /etc/apache2/sites-enabled/munin24.conf
-    state: link
-  when: munin_enabled and not nginx_enabled
+# Apache
 
-- name: Remove symlink /etc/apache2/sites-enabled/munin24.conf if not munin_enabled (debuntu)
-  file:
-    path: /etc/apache2/sites-enabled/munin24.conf
-    state: absent
-  when: not munin_enabled or nginx_enabled
+- name: Enable http://box/munin via Apache
+  command: a2ensite munin24.conf
+  when: apache_install and munin_enabled    # and not nginx_enabled
 
-- name: Install /etc/nginx/conf.d/munin24-nginx.conf, from templates
+- name: Disable http://box/munin via Apache
+  command: a2dissite munin24.conf
+  when: apache_install and not munin_enabled    # or nginx_enabled
+
+- name: Restart Apache systemd service ({{ apache_service }})
+  systemd:
+    name: "{{ apache_service }}"    # apache2 or httpd, as set in /opt/iiab/iiab/vars/<OS>.yml
+    state: restarted
+  when: apache_enabled | bool
+
+# NGINX
+
+- name: Enable http://box/munin via NGINX, by installing {{ nginx_config_dir }}/munin24-nginx.conf from template
   template:
-    src: "{{ item.src }}"
-    dest: "{{ item.dest }}"
-    owner: root
-    group: root
-    mode: 0644
-  with_items:
-    - { src: 'munin24-nginx.conf.j2', dest: '/etc/nginx/conf.d/munin24-nginx.conf' }
-  when: munin_enabled | bool and nginx_enabled | bool
+    src: munin24-nginx.conf.j2
+    dest: "{{ nginx_config_dir }}/munin24-nginx.conf"    # /etc/nginx/conf.d
+  when: munin_enabled and nginx_enabled
+
+- name: Disable http://box/munin via NGINX, by installing {{ nginx_config_dir }}/munin24-nginx.conf
+  file:
+    path: "{{ nginx_config_dir }}/munin24-nginx.conf"    # /etc/nginx/conf.d
+    state: absent
+  when: not munin_enabled
+
+- name: Restart 'nginx' systemd service
+  systemd:
+    name: nginx
+    state: restarted
+  when: nginx_enabled | bool
+
 
 - name: Add 'munin' variable values to {{ iiab_ini_file }}
   ini_file:
@@ -60,7 +60,7 @@
     - option: name
       value: Munin
     - option: description
-      value: '"Munin is a networked resource monitoring tool that can help analyze resource trends and \"what just happened to kill our performance?\" problems."'
+      value: '"Munin is a networked resource monitoring tool that can help analyze resource trends and ''what just happened to kill our performance?'' problems."'
     - option: installed
       value: "{{ munin_install }}"
     - option: enabled
