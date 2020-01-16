@@ -1,4 +1,4 @@
-#!/usr/bin/env python3 
+#!/usr/bin/python3 
 # -*- coding: UTF-8 -*- import sys, os import time import argparse
 
 import argparse
@@ -62,16 +62,26 @@ def main():
          if os.path.isfile(config['maps_viewer_dir'] + os.path.basename(osm_tile)):
             os.remove(config['maps_viewer_dir'] + os.path.basename(osm_tile))
          shutil.move(osm_tile,config['maps_viewer_dir'])
+         src = '%s/%s'%(viewer_path,os.path.basename(osm_tile))
+         dest = '%s/%s'%(viewer_path,'osm_planet.mbtiles')
+         if os.path.islink(dest):
+            os.unlink(dest)
+         os.symlink(src,dest)
       elif found == sat_tile:
          if os.path.isfile(config['maps_viewer_dir'] + os.path.basename(sat_tile)):
             os.remove(config['maps_viewer_dir'] + os.path.basename(sat_tile))
          shutil.move(sat_tile,config['maps_viewer_dir'])
+         src = '%s/%s'%(viewer_path,os.path.basename(sat_tile))
+         dest = '%s/%s'%(viewer_path,'satellite.mbtiles')
+         if os.path.islink(dest):
+            os.unlink(dest)
+         os.symlink(src,dest)
       else:
          if os.path.isfile(config['maps_viewer_dir'] + 'tiles/' + os.path.basename(found)):
             os.remove(config['maps_viewer_dir'] + 'tiles/' + os.path.basename(found))
          shutil.move(found,config['maps_viewer_dir'] + 'tiles')
 
-   src = '%s/%s'%(viewer_path,regions_json[args.region]['detail_url'])
+   src = '%s/tiles/%s'%(viewer_path,os.path.basename(regions_json[args.region]['detail_url']))
    dest = '%s/%s'%(viewer_path,'detail.mbtiles')
    if os.path.islink(dest):
       os.unlink(dest)
