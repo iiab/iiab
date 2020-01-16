@@ -46,9 +46,9 @@ if len(sys.argv) > 1:
       loggingLevel = "DEBUG"
       
 # set up some logging -- selectable for diagnostics
-logging.basicConfig(filename='/var/log/apache2/portal.log',format='%(asctime)s.%(msecs)03d:%(name)s:%(message)s', datefmt='%M:%S',level=loggingLevel)
-logger = logging.getLogger('/var/log/apache2/portal.log')
-handler = RotatingFileHandler("/var/log/apache2/portal.log", maxBytes=100000, backupCount=2)
+logging.basicConfig(filename='/var/log/nginx/portal.log',format='%(asctime)s.%(msecs)03d:%(name)s:%(message)s', datefmt='%M:%S',level=loggingLevel)
+logger = logging.getLogger('/var/log/nginx/portal.log')
+handler = RotatingFileHandler("/var/log/nginx/portal.log", maxBytes=100000, backupCount=2)
 logger.addHandler(handler)
 
 PORT={{ captiveportal_port }}
