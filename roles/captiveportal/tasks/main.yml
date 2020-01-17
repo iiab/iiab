@@ -1,4 +1,6 @@
-- name: Download & install python-dateutil, sqlite3
+# TO DO: move ~7 stanzas below into tasks/install.yml
+
+- name: "Download & install packages: python3-dateutil, python3-jinja2"
   package:
     name: "{{ item }}"
     state: present
@@ -6,93 +8,101 @@
     - python3-dateutil
     - python3-jinja2
 
-- name: Create directory /opt/iiab/captiveportal for scripts & templates
+- name: Create directory /opt/iiab/captiveportal for scripts & templates; set owner to {{ apache_user }}
   file:
     path: /opt/iiab/captiveportal
     state: directory
     owner: "{{ apache_user }}"
 
-- name: 'Copy scripts: checkurls'
+- name: "Install 3 scripts from template: /opt/iiab/captiveportal/checkurls, /usr/sbin/iiab-make-cp-servers.py, /usr/sbin/iiab-divert-to-nginx"
   template:
     src: "{{ item.src }}"
     dest: "{{ item.dest }}"
     mode: "{{ item.mode }}"
   with_items:
-    - { src: roles/captiveportal/templates/checkurls, mode: '0644', dest: /opt/iiab/captiveportal/ }
-    - { src: roles/captiveportal/templates/iiab-make-cp-servers.py, mode: '0755', dest: /usr/sbin/ }
-    - { src: roles/captiveportal/templates/iiab-divert-to-nginx, mode: '0755', dest: /usr/sbin/ }
+    - { src: roles/captiveportal/templates/checkurls, dest: /opt/iiab/captiveportal/, mode: '0644' }
+    - { src: roles/captiveportal/templates/iiab-make-cp-servers.py, dest: /usr/sbin/, mode: '0755' }
+    - { src: roles/captiveportal/templates/iiab-divert-to-nginx, dest: /usr/sbin/, mode: '0755' }
 
-- name: Put put the python script that creates the server in place
+- name: Install /opt/iiab/captiveportal/capture-wsgi.py from template (creates the server)
   template:
-    src: roles/captiveportal/templates/capture-wsgi.py 
-    mode: '0755' 
-    dest: /opt/iiab/captiveportal/ 
+    src: capture-wsgi.py.j2
+    #src: roles/captiveportal/templates/capture-wsgi.py.j2
+    dest: /opt/iiab/captiveportal/capture-wsgi.py
+    mode: '0755'
 
-- name: 'Copy templates: simple.template, mac.template'
+- name: Copy files {simple.template, mac.template} into /opt/iiab/captiveportal/
   copy:
     src: "{{ item }}"
     dest: /opt/iiab/captiveportal/
   with_items:
-    - roles/captiveportal/files/simple.template
-    - roles/captiveportal/files/mac.template
+    - simple.template
+    #- roles/captiveportal/files/simple.template
+    - mac.template
+    #- roles/captiveportal/files/mac.template
 
-- name: Copy uWSGI config file
+- name: Install uWSGI config file /opt/iiab/captiveportal/captiveportal.ini from template
   template:
-    src: roles/captiveportal/templates/captiveportal.ini.j2
+    src: captiveportal.ini.j2
+    #src: roles/captiveportal/templates/captiveportal.ini.j2
     dest: /opt/iiab/captiveportal/captiveportal.ini
-
-- name: Copy unit file for uWSGI service
-  template:
-    src: roles/captiveportal/templates/uwsgi-captiveportal.service
-    dest: /etc/systemd/system/
-
-- name: Start or restart server which responds to browsers trying to detect a captive portal
-  systemd: 
-    name: uwsgi-captiveportal.service
-    state: restarted
-    enabled: True
-  when: captiveportal_enabled | bool
-
-- name: Stop uWSGI server if captive portal has been disabled
-  systemd: 
-    name: uwsgi-captiveportal.service
-    state: stopped
-    enabled: False
-  when: not captiveportal_enabled | bool
-
-- name: Run divert to generate diversion lists for nginx
-  shell: /usr/sbin/iiab-divert-to-nginx
-     
-- name: Run script to generate nginx servers from checkurls input list
-  command: /usr/sbin/iiab-make-cp-servers.py
-  args:
-      creates: /etc/nginx/sites-available/capture.conf
-  
-- name: Enable nginx to service the sites in checkurls list
-  file:
-    src: /etc/nginx/sites-available/capture.conf
-    path: /etc/nginx/sites-enabled/capture.conf
-    state: link
-  when: captiveportal_enabled | bool
-
-- name: Disable nginx to location definitions for checkurls
-  file:
-    src: /etc/nginx/sites-available/capture.conf
-    path: /etc/nginx/sites-enabled/capture.conf
-    state: absent
-  when: not captiveportal_enabled | bool
-
-- name: Make sure dnsmasq is not diverting if not captiveportal_enabled
-  file:
-    path: /etc/dnsmasq.d/capture
-    state: absent
-  when: not captiveportal_enabled
 
 - name: "Add 'captiveportal_installed: True' to {{ iiab_state_file }}"
   lineinfile:
     dest: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
     regexp: '^captiveportal_installed'
     line: 'captiveportal_installed: True'
+
+# TO DO: move most/all 7-10 stanzas below into enable-or-disable.yml
+
+- name: Install /etc/systemd/system/uwsgi-captiveportal.service from template
+  template:
+    src: uwsgi-captiveportal.service
+    #src: roles/captiveportal/templates/uwsgi-captiveportal.service
+    dest: /etc/systemd/system/
+
+- name: Restart & Enable 'uwsgi-captiveportal' systemd service (uWSGI server) that responds to browsers trying to detect a Captive Portal
+  systemd:
+    name: uwsgi-captiveportal
+    daemon_reload: yes
+    state: restarted
+    enabled: True
+  when: captiveportal_enabled | bool
+
+- name: Stop & Disable 'uwsgi-captiveportal' systemd service (uWSGI server) if Captive Portal has been disabled
+  systemd:
+    name: uwsgi-captiveportal
+    state: stopped
+    enabled: False
+  when: not captiveportal_enabled
+
+- name: Run iiab-divert-to-nginx to generate diversion lists for NGINX
+  shell: /usr/sbin/iiab-divert-to-nginx
+
+- name: Run iiab-make-cp-servers.py to generate NGINX servers from checkurls input list (creates /etc/nginx/sites-available/capture.conf)
+  command: /usr/sbin/iiab-make-cp-servers.py
+  args:
+    creates: /etc/nginx/sites-available/capture.conf
+
+- name: Symlink /etc/nginx/sites-enabled/capture.conf -> /etc/nginx/sites-available/capture.conf, to enable NGINX to service the sites in checkurls list
+  file:
+    src: /etc/nginx/sites-available/capture.conf
+    path: /etc/nginx/sites-enabled/capture.conf
+    state: link
+  when: captiveportal_enabled | bool
+
+- name: Delete symlink /etc/nginx/sites-enabled/capture.conf, to disable NGINX to location definitions for checkurls
+  file:
+    #src: /etc/nginx/sites-available/capture.conf
+    path: /etc/nginx/sites-enabled/capture.conf
+    state: absent
+  when: not captiveportal_enabled
+
+- name: Make sure dnsmasq is not diverting if not captiveportal_enabled
+  file:
+    path: /etc/dnsmasq.d/capture
+    state: absent
+  when: not captiveportal_enabled
 
 #- name: Restart dnsmasq
 #  systemd:
@@ -102,14 +112,17 @@
 
 # ABOVE DOES NOT WORK ON UBUNTU 16.04 -- what follows is a crude hack (seems to work!)
 
-- name: Stop dnsmasq
+- name: Stop 'dnsmasq' systemd service
   systemd:
     name: dnsmasq
     state: stopped
   when: dnsmasq_enabled | bool
 
-- name: Start dnsmasq
+- name: Start 'dnsmasq' systemd service
   systemd:
     name: dnsmasq
     state: started
   when: dnsmasq_enabled | bool
+
+# TO DO: add important captiveportal_* variable values to {{ iiab_ini_file }} =
+# /etc/iiab/iiab.ini at the end of main.yml here, for /usr/bin/iiab-diagnostics
