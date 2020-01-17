@@ -4,8 +4,6 @@
       - "php{{ php_version }}-intl"
       - "php{{ php_version }}-mbstring"
     state: present
-  #tags:
-  #  - download
 
 - name: Download {{ mediawiki_download_base_url }}/{{ mediawiki_src }} to {{ downloads_dir }}
   get_url:
@@ -22,17 +20,17 @@
     dest: "{{ mediawiki_install_path }}"
     owner: root
     group: "{{ apache_user }}"
-    mode: 0755
+    mode: u+rw,g+r,o+r    # '0755' forced executable bits on files
     keep_newer: yes
 
-- name: Create symlink mwlink from docroot to {{ mediawiki_abs_path }}
+- name: Create symlink {{ doc_root }}/mwlink -> {{ mediawiki_abs_path }}
   file:
     src: "{{ mediawiki_abs_path }}"
-    dest: "{{ doc_root }}/mwlink"
+    path: "{{ doc_root }}/mwlink"
     state: link
 
-- name: Start MySQL service, so we can create db
-  service:
+- name: Start MySQL systemd service ({{ mysql_service }}) so we can create db
+  systemd:
     state: started
     name: "{{ mysql_service }}"
 
@@ -41,7 +39,7 @@
     name: "{{ mediawiki_db_name }}"
     state: present
 
-- name: Create MySQL database user {{ mediawiki_db_user }}
+- name: Create MySQL database user {{ mediawiki_db_user }} with password, and permissions to above db
   mysql_user:
     name: "{{ mediawiki_db_user }}"
     password: "{{ mediawiki_db_user_password }}"
@@ -68,22 +66,20 @@
 
 - name: Configure wgArticlePath variable in {{ mediawiki_abs_path }}/LocalSettings.php
   lineinfile:
-    dest: "{{ mediawiki_abs_path }}/LocalSettings.php"    
+    dest: "{{ mediawiki_abs_path }}/LocalSettings.php"
     line: '$wgArticlePath = "/wiki/$1";'
     create: yes
 
 - name: Configure wgUsePathInfo variable in {{ mediawiki_abs_path }}/LocalSettings.php
   lineinfile:
-    dest: "{{ mediawiki_abs_path }}/LocalSettings.php"    
+    dest: "{{ mediawiki_abs_path }}/LocalSettings.php"
     line: '$wgUsePathInfo = true;'
-    create: yes    
+    create: yes
 
-- name: Install /etc/{{ apache_config_dir }}/mediawiki.conf from template, for http://box{{ mediawiki_url }}
+- name: Install /etc/{{ apache_config_dir }}/mediawiki.conf from template, for http://box{{ mediawiki_url }} via Apache
   template:
     src: mediawiki.conf.j2
     dest: "/etc/{{ apache_config_dir }}/mediawiki.conf"
-
-# Install {{ nginx_config_dir }}/mediawiki-nginx.conf from template in enable.yml
 
 - name: "Add 'mediawiki_installed: True' to {{ iiab_state_file }}"
   lineinfile:
