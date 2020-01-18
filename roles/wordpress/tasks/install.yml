@@ -16,8 +16,6 @@
     url: "{{ wordpress_download_base_url }}/{{ wordpress_src }}"
     dest: "{{ downloads_dir }}"
     timeout: "{{ download_timeout }}"
-    # force: yes
-    # backup: yes
   register: wp_download_output
   when: internet_available | bool
 
@@ -38,53 +36,56 @@
     msg: "{{ downloads_dir }}/wordpress.tar.gz is REQUIRED in order to install WordPress."
   when: not wp_link.stat.exists
 
-- name: "Unpack /opt/iiab/downloads/wordpress.tar.gz to permanent location /library/wordpress - owner: root, group: {{ apache_user }}, mode: 0664, keep_newer: yes"
+- name: "Unpack {{ downloads_dir }}/wordpress.tar.gz to permanent location {{ wp_install_path }}/wordpress - owner: root, group: {{ apache_user }}, mode: '0664', keep_newer: yes"
   unarchive:
-    src: "{{ downloads_dir }}/wordpress.tar.gz"
-    dest: "{{ wp_install_path }}"
-    # owner: root
+    src: "{{ downloads_dir }}/wordpress.tar.gz"    # /opt/iiab/downloads
+    dest: "{{ wp_install_path }}"    # /library
+    owner: root    # 2020-01-17: confirmed that wordpress.tar.gz (otherwise) unpacks as nobody:nogroup, with all files as '0644', and all dirs as '0755'
     group: "{{ apache_user }}"    # DO WE REALLY STILL WANT THIS FOR NGINX?
-    mode: '0664'
+    mode: '0664'    # PHP/Apache/NGINX apparently need g+rw (group write access, not just read) similar to '0775' for directory traversing below
     keep_newer: yes
 
-- name: Make /library/wordpress directories 775 so Apache can traverse and write (most files remain 0664)
-  command: "/usr/bin/find {{ wp_abs_path }} -type d -exec chmod 775 {} +"
+- name: Make {{ wp_abs_path }} directories 775 so PHP/Apache/NGINX can traverse and write (above files remain 664)
+  command: "/usr/bin/find {{ wp_abs_path }} -type d -exec chmod 775 {} +"    # /library/wordpress
 
-- name: Install {{ wp_abs_path }}/wp-keys.php.BAK
+# 4 stanzas to install wp-keys.php.BAK, wp-keys.php & wp-config.php into /library/wordpress
+
+- name: Install {{ wp_abs_path }}/wp-keys.php.BAK from template (if file does not already exist) in case download of 8 dynamically-generated salts/keys fails below
   copy:
     src: wp-keys.php.BAK
-    dest: "{{ wp_abs_path }}/wp-keys.php.BAK"
-    # owner: root
+    dest: "{{ wp_abs_path }}/wp-keys.php.BAK"    # /library/wordpress
+    owner: root
     group: "{{ apache_user }}"    # DO WE REALLY STILL WANT THIS FOR NGINX?
     mode: '0640'
-
-# Fetch random salts for WordPress config into wp-keys.php file by generating script and running
+    force: no    # Preserve site's unique keys, as might have been placed into .BAK during an earlier run, by the script below
 
 - name: Install script /tmp/get-iiab-wp-salts from template
   template:
     src: get-iiab-wp-salts.j2
     dest: /tmp/get-iiab-wp-salts
-    # owner: root
-    # group: root
+    owner: root
+    group: root
     mode: '0700'
 
-- name: Run /tmp/get-iiab-wp-salts to create /library/wordpress/wp-keys.php
+- name: Run /tmp/get-iiab-wp-salts to download 8 random salts/keys, creating a new {{ wp_abs_path }}/wp-keys.php (or if nec, copy from known/prior {{ wp_abs_path }}/wp-keys.php.BAK)    # /library/wordpress
   command: /tmp/get-iiab-wp-salts
+  #when: internet_available | bool    # Better to run it every time, installing from wp-keys.php.BAK if download fails
 
-- name: Remove script /tmp/get-iiab-wp-salts
-  file:
-    path: /tmp/get-iiab-wp-salts
-    state: absent
+# Don't Bother: /tmp file are deleted on reboot!
+#- name: Remove script /tmp/get-iiab-wp-salts
+#  file:
+#    path: /tmp/get-iiab-wp-salts
+#    state: absent
 
-- name: Install {{ wp_abs_path }}/wp-config.php
+- name: Install {{ wp_abs_path }}/wp-config.php    # /library/wordpress
   template:
     src: wp-config.php.j2
     dest: "{{ wp_abs_path }}/wp-config.php"
-    # owner: root
+    owner: root
     group: "{{ apache_user }}"    # DO WE REALLY STILL WANT THIS FOR NGINX?
-    mode: '0660'
+    mode: '0660'    # Others strongly recommend '0600' (or do Apache/NGINX really need group read & write permissions?)
 
-- name: Install etc/{{ apache_config_dir }}/wordpress.conf from template, for http://box{{ wp_url }}
+- name: Install etc/{{ apache_config_dir }}/wordpress.conf from template, for http://box{{ wp_url }} via Apache
   template:
     src: wordpress.conf.j2
     dest: "/etc/{{ apache_config_dir }}/wordpress.conf"
