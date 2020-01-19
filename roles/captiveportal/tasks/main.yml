@@ -41,11 +41,11 @@
     - mac.template
     #- roles/captiveportal/files/mac.template
 
-- name: Install uWSGI config file /opt/iiab/captiveportal/captiveportal.ini from template
-  template:
-    src: captiveportal.ini.j2
-    #src: roles/captiveportal/templates/captiveportal.ini.j2
-    dest: /opt/iiab/captiveportal/captiveportal.ini
+#- name: Install /etc/systemd/system/uwsgi-captiveportal.service from template
+#  template:
+#    src: uwsgi-captiveportal.service
+#    #src: roles/captiveportal/templates/uwsgi-captiveportal.service
+#    dest: /etc/systemd/system/
 
 - name: "Add 'captiveportal_installed: True' to {{ iiab_state_file }}"
   lineinfile:
@@ -55,25 +55,33 @@
 
 # TO DO: move most/all 7-10 stanzas below into enable-or-disable.yml
 
-- name: Install /etc/systemd/system/uwsgi-captiveportal.service from template
-  template:
-    src: uwsgi-captiveportal.service
-    #src: roles/captiveportal/templates/uwsgi-captiveportal.service
-    dest: /etc/systemd/system/
+#- name: Restart & Enable 'uwsgi-captiveportal' systemd service (uWSGI server) that responds to browsers trying to detect a Captive Portal
+#  systemd:
+#    name: uwsgi-captiveportal
+#    daemon_reload: yes
+#    state: restarted
+#    enabled: True
+#  when: captiveportal_enabled | bool
 
-- name: Restart & Enable 'uwsgi-captiveportal' systemd service (uWSGI server) that responds to browsers trying to detect a Captive Portal
-  systemd:
-    name: uwsgi-captiveportal
-    daemon_reload: yes
-    state: restarted
-    enabled: True
+#- name: Stop & Disable 'uwsgi-captiveportal' systemd service (uWSGI server) if Captive Portal has been disabled
+#  systemd:
+#    name: uwsgi-captiveportal
+#    state: stopped
+#    enabled: False
+#  when: not captiveportal_enabled
+
+- name: Install uWSGI config file /etc/uwsgi/apps-enabled/captiveportal.ini from template
+  template:
+    src: captiveportal.ini.j2
+    #src: roles/captiveportal/templates/captiveportal.ini.j2
+    dest: /etc/uwsgi/apps-enabled/captiveportal.ini
   when: captiveportal_enabled | bool
 
-- name: Stop & Disable 'uwsgi-captiveportal' systemd service (uWSGI server) if Captive Portal has been disabled
-  systemd:
-    name: uwsgi-captiveportal
-    state: stopped
-    enabled: False
+- name: Delete uWSGI config file /etc/uwsgi/apps-enabled/captiveportal.ini when disabled
+  file:
+    #src: /etc/nginx/sites-available/capture.conf
+    path: /etc/uwsgi/apps-enabled/captiveportal.ini
+    state: absent
   when: not captiveportal_enabled
 
 - name: Run iiab-divert-to-nginx to generate diversion lists for NGINX
@@ -104,11 +112,11 @@
     state: absent
   when: not captiveportal_enabled
 
-#- name: Restart dnsmasq
-#  systemd:
-#    name: dnsmasq
-#    state: restarted
-#  when: dnsmasq_enabled | bool
+- name: Restart uwsgi
+  systemd:
+    name: uwsgi
+    state: restarted
+    daemon_reload: yes
 
 # ABOVE DOES NOT WORK ON UBUNTU 16.04 -- what follows is a crude hack (seems to work!)
 
