@@ -1,0 +1,59 @@
+- name: "Download & install packages: python3-dateutil, python3-jinja2"
+  package:
+    name: "{{ item }}"
+    state: present
+  with_items:
+    - python3-dateutil
+    - python3-jinja2
+
+- name: mkdir /opt/iiab/captiveportal for scripts & templates, set owner to {{ apache_user }}
+  file:
+    path: /opt/iiab/captiveportal
+    state: directory
+    owner: "{{ apache_user }}"
+
+- name: mkdir /var/log/captiveportal for logs, set ownership {{ apache_user }}:{{ apache_user }}, set mode '0750'
+  file:
+    path: /var/log/captiveportal
+    state: directory
+    owner: "{{ apache_user }}"
+    group: "{{ apache_user }}"
+    mode: '0750'    # Same as /var/log/apache2
+
+- name: "Install 3 scripts from template: /opt/iiab/captiveportal/checkurls, /usr/sbin/iiab-divert-to-nginx, /usr/sbin/iiab-make-cp-servers.py"
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    mode: "{{ item.mode }}"
+  with_items:
+    - { src: roles/captiveportal/templates/checkurls, dest: /opt/iiab/captiveportal/, mode: '0644' }
+    - { src: roles/captiveportal/templates/iiab-divert-to-nginx, dest: /usr/sbin/, mode: '0755' }
+    - { src: roles/captiveportal/templates/iiab-make-cp-servers.py, dest: /usr/sbin/, mode: '0755' }
+
+- name: Install /opt/iiab/captiveportal/capture-wsgi.py from template, mode '0755' (creates the server)
+  template:
+    src: capture-wsgi.py.j2
+    dest: /opt/iiab/captiveportal/capture-wsgi.py
+    mode: '0755'
+
+- name: Copy files {simple.template, mac.template} into /opt/iiab/captiveportal/
+  copy:
+    src: "{{ item }}"
+    dest: /opt/iiab/captiveportal/
+  with_items:
+    - simple.template
+    - mac.template
+
+- name: Run iiab-divert-to-nginx to generate diversion lists for NGINX
+  shell: /usr/sbin/iiab-divert-to-nginx
+
+- name: Run iiab-make-cp-servers.py to generate NGINX servers from /opt/iiab/captiveportal/checkurls input list (creates /etc/nginx/sites-available/capture.conf)
+  command: /usr/sbin/iiab-make-cp-servers.py
+  args:
+    creates: /etc/nginx/sites-available/capture.conf
+
+- name: "Add 'captiveportal_installed: True' to {{ iiab_state_file }}"
+  lineinfile:
+    dest: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
+    regexp: '^captiveportal_installed'
+    line: 'captiveportal_installed: True'
