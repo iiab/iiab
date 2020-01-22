@@ -1,0 +1,125 @@
+# 2020-01-21: Ansible Input Validation (basic sanity checking for now) to check
+# that *_install and *_enabled variables (as set in places like
+# /etc/iiab/local_vars.yml) appear coherent i.e. (1) are confirmed defined, (2)
+# have type boolean (Ansible often inverts logic when boolean vars are
+# accidentally declared as strings, see below!) and (3) have plausible values.
+
+# Stricter validation is needed later, when roles/playbooks/tasks are invoked
+# by various scripts, possibly bypassing 0-init?  Either way, risks abound :/
+
+# 1. "Ansible 2.8+ ADVISORY: avoid warnings by using 'when: var | bool' for
+# top-level BARE vars (in case they're strings, instead of boolean)"
+# https://github.com/iiab/iiab/issues/1632
+
+# 2. "How Exactly Does Ansible Parse Boolean Variables?"
+# https://stackoverflow.com/questions/47877464/how-exactly-does-ansible-parse-boolean-variables/47877502#47877502
+# ...is very helpful but has it slightly wrong, as Ansible implements only ~18
+# of YAML's 22 definitions of boolean (https://yaml.org/type/bool.html).
+# i.e. Ansible fails to implement y|Y|n|N, only allowing ~18 boolean values:
+#
+# yes|Yes|YES|no|No|NO
+# |true|True|TRUE|false|False|FALSE
+# |on|On|ON|off|Off|OFF
+#
+# Otherwise 'var != (var | bool)' is dangerously common, e.g. (1) when a var
+# is not one of the above ~18 words (forcing it to become a string) or (2) when
+# a var is accidentally set using quotes (forcing it to become a string) these
+# ~18 words too WILL FAIL as strings (as will any non-empty string...so beware
+# casting strings to boolean later on...can make the situation worse!)
+# https://docs.ansible.com/ansible/latest/porting_guides/porting_guide_2.8.html#bare-variables-in-conditionals
+
+# 3. "How do i fail a task in Ansible if the variable contains a boolean value?
+# I want to perform input validation for Ansible playbooks"
+# https://stackoverflow.com/questions/46664127/how-do-i-fail-a-task-in-ansible-if-the-variable-contains-a-boolean-value-i-want/46667499#46667499
+
+# 2020-01-21: checks 46+46 vars...for now!
+- name: Set vars_checklist for ~46 + ~46 vars ("XYZ_install" + "XYZ_enabled") to be checked
+  set_fact:
+    vars_checklist:
+      - hostapd
+      - dhcpd
+      - named
+      - dnsmasq
+      - captiveportal
+      - bluetooth
+      - wondershaper
+      - sshd
+      - openvpn
+      - nginx
+      - apache
+      - mysql
+      - squid
+      - dansguardian
+      - postgresql
+      - cups
+      - samba
+      - idmgr
+      - azuracast
+      - dokuwiki
+      - ejabberd
+      - elgg
+      - gitea
+      - lokole
+      - mediawiki
+      - mosquitto
+      - nodered
+      - nextcloud
+      - pbx
+      - wordpress
+      - kalite
+      - kolibri
+      - kiwix
+      - moodle
+      - mongodb
+      - sugarizer
+      - transmission
+      - awstats
+      - monit
+      - munin
+      - phpmyadmin
+      - vnstat
+      - internetarchive
+      - minetest
+      - calibre
+      - calibreweb
+
+- name: Assert that {{ vars_checklist | length }} "XYZ_install" vars are all... defined
+  assert:
+    that: "{{ item }}_install is defined"
+    fail_msg: "PLEASE GIVE THIS VARIABLE A PROPER (UNQUOTED) BOOLEAN VALUE e.g. in: /etc/iiab/local_vars.yml"
+    quiet: yes
+  loop: "{{ vars_checklist }}"
+  #register: install_vars_defined
+
+- name: Assert that {{ vars_checklist | length }} "XYZ_enabled" vars are all... defined
+  assert:
+    that: "{{ item }}_enabled is defined"
+    fail_msg: "PLEASE GIVE THIS VARIABLE A PROPER (UNQUOTED) BOOLEAN VALUE e.g. in: /etc/iiab/local_vars.yml"
+    quiet: yes
+  loop: "{{ vars_checklist }}"
+  #register: enabled_vars_defined
+
+- name: Assert that {{ vars_checklist | length }} "XYZ_install" vars are all... type boolean (NOT type string, which can invert logic!)
+  assert:
+    that: "{{ item }}_install | type_debug == 'bool'"
+    fail_msg: "PLEASE GIVE THIS VARIABLE A PROPER (UNQUOTED) BOOLEAN VALUE e.g. in: /etc/iiab/local_vars.yml"
+    quiet: yes
+  loop: "{{ vars_checklist }}"
+  #register: install_vars_boolean
+
+- name: Assert that {{ vars_checklist | length }} "XYZ_enabled" vars are all... type boolean (NOT type string, which can invert logic!)
+  assert:
+    that: "{{ item }}_enabled | type_debug == 'bool'"
+    fail_msg: "PLEASE GIVE THIS VARIABLE A PROPER (UNQUOTED) BOOLEAN VALUE e.g. in: /etc/iiab/local_vars.yml"
+    quiet: yes
+  loop: "{{ vars_checklist }}"
+  #register: enabled_vars_boolean
+
+- name: 'DISALLOW "XYZ_install: False" WITH "XYZ_enabled: True" ...for all {{ vars_checklist | length }} var pairs'
+  assert:
+    that: "{{ item }}_install or not {{ item }}_enabled"
+    fail_msg: "PLEASE VERIFY THESE 2 VARIABLES e.g. in: /etc/iiab/local_vars.yml"
+    #fail_msg: '{{ item }}_install or not {{ item }}_enabled    {{ item }}_install is {{ {{ item }}_install }}    {{ item }}_enabled is {{ {{ item }}_enabled }}'   # Is there a way to output var values ?
+    quiet: yes
+  loop: "{{ vars_checklist }}"
+  #register: var_pairs_validation
