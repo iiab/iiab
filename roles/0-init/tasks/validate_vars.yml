@@ -1,8 +1,13 @@
 # 2020-01-21: Ansible Input Validation (basic sanity checking for now) to check
 # that *_install and *_enabled variables (as set in places like
-# /etc/iiab/local_vars.yml) appear coherent i.e. (1) are confirmed defined, (2)
-# have type boolean (Ansible often inverts logic when boolean vars are
+# /etc/iiab/local_vars.yml) appear coherent i.e. (1) are confirmed defined,
+# (2) have type boolean (Ansible often inverts logic when boolean vars are
 # accidentally declared as strings, see below!) and (3) have plausible values.
+
+# 2020-01-23: *_installed variables (incrementally saved to
+# /etc/iiab/iiab_state.yml) are not required to be boolean (or even defined!)
+# for now.  However if any of these are defined, the corresponding value of
+# *_install must be True, as IIAB does not currently support uninstalling!
 
 # Stricter validation is needed later, when roles/playbooks/tasks are invoked
 # by various scripts, possibly bypassing 0-init?  Either way, risks abound :/
@@ -32,10 +37,11 @@
 # I want to perform input validation for Ansible playbooks"
 # https://stackoverflow.com/questions/46664127/how-do-i-fail-a-task-in-ansible-if-the-variable-contains-a-boolean-value-i-want/46667499#46667499
 
-# 2020-01-21: checks 46+46 vars...for now...expect this to change!  Should we
-# remove idmgr as it's officially now UNMAINTAINED in default_vars.yml and
+# 2020-01-23: checks 53 + 53 + up-to-53 vars...for now...expect this to change!
+# Should we remove {xo_services, activity_server, ejabberd_xs, idmgr} as these
+# are officially now UNMAINTAINED in default_vars.yml and
 # https://github.com/iiab/iiab/blob/master/unmaintained-roles.txt etc?
-- name: Set vars_checklist for ~46 + ~46 vars ("XYZ_install" + "XYZ_enabled") to be checked
+- name: Set vars_checklist for 53 + 53 + up-to-53 vars ("XYZ_install" + "XYZ_enabled" + "XYZ_installed") to be checked
   set_fact:
     vars_checklist:
       - hostapd
@@ -47,6 +53,7 @@
       - wondershaper
       - sshd
       - openvpn
+      - admin_console
       - nginx
       - apache
       - mysql
@@ -55,6 +62,10 @@
       - postgresql
       - cups
       - samba
+      - usb_lib
+      - xo_services
+      - activity_server
+      - ejabberd_xs
       - idmgr
       - azuracast
       - dokuwiki
@@ -64,6 +75,7 @@
       - lokole
       - mediawiki
       - mosquitto
+      - nodejs
       - nodered
       - nextcloud
       - pbx
@@ -74,6 +86,7 @@
       - moodle
       - mongodb
       - sugarizer
+      - osm_vector_maps
       - transmission
       - awstats
       - monit
@@ -88,7 +101,7 @@
 - name: Assert that {{ vars_checklist | length }} "XYZ_install" vars are all... defined
   assert:
     that: "{{ item }}_install is defined"
-    fail_msg: "PLEASE GIVE THIS VARIABLE A PROPER (UNQUOTED) BOOLEAN VALUE e.g. in: /etc/iiab/local_vars.yml"
+    fail_msg: "PLEASE GIVE THIS VARIABLE A PROPER (UNQUOTED) BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
     quiet: yes
   loop: "{{ vars_checklist }}"
   #register: install_vars_defined
@@ -96,7 +109,7 @@
 - name: Assert that {{ vars_checklist | length }} "XYZ_enabled" vars are all... defined
   assert:
     that: "{{ item }}_enabled is defined"
-    fail_msg: "PLEASE GIVE THIS VARIABLE A PROPER (UNQUOTED) BOOLEAN VALUE e.g. in: /etc/iiab/local_vars.yml"
+    fail_msg: "PLEASE GIVE THIS VARIABLE A PROPER (UNQUOTED) BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
     quiet: yes
   loop: "{{ vars_checklist }}"
   #register: enabled_vars_defined
@@ -104,7 +117,7 @@
 - name: Assert that {{ vars_checklist | length }} "XYZ_install" vars are all... type boolean (NOT type string, which can invert logic!)
   assert:
     that: "{{ item }}_install | type_debug == 'bool'"
-    fail_msg: "PLEASE GIVE THIS VARIABLE A PROPER (UNQUOTED) BOOLEAN VALUE e.g. in: /etc/iiab/local_vars.yml"
+    fail_msg: "PLEASE GIVE THIS VARIABLE A PROPER (UNQUOTED) BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
     quiet: yes
   loop: "{{ vars_checklist }}"
   #register: install_vars_boolean
@@ -112,7 +125,7 @@
 - name: Assert that {{ vars_checklist | length }} "XYZ_enabled" vars are all... type boolean (NOT type string, which can invert logic!)
   assert:
     that: "{{ item }}_enabled | type_debug == 'bool'"
-    fail_msg: "PLEASE GIVE THIS VARIABLE A PROPER (UNQUOTED) BOOLEAN VALUE e.g. in: /etc/iiab/local_vars.yml"
+    fail_msg: "PLEASE GIVE THIS VARIABLE A PROPER (UNQUOTED) BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
     quiet: yes
   loop: "{{ vars_checklist }}"
   #register: enabled_vars_boolean
@@ -120,8 +133,15 @@
 - name: 'DISALLOW "XYZ_install: False" WITH "XYZ_enabled: True" ...for all {{ vars_checklist | length }} var pairs'
   assert:
     that: "{{ item }}_install or not {{ item }}_enabled"
-    fail_msg: "PLEASE VERIFY THESE 2 VARIABLES e.g. in: /etc/iiab/local_vars.yml"
+    fail_msg: "IIAB DOES NOT SUPPORT UNINSTALLS. PLEASE VERIFY {{ item }}_install AND {{ item }}_enabled e.g. IN: /etc/iiab/local_vars.yml"
     #fail_msg: '{{ item }}_install or not {{ item }}_enabled    {{ item }}_install is {{ {{ item }}_install }}    {{ item }}_enabled is {{ {{ item }}_enabled }}'   # Is there a way to output var values ?
     quiet: yes
   loop: "{{ vars_checklist }}"
   #register: var_pairs_validation
+
+- name: 'DISALLOW "XYZ_install: False" WHEN "XYZ_installed is defined" IN /etc/iiab/iiab_state.yml ...for up-to-{{ vars_checklist | length }} var pairs'
+  assert:
+    that: "{{ item }}_install or {{ item }}_installed is undefined"
+    fail_msg: "{{ item }} ALREADY INSTALLED. IIAB DOES NOT SUPPORT UNINSTALLS. PLEASE SET '{{ item }}_install: True' e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+  loop: "{{ vars_checklist }}"
