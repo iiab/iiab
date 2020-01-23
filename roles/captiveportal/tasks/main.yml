@@ -1,128 +1,46 @@
-# TO DO: move ~7 stanzas below into tasks/install.yml
+# "How do i fail a task in Ansible if the variable contains a boolean value?
+# I want to perform input validation for Ansible playbooks"
+# https://stackoverflow.com/questions/46664127/how-do-i-fail-a-task-in-ansible-if-the-variable-contains-a-boolean-value-i-want/46667499#46667499
 
-- name: "Download & install packages: python3-dateutil, python3-jinja2"
-  package:
-    name: "{{ item }}"
-    state: present
+# If 0-init/tasks/validate_vars.yml has DEFINITELY been run (?) perhaps no need
+# to re-check whether vars are defined here.  As Ansible vars cannot be unset:
+# https://serverfault.com/questions/856729/how-to-destroy-delete-unset-a-variable-value-in-ansible
+
+- name: Assert that "captiveportal_install is sameas true" (boolean not string etc)
+  assert:
+    that: captiveportal_install is sameas true
+    fail_msg: "PLEASE SET 'captiveportal_install: True' e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+    #that: captiveportal_install is defined and captiveportal_install is sameas true
+    #success_msg: captiveportal_install is defined and captiveportal_install is sameas true
+
+- name: Assert that "captiveportal_enabled | type_debug == 'bool'" (boolean not string etc)
+  assert:
+    that: captiveportal_enabled | type_debug == 'bool'
+    fail_msg: "PLEASE GIVE VARIABLE 'captiveportal_enabled' A PROPER (UNQUOTED) BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+    #that: captiveportal_enabled is defined and captiveportal_enabled | type_debug == 'bool'
+    #success_msg: captiveportal_enabled is defined and captiveportal_enabled | type_debug == 'bool'
+
+- name: Install Captive Portal if 'captiveportal_installed' is not defined in {{ iiab_state_file }}    # /etc/iiab/iiab_state.yml
+  include_tasks: install.yml
+  when: captiveportal_installed is undefined
+
+- name: Enable or Disable Captive Portal
+  include_tasks: enable-or-disable.yml
+
+- name: Add 'captiveportal' variable values to {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"
+    section: captiveportal
+    option: "{{ item.option }}"
+    value: "{{ item.value | string }}"
   with_items:
-    - python3-dateutil
-    - python3-jinja2
-
-- name: Create directory /opt/iiab/captiveportal for scripts & templates; set owner to {{ apache_user }}
-  file:
-    path: /opt/iiab/captiveportal
-    state: directory
-    owner: "{{ apache_user }}"
-
-- name: "Install 3 scripts from template: /opt/iiab/captiveportal/checkurls, /usr/sbin/iiab-make-cp-servers.py, /usr/sbin/iiab-divert-to-nginx"
-  template:
-    src: "{{ item.src }}"
-    dest: "{{ item.dest }}"
-    mode: "{{ item.mode }}"
-  with_items:
-    - { src: roles/captiveportal/templates/checkurls, dest: /opt/iiab/captiveportal/, mode: '0644' }
-    - { src: roles/captiveportal/templates/iiab-make-cp-servers.py, dest: /usr/sbin/, mode: '0755' }
-    - { src: roles/captiveportal/templates/iiab-divert-to-nginx, dest: /usr/sbin/, mode: '0755' }
-
-- name: Install /opt/iiab/captiveportal/capture-wsgi.py from template (creates the server)
-  template:
-    src: capture-wsgi.py.j2
-    #src: roles/captiveportal/templates/capture-wsgi.py.j2
-    dest: /opt/iiab/captiveportal/capture-wsgi.py
-    mode: '0755'
-
-- name: Copy files {simple.template, mac.template} into /opt/iiab/captiveportal/
-  copy:
-    src: "{{ item }}"
-    dest: /opt/iiab/captiveportal/
-  with_items:
-    - simple.template
-    #- roles/captiveportal/files/simple.template
-    - mac.template
-    #- roles/captiveportal/files/mac.template
-
-- name: Install uWSGI config file /opt/iiab/captiveportal/captiveportal.ini from template
-  template:
-    src: captiveportal.ini.j2
-    #src: roles/captiveportal/templates/captiveportal.ini.j2
-    dest: /opt/iiab/captiveportal/captiveportal.ini
-
-- name: "Add 'captiveportal_installed: True' to {{ iiab_state_file }}"
-  lineinfile:
-    dest: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
-    regexp: '^captiveportal_installed'
-    line: 'captiveportal_installed: True'
-
-# TO DO: move most/all 7-10 stanzas below into enable-or-disable.yml
-
-- name: Install /etc/systemd/system/uwsgi-captiveportal.service from template
-  template:
-    src: uwsgi-captiveportal.service
-    #src: roles/captiveportal/templates/uwsgi-captiveportal.service
-    dest: /etc/systemd/system/
-
-- name: Restart & Enable 'uwsgi-captiveportal' systemd service (uWSGI server) that responds to browsers trying to detect a Captive Portal
-  systemd:
-    name: uwsgi-captiveportal
-    daemon_reload: yes
-    state: restarted
-    enabled: True
-  when: captiveportal_enabled | bool
-
-- name: Stop & Disable 'uwsgi-captiveportal' systemd service (uWSGI server) if Captive Portal has been disabled
-  systemd:
-    name: uwsgi-captiveportal
-    state: stopped
-    enabled: False
-  when: not captiveportal_enabled
-
-- name: Run iiab-divert-to-nginx to generate diversion lists for NGINX
-  shell: /usr/sbin/iiab-divert-to-nginx
-
-- name: Run iiab-make-cp-servers.py to generate NGINX servers from checkurls input list (creates /etc/nginx/sites-available/capture.conf)
-  command: /usr/sbin/iiab-make-cp-servers.py
-  args:
-    creates: /etc/nginx/sites-available/capture.conf
-
-- name: Symlink /etc/nginx/sites-enabled/capture.conf -> /etc/nginx/sites-available/capture.conf, to enable NGINX to service the sites in checkurls list
-  file:
-    src: /etc/nginx/sites-available/capture.conf
-    path: /etc/nginx/sites-enabled/capture.conf
-    state: link
-  when: captiveportal_enabled | bool
-
-- name: Delete symlink /etc/nginx/sites-enabled/capture.conf, to disable NGINX to location definitions for checkurls
-  file:
-    #src: /etc/nginx/sites-available/capture.conf
-    path: /etc/nginx/sites-enabled/capture.conf
-    state: absent
-  when: not captiveportal_enabled
-
-- name: Make sure dnsmasq is not diverting if not captiveportal_enabled
-  file:
-    path: /etc/dnsmasq.d/capture
-    state: absent
-  when: not captiveportal_enabled
-
-#- name: Restart dnsmasq
-#  systemd:
-#    name: dnsmasq
-#    state: restarted
-#  when: dnsmasq_enabled | bool
-
-# ABOVE DOES NOT WORK ON UBUNTU 16.04 -- what follows is a crude hack (seems to work!)
-
-- name: Stop 'dnsmasq' systemd service
-  systemd:
-    name: dnsmasq
-    state: stopped
-  when: dnsmasq_enabled | bool
-
-- name: Start 'dnsmasq' systemd service
-  systemd:
-    name: dnsmasq
-    state: started
-  when: dnsmasq_enabled | bool
-
-# TO DO: add important captiveportal_* variable values to {{ iiab_ini_file }} =
-# /etc/iiab/iiab.ini at the end of main.yml here, for /usr/bin/iiab-diagnostics
+    - option: name
+      value: Captive Portal
+    - option: description
+      value: '"Captive Portal tries to open the browser automatically, so users don''t have to type in URL''s like http://box.lan in support of kiosk-like situations, in multilingual and less literate communities."'
+    - option: installed
+      value: "{{ captiveportal_install }}"
+    - option: enabled
+      value: "{{ captiveportal_enabled }}"
