@@ -1,30 +1,32 @@
-- name: Install postgresql package
+# TO DO:
+# - Validate input vars postgresql_install & postgresql_enabled
+# - Put ~12 stanzas just below into install.yml
+#   - Triggered by... 'when: postgresql_installed is undefined'
+
+- name: Install 'postgresql' package
   package:
     name: postgresql
     state: present
-  #tags: download
 
-- name: Install postgresql-client (debuntu)
+- name: Install 'postgresql-client' package (debuntu)
   package:
     name: postgresql-client
     state: present
   when: is_debuntu | bool
-  #tags: download
 
-- name: Install postgresql-server (OS's other than debuntu)
+- name: Install 'postgresql-server' package (OS's other than debuntu)
   package:
     name: postgresql-server
     state: present
   when: not is_debuntu
-  #tags: download
 
 - name: Install /etc/systemd/system/postgresql-iiab.service from template
   template:
     src: postgresql-iiab.service
     dest: /etc/systemd/system/postgresql-iiab.service
-    owner: root
-    group: root
-    mode: '0644'
+    # owner: root
+    # group: root
+    # mode: '0644'
 
 - name: Create PostgreSQL data dir /library/pgsql-iiab, owned by postgres:postgres
   file:
@@ -71,26 +73,32 @@
     group: postgres
     mode: '0640'
 
-# Probably Not Nec!  Given stanza below does the same.
-- name: 'Stop postgresql service: /etc/init.d/postgresql stop (debuntu)'
-  command: "/etc/init.d/postgresql stop"
-  ignore_errors: True
-  when: postgresql_install and is_debuntu
+# Likely No Longer Nec!  Given stanza below does the same...
+#- name: 'Stop postgresql service: /etc/init.d/postgresql stop (debuntu)'
+#  command: "/etc/init.d/postgresql stop"
+#  ignore_errors: True
+#  when: postgresql_install and is_debuntu
 
-- name: Disable stock postgresql service
+- name: Disable & Stop stock 'postgresql' systemd service
   systemd:
     name: postgresql
     state: stopped
     enabled: no
 
-- name: Enable & Start postgresql-iiab systemd service, if postgresql_enabled
+- name: "Add 'postgresql_installed: True' to {{ iiab_state_file }}"
+  lineinfile:
+    dest: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
+    regexp: '^postgresql_installed'
+    line: 'postgresql_installed: True'
+
+- name: Enable & Start 'postgresql-iiab' systemd service, if 'postgresql_enabled'
   systemd:
     name: postgresql-iiab
     state: started
     enabled: yes
   when: postgresql_enabled | bool
 
-- name: Disable postgresql-iiab service, if not postgresql_enabled
+- name: Disable 'postgresql-iiab' systemd service, if not 'postgresql_enabled'
   systemd:
     name: postgresql-iiab
     state: stopped
