@@ -1,3 +1,12 @@
+- name: Turn on enabled vars for PostgreSQL
+  set_fact:
+    postgresql_install: True
+    postgresql_enabled: True
+
+- name: POSTGRESQL
+  include_role:
+    name: postgresql
+
 - name: Remove package Pathagar (in case rpm?)
   package:
     name: pathagar
@@ -93,6 +102,8 @@
   service:
     name: postgresql-iiab
     state: started
+    enabled: yes
+ when: pathagar_enabled
 
 - name: Enable Pathagar postgresql user access by md5 method
   lineinfile:
@@ -192,6 +203,15 @@
   systemd:
     name: "{{ apache_service }}"
     state: reloaded
+
+# if the only service using the backend db disable if not running
+- name: Disable postgresql-iiab service when not pathagar_enabled
+  systemd:
+    name: postgresql-iiab
+    state: stopped
+    enabled: no
+  when: not moodle_enabled and not pathagar_enabled
+
 
 - name: Add 'pathagar' variable values to {{ iiab_ini_file }}
   ini_file:
