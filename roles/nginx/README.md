@@ -5,6 +5,8 @@
    Until "Native" NGINX is later implemented for that IIAB App/Service &mdash; allowing it to move up to *Section ii.* below.
 
    And potentially later moving it up to *Section i.* if its Apache support is dropped!
+   
+   (Background: IIAB Apps/Services are generally [Ansible roles](https://github.com/iiab/iiab/wiki/IIAB-Contributors-Guide#ansible) that live in [/opt/iiab/iiab/roles](https://github.com/iiab/iiab/tree/master/roles))
 
 2. Without PHP available via FastCGI, any function at all for PHP-based applications validates NGINX.
 
