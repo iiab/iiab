@@ -1,9 +1,9 @@
-- name: Turn on enabled vars for PostgreSQL
+- name: "Set PostgreSQL vars 'postgresql_install: True' and 'postgresql_enabled: True'"
   set_fact:
     postgresql_install: True
     postgresql_enabled: True
 
-- name: POSTGRESQL
+- name: POSTGRESQL - run the 'postgresql' role
   include_role:
     name: postgresql
 
@@ -12,7 +12,7 @@
     name: pathagar
     state: absent
 
-- name: Install Pathagar prerequisites (all OSs)
+- name: "Install Pathagar prerequisites: python-virtualenv, python-pip, python-psycopg2"
   package:
     name: "{{ item }}"
     state: present
@@ -21,7 +21,7 @@
     - python-pip
     - python-psycopg2
 
-- name: Install Pathagar prerequisites (debuntu)
+- name: "Install Pathagar prerequisites: libapache2-mod-wsgi, libxml2-dev, libxslt-dev (debuntu)"
   package:
     name: "{{ item }}"
     state: present
@@ -31,7 +31,7 @@
     - libxslt-dev
   when: is_debuntu | bool
 
-- name: Install Pathagar prerequisites (not debuntu)
+- name: "Install Pathagar prerequisites: mod_wsgi, libxml2-devel, libxslt-devel (not debuntu)"
   package:
     name: "{{ item }}"
     state: present
@@ -41,21 +41,21 @@
     - libxslt-devel
   when: not is_debuntu
 
-- name: Create destination folder
+- name: "Create destination folder: {{ pathagar_src }}"
   file:
     path: "{{ pathagar_src }}"
     state: directory
-    owner: root
-    group: root
-    mode: 0755
+    # owner: root
+    # group: root
+    # mode: '0755'
 
-- name: Create books destination folder
+- name: "Create books destination folder: {{ pathagar_media }}"
   file:
     path: "{{ pathagar_media }}"
     state: directory
     owner: "{{ apache_user }}"
     group: "{{ apache_user }}"
-    mode: 0755
+    mode: '0755'
 
 - name: Determine if Pathagar has already been downloaded from git
   stat:
@@ -98,8 +98,8 @@
   become: yes
   become_user: postgres
 
-- name: Start postgresql-iiab
-  service:
+- name: Start 'postgresql-iiab' systemd service
+  systemd:
     name: postgresql-iiab
     state: started
     enabled: yes
@@ -117,8 +117,8 @@
     group: postgres
   register: enable_pathagar_md5_access
 
-- name: Reload postgresql service
-  service:
+- name: Reload 'postgresql-iiab' systemd service
+  systemd:
     name: postgresql-iiab
     state: reloaded
   when: enable_pathagar_md5_access.changed
@@ -137,9 +137,9 @@
   template:
     src: prod_settings.py
     dest: "{{ pathagar_src }}/prod_settings.py"
-    owner: root
-    group: root
-    mode: 0644
+    # owner: root
+    # group: root
+    # mode: '0644'
 
 - name: Create Pathagar initial db
   django_manage:
@@ -154,7 +154,7 @@
     dest: "{{ pathagar_dir }}/auth.User.json"
     owner: root
     group: root
-    mode: 0600
+    mode: '0600'
 
 - name: Load Pathagar admin user
   django_manage:
@@ -175,37 +175,37 @@
   template:
     src: wsgi.py
     dest: "{{ pathagar_dir }}/wsgi.py"
-    owner: root
-    group: root
-    mode: 0644
+    # owner: root
+    # group: root
+    # mode: '0644'
 
-- name: Install httpd conf for Pathagar
+- name: Install /etc/{{ apache_config_dir }}/pathagar.conf from template
   template:
     src: pathagar.conf
     backup: yes
     dest: "/etc/{{ apache_config_dir }}/pathagar.conf"
     mode: 0644
 
-- name: Enable Pathagar (debuntu)
+- name: Enable Pathagar via Apache (debuntu)
   file:
     path: /etc/apache2/sites-enabled/pathagar.conf
     src: /etc/apache2/sites-available/pathagar.conf
     state: link
   when: pathagar_enabled and is_debuntu
 
-- name: Disable Pathagar (debuntu)
+- name: Disable Pathagar via Apache (debuntu)
   file:
     path: /etc/apache2/sites-enabled/pathagar.conf
     state: absent
   when: not pathagar_enabled and is_debuntu
 
-- name: Reload Apache ({{ apache_service }})
+- name: Reload '{{ apache_service }}' systemd service
   systemd:
     name: "{{ apache_service }}"
     state: reloaded
 
 # if the only service using the backend db disable if not running
-- name: Disable postgresql-iiab service when not pathagar_enabled
+- name: Disable 'postgresql-iiab' systemd service, if not moodle_enabled and not pathagar_enabled
   systemd:
     name: postgresql-iiab
     state: stopped
