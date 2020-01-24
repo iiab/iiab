@@ -33,9 +33,27 @@
   setup:
     filter: ansible_local
 
-# 2020-01-21: checks 46+46 vars...for now...expect validate_vars.yml to change!
-- name: Pre-check that IIAB's "XYZ_install" + "XYZ_enabled" vars (1) are defined, (2) are boolean-not-string variables, and (3) contain plausible values
+- name: Pre-check that IIAB's "XYZ_install" + "XYZ_enabled" vars (1) are defined, (2) are boolean-not-string variables, and (3) contain plausible values.  Also checks that "XYZ_install" is True when "XYZ_installed" is defined.
   include_tasks: validate_vars.yml
+
+# SEE: https://github.com/iiab/iiab/blob/master/roles/nginx/README.md
+- name: "apache_install is currently '{{ apache_install }}' and apache_enabled is currently '{{ apache_enabled }}'.  Now let's set 'apache_install: True' and 'apache_enabled: True' if NGINX is set not to be enabled OR if any of {DokuWiki, Elgg, Lokole, Moodle, Nextcloud, Node-RED} are set to install."
+  set_fact:
+    apache_install: True
+    apache_enabled: True
+  when: not nginx_enabled or dokuwiki_install or elgg_install or lokole_install or moodle_install or nextcloud_install or nodered_install
+#
+#- name: "Verify 'apache_install: True' and 'apache_enabled: True' if any of {DokuWiki, Elgg, Lokole, Moodle, Nextcloud, Node-RED} are set to install"
+#  assert:
+#    that: apache_install and apache_enabled or not (dokuwiki_install or elgg_install or lokole_install or moodle_install or nextcloud_install or nodered_install)
+#    fail_msg: "PLEASE CONFIRM 'apache_install: True' AND 'apache_enable: True' IF YOU'RE TRYING TO INSTALL ANY OF {dokuwiki, elgg, lokole, moodle, nextcloud, nodered} e.g. IN: /etc/iiab/local_vars.yml"
+#    quiet: yes
+#
+#- name: "Verify 'apache_install: True' and 'apache_enabled: True' if 'nginx_enabled: False' -- e.g. for Apache testing of older playbooks lacking full NGINX support"
+#  assert:
+#    that: apache_install and apache_enabled or nginx_enabled
+#    fail_msg: "PLEASE CONFIRM 'apache_install: True' AND 'apache_enable: True' IF 'nginx_enabled: False' e.g. IN: /etc/iiab/local_vars.yml"
+#    quiet: yes
 
 - name: Set top-level variables from local_facts for convenience
   set_fact:
@@ -47,8 +65,8 @@
   set_fact:
     rpi_model: "rpi"
     is_rpi: True
-#      no_net_restart: True
-#      nobridge: True
+    #no_net_restart: True
+    #nobridge: True
   when: ansible_local.local_facts.os == "raspbian"
 
 - name: Set exFAT_enabled if xo_model != "none"
@@ -78,11 +96,11 @@
   get_url:
     url: "{{ iiab_download_url }}/heart-beat.txt"
     dest: /tmp/heart-beat.txt
-    # timeout: "{{ download_timeout }}"
+    #timeout: "{{ download_timeout }}"
     # @jvonau recommends: 100sec is too much (keep 10sec default)
   ignore_errors: True
-# async: 10
-# poll: 2
+  #async: 10
+  #poll: 2
   register: internet_access_test
 
 - name: Set internet_available if download succeeded and not disregard_network
@@ -109,12 +127,6 @@
     gui_port: 443
   when: adm_cons_force_ssl | bool
 
-# SEE: https://github.com/iiab/iiab/blob/master/roles/nginx/README.md
-- name: "Set 'apache_enabled: True' if any of {DokuWiki, Elgg, Lokole, Moodle, Nextcloud, Node-RED} are set to install"
-  set_fact:
-    apache_enabled: True
-  when: dokuwiki_install or elgg_install or lokole_install or moodle_install or nextcloud_install or nodered_install
-
 - name: Turn on both vars for MySQL (mandatory in Stage 3!)
   set_fact:
     mysql_install: True
@@ -122,19 +134,6 @@
 
 # We decided to enable mysql unconditionally.
 #  when: elgg_enabled or rachel_enabled or owncloud_enabled or phpmyadmin_enabled or wordpress_enabled or iiab_menu_install
-
-# There might be other db's
-- name: Turn on both vars for PostgreSQL if moodle_enabled or pathagar_enabled
-  set_fact:
-    postgresql_install: True
-    postgresql_enabled: True
-  when: moodle_enabled or (pathagar_enabled is defined and pathagar_enabled)
-
-#- name: Turn on vars for Docker if SchoolTool is to be installed
-#  set_fact:
-#    docker_install: True
-#    docker_enabled: True
-#  when: schooltool_enabled or schooltool_install
 
 - name: "Set python_path: /lib/python2.7/site-packages/ (redhat)"
   set_fact:
