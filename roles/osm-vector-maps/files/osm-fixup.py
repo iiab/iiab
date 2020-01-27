@@ -19,7 +19,7 @@ if len(sys.argv) != 3:
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Assemble Resources for Maps.")
-    parser.add_argument("region", help="Looked up in regions.json.")
+    parser.add_argument("map_url", help="The 'detail_url' field in regions.json.")
     parser.add_argument("configdir", help="Place to look for cmdsrv.conf")
     return parser.parse_args()
 
@@ -51,8 +51,11 @@ def main():
          sys.exit(1)
    config = inp['cmdsrv_conf']      
    get_regions()
-   if not args.region in regions_json.keys():
-      print('Region not found: %s'%args.region)
+   found_region = ''
+   for region in regions_json.keys():
+      if reions_json[region]['detail_url'] == args.map_url: found = True
+   if found_region == '':
+      print('Download URL not found: %s'%args.map_url)
       sys.exit(1)
 
    osm_tile = config['maps_working_dir'] + str(os.path.basename(config['maps_osm_url']))
@@ -74,10 +77,10 @@ def main():
 
    # create init.json which sets initial coords and zoom
    init = {}
-   init['region'] = args.region
-   init['zoom'] = regions_json[args.region]['zoom'] 
-   init['center_lon'] = regions_json[args.region]['center_lon'] 
-   init['center_lat'] = regions_json[args.region]['center_lat'] 
+   init['region'] = found_region
+   init['zoom'] = regions_json[found_region]['zoom'] 
+   init['center_lon'] = regions_json[found_region]['center_lon'] 
+   init['center_lat'] = regions_json[found_region]['center_lat'] 
    init_fn = viewer_path + '/init.json'
    with open(init_fn,'w') as init_fp:
       init_fp.write(json.dumps(init,indent=2))
