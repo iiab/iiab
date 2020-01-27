@@ -2,7 +2,7 @@
 global $config;
 $config['serverTitle'] = 'Maps hosted with TileServer-php v2.0';
 $config['availableFormats'] = array('png', 'jpg', 'jpeg', 'gif', 'webp', 'pbf', 'hybrid');
-$config['dataRoot'] = '/library/www/osm-vector-maps/viewer/tiles/';
+$config['dataRoot'] = '/hd/library/www/osm-vector-maps/viewer/tiles/';
 $config['baseUrls'] = array('');
 $config['protocol'] = 'http';
 
