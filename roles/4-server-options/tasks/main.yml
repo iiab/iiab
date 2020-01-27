@@ -22,10 +22,12 @@
   include_tasks: roles/network/tasks/squid.yml
   when: squid_install | bool
 
-- name: Install Bluetooth - only on Raspberry Pi
+- name: Enable/Disable sshd daemon
   include_role:
-    name: bluetooth
-  when: is_rpi and bluetooth_install    # or bluetooth_installed is defined
+    name: sshd
+
+- name: Install iiab python files
+  include_tasks: roles/2-common/tasks/pylib.yml
 
 - name: USB-LIB
   include_role:
@@ -34,24 +36,28 @@
 
 # This is in Stage 4-SERVER-OPTIONS (rather than 3-BASE-SERVER) because var
 # iiab_home_url changes, and may need to be re-run in the field/offline/etc.
-- name: HOMEPAGE
+- name: HOMEPAGE under Apache
   include_role:
     name: homepage
-  # has no "when: XXXXX_install" flag
+  when: not nginx_enabled
 
-- name: CUPS
+- name: Configure Apache systemd service ({{ apache_service }})
   include_role:
-    name: cups
-  when: cups_install    # or cups_installed is defined
+    name: httpd-enable
+  when: apache_enabled | bool
 
-- name: SAMBA
+- name: Configure NGINX
   include_role:
-    name: samba
-  when: samba_install    # or samba_installed is defined
+    name: nginx
+
+- name: OSM-VECTOR-MAPS
+  include_role:
+    name: osm-vector-maps
+  when: osm_vector_maps_install | bool
 
 - name: Run /usr/bin/iiab-refresh-wiki-docs (scraper script) to create http://box/info offline documentation.  (This script was installed at the beginning of Stage 3 = roles/3-base-server/tasks/main.yml, which ran Apache playbook = roles/httpd/tasks/main.yml)
   command: /usr/bin/iiab-refresh-wiki-docs
-  when: internet_available and not nodocs
+  when: internet_available and not nodocs and iiab_stage | int < 4
 
 - name: Recording STAGE 4 HAS COMPLETED ==================
   lineinfile:
