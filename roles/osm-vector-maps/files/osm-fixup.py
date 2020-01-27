@@ -59,33 +59,18 @@ def main():
    sat_tile = config['maps_working_dir'] + str(os.path.basename(config['maps_sat_url']))
    for found in glob.glob(config['maps_working_dir'] + '/*'):
       if found == osm_tile:
-         if os.path.isfile(config['maps_viewer_dir'] + os.path.basename(osm_tile)):
-            os.remove(config['maps_viewer_dir'] + os.path.basename(osm_tile))
-         shutil.move(osm_tile,config['maps_viewer_dir'])
-         src = '%s/%s'%(viewer_path,os.path.basename(osm_tile))
-         dest = '%s/%s'%(viewer_path,'osm_planet.mbtiles')
-         if os.path.islink(dest):
-            os.unlink(dest)
-         os.symlink(src,dest)
+         if os.path.isfile(config['maps_downloads_dir'] + os.path.basename(osm_tile)):
+            os.remove(config['maps_downloads_dir'] + os.path.basename(osm_tile))
+         shutil.move(osm_tile,config['maps_downloads_dir'])
       elif found == sat_tile:
-         if os.path.isfile(config['maps_viewer_dir'] + os.path.basename(sat_tile)):
-            os.remove(config['maps_viewer_dir'] + os.path.basename(sat_tile))
-         shutil.move(sat_tile,config['maps_viewer_dir'])
-         src = '%s/%s'%(viewer_path,os.path.basename(sat_tile))
-         dest = '%s/%s'%(viewer_path,'satellite.mbtiles')
-         if os.path.islink(dest):
-            os.unlink(dest)
-         os.symlink(src,dest)
+         if os.path.isfile(config['maps_downloads_dir'] + os.path.basename(sat_tile)):
+            os.remove(config['maps_downloads_dir'] + os.path.basename(sat_tile))
+         shutil.move(sat_tile,config['maps_downloads_dir'])
       else:
          if os.path.isfile(config['maps_viewer_dir'] + 'tiles/' + os.path.basename(found)):
             os.remove(config['maps_viewer_dir'] + 'tiles/' + os.path.basename(found))
          shutil.move(found,config['maps_viewer_dir'] + 'tiles')
 
-   src = '%s/tiles/%s'%(viewer_path,os.path.basename(regions_json[args.region]['detail_url']))
-   dest = '%s/%s'%(viewer_path,'detail.mbtiles')
-   if os.path.islink(dest):
-      os.unlink(dest)
-   os.symlink(src,dest)
 
    # create init.json which sets initial coords and zoom
    init = {}
