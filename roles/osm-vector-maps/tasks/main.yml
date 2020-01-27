@@ -1,16 +1,35 @@
-- name: Install osm-vector-maps
+# "How do i fail a task in Ansible if the variable contains a boolean value?
+# I want to perform input validation for Ansible playbooks"
+# https://stackoverflow.com/questions/46664127/how-do-i-fail-a-task-in-ansible-if-the-variable-contains-a-boolean-value-i-want/46667499#46667499
+
+# We assume 0-init/tasks/validate_vars.yml has DEFINITELY been run, so no need
+# to re-check whether vars are defined here.  As Ansible vars cannot be unset:
+# https://serverfault.com/questions/856729/how-to-destroy-delete-unset-a-variable-value-in-ansible
+
+- name: Assert that "osm_vector_maps_install is sameas true" (boolean not string etc)
+  assert:
+    that: osm_vector_maps_install is sameas true
+    fail_msg: "PLEASE SET 'osm_vector_maps_install: True' e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+
+- name: Assert that "osm_vector_maps_enabled | type_debug == 'bool'" (boolean not string etc)
+  assert:
+    that: osm_vector_maps_enabled | type_debug == 'bool'
+    fail_msg: "PLEASE GIVE VARIABLE 'osm_vector_maps_enabled' A PROPER (UNQUOTED) BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+
+
+- name: Install OSM Vector Maps if 'osm_vector_maps_installed' is not defined in {{ iiab_state_file }}    # /etc/iiab/iiab_state.yml
   include_tasks: install.yml
   when: osm_vector_maps_installed is undefined
 
-- name: Install git repo copies of needed files
-  include_tasks: enable-or-disable.yml
 
-- name: Setup NGINX
+#- name: Install countries.json, map_functions.js, index.html under-or-in {{ vector_map_path }}/maplist    # /library/www/osm-vector-maps
+#  include_tasks: enable-or-disable.yml
+
+- name: Enable/Disable/Reload NGINX for OSM, if nginx_enabled
   include_tasks: nginx.yml
-  when: nginx_enabled
+  when: nginx_enabled | bool
 
-# This depends on iiab-admin-console which is not yet installed
-#- name: Run the script that does osm-vector-maps housekeeping
-#  shell: /usr/bin/iiab-update-map
 
-# iiab.ini?
+# TO DO: write important vars to /etc/iiab/iiab.ini
