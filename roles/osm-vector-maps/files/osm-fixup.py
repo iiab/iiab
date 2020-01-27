@@ -58,17 +58,22 @@ def main():
                 os.remove(CONST.maps_viewer_dir + 'tiles/' + os.path.basename(present))
             shutil.move(present,CONST.maps_viewer_dir + 'tiles')
 
+   osm_tile = config['maps_working_dir'] + str(os.path.basename(config['maps_osm_url']))
+   sat_tile = config['maps_working_dir'] + str(os.path.basename(config['maps_sat_url']))
+   for found in glob.glob(config['maps_working_dir'] + '/*'):
+      if found == osm_tile:
+         if os.path.isfile(config['maps_downloads_dir'] + os.path.basename(osm_tile)):
+            os.remove(config['maps_downloads_dir'] + os.path.basename(osm_tile))
+         shutil.move(osm_tile,config['maps_downloads_dir'])
+      elif found == sat_tile:
+         if os.path.isfile(config['maps_downloads_dir'] + os.path.basename(sat_tile)):
+            os.remove(config['maps_downloads_dir'] + os.path.basename(sat_tile))
+         shutil.move(sat_tile,config['maps_downloads_dir'])
+      else:
+         if os.path.isfile(config['maps_viewer_dir'] + 'tiles/' + os.path.basename(found)):
+            os.remove(config['maps_viewer_dir'] + 'tiles/' + os.path.basename(found))
+         shutil.move(found,config['maps_viewer_dir'] + 'tiles')
 
-    # create init.json which sets initial coords and zoom
-    init = {}
-    map = catalog[args.map_url]
-    init['region'] = map['region']
-    init['zoom'] = map['zoom'] 
-    init['center_lon'] = map['center_lon'] 
-    init['center_lat'] = map['center_lat'] 
-    init_fn = viewer_path + '/init.json'
-    with open(init_fn,'w') as init_fp:
-        init_fp.write(json.dumps(init,indent=2))
 
     try:
       adm.subproc_run("iiab-update-map", shell=True)
