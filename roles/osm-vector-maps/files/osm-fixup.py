@@ -46,7 +46,7 @@ def main():
    get_regions()
    found_region = ''
    for region in regions_json.keys():
-      if regions_json[region]['detail_url'] == args.map_url: found = True
+      if regions_json[region]['detail_url'] == args.map_url: found_region = region
    if found_region == '':
       print('Download URL not found: %s'%args.map_url)
       sys.exit(1)
