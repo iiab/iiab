@@ -1,17 +1,44 @@
-0. INSTALL / ASSERT PREREQS
+0. ATTEMPT INSTALL-THEN-ASSERT OF (1) HARD PREREQ Node.js (2) SOFT PREREQ MongoDB 
 
-- name: MONGODB - run the 'mongodb' role
-  include_role:
-    name: mongodb
+- set_fact:
+    nodejs_install: True
+    nodejs_enabled: True
 
 - name: NODEJS - run the 'nodejs' role
   include_role:
     name: nodejs
 
-- name: FAIL (STOP INSTALLING) IF nodejs_version is not set to 12.x
+- name: FAIL (STOP THE INSTALL) IF nodejs_installed is undefined
   fail:
-    msg: "Sugarizer install cannot proceed, as it currently requires Node.js 12.x, and your nodejs_version is set to {{ nodejs_version }}.  Please check the value of nodejs_version in /opt/iiab/iiab/vars/default_vars.yml and possibly also /etc/iiab/local_vars.yml"
-  when: sugarizer_install and (nodejs_version != "12.x")
+    msg: "Sugarizer install cannot proceed, as Node.js failed to install."
+  when: nodejs_installed is undefined
+
+- name: FAIL (STOP THE INSTALL) IF nodejs_version != "12.x"
+  fail:
+    msg: "Sugarizer install cannot proceed, as it currently requires Node.js 12.x, and your nodejs_version appears to be {{ nodejs_version }}.  Please check the value of nodejs_version in /opt/iiab/iiab/vars/default_vars.yml, /etc/iiab/local_vars.yml, /opt/iiab/iiab/roles/nodejs, etc!"
+  when: nodejs_version != "12.x"
+
+- set_fact:
+    mongodb_install: True
+    mongodb_enabled: True
+
+- name: MONGODB - run the 'mongodb' role
+  include_role:
+    name: mongodb
+
+# 2020-01-29: FOR NOW LET'S TRY A VERY SOFT (BEST EFFORT) PREREQ, AS Sugarizer
+# TRADITIONALLY CAN WORK (?) EVEN WITHOUT MongoDB.  IF LATER WE INSTEAD WANT TO
+# ENFORCE MongoDB...AS A MEDIUM-STRENGTH PREREQ...OR AS A HARD (STRICT) PREREQ
+# ...THEN UNCOMMENT EITHER BELOW:
+#
+#- name: EXIT SUGARIZER PLAYBOOK (BUT CONTINUE INSTALLING IIAB) IF mongodb_installed is undefined
+#  meta: end_play
+#  when: mongodb_installed is undefined
+#
+#- name: FAIL (STOP THE INSTALL) IF mongodb_installed is undefined
+#  fail:
+#    msg: "Sugarizer install cannot proceed, as MongoDB failed to install."
+#  when: mongodb_installed is undefined
 
 
 # 1. DOWNLOAD+LINK /opt/iiab/sugarizer
