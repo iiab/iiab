@@ -1,20 +1,33 @@
-# administer this service by browsing to localhost:631
+# Administer CUPS at http://box:631
+# Above URL does NOT work over OpenVPN (ANYONE KNOW WHY?)
+
+# TO DO:
+# - validate input vars + prereqs
+# - move 5 top stanzas into install.yml
+# - move 5-7 next stanzas into enable-or-disable.yml
+
+
 - name: Install 'cups' package
   package:
     name: cups
     state: present
-  when: cups_install | bool
-  #tags: download
 
 - name: Install our own /etc/cups/cupsd.conf from template, to permit local LAN admin
   template:
     src: cupsd.conf
     dest: /etc/cups/cupsd.conf
 
-- name: Install /etc/{{ apache_config_dir }}/cups.conf from template
+- name: Install /etc/{{ apache_conf_dir }}/cups.conf from template
   template:
     src: cups.conf
-    dest: "/etc/{{ apache_config_dir }}/"
+    dest: "/etc/{{ apache_conf_dir }}/"
+
+
+# RECORD CUPS AS INSTALLED
+
+- name: "Set 'cups_installed: True'"
+  set_fact:
+    cups_installed: True
 
 - name: "Add 'cups_installed: True' to {{ iiab_state_file }}"
   lineinfile:
@@ -22,11 +35,16 @@
     regexp: '^cups_installed'
     line: 'cups_installed: True'
 
+
 - name: Enable http://box/cups via Apache (MIGHT NOT WORK?)
   command: a2ensite cups.conf
-  when: cups_enabled
+  when: cups_enabled | bool
 
-- name: Enable & Start services 'cups' and 'cups-browsed' (OS's other than Fedora 18)
+- name: Disable http://box/cups via Apache
+  command: a2dissite cups.conf
+  when: not cups_enabled
+
+- name: Enable & Start 'cups' and 'cups-browsed' systemd services (OS's other than Fedora 18)
   service:
     name: "{{ item }}"
     state: started
@@ -36,33 +54,34 @@
     - cups-browsed
   when: cups_enabled and not is_F18
 
-- name: Enable & Start service 'cups' (Fedora 18, for XO laptops)
+- name: Enable & Start 'cups' systemd service (Fedora 18, for XO laptops)
   systemd:
     name: cups
     state: started
     enabled: yes
   when: cups_enabled and is_F18
 
-- name: Permit headless admin of CUPS -- only works when CUPS daemon is running
+- name: Permit headless admin of CUPS -- only works when CUPS daemon is running, if cups_enabled
   shell: "cupsctl --remote-admin"
   when: cups_enabled | bool
 
-- name: Disable both CUPS services (OS's other than Fedora 18)
+- name: Disable & Stop 'cups' & 'cups-browsed' systemd services (OS's other than Fedora 18)
   systemd:
     name: "{{ item }}"
-    state: stopped
     enabled: no
+    state: stopped
   with_items:
     - cups
     - cups-browsed
   when: not cups_enabled and not is_F18
 
-- name: Disable services for CUPS (Fedora 18, for XO laptops)
+- name: Disable & Stop 'cups' systemd service (Fedora 18, for XO laptops)
   systemd:
     name: cups
-    state: stopped
     enabled: no
+    state: stopped
   when: not cups_enabled and is_F18
+
 
 - name: Add 'cups' variable values to {{ iiab_ini_file }}
   ini_file:
@@ -75,7 +94,7 @@
       value: CUPS
     - option: description
       value: '"CUPS (Common UNIX Printing System) is a modular printing system that allows a computer to act as a print server.  A computer running CUPS is a host that can accept print jobs from client computers, process them, and send them to the appropriate printer."'
-    - option: installed
+    - option: install
       value: "{{ cups_install }}"
-    - option: cups_enabled
+    - option: enabled
       value: "{{ cups_enabled }}"
