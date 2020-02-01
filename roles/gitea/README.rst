@@ -2,7 +2,7 @@
 Gitea README
 ============
 
-This Ansible role installs Gitea - a self-hosted Git service written in Go.
+This Ansible role installs Gitea — a self-hosted Git service written in Go.
 
 Using It
 --------
