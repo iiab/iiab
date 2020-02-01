@@ -30,7 +30,7 @@ import json
 
 # GLOBALS
 viewer_path = '/library/www/osm-vector-maps/viewer'
-region_path = '/etc/iiab'
+catalog_path = '/etc/iiab'
 
 if len(sys.argv) != 3:
    print("Argument 1=map_url, 2=<location or cmdsrv.conf>")
@@ -38,7 +38,7 @@ if len(sys.argv) != 3:
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Assemble Resources for Maps.")
-    parser.add_argument("map_url", help="The 'detail_url' field in regions.json.")
+    parser.add_argument("map_url", help="The 'detail_url' field in mapcatalog.json.")
     parser.add_argument("configdir", help="Place to look for cmdsrv.conf")
     return parser.parse_args()
 
@@ -46,10 +46,10 @@ def main():
     global map_catalog
     args = parse_args()
     map_catalog = adm.get_map_catalog()
-    regions = map_catalog['regions']
-    found_region = adm.get_region_from_tile(args.map_url)
-    if found_region == '':
-        print('Download URL not found in regions.json: %s'%args.map_url)
+    catalog = map_catalog['maps']
+    found_map = catalog.get(args.map_url,'')
+    if found_map == '':
+        print('Download URL not found in map-catalog.json: %s'%args.map_url)
         sys.exit(1)
 
     osm_tile = CONST.maps_working_dir + str(os.path.basename(CONST.maps_osm_url))
@@ -71,10 +71,11 @@ def main():
 
     # create init.json which sets initial coords and zoom
     init = {}
-    init['region'] = found_region
-    init['zoom'] = regions[found_region]['zoom'] 
-    init['center_lon'] = regions[found_region]['center_lon'] 
-    init['center_lat'] = regions[found_region]['center_lat'] 
+    map = catalog[args.map_url]
+    init['region'] = map['region']
+    init['zoom'] = map['zoom'] 
+    init['center_lon'] = map['center_lon'] 
+    init['center_lat'] = map['center_lat'] 
     init_fn = viewer_path + '/init.json'
     with open(init_fn,'w') as init_fp:
         init_fp.write(json.dumps(init,indent=2))
@@ -88,8 +89,7 @@ def main():
     adm.write_vector_map_idx(installed_tiles)
 
     # For installed regions, check that a menu def exists, and it's on home page
-    for fname in installed_tiles:
-        region = adm.get_region_from_tile(fname)
+    for map in installed_tiles:
         '''
         if region == 'maplist': # it is the splash page, display only if no others
             menu_item_name = 'en-map_test'
@@ -97,18 +97,18 @@ def main():
             if len(installed_maps) == 1:
                 adm.update_menu_json(menu_item_name)
                 return
-        elif region not in adm.map_catalog['regions']:
+        elif region not in adm.map_catalog['maps']:
         '''
-        if region not in adm.map_catalog['regions'].keys():
-            print("Skipping unknown map " + fname)
+        if map not in adm.map_catalog['maps'].keys():
+            print("Skipping unknown map " + map)
             continue
         else:
-            map_item = adm.map_catalog['regions'][region]
+            map_item = adm.map_catalog['maps'][map]
             menu_item_name = map_item['perma_ref']
 
             if not (menu_item_name in map_menu_def_list):
                 print('Creating menu def for %s'%menu_item_name)
-                adm.create_map_menu_def(region, menu_item_name, map_item)
+                adm.create_map_menu_def(map, menu_item_name, map_item)
         # if autoupdate allowed and this is a new region then add to home menu
         if adm.fetch_menu_json_value('autoupdate_menu') and menu_item_name not in previous_idx:
             print('Auto-update of menu items is enabled. Adding %s'%region)
