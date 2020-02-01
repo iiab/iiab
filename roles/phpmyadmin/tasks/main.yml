@@ -45,6 +45,19 @@
 #   #  recurse: yes
 #   #  state: directory
 
+- name: Install /etc/{{ apache_conf_dir }}/phpmyadmin.conf from template, if phpmyadmin_enabled
+  template:
+    src: phpmyadmin.j2
+    dest: "/etc/{{ apache_conf_dir }}/phpmyadmin.conf"
+  when: apache_install | bool
+
+
+# RECORD phpMyAdmin AS INSTALLED
+
+- name: "Set 'phpmyadmin_installed: True'"
+  set_fact:
+    phpmyadmin_installed: True
+
 - name: "Add 'phpmyadmin_installed: True' to {{ iiab_state_file }}"
   lineinfile:
     dest: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
@@ -52,24 +65,13 @@
     line: 'phpmyadmin_installed: True'
 
 
-- name: Install /etc/{{ apache_config_dir }}/phpmyadmin.conf from template, if phpmyadmin_enabled
-  template:
-    src: phpmyadmin.j2
-    dest: "/etc/{{ apache_config_dir }}/phpmyadmin.conf"
-  when: phpmyadmin_enabled | bool
+- name: Enable phpMyAdmin via Apache, if phpmyadmin_enabled
+  command: a2ensite phpmyadmin.conf
+  when: apache_install and phpmyadmin_enabled
 
-- name: Create symlink phpmyadmin.conf from sites-enabled to sites-available (debuntu)
-  file:
-    src: /etc/apache2/sites-available/phpmyadmin.conf
-    path: /etc/apache2/sites-enabled/phpmyadmin.conf
-    state: link
-  when: phpmyadmin_enabled and is_debuntu
-
-- name: Remove /etc/apache2/sites-enabled/phpmyadmin.conf, if not phpmyadmin_enabled (debuntu)
-  file:
-    path: /etc/apache2/sites-enabled/phpmyadmin.conf
-    state: absent
-  when: not phpmyadmin_enabled and is_debuntu
+- name: Disable phpMyAdmin via Apache, if not phpmyadmin_enabled
+  command: a2dissite phpmyadmin.conf
+  when: apache_install and not phpmyadmin_enabled
 
 
 - name: Add 'phpmyadmin' variable values to {{ iiab_ini_file }}

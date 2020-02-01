@@ -1,10 +1,33 @@
 # 2019-01-16: @jvonau's PR #1403 moved installation of Node.js (8.x for now) &
 # npm to roles/nodejs/tasks/main.yml
 
+- debug:
+    var: nodejs_install
+- debug:
+    var: nodejs_enabled
+- debug:
+    var: nodejs_installed
+
+- name: "Set 'nodejs_install: True' and 'nodejs_enabled: True'"
+  set_fact:
+    nodejs_install: True
+    nodejs_enabled: True
+
+# 2020-01-04 no longer triggered by roles/nodered/meta/main.yml
 - name: NODEJS - run the 'nodejs' role
   include_role:
     name: nodejs
-# 2020-01-04 no longer triggered by roles/nodered/meta/main.yml
+
+- name: FAIL (STOP THE INSTALL) IF nodejs_installed is undefined
+  fail:
+    msg: "Sugarizer install cannot proceed, as Node.js failed to install."
+  when: nodejs_installed is undefined
+
+- name: FAIL (STOP THE INSTALL) IF nodejs_version != "12.x"
+  fail:
+    msg: "Sugarizer install cannot proceed, as it currently requires Node.js 12.x, and your nodejs_version appears to be {{ nodejs_version }}.  Please check the value of nodejs_version in /opt/iiab/iiab/vars/default_vars.yml, /etc/iiab/local_vars.yml, /opt/iiab/iiab/roles/nodejs, etc!"
+  when: nodejs_version != "12.x"
+
 
 # BRUTAL but ensures consistency across OS's / distros like Raspbian Desktop &
 # Ubermix that often include an older version of Node-RED.  Brutal, as this
@@ -85,11 +108,11 @@
     dest: /etc/systemd/system/nodered.service
     # mode: '0666'
 
-- name: Install /etc/{{ apache_config_dir }}/nodered.conf from template
+- name: Install /etc/{{ apache_conf_dir }}/nodered.conf from template
   template:
     backup: yes
     src: nodered.conf.j2
-    dest: "/etc/{{ apache_config_dir }}/nodered.conf"
+    dest: "/etc/{{ apache_conf_dir }}/nodered.conf"
     # mode: '0666'
 
 # SEE ALSO THE apache2_module SECTION IN roles/httpd/tasks/main.yml
@@ -97,6 +120,13 @@
   apache2_module:
     state: present
     name: proxy_wstunnel
+
+
+# RECORD Node-RED AS INSTALLED
+
+- name: "Set 'nodered_installed: True'"
+  set_fact:
+    nodered_installed: True
 
 - name: "Add 'nodered_installed: True' to {{ iiab_state_file }}"
   lineinfile:

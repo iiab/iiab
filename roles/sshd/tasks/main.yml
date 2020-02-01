@@ -2,25 +2,24 @@
   package:
     name: "{{ sshd_package }}"
     state: present
-  when: sshd_enabled | bool
 
-- name: Disable root login with password
+- name: Disable password-based logins to root
   lineinfile:
     dest: /etc/ssh/sshd_config
     regexp: '^PermitRootLogin'
     line: 'PermitRootLogin without-password'
     state: present
-  when: sshd_enabled | bool
+  #when: sshd_enabled | bool
 #TODO: use handler to reload ssh
 
-- name: Create root .ssh
+- name: mkdir /root/.ssh
   file:
+    state: directory
     path: /root/.ssh
     owner: root
     group: root
-    mode: 0700
-    state: directory
-  when: sshd_enabled | bool
+    mode: '0700'
+  #when: sshd_enabled | bool
 
 - name: Install dummy root keys as placeholder
   copy:
@@ -28,19 +27,34 @@
     dest: /root/.ssh/authorized_keys
     owner: root
     group: root
-    mode: 0600
+    mode: '0600'
     force: no
-  when: sshd_enabled | bool
+  #when: sshd_enabled | bool
 
-- name: Enable & start ssh daemon
-  service:
+
+# RECORD sshd AS INSTALLED
+
+- name: "Set 'sshd_installed: True'"
+  set_fact:
+    sshd_installed: True
+
+- name: "Add 'sshd_installed: True' to {{ iiab_state_file }}"
+  lineinfile:
+    dest: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
+    regexp: '^sshd_installed'
+    line: 'sshd_installed: True'
+
+
+- name: Enable & Start ssh daemon ({{ sshd_service }}) if sshd_enabled
+  systemd:
     name: "{{ sshd_service }}"
+    daemon_reload: yes
     enabled: yes
     state: started
   when: sshd_enabled | bool
 
-- name: Disable ssh daemon
-  service:
+- name: Disable & Stop ssh daemon ({{ sshd_service }}) if not sshd_enabled
+  systemd:
     name: "{{ sshd_service }}"
     enabled: no
     state: stopped
