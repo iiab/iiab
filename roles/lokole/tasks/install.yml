@@ -1,35 +1,24 @@
 # Lokole PDF (User's Guide) gets copied for offline use (http://box/info) here:
-# https://github.com/iiab/iiab/blob/master/roles/httpd/templates/refresh-wiki-docs.sh#L47
+# https://github.com/iiab/iiab/blob/master/roles/httpd/templates/refresh-wiki-docs.sh#L51-L52
 
-- name: "Install 7 packages for Lokole: python3, python3-pip, python3-venv, python3-dev, libffi-dev, libssl-dev, python3-bcrypt"
+- name: "Install 8 packages for Lokole: python3, python3-pip, python3-venv, python3-dev, python3-bcrypt, libffi-dev, libssl-dev, libopenjp2-7"
   apt:
     name:
       - python3
       - python3-pip
       - python3-venv
       - python3-dev
+      - python3-bcrypt    # 2019-10-14: Should work across modern Linux OS's
+      #- bcrypt does not exist on Ubuntu 19.10
       - libffi-dev
       - libssl-dev
-      #- bcrypt does not exist on Ubuntu 19.10
-      - python3-bcrypt    # 2019-10-14: should work across modern Linux OS's
+      - libopenjp2-7    # 2020-02-01: To solve bug #2221
     state: present
-
-- name: pip install opwen_email_client (Lokole) {{ lokole_version }} from PyPI to {{ lokole_venv }}
-  pip:
-    name: opwen_email_client
-    version: "{{ lokole_version }}"
-    virtualenv: "{{ lokole_venv }}"
-    virtualenv_command: python3 -m venv "{{ lokole_venv }}"
-    extra_args: --no-cache-dir    # To avoid caching issues e.g. soon after new releases hit https://pypi.org/project/opwen-email-client/
-  when:
-    - internet_available | bool
-    - lokole_commit is undefined
 
 # For development purposes -- To install Lokole from a given commit, add the
 # following line to roles/lokole/defaults/main.yml:
-# 
 # lokole_commit: <git_commit_id>
-- name: pip install opwen_email_client (Lokole) from git commit {{ lokole_commit }} (for development purposes)
+- name: "OPTIONAL: pip install opwen_email_client (Lokole, git commit {{ lokole_commit }}) from GitHub to {{ lokole_venv }}, if lokole_commit is defined"
   pip:
     name: "git+https://github.com/ascoderu/opwen-webapp.git@{{ lokole_commit }}#egg=opwen_email_client"
     virtualenv: "{{ lokole_venv }}"
@@ -39,6 +28,30 @@
     - internet_available | bool
     - lokole_commit is defined
 
+# For development purposes -- To install a given pip version of Lokole, add
+# the following line to roles/lokole/defaults/main.yml:
+# lokole_version: <git_version_number>
+- name: "OPTIONAL: pip install opwen_email_client (Lokole, version {{ lokole_version }}) from PyPI to {{ lokole_venv }}, if lokole_version is defined"
+  pip:
+    name: opwen_email_client
+    version: "{{ lokole_version }}"
+    virtualenv: "{{ lokole_venv }}"
+    virtualenv_command: python3 -m venv "{{ lokole_venv }}"
+    extra_args: --no-cache-dir    # To avoid caching issues e.g. soon after new releases hit https://pypi.org/project/opwen-email-client/
+  when:
+    - internet_available | bool
+    - lokole_version is defined
+
+- name: "DEFAULT: pip install opwen_email_client (Lokole, latest available version) from PyPI to {{ lokole_venv }}, if above vars both UNdefined"
+  pip:
+    name: opwen_email_client
+    virtualenv: "{{ lokole_venv }}"
+    virtualenv_command: python3 -m venv "{{ lokole_venv }}"
+    extra_args: --no-cache-dir    # To avoid caching issues e.g. soon after new releases hit https://pypi.org/project/opwen-email-client/
+  when:
+    - internet_available | bool
+    - lokole_commit is undefined and lokole_version is undefined
+
 - name: Compile translations
   shell: |
     python_version=$(python3 -c 'from sys import version_info; print("%s.%s" % (version_info.major, version_info.minor));';)
@@ -46,10 +59,10 @@
   with_items:
     - "{{ lokole_venv }}/lib/python${python_version}/site-packages/opwen_email_client/webapp"
 
-- name: Create dir {{ lokole_run_directory }}
+- name: mkdir {{ lokole_run_directory }}
   file: 
-    path: "{{ lokole_run_directory }}"
     state: directory
+    path: "{{ lokole_run_directory }}"
 
 - name: Install {{ lokole_run_directory }}/webapp_secrets.sh from template, to configure Lokole
   template:
@@ -62,12 +75,12 @@
     dest: "{{ lokole_run_directory }}/webapp.sh"
     mode: a+x
 
-- name: Create admin user
+- name: Create admin user with password, for http://box{{ lokole_url }}    # http://box/lokole
   shell: |
     . {{ lokole_run_directory }}/webapp_secrets.sh
     {{ lokole_venv }}/bin/manage.py createadmin --name='{{ lokole_admin_user }}' --password='{{ lokole_admin_password }}'
 
-- name: Install /etc/{{ apache_conf_dir }}/lokole.conf from template, for http://box{{ lokole_url }} via Apache   # http://box/lokole
+- name: Install /etc/{{ apache_conf_dir }}/lokole.conf from template, for http://box{{ lokole_url }} via Apache    # http://box/lokole
   template:
     src: lokole.conf.j2
     dest: "/etc/{{ apache_conf_dir }}/lokole.conf"
@@ -77,14 +90,6 @@
   template:
     src: lokole.service.j2
     dest: /etc/systemd/system/lokole.service
-
-# - name: Enable & Restart 'lokole' systemd service, with daemon_reload, if lokole_enabled
-#   systemd:
-#     daemon_reload: yes
-#     name: lokole
-#     enabled: yes
-#     state: restarted
-#   when: lokole_enabled | bool
 
 
 # RECORD Lokole AS INSTALLED

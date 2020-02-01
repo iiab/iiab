@@ -1,5 +1,5 @@
 ==============
-usb-lib README
+usb_lib README
 ==============
 
 **PLEASE SEE "Can teachers display their own content?" WITHIN http://FAQ.IIAB.IO FOR UP-TO-DATE DOCUMENTATION.**
