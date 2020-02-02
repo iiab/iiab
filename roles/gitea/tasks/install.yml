@@ -1,4 +1,4 @@
-# Prepare to install Gitea: create user and directory structure
+# 1. Prepare to install Gitea: create user and directory structure
 
 - name: Shut down existing Gitea instance (if we're reinstalling)
   systemd:
@@ -16,11 +16,11 @@
     name: gitea
     comment: Gitea daemon account
     groups: gitea
-    home: "{{ gitea_home }}"
+    home: "{{ gitea_home }}"    # /home/gitea
 
 - name: Create Gitea directory structure
   file:
-    path: "{{ gitea_root_directory }}/{{ item }}"
+    path: "{{ gitea_root_directory }}/{{ item }}"    # /library/gitea
     state: directory
     owner: gitea
     group: gitea
@@ -28,21 +28,22 @@
 
 - name: Make directories data, indexers, and log writable
   file:
-    path: "{{ gitea_root_directory }}/{{ item }}"
+    path: "{{ gitea_root_directory }}/{{ item }}"    # /library/gitea
     mode: '0750'
   with_items:
     - data
     - indexers
     - log
 
-# Download, verify, and link Gitea binary
+
+# 2. Download, verify, and link Gitea binary
 
 - name: Fail if we detect unknown architecture
   fail:
     msg: "Could not find a binary for the CPU architecture \"{{ ansible_architecture }}\""
   when: gitea_iset_suffix == "unknown"
 
-- name: Download Gitea binary
+- name: Download Gitea binary {{ gitea_download_url }} to {{ gitea_install_path }}
   get_url:
     url: "{{ gitea_download_url }}"
     dest: "{{ gitea_install_path }}"
@@ -69,14 +70,15 @@
     group: gitea
     state: link
 
-# Configure Gitea
+
+# 3. Configure Gitea
 
 # For security reasons, the Gitea developers recommend removing group write
 # permissions from /etc/gitea/ and /etc/gitea/app.ini after the first run of 
 # Gitea. User gitea needs write permissions during the first run but not 
 # subsequent runs.
 
-- name: Create Gitea config directory
+- name: mkdir /etc/gitea
   file:
     state: directory
     path: /etc/gitea
@@ -84,7 +86,7 @@
     group: gitea
     mode: '0770'
 
-- name: Create app.ini
+- name: Install /etc/gitea/app.ini from template
   template:
     src: app.ini.j2
     dest: /etc/gitea/app.ini
@@ -92,7 +94,8 @@
     group: gitea
     mode: '0664'
 
-# Create systemd service & prepare Apache for http://box/gitea
+
+# 4. Create systemd service & prepare Apache for http://box/gitea
 
 - name: "Install from templates: /etc/systemd/system/gitea.service, /etc/apache2/sites-available/gitea.conf"
   template:
@@ -103,7 +106,7 @@
     - { src: 'gitea.conf.j2', dest: "/etc/{{ apache_conf_dir }}/gitea.conf" }
 
 
-# RECORD Gitea AS INSTALLED
+# 5. RECORD Gitea AS INSTALLED
 
 - name: "Set 'gitea_installed: True'"
   set_fact:
