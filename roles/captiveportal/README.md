@@ -11,11 +11,13 @@
     1. iiab-divert-to-nginx -- Bash script writes dnsmasq config file which points to IIAB server
     1. iiab-make-cp-servers.py -- Python script writes nginx configuration file to /etc/nginx/sites-enabled
     1. capture-wsgi.py -- the script which determines the client agent, records it in sqlite database, and responds with redirects as appropriate for each OS.
-    1. uwsgi-captiveportal.service -- systemd unit file which runs uwsgi which makes capture-wsgi.py available on port 9090.
+    1. captiveportal.ini.j2 -- config file for uwsgi service, which in turn runs the capture-wsgi.py script.
+    1. uwsgi.service -- systemd unit file which runs python3 programs --permits captive portal and admin-console python scripts to function.
     
  ## Extending and Debugging Captive Portal
- * The python capture script can be run interactively in terminal (use systemctl stop uwsgi-captiveportal to free up the port). This will expose any python errors easily.
- * Run the capture-wsgi.py with "-l" in a terminal to increase logging to /var/log/apache2/portal.log
+ * Running the capture-wsgi.py python script interactively will expose any python errors easily. 
+ * The python capture script can be run interactively in terminal rather than automatically by uwsgi -- (use "systemctl stop uwsgi" to free up the port used by captive portal: 9090). The uwsgi service for captive portal grabs port 9090, and two programs cannot share the same port. NOTE: that while the uwsgi service is stopped, the admin-console will not function).
+ * Run the capture-wsgi.py with "-l" in a terminal to increase logging to /var/log/captiveportal/captiveportal.log
  * To discover untrapped urls, "apt-get install tcpdump", and "tcpdump -i br0 capture.tcp". I transfer this file to a machine with a GUI, and wireshark to interpret the conversations on the wire. The DNS packets are the ones to look for.
  
  ## Known Problems
