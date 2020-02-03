@@ -1,39 +1,36 @@
-- name: Install ImageMagick package (debuntu)
+- name: "Install ImageMagick package: imagemagick"
   package:
     name: imagemagick
     state: present
-  when: is_debuntu | bool
 
-- name: Allow ImageMagick to read PDFs (debuntu)
+- name: Allow ImageMagick to read PDFs, per /etc/ImageMagick-6/policy.xml, to create book cover thumbnails
   lineinfile:
     path: /etc/ImageMagick-6/policy.xml
     regexp: '<policy domain="coder" rights="none" pattern="PDF" />'
     backrefs: yes
     line: '  <policy domain="coder" rights="read" pattern="PDF" />'
     state: present
-  when: is_debuntu | bool
 
-- name: "Create 3 Calibre-Web folders to store data and configuration files: {{ calibreweb_home }}, {{ calibreweb_venv_path }}, {{ calibreweb_config }}"
+- name: "Create 3 Calibre-Web folders to store data and config files: {{ calibreweb_home }}, {{ calibreweb_venv_path }}, {{ calibreweb_config }} (all set to {{ calibreweb_user }}:{{ apache_user }}, '0755')"
   file:
-    path: "{{ item }}"
-    owner: "{{ calibreweb_user }}"
-    group: "{{ apache_user }}"
-    mode: '0755'
     state: directory
+    path: "{{ item }}"
+    owner: "{{ calibreweb_user }}"    # root
+    group: "{{ apache_user }}"        # www-data on debuntu
+    mode: '0755'
   with_items:
-    - "{{ calibreweb_home }}"
-    - "{{ calibreweb_venv_path }}"
-    - "{{ calibreweb_config }}"
+    - "{{ calibreweb_home }}"         # /library/calibre-web
+    - "{{ calibreweb_venv_path }}"    # /usr/local/calibre-web
+    - "{{ calibreweb_config }}"       # /library/calibre-web/config
 
 ## TODO: Calibre-web future release might get into pypi https://github.com/janeczku/calibre-web/issues/456
-- name: Download Calibre-Web github repository to {{ calibreweb_venv_path }}
+- name: Clone i.e. download Calibre-Web ({{ calibreweb_version }}) from https://github.com/janeczku/calibre-web.git to {{ calibreweb_venv_path }}
   git:
     repo: https://github.com/janeczku/calibre-web.git
-    dest: "{{ calibreweb_venv_path }}"
+    dest: "{{ calibreweb_venv_path }}"    # /usr/local/calibre-web
     force: yes
-    #update: yes   # not needed, as Ansible's default is to update
     depth: 1
-    version: "{{ calibreweb_version }}"
+    version: "{{ calibreweb_version }}"    # e.g. master, 0.6.5
   when: internet_available | bool
 
 ## Ansible Pip Bug: Cannot use 'chdir' with 'env' https://github.com/ansible/ansible/issues/37912 (Patch landed)
@@ -45,31 +42,32 @@
 #  ignore_errors: True
 ##
 # Implementing this with Ansible command module for now.
-- name: Download Calibre-Web dependencies (using pip) into virtual environment
+- name: Download Calibre-Web dependencies (using pip) into python2.7 virtual environment {{ calibreweb_venv_path }}
   pip:
     requirements: "{{ calibreweb_venv_path }}/requirements.txt"
-    virtualenv: "{{ calibreweb_venv_path }}"
+    virtualenv: "{{ calibreweb_venv_path }}"    # /usr/local/calibre-web
     virtualenv_site_packages: no
     virtualenv_command: /usr/bin/virtualenv
     virtualenv_python: python2.7
   when: internet_available | bool
 
-- name: Symlink {{ calibreweb_venv_path }}/vendor to {{ calibreweb_venv_path }}/lib/python2.7/site-packages to keep cps.py happy
+# 2020-02-02: IS PYTHON 3 POSSIBLE ABOVE AND BELOW?
+
+- name: Symlink {{ calibreweb_venv_path }}/vendor -> {{ calibreweb_venv_path }}/lib/python2.7/site-packages - to keep {{ calibreweb_venv_path }}/cps.py happy
   file:
     src: "{{ calibreweb_venv_path }}/lib/python2.7/site-packages"
-    dest: "{{ calibreweb_venv_path }}/vendor"
+    path: "{{ calibreweb_venv_path }}/vendor"    # /usr/local/calibre-web
     state: link
 
-- name: Install unit file /etc/systemd/system/calibre-web.service & /etc/apache2/sites-available/calibre-web.conf for http://box{{ calibreweb_url1 }}, http://box{{ calibreweb_url2 }}, http://box{{ calibreweb_url3 }} from templates
+- name: Install /etc/systemd/system/calibre-web.service from template
   template:
-    src: "{{ item.src }}"
-    dest: "{{ item.dest }}"
-    # owner: root
-    # group: root
-    # mode: '0644'
-  with_items:
-    - { src: 'calibre-web.service.j2', dest: '/etc/systemd/system/calibre-web.service' }
-    - { src: 'calibre-web.conf.j2', dest: '/etc/apache2/sites-available/calibre-web.conf' }
+    src: calibre-web.service.j2
+    dest: /etc/systemd/system/calibre-web.service
+
+- name: Install /etc/{{ apache_conf_dir }}/calibre-web.conf from template, for http://box{{ calibreweb_url1 }}, http://box{{ calibreweb_url2 }}, http://box{{ calibreweb_url3 }} via Apache    # http://box/books, http://box/libros, http://box/livres
+  template:
+    src: calibre-web.conf.j2
+    dest: "/etc/{{ apache_conf_dir }}/calibre-web.conf"    # apache2/sites-available on debuntu
   when: apache_install | bool
 
 - name: Does /library/calibre-web/metadata.db exist?
@@ -77,12 +75,12 @@
     path: /library/calibre-web/metadata.db
   register: metadatadb
 
-- name: Provision/Copy both default metadata files into /library/calibre-web IF metadata.db did not exist
+- name: Provision/Copy both default metadata files (metadata.db, metadata_db_prefs_backup.json) into {{ calibreweb_home }} IF metadata.db did not exist
   copy:
     src: "{{ item }}"
-    dest: "{{ calibreweb_home }}"
-    owner: "{{ calibreweb_user }}"
-    group: "{{ apache_user }}"
+    dest: "{{ calibreweb_home }}"     # /library/calibre-web
+    owner: "{{ calibreweb_user }}"    # root
+    group: "{{ apache_user }}"        # www-data on debuntu
     mode: '0644'
     backup: yes
   with_items:
@@ -91,12 +89,12 @@
   when: not metadatadb.stat.exists
   #when: calibreweb_provision | bool
 
-- name: Provision/Copy default admin settings to {{ calibreweb_config }}/app.db IF metadata.db did not exist    # {{ calibreweb_config }} is /library/calibre-web/config
+- name: Provision/Copy default admin settings to {{ calibreweb_config }}/app.db IF metadata.db did not exist
   copy:
     src: roles/calibre-web/files/app.db
-    dest: "{{ calibreweb_config }}"
-    owner: "{{ calibreweb_user }}"
-    group: "{{ apache_user }}"
+    dest: "{{ calibreweb_config }}"    # /library/calibre-web/config
+    owner: "{{ calibreweb_user }}"     # root
+    group: "{{ apache_user }}"         # www-data on debuntu
     mode: '0644'
     backup: yes
   when: not metadatadb.stat.exists
