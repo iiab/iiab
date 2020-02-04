@@ -1,0 +1,72 @@
+- name: "Set 'nodejs_install: True' and 'nodejs_enabled: True'"
+  set_fact:
+    nodejs_install: True
+    nodejs_enabled: True
+
+- name: NODEJS - run 'nodejs' role (attempt to install & enable Node.js)
+  include_role:
+    name: nodejs
+
+- name: FAIL (STOP THE INSTALL) IF 'nodejs_installed is undefined'
+  fail:
+    msg: "PBX install cannot proceed, as Node.js is not installed."
+  when: nodejs_installed is undefined
+
+- name: FAIL (STOP THE INSTALL) IF 'nodejs_version != "10.x"'
+  fail:
+    msg: "PBX install cannot proceed, as it currently requires Node.js 10.x, whereas nodejs_version is set to {{ nodejs_version }}.  Please check the value of nodejs_version in /opt/iiab/iiab/vars/default_vars.yml, /etc/iiab/local_vars.yml, /opt/iiab/iiab/roles/nodejs, etc."
+  when: nodejs_version != "10.x"
+
+
+#- name: TODO: Check if asterisk and freepbx are already installed
+
+- debug:    # Crazy spacing below is tuned for 80-column screens
+    msg: >-
+      ####################################################################WARNING:
+      ONLY UBUNTU 18.04, DEBIAN 9 & RASPBIAN ARE SUPPORTED AS OF FEB 2019.   Please
+      assist Internet-in-a-Box communities worldwide if you can make
+      Asterisk  and FreePBX work on other OS's / distros, Thank
+      You!  http://FAQ.IIAB.IO        ###############################################################################
+
+- name: Check if freepbx is already installed
+  stat: 
+    path: /etc/systemd/system/freepbx.service
+  register: freepbx_installed
+
+- debug:
+    msg: >-
+      FreePBX already installed. Reinstall shall be skipped
+  when: freepbx_installed.stat.exists
+
+- name: Install Asterisk (debuntu)
+  include_tasks: asterisk.yml
+  when: internet_available and pbx_install and (not pbx_installed) and is_debuntu and (not freepbx_installed.stat.exists)
+
+  #when: internet_available and pbx_install and (not pbx_installed) and ((is_debian and ansible_distribution_major_version == "9") or is_ubuntu_18)
+
+- name: Install FreePBX (debuntu)
+  include_tasks: freepbx.yml
+  when: internet_available and pbx_install and (not pbx_installed) and is_debuntu and (not freepbx_installed.stat.exists)
+  #when: internet_available and pbx_install and (not pbx_installed) and ((is_debian and ansible_distribution_major_version == "9") or is_ubuntu_18)
+
+- name: Enable FreePBX (debuntu)
+  include_tasks: freepbx_enable.yml
+  when: internet_available and pbx_install and (not pbx_installed) and is_debuntu
+  #when: internet_available and pbx_install and (not pbx_installed) and ((is_debian and ansible_distribution_major_version == "9") or is_ubuntu_18)
+
+- name: Asterisk - Install chan_dongle
+  include: chan_dongle.yml
+  when: asterisk_chan_dongle | bool
+
+
+# RECORD PBX AS INSTALLED
+
+- name: "Set 'pbx_installed: True'"
+  set_fact:
+    pbx_installed: True
+
+- name: "Add 'pbx_installed: True' to {{ iiab_state_file }}"
+  lineinfile:
+    path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
+    regexp: '^pbx_installed'
+    line: 'pbx_installed: True'
