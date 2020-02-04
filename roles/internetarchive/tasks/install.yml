@@ -5,16 +5,21 @@
     nodejs_install: True
     nodejs_enabled: True
 
-- name: Install Node.JS
+- name: NODEJS - run 'nodejs' role (attempt to install & enable Node.js)
   include_role:
     name: nodejs
+
+- name: FAIL (STOP INSTALLING) IF nodejs_version is not set to 10.x or 12.x
+  fail:
+    msg: "Internet Archive install cannot proceed, as it currently requires Node.js 10.x or 12.x, and your nodejs_version is set to {{ nodejs_version }}.  Please check the value of nodejs_version in /opt/iiab/iiab/vars/default_vars.yml and possibly also /etc/iiab/local_vars.yml"
+  when: (nodejs_version != "10.x") and (nodejs_version != "12.x")
 
 - name: "Set 'yarn_install: True' and 'yarn_enabled: True'"
   set_fact:
     yarn_install: True
     yarn_enabled: True
 
-- name: Install Yarn
+- name: YARN - run 'yarn' role (attempt to install & enable Yarn package manager)
   include_role:
     name: yarn
 
@@ -23,40 +28,42 @@
     name: libsecret-1-dev
     state: present
 
+
 # CREATE 2 DIRS & RUN YARN
 
 - name: mkdir {{ internetarchive_dir }}
   file:
-    path: "{{ internetarchive_dir }}"    # /opt/iiab/internetarchive
     state: directory
-    owner: "root"
+    path: "{{ internetarchive_dir }}"    # /opt/iiab/internetarchive
+    # owner: root
 
-- name: Run yarn install to get needed modules (CAN TAKE ~15 MINUTES)
+- name: Run yarn install to populate {{ internetarchive_dir }}/node_modules (CAN TAKE ~15 MINUTES)
   shell: yarn config set child-concurrency 1 && yarn add @internetarchive/dweb-mirror
   args:
     chdir: "{{ internetarchive_dir }}"
     creates: "{{ internetarchive_dir }}/node_modules/@internetarchive/dweb-mirror/internetarchive"
   when: internet_available | bool
-  register: internetarchive_installing
+  # register: internetarchive_installing
 
-- name: mkdir /library/archiveorg
+- name: mkdir {{ content_base }}/archiveorg
   file:
-    path: "/library/archiveorg"
     state: directory
-    owner: "root"
+    path: "{{ content_base }}/archiveorg"    # /library
+    # owner: root
+
 
 # CONFIG FILES
 
-- name: "Install from templates: internetarchive.service (systemd), internetarchive.conf (Apache)"
+- name: "Install from templates: /etc/systemd/system/internetarchive.service, /etc/{{ apache_conf_dir }}/internetarchive.conf"
   template:
     src: "{{ item.src }}"
     dest: "{{ item.dest }}"
-    mode: '0644'
-    owner: root
-    group: root
+    # owner: root
+    # group: root
+    # mode: '0644'
   with_items:
     - { src: 'internetarchive.service.j2', dest: '/etc/systemd/system/internetarchive.service' }
-    - { src: 'internetarchive.conf', dest: '/etc/apache2/sites-available/internetarchive.conf' }
+    - { src: 'internetarchive.conf', dest: '/etc/{{ apache_conf_dir }}/internetarchive.conf' }    # apache2/sites-available
 
 
 # RECORD Internet Archive AS INSTALLED
