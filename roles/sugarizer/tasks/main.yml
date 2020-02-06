@@ -19,52 +19,35 @@
     quiet: yes
 
 
-- name: Install Sugarizer if 'sugarizer_installed' not defined, e.g. in {{ iiab_state_file }}    # /etc/iiab/iiab_state.yml
-  include_tasks: install.yml
-  when: sugarizer_installed is undefined
+# 3 stanzas moved up from install.yml, so Debian finishes "BIG" IIAB install:
+# (WITH LOUD RED WARNINGS!)
 
+- name: "Set 'mongodb_install: True' and 'mongodb_enabled: True'"
+  set_fact:
+    mongodb_install: True
+    mongodb_enabled: True
 
-# Auto-starts mongodb via the requires= line in unit file
-- name: Enable & Restart 'sugarizer' systemd service, if sugarizer_enabled
-  systemd:
-    name: sugarizer
-    daemon_reload: yes    # in case mongodb.service changed, etc
-    enabled: yes
-    state: restarted
-  when: sugarizer_enabled | bool
+- name: MONGODB - run 'mongodb' role (attempt to install & enable MongoDB)
+  include_role:
+    name: mongodb
 
-# Stops sugarizer but not mongodb
-- name: Disable & Stop 'sugarizer' systemd service, if not sugarizer_enabled
-  systemd:
-    name: sugarizer
-    enabled: no
-    state: stopped
-  when: not sugarizer_enabled
+- name: EXIT 'sugarizer' ROLE & CONTINUE, IF 'mongodb_installed is undefined'
+  fail:    # FORCE IT RED THIS ONCE!
+    msg: MongoDB INSTALLATION FAILED, likely because your OS is Debian.  Nevertheless IIAB will continue (consider this a warning!)
+  when: mongodb_installed is undefined
+  ignore_errors: yes
 
-# Stops mongodb (in the past this would've been called via meta/main.yml)
-- name: Run mongodb/tasks/enable.yml to stop MongoDB, if not sugarizer_enabled
-  include_tasks: roles/mongodb/tasks/enable.yml
-  when: not sugarizer_enabled
+# ELSE...
 
-- name: Enable/Disable/Restart Apache if primary
-  include_tasks: apache.yml
-  when: not nginx_enabled
+- name: Install/Enable/Disable/Record Sugarizer (main2.yml) IF 'mongodb_installed is defined'
+  include_tasks: main2.yml
+  when: mongodb_installed is defined
 
-- name: Enable/Disable/Restart NGINX if primary
-  include_tasks: nginx.yml
-  when: nginx_enabled | bool
+# THE block: APPROACH BELOW WORKS JUST LIKE main2.yml ABOVE.
+# BUT IT VISUALLY POLLUTES: MANY BLUE "skipping:" MESSAGES IN ANSIBLE'S OUTPUT.
 
-
-- name: Add 'sugarizer' variable values to {{ iiab_ini_file }}
-  ini_file:
-    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
-    section: sugarizer
-    option: "{{ item.option }}"
-    value: "{{ item.value | string }}"
-  with_items:
-    - option: name
-      value: Sugarizer
-    - option: description
-      value: '"The Sugar Learning Platform began with the famous One Laptop Per Child project, written in Python.  Sugarizer is the new HTML/JavaScript implementation of Sugar, usable in most all browsers."'
-    - option: sugarizer_enabled
-      value: "{{ sugarizer_enabled }}"
+# - block:    # ENTIRE BLOCK CONDITIONED ON 'when: mongodb_installed is defined'
+#
+#   [MOVED TO main2.yml]
+#
+#   when: mongodb_installed is defined    # CONDITION FOR ENTIRE ABOVE block:

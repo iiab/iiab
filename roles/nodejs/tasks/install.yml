@@ -1,0 +1,154 @@
+# 1. TEST IF Node.js ALEADY INSTALLED & WARN AS NEC
+
+# 2019-02-03: BELOW TESTS IF 'nodejs' VERSION IS ALREADY INSTALLED:
+# IF SO & THIS DOESN'T MATCH nodejs_version AS SET IN defaults_vars.yml
+# AND/OR local_vars.yml, INSTALL HALTS WITH AN EXPLANATION (PR #1447)
+
+# 2019-07-04: FOR A SOMEWHAT MORE MODERN "VERSION DETECTOR" SEE:
+# github.com/iiab/iiab/blob/master/roles/nextcloud/tasks/install.yml#L1-L40
+
+- name: Try to run 'nodejs -v' to get Node.js version
+  # 'node -v' doesn't work with older versions e.g. Ubuntu 16.04's nodejs 4.2.6
+  # Both below convert v10.15.1 to 10.x, but this is safer: (removes non-digits)
+  shell: nodejs -v | sed 's/[^0-9]*//' | sed 's/[^0-9].*/.x/'
+  #shell: nodejs -v | sed 's/^[vV]//' | sed 's/\..*/.x/'
+  register: nodejs_version_installed
+
+#- debug:
+#    var: nodejs_version_installed
+
+# When nodejs is NOT installed:
+# nodejs_version_installed.rc == 0    # Crazy with stderr below, "due to pipes"
+# nodejs_version_installed.stdout == ""
+# nodejs_version_installed.stderr == "/bin/sh: 1: nodejs: not found"
+# BOTH ABOVE (incl non-null stderr) are USED BELOW to confirm install is nec!
+
+#- name: "ENFORCE PRECONDITION: Stop installing (intentionally fail) IF an installed 'nodejs' version isn't {{ nodejs_version }}"
+#  fail:
+#    msg: >
+#      PLEASE REMOVE 'nodejs' VERSION {{ nodejs_version_installed.stdout }} AS
+#      IT DOES NOT MATCH THE REQUIRED nodejs_version: {{ nodejs_version }} --
+#      as set in /opt/iiab/iiab/vars/default_vars.yml and/or
+#      /etc/iiab/local_vars.yml -- then re-run this IIAB installer.
+#  when: nodejs_version_installed is defined and nodejs_version_installed.stdout != nodejs_version and nodejs_version_installed.stderr == ""
+
+# Forces < 12 or > 12 to be removed, ignored if file is absent
+- name: Remove /etc/apt/sources.list.d/nodesource.list if nodejs_version_installed.stdout is not {{ nodejs_version }}
+  file:
+    state: absent
+    path: /etc/apt/sources.list.d/nodesource.list
+  when: nodejs_version_installed is defined and nodejs_version_installed.stdout != nodejs_version and nodejs_version_installed.stdout != ""
+
+# BRUTAL but ensures consistency across OS's / distros like Raspbian Desktop & Ubermix that often include an older version of Node.js
+# Forces < 12 or > 12 to be uninstalled
+- name: ASK apt/yum/dnf TO REMOVE PRE-EXISTING Node.js {{ nodejs_version_installed.stdout }} (IF IT'S NOT {{ nodejs_version }})
+  package:
+    name: nodejs
+    state: absent
+  when: nodejs_version_installed is defined and nodejs_version_installed.stdout != nodejs_version and nodejs_version_installed.stdout != ""
+
+# Forces == 12
+- name: Warn if Node.js {{ nodejs_version}} already installed & might be updated
+  debug:
+    msg: "WARN: YOUR Node.js {{ nodejs_version }} MIGHT NOW BE UPDATED USING nodesource.com"
+  when: nodejs_version_installed is defined and nodejs_version_installed.stdout == nodejs_version
+
+
+# 2. INSTALL Node.js USING nodesource.com
+
+# 2019-02-12: Should not be nec, as stanza below it should overwrite
+# /etc/apt/sources.list.d/nodesource.list regardless!
+#
+#- name: Clear prior /etc/apt/sources.list.d/nodesource.list (permitting Node.js downgrade if nec)
+#  file:
+#    path: /etc/apt/sources.list.d/nodesource.list
+#    state: absent
+#  when: internet_available and is_debuntu
+
+- name: Set up Node.js {{ nodejs_version }} apt sources (debuntu)
+  shell: curl -sL https://deb.nodesource.com/setup_{{ nodejs_version }} | bash -
+  args:
+    warn: no
+    creates: /etc/apt/sources.list.d/nodesource.list
+  when: internet_available and is_debuntu
+  #when: internet_available and (is_debian_8 or is_debian_9 or is_ubuntu_16 or is_ubuntu_17)
+  # NOT NEC TO TEST FOR is_raspbian_8 OR is_raspbian_9 AS /opt/iiab/iiab/vars/<OS>.yml
+  # DEFINES THESE AS SUBSETS OF is_debian_8 OR is_debian_9 (FOR NOW!)
+
+# 2019-03-29: Above works on Debian 10 Buster pre-releases, but fails on Ubuntu
+# 19.04 Beta.  Comment it out for now, and manually run: "apt install npm" then
+# "npm install -g npm@latest" (all *SHOULD* be magically fixed by 2019-04-18 ?)
+
+# Forces update
+- name: Install latest Node.js {{ nodejs_version }} which includes /usr/bin/npm (debuntu)
+  package:
+    #name: nodejs={{ nodejs_version }}
+    name: nodejs
+    state: latest
+    #state: present
+  when: internet_available and is_debuntu
+  #when: internet_available and (is_debian_8 or is_debian_9 or is_ubuntu_16 or is_ubuntu_17)
+
+- name: Set up & install Node.js {{ nodejs_version }} which includes /usr/bin/npm (redhat)
+  shell: curl -sL https://rpm.nodesource.com/setup_{{ nodejs_version }} | bash -
+  args:
+    warn: no
+  when: internet_available and is_redhat
+
+
+# 2018-07-14: BOTH STEPS ABOVE TAKE TIME, but Raspbian (apt offers npm
+# 1.4.21) & Debian 9 (apt offers no npm!) STILL NEED the above
+# nodesource.com approach to get a version of npm that works with Sugarizer:
+# https://github.com/iiab/iiab/issues/798#issuecomment-404324530
+#
+# MORE POSITIVELY: this nodesource.com approach (brings in npm 5.6.0 with
+# nodejs 8.11.3 for now, to any OS) would also work on Ubuntu 18.04, and
+# might even bring about a sane consistency across mainline OS's?
+#
+# BUT FOR NOW: Ubuntu 18.04's apt (approach below) brings in npm 3.5.2,
+# which appears suffic "SO FAR"?  18.04's nodejs 8.10.0 is more reassuring!
+#
+# CRAZY IDEA: most versions of npm can upgrade themselves to the latest
+# (6.2.0 for now) using command "npm install -g npm", if that helps us in
+# future, e.g. TK's memory issue etc?  If so, be CAREFUL this puts npm
+# in /usr/local/bin on Ubuntu 18.04 -- unlike Ubuntu 16.04 and Raspbian
+# where it upgrades /usr/bin/npm in place:
+# https://askubuntu.com/questions/1036278/npm-is-incorrect-version-on-latest-ubuntu-18-04-installation
+
+# 2019-02-03: OLD WAY (PRIOR TO 2019) BELOW.  Since then, @m-anish helped
+# us standardize on the above nodesource.com approach i.e.
+# https://github.com/nodesource/distributions#debinstall ...across all
+# distros (so nodejs & npm always findable in /usr/bin, for Node-RED etc)
+
+# - name: Install packages nodejs {{ nodejs_version }} and npm (debuntu distros AFTER 2017, or other distros)
+#   package:
+#     name:
+#       - nodejs={{ nodejs_version }}    # Nec to change above from 'package:' to 'apt:' ?
+#       - npm
+#     state: latest
+#   when: internet_available and not (is_debian_8 or is_debian_9 or is_ubuntu_16 or is_ubuntu_17)
+
+# 2019-01-16: fyi Node.js 10.x became "LTS" on 2018-10-30 but distros are
+# holding back for now: certainly Ubuntu 18.04 and even Debian 10/Buster
+# ("testing" branch) both install Node.js 8.x (instead of 10.x).  While the
+# more bleeding-edge Debian Sid ("unstable" branch) does install Node.js 10.x
+#
+# This May Change: thanks all for running "apt -a list nodejs" on Buster's
+# daily builds @ www.debian.org/devel/debian-installer/ and Disco Dingo (Ubuntu
+# 19.04) https://launchpad.net/ubuntu/+source/nodejs to keep us informed!
+
+# 2019-03-29: Debian 10 Buster & Ubuntu 19.04 pre-releases made the jump
+# thankfully; currently both offer Node.js 10.15.2
+
+
+# 3. RECORD Node.js AS INSTALLED
+
+- name: "Set 'nodejs_installed: True'"
+  set_fact:
+    nodejs_installed: True
+
+- name: "Add 'nodejs_installed: True' to {{ iiab_state_file }}"
+  lineinfile:
+    path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
+    regexp: '^nodejs_installed'
+    line: 'nodejs_installed: True'
