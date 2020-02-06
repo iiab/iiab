@@ -11,16 +11,6 @@ except:
     adm_cons_installed = False
     pass
 
-import iiab.iiab_lib as iiab
-
-try:
-    import iiab.adm_lib as adm
-    import iiab.adm_const as CONST
-    adm_cons_installed = True
-except:
-    adm_cons_installed = False
-    pass
-
 import argparse
 import sys, os
 import json
@@ -33,7 +23,7 @@ viewer_path = '/library/www/osm-vector-maps/viewer'
 catalog_path = '/etc/iiab'
 
 if len(sys.argv) != 3:
-   print("Argument 1=map_url, 2=<location or cmdsrv.conf>")
+   print("Argument 1=map_url, 2=<location of cmdsrv.conf>")
    sys.exit(1)
 
 def parse_args():
