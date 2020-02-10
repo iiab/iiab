@@ -1,0 +1,183 @@
+# Stanzas as of 2020-02-04:
+#
+# - 4 base install
+#   - Remove the last 3 above, as CentOS & Fedora no longer supported ?
+# - 6 double timeout for slow CPUs
+# - 7 DB config
+# - 2 record as installed
+
+- name: 'Install MySQL packages: mariadb-server, mariadb-client, and 9 php packages (debuntu)'
+  package:
+    name:
+      - mariadb-server
+      - mariadb-client
+      - php{{ php_version }}
+      - php{{ php_version }}-mysql
+      - php-pear
+      - php{{ php_version }}-gd
+      - php{{ php_version }}-imap
+      - php{{ php_version }}-ldap
+      - php{{ php_version }}-odbc
+      - php{{ php_version }}-xml    # Was below
+      - php{{ php_version }}-xmlrpc
+    state: present
+  when: is_debuntu | bool
+
+# - name: Install package 'php{{ php_version }}-xml' (debuntu)    # WAS: (ubuntu or debian 9+)
+#   package:
+#     name: "php{{ php_version }}-xml"
+#     state: present
+#   when: is_debuntu | bool
+#   #when: is_ubuntu or (is_debian and not is_debian_8)
+
+#- name: Install php-xml-parser (debian-8)
+#  package:
+#    name: php-xml-parser
+#    state: present
+#  when: is_debian_8 | bool
+
+- name: "Install packages: mysql, MySQL-python and 9 php packages (OS's other than debuntu)"
+  package:
+    name:
+      - MySQL-python
+      - mysql
+      - php
+      - php-mysql
+      - php-pear
+      - php-gd
+      - php-imap
+      - php-ldap
+      - php-odbc
+      - php-xml
+      - php-xmlrpc
+    state: present
+  when: not is_debuntu
+
+- include_tasks: centos.yml
+  when: ansible_distribution == "CentOS"
+
+- include_tasks: fedora.yml
+  when: ansible_distribution == "Fedora"
+
+
+# 2019-07-03 @jvonau @holta: the next 50 lines (6 stanzas) double MariaDB's
+# default boot timeout (90s to 180s) for slow CPUs like this Ubuntu 18.04.2 VM:
+# https://github.com/iiab/iiab/issues/1802
+# https://mariadb.com/kb/en/library/what-to-do-if-mariadb-doesnt-start/#systemd
+
+- name: Check if /lib/systemd/system/mariadb.service exists
+  stat:
+    path: /lib/systemd/system/mariadb.service
+  register: mariadb_unit_file
+
+- name: Copy pkg's /lib/systemd/system/mariadb.service to /etc/systemd/system/ to be customized (CREATES TIMESTAMPED BACKUPS OF /etc/systemd/system/mariadb.service e.g. IF OPERATOR CUSTOMIZED IT, EVEN DESPITE WARNING BELOW!)
+  copy:
+    force: yes
+    backup: yes
+    src: /lib/systemd/system/mariadb.service
+    dest: /etc/systemd/system/
+  when: mariadb_unit_file.stat.exists
+
+- name: Symlink /etc/systemd/system/mysql.service -> /etc/systemd/system/mariadb.service
+  file:
+    state: link
+    force: yes
+    src: /etc/systemd/system/mariadb.service
+    path: /etc/systemd/system/mysql.service
+  when: mariadb_unit_file.stat.exists
+
+- name: Symlink /etc/systemd/system/mysqld.service -> /etc/systemd/system/mariadb.service
+  file:
+    state: link
+    force: yes
+    src: /etc/systemd/system/mariadb.service
+    path: /etc/systemd/system/mysqld.service
+  when: mariadb_unit_file.stat.exists
+
+- name: "WARN OPERATOR: Changes made to /etc/systemd/system/mariadb.service WILL BE LOST whenever 'mysql' playbook is run"
+  lineinfile:
+    path: /etc/systemd/system/mariadb.service
+    insertbefore: BOF    # Beginning of file
+    line: "# WARNING: CHANGES TO THIS FILE WILL BE REGULARLY *OVERWRITTEN* BY:\n# /opt/iiab/iiab/roles/mysql/tasks/main.yml\n"
+  when: mariadb_unit_file.stat.exists
+
+- name: Set systemd boot timeout to 180 seconds for slow machines, in /etc/systemd/system/mariadb.service
+  lineinfile:
+    path: /etc/systemd/system/mariadb.service
+    insertafter: '^\[Service\]$'
+    regexp: "^TimeoutStartSec="
+    line: "\n# 2019-07-03: @jvonau @holta doubled MariaDB's default boot timeout, from\n# 90 seconds to 180 seconds, for slow machines like this Ubuntu 18.04.2 VM:\n# https://github.com/iiab/iiab/issues/1802\n# https://mariadb.com/kb/en/library/what-to-do-if-mariadb-doesnt-start/#systemd\nTimeoutStartSec=180\n"
+    # If the line above were to be run repeatedly (never happens here!) Ansible
+    # would pollute MariaDB's systemd unit file.  As multi-line regexp's are
+    # not allowed (both regexp's should match, for idempotency).  If nec, use
+    # the 1-liner below, or Ansible's 'blockinfile' which pollutes config files
+    # in its own way...surrounding blocks with marker lines.
+    # line: "TimeoutStartSec=180"
+  when: mariadb_unit_file.stat.exists
+
+
+# 7 STANZAS BELOW...could later be put into setup.yml or config.yml or or provision.yml ?
+
+# Name of MySQL service varies by OS, so hardcoded in /opt/iiab/iiab/vars/<OS>.yml (formerly in roles/0-init/tasks/main.yml)
+- name: Start MySQL systemd service ({{ mysql_service }}) to permit configuration
+  systemd:
+    name: "{{ mysql_service }}"
+    daemon_reload: yes
+    state: restarted
+
+- name: Install /root/.my.cnf file from template, with root password credentials
+  template:
+    src: my.cnf.j2
+    dest: /root/.my.cnf
+    owner: root
+    mode: '0600'
+
+# 'localhost' needs to be the last item for idempotency, see
+# http://ansible.cc/docs/modules.html#mysql-user
+# unfortunately it still doesn't work
+- name: Update MySQL root password for localhost root accounts
+  mysql_user:
+    name: root
+    host: localhost
+    password: "{{ mysql_root_password }}"
+    priv: "*.*:ALL,GRANT"
+
+- name: Update MySQL root password for all remaining root accounts (127.0.0.1, ::1)
+  mysql_user:
+    name: root
+    host: "{{ item }}"
+    password: "{{ mysql_root_password }}"
+    priv: "*.*:ALL,GRANT"
+  with_items:
+    #- "{{ iiab_hostname }}.{{ iiab_domain }}"
+    - 127.0.0.1
+    - ::1
+
+- name: Delete anonymous MySQL server user for {{ ansible_hostname }}
+  mysql_user:
+    user: ""
+    host: "{{ ansible_hostname }}"
+    state: absent
+
+- name: Delete anonymous MySQL server user for localhost
+  mysql_user:
+    user: ""
+    state: absent
+
+- name: Remove the MySQL 'test' database
+  mysql_db:
+    db: test
+    state: absent
+
+
+# RECORD MySQL AS INSTALLED
+
+- name: "Set 'mysql_installed: True'"
+  set_fact:
+    mysql_installed: True
+
+- name: "Add 'mysql_installed: True' to {{ iiab_state_file }}"
+  lineinfile:
+    path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
+    regexp: '^mysql_installed'
+    line: 'mysql_installed: True'

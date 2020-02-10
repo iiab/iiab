@@ -1,81 +1,41 @@
-- debug:
-    var: nodejs_install
-- debug:
-    var: nodejs_enabled
-- debug:
-    var: nodejs_installed
+# "How do i fail a task in Ansible if the variable contains a boolean value?
+# I want to perform input validation for Ansible playbooks"
+# https://stackoverflow.com/questions/46664127/how-do-i-fail-a-task-in-ansible-if-the-variable-contains-a-boolean-value-i-want/46667499#46667499
 
-- name: "Set 'nodejs_install: True' and 'nodejs_enabled: True'"
-  set_fact:
-    nodejs_install: True
-    nodejs_enabled: True
+# We assume 0-init/tasks/validate_vars.yml has DEFINITELY been run, so no need
+# to re-check whether vars are defined here.  As Ansible vars cannot be unset:
+# https://serverfault.com/questions/856729/how-to-destroy-delete-unset-a-variable-value-in-ansible
 
-- name: NODEJS - run the 'nodejs' role
-  include_role:
-    name: nodejs
+- name: Assert that "pbx_install is sameas true" (boolean not string etc)
+  assert:
+    that: pbx_install is sameas true
+    fail_msg: "PLEASE SET 'pbx_install: True' e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
 
-- name: FAIL (STOP THE INSTALL) IF nodejs_installed is undefined
-  fail:
-    msg: "PBX install cannot proceed, as Node.js failed to install."
-  when: nodejs_installed is undefined
-
-- name: Fail if nodejs_version is incorrect
-  fail:
-    msg: >-
-      PBX: Refusing to install as nodejs_version is not 10.x.  Please fix that
-      (looking into /etc/iiab/local_vars.yml and
-      /opt/iiab/iiab/vars/default_vars.yml) and then rerun.
-  when: pbx_install and (nodejs_version != "10.x")
-
-#- name: TODO: Check if asterisk and freepbx are already installed
-
-- debug:    # Crazy spacing below is tuned for 80-column screens
-    msg: >-
-      ####################################################################WARNING:
-      ONLY UBUNTU 18.04, DEBIAN 9 & RASPBIAN ARE SUPPORTED AS OF FEB 2019.   Please
-      assist Internet-in-a-Box communities worldwide if you can make
-      Asterisk  and FreePBX work on other OS's / distros, Thank
-      You!  http://FAQ.IIAB.IO        ###############################################################################
-
-- name: Check if freepbx is already installed
-  stat: 
-    path: /etc/systemd/system/freepbx.service
-  register: freepbx_installed
-
-- debug:
-    msg: >-
-      FreePBX already installed. Reinstall shall be skipped
-  when: freepbx_installed.stat.exists
-
-- name: Install Asterisk (debuntu)
-  include_tasks: asterisk.yml
-  when: internet_available and pbx_install and (not pbx_installed) and is_debuntu and (not freepbx_installed.stat.exists)
-
-  #when: internet_available and pbx_install and (not pbx_installed) and ((is_debian and ansible_distribution_major_version == "9") or is_ubuntu_18)
-
-- name: Install FreePBX (debuntu)
-  include_tasks: freepbx.yml
-  when: internet_available and pbx_install and (not pbx_installed) and is_debuntu and (not freepbx_installed.stat.exists)
-  #when: internet_available and pbx_install and (not pbx_installed) and ((is_debian and ansible_distribution_major_version == "9") or is_ubuntu_18)
-
-- name: Enable FreePBX (debuntu)
-  include_tasks: freepbx_enable.yml
-  when: internet_available and pbx_install and (not pbx_installed) and is_debuntu
-  #when: internet_available and pbx_install and (not pbx_installed) and ((is_debian and ansible_distribution_major_version == "9") or is_ubuntu_18)
-
-- name: Asterisk - Install chan_dongle
-  include: chan_dongle.yml
-  when: asterisk_chan_dongle | bool
+- name: Assert that "pbx_enabled | type_debug == 'bool'" (boolean not string etc)
+  assert:
+    that: pbx_enabled | type_debug == 'bool'
+    fail_msg: "PLEASE GIVE VARIABLE 'pbx_enabled' A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
 
 
-# RECORD PBX AS INSTALLED
+- name: Install PBX if pbx_installed is not defined, e.g. in {{ iiab_state_file }}    # /etc/iiab/iiab_state.yml
+  include_tasks: install.yml
+  when: pbx_installed is undefined
 
-- name: "Set 'pbx_installed: True'"
-  set_fact:
-    pbx_installed: True
 
-- name: "Add 'pbx_installed: True' to {{ iiab_state_file }}"
-  lineinfile:
-    dest: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
-    regexp: '^pbx_installed'
-    line: 'pbx_installed: True'
+- name: Add 'pbx' variable values to {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+    section: pbx
+    option: "{{ item.option }}"
+    value: "{{ item.value | string }}"
+  with_items:
+    - option: name
+      value: PBX
+    - option: description
+      value: '"Full-featured PBX for rural telephony etc, that can integrate with GSM (mobile phone) networks.  Based on Asterisk (Voice over IP, SIP telephone numbers) and FreePBX (web-based GUI to administer it)."'
+    - option: pbx_install
+      value: "{{ pbx_install }}"
+    - option: pbx_enabled
+      value: "{{ pbx_enabled }}"

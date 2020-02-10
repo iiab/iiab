@@ -1,18 +1,12 @@
-- debug:
-    var: postgresql_install
-- debug:
-    var: postgresql_enabled
-- debug:
-    var: postgresql_installed
-
 - name: "Set 'postgresql_install: True' and 'postgresql_enabled: True'"
   set_fact:
     postgresql_install: True
     postgresql_enabled: True
 
-- name: POSTGRESQL - run the 'postgresql' role
+- name: POSTGRESQL - run 'postgresql' role (attempt to install & enable PostgreSQL)
   include_role:
     name: postgresql
+
 
 - name: "Install packages: python-psycopg2, php-pgsql (OS's other than debuntu)"
   package:
@@ -35,22 +29,22 @@
     state: present
   when: is_debuntu | bool
 
-- name: "Install package: php{{ php_version }}-zip (ubuntu or debian-9+)"
+- name: "Install package: php{{ php_version }}-zip (Ubuntu or Debian 9+)"
   package:
     name: "php{{ php_version }}-zip"
   when: is_ubuntu or (is_debian and not is_debian_8)
 
-- name: "Install package: php-pclzip (debian-8)"
-  package:
-    name: php-pclzip
-  when: is_debian_8 | bool
+# - name: "Install package: php-pclzip (debian-8)"
+#   package:
+#     name: php-pclzip
+#   when: is_debian_8 | bool
 
-- name: Determine if Moodle is already downloaded
+- name: Does {{ moodle_base }}/config-dist.php exist? (indicating Moodle is/was installed)
   stat:
     path: "{{ moodle_base }}/config-dist.php"
   register: moodle
 
-- name: Download the latest Moodle repo
+- name: Clone (i.e. use git to download) {{ moodle_repo_url }} to {{ moodle_base }}
   git:
     repo: "{{ moodle_repo_url }}"
     dest: "{{ moodle_base }}"
@@ -63,32 +57,32 @@
 
 - name: Create dir {{ moodle_base }} owned by {{ apache_user }} (for config file?)
   file:
+    state: directory
     path: "{{ moodle_base }}"
     owner: "{{ apache_user }}"
     recurse: yes
-    state: directory
 
 - name: Create dir {{ content_base }}/dbdata/moodle owned by {{ apache_user }}
   file:
+    state: directory
     path: "{{ content_base }}/dbdata/moodle"
     owner: "{{ apache_user }}"
     # mode: '0755'
-    state: directory
 
-- name: Create dir {{ moodle_data }} owned by {{ apache_user }}:{{ apache_user }} with write permission 0770    # /library/moodle
+- name: Create dir {{ moodle_data }} ({{ apache_user }}:{{ apache_user }}, '0770')    # /library/moodle
   file:
+    state: directory
     path: "{{ moodle_data }}"
     owner: "{{ apache_user }}"
     group: "{{ apache_user }}"
     mode: '0770'
-    state: directory
 
-- name: Remove Apache's stock moodle.conf
+- name: Remove stock /etc/{{ apache_conf_dir }}/moodle.conf
   file:
     path: "/etc/{{ apache_conf_dir }}/moodle.conf"
     state: absent
 
-- name: Install Apache's 022-moodle.conf from template, if moodle_enabled
+- name: Install /etc/{{ apache_conf_dir }}/022-moodle.conf from template
   template:
     src: 022-moodle.j2
     dest: "/etc/{{ apache_conf_dir }}/022-moodle.conf"
@@ -96,10 +90,10 @@
     # group: root
     # mode: '0644'
 
-- name: Restart postgresql-iiab
-  service:
+- name: Start 'postgresql-iiab' systemd service, to configure Moodle's DB
+  systemd:
     name: postgresql-iiab
-    state: restarted
+    state: started
 
 - name: Create PostgreSQL db user Admin/changeme
   postgresql_user:
@@ -121,21 +115,21 @@
   become: yes
   become_user: postgres
 
-- name: Install {{ moodle_base }}/moodle_installer from template
+- name: Install {{ moodle_base }}/moodle_installer from template ('0755')
   template:
     src: moodle_installer
     dest: "{{ moodle_base }}"
     mode: '0755'
 
-- name: Enable & Restart postgresql-iiab
-  service:
+- name: (Re)Start 'postgresql-iiab' systemd service
+  systemd:
     name: postgresql-iiab
     state: restarted
-    enabled: yes
-  when: moodle_enabled | bool
+    #enabled: yes
+  #when: moodle_enabled | bool
 
-- name: Restart Apache systemd service ({{ apache_service }})
-  service:
+- name: (Re)Start '{{ apache_service }}' systemd service
+  systemd:
     name: "{{ apache_service }}"
     state: restarted
 
@@ -148,10 +142,10 @@
   shell: "{{ moodle_base }}/moodle_installer"
   when: config.stat.exists is defined and not config.stat.exists
 
-- name: Give read permission 0644 to {{ moodle_base }}/config.php    # /opt/iiab/moodle/config.php
+- name: Make {{ moodle_base }}/config.php readable, with permission '0644'
   #command: chown -R {{ apache_user }} {{ moodle_base }}
   file:
-    path: "{{ moodle_base }}/config.php"
+    path: "{{ moodle_base }}/config.php"    # /opt/iiab/moodle
     mode: '0644'
 
 
@@ -163,6 +157,6 @@
 
 - name: "Add 'moodle_installed: True' to {{ iiab_state_file }}"
   lineinfile:
-    dest: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
+    path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
     regexp: '^moodle_installed'
     line: 'moodle_installed: True'

@@ -1,3 +1,10 @@
+# TO DO:
+#
+# - Prepare for a possible future w/o Apache by verifying/refining below...
+#   - 5 'when: apache_install | bool'
+#   - 1 'when: nginx_install | bool'
+#   - 8 core stanzas w/o such 'when:' clauses
+
 - name: 'Install 3 packages: awstats, openssl, pwauth'
   package:
     name:
@@ -12,33 +19,47 @@
       - libapache2-mod-authnz-external
       - apache2-utils
     state: present
+  when: apache_install | bool
 
-- name: Enable cgi execution via Apache
+- name: Run 'a2enmod cgi' to enable cgi execution via Apache
   command: a2enmod cgi
+  when: apache_install | bool
 
-- name: 'Mandate {{ apache_user }}:{{ apache_user }} perm 0750 dirs: {{ awstats_data_dir }} (intermediate summary storage) & {{ apache_log_dir }}'    # /library/awstats & /var/log/apache2 typically
+- name: Create directory... mkdir {{ apache_log_dir }}, recursively chown {{ apache_user }}:{{ apache_user }}, with chmod u+rw,g+r,g-w,o-rwx
   file:
+    state: directory
+    recurse: yes
+    path: "{{ apache_log_dir }}"    # /var/log/apache2 on debuntu
+    owner: "{{ apache_user }}"      # www-data on debuntu
+    group: "{{ apache_user }}"
+    mode: u+rw,g+r,g-w,o-rwx    # '0750' turned on too many x bits
+    #force: yes
+  when: apache_install | bool
+
+- name: Create 2 directories... mkdir {{ awstats_data_dir }} (intermediate summary storage) and /usr/lib/cgi-bin/awstats, recursively chown {{ apache_user }}:{{ apache_user }}, with chmod u+rw,g+r,g-w,o-rwx
+  file:
+    state: directory
+    recurse: yes
     path: "{{ item }}"
     owner: "{{ apache_user }}"
     group: "{{ apache_user }}"
-    mode: '0750'
-    state: directory
-    recurse: yes
-    force: yes
+    mode: u+rw,g+r,g-w,o-rwx    # '0750' turned on too many x bits
+    #force: yes
   with_items:
-    - "{{ awstats_data_dir }}"
-    - "{{ apache_log_dir }}"
+    - "{{ awstats_data_dir }}"    # /library/awstats
     - /usr/lib/cgi-bin/awstats    # create backward compatible path for awstats
 
 - name: Install /etc/{{ apache_conf_dir }}/awstats.conf from template
   template:
     src: apache-awstats.conf
-    dest: "/etc/{{ apache_conf_dir }}/awstats.conf"
+    dest: "/etc/{{ apache_conf_dir }}/awstats.conf"    # apache2/sites-available on debuntu
+  when: apache_install | bool
 
 - name: Install /etc/logrotate.d/apache2 from template, to ensure logrotate doesn't make logs unreadable
   template:
     src: logrotate.d.apache2
     dest: /etc/logrotate.d/apache2
+  when: apache_install | bool
 
 - name: Does /etc/awstats/awstats.conf exist?
   stat:
@@ -59,22 +80,25 @@
   template:
     src: awstats.schoolserver.conf.j2
     dest: /etc/awstats/awstats.schoolserver.conf
-  # when: awstats_enabled | bool
 
 - name: Symlink /etc/awstats/awstats.conf -> /etc/awstats/awstats.schoolserver.conf for access by IP address
   file:
     src: /etc/awstats/awstats.schoolserver.conf
     path: /etc/awstats/awstats.conf
     state: link
-  # when: awstats_enabled | bool
 
 # - name: On first enabling of AWStats, summarize httpd logs up to now (OS's other than debuntu)
 #   shell: /bin/perl /usr/share/awstats/wwwroot/cgi-bin/awstats.pl -config=schoolserver -update
 #   when: awstats_enabled and not is_debuntu
 
-- name: On first enabling of AWStats, summarize httpd logs up to now
+- name: "Summarize logs up to now: /usr/bin/perl /usr/lib/cgi-bin/awstats.pl -config=schoolserver -update"
   shell: /usr/bin/perl /usr/lib/cgi-bin/awstats.pl -config=schoolserver -update
-  # when: awstats_enabled | bool
+
+- name: Install /etc/nginx/cgi-bin.php from template
+  template:
+    src: cgi-bin.php
+    dest: /etc/nginx/
+  when: nginx_install | bool
 
 
 # RECORD AWStats AS INSTALLED
@@ -85,6 +109,6 @@
 
 - name: "Add 'awstats_installed: True' to {{ iiab_state_file }}"
   lineinfile:
-    dest: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
+    path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
     regexp: '^awstats_installed'
     line: 'awstats_installed: True'
