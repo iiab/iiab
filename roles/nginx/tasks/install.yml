@@ -1,4 +1,14 @@
-- name: Install NGINX required and helper packages
+# This stanza can likely be removed later in 2020:
+- name: 'Remove legacy files if present: /etc/systemd/system/uwsgi.service, {{ nginx_conf_dir }}/usb-lib.conf, {{ nginx_conf_dir }}/modules.conf'
+  file:
+    path: "{{ item.path }}"
+    state: absent
+  with_items:
+    - { path: "/etc/systemd/system/uwsgi.service" }
+    - { path: "{{ nginx_conf_dir }}/usb-lib.conf" }
+    - { path: "{{ nginx_conf_dir }}/modules.conf" }
+
+- name: Install required and helper packages for NGINX
   package:
     name: "{{ item }}"
     state: present
@@ -9,7 +19,7 @@
     - php-fpm
     - libnginx-mod-http-subs-filter
 
-- name: Add http server user to shadow group, so it can authenticate Admin Console
+- name: Add user '{{ apache_user }}' to shadow group, so it can authenticate Admin Console
   user:
     name: "{{ apache_user }}"
     groups: shadow
@@ -19,29 +29,30 @@
     path: /etc/nginx/sites-enabled/default
     state: absent
 
-- name: 'Install 4 files from template: /etc/nginx/server.conf, /etc/nginx/nginx.conf, /etc/{{ apache_service }}/ports.conf, /etc/systemd/system/uwsgi.service'
+- name: 'Install 3-or-4 files from template: /etc/nginx/server.conf, /etc/nginx/nginx.conf, /etc/{{ apache_service }}/ports.conf'
   template:
     src: "{{ item.src }}"
     dest: "{{ item.dest }}"
   with_items:
-    - { src: 'roles/nginx/templates/server.conf.j2', dest: '/etc/nginx/server.conf' }
-    - { src: 'roles/nginx/templates/nginx.conf.j2', dest: '/etc/nginx/nginx.conf' }
-    - { src: 'roles/nginx/templates/ports.conf.j2', dest: '/etc/{{ apache_service }}/ports.conf' }
+    - { src: 'server.conf.j2', dest: '/etc/nginx/server.conf' }
+    - { src: 'nginx.conf.j2', dest: '/etc/nginx/nginx.conf' }
+    #- { src: 'ports.conf.j2', dest: '/etc/{{ apache_service }}/ports.conf' }    # Moved to enable-or-disable.yml
+    - { src: 'iiab.conf.j2', dest: "{{ nginx_conf_dir }}/iiab.conf" }
 
-# php stem extension is installed in role httpd
+# php-stem extension installed by roles/web_support/tasks/php-stem.yml
 # here it is linked to php-fpm
-- name: Create softlink 20-stem.ini to /etc/php/{{ php_version }}/mods-available/stem.ini
+- name: Symlink /etc/php/{{ php_version }}/fpm/conf.d/20-stem.ini -> /etc/php/{{ php_version }}/mods-available/stem.ini
   file:
     src: "/etc/php/{{ php_version }}/mods-available/stem.ini"
     path: "/etc/php/{{ php_version }}/fpm/conf.d/20-stem.ini"
     state: link
-  when: nginx_enabled
+  #when: nginx_enabled | bool
 
-- name: Restart php{{ php_version }}-fpm service
-  service:
+- name: Restart php{{ php_version }}-fpm systemd service
+  systemd:
     name: "php{{ php_version }}-fpm"
     state: restarted
-  when: nginx_enabled
+  #when: nginx_enabled | bool
 
 
 # RECORD NGINX AS INSTALLED

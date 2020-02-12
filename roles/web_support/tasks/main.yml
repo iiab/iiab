@@ -1,0 +1,36 @@
+- include_tasks: html.yml
+
+
+- include_tasks: php-stem.yml
+
+# DOES THE FLAG BELOW (apache_high_php_limits) WORK WITH NGINX TOO?
+
+# For schools that use WordPress/Nextcloud/Moodle intensively.  iiab/iiab#1147
+# WARNING: Enabling this might cause excess use of RAM/disk or other resources!
+- name: Enact high limits in /etc/php/{{ php_version }}/{{ apache_service }}/php.ini if using WordPress/Nextcloud/Moodle intensively
+  lineinfile:
+    path: "/etc/php/{{ php_version }}/{{ apache_service }}/php.ini"
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+  when: apache_high_php_limits | bool
+  with_items:
+    - { regexp: '^upload_max_filesize', line: 'upload_max_filesize = 500M    ; default is 2M' }
+    - { regexp: '^post_max_size', line: 'post_max_size = 500M    ; default is 8M' }
+    - { regexp: '^memory_limit', line: 'memory_limit = 256M    ; default is 128M / Nextcloud requests 512M' }
+    - { regexp: '^max_execution_time', line: 'max_execution_time = 300    ; default is 30' }
+    - { regexp: '^max_input_time', line: 'max_input_time = 300    ; default is 60' }
+
+
+- name: Create dir {{ doc_root }}/info for http://box/info offline docs
+  file:
+    state: directory
+    path: "{{ doc_root }}/info"    # /library/www/html
+    owner: "{{ apache_user }}"
+    group: "{{ apache_user }}"
+    #mode: '0755'
+
+- name: Install /usr/bin/iiab-refresh-wiki-docs (scraper script) to create http://box/info offline documentation.  (Script can be run manually and/or at the end of Stage 4 = roles/4-server-options/tasks/main.yml)
+  template:
+    src: iiab-refresh-wiki-docs.sh
+    dest: /usr/bin/iiab-refresh-wiki-docs
+    mode: '0755'

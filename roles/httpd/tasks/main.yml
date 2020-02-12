@@ -1,20 +1,83 @@
 # 2020-01-23 TO DO / Questions:
-# - Validate input vars apache_install & apache_enabled here.
+# - [DONE] Validate input vars apache_install & apache_enabled here.
 #   - Use as nec, with 'when: apache_installed is undefined'
-# - Encapsulate all 3 tasks below into httpd/roles/install.yml ?
+# - [DONE: moved them to roles/web_support] Encapsulate all 3 tasks below into httpd/roles/install.yml ?
 # - Similarly sanity-check httpd/roles/enable.yml or httpd/roles/enable-or-disable.yml...
 #   - Verify that 9-local-addons/tasks/main.yml's invocation of
 #     roles/httpd/tasks/enable.yml (via roles/httpd-enable/tasks/main.yml, if
 #     apache_enabled is True) does the right thing!
 #   - And that we really don't want to invoke it hereunder?
-# - Save relevant apache_* vars to /etc/iiab/iiab.ini
+# - [DONE] Save relevant apache_* vars to /etc/iiab/iiab.ini
 
-#- include_tasks: install.yml
-- include_tasks: html.yml
-- include_tasks: php-stem.yml
+# "How do i fail a task in Ansible if the variable contains a boolean value?
+# I want to perform input validation for Ansible playbooks"
+# https://stackoverflow.com/questions/46664127/how-do-i-fail-a-task-in-ansible-if-the-variable-contains-a-boolean-value-i-want/46667499#46667499
 
-- name: Install /usr/bin/iiab-refresh-wiki-docs (scraper script) to create http://box/info offline documentation.  (Script can be run manually and/or at the end of Stage 4 = roles/4-server-options/tasks/main.yml)
-  template:
-    src: refresh-wiki-docs.sh
-    dest: /usr/bin/iiab-refresh-wiki-docs
-    mode: '0755'
+# We assume 0-init/tasks/validate_vars.yml has DEFINITELY been run, so no need
+# to re-check whether vars are defined here.  As Ansible vars cannot be unset:
+# https://serverfault.com/questions/856729/how-to-destroy-delete-unset-a-variable-value-in-ansible
+
+- name: Assert that "apache_install is sameas true" (boolean not string etc)
+  assert:
+    that: apache_install is sameas true
+    fail_msg: "PLEASE SET 'apache_install: True' e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+
+- name: Assert that "apache_enabled | type_debug == 'bool'" (boolean not string etc)
+  assert:
+    that: apache_enabled | type_debug == 'bool'
+    fail_msg: "PLEASE GIVE VARIABLE 'apache_enabled' A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+
+- debug:
+    var: apache_install
+- debug:
+    var: apache_enabled
+- debug:
+    var: apache_installed
+
+
+- name: Install Apache if 'apache_installed' not defined, e.g. in {{ iiab_state_file }}    # /etc/iiab/iiab_state.yml
+  include_tasks: install.yml
+  when: apache_installed is undefined
+
+
+- name: "IN CASE NGINX IS DISABLED: Enable IIAB pages via Apache (e.g. on port 80) by running 'a2ensite 010-iiab.conf', if apache_enabled"
+  command: a2ensite 010-iiab.conf
+  when: apache_enabled | bool
+
+- name: Disable IIAB pages via Apache (e.g. on port 80) by running 'a2dissite 010-iiab.conf', if not apache_enabled"
+  command: a2dissite 010-iiab.conf
+  when: not apache_enabled
+
+- name: Enable & (Re)Start {{ apache_service }} systemd service, if apache_enabled
+  systemd:
+    name: "{{ apache_service }}"
+    daemon_reload: yes
+    enabled: yes
+    state: restarted
+  when: apache_enabled | bool
+
+- name: Disable & Stop {{ apache_service }} systemd service, if not apache_enabled
+  systemd:
+    name: "{{ apache_service }}"
+    enabled: no
+    state: stopped
+  when: not apache_enabled
+
+
+- name: Add 'apache' variable values to {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+    section: wordpress
+    option: "{{ item.option }}"
+    value: "{{ item.value | string }}"
+  with_items:
+    - option: name
+      value: Apache
+    - option: description
+      value: '"The Apache HTTP Server (''httpd'')."'
+    - option: apache_install
+      value: "{{ apache_install }}"
+    - option: apache_enabled
+      value: "{{ apache_enabled }}"

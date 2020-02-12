@@ -49,7 +49,7 @@
     state: present
   when: is_redhat | bool
 
-# remove symlinks for mpm-event, replace with mpm-prefork
+# Remove symlinks for mpm_event, replace with mpm_prefork
 - name: Remove both mpm_event symlinks from /etc/apache2/mods-enabled (debuntu)
   file:
     path: "/etc/apache2/mods-enabled/{{ item }}"
@@ -68,6 +68,19 @@
     - mpm_prefork.conf
     - mpm_prefork.load
   when: is_debuntu | bool
+
+# - name: Remove mpm_event.conf & mpm_event.load symlinks, using a2dissite
+#   command: "a2dissite {{ item }}"
+#   with_items:
+#     - mpm_event.conf
+#     - mpm_event.load
+#   ignore_errors: yes
+#
+# - name: Symlink mpm_prefork.conf & mpm_prefork.load, using a2ensite
+#   command: "a2ensite {{ item }}"
+#   with_items:
+#     - mpm_prefork.conf
+#     - mpm_prefork.load
 
 #- name: 'Turn on mod_proxy using a2enmod with: proxy, proxy_html, headers, rewrite (debuntu)'
 #  command: a2enmod {{ item }}
@@ -100,11 +113,11 @@
 
 - name: Create Apache's pid dir /var/run/{{ apache_user }}
   file:
+    state: directory
     path: "/var/run/{{ apache_user }}"
     owner: root
     group: root
     mode: '0755'
-    state: directory
 
 - name: 'Create group: admin'
   group:
@@ -120,25 +133,25 @@
 
 - name: Create Apache dir /var/log/{{ apache_service }}
   file:
+    state: directory
     path: "/var/log/{{ apache_service }}"
     owner: "{{ apache_user }}"
     group: "{{ apache_user }}"
     mode: '0755'
-    state: directory
 
-- name: Enable Apache systemd service ({{ apache_service }})
-  service:
-    name: "{{ apache_service }}"
-    enabled: yes
-    state: stopped
+- name: Install Apache's 010-iiab.conf & proxy_ajp.conf into /etc/apache2/sites-available, from templates
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+  with_items:
+    - { src: 'roles/httpd/templates/010-iiab.conf.j2', dest: '/etc/{{ apache_conf_dir }}/010-iiab.conf' }
+    - { src: 'roles/httpd/templates/proxy_ajp.conf.j2', dest: '/etc/{{ apache_conf_dir }}/proxy_ajp.conf' }
 
-- name: Create /library/www/html/info directory for http://box/info offline docs
-  file:
-    path: "{{ doc_root }}/info"
-    owner: "{{ apache_user }}"
-    group: "{{ apache_user }}"
-    mode: '0755'
-    state: directory
+# - name: Enable & Stop '{{ apache_service }}' systemd service
+#   systemd:
+#     name: "{{ apache_service }}"
+#     enabled: yes
+#     state: stopped
 
 
 # RECORD Apache AS INSTALLED
