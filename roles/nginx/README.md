@@ -44,6 +44,6 @@
       * kalite (menu goes directly to ports 8006-8008) [*]
       * minetest [*]
       * openvpn [*]
-      * pbx
+      * pbx [*]
 
-[*] Apache, NGINX and the 5 above starred roles above could use improvement as of 2020-02-14.
+[*] The 6 above starred roles could use improvement, as of 2020-02-14.
