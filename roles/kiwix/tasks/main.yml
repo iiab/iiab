@@ -1,40 +1,54 @@
-- name: "Set Kiwix filename to d/l: {{ kiwix_src_file_armhf }} (armv6l or armv71)"
-  set_fact:
-    kiwix_src_dir: "{{ kiwix_version_armhf }}"
-    kiwix_src_file: "{{ kiwix_src_file_armhf }}"
-  when: ansible_machine == "armv7l" or ansible_machine == "armv6l"
-  
-- name: "Set Kiwix filename to d/l: {{ kiwix_src_file_linux64 }} (x86_64)"
-  set_fact:
-    kiwix_src_dir: "{{ kiwix_version_linux64 }}"
-    kiwix_src_file: "{{ kiwix_src_file_linux64 }}"
-  when: ansible_machine == "x86_64"
+# "How do i fail a task in Ansible if the variable contains a boolean value?
+# I want to perform input validation for Ansible playbooks"
+# https://stackoverflow.com/questions/46664127/how-do-i-fail-a-task-in-ansible-if-the-variable-contains-a-boolean-value-i-want/46667499#46667499
 
-- name: "Set Kiwix filename to d/l: {{ kiwix_src_file_i686 }} (i686)"
-  set_fact:
-    kiwix_src_dir: "{{ kiwix_version_i686 }}"
-    kiwix_src_file: "{{ kiwix_src_file_i686 }}"
-  when: ansible_machine == "i686"
-# COMMENT OUT LINE ABOVE TO TEST i686 CODE PATH ON X86_64 (WORKS NOV 2017)
+# We assume 0-init/tasks/validate_vars.yml has DEFINITELY been run, so no need
+# to re-check whether vars are defined here.  As Ansible vars cannot be unset:
+# https://serverfault.com/questions/856729/how-to-destroy-delete-unset-a-variable-value-in-ansible
 
-- name: FAIL (force Ansible to exit) IF kiwix-tools appears unavailable for OS/architecture
-# debug:
-  fail:
-    msg: "WARNING: kiwix-tools SOFTWARE APPEARS UNAVAILABLE FOR YOUR {{ ansible_machine }} OS/ARCHITECTURE."
-  when: not kiwix_src_file
+- name: Assert that "kiwix_install is sameas true" (boolean not string etc)
+  assert:
+    that: kiwix_install is sameas true
+    fail_msg: "PLEASE SET 'kiwix_install: True' e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
 
-- name: Check for /opt/iiab/kiwix/bin/kiwix-serve binary
-  stat:
-    path: "{{ kiwix_path }}/bin/kiwix-serve"
-  register: kiwix_bin
+- name: Assert that "kiwix_enabled | type_debug == 'bool'" (boolean not string etc)
+  assert:
+    that: kiwix_enabled | type_debug == 'bool'
+    fail_msg: "PLEASE GIVE VARIABLE 'kiwix_enabled' A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
 
-- name: Set fact kiwix_force_install if kiwix-serve not found
-  set_fact:
-    kiwix_force_install: True
-  when: not kiwix_bin.stat.exists or reinstall is defined
 
-- include_tasks: install.yml
-  when: (kiwix_install and not kiwix_installed is defined) or kiwix_force_install
+- name: Install Kiwix if 'kiwix_installed' not defined, e.g. in {{ iiab_state_file }}    # /etc/iiab/iiab_state.yml
+  include_tasks: install.yml
+  when: kiwix_installed is undefined
 
-- include_tasks: enable.yml
-  when: kiwix_enabled    # or kiwix_installed is defined
+
+- include_tasks: enable-or-disable.yml
+
+
+- name: Add 'kiwix' variable values to {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"
+    section: kiwix
+    option: "{{ item.option }}"
+    value: "{{ item.value | string }}"
+  with_items:
+  - option: name
+    value: Kiwix
+  - option: description
+    value: '"Part of https://github.com/kiwix/kiwix-tools/ -- kiwix-serve is the most used web server for ZIM files."'
+  - option: kiwix_url
+    value: "{{ kiwix_url }}"
+  - option: kiwix_url_plus_slash
+    value: "{{ kiwix_url_plus_slash }}"
+  - option: kiwix_path
+    value: "{{ kiwix_path }}"
+  - option: kiwix_port
+    value: "{{ kiwix_port }}"
+  - option: iiab_zim_path
+    value: "{{ iiab_zim_path }}"
+  - option: kiwix_library_xml
+    value: "{{ kiwix_library_xml }}"
+  - option: kiwix_enabled
+    value: "{{ kiwix_enabled }}"
