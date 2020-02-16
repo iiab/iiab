@@ -28,6 +28,7 @@
       * kolibri
       * mediawiki
       * munin
+      * nextcloud
       * sugarizer
       * wordpress
 
@@ -35,7 +36,6 @@
       * elgg
       * lokole
       * moodle
-      * nextcloud ([PR #2119](https://github.com/iiab/iiab/pull/2119)) [*]
       * nodered
 
    4. These each run their own web server or non-web / backend services, e.g. off of their own [unique port(s)](https://github.com/iiab/iiab/wiki/IIAB-Networking#list-of-ports--services) (IIAB home pages link directly to these destinations).  In future we'd like mnemonic URL's for all of these: (e.g. http://box/calibre, http://box/archive, http://box/kalite)
@@ -46,4 +46,4 @@
       * openvpn [*]
       * pbx [*]
 
-[*] The 6 above starred roles could use improvement, as of 2020-02-14.
+[*] The 5 above starred roles could use improvement, as of 2020-02-15.
