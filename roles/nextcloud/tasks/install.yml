@@ -1,5 +1,47 @@
+# CHECK FOR PHP VERSION AUTOMATICALLY, TO DETERMINE WHICH NEXTCLOUD TO INSTALL.
+# INSPIRED BY: github.com/iiab/iiab/blob/master/roles/nodejs/tasks/main.yml
+
+# - name: Try to run 'php -v' to get PHP version
+#   # e.g. converts multi-line "PHP 7.0.33-0ubuntu0.16.04.5 (cli) ( NTS ) ..." to "7.0.33"
+#   shell: php -v | head -1 | sed 's/^[^0-9.]*//' | sed 's/[^0-9.].*//'
+#   register: php_version_installed
+#   #ignore_errors: yes    # NOT NEC: if php is not installed, php_version_installed.stdout will get set to ""
+
+# - debug:
+#     var: php_version_installed
+
+# # NOTE: this could easily be made to work even if PHP was not installed, e.g.
+# # by pre-initializing variable 'php_new' to False here.  But trapping the
+# # absence of PHP (below) is a useful software safety precondition!
+# #
+# #- name: Initialize var 'php_new' to False
+# #  set_fact:
+# #    php_new: False
+
+# - name: INTENTIONALLY FAIL, IF PHP (Nextcloud prerequisite) ISN'T INSTALLED
+#   fail:
+#     msg: >
+#       Nextcloud install cannot proceed, as it requires PHP be installed first.
+#       Note that as of 2019-07-04, IIAB takes care of this by forcing vars
+#       mysql_install and mysql_enabled to True in
+#       /opt/iiab/iiab/roles/0-init/tasks/main.yml, which in turn forces the
+#       installation of PHP in /opt/iiab/iiab/roles/mysql/tasks/main.yml, as
+#       invoked by /opt/iiab/iiab/roles/3-base-server/tasks/main.yml
+#   when: php_version_installed.stdout == ""
+
+# - name: Set var 'php_new' indicating if installed version of PHP ({{ php_version_installed.stdout }}) >= 7.1, as required by Nextcloud 16
+#   set_fact:
+#     php_new: "{{ php_version_installed.stdout is version('7.1', '>=') }}"
+#     # Ansible's Version Comparison routine:
+#     # https://docs.ansible.com/ansible/latest/user_guide/playbooks_tests.html#version-comparison
+#   when: php_version_installed.stdout != ""    # i.e. IF ABOVE 'php -v' WORKED
+
+# - debug:
+#     var: php_new
+
+
 # https://docs.nextcloud.com/server/18/admin_manual/installation/source_installation.html#prerequisites-for-manual-installation
-- name: Install ffmpeg + libxml2 + 21 php packages
+- name: Install ffmpeg + libxml2 + 13 php packages
   package:
     name:
       #- dnsutils        # NOT REQUESTED by Nextcloud
@@ -9,15 +51,10 @@
       - php-bz2          # Optional (for extraction of apps)
       #- php-cli         # NOT REQUESTED by Nextcloud
       #- php-common      # NOT REQUESTED by Nextcloud
-      - php-ctype
       - php-curl
-      - php-dom
-      - php-exif         # Optional (for image rotation in pictures app)
-      - php-fileinfo     # Optional (enhances file analysis performance)
       - php-fpm          # ALSO INSTALLED IN roles/www_back_end (Stage 3) for nginx_high_php_limits
       - php-gd
       - php-gmp          # Optional (for SFTP storage)
-      - php-iconv
       - php-imagick      # Optional (for preview generation)
       - php-intl         # Optional (increases language translation performance and fixes sorting of non-ASCII characters)
       - php-json
@@ -26,17 +63,30 @@
       - php-mysql 
       #- php-openssl     # NOT INSTALLABLE: ENABLED BY DEFAULT?
       #- php-pdo_mysql   # NOT INSTALLABLE: php-mysql handles this on all OS's?
-      - php-posix
       #- php-redis       # @m-anish future work?
       #- php-session     # NOT INSTALLABLE: ENABLED BY DEFAULT?
-      - php-simplexml
       - php-smbclient    # Optional (SMB/CIFS integration
-      #- php-xml         # NOT REQUESTED by Nextcloud
-      - php-xmlreader
-      - php-xmlwriter
+      - php-xml          # NOT FORMALLY REQUESTED by Nextcloud (BUT hopefully delivers php-simplexml if not {php-xmlreader, php-xmlwriter} on Raspbian?)
       - php-zip
       #- php-zlib        # NOT INSTALLABLE: ENABLED BY DEFAULT?
     state: present
+
+# https://docs.nextcloud.com/server/18/admin_manual/installation/source_installation.html#prerequisites-for-manual-installation
+- name: Install 9 additional php packages, if OS is not Raspbian (these are not available on Raspbian on RPi, as of Feb 2020)
+  package:
+    name:
+      - php-ctype
+      - php-dom
+      - php-exif         # Optional (for image rotation in pictures app)
+      - php-fileinfo     # Optional (enhances file analysis performance)
+      - php-iconv
+      - php-posix
+      - php-simplexml
+      - php-xmlreader
+      - php-xmlwriter
+    state: present
+  when: not is_raspbian
+
 
 - name: Create dir {{ nextcloud_prefix }}{{ nextcloud_url }}
   file:
