@@ -19,11 +19,11 @@ The Nextcloud suite is divided into three main categories:
     nextcloud_install: True
     nextcloud_enabled: True
 
-(2) If you want to access Nextcloud from IPv4 addresses across the public Internet, then also set:
+<strike>(2) If you want to access Nextcloud from IPv4 addresses across the public Internet, then also set:
 
     nextcloud_allow_public_ips: True
 
-To further refine Nextcloud access controls based on IPv4 addresses, you can edit `/etc/apache2/sites-available/nextcloud.conf` _after_ it's created by this template: [/opt/iiab/iiab/roles/nextcloud/templates/nextcloud.conf.j2](https://github.com/iiab/iiab/blob/master/roles/nextcloud/templates/nextcloud.conf.j2)
+To further refine Nextcloud access controls based on IPv4 addresses, you can edit `/etc/apache2/sites-available/nextcloud.conf` _after_ it's created by this template: [/opt/iiab/iiab/roles/nextcloud/templates/nextcloud.conf.j2](https://github.com/iiab/iiab/blob/master/roles/nextcloud/templates/nextcloud.conf.j2)</strike>
 
 (3) Strongly consider also setting `nginx_high_php_limits: True` in the 3-BASE-SERVER section of /etc/iiab/local_vars.yml, to allocate important RAM/resources to PHP.  Of course, enabling this might cause excess use of RAM/disk or other resources if not calibrated to your hardware and network!  So _after_ install is complete, verify and evaluate these 5 settings in /etc/php/[ACTUAL PHP VERSION]/apache2/php.ini:
 
