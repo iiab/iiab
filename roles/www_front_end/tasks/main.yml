@@ -1,0 +1,111 @@
+# Role "www_back_end" runs earlier, likely in 3-BASE-SERVER.
+# Role "www_front_end" runs here, probably in 4-SERVER-OPTIONS.
+#
+# (Don't take either name too literally!)
+
+
+# HOMEPAGE
+
+- name: Create dir {{ doc_root }}{{ iiab_home_url }} just in case variable iiab_home_url was customized.  (Standard path {{doc_root}}/home was created earlier.)
+  file:
+    state: directory
+    path: "{{ doc_root }}{{ iiab_home_url }}"    # /library/www/html/home
+    owner: "{{ apache_user }}"
+    group: "{{ apache_user }}"
+    mode: '0755'
+
+# Used to be run by httpd/tasks/install.yml
+- name: "IN CASE NGINX IS DISABLED: Enable IIAB pages via Apache (e.g. on port 80) if apache_install"
+  include_tasks: roles/httpd/tasks/homepage.yml
+  when: apache_install | bool
+
+# Used to be run by nginx/tasks/install.yml
+- name: Enable IIAB pages via NGINX (e.g. on port 80) if nginx_install
+  include_tasks: roles/nginx/tasks/homepage.yml
+  when: nginx_install | bool
+
+
+- block:    # 3-STANZA BLOCK BEGINS
+
+  # Also installed by roles/nextcloud/tasks/install.yml in case './runrole nextcloud' bypasses this role here.  (Possibly make php-fpm mandatory in nginx/tasks/install.yml in future?)
+  - name: Install php-fpm (FastCGI Process Manager) as nec
+    package:
+      name: php-fpm
+
+  # For schools that use WordPress/Nextcloud/Moodle intensively.
+  # WARNING: Enabling this might cause excess use of RAM/disk or other resources!
+
+  # COMPARE apache_allow_sudo further below.
+
+  - name: Enact high limits in /etc/php/{{ php_version }}/fpm/php.ini if using WordPress/Nextcloud/Moodle intensively, as nec
+    lineinfile:
+      path: "/etc/php/{{ php_version }}/fpm/php.ini"
+      #path: "/etc/php/{{ php_version }}/{{ apache_service }}/php.ini"
+      regexp: "{{ item.regexp }}"
+      line: "{{ item.line }}"
+    with_items:
+      - { regexp: '^upload_max_filesize', line: 'upload_max_filesize = 500M    ; default is 2M' }
+      - { regexp: '^post_max_size', line: 'post_max_size = 500M    ; default is 8M' }
+      - { regexp: '^memory_limit', line: 'memory_limit = 512M    ; default is 128M / Nextcloud requests 512M' }
+      - { regexp: '^max_execution_time', line: 'max_execution_time = 300    ; default is 30' }
+      - { regexp: '^max_input_time', line: 'max_input_time = 300    ; default is 60' }
+    when: nginx_high_php_limits
+
+  - name: Restart 'php{{ php_version }}-fpm' systemd services, as nec
+    systemd:
+      name: "php{{ php_version }}-fpm"
+      state: restarted
+
+  when: (nextcloud_install or pbx_install) and nginx_enabled    # 3-STANZA BLOCK ENDS
+
+
+# 'Is a "Rapid Power Off" button possible for low-electricity environments?'
+# gives more details here: http://FAQ.IIAB.IO
+
+# COMPARE nginx_high_php_limits further above.
+
+# 2020-02-12: DOES THE FLAG BELOW (apache_allow_sudo) WORK WITH NGINX TOO ?
+
+- name: Give {{ apache_user }} (per variable apache_user) permission to poweroff, installing /etc/sudoers.d/020_apache_poweroff from template
+  template:
+    src: 020_apache_poweroff.j2
+    dest: /etc/sudoers.d/020_apache_poweroff
+    mode: '0755'
+  when: apache_allow_sudo | bool
+
+- name: Remove {{ apache_user }} (per variable apache_user) permission to poweroff, removing /etc/sudoers.d/020_apache_poweroff
+  file:
+    path: /etc/sudoers.d/020_apache_poweroff
+    state: absent
+  when: not apache_allow_sudo
+
+
+- name: Run /usr/bin/iiab-refresh-wiki-docs (scraper script) to create http://box/info offline documentation.  (This script was installed in Stage 3 = roles/3-base-server/tasks/main.yml, which ran roles/www_back_end/tasks/main.yml)
+  command: /usr/bin/iiab-refresh-wiki-docs
+  when: internet_available and not nodocs
+
+
+- name: (Re)Start '{{ apache_service }}' systemd service, if apache_enabled
+  systemd:
+    name: "{{ apache_service }}"    # apache2 on debuntu
+    state: restarted
+  when: apache_enabled | bool
+
+- name: (Re)Start 'nginx' systemd service, if nginx_enabled
+  systemd:
+    name: nginx
+    state: restarted
+  when: nginx_enabled | bool
+
+
+# RECORD www_front_end AS INSTALLED
+
+- name: "Set 'www_front_end_installed: True'"
+  set_fact:
+    www_front_end_installed: True
+
+- name: "Add 'www_front_end_installed: True' to {{ iiab_state_file }}"
+  lineinfile:
+    path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
+    regexp: '^www_front_end_installed'
+    line: 'www_front_end_installed: True'

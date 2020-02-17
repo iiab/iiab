@@ -1,0 +1,43 @@
+- name: Add dir {{ doc_root }}/local_content, where USB drive links can appear
+  file:
+    state: directory
+    path: "{{ doc_root }}/local_content"
+    owner: "{{ apache_user }}"
+    group: "{{ apache_user }}"    # 2020-02-13: changed from iiab_admin_user, after discussion on weekly call (#1228, #2222)
+    mode: '0775'
+
+- name: 'Install from template: /etc/udev/rules.d/usbmount.rules, /etc/systemd/system/usbmount@.service, /usr/bin/iiab-usb_lib-show-all-on, /usr/bin/iiab-usb_lib-show-all-off'
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    mode: "{{ item.mode }}"
+  with_items:
+    - { src: 'usbmount@.service.j2', dest: '/etc/systemd/system/usbmount@.service', mode: '0644' }
+    - { src: 'usbmount.rules.j2', dest: '/etc/udev/rules.d/usbmount.rules', mode: '0644' }
+    - { src: 'iiab-usb_lib-show-all-on', dest: '/usr/bin/', mode: '0755' }
+    - { src: 'iiab-usb_lib-show-all-off', dest: '/usr/bin/', mode: '0755' }
+
+- name: Enable exFAT and NTFS in /etc/usbmount/usbmount.conf
+  lineinfile:
+    regexp: '^FILESYSTEMS.*'
+    line: 'FILESYSTEMS="vfat ext2 ext3 ext4 hfsplus exfat fuseblk ntfs"'
+    path: /etc/usbmount/usbmount.conf
+
+- name: Install /etc/{{ apache_conf_dir }}/content_dir.conf from template
+  template:
+    src: content_dir.conf
+    dest: "/etc/{{ apache_conf_dir }}"    # apache2/sites-available on debuntu
+  when: apache_install
+
+
+# RECORD 'USB_LIB' AS INSTALLED
+
+- name: "Set 'usb_lib_installed: True'"
+  set_fact:
+    usb_lib_installed: True
+
+- name: "Add 'usb_lib_installed: True' to {{ iiab_state_file }}"
+  lineinfile:
+    path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
+    regexp: '^usb_lib_installed'
+    line: 'usb_lib_installed: True'

@@ -1,29 +1,56 @@
-# 1. CREATE/VERIFY CRITICAL DIRECTORIES & FILES ARE IN PLACE
+# 0. SET CPU ARCHITECTURE
 
-- name: Download Kiwix software to /opt/iiab/downloads
+- name: "Initialize 'kiwix_src_dir: False' just in case CPU architecture is not supported"
+  set_fact:
+    kiwix_src_dir: False
+
+- name: "Set fact 'kiwix_src_dir: {{ kiwix_version_armhf }}' (armv6l or armv71)"
+  set_fact:
+    kiwix_src_dir: "{{ kiwix_version_armhf }}"
+  when: ansible_machine == "armv7l" or ansible_machine == "armv6l"
+
+- name: "Set fact 'kiwix_src_dir: {{ kiwix_version_linux64 }}' (x86_64)"
+  set_fact:
+    kiwix_src_dir: "{{ kiwix_version_linux64 }}"
+  when: ansible_machine == "x86_64"
+
+- name: "Set fact 'kiwix_src_dir: {{ kiwix_version_i686 }}' (i686)"
+  set_fact:
+    kiwix_src_dir: "{{ kiwix_version_i686 }}"
+  when: ansible_machine == "i686"
+# COMMENT OUT LINE ABOVE TO TEST i686 CODE PATH ON X86_64 (WORKS NOV 2017)
+
+- name: Force Ansible to exit (FAIL) if kiwix-tools appears unavailable for your architecture ({{ ansible_machine }})
+  fail:
+    msg: "WARNING: kiwix-tools SOFTWARE APPEARS UNAVAILABLE FOR YOUR {{ ansible_machine }} OS/ARCHITECTURE."
+  when: not kiwix_src_dir
+
+- name: "Set fact 'kiwix_src_file: {{ kiwix_src_dir }}.tar.gz'"
+  set_fact:
+    kiwix_src_file: "{{ kiwix_src_dir }}.tar.gz"
+
+
+# 1. PUT IN PLACE: ESSENTIAL DIRS, library.xml, test.zim
+
+- name: Download {{ iiab_download_url }}/{{ kiwix_src_file }} to /opt/iiab/downloads
   get_url:
-    url: "{{ iiab_download_url }}/{{ kiwix_src_file }}"
+    url: "{{ iiab_download_url }}/{{ kiwix_src_file }}"    # http://download.iiab.io/packages
     dest: "{{ downloads_dir }}/{{ kiwix_src_file }}"
     timeout: "{{ download_timeout }}"
   when: internet_available | bool
 
-- name: Check for /opt/iiab/downloads/{{ kiwix_src_file }}
-  stat:
-    path: "{{ downloads_dir }}/{{ kiwix_src_file }}"
-  register: kiwix_src
-
-- name: Create directory {{ iiab_zim_path }} and subdirs {content, index} for Kiwix ZIM files
+- name: Create dir {{ iiab_zim_path }} and subdirs {content, index} for Kiwix ZIM files
   file:
     path: "{{ item }}"
     state: directory
   with_items:
-    - "{{ iiab_zim_path }}"
+    - "{{ iiab_zim_path }}"    # /library/zims
     - "{{ iiab_zim_path }}/content"
     - "{{ iiab_zim_path }}/index"
 
-- name: Check for {{ kiwix_library_xml }}    # /library/zims/library.xml
+- name: Check for {{ kiwix_library_xml }}
   stat:
-    path: "{{ kiwix_library_xml }}"
+    path: "{{ kiwix_library_xml }}"    # /library/zims/library.xml
   register: kiwix_xml
 
 - name: Install stub /library/zims/library.xml from template, if one doesn't exist
@@ -39,9 +66,9 @@
     dest: "{{ iiab_zim_path }}/content/test.zim"
     force: no
 
-- name: Create {{ kiwix_path }}/bin directory    # /opt/iiab/kiwix/bin
+- name: Create {{ kiwix_path }}/bin directory
   file:
-    path: "{{ kiwix_path }}/bin"
+    path: "{{ kiwix_path }}/bin"    # /opt/iiab/kiwix
     state: directory
 
 
@@ -52,8 +79,8 @@
     src: "{{ downloads_dir }}/{{ kiwix_src_file }}"
     dest: /tmp
 
-- name: Move /tmp/{{ kiwix_src_dir }}/* to permanent location /opt/iiab/kiwix/bin (armhf & linux64 & i686)
-  shell: "mv /tmp/{{ kiwix_src_dir }}/* {{ kiwix_path }}/bin/"
+- name: Move /tmp/{{ kiwix_src_dir }}/* to permanent location {{ kiwix_path }}/bin
+  shell: "mv /tmp/{{ kiwix_src_dir }}/* {{ kiwix_path }}/bin/"    # /opt/iiab/kiwix
 
 
 # 3. ENABLE MODS FOR APACHE PROXY IF DEBUNTU

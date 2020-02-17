@@ -49,7 +49,6 @@ language_priority: en es fr
 iiab_admin_user_install: True
 # If iiab_admin_user_install: False, set iiab_admin_user (below) to an existing
 # Linux user that has sudo access, for login to Admin Console http://box/admin
-# ODDLY THIS IS ALSO USED BY roles/usb-lib/tasks/main.yml TO SET GROUP PERM FOR /library/www/html/local_content (ISN'T {{ apache_user }} MORE APPROPRIATE?)
 iiab_admin_user: iiab-admin
 iiab_admin_published_pwd: g0adm1n    # For live checks/alerts of published pwds
 # Password hash to override above, if Ansible creates above user:
@@ -237,6 +236,12 @@ exFAT_enabled: True
 admin_console_install: True
 admin_console_enabled: True
 
+# MySQL MANDATORY - THESE 2 VARS HAVE NO EFFECT - SEE roles/0-init/tasks/main.yml & roles/mysql/tasks/main.yml
+mysql_install: True
+mysql_enabled: True
+# mysql_root_password: $6$iiab51$3ICIW0CLWxxMW2a3yrHZ38ukZItD5tcadL4rWcE9D.qIGStxhh8rRsaSxoj3b.MYxI/VRDNjpzSYK/V6zkWFI0
+mysql_root_password: fixmysql
+
 # 2019-01-13: IIAB's use of NGINX is still evolving -- please review this
 # evolving doc: https://github.com/iiab/iiab/blob/master/roles/nginx/README.md
 nginx_install: True
@@ -245,6 +250,13 @@ nginx_port: 80
 nginx_interface: 0.0.0.0
 nginx_conf_dir: /etc/nginx/conf.d
 nginx_log_dir: /var/log/nginx
+#
+# For schools that use WordPress/Nextcloud/Moodle intensively:
+nginx_high_php_limits: False
+# WARNING: Enabling this might cause excess use of RAM/disk or other resources!
+# SO AFTER INSTALLING IIAB, VERIFY THAT THESE 5 SETTINGS...
+# https://github.com/iiab/iiab/blob/master/roles/www_back_end/tasks/main.yml#L23-L27
+# ...ARE SUITABLE FOR YOUR HARDWARE, for: /etc/php/<VERSION>/fpm/php.ini
 
 # See also Apache vars {default_language, language_priority} @ top of this file
 apache_install: True
@@ -254,21 +266,8 @@ apache_enabled: False
 apache_port: 8090
 apache_interface: 127.0.0.1    # 2020-01-13: Var unused
 #
-# For schools that use WordPress/Nextcloud/Moodle intensively:  iiab/iiab#1147
-apache_high_php_limits: False
-# WARNING: Enabling this might cause excess use of RAM/disk or other resources!
-# SO AFTER INSTALLING IIAB, VERIFY THAT THESE 5 SETTINGS...
-# https://github.com/iiab/iiab/blob/master/roles/httpd/tasks/main.yml#L80-L84
-# ...ARE SUITABLE FOR YOUR HARDWARE IN /etc/php/<VERSION>/apache2/php.ini
-#
 # Make this False to disable http://box/common/services/power_off.php button:
 apache_allow_sudo: True
-
-# MySQL MANDATORY - THESE 2 VARS HAVE NO EFFECT - SEE roles/0-init/tasks/main.yml & roles/mysql/tasks/main.yml
-mysql_install: True
-mysql_enabled: True
-# mysql_root_password: $6$iiab51$3ICIW0CLWxxMW2a3yrHZ38ukZItD5tcadL4rWcE9D.qIGStxhh8rRsaSxoj3b.MYxI/VRDNjpzSYK/V6zkWFI0
-mysql_root_password: fixmysql
 
 
 # 4-SERVER-OPTIONS
@@ -304,7 +303,7 @@ samba_udp_ports: "137:138"
 samba_tcp_mports: "139,445"
 shared_dir : "{{ content_base }}/public"    # /library/public
 
-# usb-lib
+# USB_LIB
 usb_lib_install: True
 usb_lib_enabled: True
 # Show entire contents of USB sticks/drives (at http://box/usb)
@@ -344,8 +343,8 @@ azuracast_enabled: False
 azuracast_http_port: 10080
 azuracast_https_port: 10443
 
-# AzuraCast needs many ports in the 8000:8100 range by default, but IIAB services
-# conflict with those ports so this variable below sets a sane prefix.
+# AzuraCast needs many ports in the 8000:8100 range by default, but IIAB
+# services conflict with those ports so this variable below sets a sane prefix.
 # e.g. setting the below variable to 10 will result in port ranges 10000-10100
 # being reserved for AzuraCast:
 azuracast_port_range_prefix: 10
@@ -400,17 +399,20 @@ nodered_port: 1880
 nodered_web_path: nodered
 
 # Store your docs, calendar, contacts & photos on your local server not cloud!
-# If using WordPress intensively, set apache_high_php_limits in 3-BASE-SERVER
+# If using Nextcloud intensively, set nginx_high_php_limits further above.
 nextcloud_install: False
 nextcloud_enabled: False
-nextcloud_allow_public_ips: False
+#
+# 2020-02-15: UNUSED at this time.  Legacy remains from Apache:
+# nextcloud_allow_public_ips: True
+#
 # Configuration tips for IPv4 access controls and tuning RAM/resources:
 # https://github.com/iiab/iiab/blob/master/roles/nextcloud/README.md
 #
 # 2020-01-07: If installing IIAB often, download.nextcloud.com may throttle
 # you to ~100 kbit/sec, delaying your IIAB install by an hour or more (#2112).
 # Uncomment the following line to end that: (might install an older Nextcloud!)
-# nextcloud_dl_url: http://d.iiab.io/packages
+# nextcloud_dl_url: http://d.iiab.io/packages/latest.tar.bz2
 
 # A full-featured PBX (for rural telephony, etc) based on Asterisk and FreePBX.
 # Works on Ubuntu 18.04, Debian 9 w/ Node.js 10.x.  Experimental on RPi 3.
@@ -422,7 +424,7 @@ pbx_signaling_ports_chan_pjsip: "5060"
 pbx_data_ports: "10000:20000"
 pbx_http_port: 83
 
-# If using WordPress intensively, set apache_high_php_limits in 3-BASE-SERVER
+# If using WordPress intensively, set nginx_high_php_limits further above.
 wordpress_install: False
 wordpress_enabled: False
 
@@ -453,7 +455,7 @@ iiab_zim_path: "{{ content_base }}/zims"    # /library/zims
 
 moodle_install: False
 moodle_enabled: False
-# If using Moodle intensively, set apache_high_php_limits in 3-BASE-SERVER
+# If using Moodle intensively, set nginx_high_php_limits further above.
 
 # MongoDB (/library/dbdata/mongodb) greatly enhances the Sugarizer experience.
 # This role was formerly installed by roles/sugarizer/meta/main.yml
@@ -539,15 +541,15 @@ watchdog:
   - postgresql
   - squid
 
-munin_install: True
-munin_enabled: True
+munin_install: False
+munin_enabled: False
 
 # Handy for maintaining tables, but DANGEROUS if not locked down
 phpmyadmin_install: False
 phpmyadmin_enabled: False
 
-vnstat_install: True
-vnstat_enabled: True
+vnstat_install: False
+vnstat_enabled: False
 
 
 # 9-LOCAL-ADDONS
