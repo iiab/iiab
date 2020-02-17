@@ -1,0 +1,115 @@
+- name: Install OpenVPN and Nmap packages
+  package:
+    name:
+      - openvpn
+      - nmap
+    state: present
+
+# Newer versions of NMap do not include NCat, needed to announce /etc/iiab/openvpn_handle
+- name: Install Ncat package (if Debian > 9 or Ubuntu > 18)
+  package:
+    name: ncat
+    state: present
+  when: is_debuntu and not (is_debian_8 or is_debian_9 or is_ubuntu_16 or is_ubuntu_17 or is_ubuntu_18)
+
+- name: Install ssh public keys for remote support (if openvpn_install)
+  lineinfile:
+    line: "{{ item.pubkey }}"
+    regexp: "{{ item.regexp }}"
+    path: /root/.ssh/authorized_keys
+  with_items:
+    - regexp: "LvCSAAcfYIdZPR4ePVpVUZ/IbkGjpQSoRMa5HuVjMO3cZNR27ptqjNjq2husJOyhMFCOBTzo4thioGyTpBr4u3s=$" # Tim Moody
+      pubkey: "ssh-rsa AAAAB3NzaC1yc2EAAAABJQAAAIEAhlQIh8ZPx4awdM0O6QNcPbx3qIZ39FHjF2YJ2SX3z7iLnYiz03Ek6Bux9P4HvaVAqlApiz2I68Vq8TfU2s/+LvCSAAcfYIdZPR4ePVpVUZ/IbkGjpQSoRMa5HuVjMO3cZNR27ptqjNjq2husJOyhMFCOBTzo4thioGyTpBr4u3s="
+    - regexp: "tUM4hl009fbXY4Yy3bAadWL1CquVrZmKfBBWhyhz8zLD6TQ== ghunt@ip-192-168-123-123.ec2.internal$"
+      pubkey: "ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAQEAxAmjU7VojyK+0Pjp2p8CCGTNBtE565A/L8IVbAT8MIucRE9LN1g5LjGnOHUShFJpwuTR1JLX2r9EDRMsf9MmyTgUAnuyP005giWVHXLPtjyjTzbsJ1DEtXRytulmF+GlCOaqPWNde6EOmReqPHbmjIQpRZ/Sc8hziS4jVSQuBA9EhaBmZ62CPqK33mPJvnpwMtdd6nHXAcXsZhStd3NhVDm27+B3sHI6mr2w7ExdBXE5DKiZL2po8n2y4hJYZreJopbjcQmv4oWdDWvPu5I92xDgYCsqcE7zSrv1um+tUM4hl009fbXY4Yy3bAadWL1CquVrZmKfBBWhyhz8zLD6TQ== ghunt@ip-192-168-123-123.ec2.internal"
+    - regexp: "heOMXXNU6skxdPh2fcHh0bzQcaCSQ== holt@crank$"
+      pubkey: "ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAQEApHPly+EA1M4bispl3AulTLjyYCjcJzh6s779K3epDkqh600a+fHsdIiddWCAfIonRq+9MJyOiaNQ+WYLOuajI1IiFZWFt45xDAiyCUnyuT+ytAX+IA3TgTwgTZPfzDOzI8rDRV9Sgl+LZLfPno7T3qxcGx2l51bRk+koRK+Txpph//M3jGvsFmTKhjvfxgEIUmMH9SkASxEdyqASr0+/+uLR92MnT+8CT1pOYYoJyZp9Lta5eGqJvbEmd3Dn7MXqD3vXE57o4rBJ0bR3q5LK59WVNxNQbulJ9z5V7aTJ4AbBFQWxm0fH0gBx+heOMXXNU6skxdPh2fcHh0bzQcaCSQ== holt@crank"
+
+# CLARIF: plus signs (+) in public keys cause duplicate key additions (above)
+# and failure during removal (below) as "+" has a special meaning as
+# interpreted in a Python regexp, as implemented by Ansible's lineinfile module:
+# https://docs.python.org/2/library/re.html
+
+# WORKAROUND: the tail end of each public key (after the last plus sign) is
+# being used (instead of the full key) as an abbreviated regexp for now.
+# A backslash in front of each plus sign (+) would also work.
+
+# - name: Remove those ssh public keys, if not openvpn_enabled
+#   lineinfile:
+#     regexp: "{{ item }}"
+#     path: /root/.ssh/authorized_keys
+#     state: absent
+#   with_items:
+#     - "LvCSAAcfYIdZPR4ePVpVUZ/IbkGjpQSoRMa5HuVjMO3cZNR27ptqjNjq2husJOyhMFCOBTzo4thioGyTpBr4u3s=$"
+#     - "tUM4hl009fbXY4Yy3bAadWL1CquVrZmKfBBWhyhz8zLD6TQ== ghunt@ip-192-168-123-123.ec2.internal$"
+#     - "heOMXXNU6skxdPh2fcHh0bzQcaCSQ== holt@crank$"
+#   when: not openvpn_enabled
+
+- name: 'Create dirs: /etc/openvpn/keys, /etc/openvpn/scripts'
+  file:
+    path: "{{ item }}"
+    state: directory
+  with_items:
+    - /etc/openvpn/keys
+    - /etc/openvpn/scripts
+
+- name: Configure OpenVPN (BACKS UP FILES IF CHANGED)
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    mode: "{{ item.mode }}"
+    backup: yes
+  with_items:
+    - { src: 'ca.crt', dest: '/etc/openvpn/keys/ca.crt', mode: '0644' }
+    - { src: 'client1.crt', dest: '/etc/openvpn/keys/client1.crt', mode: '0644' }
+    - { src: 'client1.key', dest: '/etc/openvpn/keys/client1.key', mode: '0600' }
+    - { src: 'announce', dest: '/etc/openvpn/scripts/announce', mode: '0755' }
+    - { src: 'announcer.j2', dest: '/etc/openvpn/scripts/announcer', mode: '0755' }
+    - { src: 'silence', dest: '/etc/openvpn/scripts/silence', mode: '0755' }
+    - { src: 'xscenet.conf.j2', dest: '/etc/openvpn/xscenet.conf', mode: '0644' }
+    - { src: 'openvpn_handle.j2', dest: '/etc/iiab/openvpn_handle', mode: '0644' }
+    - { src: 'iiab-remote-on.j2', dest: '/usr/bin/iiab-remote-on', mode: '0755' }
+    - { src: 'iiab-remote-off', dest: '/usr/bin/iiab-remote-off', mode: '0755' }
+
+- name: Copy /opt/iiab/iiab/iiab-support to /usr/bin/iiab-support, in case git tree deleted e.g. on a smaller IIAB install
+  copy:
+    src: "{{ iiab_dir }}/iiab-support"
+    dest: /usr/bin/
+    mode: '0755'
+
+- name: Symlink /usr/bin/iiab-support-on -> /usr/bin/iiab-support
+  file:
+    src: /usr/bin/iiab-support
+    path: /usr/bin/iiab-support-on
+    state: link
+
+- name: Symlink /usr/bin/iiab-support-off -> /usr/bin/iiab-remote-off
+  file:
+    src: /usr/bin/iiab-remote-off
+    path: /usr/bin/iiab-support-off
+    state: link
+
+- name: Symlink /usr/bin/iiab-vpn-on -> /usr/bin/iiab-remote-on
+  file:
+    src: /usr/bin/iiab-remote-on
+    path: /usr/bin/iiab-vpn-on
+    state: link
+
+- name: Symlink /usr/bin/iiab-vpn-off -> /usr/bin/iiab-remote-off
+  file:
+    src: /usr/bin/iiab-remote-off
+    path: /usr/bin/iiab-vpn-off
+    state: link
+
+
+# RECORD OpenVPN AS INSTALLED
+
+- name: "Set 'openvpn_installed: True'"
+  set_fact:
+    openvpn_installed: True
+
+- name: "Add 'openvpn_installed: True' to {{ iiab_state_file }}"
+  lineinfile:
+    path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
+    regexp: '^openvpn_installed'
+    line: 'openvpn_installed: True'
