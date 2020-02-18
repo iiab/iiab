@@ -1,3 +1,4 @@
+# For OS's other than Fedora 18
 - name: Download {{ kalite_requirements }} to {{ pip_packages_dir }}/kalite.txt
   get_url:
     url: "{{ kalite_requirements }}"
@@ -11,7 +12,15 @@
 #  ignore_errors: yes
 #  when: is_rpi | bool
 
-- name: Use pip to install KA Lite static to {{ kalite_venv }}
+#- name: Install KA Lite non-static + reqs file with pip - (debuntu)
+#  pip: requirements={{ pip_packages_dir }}/kalite.txt
+#       virtualenv={{ kalite_venv }}
+#       virtualenv_site_packages=no
+#       extra_args="--no-cache-dir"
+#       extra_args="--disable-pip-version-check"
+#  when: internet_available and is_debuntu
+
+- name: Install KA Lite static to {{ kalite_venv }}, using pip (debuntu)
   pip:
     name: ka-lite-static
     version: "{{ kalite_version }}"
@@ -20,8 +29,28 @@
     virtualenv_command: /usr/bin/virtualenv
     virtualenv_python: python2.7
     extra_args: "--no-cache-dir"
-    #extra_args="--disable-pip-version-check"
-  when: internet_available | bool
+#       extra_args="--disable-pip-version-check"
+  when: internet_available and is_debuntu
+
+#- name: Install KA Lite non-static + reqs file with pip (OS's other than debuntu)
+#  pip: requirements={{ pip_packages_dir }}/kalite.txt
+#       virtualenv={{ kalite_venv }}
+#       virtualenv_site_packages=no
+#       extra_args="--no-cache-dir"
+#       extra_args="--disable-pip-version-check"
+#  when: internet_available and not is_debuntu
+
+- name: Install KA Lite static to {{ kalite_venv }}, using pip (OS's other than debuntu)
+  pip:
+    name: ka-lite-static
+    version: "{{ kalite_version }}"
+    virtualenv: "{{ kalite_venv }}"
+    virtualenv_site_packages: no
+    virtualenv_command: /usr/bin/virtualenv
+    virtualenv_python: python2.7
+#       extra_args="--no-cache-dir"
+#       extra_args="--disable-pip-version-check"
+  when: internet_available and not is_debuntu
 
 # This effectively does nothing at all on Ubuntu & Raspbian, where libgeos-*
 # pkgs are not installed FWIW.  But it's included to safeguard us across all
@@ -29,6 +58,16 @@
 # Removing pkgs libgeos-3.6.2 & libgeos-c1v5 fixed the situation on Ubermix!
 - name: Remove libgeos-* pkgs, avoiding KA Lite Django failure on Ubermix
   shell: apt -y remove "libgeos-*"
+
+# 2019-10-20: For Fedora 18 legacy (XO laptops) specially
+- name: Default is to have cronserve started with KA Lite
+  set_fact:
+    job_scheduler_stanza: ""
+
+- name: Add --skip-job-scheduler to start if cronserve not enabled
+  set_fact:
+    job_scheduler_stanza: "--skip-job-scheduler "
+  when: not kalite_cron_enabled
 
 - name: "Install from template: venv wrapper /usr/bin/kalite, systemd unit file kalite-serve.service, Apache's kalite.conf"
   template:
@@ -49,25 +88,8 @@
     regexp: 'a-zA-Z0-9'
     replace: 'a-zA-Z0-9\-'
 
-- name: Create dir {{ kalite_root }}
-  file:
-    state: directory
-    path: "{{ kalite_root }}/httpsrv/static"    # /library/ka-lite
 
-- name: Run 'kalite manage setup ...'
-  command: "{{ kalite_program }} manage setup --username={{ kalite_admin_user }} --password={{ kalite_admin_password }} --noinput"    # Runs /usr/local/kalite/venv/bin/kalite
-  environment:
-    KALITE_HOME: "{{ kalite_root }}"    # /library/ka-lite
-  async: 1800
-  poll: 10
+# RECORD KA Lite AS INSTALLED
 
-
-- name: "Set 'kalite_installed: True'"
-  set_fact:
-    kalite_installed: True
-
-- name: "Add 'kalite_installed: True' to {{ iiab_state_file }}"
-  lineinfile:
-    path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
-    regexp: '^kalite_installed'
-    line: 'kalite_installed: True'
+# TO DO: move the last 2 stanzas from setup.yml so they live right here,
+# as any action named "install.yml" should do exactly what it says (install!)
