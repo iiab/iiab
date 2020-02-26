@@ -31,8 +31,8 @@ if [[ $(grep -i raspbian /etc/*release) &&
         #)
    #]];
 then
-    ip link set dev wlan0 promisc on
-    echo "wlan0 promiscuous mode ON, internal AP OFF: github.com/iiab/iiab/issues/638"
+#    ip link set dev wlan0 promisc on
+    echo "wlan0 promiscuous mode ON, internal AP OFF: github.com/iiab/iiab/issues/638 DISABLED"
 fi
 
 exit 0
