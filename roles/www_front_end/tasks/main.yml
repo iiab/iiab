@@ -25,7 +25,7 @@
   when: nginx_install | bool
 
 
-- block:    # 3-STANZA BLOCK BEGINS
+- block:    # 4-STANZA BLOCK BEGINS
 
   # Also installed by roles/nextcloud/tasks/install.yml in case './runrole nextcloud' bypasses this role here.  (Possibly make php-fpm mandatory in nginx/tasks/install.yml in future?)
   - name: Install php-fpm (FastCGI Process Manager) as nec
@@ -37,7 +37,21 @@
 
   # COMPARE apache_allow_sudo further below.
 
-  - name: Enact high limits in /etc/php/{{ php_version }}/fpm/php.ini if using WordPress/Nextcloud/Moodle intensively, as nec
+  - name: Enact IIAB defaults in /etc/php/{{ php_version }}/fpm/php.ini for WordPress/Nextcloud/Moodle (allow photos/docs up to 100MB, 128MB RAM, 300s timeouts)
+    lineinfile:
+      path: "/etc/php/{{ php_version }}/fpm/php.ini"
+      #path: "/etc/php/{{ php_version }}/{{ apache_service }}/php.ini"
+      regexp: "{{ item.regexp }}"
+      line: "{{ item.line }}"
+    with_items:
+      - { regexp: '^upload_max_filesize', line: 'upload_max_filesize = 100M    ; default is 2M' }
+      - { regexp: '^post_max_size', line: 'post_max_size = 100M    ; default is 8M' }
+      - { regexp: '^memory_limit', line: 'memory_limit = 128M    ; default is 128M / Nextcloud requests 512M' }
+      - { regexp: '^max_execution_time', line: 'max_execution_time = 300    ; default is 30' }
+      - { regexp: '^max_input_time', line: 'max_input_time = 300    ; default is 60' }
+    when: not nginx_high_php_limits
+
+  - name: Enact high limits in /etc/php/{{ php_version }}/fpm/php.ini for WordPress/Nextcloud/Moodle (allow photos/docs up to 500MB, 512MB RAM, 300s timeouts)
     lineinfile:
       path: "/etc/php/{{ php_version }}/fpm/php.ini"
       #path: "/etc/php/{{ php_version }}/{{ apache_service }}/php.ini"
@@ -49,14 +63,14 @@
       - { regexp: '^memory_limit', line: 'memory_limit = 512M    ; default is 128M / Nextcloud requests 512M' }
       - { regexp: '^max_execution_time', line: 'max_execution_time = 300    ; default is 30' }
       - { regexp: '^max_input_time', line: 'max_input_time = 300    ; default is 60' }
-    when: nginx_high_php_limits
+    when: nginx_high_php_limits | bool
 
   - name: Restart 'php{{ php_version }}-fpm' systemd services, as nec
     systemd:
       name: "php{{ php_version }}-fpm"
       state: restarted
 
-  when: (nextcloud_install or pbx_install) and nginx_enabled    # 3-STANZA BLOCK ENDS
+  when: (moodle_install or nextcloud_install or pbx_install or wordpress_install) and nginx_enabled    # 4-STANZA BLOCK ENDS
 
 
 # 'Is a "Rapid Power Off" button possible for low-electricity environments?'
