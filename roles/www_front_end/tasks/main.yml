@@ -24,6 +24,8 @@
   include_tasks: roles/nginx/tasks/homepage.yml
   when: nginx_install | bool
 
+- debug:
+    msg: 'THE 4 ANSIBLE STANZAS BELOW ONLY RUN... when: (moodle_install or nextcloud_install or pbx_install or wordpress_install) and nginx_enabled'
 
 - block:    # 4-STANZA BLOCK BEGINS
 
@@ -32,12 +34,7 @@
     package:
       name: php-fpm
 
-  # For schools that use WordPress/Nextcloud/Moodle intensively.
-  # WARNING: Enabling this might cause excess use of RAM/disk or other resources!
-
-  # COMPARE apache_allow_sudo further below.
-
-  - name: Enact IIAB defaults in /etc/php/{{ php_version }}/fpm/php.ini for WordPress/Nextcloud/Moodle (allow photos/docs up to 100MB, 128MB RAM, 300s timeouts)
+  - name: Raise 2+2 PHP default values in /etc/php/{{ php_version }}/fpm/php.ini for occasional use of WordPress/Nextcloud/Moodle/PBX (allow photos/docs up to 100MB, 100s timeouts, but preserve PHP's 128MB RAM limit)
     lineinfile:
       path: "/etc/php/{{ php_version }}/fpm/php.ini"
       #path: "/etc/php/{{ php_version }}/{{ apache_service }}/php.ini"
@@ -46,12 +43,18 @@
     with_items:
       - { regexp: '^upload_max_filesize', line: 'upload_max_filesize = 100M    ; default is 2M' }
       - { regexp: '^post_max_size', line: 'post_max_size = 100M    ; default is 8M' }
+      - { regexp: '^max_execution_time', line: 'max_execution_time = 100    ; default is 30' }
+      - { regexp: '^max_input_time', line: 'max_input_time = 100    ; default is 60' }
       - { regexp: '^memory_limit', line: 'memory_limit = 128M    ; default is 128M / Nextcloud requests 512M' }
-      - { regexp: '^max_execution_time', line: 'max_execution_time = 300    ; default is 30' }
-      - { regexp: '^max_input_time', line: 'max_input_time = 300    ; default is 60' }
-    when: not nginx_high_php_limits
+    when: not nginx_high_php_limits    # REMINDER: THIS ENTIRE 4-STANZA BLOCK IS ONLY INVOKED... when: (wordpress_install or nextcloud_install or moodle_install or pbx_install) and nginx_enabled
 
-  - name: Enact high limits in /etc/php/{{ php_version }}/fpm/php.ini for WordPress/Nextcloud/Moodle (allow photos/docs up to 500MB, 512MB RAM, 300s timeouts)
+  # 2020-03-08: IIAB does not support uninstalling apps, so a 3rd clause
+  # (to reset/restore PHP's defaults) is not necessary at this time.
+
+  # COMPARE apache_allow_sudo further below.
+
+  # WARNING: This might cause excess use of RAM/disk or other resources!
+  - name: Enact nginx_high_php_limits in /etc/php/{{ php_version }}/fpm/php.ini for schools that use WordPress/Nextcloud/Moodle/PBX intensively (allow photos/docs up to 500MB, 300s timeouts, 512MB RAM limit)
     lineinfile:
       path: "/etc/php/{{ php_version }}/fpm/php.ini"
       #path: "/etc/php/{{ php_version }}/{{ apache_service }}/php.ini"
@@ -60,12 +63,12 @@
     with_items:
       - { regexp: '^upload_max_filesize', line: 'upload_max_filesize = 500M    ; default is 2M' }
       - { regexp: '^post_max_size', line: 'post_max_size = 500M    ; default is 8M' }
-      - { regexp: '^memory_limit', line: 'memory_limit = 512M    ; default is 128M / Nextcloud requests 512M' }
       - { regexp: '^max_execution_time', line: 'max_execution_time = 300    ; default is 30' }
       - { regexp: '^max_input_time', line: 'max_input_time = 300    ; default is 60' }
+      - { regexp: '^memory_limit', line: 'memory_limit = 512M    ; default is 128M / Nextcloud requests 512M' }
     when: nginx_high_php_limits | bool
 
-  - name: Restart 'php{{ php_version }}-fpm' systemd services, as nec
+  - name: Restart 'php{{ php_version }}-fpm' systemd service
     systemd:
       name: "php{{ php_version }}-fpm"
       state: restarted
@@ -78,7 +81,9 @@
 
 # COMPARE nginx_high_php_limits further above.
 
-# 2020-02-12: DOES THE FLAG BELOW (apache_allow_sudo) WORK WITH NGINX TOO ?
+# 2020-03-08: DOES THE FLAG BELOW (apache_allow_sudo) PRESUMABLY WORK
+# WITH NGINX TOO ?  (The single-click poweroff button on IIAB's home
+# page certainly does still work with NGINX.)
 
 - name: Give {{ apache_user }} (per variable apache_user) permission to poweroff, installing /etc/sudoers.d/020_apache_poweroff from template
   template:
