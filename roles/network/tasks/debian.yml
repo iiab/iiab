@@ -41,13 +41,13 @@
   template:
     dest: /etc/network/interfaces.d/iiab
     src: network/systemd.j2
-  when: not is_rpi and (iiab_lan_iface == "br0" or wan_ip != "dhcp" or gui_static_wan_ip == "undefined")
+  when: not is_raspbian (iiab_lan_iface == "br0" or wan_ip != "dhcp" or gui_static_wan_ip == "undefined")
 
 - name: Copy the bridge script for RPi
   template:
     dest: /etc/network/interfaces.d/iiab
     src: network/rpi.j2
-  when: is_rpi and iiab_lan_iface == "br0"
+  when: is_raspbian and iiab_lan_iface == "br0"
 
 - name: Workaround auto issue - ifupdown compatibility mode (debian-9+)
   template:
@@ -62,24 +62,7 @@
     regexp: "{{ iiab_wan_iface }}"
   when: wan_ip != "dhcp" and iiab_wan_iface != "none" and is_debian and not is_debian_8
 
-- name: BIND may be affected
-  service:
-    name: "{{ dns_service }}"
-    state: stopped
-  when: named_install and dnsmasq_enabled
-
-# dhcpd_server release the interface
-- name: dhcpd_server may be affected - stopping dhcpd
-  service:
-    name: dhcpd
-    state: stopped
-  when: dhcpd_install | bool
-
-- name: dhcpd_server may be affected - stopping dnsmasq
-  service:
-    name: dnsmasq
-    state: stopped
-  when: dnsmasq_install | bool
+- include_tasks: down-debian.yml
 
 - name: Reload systemd
   systemd:
