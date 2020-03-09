@@ -1,0 +1,128 @@
+# Role "www_base" runs earlier, likely in 3-BASE-SERVER.
+# Role "www_options" runs here, probably in 4-SERVER-OPTIONS.
+#
+# (Don't take either name too literally!)
+
+
+# HOMEPAGE
+
+- name: Create dir {{ doc_root }}{{ iiab_home_url }} just in case variable iiab_home_url was customized.  (Standard path {{doc_root}}/home was created earlier.)
+  file:
+    state: directory
+    path: "{{ doc_root }}{{ iiab_home_url }}"    # /library/www/html/home
+    owner: "{{ apache_user }}"
+    group: "{{ apache_user }}"
+    mode: '0755'
+
+# Used to be run by httpd/tasks/install.yml
+- name: "IN CASE NGINX IS DISABLED: Enable IIAB pages via Apache (e.g. on port 80) if apache_install"
+  include_tasks: roles/httpd/tasks/homepage.yml
+  when: apache_install | bool
+
+# Used to be run by nginx/tasks/install.yml
+- name: Enable IIAB pages via NGINX (e.g. on port 80) if nginx_install
+  include_tasks: roles/nginx/tasks/homepage.yml
+  when: nginx_install | bool
+
+- debug:
+    msg: 'THE 3 ANSIBLE STANZAS BELOW ONLY RUN... when: (moodle_install or nextcloud_install or pbx_install or wordpress_install) and nginx_enabled'
+
+- block:    # 3-STANZA BLOCK BEGINS
+
+  # FYI roles/nginx has already installed package php-fpm, in 3-base-server
+
+  - name: Raise 2+2 PHP default values in /etc/php/{{ php_version }}/fpm/php.ini for lightweight use of WordPress/Nextcloud/Moodle/PBX (allow photos/docs up to 100MB, 100s timeouts, but preserve PHP's 128MB RAM limit)
+    lineinfile:
+      path: "/etc/php/{{ php_version }}/fpm/php.ini"
+      #path: "/etc/php/{{ php_version }}/{{ apache_service }}/php.ini"
+      regexp: "{{ item.regexp }}"
+      line: "{{ item.line }}"
+    with_items:
+      - { regexp: '^upload_max_filesize', line: 'upload_max_filesize = 100M    ; default is 2M' }
+      - { regexp: '^post_max_size', line: 'post_max_size = 100M    ; default is 8M' }
+      - { regexp: '^max_execution_time', line: 'max_execution_time = 100    ; default is 30' }
+      - { regexp: '^max_input_time', line: 'max_input_time = 100    ; default is 60' }
+      - { regexp: '^memory_limit', line: 'memory_limit = 128M    ; default is 128M / Nextcloud requests 512M' }
+    when: not nginx_high_php_limits    # REMINDER: THIS ENTIRE 4-STANZA BLOCK IS ONLY INVOKED... when: (wordpress_install or nextcloud_install or moodle_install or pbx_install) and nginx_enabled
+
+  # 2020-03-08: IIAB does not support uninstalling apps, so a 3rd clause
+  # (to reset/restore PHP's defaults) is not necessary at this time.
+
+  # COMPARE apache_allow_sudo further below.
+
+  # WARNING: This might cause excess use of RAM/disk or other resources!
+  # The 5 values below were chosen by @ericnitschke and @kananigit in ~2018.
+  - name: Enact nginx_high_php_limits in /etc/php/{{ php_version }}/fpm/php.ini for schools that use WordPress/Nextcloud/Moodle/PBX intensively (allow photos/docs up to 500MB, 300s timeouts, 512MB RAM limit)
+    lineinfile:
+      path: "/etc/php/{{ php_version }}/fpm/php.ini"
+      #path: "/etc/php/{{ php_version }}/{{ apache_service }}/php.ini"
+      regexp: "{{ item.regexp }}"
+      line: "{{ item.line }}"
+    with_items:
+      - { regexp: '^upload_max_filesize', line: 'upload_max_filesize = 500M    ; default is 2M' }
+      - { regexp: '^post_max_size', line: 'post_max_size = 500M    ; default is 8M' }
+      - { regexp: '^max_execution_time', line: 'max_execution_time = 300    ; default is 30' }
+      - { regexp: '^max_input_time', line: 'max_input_time = 300    ; default is 60' }
+      - { regexp: '^memory_limit', line: 'memory_limit = 512M    ; default is 128M / Nextcloud requests 512M' }
+    when: nginx_high_php_limits | bool
+
+  - name: Restart 'php{{ php_version }}-fpm' systemd service
+    systemd:
+      name: "php{{ php_version }}-fpm"
+      state: restarted
+
+  when: (moodle_install or nextcloud_install or pbx_install or wordpress_install) and nginx_enabled    # 3-STANZA BLOCK ENDS
+
+
+# 'Is a "Rapid Power Off" button possible for low-electricity environments?'
+# gives more details here: http://FAQ.IIAB.IO
+
+# COMPARE nginx_high_php_limits further above.
+
+# 2020-03-08: DOES THE FLAG BELOW (apache_allow_sudo) PRESUMABLY WORK
+# WITH NGINX TOO ?  (The single-click poweroff button on IIAB's home
+# page certainly does still work with NGINX.)
+
+- name: Give {{ apache_user }} (per variable apache_user) permission to poweroff, installing /etc/sudoers.d/020_apache_poweroff from template
+  template:
+    src: 020_apache_poweroff.j2
+    dest: /etc/sudoers.d/020_apache_poweroff
+    mode: '0755'
+  when: apache_allow_sudo | bool
+
+- name: Remove {{ apache_user }} (per variable apache_user) permission to poweroff, removing /etc/sudoers.d/020_apache_poweroff
+  file:
+    path: /etc/sudoers.d/020_apache_poweroff
+    state: absent
+  when: not apache_allow_sudo
+
+
+- name: Run /usr/bin/iiab-refresh-wiki-docs (scraper script) to create http://box/info offline documentation.  (This script was installed in Stage 3 = roles/3-base-server/tasks/main.yml, which ran roles/www_base/tasks/main.yml)
+  command: /usr/bin/iiab-refresh-wiki-docs
+  when: internet_available and not nodocs
+
+
+- name: (Re)Start '{{ apache_service }}' systemd service, if apache_enabled
+  systemd:
+    name: "{{ apache_service }}"    # apache2 on debuntu
+    state: restarted
+  when: apache_enabled | bool
+
+- name: (Re)Start 'nginx' systemd service, if nginx_enabled
+  systemd:
+    name: nginx
+    state: restarted
+  when: nginx_enabled | bool
+
+
+# RECORD www_options AS INSTALLED
+
+- name: "Set 'www_options_installed: True'"
+  set_fact:
+    www_options_installed: True
+
+- name: "Add 'www_options_installed: True' to {{ iiab_state_file }}"
+  lineinfile:
+    path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
+    regexp: '^www_options_installed'
+    line: 'www_options_installed: True'
