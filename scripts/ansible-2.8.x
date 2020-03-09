@@ -78,7 +78,7 @@ elif [ -f /etc/debian_version ]; then    # Includes Debian, Ubuntu & Raspbian
     echo -e "https://github.com/iiab/iiab/tree/master/scripts/ansible.md\n"
     apt update
     apt -y --allow-downgrades install ansible python3-pymysql python3-psycopg2 \
-        python3-passlib python3-pip python3-setuptools virtualenv
+        python3-passlib python3-pip python3-setuptools python3-venv virtualenv
 
     echo -e "\nSUCCESS: verify Ansible using 'ansible --version' and/or 'apt -a list ansible'\n\n"
 
