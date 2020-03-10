@@ -1,7 +1,7 @@
 #!/bin/bash -e
 
 CURR_VER="undefined"    # Ansible version you currently have installed
-GOOD_VER="2.9.4"    # For XO laptops (pip install) & CentOS (yum install rpm)
+GOOD_VER="2.9.6"    # For XO laptops (pip install) & CentOS (yum install rpm)
 # On other OS's we attempt the latest from PPA, which might be more recent
 
 export DEBIAN_FRONTEND=noninteractive
@@ -78,7 +78,7 @@ elif [ -f /etc/debian_version ]; then    # Includes Debian, Ubuntu & Raspbian
     echo -e "https://github.com/iiab/iiab/tree/master/scripts/ansible.md\n"
     apt update
     apt -y --allow-downgrades install ansible python3-pymysql python3-psycopg2 \
-        python3-passlib python3-pip python3-setuptools virtualenv
+        python3-passlib python3-pip python3-setuptools python3-venv virtualenv
 
     echo -e "\nSUCCESS: verify Ansible using 'ansible --version' and/or 'apt -a list ansible'\n\n"
 
