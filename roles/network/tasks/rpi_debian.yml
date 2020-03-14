@@ -20,10 +20,34 @@
     dest: /etc/dhcpcd.conf
     src: network/dhcpcd.conf.j2
 
+- name: Raspbian has wpa_supplicant by default, but not Ubuntu
+  package:
+    name:
+      - wpasupplicant
+      - rfkill
+      - ifupdown
+      - dhcpcd5
+    state: present
+  when: is_ubuntu_20
+
+- name: Check existence of wpa_supplicant
+  stat: 
+    path: /etc/wpa_supplicante.conf
+  register: wpa
+
+- name: Put config file if missing
+  template:
+    src: network/wpa_supplicant.conf.j2
+    dest: /etc/wpa_supplicant/wpa_supplicant.conf
+  when: not wpa.stat.exists
+
 - name: New Raspbian requires country code -- check for it
   shell: grep country /etc/wpa_supplicant/wpa_supplicant.conf
   register: country_code
   ignore_errors: True
+
+- debug:
+    var: country_code
 
 - name: Put country code ({{ host_country_code }}) in /etc/wpa_supplicant/wpa_supplicant.conf if nec
   lineinfile: 
@@ -64,10 +88,10 @@
   when: not nobridge is defined and not is_ubuntu    # less is better
   #when: not nobridge is defined and not no_net_restart
 
-- name: Restart the networking service if appropriate
-  service:
-    name: network-manager
-    enabled: yes
-    state: restarted
-  when: not nobridge is defined and is_ubuntu    # less is better
+  #- name: Restart the networking service if appropriate
+  #service:
+  #  name: network-manager
+  #  enabled: yes
+  #  state: restarted
+  #when: not nobridge is defined and is_ubuntu    # less is better
   #when: not nobridge is defined and not no_net_restart
