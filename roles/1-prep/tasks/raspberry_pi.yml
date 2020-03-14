@@ -16,7 +16,16 @@
     line: "dtoverlay=i2c-rtc,{{ rtc_id }}=on"
     state: present
   register: rpiconfig    # HMMM REGISTER "rpiconfig" IS *COMPLETELY UNUSED* AS OF 2018-11-02
-  when: rtc_id is defined and rtc_id != "none"
+  when: rtc_id is defined and rtc_id != "none" and not is_ubuntu
+
+# RTC requires a change to the device tree (and reboot)
+- name: Enable i2c-rtc device (with "dtoverlay=i2c-rtc,{{ rtc_id }}=on" in /boot/config.txt, requires reboot!) if rtc_id is defined and rtc_id != "none"
+  lineinfile:
+    path: /boot/firmware/usercfg.txt
+    line: "dtoverlay=i2c-rtc,{{ rtc_id }}=on"
+    state: present
+  register: rpiconfig    # HMMM REGISTER "rpiconfig" IS *COMPLETELY UNUSED* AS OF 2018-11-02
+  when: rtc_id is defined and rtc_id != "none" and is_ubuntu
 
 #- name: Install udev rule /etc/udev/rules.d/92-rtc-i2c.rules from template, to transfer hwclock to system clock at dev creation, if rtc_id != "none"
 #  template:
@@ -27,10 +36,13 @@
 #    mode: 0644
 #  when: rtc_id != "none"
 
-- name: Install latest ntp package
+- name: Install latest ntp and fake-hwclock packages
   package:
-    name: ntp
+    name: "{{ item }}"
     state: latest
+  with_items:
+    - ntp
+    -fake-hwclock
 
 - name: Increase swap file size (to CONF_SWAPSIZE={{ pi_swap_file_size }} in /etc/dphys-swapfile) as kalite pip download fails (debuntu)
   lineinfile:
