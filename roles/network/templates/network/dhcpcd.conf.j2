@@ -38,20 +38,22 @@ require dhcp_server_identifier
 slaac private
 
 # IIAB
+denyinterfaces ap0
 
+# Setting iiab_wired_lan_iface would install the device as a slave under
+# br0 so we need to turn off the dhcp client in that network layout.
+# Auto creation of the wired slave is suppressed in discovered_network.yml
+# -> Set iiab_wired_lan_iface if present is conditional on is_raspbian
+# Slave creation can be forced by populating local_vars.yml with
+# 'iiab_wired_lan_iface: eth0' which populates /etc/network/interfaces.d/iiab
+# with 'bridge_ports eth0' in place of 'bridge_ports none'
 # Always (try) to run DHCP client on RPi's Ethernet port, for in-field
 # "cablemodems" used by many non-technical operators, who want Zero-Hassle
 # Updates.  This means AVOIDING "denyinterfaces eth0" below:
-{% if is_raspbian and hostapd_enabled %}
-denyinterfaces{% if discovered_wireless_iface != "none" %} {{ discovered_wireless_iface }}{% endif %}
-{% elif is_raspbian %}
-#denyinterfaces{% if discovered_wireless_iface != "none" %} {{ discovered_wireless_iface }}{% endif %}
-{% else %}
-denyinterfaces{% if iiab_wireless_lan_iface is defined %} {{ iiab_wireless_lan_iface }}{% endif %}{% if iiab_wired_lan_iface is defined %} {{ iiab_wired_lan_iface }}{% endif %}
-{% endif %}
 
-# FYI this 'denyinterfaces' line (here in /etc/dhcpcd.conf) is commented out by
-# /usr/bin/iiab-hotspot-off, and uncommented by /usr/bin/iiab-hotspot-on
+{% if iiab_wired_lan_iface is defined %}
+denyinterfaces {{ iiab_wired_lan_iface }}
+{% endif %}
 
 {% if dhcpcd_result == "enabled" and iiab_lan_iface != "none" %}
 interface {{ iiab_lan_iface }}
