@@ -10,41 +10,47 @@
   when: rtc_id is defined and rtc_id != "none"
 
 # RTC requires a change to the device tree (and reboot)
-- name: Enable i2c-rtc device (with "dtoverlay=i2c-rtc,{{ rtc_id }}=on" in /boot/config.txt, requires reboot!) if rtc_id is defined and rtc_id != "none"
+- name: Enable i2c-rtc device (with "dtoverlay=i2c-rtc,{{ rtc_id }}=on" in /boot/config.txt, requires reboot!) if rtc_id is defined and rtc_id != "none" and is_raspbian
   lineinfile:
     path: /boot/config.txt
     line: "dtoverlay=i2c-rtc,{{ rtc_id }}=on"
     state: present
-  register: rpiconfig    # HMMM REGISTER "rpiconfig" IS *COMPLETELY UNUSED* AS OF 2018-11-02
-  when: rtc_id is defined and rtc_id != "none"
+  when: rtc_id is defined and rtc_id != "none" and is_raspbian
 
-#- name: Install udev rule /etc/udev/rules.d/92-rtc-i2c.rules from template, to transfer hwclock to system clock at dev creation, if rtc_id != "none"
-#  template:
-#    src: 92-rtc-i2c.rules
-#    dest: /etc/udev/rules.d/92-rtc-i2c.rules
-#    owner: root
-#    group: root
-#    mode: 0644
-#  when: rtc_id != "none"
+- name: Enable i2c-rtc device (with "dtoverlay=i2c-rtc,{{ rtc_id }}=on" in /boot/firmware/config.txt, requires reboot!) if rtc_id is defined and rtc_id != "none" and is_ubuntu
+  lineinfile:
+    path: /boot/firmware/usercfg.txt
+    line: "dtoverlay=i2c-rtc,{{ rtc_id }}=on"
+    state: present
+  when: rtc_id is defined and rtc_id != "none" and is_ubuntu
 
-- name: Install latest ntp package
+- name: Enable bluetooth in /boot/firmware/syscfg.txt on Ubuntu (needs reboot)
+  lineinfile:
+    path: /boot/firmware/syscfg.txt
+    regexp: '^include*'
+    line: 'include btcfg.txt'
+  when: is_ubuntu
+
+- name: Ensure dphys-swapfile fake-hwclock iw rkill are installed
   package:
-    name: ntp
-    state: latest
+    name:
+      - dphys-swapfile
+      - fake-hwclock
+      - iw
+      - rfkill
+    state: present
 
 - name: Increase swap file size (to CONF_SWAPSIZE={{ pi_swap_file_size }} in /etc/dphys-swapfile) as kalite pip download fails (debuntu)
   lineinfile:
     path: /etc/dphys-swapfile
     regexp: "^CONF_SWAPSIZE"
     line: "CONF_SWAPSIZE={{ pi_swap_file_size }}"
-  when: is_debuntu | bool    # Redundant, given raspberry_pi.yml is only run when rpi_model: != "none" Until someone tries a non-debuntu OS on RPi?
 
 - name: Restart swap service "dphys-swapfile" (debuntu)
   #command: /etc/init.d/dphys-swapfile restart
   service:    # A rare/legacy service that is NOT systemd
     name: dphys-swapfile
     state: restarted
-  when: is_debuntu | bool
 
 - name: Install RPi rootfs resizing (iiab-rpi-max-rootfs.sh) and its systemd service (iiab-rpi-root-resize.service), from templates
   template:
