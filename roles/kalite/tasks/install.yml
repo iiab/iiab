@@ -15,7 +15,23 @@
   package:
     name: python2
     state: present
-  when: not (is_debian_9 or is_debian_10 or is_ubuntu_16 or is_ubuntu_17 or is_ubuntu_18 or is_ubuntu_19)    # 2020-03-27: Testing for {is_raspbian_9, is_raspbian_10} is not currently nec, as testing for {is_debian_9, is_debian_10} covers that already.
+  when: not (is_debian_9 or is_debian_10 or is_ubuntu_16 or is_ubuntu_17 or is_ubuntu_18 or is_ubuntu_19)
+  # 2020-03-31: Testing for {is_raspbian_9, is_raspbian_10} is not currently nec, as testing for {is_debian_9, is_debian_10} covers that already.
+
+- name: Use pip to pin older working versions in {{ kalite_venv }} if Raspbian/Debian > 10 or Ubuntu > 19
+  pip:
+    name:
+    - ipaddr
+    - pip<20
+    - setuptools<45
+    - wheel<34
+    virtualenv: "{{ kalite_venv }}"    # /usr/local/kalite/venv
+    virtualenv_site_packages: no
+    virtualenv_command: /usr/bin/virtualenv
+    virtualenv_python: python2.7
+    extra_args: "--no-use-pep517 --no-cache-dir --no-python-version-warning"
+  when: not (is_debian_9 or is_debian_10 or is_ubuntu_16 or is_ubuntu_17 or is_ubuntu_18 or is_ubuntu_19)
+  # 2020-03-31: Testing for {is_raspbian_9, is_raspbian_10} is not currently nec, as testing for {is_debian_9, is_debian_10} covers that already.
 
 - name: Use pip to install KA Lite static to {{ kalite_venv }}
   pip:
@@ -26,7 +42,6 @@
     virtualenv_command: /usr/bin/virtualenv
     virtualenv_python: python2.7
     extra_args: "--no-cache-dir"
-    #extra_args="--disable-pip-version-check"
   when: internet_available | bool
 
 - name: "Install from template: venv wrapper /usr/bin/kalite, systemd unit file kalite-serve.service, Apache's kalite.conf"
@@ -42,11 +57,22 @@
     - { src: 'kalite-serve.service.j2', dest: '/etc/systemd/system/kalite-serve.service', mode: '0644'}
     - { src: 'kalite.conf', dest: '/etc/{{ apache_conf_dir }}', mode: '0644'}
 
-- name: Fix KA Lite bug in regex parsing ifconfig output, for @m-anish's network names that contain dashes
+- name: Fix KA Lite bug in regex parsing ifconfig output, for @m-anish's network names that contain dashes, if Raspbian/Debian < 11 or Ubuntu < 20
   replace:
     path: /usr/local/kalite/venv/local/lib/python2.7/site-packages/kalite/packages/dist/ifcfg/parser.py
     regexp: 'a-zA-Z0-9'
     replace: 'a-zA-Z0-9\-'
+  when: is_debian_9 or is_debian_10 or is_ubuntu_16 or is_ubuntu_17 or is_ubuntu_18 or is_ubuntu_19
+  # 2020-03-31: Testing for {is_raspbian_9, is_raspbian_10} is not currently nec, as testing for {is_debian_9, is_debian_10} covers that already.
+
+- name: Fix KA Lite bug in regex parsing ifconfig output, for @m-anish's network names that contain dashes, if Raspbian/Debian > 10 or Ubuntu > 19
+  replace:
+    path: /usr/local/kalite/venv/lib/python2.7/site-packages/kalite/packages/dist/ifcfg/parser.py
+    regexp: 'a-zA-Z0-9'
+    replace: 'a-zA-Z0-9\-'
+  when: not (is_debian_9 or is_debian_10 or is_ubuntu_16 or is_ubuntu_17 or is_ubuntu_18 or is_ubuntu_19)
+  # 2020-03-31: Testing for {is_raspbian_9, is_raspbian_10} is not currently nec, as testing for {is_debian_9, is_debian_10} covers that already.
+  # JV why not just is_ubuntu_20?
 
 - name: Create dir {{ kalite_root }}
   file:
