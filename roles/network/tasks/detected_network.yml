@@ -15,9 +15,9 @@
     device_gw: "{{ discovered_wan_iface }}"
   when: ansible_default_ipv4.gateway is defined
 
-- name: Red Hat network detection (redhat)
-  include_tasks: detected_redhat.yml
-  when: is_redhat | bool
+#- name: Red Hat network detection (redhat)
+#  include_tasks: detected_redhat.yml
+#  when: is_redhat | bool
 
 - name: Setting dhcpcd_test results
   set_fact:
@@ -97,13 +97,14 @@
     ap_device: "eth0"
   when: iiab_wan_iface != "eth0" and discovered_wireless_iface != "none" and xo_model == "XO-1.5"
 
-- name: Exclude reserved WiFi adapter if defined - takes adapter name
+- name: Exclude reserved Network Adapter if defined - takes adapter name
   set_fact:
-    ap_device: "{{ reserved_wifi }}"
-  when: reserved_wifi is defined and discovered_wireless_iface != iiab_wan_iface and num_wifi_interfaces >= "2"
+    exclude_device: "{{ reserved_device }}"
+#  when: reserved_device is defined and discovered_wireless_iface != iiab_wan_iface and num_wifi_interfaces >= "2"
+  when: reserved_device is defined
 
 - name: Count LAN ifaces
-  shell: ls /sys/class/net | grep -v -e ap0 -e wwlan -e ppp -e lo -e br0 -e tun -e br- -e docker -e bridge0 -e veth -e {{ device_gw }} -e {{ ap_device }} | wc -l
+  shell: ls /sys/class/net | grep -v -e ap0 -e wwlan -e ppp -e lo -e br0 -e tun -e br- -e docker -e bridge0 -e veth -e {{ device_gw }} -e {{ exclude_device }} | wc -l
   register: num_lan_interfaces_result
 
 - name: Calculate number of LAN interfaces including WiFi
@@ -112,7 +113,7 @@
 
 # LAN - pick non WAN's
 - name: Create list of LAN (non WAN) ifaces
-  shell: ls /sys/class/net | grep -v -e ap0 -e wwlan -e ppp -e lo -e br0 -e tun -e br- -e docker -e bridge0 -e veth -e {{ device_gw }} -e {{ ap_device }}
+  shell: ls /sys/class/net | grep -v -e ap0 -e wwlan -e ppp -e lo -e br0 -e tun -e br- -e docker -e bridge0 -e veth -e {{ device_gw }} -e {{ exclude_device }}
   when: num_lan_interfaces != "0"
   register: lan_list_result
 
@@ -142,10 +143,6 @@
   set_fact:
     iiab_wired_lan_iface: "{{ discovered_wired_iface }}"
   when: discovered_wired_iface is defined and discovered_wired_iface != "none" and discovered_wired_iface != iiab_wan_iface and not is_raspbian
-
-#unused
-#- name: Get a list of ifcfg files to delete
-# moved to detected_redhat
 
 # use value only if present
 - name: 2 or more devices on the LAN - use bridging
