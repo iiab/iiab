@@ -47,7 +47,7 @@ But first off, the file is compiled by harvesting 1 + 6 kinds of things:
    Or, you can later/manually upload it using the ``pastebinit`` command:
 
    ```
-   pastebinit < /etc/iiab/diag/NEW-FILE-NAME
+   pastebinit -b dpaste.com < /etc/iiab/diag/NEW-FILE-NAME
    ```
 
    Either way, this will generate an actual web link (URL).
