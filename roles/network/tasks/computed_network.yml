@@ -6,20 +6,6 @@
     user_wan_iface: "{{ discovered_wan_iface }}"
   when: not (discovered_wan_iface == "none") and not (xo_model == "none") and has_ifcfg_gw == "none"
 
-#- name: Checking for NetworkManager-config-server
-#  shell: rpm -qa | grep  NetworkManager-config-server | wc -l
-#  register: strict_networking_check
-
-#- name: Found Checking for NetworkManager-config-server
-#  set_fact:
-#     strict_networking: True
-#  when: strict_networking_check == "1"
-
-#- name: Use restricted network features
-#  set_fact:
-#     iiab_demo_mode: True
-#  when: teamviewer_install and not strict_networking
-
 - name: XO laptop wants USB WiFi interface as AP mode
   set_fact:
     iiab_wireless_lan_iface: "{{ discovered_lan_iface }}"
@@ -62,7 +48,7 @@
     user_wan_iface: "none"
   when: not iiab_wan_enabled
 
-# gui wants LanController # keeps ifcfg-WAN but onboot=no
+# gui wants LanController
 # the change over might be a little bumpy ATM.
 - name: Setting GUI wants 'LanController'
   set_fact:
@@ -71,10 +57,9 @@
     iiab_gateway_enabled: "False"
   when: gui_desired_network_role is defined and gui_desired_network_role == "LanController"
 
-# device_gw is used with the LAN detection and LAN's ifcfg file deletion.
-# single interface vars/ users would need to set iiab_wan_enabled False as above, to disable the WAN
-# and set user_lan_iface = <device> to suppress the auto detection for the same effect.
-
+# discovered_wan_iface is used with the LAN detection, single interface vars/ users would
+# need to set iiab_wan_enabled False as above, to disable the WAN and set
+# user_lan_iface: <device> to suppress the auto detection for the same effect.
 - name: Setting user_lan_iface for 'LanController' for single interface
   set_fact:
     user_lan_iface: "{{ discovered_wan_iface }}"
@@ -143,24 +128,6 @@
     iiab_lan_iface: "{{ user_lan_iface }}"
   when: not (user_lan_iface == "auto")
 
-# so this works
-- name: Interface count
-  shell: ls /sys/class/net | grep -v -e lo -e bridge0 -e veth -e "br-*" -e docker| wc | awk '{print $1}'
-  register: adapter_count
-
-# well if there ever was a point to tell the user things are FUBAR this is it.
-- name: We're hosed no work interfaces
-  set_fact:
-    iiab_network_mode: "No_network_found"
-  when: adapter_count.stdout|int == 0
-
-# well if there ever was a point to tell the user things are FUBAR this is it.
-- name: I'm not guessing declare gateway please
-  set_fact:
-    iiab_network_mode: "Undetectable_use_local_vars"
-    iiab_wan_iface: "none"
-  when: adapter_count.stdout|int >= 5 and device_gw == "none" and gui_wan_iface == "unset" and gui_static_wan is defined
-
 - name: Record IIAB_WAN_DEVICE to {{ iiab_env_file }}
   lineinfile:
     path: "{{ iiab_env_file }}"
@@ -197,11 +164,3 @@
     value: "{{ iiab_lan_iface }}"
   - option: iiab_network_mode
     value: "{{ iiab_network_mode }}"
-  - option: hostapd_enabled
-    value: "{{ hostapd_enabled }}"
-  - option: host_ssid
-    value: "{{ host_ssid }}"
-  - option: host_wifi_mode
-    value: "{{ host_wifi_mode }}"
-  - option: host_channel
-    value: "{{ host_channel }}"
