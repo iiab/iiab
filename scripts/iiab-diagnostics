@@ -38,7 +38,8 @@ function cat_file_raw() {    # $1 = path/filename; $2 = # of lines, for tail
             echo "FILE EXISTS BUT IS EMPTY!" >> $outfile
         elif [ $# -eq 1 ]; then
             echo >> $outfile
-            cat $1 | iconv -t UTF-8//IGNORE >> $outfile
+            # Redact most passwords from /etc/hostapd/hostapd.conf, /etc/wpa_supplicant/wpa_supplicant.conf, /etc/iiab/local_vars.yml -- not much to worry about in /etc/iiab/iiab.ini
+            cat $1 | sed -e 's/^\(\s*psk=\).*/\1[REDACTED]/; s/^\(\s*wpa_passphrase=\).*/\1[REDACTED]/; s/^\([^#].*assword:\).*/\1 [REDACTED]/' | iconv -t UTF-8//IGNORE >> $outfile
         else    # e.g. last 100 lines, maximum
             echo "                        ...ITS LAST $2 LINES FOLLOW..." >> $outfile
             echo >> $outfile
@@ -150,13 +151,13 @@ cat_file /etc/iiab/openvpn_handle
 cat_file /.iiab-image
 cat_file /etc/iiab/iiab.env
 cat_file /etc/iiab/iiab.ini
-cat_file /etc/iiab/local_vars.yml
+cat_file /etc/iiab/local_vars.yml      # Redacts most passwords above
 cat_file /etc/iiab/iiab_state.yml
-cat_file /etc/iiab/config_vars.yml
+#cat_file /etc/iiab/config_vars.yml    # No longer common
 cat_file /etc/resolv.conf
 cat_file /etc/network/interfaces
-cat_file /etc/hostapd/hostapd.conf                   # Auto-redact password?
-#cat_file /etc/wpa_supplicant/wpa_supplicant.conf    # Auto-redact password?
+cat_file /etc/hostapd/hostapd.conf                  # Redacts most passwords above
+cat_file /etc/wpa_supplicant/wpa_supplicant.conf    # Redacts most passwords above
 
 # Record all Ansible variables: SLOW! OUTPUT TOO LARGE?
 #pushd /opt/iiab/iiab > /dev/null
@@ -169,8 +170,8 @@ echo -e "\n\n\n\n3. CONTENT OF DIRECTORIES (1-LEVEL DEEP)\n" >> $outfile
 cat_dir /etc/network/interfaces.d
 cat_dir /etc/systemd/network
 cat_dir /etc/NetworkManager/system-connections
-cat_dir /etc/netplan
-#cat_dir /etc/sysconfig/network-scripts/if-cfg*    # No longer common.
+cat_dir /etc/netplan    # Redacts most passwords above
+#cat_dir /etc/sysconfig/network-scripts/if-cfg*    # No longer common
 #cat_dir /etc/network    # Above file /etc/network/interfaces suffices
 
 echo -e "\n  4. Output of Commands:\n"
@@ -187,15 +188,16 @@ cat_cmd 'ip route' 'Routing table'
 cat_cmd 'netstat -rn' 'Routing table (old view)'
 cat_cmd 'brctl show' 'Bridge for LAN side'
 cat_cmd 'sudo netstat -natp' 'Ports/Services in use'
-cat_cmd 'systemctl status dnsmasq' 'Is dnsmasq Ok?'
+cat_cmd 'systemctl status dnsmasq' 'Is dnsmasq running?'
 cat_cmd 'sudo journalctl -b 0 -u dnsmasq' 'dnsmasq log'
 cat_cmd 'networkctl' 'systemd-networkd status'
 cat_cmd 'nmcli d' 'NetworkManager status'
 cat_cmd 'sudo journalctl -b 0 -u networkd-dispatcher' 'networkd-dispatcher log'
 cat_cmd 'iw dev' 'List wireless interfaces'
-cat_cmd 'systemctl status hostapd' 'Is hostapd Ok?'
+cat_cmd 'systemctl status hostapd' 'Downstream Wi-Fi: Is hostapd running?'
+cat_cmd 'ls -l /etc/wpa_supplicant' 'Upstream Wi-Fi'
 cat_cmd 'ps -AH' 'Process hierarchy: staging of hostapd & wpa_supplicant?'
-cat_cmd 'dmesg | grep brcm' 'Diagnostic messages: RPi WiFi firmware'
+cat_cmd 'dmesg | grep brcm' 'Diagnostic messages: RPi Wi-Fi firmware'
 cat_cmd 'env' 'Environment variables'
 #cat_cmd 'ansible localhost -m setup 2>/dev/null' 'All Ansible facts'    # For cleaner scraping of Ansible vars, consider "./runrole all-vars /tmp/all-ansible-vars" 27-31 lines above?
 
