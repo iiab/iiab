@@ -60,4 +60,4 @@ But first off, the file is compiled by harvesting 1 + 6 kinds of things:
 
 ## Source Code
 
-Please look over the bottom of [iiab-diagnostics](iiab-diagnostics) (lines 104-214 especially) to learn more about which common IIAB files and commands make this rapid troubleshooting possible.
+Please look over the bottom of [iiab-diagnostics](iiab-diagnostics) (lines 105-216 especially) to learn more about which common IIAB files and commands make this rapid troubleshooting possible.
