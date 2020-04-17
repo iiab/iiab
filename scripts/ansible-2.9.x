@@ -1,7 +1,7 @@
 #!/bin/bash -e
 
 CURR_VER="undefined"    # Ansible version you currently have installed
-GOOD_VER="2.9.6"    # For XO laptops (pip install) & CentOS (yum install rpm)
+GOOD_VER="2.9.7"    # For XO laptops (pip install) & CentOS (yum install rpm)
 # On other OS's we attempt the latest from PPA, which might be more recent
 
 export DEBIAN_FRONTEND=noninteractive
