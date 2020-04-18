@@ -2,7 +2,9 @@
 
 To streamline troubleshooting of remote Internet-in-a-Box (IIAB) installations, we bundle up common machine/software diagnostics, all together in 1 human-readable small file, that can be easily circulated online AND offline.
 
-The ``pastebinit`` command can then be used to auto-upload this file, creating a short URL that makes it easier to pass around.
+Passwords (including Wi-Fi passwords) are auto-redacted from this file, to protect your community confidentiality.
+
+The ``pastebinit`` command can then be used to auto-upload this file, creating a short URL that makes it much easier to circulate among [volunteers](http://internet-in-a-box.org/pages/contributing.html).
 
 But first off, the file is compiled by harvesting 1 + 6 kinds of things:
 
@@ -60,4 +62,4 @@ But first off, the file is compiled by harvesting 1 + 6 kinds of things:
 
 ## Source Code
 
-Please look over the bottom of [iiab-diagnostics](iiab-diagnostics) (lines 104-214 especially) to learn more about which common IIAB files and commands make this rapid troubleshooting possible.
+Please look over the bottom of [iiab-diagnostics](iiab-diagnostics) (lines 105-216 especially) to learn more about which common IIAB files and commands make this rapid troubleshooting possible.
