@@ -1,11 +1,12 @@
+#!/bin/bash
 IFACE={{ discovered_wireless_iface }}
 SSID=""
 if [ -f /run/netplan/wpa-$IFACE.conf ]; then
-    SSID=`grep ssid /run/netplan/wpa-$IFACE.conf | awk -F = '{print $2}' | sed -r s/\"// | sed -r s/\">
+    SSID=`grep ssid /run/netplan/wpa-$IFACE.conf | awk -F = '{print $2}' | sed -r s/\"// | sed -r s/\"//`
 fi
 
 if [ -f /etc/wpa_supplicant/wpa_supplicant.conf ]; then
-    SSID=`grep ssid /etc/wpa_supplicant/wpa_supplicant.conf | awk -F = '{print $2}' | sed -r s/\"// | >
+    SSID=`grep ssid /etc/wpa_supplicant/wpa_supplicant.conf | awk -F = '{print $2}' | sed -r s/\"// | sed -r s/\"//`
 fi
 if [ -f /etc/iiab/iiab.env ]; then
     source /etc/iiab/iiab.env
@@ -14,11 +15,15 @@ if [ -f /etc/iiab/iiab.env ]; then
     fi
 fi
 sleep 3
-wpa_cli -i wlan0 scan > /dev/null
+wpa_cli -i $IFACE scan > /dev/null
 sleep 2
-FREQ=`wpa_cli -i wlan0 scan_results | grep $SSID | awk '{print $2}'`
+FREQ=`wpa_cli -i $IFACE scan_results | grep $SSID | awk '{print $2}'`
+if [ ! $FREQ -lt 2485 ]; then
+    FREQ=""
+fi
 echo "frequency is $FREQ for $SSID"
-CHAN=$(((($FREQ - 2407)) / 5 ))
+CHAN=$(($FREQ - 2407 ))
+CHAN=$(($CHAN / 5 ))
 echo "channel is $CHAN for $SSID"
 cp /etc/hostapd/hostapd.conf.iiab /etc/hostapd/hostapd.conf
 sed -i -e "s/^channel.*/channel=$CHAN/" /etc/hostapd/hostapd.conf
