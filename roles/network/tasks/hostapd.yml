@@ -39,19 +39,19 @@
   set_fact:
     ap0_mac_addr: "{{ ap0_mac.stdout }}"
 
-- name: Use custom 'hostapd' systemd service unit file using ap0 when wifi_up_down
+- name: Use custom 'hostapd' systemd service unit file using ap0
   template:
     owner: root
     group: root
-    mode: 0644
     src: "{{ item.src }}"
     dest: "{{ item.dest }}"
+    mode: "{{ item.mode  }}"
   with_items:
-   - { src: 'hostapd/hostapd.service.j2', dest: '/etc/systemd/system/hostapd.service' }
-   - { src: 'hostapd/clone-wifi.service.j2', dest: '/etc/systemd/system/clone-wifi.service' }
-   - { src: 'hostapd/wifi-test.service.j2', dest: '/etc/systemd/system/wifi-test.service' }
-   - { src: 'hostapd/test-wifi', dest: '/sbin/test-wifi' }
-  when: discovered_wireless_iface != "none" and wifi_up_down
+    - { src: 'hostapd/hostapd.service.j2', dest: '/etc/systemd/system/hostapd.service', mode: '0644' }
+    - { src: 'hostapd/clone-wifi.service.j2', dest: '/etc/systemd/system/clone-wifi.service', mode: '0644' }
+    - { src: 'hostapd/wifi-test.service.j2', dest: '/etc/systemd/system/wifi-test.service', mode: '0644'}
+    - { src: 'hostapd/test-wifi', dest: '/sbin/test-wifi', mode: '0755' }
+  when: discovered_wireless_iface != "none"
 
 - name: Use custom 'hostapd' systemd service unit file for {{ discovered_wireless_iface }} when not wifi_up_down
   template:
@@ -138,10 +138,18 @@
     enabled: yes
   when: hostapd_enabled and not wifi_up_down
 
-- name: Enable the Access Point 'hostapd' service
+- name: Disable ap0 related services
   systemd:
     name: "{{ item }}"
-    masked: no
+    enabled: no
+  with_items:
+    - clone-wifi.service
+    - wifi-test.service
+  when: not wifi_up_down
+
+- name: Enable the Access Point 'hostapd' and ap0 related services
+  systemd:
+    name: "{{ item }}"
     enabled: yes
   with_items:
     - hostapd.service
