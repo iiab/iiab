@@ -46,7 +46,7 @@ lynx -reload -source https://github.com/XSCE/xsce/blob/release-6.2/ReleaseNotes6
 
 # Download Raspberry Pi guides
 wget -nc https://www.raspberrypi.org/magpi-issues/Beginners_Guide_v1.pdf -O $DOCSPATH/Raspberry_Pi_Beginners_Guide_v1.pdf || true    # Overrides set -e
-wget -nc https://dn.odroid.com/IoT/other_doc.pdf -O $DOCSPATH/Raspberry_Pi_User_Guide_v4.pdf || true
+wget -nc https://ia601505.us.archive.org/15/items/other_doc/other_doc.pdf -O $DOCSPATH/Raspberry_Pi_User_Guide_v4.pdf || true
 
 # Copy PDF from Lokole playbook
 cp -p "{{ iiab_dir }}/roles/lokole/Lokole-IIAB_Users_Manual.pdf" $DOCSPATH    # From /opt/iiab/iiab
@@ -55,7 +55,7 @@ cp -p "{{ iiab_dir }}/roles/lokole/Lokole-IIAB_Users_Manual.pdf" $DOCSPATH    # 
 
 # ...on main page (http://box/info)
 sed -i -r "s|https://www.raspberrypi.org/magpi-issues/Beginners_Guide_v1.pdf|docs/Raspberry_Pi_Beginners_Guide_v1.pdf|g" $DESTPATH/index.html
-sed -i -r "s|https://dn.odroid.com/IoT/other_doc.pdf|docs/Raspberry_Pi_User_Guide_v4.pdf|g" $DESTPATH/index.html
+sed -i -r "s|https://ia601505.us.archive.org/15/items/other_doc/other_doc.pdf|docs/Raspberry_Pi_User_Guide_v4.pdf|g" $DESTPATH/index.html
 sed -i -r "s|https://github.com/iiab/iiab/blob/master/roles/lokole/Lokole-IIAB_Users_Manual.pdf|docs/Lokole-IIAB_Users_Manual.pdf|g" $DESTPATH/index.html
 
 # ...and within subpages
