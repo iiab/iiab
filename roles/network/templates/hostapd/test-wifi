@@ -1,13 +1,23 @@
 #!/bin/bash
 IFACE={{ discovered_wireless_iface }}
+NETPLAN=0
 SSID=""
-if [ -f /run/netplan/wpa-$IFACE.conf ]; then
-    SSID=`grep ssid /run/netplan/wpa-$IFACE.conf | awk -F = '{print $2}' | sed -r s/\"// | sed -r s/\"//`
+# covers systemd-networkd
+if [ -f /etc/wpa_supplicant/wpa_supplicant-$IFACE.conf ]; then
+    SSID=`grep ssid /etc/wpa_supplicant/wpa_supplicant-$IFACE.conf | awk -F = '{print $2}' | sed -r s/\"// | sed -r s/\"//`
 fi
 
+# covers raspbian
 if [ -f /etc/wpa_supplicant/wpa_supplicant.conf ]; then
     SSID=`grep ssid /etc/wpa_supplicant/wpa_supplicant.conf | awk -F = '{print $2}' | sed -r s/\"// | sed -r s/\"//`
 fi
+
+# covers netplan
+if [ -f /run/netplan/wpa-$IFACE.conf ]; then
+    NETPLAN=1
+    SSID=`grep ssid /run/netplan/wpa-$IFACE.conf | awk -F = '{print $2}' | sed -r s/\"// | sed -r s/\"//`
+fi
+# IIAB hint for NetworkManager
 if [ -f /etc/iiab/iiab.env ]; then
     source /etc/iiab/iiab.env
     if [ ! -z $CLIENT_SSID ]; then
@@ -32,11 +42,11 @@ echo "channel is $CHAN for $SSID"
 cp /etc/hostapd/hostapd.conf.iiab /etc/hostapd/hostapd.conf
 sed -i -e "s/^channel.*/channel=$CHAN/" /etc/hostapd/hostapd.conf
 systemctl stop wpa_supplicant
-#systemctl daemon-reload
 systemctl start hostapd
-#systemctl stop wpa_supplicant
 systemctl start wpa_supplicant
-systemctl restart netplan-wpa-wlan0.service
+if [ $NETPLAN -eq 1 ]; then
+    systemctl restart netplan-wpa-wlan0.service
+fi
 systemctl stop dnsmasq.service
 systemctl start dnsmasq.service
 exit 0
