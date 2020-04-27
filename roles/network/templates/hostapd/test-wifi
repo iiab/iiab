@@ -14,20 +14,29 @@ if [ -f /etc/iiab/iiab.env ]; then
        SSID=$CLIENT_SSID
     fi
 fi
-sleep 3
-wpa_cli -i $IFACE scan > /dev/null
 sleep 2
+wpa_cli -i $IFACE scan > /dev/null
+sleep 1
 FREQ=`wpa_cli -i $IFACE scan_results | grep $SSID | awk '{print $2}'`
 for result in $FREQ; do
-    echo "frequency $result found for $SSID"
+    echo "frequency is $result for $SSID"
     if [ $result -lt 2485 ]; then
         FREQ2=$result
     fi
 done
 echo "Using $FREQ2 for $SSID"
+
 CHAN=$(($FREQ2 - 2407 ))
 CHAN=$(($CHAN / 5 ))
 echo "channel is $CHAN for $SSID"
 cp /etc/hostapd/hostapd.conf.iiab /etc/hostapd/hostapd.conf
 sed -i -e "s/^channel.*/channel=$CHAN/" /etc/hostapd/hostapd.conf
-systemctl daemon-reload
+systemctl stop wpa_supplicant
+#systemctl daemon-reload
+systemctl start hostapd
+#systemctl stop wpa_supplicant
+systemctl start wpa_supplicant
+systemctl restart netplan-wpa-wlan0.service
+systemctl stop dnsmasq.service
+systemctl start dnsmasq.service
+exit 0
