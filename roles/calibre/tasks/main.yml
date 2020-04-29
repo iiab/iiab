@@ -1,5 +1,83 @@
-- include_tasks: install.yml
-  when: calibre_install and not calibre_installed is defined
+# "How do i fail a task in Ansible if the variable contains a boolean value?
+# I want to perform input validation for Ansible playbooks"
+# https://stackoverflow.com/questions/46664127/how-do-i-fail-a-task-in-ansible-if-the-variable-contains-a-boolean-value-i-want/46667499#46667499
 
-- include_tasks: enable.yml
-  when: calibre_install or calibre_installed is defined
+# We assume 0-init/tasks/validate_vars.yml has DEFINITELY been run, so no need
+# to re-check whether vars are defined here.  As Ansible vars cannot be unset:
+# https://serverfault.com/questions/856729/how-to-destroy-delete-unset-a-variable-value-in-ansible
+
+- name: Assert that "calibre_install is sameas true" (boolean not string etc)
+  assert:
+    that: calibre_install is sameas true
+    fail_msg: "PLEASE SET 'calibre_install: True' e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+
+- name: Assert that "calibre_enabled | type_debug == 'bool'" (boolean not string etc)
+  assert:
+    that: calibre_enabled | type_debug == 'bool'
+    fail_msg: "PLEASE GIVE VARIABLE 'calibre_enabled' A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+
+
+- name: Install Calibre if 'calibre_installed' not defined, e.g. in {{ iiab_state_file }}    # /etc/iiab/iiab_state.yml
+  include_tasks: install.yml
+  when: calibre_installed is undefined
+
+# http://box:8080 & http://box:8080/mobile WORK BUT OTHER URL'S LIKE http://box/calibre ARE A MESS (BOOKS RARELY DISPLAY)
+#
+# 2018-08-27 POSSIBLE FIX...CONSIDER THIS ProxyPass / ProxyPassReverse TECHNIQUE:
+# https://github.com/iiab/iiab/tree/master/roles/calibre-web/templates/calibre-web.conf.j2
+#    (anyway this works great for calibre-web, allowing http://box/books
+#    to work even better than http://box:8083 when box == 192.168.0.x !)
+#
+#- name: Attempt to enable http://box/calibre via Apache (UNTESTED)
+#  command: a2ensite calibre.conf
+#  when: apache_installed and calibre_enabled
+#
+#- name: Attempt to disable http://box/calibre via Apache (UNTESTED)
+#  command: a2dissite calibre.conf
+#  when: apache_installed and not calibre_enabled
+
+- name: Enable & (Re)Start 'calibre-serve' service, if calibre_enabled
+  systemd:
+    daemon_reload: yes
+    name: calibre-serve
+    enabled: yes
+    state: restarted
+  when: calibre_enabled | bool
+
+- name: Disable & Stop 'calibre-serve' service, if not calibre_enabled
+  systemd:
+    name: calibre-serve
+    enabled: no
+    state: stopped
+  when: not calibre_enabled
+
+#- name: Enable/Disable/Restart Apache if primary
+#  include_tasks: apache.yml
+#  when: not nginx_enabled
+#
+#- name: Enable/Disable/Restart NGINX if primary
+#  include_tasks: nginx.yml
+#  when: nginx_enabled | bool
+
+
+- name: Add 'calibre' variable values to {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+    section: calibre
+    option: "{{ item.option }}"
+    value: "{{ item.value | string }}"
+  with_items:
+  - option: name
+    value: Calibre
+  - option: description
+    value: '"Calibre is an extremely popular personal library system for e-books."'
+  - option: calibre_src_url
+    value: "{{ calibre_src_url }}"
+  - option: calibre_dbpath
+    value: "{{ calibre_dbpath }}"
+  - option: calibre_port
+    value: "{{ calibre_port }}"
+  - option: calibre_enabled
+    value: "{{ calibre_enabled }}"
