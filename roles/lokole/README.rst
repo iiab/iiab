@@ -2,7 +2,7 @@
 Lokole README
 =============
 
-This Ansible role installs the `Lokole web app <https://github.com/ascoderu/opwen-webapp>`_ within Internet-in-a-Box (IIAB).  Lokole is a project by the Canadian-Congolese non-profit `Ascoderu <https://ascoderu.ca>`_.
+This Ansible role installs the `Lokole web app <https://github.com/ascoderu/lokole>`_ within Internet-in-a-Box (IIAB).  Lokole is a project by the Canadian-Congolese non-profit `Ascoderu <https://ascoderu.ca>`_.
 
 The Lokole is a simple email client that offers functionality like:
 
@@ -12,7 +12,7 @@ The Lokole is a simple email client that offers functionality like:
 4. Send attachments
 
 The Lokole email client is translated into a number of languages, including French and Lingala.
-For an up-to-date list of supported languages, refer to the `Lokole translations source <https://github.com/ascoderu/opwen-webapp/tree/master/opwen_email_client/webapp/translations>`_.
+For an up-to-date list of supported languages, refer to the `Lokole translations source <https://github.com/ascoderu/lokole/tree/master/opwen_email_client/webapp/translations>`_.
 
 Using It
 --------
@@ -73,7 +73,7 @@ Nightly Internet Email Sync (Not Easy!)
 
 The Lokole software can be configured to access the Internet via USB modem, SIM card, or Ethernet, by setting the environment variable ``OPWEN_SIM_TYPE`` in configuration file `/home/lokole/state/webapp_secrets.sh <https://github.com/iiab/iiab/blob/master/roles/lokole/templates/webapp_secrets.sh.j2>`_.  By default, this installation of Lokole is set to local-only (offline) mode, in which users can only send emails to other users on the same Internet-in-a-Box, and cannot send emails over the Internet.  This has been done by setting ``OPWEN_SIM_TYPE`` to ``LocalOnly``.
 
-If configured to work with a USB modem or other form of Internet connection, Lokole will sync with the cloud server (operated by `Ascoderu <https://ascoderu.ca/>`_) on a nightly basis to deliver and receive emails globally.  *However, arranging this is extremely complicated.*  You would need a compatible form of connection and an Internet expert familiar with modem protocols, MX records, etc.  Ask that person to read the `Lokole software README <https://github.com/ascoderu/opwen-webapp/blob/master/README.rst>`_ in its entirety, to help you understand whether this is realistic for your organization.
+If configured to work with a USB modem or other form of Internet connection, Lokole will sync with the cloud server (operated by `Ascoderu <https://ascoderu.ca/>`_) on a nightly basis to deliver and receive emails globally.  *However, arranging this is extremely complicated.*  You would need a compatible form of connection and an Internet expert familiar with modem protocols, MX records, etc.  Ask that person to read the `Lokole software README <https://github.com/ascoderu/lokole/blob/master/README.rst>`_ in its entirety, to help you understand whether this is realistic for your organization.
 
 Lokole and Internet-in-a-Box would welcome a business plan (whether volunteer-based, grant-based or for-profit) from someone willing to operationalize this — making it relatively hassle-free for schools, clinics, libraries and orphanages around the world — that generally do not have access to technical experts.  Please `contact us <http://wiki.laptop.org/go/IIAB/FAQ#What_are_the_best_places_for_community_support.3F>`_ if you have the capacity to help make such a social enterprise happen.
 
@@ -85,4 +85,4 @@ For further usage information and troubleshooting, refer to the `Lokole user man
 Known Issues
 ------------
 
-For an up-to-date list of open issues, please see the `Lokole project's issue tracker <https://github.com/ascoderu/opwen-webapp/issues>`_.  See also `IIAB's issue tracker <https://github.com/iiab/iiab/issues>`_.
+For an up-to-date list of open issues, please see the `Lokole project's issue tracker <https://github.com/ascoderu/lokole/issues>`_.  See also `IIAB's issue tracker <https://github.com/iiab/iiab/issues>`_.
