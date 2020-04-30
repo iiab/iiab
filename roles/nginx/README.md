@@ -10,7 +10,7 @@
 
 2. Without PHP available via FastCGI, any function at all for PHP-based applications validates NGINX.
 
-3. Current state of IIAB App/Service migrations as of 2020-04-24:
+3. Current state of IIAB App/Service migrations as of 2020-04-29:
 
    1. These support "Native" NGINX but ***NOT*** Apache
       * Admin Console
@@ -39,7 +39,7 @@
       * nodered
 
    4. These each run their own web server or non-web / backend services, e.g. off of their own [unique port(s)](https://github.com/iiab/iiab/wiki/IIAB-Networking#list-of-ports--services) (IIAB home pages link directly to these destinations).  In future we'd like mnemonic URL's for all of these: (e.g. http://box/calibre, http://box/archive, http://box/kalite)
-      * calibre (menu goes directly to port 8080) [*]
+      * calibre (menu goes directly to port 8080)
       * internetarchive (menu goes directly to port 4244, [PR #2120](https://github.com/iiab/iiab/pull/2120)) [*]
       * kalite (menu goes directly to ports 8006-8008)
       * minetest [*]
@@ -47,4 +47,4 @@
       * pbx [*]
       * transmission [*]
 
-[*] The 5 above starred roles could use improvement, as of 2020-04-24.
+[*] The 4 above starred roles could use improvement, as of 2020-04-29.
