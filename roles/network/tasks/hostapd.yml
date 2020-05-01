@@ -1,3 +1,9 @@
+- name: Unmask the Access Point 'hostapd' service
+  systemd:
+    name: hostapd
+    enabled: no
+    masked: no
+
 - name: Disable hostapd when not using ap0 and wifi gateway present
   set_fact:
     hostapd_enabled: False
@@ -73,7 +79,7 @@
     group: root
     mode: 0755
 
-- name: Create dhcpcd hook for hostapd
+- name: Create dhcpcd hook for hostapd and ap0 when wifi_up_down True
   template:
     src: hostapd/50-hostapd
     dest: /lib/dhcpcd/dhcpcd-hooks/50-hostapd
@@ -82,7 +88,7 @@
     mode: 0644
   when: is_raspbian and wifi_up_down
 
-- name: Remove dhcpcd hook for hostapd if WiFi is not split
+- name: Remove dhcpcd hook for hostapd if WiFi is not split using ap0
   file:
     path: /lib/dhcpcd/dhcpcd-hooks/50-hostapd
     state: absent
@@ -104,7 +110,7 @@
     - { src: 'hostapd/00-iiab-debug', dest: '/etc/networkd-dispatcher/routable.d/00-iiab-debug' }
   when: systemd_networkd_active and discovered_wireless_iface != "none"
 
-- name: Create networkd-dispatcher hook for hostapd
+- name: Create networkd-dispatcher hook for hostapd wifi_up_down True
   template:
     owner: root
     group: root
@@ -117,7 +123,7 @@
     - { src: 'hostapd/netd-disp', dest: '/etc/networkd-dispatcher/routable.d/iiab-wifi' }
   when: systemd_networkd_active and discovered_wireless_iface != "none" and wifi_up_down
 
-- name: Remove networkd-dispatcher hook for hostapd on RPi hardware and not up/down
+- name: Remove networkd-dispatcher hook wifi_up_down False
   file:
     path: "{{ item.dest }}"
     state: absent
@@ -125,19 +131,11 @@
     - { dest: '/etc/networkd-dispatcher/carrier.d/iiab-wifi' }
     - { dest: '/etc/networkd-dispatcher/no-carrier.d/iiab-wifi' }
     - { dest: '/etc/networkd-dispatcher/routable.d/iiab-wifi' }
-  when: systemd_networkd_active and discovered_wireless_iface != "none" and rpi_model != "none" and not wifi_up_down
-
-- name: Disable the Access Point 'hostapd' service
-  systemd:
-    name: hostapd
-    enabled: no
-# cheap workaround for when /etc/init.d is populated
-#  when: not hostapd_enabled
+  when: systemd_networkd_active and discovered_wireless_iface != "none" and not wifi_up_down
 
 - name: Enable the Access Point 'hostapd' service
   systemd:
     name: hostapd
-    masked: no
     enabled: yes
   when: hostapd_enabled
 
