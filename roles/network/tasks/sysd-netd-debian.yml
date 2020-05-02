@@ -11,11 +11,14 @@
     src: network/systemd-br0-network.j2
   when: iiab_lan_iface == "br0"
 
-- name: Copy the bridge script - Assigns br0 wired slaves
+# can be more than one wired interface
+- name: Wired enslaving - Assigns lan_list_results to br0 as wired slaves if present
   template:
-    dest: /etc/systemd/network/IIAB-Slave.network
     src: network/systemd-br0-slave.j2
-  when: iiab_wired_lan_iface is defined and iiab_lan_iface == "br0"
+    dest: /etc/systemd/network/IIAB-Slave-{{ item|trim }}.network
+  with_items:
+    - "{{ lan_list_result.stdout_lines }}"
+  when: iiab_wired_lan_iface is defined and num_lan_interfaces|int >= 1 and not network_manager_active
 
 - name: Remove static WAN template
   file:
@@ -33,11 +36,12 @@
     wan_cidr: "{{ CIDR.stdout }}"
   when: wan_ip != "dhcp"
 
-- name: Supply static WAN template (ubuntu-16)
+- name: Supply static WAN template when network_manager_active is False
   template:
     dest: /etc/systemd/network/IIAB-Static.network
     src: network/systemd-static-net.j2
-  when: wan_ip != "dhcp" and is_ubuntu_16
+  when: wan_ip != "dhcp" and ( is_ubuntu_16 or not network_manager_active )
+
   #when: wan_ip != "dhcp" and not is_ubuntu_18
 
 - name: Stopping services
@@ -50,6 +54,6 @@
 - name: Restart the systemd-networkd service
   systemd:
     name: systemd-networkd
-    enabled: yes
     state: restarted
-  when: not nobridge is defined and not no_net_restart
+  #when: (netplan.stdout is undefined or netplan.stdout.find("yaml") == -1) and not no_net_restart
+  when: not no_net_restart

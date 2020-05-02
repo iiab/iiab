@@ -11,16 +11,34 @@ if [ ! -f iiab-network.yml ]; then
     exit 1
 fi
 
-if [ ! -f /etc/iiab/config_vars.yml ]; then
-    echo "Creating stub /etc/iiab/config_vars.yml"
-    mkdir -p /etc/iiab
-    echo "{}" > /etc/iiab/config_vars.yml
-fi
-
 OS="unknown"   # will be overridden below, if /etc/iiab/iiab.env is legit
 if [ -f /etc/iiab/iiab.env ]; then
     echo "Reading /etc/iiab/iiab.env"
+    STAGE=0
     source /etc/iiab/iiab.env
+    if grep -q STAGE= /etc/iiab/iiab.env ; then
+        echo -e "\nExtracted STAGE=$STAGE (counter) from /etc/iiab/iiab.env"
+        if ! [ "$STAGE" -eq "$STAGE" ] 2> /dev/null; then
+            echo -e "\nEXITING: STAGE (counter) value == ""$STAGE"" is non-integer"
+            exit 1
+        elif [ "$STAGE" -lt 0 ] || [ "$STAGE" -gt 9 ]; then
+            echo -e "\nEXITING: STAGE (counter) value == ""$STAGE"" is out-of-range"
+            exit 1
+        elif [ "$STAGE" -lt 3 ]; then
+            echo -e "\nEXITING: STAGE (counter) value == ""$STAGE"
+            echo -e "\nIIAB Stage 3 not complete."
+            echo -e "\nPlease run: ./iiab-install"
+            exit 1
+        fi
+    else
+        echo -e "\nEXITING: STAGE (counter) not found"
+        echo -e "\nIIAB not installed."
+        echo -e "\nPlease run: ./iiab-install"
+        exit 1
+    fi
+else
+    echo -e "\nEXITING: /etc/iiab/iiab.env not found"
+    exit 1
 fi
 
 echo "Ansible will now run iiab-network.yml -- log file is iiab-network.log"
