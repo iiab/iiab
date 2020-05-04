@@ -1,7 +1,12 @@
 #!/bin/bash
 IFACE={{ discovered_wireless_iface }}
+RASPBIAN=0
 NETPLAN=0
 SSID=""
+# when we get here br0 should be available and dbus wpa_supplicant was started if enabled. None
+# of the backends that use wpa_supplicant should be active yet based on the Before= After= lines
+# in the wifi-test.service unit file.
+
 # covers systemd-networkd
 if [ -f /etc/wpa_supplicant/wpa_supplicant-$IFACE.conf ]; then
     SSID=`grep ssid /etc/wpa_supplicant/wpa_supplicant-$IFACE.conf | awk -F = '{print $2}' | sed -r s/\"// | sed -r s/\"//`
@@ -9,6 +14,7 @@ fi
 
 # covers raspbian
 if [ -f /etc/wpa_supplicant/wpa_supplicant.conf ]; then
+    RASPBIAN=1
     SSID=`grep ssid /etc/wpa_supplicant/wpa_supplicant.conf | awk -F = '{print $2}' | sed -r s/\"// | sed -r s/\"//`
 fi
 
@@ -19,12 +25,17 @@ if [ -f /run/netplan/wpa-$IFACE.conf ]; then
     sed 's|ctrl_interface=/run/wpa_supplicant|&\ncountry={{ host_country_code }}|' /run/netplan/wpa-$IFACE.conf
 fi
 # IIAB hint for NetworkManager
+# could scrape /etc/NetworkManager/system-connections/ looking for ssid
 if [ -f /etc/iiab/iiab.env ]; then
     source /etc/iiab/iiab.env
     if [ ! -z $CLIENT_SSID ]; then
        SSID=$CLIENT_SSID
     fi
 fi
+# might need to start the dbus wpa_supplicant
+#if [ $RASPBIAN -eq 1 ]; then
+#    systemctl start wpa_supplicant
+#fi
 sleep 2
 wpa_cli -i $IFACE scan > /dev/null
 sleep 1
@@ -40,14 +51,28 @@ echo "Using $FREQ2 for $SSID"
 CHAN=$(($FREQ2 - 2407 ))
 CHAN=$(($CHAN / 5 ))
 echo "channel is $CHAN for $SSID"
-cp /etc/hostapd/hostapd.conf.iiab /etc/hostapd/hostapd.conf
-sed -i -e "s/^channel.*/channel=$CHAN/" /etc/hostapd/hostapd.conf
-systemctl stop wpa_supplicant
-systemctl start hostapd
-systemctl start wpa_supplicant
-if [ $NETPLAN -eq 1 ]; then
-    systemctl restart netplan-wpa-wlan0.service
+HOSTAPD=`grep channel /etc/hostapd/hostapd.conf | awk -F = '{print $2}'`
+echo "Hostapd set for $HOSTAPD"
+if [ $CHAN -ne $HOSTAPD ]; then
+    echo "Editing Hostapd for channel $CHAN"
+    cp /etc/hostapd/hostapd.conf.iiab /etc/hostapd/hostapd.conf
+    sed -i -e "s/^channel.*/channel=$CHAN/" /etc/hostapd/hostapd.conf
+    systemctl stop wpa_supplicant
+    systemctl start hostapd
+    systemctl start wpa_supplicant
+    # This is more of a netplan workaround should go away.
+    if [ $NETPLAN -eq 1 ]; then
+        systemctl restart netplan-wpa-$IFACE.service
+    fi
+else
+    #we started it stop it now, dhcpcd should launch it's version anyway
+#    if [ $RASPBIAN -eq 1 ]; then
+#        systemctl stop wpa_supplicant
+#    fi
+    # firmware might force the need to restart anyway
+#    systemctl stop wpa_supplicant
+    systemctl start hostapd
+#    systemctl start wpa_supplicant
 fi
-systemctl stop dnsmasq.service
 systemctl start dnsmasq.service
 exit 0
