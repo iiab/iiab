@@ -1,0 +1,25 @@
+#!/bin/bash
+if [ "$IFACE" == "{{ discovered_wireless_iface }}" ]; then
+    echo "NET-DISP-WiFi $IFACE $STATE"
+    FREQ=`wpa_cli -i $IFACE scan_results | grep $SSID | awk '{print $2}'`
+    for result in $FREQ; do
+        echo "frequency is $result for $SSID"
+        if [ $result -lt 2485 ]; then
+            FREQ2=$result
+        fi
+    done
+    echo "Using $FREQ2 for $SSID"
+    CHAN=$(($FREQ2 - 2407 ))
+    CHAN=$(($CHAN / 5 ))
+    HOSTAPD=`grep channel /etc/hostapd/hostapd.conf | awk -F = '{print $2}'`
+    echo "Hostapd set for $HOSTAPD"
+    if [ $CHAN -ne $HOSTAPD ]; then
+        echo "Editing Hostapd for channel $CHAN"
+        cp /etc/hostapd/hostapd.conf.iiab /etc/hostapd/hostapd.conf
+        sed -i -e "s/^channel.*/channel=$CHAN/" /etc/hostapd/hostapd.conf
+        systemctl stop wpa_supplicant
+        systemctl restart hostapd
+        systemctl start wpa_supplicant
+    fi
+    /usr/sbin/ip link set ap0 up
+fi
