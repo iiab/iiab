@@ -1,4 +1,5 @@
-- include_tasks: detected_network.yml
+- name: detected_network
+  include_tasks: detected_network.yml
 
 - name: IF WIFI IS PRIMARY GATEWAY, PLEASE RUN 'iiab-hotspot-on' MANUALLY
   set_fact:
@@ -11,25 +12,8 @@
 # in hostapd.yml for later use by...
 # /usr/libexec/iiab-startup.sh, iiab-hotspot-off & iiab-hotspot-on
 #
-# Separate Idea, Not Without Risks: should WiFi-as-gateway detection logic
-# be encapsulated into roles/network/tasks/hostapd.yml in future?  Whereas
-# today "./runtags hostapd" doesn't exist & "./runtags AP" is UNSUPPORTED!
-
-#- name: RPi - reboot to AP post install - installed via wifi so the services are ready
-#  set_fact:
-#    iiab_lan_iface: br0
-#    iiab_wan_iface: "{{ discovered_wired_iface }}"
-#    iiab_wireless_lan_iface: "{{ discovered_wireless_iface }}"
-#    iiab_wired_lan_iface: ""
-#  when: is_raspbian and discovered_wireless_iface is defined and discovered_wireless_iface == iiab_wan_iface and reboot_to_AP
-
-- include_tasks: computed_network.yml
-
-#- name: RPi - don't reboot to AP post install - installed via wifi - don't blow away current network
-#  set_fact:
-#    no_net_restart: True
-#    hostapd_enabled: False
-#  when: is_raspbian and discovered_wireless_iface is defined and discovered_wired_iface != iiab_wan_iface
+- name: computed_network
+  include_tasks: computed_network.yml
 
 - name: Configure wondershaper
   include_tasks: wondershaper.yml
@@ -53,42 +37,37 @@
   when: is_ubuntu and not is_ubuntu_16
 
 #### Start services
-
-- include_tasks: avahi.yml
-- include_tasks: hostapd.yml
-- include_tasks: computed_services.yml
-- include_tasks: enable_services.yml
-
+- name: avahi
+  include_tasks: avahi.yml
+- name: hostapd
+  include_tasks: hostapd.yml
+- name: computed_services
+  include_tasks: computed_services.yml
+- name: enable_services
+  include_tasks: enable_services.yml
 #### End services
 
 #### Start network layout
-
-- name: Redhat networking
-  include_tasks: ifcfg_mods.yml
-  when: is_redhat | bool
-  #and not installing
+#- name: Redhat networking
+#  include_tasks: ifcfg_mods.yml
+#  when: is_redhat | bool
 
 - name: NetworkManager in use
   include_tasks: NM-debian.yml
   when: is_debuntu and network_manager_active
-  #and not installing
 
 - name: systemd-networkd in use
   include_tasks: sysd-netd-debian.yml
   when: is_debuntu and systemd_networkd_active
-  #and not installing
 
 - name: Raspbian uses dhcpcd only with no N-M or SYS-NETD active
   include_tasks: rpi_debian.yml
   when: is_raspbian
-  #and not installing
 
 - name: Not RPi, Not NetworkManager, Not systemd-networkd in use
   include_tasks: debian.yml
   when: (not is_raspbian and not network_manager_active and not systemd_networkd_active and is_debuntu) or is_ubuntu_16
-  #and not installing
-
 #### end network layout
 
-- include_tasks: restart.yml
-  when: not installing    # REMOVE THIS LINE IF installing IS ALWAYS false AS SET IN roles/0-init/defaults/main.yml
+- name: Restart services
+  include_tasks: restart.yml
