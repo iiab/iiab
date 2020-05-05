@@ -22,6 +22,7 @@ fi
 if [ -f /run/netplan/wpa-$IFACE.conf ]; then
     NETPLAN=1
     SSID=`grep ssid /run/netplan/wpa-$IFACE.conf | awk -F = '{print $2}' | sed -r s/\"// | sed -r s/\"//`
+    # covers netplan lack of country=
     sed 's|ctrl_interface=/run/wpa_supplicant|&\ncountry={{ host_country_code }}|' /run/netplan/wpa-$IFACE.conf
 fi
 # IIAB hint for NetworkManager
@@ -41,9 +42,8 @@ fi
 #if [ $RASPBIAN -eq 1 ]; then
 #    systemctl start wpa_supplicant
 #fi
-sleep 2
 wpa_cli -i $IFACE scan > /dev/null
-sleep 1
+sleep 2
 FREQ=`wpa_cli -i $IFACE scan_results | grep $SSID | awk '{print $2}'`
 for result in $FREQ; do
     echo "frequency is $result for $SSID"
@@ -62,12 +62,16 @@ if [ $CHAN -ne $HOSTAPD ]; then
     echo "Editing Hostapd for channel $CHAN"
     cp /etc/hostapd/hostapd.conf.iiab /etc/hostapd/hostapd.conf
     sed -i -e "s/^channel.*/channel=$CHAN/" /etc/hostapd/hostapd.conf
-    systemctl stop wpa_supplicant
-    systemctl start hostapd
-    systemctl start wpa_supplicant
-    # This is more of a netplan workaround should go away.
-    if [ $NETPLAN -eq 1 ]; then
-        systemctl restart netplan-wpa-$IFACE.service
+    # too soon to for raspbian to call hostapd but hostapd gets called after this script anyway.
+    if [ RASPBIAN -eq 0 ]; then
+        systemctl stop wpa_supplicant
+        systemctl start hostapd
+        systemctl start wpa_supplicant
     fi
+fi
+# covers netplan lack of country=
+if [ $NETPLAN -eq 1 ]; then
+    # This is more of a netplan workaround should go away.
+    systemctl restart netplan-wpa-$IFACE.service
 fi
 exit 0
