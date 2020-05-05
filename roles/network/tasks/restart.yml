@@ -1,9 +1,14 @@
-- name: Restart hostapd when WiFi is present
+#iiab_wireless_lan_iface(wlan0) - wifi_up_down False needs hw
+#iiab_wireless_lan_iface(ap0) - wifi_up_down True needs hw
+#hostapd_enabled False - set in hostapd.yml to avoid the enable with wifi_up_down False
+#no_net_restart: True - main.yml discovered_wireless_iface == iiab_wan_iface
+- name: Restart hostapd when WiFi is present but not when using WiFi as gateway
   systemd:
     name: hostapd
     state: restarted
 #  when: iiab_wireless_lan_iface is defined and hostapd_enabled and discovered_wireless_iface != iiab_wan_iface
-  when: hostapd_enabled and iiab_wireless_lan_iface is defined and discovered_wireless_iface == iiab_wireless_lan_iface
+#  when: hostapd_enabled and iiab_wireless_lan_iface is defined and discovered_wireless_iface == iiab_wireless_lan_iface
+  when: hostapd_enabled and not no_net_restart
 
 - name: Start named service
   systemd:
@@ -76,10 +81,13 @@
     state: restarted
   when: hostapd_enabled and wifi_slave.stdout is defined and wifi_slave.stdout == 0
 
+#both interfaces.d and systemd-networkd should have br0 available and Appliance lacks br0
 - name: User choice of dnsmasq or dhcpd - restarting {{ dhcp_service2 }}
   systemd:
     name: "{{ dhcp_service2 }}"
     state: restarted
-  when: not no_net_restart and discovered_wireless_iface == "none"
+  when: (not no_net_restart) or wifi_up_down
   #when: (iiab_network_mode != "Appliance")    # Sufficient b/c br0 exists thanks to /etc/network/interfaces.d/iiab
   #when: iiab_network_mode != "Appliance" and iiab_wan_iface != discovered_wireless_iface
+#keep an eye on legacy wifi installs where br0 is present but not 'online' with an ip address
+#due to hostapd didn't go to a carrier state. All others should get dnsmasq restarted
