@@ -1,4 +1,14 @@
 #!/bin/bash
+sed -i -e "s/^HOSTAPD_ENABLED.*/HOSTAPD_ENABLED=False/" {{ iiab_env_file }}
+systemctl disable hostapd
+systemctl stop hostapd
+{% if wifi_up_down %}
+systemctl disable clone-wifi.service
+systemctl disable wifi-test.service
+systemctl stop clone-wifi.service
+echo " IIAB hotspot access point Disabled"
+exit 0
+{% else %}
 {% if is_raspbian %}
 # hotspot-off before ap0_updown
 sed -i -e "s/^denyinterfaces/#denyinterfaces/" /etc/dhcpcd.conf
@@ -9,7 +19,6 @@ systemctl stop hostapd
 systemctl daemon-reload
 systemctl restart dhcpcd
 #systemctl restart networking 6/15/2019 TFM removed
-sed -i -e "s/^HOSTAPD_ENABLED.*/HOSTAPD_ENABLED=False/" {{ iiab_env_file }}
 # Temporary promiscuous-mode workaround for RPi's WiFi "10SEC disease"
 # Set wlan0 to promiscuous when AP's OFF (for possible WiFi gateway)
 # SEE ALSO iiab-hotspot-on + /usr/libexec/iiab-startup.sh
@@ -17,20 +26,13 @@ sed -i -e "s/^HOSTAPD_ENABLED.*/HOSTAPD_ENABLED=False/" {{ iiab_env_file }}
 #if grep -qi raspbian /etc/*release; then
 #    ip link set dev wlan0 promisc on
 #fi
-
 {% else %}
-systemctl disable hostapd
-systemctl stop hostapd
-sed -i -e "s/^HOSTAPD_ENABLED.*/HOSTAPD_ENABLED=False/" {{ iiab_env_file }}
-{% if wifi_up_down %}
-systemctl disable clone-wifi.service
-systemctl disable wifi-test.service
-systemctl stop clone-wifi.service
-echo " IIAB hotspot access point Disabled"
-exit 0
-{% else %}
-sed -i -e "s|managed=0|managed=1|" /etc/NetworkManager/conf.d/wifi-manage.conf
+#ubuntu
+if [ -f /etc/NetworkManager/conf.d/wifi-manage.conf ]
+    sed -i -e "s|managed=0|managed=1|" /etc/NetworkManager/conf.d/wifi-manage.conf
+fi
 echo -e "\nPlease reboot to enable upstream WiFi access.\n"
 exit 0
 {% endif %}
+#wifi_up_down
 {% endif %}
