@@ -22,8 +22,8 @@ fi
 if [ -f /run/netplan/wpa-$IFACE.conf ]; then
     NETPLAN=1
     SSID=`grep ssid /run/netplan/wpa-$IFACE.conf | awk -F = '{print $2}' | sed -r s/\"// | sed -r s/\"//`
-    # covers netplan lack of country=
-    sed 's|ctrl_interface=/run/wpa_supplicant|&\ncountry={{ host_country_code }}|' /run/netplan/wpa-$IFACE.conf
+    echo "cover netplan lack of country="
+    sed -i 's|ctrl_interface=/run/wpa_supplicant|&\ncountry=US|' /run/netplan/wpa-$IFACE.conf
 fi
 # IIAB hint for NetworkManager
 # could scrape /etc/NetworkManager/system-connections/ looking for ssid
@@ -34,25 +34,32 @@ if [ -f /etc/iiab/iiab.env ]; then
     fi
 fi
 echo "ssid is $SSID"
-if [[ $SSID == "" ]]; then
-    echo "Couldn't find ssid to use exiting"
+if [[ $SSID == "" ]] || [[ $SSID == "NA" ]]; then
+    echo "Couldn't find ssid $SSID to use exiting"
+    if [ $NETPLAN -eq 1 ]; then
+       echo "Netplan1"
+    fi
     exit 0
 fi
-# might need to start the dbus wpa_supplicant
-#if [ $RASPBIAN -eq 1 ]; then
-#    systemctl start wpa_supplicant
-#fi
 wpa_cli -i $IFACE scan > /dev/null
 sleep 2
 FREQ=`wpa_cli -i $IFACE scan_results | grep $SSID | awk '{print $2}'`
 for result in $FREQ; do
     echo "frequency is $result for $SSID"
-    if [ $result -lt 2485 ]; then
+    if [ $result -lt 2485 ] && [ $result -gt 2407 ]; then
         FREQ2=$result
+        break
     fi
 done
 echo "Using $FREQ2 for $SSID"
-
+if [[ $FREQ2 == "" ]]; then
+    echo "Couldn't find frequency to use exiting"
+    if [ $NETPLAN -eq 1 ]; then
+        echo "Netplan2"
+    fi
+    exit 0
+fi
+# ubuntu on boot exits at this point timing - issue with wpa_cli and scanning
 CHAN=$(($FREQ2 - 2407 ))
 CHAN=$(($CHAN / 5 ))
 echo "channel is $CHAN for $SSID"
@@ -62,15 +69,13 @@ if [ $CHAN -ne $HOSTAPD ]; then
     echo "Editing Hostapd for channel $CHAN"
     cp /etc/hostapd/hostapd.conf.iiab /etc/hostapd/hostapd.conf
     sed -i -e "s/^channel.*/channel=$CHAN/" /etc/hostapd/hostapd.conf
-    # too soon to for raspbian to call hostapd but hostapd gets called after this script anyway.
-    if [ RASPBIAN -eq 0 ]; then
-        systemctl stop wpa_supplicant
-        systemctl start hostapd
-        systemctl start wpa_supplicant
-    fi
 fi
-# covers netplan lack of country=
+systemctl stop wpa_supplicant
+systemctl stop hostapd
+systemctl start hostapd
+systemctl start wpa_supplicant
 if [ $NETPLAN -eq 1 ]; then
+    echo "Netplan3"
     # This is more of a netplan workaround should go away.
     systemctl restart netplan-wpa-$IFACE.service
 fi
