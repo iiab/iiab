@@ -1,23 +1,36 @@
-- name: iiab_wan_device
-  shell: grep IIAB_WAN_DEVICE {{ iiab_env_file }} | awk -F "=" '{print $2}'
-  when: iiab_stage|int > 4
-  register: prior_gw
+# so this works
+- name: Interface count
+  shell: ls /sys/class/net | grep -v {{ virtual_network_devices }} | wc | awk '{print $1}'
+  register: adapter_count
+
+# well if there ever was a point to tell the user things are FUBAR this is it.
+- name: We're hosed no work interfaces
+  fail:    # FORCE IT RED THIS ONCE!
+    msg: "No_network_found"
+  when: adapter_count.stdout|int == 0
 
 - name: Checking for old device gateway interface for device test
+  shell: grep IIAB_WAN_DEVICE {{ iiab_env_file }} | awk -F "=" '{print $2}'
+  when: iiab_stage|int == 9
+  register: prior_gw
+
+- name: Setting device_gw, prior_gw_device
   set_fact:
     device_gw: "{{ prior_gw.stdout }}"
-    device_gw2: "{{ prior_gw.stdout }}"
-  when: iiab_stage|int > 4 and prior_gw is defined and prior_gw.stdout != ""
+    prior_gw_device: "{{ prior_gw.stdout }}"
+  when: prior_gw.stdout is defined and prior_gw.stdout != ""
 
-- name: Setting WAN if detected
+- name: Setting WAN, device_gw if detected
   set_fact:
     iiab_wan_iface: "{{ discovered_wan_iface }}"
     device_gw: "{{ discovered_wan_iface }}"
   when: ansible_default_ipv4.gateway is defined
 
-- name: Red Hat network detection (redhat)
-  include_tasks: detected_redhat.yml
-  when: is_redhat | bool
+- name: Figure out netplan file name
+  shell: ls /etc/netplan
+  register: netplan
+  ignore_errors: True # pre 17.10 doesn't use netplan
+  when: is_ubuntu
 
 - name: Setting dhcpcd_test results
   set_fact:
@@ -75,16 +88,15 @@
   set_fact:
     wifi2: "{{ item|trim }}"
     discovered_wireless_iface: "{{ item|trim }}"
-  when: wireless_list2.stdout is defined and not wireless_list2.stdout == "ap0"
+  when: wireless_list2.stdout is defined and item|trim != "ap0"
   with_items:
     - "{{ wireless_list2.stdout_lines }}"
 #item|trim != discovered_wan_iface
 
 - name: Count WiFi ifaces
-  shell: "ls -la /sys/class/net/*/phy80211 | awk -F / '{print $5}' | wc -l"
+  shell: "ls -la /sys/class/net/*/phy80211 | awk -F / '{print $5}' | grep -v -e ap0 | wc -l"
   register: count_wifi_interfaces
 
-# facts are apparently all stored as text, so do text comparisons from here on
 - name: Remember number of WiFi devices
   set_fact:
     num_wifi_interfaces: "{{ count_wifi_interfaces.stdout|int }}"
@@ -94,16 +106,16 @@
 
 - name: XO laptop override 2 WiFi on LAN
   set_fact:
-    ap_device: "eth0"
+    exclude_device: "eth0"
   when: iiab_wan_iface != "eth0" and discovered_wireless_iface != "none" and xo_model == "XO-1.5"
 
-- name: Exclude reserved WiFi adapter if defined - takes adapter name
+- name: Exclude reserved Network Adapter if defined - takes adapter name
   set_fact:
-    ap_device: "{{ reserved_wifi }}"
-  when: reserved_wifi is defined and discovered_wireless_iface != iiab_wan_iface and num_wifi_interfaces >= "2"
+    exclude_device: "{{ reserved_device }}"
+  when: reserved_device is defined
 
 - name: Count LAN ifaces
-  shell: ls /sys/class/net | grep -v -e ap0 -e wwlan -e ppp -e lo -e br0 -e tun -e br- -e docker -e bridge0 -e veth -e {{ device_gw }} -e {{ ap_device }} | wc -l
+  shell: ls /sys/class/net | grep -v {{ virtual_network_devices }} -e wwlan -e ppp -e {{ device_gw }} -e {{ exclude_device }} | wc -l
   register: num_lan_interfaces_result
 
 - name: Calculate number of LAN interfaces including WiFi
@@ -112,7 +124,7 @@
 
 # LAN - pick non WAN's
 - name: Create list of LAN (non WAN) ifaces
-  shell: ls /sys/class/net | grep -v -e ap0 -e wwlan -e ppp -e lo -e br0 -e tun -e br- -e docker -e bridge0 -e veth -e {{ device_gw }} -e {{ ap_device }}
+  shell: ls /sys/class/net | grep -v {{ virtual_network_devices }} -e wwlan -e ppp -e {{ device_gw }} -e {{ exclude_device }}
   when: num_lan_interfaces != "0"
   register: lan_list_result
 
@@ -133,19 +145,21 @@
   with_items:
     - "{{ lan_list_result.stdout_lines }}"
 
-- name: Set iiab_wireless_lan_iface if present
+
+- name: Set iiab_wireless_lan_iface to {{ discovered_wireless_iface }} if not none
   set_fact:
     iiab_wireless_lan_iface: "{{ discovered_wireless_iface }}"
-  when: discovered_wireless_iface is defined and discovered_wireless_iface != "none" and discovered_wireless_iface != iiab_wan_iface
+  when: discovered_wireless_iface != "none" and not wifi_up_down
+
+- name: Set iiab_wireless_lan_iface to ap0 if WiFi device is present
+  set_fact:
+    iiab_wireless_lan_iface: ap0
+  when: discovered_wireless_iface != "none" and wifi_up_down
 
 - name: Set iiab_wired_lan_iface if present
   set_fact:
     iiab_wired_lan_iface: "{{ discovered_wired_iface }}"
   when: discovered_wired_iface is defined and discovered_wired_iface != "none" and discovered_wired_iface != iiab_wan_iface and not is_raspbian
-
-#unused
-#- name: Get a list of ifcfg files to delete
-# moved to detected_redhat
 
 # use value only if present
 - name: 2 or more devices on the LAN - use bridging
@@ -197,8 +211,8 @@
   with_items:
   - option: has_ifcfg_gw
     value: "{{ has_ifcfg_gw }}"
-  - option: prior_gateway_(device_gw2)
-    value: "{{ device_gw2 }}"
+  - option: prior_gateway_device
+    value: "{{ prior_gw_device }}"
   - option: dhcpcd_result
     value: "{{ dhcpcd_result }}"
   - option: network_manager_active
@@ -227,3 +241,10 @@
     value: "{{ iiab_lan_iface }}"
   - option: iiab_wan_iface
     value: "{{ iiab_wan_iface }}"
+
+# well if there ever was a point to tell the user things are FUBAR this is it.
+# limit 2 network adapters wifi wired
+- name: I'm not guessing declare gateway please
+  fail:    # FORCE IT RED THIS ONCE!
+    msg: "Undetectable gateway or prior gateway for use with static network addressing from admin-console use local_vars to declare user_wan_iface"
+  when: adapter_count.stdout|int >=3 and gui_wan_iface == "unset" and gui_static_wan

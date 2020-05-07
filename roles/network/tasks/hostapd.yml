@@ -1,7 +1,23 @@
-- name: Turn off hostapd when no wifi interface present or in "Appliance Mode"
+- name: Unmask the Access Point 'hostapd' service
+  systemd:
+    name: hostapd
+    enabled: no
+    masked: no
+
+- name: Disable hostapd when not using ap0 and wifi gateway present, or no WiFi hardware present
   set_fact:
     hostapd_enabled: False
-  when: not iiab_wireless_lan_iface is defined or iiab_network_mode == "Appliance"
+  when: (not wifi_up_down and discovered_wireless_iface == iiab_wan_iface) or discovered_wireless_iface == "none"
+
+- name: Detect current Wifi channel
+  shell: iw {{ discovered_wireless_iface }} info | grep channel | cut -d' ' -f2
+  register: current_host_channel
+  when: discovered_wireless_iface != "none"
+
+- name: Setting WiFi channel to {{ current_host_channel.stdout }}
+  set_fact:
+    host_channel: "{{ current_host_channel.stdout }}"
+  when: current_host_channel.stdout is defined and current_host_channel.stdout != "" and current_host_channel.stdout|int <= 13
 
 - name: Create /etc/hostapd/hostapd.conf from template
   template:
@@ -14,21 +30,38 @@
 
 - name: Create backup /etc/hostapd/hostapd.conf.iiab from template
   template:
-    src: hostapd/iiab-hostapd.conf.j2
+    src: hostapd/hostapd.conf.j2
     dest: /etc/hostapd/hostapd.conf.iiab
     owner: root
     group: root
     mode: 0644
   when: discovered_wireless_iface != "none"
 
-- name: Use custom systemd unit file to start 'hostapd' service
+- name: Generate new random mac address for ap0
+  shell: tr -dc A-F0-9 < /dev/urandom | head -c 10 | sed -r 's/(..)/\1:/g;s/:$//;s/^/02:/'
+  register: ap0_mac
+
+- name: Setting ap0 mac address for use in hostapd service file
+  set_fact:
+    ap0_mac_addr: "{{ ap0_mac.stdout }}"
+
+- name: Use custom 'hostapd' systemd service unit file using ap0 when wifi_up_down
   template:
     src: hostapd/hostapd.service.j2
     dest: /etc/systemd/system/hostapd.service
     owner: root
     group: root
     mode: 0644
-  when: discovered_wireless_iface != "none"
+  when: discovered_wireless_iface != "none" and wifi_up_down
+
+- name: Use custom 'hostapd' systemd service unit file for {{ discovered_wireless_iface }} when not wifi_up_down
+  template:
+    src: hostapd/hostapd.legacy.j2
+    dest: /etc/systemd/system/hostapd.service
+    owner: root
+    group: root
+    mode: 0644
+  when: discovered_wireless_iface != "none" and not wifi_up_down
 
 - name: Create /usr/bin/iiab-hotspot-on from template
   template:
@@ -37,7 +70,6 @@
     owner: root
     group: root
     mode: 0755
-  when: is_raspbian | bool
 
 - name: Create /usr/bin/iiab-hotspot-off from template
   template:
@@ -46,14 +78,60 @@
     owner: root
     group: root
     mode: 0755
-  when: is_raspbian | bool
 
-- name: Disable the Access Point 'hostapd' service
-  systemd:
-    name: hostapd
-    enabled: no
-# cheap workaround for when /etc/init.d is populated
-#  when: not hostapd_enabled
+- name: Create dhcpcd hook for hostapd and ap0 when wifi_up_down True
+  template:
+    src: hostapd/50-hostapd
+    dest: /lib/dhcpcd/dhcpcd-hooks/50-hostapd
+    owner: root
+    group: root
+    mode: 0644
+  when: is_raspbian and wifi_up_down
+
+- name: Remove dhcpcd hook for hostapd if WiFi is not split using ap0
+  file:
+    path: /lib/dhcpcd/dhcpcd-hooks/50-hostapd
+    state: absent
+  when: is_raspbian and not wifi_up_down
+
+- name: Create networkd-dispatcher diagnosic hook for recording network events
+  template:
+    owner: root
+    group: root
+    mode: 0755
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+  with_items:
+    - { src: 'hostapd/00-iiab-debug', dest: '/etc/networkd-dispatcher/carrier.d/00-iiab-debug' }
+    - { src: 'hostapd/00-iiab-debug', dest: '/etc/networkd-dispatcher/degraded.d/00-iiab-debug' }
+    - { src: 'hostapd/00-iiab-debug', dest: '/etc/networkd-dispatcher/dormant.d/00-iiab-debug' }
+    - { src: 'hostapd/00-iiab-debug', dest: '/etc/networkd-dispatcher/no-carrier.d/00-iiab-debug' }
+    - { src: 'hostapd/00-iiab-debug', dest: '/etc/networkd-dispatcher/off.d/00-iiab-debug' }
+    - { src: 'hostapd/00-iiab-debug', dest: '/etc/networkd-dispatcher/routable.d/00-iiab-debug' }
+  when: systemd_networkd_active and discovered_wireless_iface != "none"
+
+- name: Create networkd-dispatcher hook for hostapd wifi_up_down True
+  template:
+    owner: root
+    group: root
+    mode: 0755
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+  with_items:
+    - { src: 'hostapd/netd-disp', dest: '/etc/networkd-dispatcher/carrier.d/iiab-wifi' }
+    - { src: 'hostapd/netd-disp', dest: '/etc/networkd-dispatcher/no-carrier.d/iiab-wifi' }
+    - { src: 'hostapd/netd-disp', dest: '/etc/networkd-dispatcher/routable.d/iiab-wifi' }
+  when: systemd_networkd_active and discovered_wireless_iface != "none" and wifi_up_down
+
+- name: Remove networkd-dispatcher hook wifi_up_down False
+  file:
+    path: "{{ item.dest }}"
+    state: absent
+  with_items:
+    - { dest: '/etc/networkd-dispatcher/carrier.d/iiab-wifi' }
+    - { dest: '/etc/networkd-dispatcher/no-carrier.d/iiab-wifi' }
+    - { dest: '/etc/networkd-dispatcher/routable.d/iiab-wifi' }
+  when: systemd_networkd_active and discovered_wireless_iface != "none" and not wifi_up_down
 
 - name: Enable the Access Point 'hostapd' service
   systemd:

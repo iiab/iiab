@@ -3,27 +3,39 @@
   include_tasks: down-debian.yml
 
 # provide keyfile layout like the XO's used way back.
-- name: Create uuid for NM's keyfile store
-  shell: uuidgen
-  register: uuid_response
+#- name: Create uuid for NM's keyfile store
+#  shell: uuidgen
+#  register: uuid_response
 
-- name: Put the uuid in place
-  set_fact:
-    gen_uuid: "{{ uuid_response.stdout_lines[0] }}"
+#- name: Put the uuid in place
+#  set_fact:
+#    gen_uuid: "{{ uuid_response.stdout_lines[0] }}"
 
-# NM might have a watcher on this path and we don't have to restart NM
-- name: Copy the bridge script for NetworkManager
-  template:
-    dest: /etc/NetworkManager/system-connections/
-    src: network/bridge-br0
-    mode: 0600
-  when: iiab_network_mode != "Appliance"
-
-- name: Remove br0 in Appliance Mode for NetworkManager
+# systemd-networkd handles br0 except for Raspbian
+- name: Remove stale br0 for NetworkManager
   file:
     dest: /etc/NetworkManager/system-connections/bridge-br0
     state: absent
-  when: iiab_network_mode == "Appliance"
+
+- name: Copy ap0-manage.conf for NetworkManager
+  template:
+    dest: /etc/NetworkManager/conf.d/ap0-manage.conf
+    src: network/ap0-manage.conf
+    mode: 0644
+  when: wifi_up_down
+
+- name: Copy manage.conf for NetworkManager when wifi_up_down False
+  template:
+    dest: /etc/NetworkManager/conf.d/wifi-manage.conf
+    src: network/manage.conf.j2
+    mode: 0644
+  when: discovered_wireless_iface != "none" and not wifi_up_down
+
+- name: Remove manage.conf for NetworkManager when wifi_up_down True
+  file:
+    dest: /etc/NetworkManager/conf.d/wifi-manage.conf
+    state: absent
+  when: wifi_up_down
 
 - name: Removing static for NetworkManager
   file:
@@ -57,16 +69,6 @@
     src: network/NM-static.j2
     mode: 0600
   when: wan_ip != "dhcp"
-
-- name: Stop wpa_supplicant service
-  service:
-    name: wpa_supplicant
-    state: stopped
-  when: iiab_wireless_lan_iface is defined and hostapd_enabled and iiab_network_mode != "Appliance"
-
-- name: Mask wpa_supplicant
-  shell: systemctl mask wpa_supplicant
-  when: iiab_wireless_lan_iface is defined and hostapd_enabled and iiab_network_mode != "Appliance"
 
 - name: Reload systemd
   systemd:
