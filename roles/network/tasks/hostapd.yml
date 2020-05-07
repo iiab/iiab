@@ -19,22 +19,16 @@
     host_channel: "{{ current_host_channel.stdout }}"
   when: current_host_channel.stdout is defined and current_host_channel.stdout != "" and current_host_channel.stdout|int <= 13
 
-- name: Create /etc/hostapd/hostapd.conf from template
+- name: Create /etc/hostapd/hostapd.conf and backup .iiab from template
   template:
-    src: hostapd/hostapd.conf.j2
-    dest: /etc/hostapd/hostapd.conf
     owner: root
     group: root
     mode: 0644
-  when: discovered_wireless_iface != "none"
-
-- name: Create backup /etc/hostapd/hostapd.conf.iiab from template
-  template:
-    src: hostapd/hostapd.conf.j2
-    dest: /etc/hostapd/hostapd.conf.iiab
-    owner: root
-    group: root
-    mode: 0644
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+  with_items:
+    - { src: 'hostapd/hostapd.conf.j2', dest: '/etc/hostapd/hostapd.conf' }
+    - { src: 'hostapd/hostapd.conf.j2', dest: '/etc/hostapd/hostapd.conf.iiab' }
   when: discovered_wireless_iface != "none"
 
 - name: Generate new random mac address for ap0
@@ -45,14 +39,19 @@
   set_fact:
     ap0_mac_addr: "{{ ap0_mac.stdout }}"
 
-- name: Use custom 'hostapd' systemd service unit file using ap0 when wifi_up_down
+- name: Use custom 'hostapd' systemd service unit file using ap0
   template:
-    src: hostapd/hostapd.service.j2
-    dest: /etc/systemd/system/hostapd.service
     owner: root
     group: root
-    mode: 0644
-  when: discovered_wireless_iface != "none" and wifi_up_down
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    mode: "{{ item.mode  }}"
+  with_items:
+    - { src: 'hostapd/hostapd.service.j2', dest: '/etc/systemd/system/hostapd.service', mode: '0644' }
+    - { src: 'hostapd/clone-wifi.service.j2', dest: '/etc/systemd/system/clone-wifi.service', mode: '0644' }
+    - { src: 'hostapd/wifi-test.service.j2', dest: '/etc/systemd/system/wifi-test.service', mode: '0644'}
+    - { src: 'hostapd/test-wifi', dest: '/sbin/test-wifi', mode: '0755' }
+  when: discovered_wireless_iface != "none"
 
 - name: Use custom 'hostapd' systemd service unit file for {{ discovered_wireless_iface }} when not wifi_up_down
   template:
@@ -120,7 +119,7 @@
   with_items:
     - { src: 'hostapd/netd-disp', dest: '/etc/networkd-dispatcher/carrier.d/iiab-wifi' }
     - { src: 'hostapd/netd-disp', dest: '/etc/networkd-dispatcher/no-carrier.d/iiab-wifi' }
-    - { src: 'hostapd/netd-disp', dest: '/etc/networkd-dispatcher/routable.d/iiab-wifi' }
+    - { src: 'hostapd/netd-disp2', dest: '/etc/networkd-dispatcher/routable.d/iiab-wifi2' }
   when: systemd_networkd_active and discovered_wireless_iface != "none" and wifi_up_down
 
 - name: Remove networkd-dispatcher hook wifi_up_down False
@@ -131,13 +130,35 @@
     - { dest: '/etc/networkd-dispatcher/carrier.d/iiab-wifi' }
     - { dest: '/etc/networkd-dispatcher/no-carrier.d/iiab-wifi' }
     - { dest: '/etc/networkd-dispatcher/routable.d/iiab-wifi' }
+    - { dest: '/etc/networkd-dispatcher/routable.d/iiab-wifi2' }
   when: systemd_networkd_active and discovered_wireless_iface != "none" and not wifi_up_down
 
 - name: Enable the Access Point 'hostapd' service
   systemd:
     name: hostapd
     enabled: yes
-  when: hostapd_enabled
+  when: hostapd_enabled and not wifi_up_down
+
+- name: Disable ap0 related services
+  systemd:
+    name: "{{ item }}"
+    enabled: no
+    daemon_reload: yes    
+  with_items:
+    - clone-wifi.service
+    - wifi-test.service
+  when: not wifi_up_down
+
+- name: Enable the Access Point 'hostapd' and ap0 related services
+  systemd:
+    name: "{{ item }}"
+    enabled: yes
+    daemon_reload: yes
+  with_items:
+    - hostapd.service
+    - clone-wifi.service
+    - wifi-test.service
+  when: hostapd_enabled and wifi_up_down
 
 - name: Record HOSTAPD_ENABLED to {{ iiab_env_file }}
   lineinfile:

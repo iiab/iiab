@@ -1,5 +1,12 @@
 #!/bin/bash
-
+sed -i -e "s/^HOSTAPD_ENABLED.*/HOSTAPD_ENABLED=True/" {{ iiab_env_file }}
+{% if wifi_up_down %}
+systemctl enable clone-wifi.service
+systemctl enable hostapd
+systemctl enable wifi-test.service
+echo -e "\nPlease reboot to activate hostapd feature.\n"
+exit 0
+{% else %}
 {% if is_raspbian %}
 # just do what we have always done in hotspot-on
 cp -f /etc/hostapd/hostapd.conf.iiab /etc/hostapd/hostapd.conf
@@ -12,7 +19,6 @@ systemctl daemon-reload
 systemctl restart dhcpcd
 systemctl start hostapd
 systemctl start dnsmasq
-sed -i -e "s/^HOSTAPD_ENABLED.*/HOSTAPD_ENABLED=True/" {{ iiab_env_file }}
 
 # Temporary promiscuous-mode workaround for RPi's WiFi "10SEC disease"
 # Disable "promiscuous" on wlan0 when AP (i.e. no WiFi gateway)
@@ -21,16 +27,14 @@ sed -i -e "s/^HOSTAPD_ENABLED.*/HOSTAPD_ENABLED=True/" {{ iiab_env_file }}
 #if grep -qi raspbian /etc/*release; then
 #    ip link set dev wlan0 promisc off
 #fi
-
 {% else %}
+#ubuntu
+if [ -f /etc/NetworkManager/conf.d/wifi-manage.conf ]
+    sed -i -e "s|managed=1|managed=0|" /etc/NetworkManager/conf.d/wifi-manage.conf
+fi
 systemctl enable hostapd
-sed -i -e "s/^HOSTAPD_ENABLED.*/HOSTAPD_ENABLED=True/" {{ iiab_env_file }}
-{% if wifi_up_down %}
-echo -e "\nPlease reboot to activate hostapd feature.\n"
-exit 0
-{% else %}
-sed -i -e "s|managed=1|managed=0|" /etc/NetworkManager/conf.d/wifi-manage.conf
 echo -e "\nPlease reboot to activate hostapd feature.\n"
 exit 0
 {% endif %}
+#wifi_up_down
 {% endif %}

@@ -50,16 +50,28 @@
   systemd:
     daemon_reload: yes
 
-# now pick up denyinterfaces
-- name: Restart dhcpcd
-  service:
-    name: dhcpcd
-    state: restarted
+- name: Clone wifi if needed
+  systemd:
+    name: clone-wifi
+    state: started
 
 - name: Restart the networking service if appropriate
-  service:
+  systemd:
     name: networking
     enabled: yes
     state: restarted
-  when: not nobridge is defined    # less is better
-  #when: not nobridge is defined and not no_net_restart
+
+- name: Restart hostapd when WiFi is present but not when using WiFi as gateway 
+  systemd:
+    name: hostapd
+    state: restarted
+  when: hostapd_enabled and (wifi_up_down or not no_net_restart)
+
+#- name: Stop wpa_supplicant on Raspbian
+#  shell: killall wpa_supplicant
+
+# now pick up denyinterfaces and respawn wpa_supplicant
+- name: Restart dhcpcd on Raspbian
+  systemd:
+    name: dhcpcd
+    state: restarted
