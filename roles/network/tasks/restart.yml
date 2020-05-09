@@ -1,14 +1,14 @@
-#iiab_wireless_lan_iface(wlan0) - wifi_up_down False needs hw
-#iiab_wireless_lan_iface(ap0) - wifi_up_down True needs hw
-#hostapd_enabled False - set in hostapd.yml to avoid the enable with wifi_up_down False
-#no_net_restart: True - main.yml discovered_wireless_iface == iiab_wan_iface
-- name: Restart hostapd when WiFi is present but not when using WiFi as gateway
+- name: Restart wpa_supplicant service
   systemd:
-    name: hostapd
+    name: "{{ item }}"
     state: restarted
-#  when: iiab_wireless_lan_iface is defined and hostapd_enabled and discovered_wireless_iface != iiab_wan_iface
-#  when: hostapd_enabled and iiab_wireless_lan_iface is defined and discovered_wireless_iface == iiab_wireless_lan_iface
-  when: hostapd_enabled and not no_net_restart
+  with_items:
+    - wpa_supplicant
+  when: wifi_up_down and hostapd_enabled
+
+- name: Reload netplan for Wifi gateway on Ubuntu 18+
+  shell: netplan apply
+  when: wifi_up_down and is_ubuntu and netplan.stdout.find("yaml") != -1
 
 - name: Start named service
   systemd:
@@ -72,7 +72,8 @@
 
 - name: Checking if WiFi slave is active
   shell: brctl show br0 | grep {{ iiab_wireless_lan_iface }} | wc -l
-  when: hostapd_enabled and discovered_wireless_iface != iiab_wan_iface and iiab_lan_iface == "br0"
+#  when: hostapd_enabled and discovered_wireless_iface != iiab_wan_iface and iiab_lan_iface == "br0"
+  when: hostapd_enabled and iiab_lan_iface == "br0"
   register: wifi_slave
 
 - name: Restart hostapd if WiFi slave is inactive
@@ -82,12 +83,13 @@
   when: hostapd_enabled and wifi_slave.stdout is defined and wifi_slave.stdout == 0
 
 #both interfaces.d and systemd-networkd should have br0 available and Appliance lacks br0
+#keep an eye on legacy wifi installs where br0 is present but not 'online' with an ip address
+#due to hostapd didn't go to a carrier state. All others should get dnsmasq restarted
 - name: User choice of dnsmasq or dhcpd - restarting {{ dhcp_service2 }}
   systemd:
     name: "{{ dhcp_service2 }}"
     state: restarted
-  when: (not no_net_restart) or wifi_up_down
+  when: (not no_net_restart or (is_ubuntu_20 and wifi_up_down)) or (iiab_stage|int == 9)
+  #when: (not no_net_restart or (is_ubuntu_20 and wifi_up_down))
   #when: (iiab_network_mode != "Appliance")    # Sufficient b/c br0 exists thanks to /etc/network/interfaces.d/iiab
   #when: iiab_network_mode != "Appliance" and iiab_wan_iface != discovered_wireless_iface
-#keep an eye on legacy wifi installs where br0 is present but not 'online' with an ip address
-#due to hostapd didn't go to a carrier state. All others should get dnsmasq restarted

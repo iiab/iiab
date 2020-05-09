@@ -6,13 +6,27 @@ if [ "$interface" = "wlan0" ]; then
         # wpa_supplicant wants MHz for frequency= while hostapd wants channel..... whatever
         # FREQ=`iw wlan0 info|grep channel|cut -d' ' -f9`
         FREQ=`iw wlan0 info|grep channel|cut -d' ' -f2`
-        syslog info "40-iiab set channel $FREQ"
-        sed -i -e "s/^channel.*/channel=$FREQ /" /etc/hostapd/hostapd.conf
-        # will need a reboot for hostapd if the channel changed
+        FREQ2=""
+        for result in $FREQ; do
+            echo "frequency is $result for carrier"
+            if [ $result -lt 13 ]; then
+                FREQ2=$result
+            fi
+        done
+        echo "Using $FREQ2 for carrier"
+        syslog info "50-iiab set channel $FREQ2"
+        HOSTAPD=`grep channel /etc/hostapd/hostapd.conf | awk -F = '{print $2}'`
+        echo "Hostapd set for $HOSTAPD"
+        if [ $FREQ2 -ne $HOSTAPD ] && [ ! -z $FREQ2 ]; then
+            echo "Editing Hostapd for channel $FREQ2"
+            cp /etc/hostapd/hostapd.conf.iiab /etc/hostapd/hostapd.conf
+            sed -i -e "s/^channel.*/channel=$FREQ /" /etc/hostapd/hostapd.conf
+#            systemctl restart hostapd
+        fi
     fi
     # spams the logging
     #syslog info "50-iiab set ap0 spam $REASON"
-    if [ -e /sys/class/net/ap0 ] && ! [ "$reason" = "ROUTERADVERT" ]; then
+    if [ -e /sys/class/net/ap0 ] && [ "$reason" = "BOUND" ]; then
         syslog info "50-iiab set ap0 up $REASON"
         # keeps ap0 up so hostapd works
         ip link set ap0 up
