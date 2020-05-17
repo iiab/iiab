@@ -10,7 +10,7 @@
 
 2. Without PHP available via FastCGI, any function at all for PHP-based applications validates NGINX.
 
-3. Current state of IIAB App/Service migrations as of 2020-05-16:
+3. Current state of IIAB App/Service migrations as of 2020-05-17:
 
    1. These support "Native" NGINX but ***NOT*** Apache
       * Admin Console
@@ -48,4 +48,4 @@
       * pbx [*]
       * transmission [*]
 
-[*] The 4 above starred roles could use improvement, as of 2020-05-16.
+[*] The 4 above starred roles could use improvement, as of 2020-05-17.
