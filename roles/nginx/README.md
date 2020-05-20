@@ -10,7 +10,7 @@
 
 2. Without PHP available via FastCGI, any function at all for PHP-based applications validates NGINX.
 
-3. Current state of IIAB App/Service migrations as of 2020-05-17:
+3. Current state of IIAB App/Service migrations as of 2020-05-20:
 
    1. These support "Native" NGINX but ***NOT*** Apache
       * Admin Console
@@ -32,8 +32,8 @@
       * sugarizer
       * wordpress
 
-   3. These support Apache but ***NOT*** "Native" NGINX.  They use a "Shim" to [proxy_pass](https://docs.nginx.com/nginx/admin-guide/web-server/reverse-proxy/) from NGINX to Apache on port 8090.  See [roles/3-base-server/tasks/main.yml#L11](../3-base-server/tasks/main.yml#L11) for a list of these IIAB Apps/Services, that auto-enable Apache.
-      * cups ?
+   3. These support Apache but ***NOT*** "Native" NGINX.  They use a "Shim" to [proxy_pass](https://docs.nginx.com/nginx/admin-guide/web-server/reverse-proxy/) from NGINX to Apache on port 8090.  See [roles/3-base-server/tasks/main.yml#L11](../3-base-server/tasks/main.yml#L11) for a list of IIAB Apps/Services that auto-enable Apache.
+      * cups [*, shim not yet in place.]
       * elgg
       * lokole
       * moodle
@@ -46,6 +46,7 @@
       * minetest [*]
       * openvpn
       * pbx [*]
+      * phpmyadmin [*, requires Apache for now, as in Section 3.]
       * transmission [*]
 
-[*] The 4 above starred roles could use improvement, as of 2020-05-17.
+[*] The 6 above starred roles could use improvement, as of 2020-05-20.
