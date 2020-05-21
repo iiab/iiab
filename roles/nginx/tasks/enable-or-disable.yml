@@ -1,7 +1,9 @@
-- name: Ensure that Apache (({{ apache_service }})) is not running -- we may need port swap
+- name: Ensure that Apache ({{ apache_service }}) is not running -- we may need port swap
   systemd:
     name: "{{ apache_service }}"    # apache2 or httpd, per /opt/iiab/iiab/vars/<OS>.yml
     state: stopped
+  ignore_errors: yes
+  # 'when: apache_installed is defined' insuff b/c mysql's php installs apache2
 
 - name: Install /etc/{{ apache_service }}/ports.conf from template 1 of 2 (ports.conf.j2) if nginx_enabled, to enable Apache port {{ apache_port }} localhost only
   template:
@@ -15,13 +17,13 @@
     dest: "/etc/{{ apache_service }}/ports.conf"
   when: not nginx_enabled
 
-- name: Enable & Restart '{{ apache_service }}' if apache_enabled or not nginx_enabled, since we stopped it
+- name: Enable & Restart '{{ apache_service }}' if Apache is installed and enabled, since we stopped it
   systemd:
     name: "{{ apache_service }}"    # apache2 or httpd, per /opt/iiab/iiab/vars/<OS>.yml
     daemon_reload: yes
     state: restarted
     enabled: true
-  when: apache_enabled or not nginx_enabled
+  when: apache_installed is defined and apache_enabled    # or not nginx_enabled
 
 
 - name: Enable & (Re)Start 'nginx' systemd service, if nginx_enabled
