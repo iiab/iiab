@@ -2,4 +2,6 @@
 
 ### Steps to reproduce the problem.
 
-### Specifications like the version of the IIAB, operating system version, or hardware details.
+### IIAB version, OS version, hardware details.
+
+### Please run the `iiab-diagnostics` command, to generate a URL summarizing your IIAB configuration, for volunteers seeking to help you.  (Include that URL here, Thanks!)
