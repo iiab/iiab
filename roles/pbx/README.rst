@@ -41,7 +41,7 @@ It is possible that FreePBX restarts much more reliably when run on a MIN-sized 
 Raspberry Pi Zero W Warning
 ---------------------------
 
-Node.js applications like Asterisk/FreePBX, Node-RED and Sugarizer `won't work <https://nodered.org/docs/hardware/raspberrypi#swapping-sd-cards>`_ on Raspberry Pi Zero W (ARM6) if you installed Node.js while on RPi 3 or 3 B+ (ARM7).  If necessary, run ``apt remove nodejs`` then ``cd /opt/iiab/iiab`` then `./runrole nodejs <https://github.com/iiab/iiab/blob/master/roles/nodejs/tasks/main.yml>`_ *on the Raspberry Pi Zero W itself* — before proceeding to install Asterisk/FreePBX, Node-RED and/or Sugarizer.
+Node.js applications like Asterisk/FreePBX, Node-RED and Sugarizer won't work on Raspberry Pi Zero W (ARMv6) if you installed Node.js while on RPi 3, 3 B+ (ARMv7) or RPi 4 (ARMv8).  If necessary, run ``apt remove nodejs`` or ``apt purge nodejs`` then ``rm /etc/apt/sources.list.d/nodesource.list; apt update`` then (`attempt! <https://nodered.org/docs/hardware/raspberrypi#swapping-sd-cards>`_) to `install Node.js <https://github.com/iiab/iiab/blob/master/roles/nodejs/tasks/main.yml>`_ *on the Raspberry Pi Zero W itself* (a better approach than "cd /opt/iiab/iiab; ./runrole nodejs" is to try ``apt install nodejs`` or try installing the tar file mentioned at `#2082 <https://github.com/iiab/iiab/issues/2082#issuecomment-569344617>`_).  You might also need ``apt install npm``.  Whatever versions of Node.js and npm you install, make sure ``/etc/iiab/iiab_state.yml`` contains the line ``nodejs_installed: True`` (add it if nec!)  Finally, proceed to install Asterisk/FreePBX, Node-RED and/or Sugarizer.  `#1799 <https://github.com/iiab/iiab/issues/1799>`_
 
 Attribution
 -----------
