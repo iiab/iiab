@@ -1,7 +1,7 @@
-### Fixes Bug
+### Fixes bug:
 
-### Description of changes proposed in this pull request.
+### Description of changes proposed in this pull request:
 
-### Smoke-tested in operating system.
+### Smoke-tested on which OS or OS's:
 
-### Mention a team member for further information or comment using @ name
+### Mention a team member @username e.g. to help with code review:
