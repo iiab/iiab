@@ -16,6 +16,12 @@
     state: directory
     mode: '0755'
 
+- name: Make space for the installer tiles
+  file:
+    path: '{{ vector_map_path }}/installer'
+    state: directory
+    mode: '0755'
+
 - name: Copy the map catalog to /etc/iiab/map-catalog.json
   get_url:
     url: "{{ map_catalog_url }}/map-catalog.json"
@@ -64,6 +70,14 @@
       #- main.js.map
       - ../ol-contextmenu.css
       - ../popup.css
+
+- name: Fetch the javascript bundle for map installer
+  get_url:
+    url: "{{ osm_repo_url }}/{{ maps_branch }}/osm-source/installer/build/{{ item }}"
+    dest: '{{ vector_map_path }}/installer/'
+  with_items:
+      - index.html
+      - main.js
 
 #  get_url:
 #    url: "{{ osm_repo_url }}/osm-source/regional-base/build/index.html"
@@ -118,12 +132,6 @@
     dest: /usr/bin/iiab-update-map
     mode: "0755"
 
-- name: Install the script to download map resources
-  copy:
-    src: aggregate.py
-    dest: /usr/bin/iiab-aggregate.py
-    mode: "0755"
-
 - name: Copy the redirect to the test page -- delete this if more than one map
   copy:
     force: no
@@ -140,13 +148,18 @@
 
 - name: Copy a script to download world tiles to zoom 10
   copy:
-      src: install-map-region
-      dest: /usr/local/sbin/
+      src: iiab-install-map-region
+      dest: /usr/bin/
       mode: 0755
-  when: osm_vector_maps_enabled | bool
+
+- name: Copy a script to initialize init.json from map-catalog.json
+  copy:
+      src: iiab-make-init.py
+      dest: /usr/bin/
+      mode: 0755
 
 - name: Install the World Map to zoom 10
-  shell: install-map-region
+  shell: iiab-install-map-region
   when: osm_vector_maps_enabled | bool
 
 - name: Install /etc/nginx/osm-vector-maps-nginx.conf from template
