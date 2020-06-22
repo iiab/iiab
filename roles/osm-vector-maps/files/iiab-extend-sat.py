@@ -692,7 +692,7 @@ def set_up_target_db(name='sentinel'):
    dbpath = '%s/%s'%(work_dir,dbname)
    if not os.path.exists(dbpath):
    #if True:
-      shutil.copyfile('%s//%s'%(sat_dir,sat_mbtile_fname,dbpath)) 
+      shutil.copyfile('%s/%s'%(sat_dir,sat_mbtile_fname),dbpath) 
    mbTiles = MBTiles(dbpath)
    mbTiles.CheckSchema()
    mbTiles.get_bounds()
