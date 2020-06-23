@@ -1,13 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: UTF-8 -*-
 
-# Exploration of tiles surrounding a lat/lon
-# notes to set up this exploration
-#  -- the symbolic link satellite.mbtiles is set to source
-#  -- output placed in ./work/sat_<name>.mbtiles
+# This instance of python_mbtiles/tile-dl.py was made specific to expand satellite
+#  coverage -- with the mbtile class incorporated, rather than imported
 
-
-# read mbtiles images to viewer
 # started from https://github.com/TimSC/pyMbTiles/blob/master/MBTiles.py
 
 import sqlite3
@@ -43,7 +39,7 @@ ATTRIBUTION = os.environ.get('METADATA_ATTRIBUTION', '<a href="http://openmaptil
 VERSION = os.environ.get('METADATA_VERSION', '3.3')
 
 work_dir = '/library/working/maps'
-osm_dir = 'library/www/osm-vector-maps/maplist/assets'
+osm_dir = '/library/www/osm-vector-maps/maplist/assets'
 sat_dir = '/library/www/osm-vector-maps/viewer/tiles'
 
 # Translates between lat/long and the slippy-map tile numbering scheme
@@ -318,7 +314,7 @@ class MBTiles():
                                  }
      outstr = json.dumps(self.bounds,indent=2)
      # diagnostic info
-     with open('./work/bounds.json','w') as bounds_fp:
+     with open('/tmp/bounds.json','w') as bounds_fp:
         bounds_fp.write(outstr)
      return self.bounds
 
@@ -526,7 +522,7 @@ def record_bbox_debug_info():
       #print(xmin,xmax,ymin,ymax,zoom)
       tot_tiles = mbTiles.CountTiles(zoom)
       bbox_limits[zoom] = { 'minX': xmin,'maxX':xmax,'minY':ymin,'maxY':ymax,                              'count':tot_tiles}
-   with open('./work/bbox_limits','w') as fp:
+   with open('/tmp/bbox_limits','w') as fp:
       fp.write(json.dumps(bbox_limits,indent=2))
 
 def get_degree_extent(lat_deg,lon_deg,radius_km,zoom=13):
@@ -589,7 +585,7 @@ def create_clone():
    
    # copy the source into a work directory, then do in place substitution
    set_up_target_db('fix_try')
-   bad_ref = open('./work/bad_tiles','w')
+   bad_ref = open('/tmp/bad_tiles','w')
 
 
 def scan_verify():
@@ -685,10 +681,10 @@ def set_up_target_db(name='sentinel'):
    mbTiles = None
 
    # attach to the correct output database
-   dbname = 'sat-%s-z0_13.mbtiles'%name
+   dbname = sat_mbtile_fname
    if not os.path.isdir(work_dir):
-      os.mkdir('./work')
-      work_dir = './work'
+      #os.mkdir('./work')
+      work_dir = '/tmp'
    dbpath = '%s/%s'%(work_dir,dbname)
    if not os.path.exists(dbpath):
    #if True:
