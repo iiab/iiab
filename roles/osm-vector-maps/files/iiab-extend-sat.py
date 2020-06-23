@@ -708,7 +708,7 @@ def do_downloads():
       sys.exit(1)
    set_up_target_db(args.name)
    start = time.time()
-   sat_bboxes(args.lat,args.lon,args.zoom.args.radius)
+   sat_bboxes(args.lat,args.lon,args.zoom,args.radius)
    for zoom in range(args.zoom,14):
       print("new zoom level:%s"%zoom)
       download_tiles(src,args.lat,args.lon,zoom,args.radius)
