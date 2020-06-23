@@ -765,8 +765,8 @@ def main():
    do_downloads() 
 
    # save input for debugging in /tmp
-   os.move('%s/%s'%(sat_dir,sat_mbtile_fname),'/tmp/%s'%(sat_mbtile_fname)) 
-   os.move('%s/%s'%(work_dir,sat_mbtile_fname),'%s/%s'%(sat_dir,sat_mbtile_fname)) 
+   shutil.copy('%s/%s'%(sat_dir,sat_mbtile_fname),'/tmp/%s'%(sat_mbtile_fname)) 
+   os.replace('%s/%s'%(work_dir,sat_mbtile_fname),'%s/%s'%(sat_dir,sat_mbtile_fname)) 
 
 if __name__ == "__main__":
     # Run the main routine
