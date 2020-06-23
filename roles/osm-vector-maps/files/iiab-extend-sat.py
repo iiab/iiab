@@ -759,12 +759,14 @@ def main():
    if not args.lon and not args.lat:
       args.lon = -122.14 
       args.lat = 37.46
-   print('inputs to tileXY: lat:%s lon:%s zoom:%s'%(args.lat,args.lon,args.zoom))
+   #print('inputs to tileXY: lat:%s lon:%s zoom:%s'%(args.lat,args.lon,args.zoom))
    args.x,args.y = xytools.tileXY(args.lat,args.lon,args.zoom)
 
-   #debug_one_tile()
-   #sys.exit()
    do_downloads() 
+
+   # save input for debugging in /tmp
+   os.move('%s/%s'%(sat_dir,sat_mbtile_fname),'/tmp/%s'%(sat_mbtile_fname)) 
+   os.move('%s/%s'%(work_dir,sat_mbtile_fname),'%s/%s'%(sat_dir,sat_mbtile_fname)) 
 
 if __name__ == "__main__":
     # Run the main routine
