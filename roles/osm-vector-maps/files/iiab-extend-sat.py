@@ -543,7 +543,7 @@ def coordinates2WmtsTilesNumbers(lat_deg, lon_deg, zoom):
   ytile = int((1.0 - math.log(math.tan(lat_rad) + (1 / math.cos(lat_rad))) / math.pi) / 2.0 * n)
   return (xtile, ytile)
 
-def sat_bbox(lat_deg,lon_deg,zoom,radius):
+def sat_bboxes(lat_deg,lon_deg,zoom,radius):
    # Adds a bounding box for the current location, radius
    magic_number = int(lat_deg * lon_deg * radius)
    bboxes = osm_dir + "/bboxes.geojson"
