@@ -14,7 +14,7 @@ if [  -f /.resize-rootfs ];then
   root_part_no=${root_part: (-1)}
 
   # Resize partition
-  parted -s /dev/$root_dev resizepart $root_part_no 100%
+  growpart /dev/$root_dev $root_part_no
   resize2fs /dev/$root_part
   rm /.resize-rootfs
 fi
