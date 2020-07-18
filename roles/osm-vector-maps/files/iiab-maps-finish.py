@@ -13,6 +13,7 @@ import json
 
 # GLOBALS
 viewer_path = '/library/www/osm-vector-maps/viewer'
+vector_map_idx_dir = '/library/www/html/common/assets'
 catalog_path = '/etc/iiab'
 map_catalog = {}
 
@@ -33,6 +34,36 @@ def subproc_cmd(cmdstr, shell=False):
     args = shlex.split(cmdstr)
     outp = subproc_check_output(args, shell=shell)
     return (outp)
+
+def write_vector_map_idx(installed_maps):
+    # copied from adm_lib
+    map_dict = {}
+    idx_dict = {}
+    for fname in installed_maps:
+        map_dict = map_catalog['maps'].get(fname, '')
+        if map_dict == '': continue
+
+        # Create the idx file in format required bo js-menu system
+        item = map_dict['perma_ref']
+        idx_dict[item] = {}
+        idx_dict[item]['file_name'] = os.path.basename(map_dict['detail_url'])
+        idx_dict[item]['menu_item'] = map_dict['perma_ref']
+        idx_dict[item]['size'] = map_dict['size']
+        idx_dict[item]['date'] = map_dict['date']
+        idx_dict[item]['region'] = map_dict['region']
+        idx_dict[item]['language'] = map_dict['perma_ref'][:2]
+
+    with open(vector_map_idx_dir + '/vector-map-idx.json', 'w') as idx:
+        idx.write(json.dumps(idx_dict, indent=2))
+
+def get_installed_tiles():
+    installed_maps = []
+    tile_list = glob.glob(viewer_path + '/tiles/*')
+    for index in range(len(tile_list)):
+       if tile_list[index].startswith('sat'): continue
+       if tile_list[index].startswith('osm-planet_z0'): continue
+       installed_maps.append(os.path.basename(tile_list[index]))
+    return installed_maps
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Create init.json for a tile URL.")
@@ -61,6 +92,11 @@ def main():
     init_fn = viewer_path + '/init.json'
     with open(init_fn,'w') as init_fp:
         init_fp.write(json.dumps(init,indent=2))
+
+    installed_maps = get_installed_tiles()
+    print('installed_maps')
+    print(repr(installed_maps))
+    write_vector_map_idx(installed_maps)
 
 if __name__ == '__main__':
    main()
