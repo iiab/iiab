@@ -20,7 +20,7 @@ import time
 import uuid
 import io
 from PIL import Image
-#import ipdb; ipdb.set_trace()
+#import pdb; pdb.set_trace()
 
 # GLOBALS
 mbTiles = object
@@ -649,6 +649,7 @@ def replace_tile(src,zoom,tileX,tileY):
          try:
             #image = Image.open(io.StringIO(raw))
             image = Image.open(io.BytesIO(raw))
+            total_tiles += 1
             #image.show(io.StringIO(raw))
          except Exception as e:
             print('exception:%s'%e)
@@ -665,7 +666,7 @@ def replace_tile(src,zoom,tileX,tileY):
       return False
 
 def download_tiles(src,lat_deg,lon_deg,zoom,radius):
-   global mbTiles
+   global mbTiles, ok
    global total_tiles
    global start
    tileX_min,tileX_max,tileY_min,tileY_max = get_bounds(lat_deg,lon_deg,radius,zoom)
@@ -673,6 +674,16 @@ def download_tiles(src,lat_deg,lon_deg,zoom,radius):
       for tileY in range(tileY_min,tileY_max+1):
          if (start - time.time()) % 10 == 0:
             print('tileX:%s tileY:%s zoom:%s added:%s'%(tileX,tileY,zoom,total_tiles))
+         tile_exists =  mbTiles.TileExists(zoom,tileX,tileY)
+         if tile_exists:
+            raw = mbTiles.GetTile(zoom, tileX, tileY)
+            try:
+               image = Image.open(io.StringIO(raw))
+               ok += 1
+               if len(raw) > 800: 
+                  continue
+            except Exception as e:
+               pass
          replace_tile(src,zoom,tileX,tileY)
 
 def set_up_target_db(name='sentinel'):
@@ -714,7 +725,7 @@ def do_downloads():
       download_tiles(src,args.lat,args.lon,zoom,args.radius)
    seconds =(time.time()-start)
    d,h,m,s = dhms_from_seconds(seconds)
-   print('Total time:%s:%s:%s hr:min:sec Total_tiles Added:%s'%(h,m,s,total_tiles))
+   print('Total time:%2.0f hrs:%2.0f min:%2.0f sec Duplicates:%s Total_tiles Added:%s'%(h,m,s,ok,total_tiles))
 
 def main():
    global args
