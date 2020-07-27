@@ -19,6 +19,7 @@ import json
 import time
 import uuid
 import io
+import datetime
 from PIL import Image
 #import pdb; pdb.set_trace()
 
@@ -34,6 +35,7 @@ config_fn = 'config.json'
 total_tiles = 0
 bad_ref = 0
 sat_mbtile_fname = 'satellite_z0-z9_v3.mbtiles'
+bound_string = ''
 
 ATTRIBUTION = os.environ.get('METADATA_ATTRIBUTION', '<a href="http://openmaptiles.org/" target="_blank">&copy; OpenMapTiles</a> <a href="http://www.openstreetmap.org/about/" target="_blank">&copy; OpenStreetMap contributors</a>')
 VERSION = os.environ.get('METADATA_VERSION', '3.3')
@@ -374,6 +376,26 @@ class MBTiles():
       self.c.execute(sql)
       self.Commit()
 
+   def create_sat_info(self):
+      sql = '''CREATE TABLE IF NOT EXISTS satellite_info (
+               perma_ref TEXT, bounds TEXT, coordinates TEXT,
+               date_downloaded TEXT, tiles_downloaded INTEGER,
+               command_line TEXT, magic_number INTEGER,
+               min_zoom INTEGER, max_zoom INTEGER
+      )''' 
+      self.c.execute(sql)
+      self.Commit()
+
+   def insert_sat_info(self,perma_ref,bounds,coordinates,date_downloaded,
+                       tiles_downloaded,command_line,magic_number,
+                       min_zoom,max_zoom):
+      sql = '''insert into satellite_info (perma_ref,bounds,coordinates,
+               date_downloaded,tiles_downloaded,command_line,
+               magic_number,min_zoom,max_zoom) values (?,?,?,?,?,?,?,?,?)'''
+      self.c.execute(sql,(perma_ref,bounds,coordinates,date_downloaded,
+                     tiles_downloaded,command_line,magic_number,min_zoom,max_zoom,))
+      self.Commit()
+
 class WMTS(object):
 
    def __init__(self, template):
@@ -544,6 +566,7 @@ def coordinates2WmtsTilesNumbers(lat_deg, lon_deg, zoom):
   return (xtile, ytile)
 
 def sat_bboxes(lat_deg,lon_deg,zoom,radius):
+   global bound_string,poly,magic_number
    # Adds a bounding box for the current location, radius
    magic_number = int(lat_deg * lon_deg * radius)
    bboxes = osm_dir + "/bboxes.geojson"
@@ -561,6 +584,7 @@ def sat_bboxes(lat_deg,lon_deg,zoom,radius):
    south=float(south)
    east=float(east)
    north=float(north)
+   bound_string = "%s,%s,%s,%s"%(west,south,east,north)
    poly = Polygon([[[west,south],[east,south],[east,north],[west,north],[west,south]]])
    if not magic_number_found:
       data['features'].append(Feature(geometry=poly,properties={"name":'satellite',\
@@ -643,7 +667,7 @@ def replace_tile(src,zoom,tileX,tileY):
       raw = r.data
       line = bytearray(raw)
       if line.find(b"DOCTYPE") != -1:
-         print('still getting html from sentinel cloudless')
+         print('Sentinel Cloudless returned text rather than an image ')
          return False
       else:
          try:
@@ -707,10 +731,27 @@ def set_up_target_db(name='sentinel'):
    put_config()
    print("Destination Database opened successfully:%s"%dbpath)
 
+def record_satellite_info():
+   sat_bboxes(args.lat,args.lon,args.zoom,args.radius)
+   mbTiles.create_sat_info()
+   perma_ref = 'satellite_z0'
+   coordinates = str(poly)
+   tiles_downloaded = int(total_tiles)
+   min_zoom = args.zoom
+   max_zoom = 13
+   command_line = ''
+   date_downloaded = str(datetime.date.today())
+   for nibble in sys.argv:
+      command_line += nibble + ' '
+   bounds_string = str(bounds)
+   mbTiles.insert_sat_info(perma_ref,bounds_string,coordinates,date_downloaded,
+                       tiles_downloaded,command_line,magic_number,
+                       min_zoom,max_zoom)
+
 def do_downloads():
    # Open a WMTS source
    global src # the opened url for satellite images
-   global start
+   global start, bound_string
    global total_tiles
    try:
       src = WMTS(url)
@@ -719,13 +760,13 @@ def do_downloads():
       sys.exit(1)
    set_up_target_db(args.name)
    start = time.time()
-   sat_bboxes(args.lat,args.lon,args.zoom,args.radius)
    for zoom in range(args.zoom,14):
       print("new zoom level:%s"%zoom)
       download_tiles(src,args.lat,args.lon,zoom,args.radius)
    seconds =(time.time()-start)
    d,h,m,s = dhms_from_seconds(seconds)
    print('Total time:%2.0f hrs:%2.0f min:%2.0f sec Duplicates:%s Total_tiles Added:%s'%(h,m,s,ok,total_tiles))
+   record_satellite_info()
 
 def main():
    global args
