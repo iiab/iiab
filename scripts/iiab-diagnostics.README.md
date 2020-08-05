@@ -49,7 +49,7 @@ But first off, the file is compiled by harvesting 1 + 6 kinds of things:
    Or, you can later/manually upload it using the ``pastebinit`` command:
 
    ```
-   pastebinit -b dpaste.com < /etc/iiab/diag/NEW-FILE-NAME
+   pastebinit -b sprunge.us < /etc/iiab/diag/NEW-FILE-NAME
    ```
 
    Either way, this will generate an actual web link (URL).
@@ -62,4 +62,4 @@ But first off, the file is compiled by harvesting 1 + 6 kinds of things:
 
 ## Source Code
 
-Please look over the bottom of [iiab-diagnostics](iiab-diagnostics) (lines 105-218 especially) to learn more about which common IIAB files and commands make this rapid troubleshooting possible.
+Please look over the bottom of [iiab-diagnostics](iiab-diagnostics) (lines 106-218 especially) to learn more about which common IIAB files and commands make this rapid troubleshooting possible.
