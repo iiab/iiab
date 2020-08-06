@@ -38,6 +38,8 @@ if [ "$WARN" = "1" ]; then
     #echo "rebooting..."
     #reboot
 else
-    rm /.fw_replaced
+    if [ -f /.fw_replaced ]; then
+        rm /.fw_replaced
+    fi
 fi
 exit 0
