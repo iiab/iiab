@@ -33,11 +33,13 @@ else
     fi
 fi
 if [ "$WARN" = "1" ]; then
-    echo "You should reboot now"
+    echo -e " \033[31;5mFirmware has been replaced\033[0m"
+    echo -e " \033[31;5mReboot is required to activate\033[0m"
     touch /.fw_replaced
     #echo "rebooting..."
     #reboot
 else
+    echo -e " Firmware check \033[32;5mPASSED\033[0m"
     if [ -f /.fw_replaced ]; then
         rm /.fw_replaced
     fi
