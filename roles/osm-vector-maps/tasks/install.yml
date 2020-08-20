@@ -1,76 +1,196 @@
-- name: Install php{{ php_version }}-sqlite3
-  package:
-    name: "php{{ php_version }}-sqlite3"
-    state: present
-
-- name: Ensure directory {{ vector_map_path }}/maplist/assets exists
+- name: Make the required directories for Maps
   file:
-    path: "{{ vector_map_path }}/maplist/assets"    # /library/www/osm-vector-maps
+    path: '{{ item }}'
     state: directory
-    owner: "{{ apache_user }}"    # Typically 'www-data' or 'apache'
-    group: "{{ apache_user }}"
     mode: '0755'
+  with_items:
+    - '{{ vector_map_path }}/test-page/assets'
+    - '{{ vector_map_path }}/maplist/assets'
+    - '{{ vector_map_path }}/viewer/assets'
+    - '{{ vector_map_path }}/viewer/tiles'
+    - '{{ vector_map_path }}/installer'
+
+- name: Copy the map catalog to /etc/iiab/map-catalog.json
+  get_url:
+    url: "{{ map_catalog_url }}/map-catalog.json"
+    dest: /etc/iiab/
 
 - name: Download map catalog {{ iiab_map_url }}/assets/regions.json to {{ iiab_etc_path }}
   get_url:
     url: "{{ iiab_map_url }}/assets/regions.json"    # http://download.iiab.io/content/OSM/vector-tiles/maplist/hidden
     dest: "{{ iiab_etc_path }}"
 
-- name: Symlink map catalog {{ vector_map_path }}/maplist/assets/regions.json -> {{ iiab_etc_path }}
+- name: Check for existence of cities database
+  stat:
+    path: "{{ vector_map_path }}/cities1000.sqlite"
+  register: cities_installed
+
+- name: Fetch the city database
+  get_url:
+    url: "{{ iiab_map_url }}/regional-resources/cities1000.sqlite"
+    dest: '{{ vector_map_path }}/viewer/cities1000.sqlite'
+  when: not cities_installed.stat.exists
+
+- name: Create a link to osm catalog in /common/assets
   file:
-    src: "{{ iiab_etc_path }}/regions.json"
+    src: "/etc/iiab/map-catalog.json"
+    dest: "{{ doc_root }}/common/assets/map-catalog.json"
+    state: link
+
+- name: Create a link to osm catalog in {{ vector_map_path }}/maplist/assets
+  file:
+    src: "/etc/iiab/map-catalog.json"
+    dest: "{{ vector_map_path }}/test-page/assets/map-catalog.json"
+    state: link
+
+- name: Create a link to regions.json in {{ vector_map_path }}/maplist/assets
+  file:
+    src: "/etc/iiab/regions.json"
     dest: "{{ vector_map_path }}/maplist/assets/regions.json"
     state: link
 
-- name: Download the JavaScript bundle with OpenLayers (main.js) into {{ vector_map_path }}/maplist/, for test page http://box/maps/maplist
+- name: Download the JavaScript bundle with OpenLayers (main.js) for test page http://box/maps/maplist
+# At this point, fetches from github.com/georgejhunt/maps from test branch
   get_url:
-    url: "{{ iiab_map_url }}/../main.js"    # http://download.iiab.io/content/OSM/vector-tiles/maplist/hidden
-    dest: "{{ vector_map_path }}/maplist/"    # /library/www/osm-vector-maps
+    url: "{{ item }}"
+    dest: '{{ vector_map_path }}/test-page/'
+  with_items:
+    - "{{ osm_repo_url }}/{{ maps_branch }}/osm-source/pages/test-page/build/main.js"
+    - "{{ osm_repo_url }}/{{ maps_branch }}/osm-source/pages/test-page/build/index.html"
 
-- name: Install {{ vector_map_path }}/maplist/index.html from template, for test page http://box/maps/maplist/
-  template:
-    src: index.html
-    dest: "{{ vector_map_path }}/maplist/index.html"    # /library/www/osm-vector-maps
-
-# Bboxes (bounding boxes) are currently square.  But geofabrik has non-rectangular bboxes.
-# So bring the bounding box definition from cloud (bboxes.geojson is big)
-- name: Download bounding box definitions (bboxes.geojson) to {{ vector_map_path }}/maplist/assets/
+- name: Fetch the javascript bundle with openlayers for Viewer page
+# At this point, fetches from github.com/iiab/maps from {{ maps_branch }} branch
   get_url:
-    url: "{{ iiab_map_url }}/assets/bboxes.geojson"    # http://download.iiab.io/content/OSM/vector-tiles/maplist/hidden
-    dest: "{{ vector_map_path }}/maplist/assets/"    # /library/www/osm-vector-maps
+     url: "{{ osm_repo_url }}/{{ maps_branch }}/osm-source/pages/viewer/build/{{ item }}"
+     dest: '{{ vector_map_path }}/viewer/'
+  with_items:
+      - index.html
+      - main.js
+      - main.js.map
 
-- name: Install /usr/bin/iiab-update-map from template, for updating of Map Pack catalog & descriptions
+- name: Get the helper files for viewer
+  get_url:
+     url: "{{ osm_repo_url }}/{{ maps_branch }}/osm-source/pages/viewer/{{ item }}"
+     dest: '{{ vector_map_path }}/viewer/'
+  with_items:
+      - mbtileinfo.php
+      - ol-contextmenu.css
+      - popup.css
+      - searchapi.php
+      - tileserver.php
+
+- name: Copy the map installer mbtiles
+  get_url:
+    url: "{{ map_catalog_url }}/planet_z0-z6_2019.mbtiles"
+    dest: '{{ vector_map_path }}/installer/'
+
+- name: Create a synlink from tiles to detail.mbtiles
+  file:
+      src: '{{ vector_map_path }}/installer/planet_z0-z6_2019.mbtiles'  
+      dest: '{{ vector_map_path }}/installer/detail.mbtiles'
+      state: link
+
+- name: Fetch the javascript bundle for map installer
+  get_url:
+    url: "{{ osm_repo_url }}/{{ maps_branch }}/osm-source/pages/installer/build/{{ item }}"
+    dest: '{{ vector_map_path }}/installer/'
+  with_items:
+      - index.html
+      - main.js
+
+- name: Fetch the action routines for installer
+  get_url:
+    url: "{{ osm_repo_url }}/{{ maps_branch }}/osm-source/pages/installer/{{ item }}"
+    dest: '{{ vector_map_path }}/installer/'
+  with_items:
+      - map.css
+      - style-osm.json
+      - installer-functions.js
+      - tileserver.php
+
+# the following was changed to grab from the iiab/maps repo
+- name: Copy the common assets for the general purpose map viewer
+  get_url:
+      url: "{{ osm_repo_url }}/{{ maps_branch }}/osm-source/pages/viewer/assets/{{ item }}"
+      dest: "{{ vector_map_path }}/viewer/assets"
+  with_items:
+      - bboxes.geojson
+      - center.png
+      - countries.json
+      - fonts.css
+      - ol5-layerswitcher.css
+      - pin_drop.png
+      - sprite@2x.json
+      - sprite@2x.png
+      - sprite.json
+      - sprite.png
+      - style-cdn.json
+      - style-osm.json
+      - style-sat.json
+      - view_list.png
+
+- name: Place a link to bboxes.geojson for Admin Console
+  file: 
+      src: "{{ vector_map_path }}/viewer/assets/bboxes.geojson"
+      dest: "{{ vector_map_path }}/maplist/assets/bboxes.geojson"
+      state: link
+      force: True
+      
+- name: Place a link to countries.json for Admin Console
+  file: 
+      src: "{{ vector_map_path }}/viewer/assets/countries.json"
+      dest: "{{ vector_map_path }}/maplist/assets/countries.json"
+      state: link
+      force: True
+      
+- name: Copy the fonts for the general purpose map viewer
+  copy:
+        src: "{{ item }}"
+        dest: "{{ doc_root }}/common/fonts/"
+        mode: 0644
+        owner: root
+        group: root
+  with_fileglob:
+      - fonts/*
+
+- name: Copy the redirect to the test page
+  get_url:
+        url: "{{ osm_repo_url }}/{{ maps_branch }}/osm-source/pages/viewer/installer-index.redirect"
+        dest: "{{ vector_map_path }}/maplist/index.html"
+        force: yes
+
+- name: Get packages necessary for map installation
+  package:
+      state: present
+      name:
+         - python3-wget
+         - "php{{ php_version }}-sqlite3"
+         - python3-geojson
+         - python3-pil
+
+- name: Copy a scripts to download tiles
+  get_url:
+      url: "{{ osm_repo_url }}/{{ maps_branch }}/osm-source/pages/viewer/{{ item }}"
+      dest: /usr/bin/
+      mode: 0755
+  with_items:
+      - iiab-install-map-region
+      - iiab-extend-sat.py
+      - iiab-summarize.sh
+      - iiab-maps-finish.py
+      - iiab-make-init.py
+      - iiab-update-map
+
+- name: Install the World Map to zoom 10
+  shell: iiab-install-map-region
+  when: osm_vector_maps_enabled | bool
+
+- name: Install /etc/nginx/osm-vector-maps-nginx.conf from template
   template:
-    src: iiab-update-map
-    dest: /usr/bin/iiab-update-map
-    mode: '0755'
-
-
-# 2020-01-27: See #2197 "OSM Install Errors" -- should the following 4 stanzas
-# be restored to enable-or-disable.yml ?  What fix is best short/long term?
-
-- name: Copy countries.json (geojson) into {{ vector_map_path }}/maplist/assets/
-  copy:
-    src: countries.json
-    dest: "{{ vector_map_path }}/maplist/assets"    # /library/www/osm-vector-maps
-
-# It is too complicated to use a single file for both iiab and admin-console
-- name: Copy map_functions.js (duplicated JavaScript) into {{ vector_map_path }}/maplist/assets/
-  copy:
-    src: map_functions.js
-    dest: "{{ vector_map_path }}/maplist/assets"    # /library/www/osm-vector-maps
-
-- name: Install {{ vector_map_path }}/maplist/index.html from template, for test page http://box/maps/maplist/
-  template:
-    src: index.html
-    dest: "{{ vector_map_path }}/maplist/index.html"    # /library/www/osm-vector-maps
-
-- name: "Copy test-index.redirect to {{ vector_map_path }}/index.html, for interim redirect: http://box/maps/ -> http://box/osm-vector-maps/maplist/"
-  copy:
-    force: no
-    src: test-index.redirect
-    dest: "{{ vector_map_path }}/index.html"    # /library/www/osm-vector-maps
-
+    src: osm-vector-maps-nginx.conf.j2
+    dest: "/etc/nginx/conf.d/osm-vector-maps-nginx.conf"
+  when:
+    osm_vector_maps_install | bool
 
 # RECORD OSM Vector Maps AS INSTALLED
 
