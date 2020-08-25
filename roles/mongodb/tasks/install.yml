@@ -1,13 +1,5 @@
 # 1. INSTALL MongoDB PACKAGES OR BINARIES
 
-- name: "Install packages: mongodb, mongodb-server (not raspbian)"
-  package:
-    name:
-      - mongodb-server
-      - mongodb    # 2019-01-31: this package does not exist on (cannot be installed on) Debian 10, SEE #1437
-    state: present
-  when: internet_available and not is_raspbian
-
 # 2019-02-02: Sugarizer with Node.js 10.x requires MongoDB 2.6+ so
 # https://andyfelong.com/2017/08/mongodb-3-0-14-for-raspbian-stretch/ is
 # being used on Raspbian, all I found! (Raspbian's apt pkg is MongoDB 2.4.14)
@@ -18,33 +10,43 @@
 # CLARIF: mongodb_stretch_3_0_14_core.zip IS IN FACT 3.0.14 (core) BUT...
 #         mongodb_stretch_3_0_14_tools.zip IS REALLY 3.0.15 (tools)
 
-- name: Create dir /tmp/mongodb-3.0.1x (raspbian)
-  file:
-    path: /tmp/mongodb-3.0.1x
-    state: directory
-  when: internet_available and is_raspbian
+- block:
+  - name: Create dir /tmp/mongodb-3.0.1x (raspbian)
+    file:
+      path: /tmp/mongodb-3.0.1x
+      state: directory
 
-- name: Download & unzip 20MB http://download.iiab.io/packages/mongodb_stretch_3_0_14_core.zip to /tmp/mongodb-3.0.1x (raspbian)
-  unarchive:
-    remote_src: yes
-    src: "{{ iiab_download_url }}/mongodb_stretch_3_0_14_core.zip"
-    dest: /tmp/mongodb-3.0.1x
-  when: internet_available and is_raspbian
+  - name: Download & unzip 20MB http://download.iiab.io/packages/mongodb_stretch_3_0_14_core.zip to /tmp/mongodb-3.0.1x (raspbian)
+    unarchive:
+      remote_src: yes
+      src: "{{ iiab_download_url }}/mongodb_stretch_3_0_14_core.zip"
+      dest: /tmp/mongodb-3.0.1x
 
-- name: Install (move) its 3 CORE binaries from /tmp/mongodb-3.0.1x/core to /usr/bin (raspbian)
-  shell: mv /tmp/mongodb-3.0.1x/core/* /usr/bin
-  when: internet_available and is_raspbian
+  - name: Install (move) its 3 CORE binaries from /tmp/mongodb-3.0.1x/core to /usr/bin (raspbian)
+    shell: mv /tmp/mongodb-3.0.1x/core/* /usr/bin
 
-- name: Download & unzip 15MB http://download.iiab.io/packages/mongodb_stretch_3_0_14_tools.zip [IN FACT THIS ONE'S 3.0.15] to /tmp/mongodb-3.0.1x (raspbian)
-  unarchive:
-    remote_src: yes
-    src: "{{ iiab_download_url }}/mongodb_stretch_3_0_14_tools.zip"
-    dest: /tmp/mongodb-3.0.1x
-  when: internet_available and is_raspbian
+  - name: Download & unzip 15MB http://download.iiab.io/packages/mongodb_stretch_3_0_14_tools.zip [IN FACT THIS ONE'S 3.0.15] to /tmp/mongodb-3.0.1x (raspbian)
+    unarchive:
+      remote_src: yes
+      src: "{{ iiab_download_url }}/mongodb_stretch_3_0_14_tools.zip"
+      dest: /tmp/mongodb-3.0.1x
 
-- name: Install (move) its 9 TOOLS binaries from /opt/iiab/downloads/mongodb-3.0.1x/tools to /usr/bin (raspbian)
-  shell: mv /tmp/mongodb-3.0.1x/tools/* /usr/bin
-  when: internet_available and is_raspbian
+  - name: Install (move) its 9 TOOLS binaries from /opt/iiab/downloads/mongodb-3.0.1x/tools to /usr/bin (raspbian)
+    shell: mv /tmp/mongodb-3.0.1x/tools/* /usr/bin
+
+  - name: Create Linux group mongodb (raspbian)
+    group:
+      name: mongodb
+      state: present
+
+  - name: Create Linux user mongodb (raspbian)
+    user:
+      name: mongodb
+      group: mongodb    # primary group
+      groups: mongodb
+      home: /var/lib/mongodb
+      shell: /usr/sbin/nologin
+  when: is_raspbian and not (ansible_architecture == aarch64)
 
 # OLD WAY / MUCH SLOWER: had put unnec duplicate copies in /opt/iiab/downloads/mongodb-3.0.1x
 #
@@ -84,20 +86,31 @@
 #    - "{{ downloads_dir }}/mongodb-3.0.1x/tools/*"
 #  when: internet_available and is_raspbian
 
-- name: Create Linux group mongodb (raspbian)
-  group:
-    name: mongodb
-    state: present
-  when: is_raspbian | bool
+- block:
+  - name: Add mongodb.org signing key
+    shell: wget -qO - https://www.mongodb.org/static/pgp/server-4.4.asc | apt-key add -
 
-- name: Create Linux user mongodb (raspbian)
-  user:
-    name: mongodb
-    group: mongodb    # primary group
-    groups: mongodb
-    home: /var/lib/mongodb
-    shell: /usr/sbin/nologin
-  when: is_raspbian | bool
+  - name: Add mongodb repo for Debian amd64
+    apt_repository:
+      repo: deb http://repo.mongodb.org/apt/debian buster/mongodb-org/4.4 main
+      state: present
+      filename: mongodb-org
+    when: is_debian_10 and (ansible_architecture == "amd64")
+
+  - name: Add mongodb repo for Ubuntu
+    apt_repository:
+      repo: deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu focal/mongodb-org/4.4 multiverse
+      state: present
+      filename: mongodb-org
+    when: (ansible_architecture == "aarch64")
+
+  - name: "Install packages: mongodb-org, mongodb-org-server"
+    package:
+      name:
+        - mongodb-org
+        - mongodb-org-server
+      state: present
+  when: (ansible_architecture == "aarch64") or ansible_architecture == "amd64")
 
 
 # 2. CONFIGURE MongoDB FOR IIAB
