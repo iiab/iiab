@@ -1,13 +1,5 @@
 # 1. INSTALL MongoDB PACKAGES OR BINARIES
 
-- name: "Install packages: mongodb, mongodb-server (not raspbian)"
-  package:
-    name:
-      - mongodb-server
-      - mongodb    # 2019-01-31: this package does not exist on (cannot be installed on) Debian 10, SEE #1437
-    state: present
-  when: internet_available and not is_raspbian
-
 # 2019-02-02: Sugarizer with Node.js 10.x requires MongoDB 2.6+ so
 # https://andyfelong.com/2017/08/mongodb-3-0-14-for-raspbian-stretch/ is
 # being used on Raspbian, all I found! (Raspbian's apt pkg is MongoDB 2.4.14)
@@ -18,86 +10,105 @@
 # CLARIF: mongodb_stretch_3_0_14_core.zip IS IN FACT 3.0.14 (core) BUT...
 #         mongodb_stretch_3_0_14_tools.zip IS REALLY 3.0.15 (tools)
 
-- name: Create dir /tmp/mongodb-3.0.1x (raspbian)
-  file:
-    path: /tmp/mongodb-3.0.1x
-    state: directory
-  when: internet_available and is_raspbian
+- block:
+  - name: Create dir /tmp/mongodb-3.0.1x (aarch32)
+    file:
+      path: /tmp/mongodb-3.0.1x
+      state: directory
 
-- name: Download & unzip 20MB http://download.iiab.io/packages/mongodb_stretch_3_0_14_core.zip to /tmp/mongodb-3.0.1x (raspbian)
-  unarchive:
-    remote_src: yes
-    src: "{{ iiab_download_url }}/mongodb_stretch_3_0_14_core.zip"
-    dest: /tmp/mongodb-3.0.1x
-  when: internet_available and is_raspbian
+  - name: Download & unzip 20MB http://download.iiab.io/packages/mongodb_stretch_3_0_14_core.zip to /tmp/mongodb-3.0.1x (aarch32)
+    unarchive:
+      remote_src: yes
+      src: "{{ iiab_download_url }}/mongodb_stretch_3_0_14_core.zip"
+      dest: /tmp/mongodb-3.0.1x
 
-- name: Install (move) its 3 CORE binaries from /tmp/mongodb-3.0.1x/core to /usr/bin (raspbian)
-  shell: mv /tmp/mongodb-3.0.1x/core/* /usr/bin
-  when: internet_available and is_raspbian
+  - name: Install (move) its 3 CORE binaries from /tmp/mongodb-3.0.1x/core to /usr/bin (aarch32)
+    shell: mv /tmp/mongodb-3.0.1x/core/* /usr/bin
 
-- name: Download & unzip 15MB http://download.iiab.io/packages/mongodb_stretch_3_0_14_tools.zip [IN FACT THIS ONE'S 3.0.15] to /tmp/mongodb-3.0.1x (raspbian)
-  unarchive:
-    remote_src: yes
-    src: "{{ iiab_download_url }}/mongodb_stretch_3_0_14_tools.zip"
-    dest: /tmp/mongodb-3.0.1x
-  when: internet_available and is_raspbian
+  - name: Download & unzip 15MB http://download.iiab.io/packages/mongodb_stretch_3_0_14_tools.zip [IN FACT THIS ONE'S 3.0.15] to /tmp/mongodb-3.0.1x (aarch32)
+    unarchive:
+      remote_src: yes
+      src: "{{ iiab_download_url }}/mongodb_stretch_3_0_14_tools.zip"
+      dest: /tmp/mongodb-3.0.1x
 
-- name: Install (move) its 9 TOOLS binaries from /opt/iiab/downloads/mongodb-3.0.1x/tools to /usr/bin (raspbian)
-  shell: mv /tmp/mongodb-3.0.1x/tools/* /usr/bin
-  when: internet_available and is_raspbian
+  - name: Install (move) its 9 TOOLS binaries from /opt/iiab/downloads/mongodb-3.0.1x/tools to /usr/bin (aarch32)
+    shell: mv /tmp/mongodb-3.0.1x/tools/* /usr/bin
 
-# OLD WAY / MUCH SLOWER: had put unnec duplicate copies in /opt/iiab/downloads/mongodb-3.0.1x
-#
-#- name: Create dir /opt/iiab/downloads/mongodb-3.0.1x (raspbian)
-#  file:
-#    path: "{{ downloads_dir }}/mongodb-3.0.1x"
-#    state: directory
-#  when: internet_available and is_raspbian
-#
-#- name: Download & unzip MongoDB 3.0.14's 3 core binaries to /opt/iiab/downloads/mongodb-3.0.1x (raspbian)
-#  unarchive:
-#    remote_src: yes
-#    src: "{{ iiab_download_url }}/mongodb_stretch_3_0_14_core.zip"
-#    dest: "{{ downloads_dir }}/mongodb-3.0.1x"
-#  when: internet_available and is_raspbian
-#
-#- name: Install (copy) 3 binaries from /opt/iiab/downloads/mongodb-3.0.1x/core to /usr/bin (raspbian)
-#  copy:
-#    src: "{{ item }}"
-#    dest: /usr/bin
-#  with_fileglob:
-#    - "{{ downloads_dir }}/mongodb-3.0.1x/core/*"
-#  when: internet_available and is_raspbian
-#
-#- name: Download & unzip MongoDB 3.0.15's 9 tools binaries to /opt/iiab/downloads/mongodb-3.0.1x (raspbian)
-#  unarchive:
-#    remote_src: yes
-#    src: "{{ iiab_download_url }}/mongodb_stretch_3_0_14_tools.zip"
-#    dest: "{{ downloads_dir }}/mongodb-3.0.1x"
-#  when: internet_available and is_raspbian
-#
-#- name: Install (copy) 9 binaries from /opt/iiab/downloads/mongodb-3.0.1x/tools to /usr/bin (raspbian)
-#  copy:
-#    src: "{{ item }}"
-#    dest: /usr/bin
-#  with_fileglob:
-#    - "{{ downloads_dir }}/mongodb-3.0.1x/tools/*"
-#  when: internet_available and is_raspbian
+  - name: Create Linux group mongodb (aarch32)
+    group:
+      name: mongodb
+      state: present
 
-- name: Create Linux group mongodb (raspbian)
-  group:
-    name: mongodb
-    state: present
-  when: is_raspbian | bool
+  - name: Create Linux user mongodb (aarch32)
+    user:
+      name: mongodb
+      group: mongodb    # primary group
+      groups: mongodb
+      home: /var/lib/mongodb
+      shell: /usr/sbin/nologin
 
-- name: Create Linux user mongodb (raspbian)
-  user:
-    name: mongodb
-    group: mongodb    # primary group
-    groups: mongodb
-    home: /var/lib/mongodb
-    shell: /usr/sbin/nologin
-  when: is_raspbian | bool
+  - name: Install /etc/mongod.conf from template (aarch32)
+    template:
+      src: "{{ item.src }}"
+      dest: "{{ item.dest }}"
+      owner: root
+      group: root
+      mode: "{{ item.mode }}"
+    with_items:
+      - { src: 'mongod.conf.j2', dest: "{{ mongodb_conf }}", mode: '0644' }    # i.e. /etc/mongod.conf
+
+
+  # end block
+  when: not (ansible_architecture == "x86_64" or ansible_architecture == "aarch64")
+# 32 bit OS's get caught above should handle aarch32 including 32-bit ubuntu
+# from https://ubuntu.com/download/raspberry-pi. 20.4-32bit might fail untested
+# 32bit intel might puke as this was orginally deployed for raspbian. Haven't
+# see bootable 32bit intel installers for a while now.
+# 64 bit OS's proceed below.
+- block:
+  - name: Add mongodb.org signing key (only 64-bit support available)
+    shell: wget -qO - https://www.mongodb.org/static/pgp/server-4.4.asc | apt-key add -
+    args:
+      warn: false
+
+  - name: Add mongodb repo for Debian 10 (only amd64 support available)
+    apt_repository:
+      repo: deb http://repo.mongodb.org/apt/debian buster/mongodb-org/4.4 main
+      state: present
+      filename: mongodb-org
+    when: is_debian_10 and (ansible_architecture == "x86_64")
+
+  # Debian 10 aarch64 might work below but is blocked in main.yml
+  - name: Add mongodb repo for RaspOS-aarch64
+    apt_repository:
+      repo: deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu bionic/mongodb-org/4.4 multiverse
+      state: present
+      filename: mongodb-org
+    when: (ansible_architecture == "aarch64" and is_raspbian_10)
+
+  - name: Add mongodb repo for Ubuntu 64bit only
+    apt_repository:
+      repo: deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu {{ ansible_distribution_release }}/mongodb-org/4.4 multiverse
+      state: present
+      filename: mongodb-org
+    when: is_ubuntu
+
+  - name: "Install packages: mongodb-org, mongodb-org-server"
+    package:
+      name:
+        - mongodb-org
+        - mongodb-org-server
+      state: present
+
+  - name: Change the mongodb port to 27018
+    lineinfile:
+      path: /etc/mongod.conf
+      regexp: 'port: 27017'
+      backrefs: yes
+      line: '  port: 27018'
+
+  # end block
+  when: (ansible_architecture == "aarch64") or (ansible_architecture == "x86_64")
 
 
 # 2. CONFIGURE MongoDB FOR IIAB
@@ -114,7 +125,7 @@
     - /var/log/mongodb
     - "{{ mongodb_db_path }}"    # i.e. /library/dbdata/mongodb/
 
-- name: Install /etc/mongod.conf, mongodb.service, /usr/bin/iiab-mongodb-repair-if-no-lock from templates
+- name: Install mongodb.service, /usr/bin/iiab-mongodb-repair-if-no-lock from templates
   template:
     src: "{{ item.src }}"
     dest: "{{ item.dest }}"
@@ -122,10 +133,17 @@
     group: root
     mode: "{{ item.mode }}"
   with_items:
-    - { src: 'mongod.conf.j2', dest: "{{ mongodb_conf }}", mode: '0644' }    # i.e. /etc/mongod.conf
     - { src: 'mongodb.service.j2', dest: '/etc/systemd/system/mongodb.service', mode: '0644' }
     - { src: 'iiab-mongodb-repair-if-no-lock.j2', dest: '/usr/bin/iiab-mongodb-repair-if-no-lock', mode: '0755' }
 
+# daemon_reload is used to force systemd to recognize a newly installed .service file
+# restarted here to ensure the port has been changed
+- name: Disable 'mongodb' systemd service - started on demand by sugarizer
+  systemd:
+    name: mongodb
+    daemon_reload: yes
+    enabled: no
+    state: restarted
 
 # 3. RECORD MongoDB AS INSTALLED
 
