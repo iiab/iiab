@@ -1,0 +1,49 @@
+- name: Install usage accumulation if 'usaged_installed' not defined, e.g. in {{ iiab_state_file }}    # /etc/iiab/iiab_state.yml
+  include_tasks: install.yml
+  when: usage_installed is undefined
+
+- name: Enable/Disable/Reload Collection of WiFi client data
+  lineinfile: 
+      regexp: ".*clientdata.py$"
+      line:  "*/2 * * * * root /opt/iiab/iiab-factory/box/generic/fieldback/iiab-wifidaya.py"
+      state: present
+      path: /etc/crontab
+  when: usage_enabled | bool
+
+- name: Enable/Disable/Reload Collection of WiFi client data
+  lineinfile: 
+      regexp: ".*clientdata.py$"
+      line:  "1  *  * * * root systemctl restart hostapd"
+      state: present
+      path: /etc/crontab
+  when: usage_enabled | bool
+
+- name: Enable/Disable/Reload Collection of WiFi client data
+  lineinfile: 
+      regexp: ".*iiab-wifidata.py$"
+      state: absent
+      path: /etc/crontab
+  when: not usage_enabled
+
+- name: Enable/Disable/Reload Collection of WiFi client data
+  lineinfile: 
+      regexp: ".*clientdata.py$"
+      state: absent
+      path: /etc/crontab
+  when: not usage_enabled
+
+- name: Add 'usage' variable values to {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+    section: usage
+    option: "{{ item.option }}"
+    value: "{{ item.value | string }}"
+  with_items:
+    - option: name
+      value: Wifi Usage
+    - option: description
+      value: '"The Usage system records wifi client information known to the WiFi server hostapd into a sdatabase. It provides a client server browser based web page that summarizes clients by hour,day,week and month"'
+    - option: install
+      value: "{{ usage_install }}"
+    - option: enabled
+      value: "{{ usage_enabled }}"
