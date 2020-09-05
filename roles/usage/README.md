@@ -28,7 +28,7 @@ Then I clicked the "Days" bucket, which groups all today's data into a single bu
 
 ![](usage4.jpg)
 
-The start and end date section always assumes that the user wants the end date to be now. If the user wanted to see the hourly chart for four weeks ago,she would click "week", and then click "earlier" 4 times, and then set end end date with the keyboard to set the end of that week, and click "Redraw".
+The start and end date section always assumes that the user wants the end date to be now. If the user wanted to see the hourly chart for four weeks ago, she would click "week", and then click "earlier" 4 times, and then set end date with the keyboard to set the end of the desired week, and click "Redraw".
 
 ### Internals
 The database update program, /usr/bin/iiab-wifidata.py, writes to the database (/opt/iiab/clientdata.sqlite) after using the ```"hostapd_cli all_sta"``` command to get the current WiFi statistics. This "cli" (command line interface) returns data that looks like this:
