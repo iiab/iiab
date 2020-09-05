@@ -27,3 +27,37 @@ shows that I got up at about 7AM, and read the online NYTimes for quite a while.
 Then I clicked the "Days" bucket, which shows how much connection and data I've used while testing this application. My computer stays connected, so the blue bars are always the same, and do not really indicate much useful information. When there is a whole classroom of computers, and some of them might not be turned on part of the time, the number of connection hours might be useful.
 
 ![](usage4.jpg)
+
+The start and end date section assumes that most of the charts will be showing trends ending at now. If the user wanted to see the hourly chart for a time,she would first click "earlier" 4 times, and then set end end date with the keyboard, and click "Redraw".
+
+### Internals
+The database update program, /usr/bin/iiab-wificlient.py, writes to the database (/opt/iiab/clientdata.sqlite) after using the "hostapd_cli all_sta" command to get the current WiFi statistics. This "cli" (command line interface) returns data that looks like this:
+```
+root@box:/opt/iiab/iiab# hostapd_cli all_sta
+Selected interface 'wlan0'
+20:c9:d0:b7:16:59
+flags=[AUTH][ASSOC][AUTHORIZED][SHORT_PREAMBLE]
+aid=1
+capability=0x421
+listen_interval=10
+supported_rates=82 84 8b 96 24 30 48 6c 0c 12 18 60
+timeout_next=NULLFUNC POLL
+rx_packets=3167
+tx_packets=1403
+rx_bytes=419099
+tx_bytes=308529
+inactive_msec=0
+connected_time=582
+root@box:/opt/iiab/iiab# 
+```
+The data items in the sqlite database are:
+```
+sqlite> .schema
+CREATE TABLE connections (id INTEGER PRIMARY KEY,host_num TEXT, client_id TEXT, start_time_stamp TEXT,tx_bytes INTEGER, rx_bytes INTEGER,connected_time TEXT,connected_str TEXT,hour INTEGER,minute INTEGER,datestr TEXT,month INTEGER,day INTEGER,dow INTEGER,week INTEGER,doy INTEGER,datetime TEXT,year INTEGER,site TEXT);
+CREATE UNIQUE INDEX client_id on connections (client_id,start_time_stamp);
+CREATE TABLE lookup (id INTEGER PRIMARY KEY,host_num INTEGER, client_id TEXT,name TEXT);
+CREATE UNIQUE INDEX lookup_index ON lookup (client_id);
+sqlite> 
+```
+#### Security
+The MAC address of each client is not recorded in the database, but rather the md5sum of the MAC address. Also the identity of the server is somewhat obscured, by using the UUID stored in /etc/iiab/uuid, for the site field.
