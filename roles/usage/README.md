@@ -19,4 +19,11 @@ There are three main variables which can be selected independently in the **Usag
 2. The size of the time bucket which is lumped into a set of bars 
 3. The start date and end date which will be displayed 
 ### How to use
+Part of the challenge in testing and debugging an application such as **Usage Chart** is accumulating enough data to test the historical charts. The easiest is to accumulate for a few days, and then display the hourly buckets:
+![](usage5.jpg)
+This chart
+shows that I got up at about 7AM, and read the online NYTimes for quite a while. Then I had breakfast. and started again about 10AM.
+
+Then I clicked the "Days" bucket, which shows how much connection and data I've used while testing this application. My computer stays connected, so the blue bars are always the same, and do not really indicate much useful information. When there is a whole classroom of computers, and some of them might not be turned on part of the time, the number of connection hours might be useful.
+
 ![](usage4.jpg)
