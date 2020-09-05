@@ -19,4 +19,4 @@ There are three main variables which can be selected independently in the **Usag
 2. The size of the time bucket which is lumped into a set of bars 
 3. The start date and end date which will be displayed 
 ### How to use
-![](usage4.jpeg)
+![](usage4.jpg)
