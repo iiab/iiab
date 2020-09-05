@@ -1,7 +1,7 @@
 ### Usage Statistics Describing WiFi Clients on IIAB Servers
 Overview:
 
-The *hostapd* program runs on the IIAB server, and manages all of the WiFi client connections. This **Usage** application records the identity and  byte counts for each connected device once every 2 minutes. It places this information into a sqlite3 databae (/opt/iiab/clientlinfo.sqlite). The information in the database is summarized by a graphical output page at http://box.lan/admin/usage (requires the *Admin Console* username and password).
+The *hostapd* program runs on the IIAB server, and manages all of the WiFi client connections. This **Usage** application records the identity and  byte counts for each connected device once every 2 minutes. It places this information into a sqlite3 databasje (/opt/iiab/clientlinfo.sqlite). The information in the database is summarized by a graphical output page at http://box.lan/admin/usage (requires the *Admin Console* username and password).
 ### What Questions Can the Usage Chart Answer?
 The graphical user interface for an application is always a challenge. Here are the questions which the **Usage Chart** may be able to answer:
 1. What happened in the classroom today?
@@ -17,21 +17,21 @@ There are three main variables which can be selected independently in the **Usag
         1. Number of minutes connected to the server.
         1. Number of megabytes consumed fro the server.
 2. The size of the time bucket which is lumped into a set of bars 
-3. The start date and end date which will be displayed 
+3. The start date and end date for defining which will be displayed 
 ### How to use
 Part of the challenge in testing and debugging an application such as **Usage Chart** is accumulating enough data to test the historical charts. The easiest is to accumulate for a few days, and then display the hourly buckets:
 ![](usage5.jpg)
-This chart
-shows that I got up at about 7AM, and read the online NYTimes for quite a while. Then I had breakfast. and started again about 10AM.
 
-Then I clicked the "Days" bucket, which shows how much connection and data I've used while testing this application. My computer stays connected, so the blue bars are always the same, and do not really indicate much useful information. When there is a whole classroom of computers, and some of them might not be turned on part of the time, the number of connection hours might be useful.
+This chart shows that I got up at about 7AM, and read the online NYTimes for quite a while. Then I had breakfast. and started again about 10AM.
+
+Then I clicked the "Days" bucket, which groups all today's data into a single bucket, and how much connection and data I've used while over the last week. My computer stays connected, so the blue bars are always the same, and do not really indicate much useful information. When there is a whole classroom of computers, and some of them might not be turned on part of the time, the number of connection hours might be more useful.
 
 ![](usage4.jpg)
 
-The start and end date section assumes that most of the charts will be showing trends ending at now. If the user wanted to see the hourly chart for a time,she would first click "earlier" 4 times, and then set end end date with the keyboard, and click "Redraw".
+The start and end date section always assumes that the user wants the end date to be now. If the user wanted to see the hourly chart for four weeks ago,she would click "week", and then click "earlier" 4 times, and then set end end date with the keyboard to set the end of that week, and click "Redraw".
 
 ### Internals
-The database update program, /usr/bin/iiab-wificlient.py, writes to the database (/opt/iiab/clientdata.sqlite) after using the "hostapd_cli all_sta" command to get the current WiFi statistics. This "cli" (command line interface) returns data that looks like this:
+The database update program, /usr/bin/iiab-wifidata.py, writes to the database (/opt/iiab/clientdata.sqlite) after using the ```"hostapd_cli all_sta"``` command to get the current WiFi statistics. This "cli" (command line interface) returns data that looks like this:
 ```
 root@box:/opt/iiab/iiab# hostapd_cli all_sta
 Selected interface 'wlan0'
@@ -50,6 +50,14 @@ inactive_msec=0
 connected_time=582
 root@box:/opt/iiab/iiab# 
 ```
+The iiab-wifidata.py program is started every two minutes by entries in /etc/crontab. This program runs to completion in about 200 mS.
+```
+# /etc/crontab: system-wide crontab
+# m h dom mon dow user  command
+*/2 * * * * root /usr/bin/iiab-wifidata.py
+1  *  * * * root systemctl restart hostapd
+```
+
 The data items in the sqlite database are:
 ```
 sqlite> .schema
