@@ -1,20 +1,21 @@
 # Initialize
 - name: ...IS BEGINNING ============================================
-  stat:
-    path: "{{ iiab_env_file }}"
-  register: NewInstall
-
-- name: Set first_run flag
-  set_fact:
-    first_run: True
-  when: not NewInstall.stat.exists
-
-- name: Set top-level variables from local_facts for convenience
+#- name: Re-read local_facts.facts from /etc/ansible/facts.d
+#  setup:
+#    filter: ansible_local
+#- name: Set top-level variables from local_facts for convenience
   set_fact:
     rpi_model: "{{ ansible_local.local_facts.rpi_model }}"
     xo_model: "{{ ansible_local.local_facts.xo_model }}"
     phplib_dir: "{{ ansible_local.local_facts.phplib_dir }}"
     iiab_stage: "{{ ansible_local.local_facts.stage }}"
+    installed_release: "{{ ansible_local.local_facts.installed_release }}"
+    installed_revision: "{{ ansible_local.local_facts.installed_revision }}"
+
+- name: Set first_run flag
+  set_fact:
+    first_run: True
+  when: iiab_stage | int == 0
 
 # We need to inialize the ini file and only write the location and version
 # sections once and only once to preserve the install date and git hash.
@@ -35,10 +36,6 @@
     state: directory
     path: /etc/iiab/diag
     mode: '0777'
-
-- name: Re-read local_facts.facts from /etc/ansible/facts.d
-  setup:
-    filter: ansible_local
 
 - name: Pre-check that IIAB's "XYZ_install" + "XYZ_enabled" vars (1) are defined, (2) are boolean-not-string variables, and (3) contain plausible values.  Also checks that "XYZ_install" is True when "XYZ_installed" is defined.
   include_tasks: validate_vars.yml
