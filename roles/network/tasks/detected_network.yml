@@ -101,21 +101,40 @@
   set_fact:
     num_wifi_interfaces: "{{ count_wifi_interfaces.stdout|int }}"
 
+- name: Detect wifi gateway active
+  shell: ip r | grep default | grep {{ discovered_wireless_iface }} | wc -l
+  register: wifi_gateway_found
+  when: discovered_wireless_iface != "none"
+
+- name: Set has_wifi_gateway for {{ discovered_wireless_iface }} if WiFi gateway is detected
+  set_fact:
+    has_wifi_gateway: True
+  when: discovered_wireless_iface != "none" and (wifi_gateway_found.stdout|int > 0)
+
+- name: Detect secondary gateway active
+  shell: ip r | grep default | grep -v {{ discovered_wan_iface }} | awk '{print $5}'
+  register: second_gateway_found
+
+- name: Set exclude_devices for {{ second_gateway_found.stdout }} if gateway is detected
+  set_fact:
+    exclude_devices: "-e {{ second_gateway_found.stdout }}"
+  when: second_gateway_found.changed
+
 # XO hack here ap_device would not be active therefore not set with
 # wired as gw use ap_device to exclude eth0 from network calulations
 
-- name: XO laptop override 2 WiFi on LAN
-  set_fact:
-    exclude_device: "eth0"
-  when: iiab_wan_iface != "eth0" and discovered_wireless_iface != "none" and xo_model == "XO-1.5"
+#- name: XO laptop override 2 WiFi on LAN
+#  set_fact:
+#    exclude_devices: "-e eth0"
+#  when: iiab_wan_iface != "eth0" and discovered_wireless_iface != "none" and xo_model == "XO-1.5"
 
 - name: Exclude reserved Network Adapter if defined - takes adapter name
   set_fact:
-    exclude_device: "{{ reserved_device }}"
+    exclude_devices: "-e {{ reserved_device }} {{ exclude_devices }}"
   when: reserved_device is defined
 
 - name: Count LAN ifaces
-  shell: ls /sys/class/net | grep -v {{ virtual_network_devices }} -e wwlan -e ppp -e {{ device_gw }} -e {{ exclude_device }} | wc -l
+  shell: ls /sys/class/net | grep -v {{ virtual_network_devices }} -e wwlan -e ppp -e {{ device_gw }} {{ exclude_devices }} | wc -l
   register: num_lan_interfaces_result
 
 - name: Calculate number of LAN interfaces including WiFi
@@ -124,7 +143,7 @@
 
 # LAN - pick non WAN's
 - name: Create list of LAN (non WAN) ifaces
-  shell: ls /sys/class/net | grep -v {{ virtual_network_devices }} -e wwlan -e ppp -e {{ device_gw }} -e {{ exclude_device }}
+  shell: ls /sys/class/net | grep -v {{ virtual_network_devices }} -e wwlan -e ppp -e {{ device_gw }} {{ exclude_devices }}
   when: num_lan_interfaces != "0"
   register: lan_list_result
 
@@ -144,16 +163,6 @@
   when: lan_list_result.stdout_lines is defined and item|trim != discovered_wireless_iface
   with_items:
     - "{{ lan_list_result.stdout_lines }}"
-
-- name: Detect wifi gateway active
-  shell: ip r | grep default | grep {{ discovered_wireless_iface }} | wc -l
-  when: discovered_wireless_iface != "none"
-  register: wifi_gateway_found
-
-- name: Set has_wifi_gateway for {{ discovered_wireless_iface }} if gateway is detected
-  set_fact:
-    has_wifi_gateway: True
-  when: wifi_gateway_found is defined and (wifi_gateway_found.stdout|int > 0)
 
 - name: Set iiab_wireless_lan_iface to {{ discovered_wireless_iface }} if not none
   set_fact:
@@ -240,8 +249,8 @@
     value: "{{ discovered_wireless_iface }}"
   - option: discovered_wired_iface
     value: "{{ discovered_wired_iface }}"
-#  - option: 'iiab_wireless_lan_iface
-#    value: '{{ iiab_wireless_lan_iface }}"
+  - option: 'exclude_devices'
+    value: "{{ exclude_devices }}"
   - option: num_lan_interfaces
     value: "{{ num_lan_interfaces }}"
   - option: gui_static_wan
