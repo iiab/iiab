@@ -106,11 +106,19 @@
   register: wifi_gateway_found
   when: discovered_wireless_iface != "none"
 
-- name: Set has_wifi_gateway for {{ discovered_wireless_iface }} if gateway is detected
+- name: Set has_wifi_gateway for {{ discovered_wireless_iface }} if WiFi gateway is detected
   set_fact:
-    exclude_devices: "-e {{ discovered_wireless_iface }}"
     has_wifi_gateway: True
   when: discovered_wireless_iface != "none" and (wifi_gateway_found.stdout|int > 0)
+
+- name: Detect secondary gateway active
+  shell: ip r | grep default | grep -v {{ discovered_wan_iface }} | awk '{print $5}'
+  register: second_gateway_found
+
+- name: Set exclude_devices for {{ second_gateway_found.stdout }} if gateway is detected
+  set_fact:
+    exclude_devices: "-e {{ second_gateway_found.stdout }}"
+  when: second_gateway_found.changed
 
 # XO hack here ap_device would not be active therefore not set with
 # wired as gw use ap_device to exclude eth0 from network calulations
