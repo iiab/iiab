@@ -1,6 +1,7 @@
 #!/bin/bash -e
 
 # PLZ SEE http://FAQ.IIAB.IO > "What is Ansible and what version should I use?"
+#         https://github.com/iiab/iiab/tree/master/scripts/ansible.md
 
 APT_PATH=/usr/bin    # Avoids problematic /usr/local/bin/apt on Linux Mint
 CURR_VER="undefined"    # Ansible version you currently have installed
@@ -10,6 +11,18 @@ GOOD_VER="2.10.1"    # Orig for 'yum install [rpm]' & XO laptops (pip install)
 # https://launchpad.net/~ansible/+archive/ubuntu/ansible-2.10
 # http://ppa.launchpad.net/ansible/ansible/ubuntu/pool/main/a/ansible-base/
 # https://github.com/ansible/ansible/commits/stable-2.10/changelogs/CHANGELOG-v2.10.rst
+
+# IIAB implementers might instead consider these 2 GENERAL TECHNIQUES below
+# ("in an emergency!") e.g. if you must install an older version of Ansible:
+
+# TEMPORARILY USE ANSIBLE 2.9.13 (REMOVE IT WITH "pip uninstall ansible")
+#pip install ansible==2.9.13
+
+# TEMPORARILY USE ANSIBLE 2.4.2 DUE TO 2.4.3 MEMORY BUG. Details: iiab/iiab#669
+#echo "Install http://download.iiab.io/packages/ansible_2.4.2.0-1ppa~xenial_all.deb"
+#cd /tmp
+#wget http://download.iiab.io/packages/ansible_2.4.2.0-1ppa~xenial_all.deb
+#apt -y --allow-downgrades install ./ansible_2.4.2.0-1ppa~xenial_all.deb
 
 export DEBIAN_FRONTEND=noninteractive
 # Why 'noninteractive' appears needed:
@@ -37,6 +50,8 @@ else
 fi
 echo -e "(Internet-in-a-Box requests ansible-base $GOOD_VER or higher)\n"
 
+# Code above designed to work on all Linux distributions, to preserve options,
+# in support of any volunteer(s) wanting to port IIAB to a new Linux/distro.
 if [ ! -f /etc/debian_version ]; then    # e.g. Raspbian, Ubuntu, Mint & Debian
     echo -e "\nEXITING: /etc/debian_version FILE NOT FOUND.  Linux OS support info here:"
     echo -e "           https://github.com/iiab/iiab/wiki/IIAB-Platforms\n"
@@ -46,10 +61,18 @@ fi
 echo -e "\napt update; install dirmngr; PPA to /etc/apt/sources.list.d/iiab-ansible.list\n"
 $APT_PATH/apt update
 $APT_PATH/apt -y install dirmngr
+# In future we might instead consider 'add-apt-repository ppa:ansible/ansible'
+# or 'apt-add-repository ppa:ansible/bionic/ansible' etc, e.g. for streamlined
+# removal using 'apt-add-repository -r' -- however that currently requires
+# 'apt install software-properties-common' which drags in a dozen packages we
+# might not want, e.g. unattended-upgrades, packagekit etc.
 echo "deb http://ppa.launchpad.net/ansible/ansible/ubuntu bionic main" \
      > /etc/apt/sources.list.d/iiab-ansible.list
 
-# 2020-08-20: TEMP WORKAROUND (REVERT TO ANSIBLE 2.9.6) MITIGATING #2481 (Ansible 2.9.12 and 2.10.0's 666-TO-600 file permissions problem). This installs 2.9.6-1ppa~disco onto RaspiOS, from https://launchpad.net/~ansible/+archive/ubuntu/ansible
+# 2020-08-20: TEMP WORKAROUND (REVERT TO ANSIBLE 2.9.6) MITIGATING
+# iiab/iiab#2481 (Ansible 2.9.12 and 2.10.0's 666-TO-600 file permissions
+# problem).  This workaround installs 2.9.6-1ppa~disco onto RaspiOS, from
+# https://launchpad.net/~ansible/+archive/ubuntu/ansible
 #echo "deb http://ppa.launchpad.net/ansible/ansible/ubuntu disco main" \
     #    > /etc/apt/sources.list.d/iiab-ansible.list
 
@@ -65,24 +88,15 @@ echo -e "\napt update; apt install ansible-base and python3 dependencies explain
 echo -e "https://github.com/iiab/iiab/tree/master/scripts/ansible.md\n"
 $APT_PATH/apt update
 $APT_PATH/apt -y --allow-downgrades install ansible-base \
-	      python3-pymysql python3-psycopg2 python3-passlib python3-pip \
-	      python3-setuptools python3-venv virtualenv
+              python3-pymysql python3-psycopg2 python3-passlib python3-pip \
+              python3-setuptools python3-venv virtualenv
 
-# IIAB requires these 2 Ansible Collections: (with ansible-base 2.10.0 or higher)
+echo -e "\n\nIIAB requires these 2 Ansible Collections: (w/ ansible-base 2.10.0 or higher)\n"
 ansible-galaxy collection install community.general    # Re-running these
 ansible-galaxy collection install community.mysql      # appears to be safe!?
 
-echo -e "\nSUCCESS: verify Ansible using 'ansible --version' and/or 'apt -a list ansible-base'\n\n"
-
-# TEMPORARILY USE ANSIBLE 2.4.4 (REMOVE IT WITH "pip uninstall ansible")
-#pip install ansible==2.4.4
-
-# TEMPORARILY USE ANSIBLE 2.4.2 DUE TO 2.4.3 MEMORY BUG. DETAILS @ https://github.com/iiab/iiab/issues/669
-#echo "Install http://download.iiab.io/packages/ansible_2.4.2.0-1ppa~xenial_all.deb"
-#cd /tmp
-#wget http://download.iiab.io/packages/ansible_2.4.2.0-1ppa~xenial_all.deb
-#apt -y --allow-downgrades install ./ansible_2.4.2.0-1ppa~xenial_all.deb
-
-# Needed?
+echo -e "\n\nCreating/verifying directory /etc/ansible & installing /etc/ansible/hosts\n"
 mkdir -p /etc/ansible
 echo -e '[local]\nlocalhost\n' > /etc/ansible/hosts
+
+echo -e "SUCCESS: VERIFY ANSIBLE WITH 'ansible --version' & 'apt -a list ansible-base'\n\n"
