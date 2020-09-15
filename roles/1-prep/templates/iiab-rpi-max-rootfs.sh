@@ -6,6 +6,7 @@
 # Only works on F22 + where resizepart command exists
 # Assumes sd card style partition name like <device>p<partition number>
 
+echo "Checking for .resize-rootfs"
 if [  -f /.resize-rootfs ];then
   echo "$0: maximizing rootfs partion"
   # Calculate root partition
@@ -18,3 +19,4 @@ if [  -f /.resize-rootfs ];then
   resize2fs /dev/$root_part
   rm /.resize-rootfs
 fi
+exit 0
