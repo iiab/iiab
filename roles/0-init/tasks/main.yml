@@ -1,21 +1,20 @@
 # Initialize
 - name: ...IS BEGINNING ============================================
-#- name: Re-read local_facts.facts from /etc/ansible/facts.d
-#  setup:
-#    filter: ansible_local
-#- name: Set top-level variables from local_facts for convenience
+  stat:
+    path: "{{ iiab_env_file }}"
+  register: NewInstall
+
+- name: Set first_run flag
+  set_fact:
+    first_run: True
+  when: not NewInstall.stat.exists
+
+- name: Set top-level variables from local_facts for convenience
   set_fact:
     rpi_model: "{{ ansible_local.local_facts.rpi_model }}"
     xo_model: "{{ ansible_local.local_facts.xo_model }}"
     phplib_dir: "{{ ansible_local.local_facts.phplib_dir }}"
     iiab_stage: "{{ ansible_local.local_facts.stage }}"
-    installed_release: "{{ ansible_local.local_facts.installed_release }}"
-    installed_revision: "{{ ansible_local.local_facts.installed_revision }}"
-
-- name: Set first_run flag
-  set_fact:
-    first_run: True
-  when: iiab_stage | int == 0
 
 # We need to inialize the ini file and only write the location and version
 # sections once and only once to preserve the install date and git hash.
@@ -37,30 +36,12 @@
     path: /etc/iiab/diag
     mode: '0777'
 
+- name: Re-read local_facts.facts from /etc/ansible/facts.d
+  setup:
+    filter: ansible_local
+
 - name: Pre-check that IIAB's "XYZ_install" + "XYZ_enabled" vars (1) are defined, (2) are boolean-not-string variables, and (3) contain plausible values.  Also checks that "XYZ_install" is True when "XYZ_installed" is defined.
   include_tasks: validate_vars.yml
-
-# the below 2 stanza don't do anything functional at the moment, more
-# informational you will see 'changed'. The real work would be done by
-# iiab-upgrade via auto deleting the *_installed flag in iiab_state.yml
-# based on entries in upgrade_roles. It is just plain easier to delete the
-# marker before ansible loads iiab_state.yml like runrole --reinstall does.
-# https://github.com/jvonau/iiab-factory/blob/iiab-upgrade/iiab-upgrade
-# Might work on loading iiab_state.yml on demand via conditionals in the future.
-
-# this one is informational you will see 'changed'.
-- name: Upgrade situation detected
-  set_fact:
-    do_upgrade: True
-  when: installed_revision|int < iiab_revision|int
-
-# leave at 7.2 when branching to 7.3, bump to 7.3 when 7.4 or 8.0 comes along.
-# does nothing at the moment for future use, just denotes a major change in the
-# starting point of the install.
-- name: Reinstall situation detected
-  set_fact:
-    do_reinstall: True
-  when: not installed_release == "0" and installed_release == "7.2"
 
 # Discover: do we have a gateway?
 # If Ansible detects gateway, becomes WAN candidate.
