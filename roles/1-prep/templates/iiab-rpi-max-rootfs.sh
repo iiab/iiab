@@ -18,5 +18,6 @@ if [  -f /.resize-rootfs ];then
   growpart /dev/$root_dev $root_part_no
   resize2fs /dev/$root_part
   rm /.resize-rootfs
+  systemctl disable iiab-rpi-root-resize.service
 fi
 exit 0
