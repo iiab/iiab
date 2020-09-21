@@ -1,19 +1,25 @@
 # Server Options
 
 - name: ...IS BEGINNING ==================================
-  file:
-    path: "{{ iiab_state_file }}"
-    state: touch
+  stat:
+    path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
+  register: iiab_state_file_check
 
-- name: Install IIAB's python libs
+# STRICT CHECK in case {iiab-stages.yml, run-one-role.yml, etc} omit this:
+- name: ENFORCE precondition that {{ iiab_state_file }} MUST exist
+  assert:
+    that: iiab_state_file_check.stat.exists
+
+- name: Install pylibs (IIAB's python libs)
   include_role:
     name: pylibs
+  #when: pylibs_install | bool    # Flag might be created in future?
 
 - name: Install named / BIND
   include_tasks: roles/network/tasks/named.yml
   when: named_install | bool
 
-- name: Installing dhcpd
+- name: Install dhcpd
   include_tasks: roles/network/tasks/dhcpd.yml
   when: dhcpd_install | bool
 
@@ -24,7 +30,7 @@
 - name: Install Bluetooth - only on Raspberry Pi
   include_role:
     name: bluetooth
-  when: rpi_model != "none" and bluetooth_install
+  when: bluetooth_install and rpi_model != "none"
 
 - name: USB_LIB
   include_role:
@@ -48,8 +54,7 @@
 - name: WWW_OPTIONS (WWW_BASE should have been installed earlier)
   include_role:
     name: www_options
-  #when: www_options_install | bool
-  #when: apache_install or nginx_install
+  #when: www_options_install | bool    # Flag might be created in future?
 
 - name: Recording STAGE 4 HAS COMPLETED ==================
   lineinfile:
