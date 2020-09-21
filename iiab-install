@@ -13,8 +13,33 @@ OS=${OS//\"/}
 MIN_RPI_KERN=4.19.97       # If using Raspbian, 'rpi-update' should no longer be nec -- please use Raspbian 2020-02-13 or higher: https://github.com/iiab/iiab/issues/1993
 MIN_ANSIBLE_VER=2.8.11     # Ansible 2.8.3 and 2.8.6 have serious bugs, preventing their use with IIAB.
 
-if [ ! -f /etc/iiab/local_vars.yml ]; then
+if [ ! -f $PLAYBOOK ]; then
+    echo "EXITING: IIAB Playbook ""$PLAYBOOK"" not found."
+    echo "Please run 'sudo ./iiab-install' from /opt/iiab/iiab (top level of git repo)."
+    exit 1
+fi
 
+usage() {
+    echo "Use 'sudo ./iiab-install' for regular installs, or to continue an install."
+    echo "Use 'sudo ./iiab-install --reinstall' to force running all Stages 0-9, followed by the Network Role."
+    echo "Use 'sudo ./iiab-install --debug' to run Stage 0, followed by Stages 3-9, followed by the Network Role."
+    echo "Use 'sudo ./iiab-configure' to run Stage 0, followed by Stages 4-9."
+    echo "Use 'sudo ./runrole' to run Stage 0, followed by a single Stage or Role."
+    echo "Use 'sudo ./iiab-network' to run Stage 0, followed by the Network Role."
+}
+
+if [ "$1" != "--debug" ] && [ "$1" != "--reinstall" ] && [ "$1" != "" ]; then
+    usage
+    exit 1
+fi
+
+# Everything else needs to be run as root
+if [ $(id -u) -ne 0 ]; then
+    echo -e "'iiab-install' must be run as root. Try 'sudo iiab-install'\n"
+    exit 1
+fi
+
+if [ ! -f /etc/iiab/local_vars.yml ]; then
     if [ -f /opt/iiab/iiab/vars/local_vars.yml ]; then
         echo -e "\nACTION NEEDED: YOUR /opt/iiab/iiab/vars/local_vars.yml IS NO LONGER SUPPORTED.\n" >&2
 
@@ -46,22 +71,6 @@ fi
 cp ./scripts/local_facts.fact /etc/ansible/facts.d/local_facts.fact
 echo "Placed /etc/ansible/facts.d/local_facts.fact into position."
 
-if [ ! -f $PLAYBOOK ]; then
-    echo "EXITING: IIAB Playbook ""$PLAYBOOK"" not found."
-    echo "Please run './iiab-install' from /opt/iiab/iiab (top level of git repo)."
-    exit 1
-fi
-
-if [ "$1" != "--debug" ] && [ "$1" != "--reinstall" ] && [ "$1" != "" ]; then
-    echo "Use './iiab-install' for regular installs, or to continue an install."
-    echo "Use './iiab-install --reinstall' to force running all Stages 0-9, followed by the Network Role."
-    echo "Use './iiab-install --debug' to run Stage 0, followed by Stages 3-9, followed by the Network Role."
-    echo "Use './iiab-configure' to run Stage 0, followed by Stages 4-9."
-    echo "Use './runrole' to run Stage 0, followed by a single Stage or Role."
-    echo "Use './iiab-network' to run Stage 0, followed by the Network Role."
-    exit 1
-fi
-
 # Subroutine compares software version numbers.  Generates rare false positives
 # like "1.0 > 1" and "2.4.0 > 2.4".  Avoid risks by structuring conditionals w/
 # a consistent # of decimal points e.g. "if version_gt w.x.y.z a.b.c.d; then"
@@ -73,8 +82,8 @@ CURR_KERN=`uname -r`
 echo "Found Kernel ""$CURR_KERN"
 if [ "$OS" == "raspbian" ] && version_gt $MIN_RPI_KERN $CURR_KERN ; then
     echo -e "\nEXITING: Kernel ""$MIN_RPI_KERN"" or higher required with Raspbian."
-    echo -e "PLEASE RUN 'apt update' then 'apt install raspberrypi-kernel' then reboot."
-    echo -e "THEN IF NEC run 'rpi-update' to install a more recent kernel, then reboot."
+    echo -e "PLEASE RUN 'sudo apt update' then 'sudo apt install raspberrypi-kernel' then reboot."
+    echo -e "THEN IF NEC run 'sudo rpi-update' to install a more recent kernel, then reboot."
     echo -e "IIAB INSTALL INSTRUCTIONS: https://github.com/iiab/iiab/wiki/IIAB-Installation"
     exit 1
 fi
@@ -132,12 +141,7 @@ if [ -f /etc/iiab/iiab.env ]; then
         echo "Wrote STAGE=2 (counter) to /etc/iiab/iiab.env"
     elif [ "$STAGE" -eq 9 ]; then
         echo -e "\nEXITING: STAGE (counter) in /etc/iiab/iiab.env shows Stage 9 Is Already Done."
-        echo -e "Use './iiab-install --reinstall' to force running all Stages 0-9, followed by the Network Role."
-        echo -e "Use './iiab-install --debug' to run Stage 0, followed by Stages 3-9, followed by the Network Role."
-        echo -e "Use './iiab-configure' to run Stage 0, followed by Stages 4-9."
-        echo -e "Use './runrole' to run Stage 0, followed by a single Stage or Role."
-        echo -e "Use './iiab-network' to run Stage 0, followed by the Network Role.\n\n"
-
+        usage
         exit 0    # Allows rerunning http://download.iiab.io/install.txt
     fi
 fi
