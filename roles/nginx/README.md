@@ -45,9 +45,11 @@
       * kalite (menu goes directly to ports 8006-8008)
       * minetest [*]
       * openvpn
+      * mosquitto [*]
       * pbx [*, requires Apache for now, as in Section iii.]
       * phpmyadmin [*, requires Apache for now, as in Section iii.]
       * samba
       * transmission [*]
+      * vnstat [*]
 
-[*] The 6 above starred roles could use improvement, as of 2020-09-21.
+[*] The 8 above starred roles could use improvement, as of 2020-09-21.
