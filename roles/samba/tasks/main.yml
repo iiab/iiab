@@ -1,78 +1,35 @@
-- name: "Create smb user: {{ smbuser }}"
-  user:
-    name: "{{ smbuser }}"
-    shell: /sbin/nologin
-    password: "{{ smbpassword }}"
+# "How do i fail a task in Ansible if the variable contains a boolean value?
+# I want to perform input validation for Ansible playbooks"
+# https://stackoverflow.com/questions/46664127/how-do-i-fail-a-task-in-ansible-if-the-variable-contains-a-boolean-value-i-want/46667499#46667499
 
-- name: "Create public folder: {{ shared_dir }}"
-  file:
-    path: "{{ shared_dir }}"
-    owner: "{{ smbuser }}"
-    group: "{{ smbuser }}"
-    mode: '0777'
-    state: directory
+# We assume 0-init/tasks/validate_vars.yml has DEFINITELY been run, so no need
+# to re-check whether vars are defined here.  As Ansible vars cannot be unset:
+# https://serverfault.com/questions/856729/how-to-destroy-delete-unset-a-variable-value-in-ansible
 
-# Install and configure samba server (requires ports 137, 138, 139, 445 open).
-- name: "Install 4 packages: samba, samba-client, samba-common, cifs-client"
-  package:
-    name:
-      - samba
-      - samba-client
-      - samba-common
-      - cifs-utils
-    state: present
+- name: Assert that "samba_install is sameas true" (boolean not string etc)
+  assert:
+    that: samba_install is sameas true
+    fail_msg: "PLEASE SET 'samba_install: True' e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
 
-- name: Install /etc/samba/smb.conf from template
-  template:
-    src: smb.conf.j2
-    dest: /etc/samba/smb.conf
+- name: Assert that "samba_enabled | type_debug == 'bool'" (boolean not string etc)
+  assert:
+    that: samba_enabled | type_debug == 'bool'
+    fail_msg: "PLEASE GIVE VARIABLE 'samba_enabled' A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
 
 
-# RECORD Samba AS INSTALLED
-
-- name: "Set 'samba_installed: True'"
-  set_fact:
-    samba_installed: True
-
-- name: "Add 'samba_installed: True' to {{ iiab_state_file }}"
-  lineinfile:
-    path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
-    regexp: '^samba_installed'
-    line: 'samba_installed: True'
+- name: Install Samba if 'samba_installed' not defined, e.g. in {{ iiab_state_file }}    # /etc/iiab/iiab_state.yml
+  include_tasks: install.yml
+  when: samba_installed is undefined
 
 
-- name: Enable & Start Samba systemd service ({{ smb_service }}) if samba_enabled
-  service:
-    name: "{{ smb_service }}"
-    state: started
-    enabled: yes
-  when: samba_enabled | bool
-
-- name: Enable & Start NetBIOS name service ({{ nmb_service }}) if samba_enabled
-  service:
-    name: "{{ nmb_service }}"
-    state: started
-    enabled: yes
-  when: samba_enabled | bool
-
-- name: Disable & Stop Samba systemd service ({{ smb_service }}) if not samba_enabled
-  systemd:
-    name: "{{ smb_service }}"
-    state: stopped
-    enabled: no
-  when: not samba_enabled
-
-- name: Disable & Stop NetBIOS name service ({{ nmb_service }}) if not samba_enabled
-  systemd:
-    name: "{{ nmb_service }}"
-    state: stopped
-    enabled: no
-  when: not samba_enabled
+- include_tasks: enable-or-disable.yml
 
 
 - name: Add 'samba' variable values to {{ iiab_ini_file }}
   ini_file:
-    path: "{{ iiab_ini_file }}"
+    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
     section: samba
     option: "{{ item.option }}"
     value: "{{ item.value | string }}"
