@@ -1,0 +1,75 @@
+- name: "Set 'apache_install: True' and 'apache_enabled: True'"
+  set_fact:
+    apache_install: True
+    apache_enabled: True
+
+- name: APACHE - run 'httpd' role
+  include_role:
+    name: httpd
+
+
+- name: Download {{ iiab_download_url }}/{{ phpmyadmin_name_zip }} to {{ downloads_dir }}
+  get_url:
+    url: "{{ iiab_download_url }}/{{ phpmyadmin_name_zip }}"
+    dest: "{{ downloads_dir }}"
+    timeout: "{{ download_timeout }}"
+  when: internet_available | bool
+
+- name: Does {{ downloads_dir }}/{{ phpmyadmin_name_zip }} exist?    # e.g. /opt/iiab/downloads/phpMyAdmin-5.0.2-all-languages.zip
+  stat:
+    path: "{{ downloads_dir }}/{{ phpmyadmin_name_zip }}"
+  register: phpmyadmin_dl
+
+- name: FAIL (force Ansible to exit) IF /opt/iiab/downloads/{{ phpmyadmin_name_zip }} doesn't exist
+  fail:
+    msg: "{{ downloads_dir }}/{{ phpmyadmin_name_zip }} is REQUIRED in order to install phpMyAdmin."
+  when: not phpmyadmin_dl.stat.exists
+
+- name: Unzip to permanent location /opt/{{ phpmyadmin_name }}, owned by {{ apache_user }}
+  unarchive:
+    src: "{{ downloads_dir }}/{{ phpmyadmin_name_zip }}"
+    dest: /opt
+    owner: "{{ apache_user }}"
+
+- name: Symlink /opt/phpmyadmin -> {{ phpmyadmin_name }}
+  file:
+    src: "{{ phpmyadmin_name }}"
+    path: /opt/phpmyadmin
+    owner: "{{ apache_user }}"    # Some Linux's ignore symlink owners?
+    state: link
+
+- name: Install /opt/phpmyadmin/config.inc.php owned by {{ apache_user }}, from template
+  template:
+    src: config.inc.php
+    dest: /opt/phpmyadmin/config.inc.php
+    owner: "{{ apache_user }}"
+
+# Above 3 stanzas set link/tree/contents ownership to {{ apache_user }}:root
+# OOPS: CHOWN BELOW CHANGED LINK ALONE (TREE/CONTENTS REMAINED root:root)
+
+# - name: Change the owner of the PHP tree to Apache
+#   shell: "chown -R {{ apache_user }} /opt/phpmyadmin"
+#   #file:
+#   #  path: "/opt/{{ phpmyadmin_name_zip }}"
+#   #  owner: "{{ apache_user }}"
+#   #  recurse: yes
+#   #  state: directory
+
+- name: Install /etc/{{ apache_conf_dir }}/phpmyadmin.conf from template, if phpmyadmin_enabled
+  template:
+    src: phpmyadmin.j2
+    dest: "/etc/{{ apache_conf_dir }}/phpmyadmin.conf"
+  when: apache_installed is defined
+
+
+# RECORD phpMyAdmin AS INSTALLED
+
+- name: "Set 'phpmyadmin_installed: True'"
+  set_fact:
+    phpmyadmin_installed: True
+
+- name: "Add 'phpmyadmin_installed: True' to {{ iiab_state_file }}"
+  lineinfile:
+    path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
+    regexp: '^phpmyadmin_installed'
+    line: 'phpmyadmin_installed: True'

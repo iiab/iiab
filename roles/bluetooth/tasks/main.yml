@@ -1,6 +1,44 @@
-- include_tasks: install.yml
-  when: bluetooth_install and not bluetooth_installed is defined
+# "How do i fail a task in Ansible if the variable contains a boolean value?
+# I want to perform input validation for Ansible playbooks"
+# https://stackoverflow.com/questions/46664127/how-do-i-fail-a-task-in-ansible-if-the-variable-contains-a-boolean-value-i-want/46667499#46667499
 
-- include_tasks: enable.yml
-  when: bluetooth_install or bluetooth_installed is defined
+# We assume 0-init/tasks/validate_vars.yml has DEFINITELY been run, so no need
+# to re-check whether vars are defined here.  As Ansible vars cannot be unset:
+# https://serverfault.com/questions/856729/how-to-destroy-delete-unset-a-variable-value-in-ansible
 
+- name: Assert that "bluetooth_install is sameas true" (boolean not string etc)
+  assert:
+    that: bluetooth_install is sameas true
+    fail_msg: "PLEASE SET 'bluetooth_install: True' e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+
+- name: Assert that "bluetooth_enabled | type_debug == 'bool'" (boolean not string etc)
+  assert:
+    that: bluetooth_enabled | type_debug == 'bool'
+    fail_msg: "PLEASE GIVE VARIABLE 'bluetooth_enabled' A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+
+
+- name: Install Bluetooth if 'bluetooth_installed' not defined, e.g. in {{ iiab_state_file }}    # /etc/iiab/iiab_state.yml
+  include_tasks: install.yml
+  when: bluetooth_installed is undefined
+
+
+- include_tasks: enable.yml    # i.e. enable-or-disable.yml in other roles
+
+
+- name: Add 'bluetooth' variable values to {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+    section: bluetooth
+    option: "{{ item.option }}"
+    value: "{{ item.value | string }}"
+  with_items:
+    - option: name
+      value: Bluetooth
+    - option: description
+      value: '"Bluetooth services for pan and terminal."'
+    - option: bluetooth_enabled
+      value: "{{ bluetooth_enabled }}"
+    - option: bluetooth_term_enabled
+      value: "{{ bluetooth_term_enabled }}"

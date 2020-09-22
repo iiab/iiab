@@ -2,102 +2,43 @@
 # Above URL does NOT work over OpenVPN (ANYONE KNOW WHY?)
 
 # TO DO:
-# - validate input vars + prereqs
-# - move ~7 top stanzas into install.yml
-# - move ~7 next stanzas into enable-or-disable.yml
-#   - create /etc/nginx/conf.d/cups-nginx.conf as SHIM to Apache on port 8090 ?
-#   - deprecate ~2 F18 stanzas?
+#
+# - CREATE /etc/nginx/conf.d/cups-nginx.conf as SHIM to Apache on port 8090.
+#   SEE OTHERS @ https://github.com/iiab/iiab/blob/master/roles/nginx/README.md
 
 
-- name: "Set 'apache_install: True' and 'apache_enabled: True'"
-  set_fact:
-    apache_install: True
-    apache_enabled: True
+# "How do i fail a task in Ansible if the variable contains a boolean value?
+# I want to perform input validation for Ansible playbooks"
+# https://stackoverflow.com/questions/46664127/how-do-i-fail-a-task-in-ansible-if-the-variable-contains-a-boolean-value-i-want/46667499#46667499
 
-- name: APACHE - run 'httpd' role
-  include_role:
-    name: httpd
+# We assume 0-init/tasks/validate_vars.yml has DEFINITELY been run, so no need
+# to re-check whether vars are defined here.  As Ansible vars cannot be unset:
+# https://serverfault.com/questions/856729/how-to-destroy-delete-unset-a-variable-value-in-ansible
 
+- name: Assert that "cups_install is sameas true" (boolean not string etc)
+  assert:
+    that: cups_install is sameas true
+    fail_msg: "PLEASE SET 'cups_install: True' e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
 
-- name: Install 'cups' package
-  package:
-    name: cups
-    state: present
-
-- name: Install our own /etc/cups/cupsd.conf from template, to permit local LAN admin
-  template:
-    src: cupsd.conf
-    dest: /etc/cups/cupsd.conf
-
-- name: Install /etc/{{ apache_conf_dir }}/cups.conf from template
-  template:
-    src: cups.conf
-    dest: "/etc/{{ apache_conf_dir }}/"
+- name: Assert that "cups_enabled | type_debug == 'bool'" (boolean not string etc)
+  assert:
+    that: cups_enabled | type_debug == 'bool'
+    fail_msg: "PLEASE GIVE VARIABLE 'cups_enabled' A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
 
 
-# RECORD CUPS AS INSTALLED
-
-- name: "Set 'cups_installed: True'"
-  set_fact:
-    cups_installed: True
-
-- name: "Add 'cups_installed: True' to {{ iiab_state_file }}"
-  lineinfile:
-    path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
-    regexp: '^cups_installed'
-    line: 'cups_installed: True'
+- name: Install CUPS if 'cups_installed' not defined, e.g. in {{ iiab_state_file }}    # /etc/iiab/iiab_state.yml
+  include_tasks: install.yml
+  when: cups_installed is undefined
 
 
-- name: Enable http://box/cups via Apache (MIGHT NOT WORK?)
-  command: a2ensite cups.conf
-  when: cups_enabled | bool
-
-- name: Disable http://box/cups via Apache
-  command: a2dissite cups.conf
-  when: not cups_enabled
-
-- name: Enable & Start 'cups' and 'cups-browsed' systemd services (OS's other than Fedora 18)
-  service:
-    name: "{{ item }}"
-    state: started
-    enabled: yes
-  with_items:
-    - cups
-    - cups-browsed
-  when: cups_enabled and not is_F18
-
-- name: Enable & Start 'cups' systemd service (Fedora 18, for XO laptops)
-  systemd:
-    name: cups
-    state: started
-    enabled: yes
-  when: cups_enabled and is_F18
-
-- name: Permit headless admin of CUPS -- only works when CUPS daemon is running (if cups_enabled)
-  shell: "cupsctl --remote-admin"
-  when: cups_enabled | bool
-
-- name: Disable & Stop 'cups' & 'cups-browsed' systemd services (OS's other than Fedora 18)
-  systemd:
-    name: "{{ item }}"
-    enabled: no
-    state: stopped
-  with_items:
-    - cups
-    - cups-browsed
-  when: not cups_enabled and not is_F18
-
-- name: Disable & Stop 'cups' systemd service (Fedora 18, for XO laptops)
-  systemd:
-    name: cups
-    enabled: no
-    state: stopped
-  when: not cups_enabled and is_F18
+- include_tasks: enable-or-disable.yml
 
 
 - name: Add 'cups' variable values to {{ iiab_ini_file }}
   ini_file:
-    path: "{{ iiab_ini_file }}"
+    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
     section: cups
     option: "{{ item.option }}"
     value: "{{ item.value | string }}"

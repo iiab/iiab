@@ -1,0 +1,41 @@
+- name: "Install BitTorrent packages: transmission-daemon, transmission-cli"
+  package:
+    name:
+      - transmission-daemon
+      - transmission-cli
+    state: present
+
+- name: Create download dir {{ transmission_download_dir }}, owned by {{ transmission_user }}:{{ transmission_group }}
+  file:
+    state: directory
+    path: "{{ transmission_download_dir }}"    # /library/transmission
+    owner: "{{ transmission_user }}"    # debian-transmission
+    group: "{{ transmission_group }}"    # root
+    # mode: '0755'
+
+- name: Stop 'transmission-daemon' systemd service, before modifying its settings
+  systemd:
+    name: transmission-daemon
+    state: stopped
+  ignore_errors: yes
+
+- name: Install /etc/transmission-daemon/settings.json from template
+  template:
+    src: settings.json.j2
+    dest: /etc/transmission-daemon/settings.json
+    owner: "{{ transmission_user }}"    # debian-transmission
+    group: "{{ transmission_group }}"    # root
+    # mode: '0644'
+
+
+# RECORD Transmission AS INSTALLED
+
+- name: "Set 'transmission_installed: True'"
+  set_fact:
+    transmission_installed: True
+
+- name: "Add 'transmission_installed: True' to {{ iiab_state_file }}"
+  lineinfile:
+    path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
+    regexp: '^transmission_installed'
+    line: 'transmission_installed: True'

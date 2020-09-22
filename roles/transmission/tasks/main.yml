@@ -1,76 +1,35 @@
-- name: "Install BitTorrent packages: transmission-daemon, transmission-cli"
-  package:
-    name:
-      - transmission-daemon
-      - transmission-cli
-    state: present
+# "How do i fail a task in Ansible if the variable contains a boolean value?
+# I want to perform input validation for Ansible playbooks"
+# https://stackoverflow.com/questions/46664127/how-do-i-fail-a-task-in-ansible-if-the-variable-contains-a-boolean-value-i-want/46667499#46667499
 
-- name: Create download dir {{ transmission_download_dir }}, owned by {{ transmission_user }}:{{ transmission_group }}
-  file:
-    state: directory
-    path: "{{ transmission_download_dir }}"    # /library/transmission
-    owner: "{{ transmission_user }}"    # debian-transmission
-    group: "{{ transmission_group }}"    # root
-    # mode: '0755'
+# We assume 0-init/tasks/validate_vars.yml has DEFINITELY been run, so no need
+# to re-check whether vars are defined here.  As Ansible vars cannot be unset:
+# https://serverfault.com/questions/856729/how-to-destroy-delete-unset-a-variable-value-in-ansible
 
-- name: Stop 'transmission-daemon' systemd service, before modifying its settings
-  systemd:
-    name: transmission-daemon
-    state: stopped
-  ignore_errors: yes
+- name: Assert that "transmission_install is sameas true" (boolean not string etc)
+  assert:
+    that: transmission_install is sameas true
+    fail_msg: "PLEASE SET 'transmission_install: True' e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
 
-- name: Install /etc/transmission-daemon/settings.json from template
-  template:
-    src: settings.json.j2
-    dest: /etc/transmission-daemon/settings.json
-    owner: "{{ transmission_user }}"    # debian-transmission
-    group: "{{ transmission_group }}"    # root
-    # mode: '0644'
+- name: Assert that "transmission_enabled | type_debug == 'bool'" (boolean not string etc)
+  assert:
+    that: transmission_enabled | type_debug == 'bool'
+    fail_msg: "PLEASE GIVE VARIABLE 'transmission_enabled' A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
 
 
-# RECORD Transmission AS INSTALLED
-
-- name: "Set 'transmission_installed: True'"
-  set_fact:
-    transmission_installed: True
-
-- name: "Add 'transmission_installed: True' to {{ iiab_state_file }}"
-  lineinfile:
-    path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
-    regexp: '^transmission_installed'
-    line: 'transmission_installed: True'
+- name: Install Transmission if 'transmission_installed' not defined, e.g. in {{ iiab_state_file }}    # /etc/iiab/iiab_state.yml
+  include_tasks: install.yml
+  when: transmission_installed is undefined
 
 
-- name: Enable & Restart 'transmission-daemon' systemd service, incl daemon-reload
-  systemd:
-    name: transmission-daemon
-    daemon_reload: yes
-    enabled: yes
-    state: restarted
-  when: transmission_enabled | bool
-
-- name: Add PAUSED KA Lite torrent(s) to transmission-daemon's queue
-  shell: >
-    /usr/bin/transmission-remote
-    --start-paused
-    -n {{ transmission_username }}:{{ transmission_password }}
-    -a http://pantry.learningequality.org/downloads/ka-lite/{{ transmission_kalite_version }}/content/ka-lite-0.17-resized-videos-{{ item }}.torrent
-  with_items: "{{ transmission_kalite_languages }}"
-  when: transmission_enabled and transmission_provision and transmission_kalite_languages is defined and transmission_kalite_languages is not none
-  ignore_errors: yes
-
-- name: Disable & Stop 'transmission-daemon' service, if not transmission_enabled
-  systemd:
-    name: transmission-daemon
-    daemon_reload: yes
-    enabled: no
-    state: stopped
-  when: not transmission_enabled
+- include_tasks: enable-or-disable.yml
 
 
 - name: Add 'transmission' variable values to {{ iiab_ini_file }}
   ini_file:
-    path: "{{ iiab_ini_file }}"
+    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
     section: transmission
     option: "{{ item.option }}"
     value: "{{ item.value | string }}"
