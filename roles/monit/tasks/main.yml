@@ -1,3 +1,24 @@
+# "How do i fail a task in Ansible if the variable contains a boolean value?
+# I want to perform input validation for Ansible playbooks"
+# https://stackoverflow.com/questions/46664127/how-do-i-fail-a-task-in-ansible-if-the-variable-contains-a-boolean-value-i-want/46667499#46667499
+
+# We assume 0-init/tasks/validate_vars.yml has DEFINITELY been run, so no need
+# to re-check whether vars are defined here.  As Ansible vars cannot be unset:
+# https://serverfault.com/questions/856729/how-to-destroy-delete-unset-a-variable-value-in-ansible
+
+- name: Assert that "monit_install is sameas true" (boolean not string etc)
+  assert:
+    that: monit_install is sameas true
+    fail_msg: "PLEASE SET 'monit_install: True' e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+
+- name: Assert that "monit_enabled | type_debug == 'bool'" (boolean not string etc)
+  assert:
+    that: monit_enabled | type_debug == 'bool'
+    fail_msg: "PLEASE GIVE VARIABLE 'monit_enabled' A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+
+
 # 2019-07-06: The 'monit' package was suddenly removed from Debian 10.0.0
 # "Buster" during the very final days prior to release, as confirmed by the
 # sudden disappearance of these 2 pages:
@@ -9,6 +30,32 @@
 # be is_debian_10 in vars/raspbian-10.yml for now!) still provides 'monit' via
 # apt -- so eliminating "Debian 10+" requires this funky conditional:
 
-- name: Install 'monit' if monit_install and not Debian 10+
+# 2020-09-21: The 'monit' package appears to be returning to Debian 11, per:
+#
+#   https://packages.debian.org/bullseye/monit
+#   https://packages.debian.org/source/bullseye/monit
+#
+# SEE iiab/iiab#1849 re: "Debian 10 Buster no longer includes Monit" etc.
+
+- name: Install Monit if 'monit_installed' not defined, e.g. in {{ iiab_state_file }} AND not Debian 10    # /etc/iiab/iiab_state.yml
   include_tasks: install.yml
-  when: monit_install and not ((is_debian and not is_raspbian) and (not is_debian_8) and (not is_debian_9))
+  when: monit_installed is undefined and not (is_debian_10 and not is_raspbian)
+  #when: monit_installed is undefined and not ((is_debian and not is_raspbian) and (not is_debian_8) and (not is_debian_9))
+
+
+- include_tasks: enable-or-disable.yml
+
+
+- name: Add 'monit' variable values to {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+    section: monit
+    option: "{{ item.option }}"
+    value: "{{ item.value | string }}"
+  with_items:
+    - option: name
+      value: Monit
+    - option: description
+      value: '"Monit is a background service monitor which can correct problems, send email, restart services."'
+    - option: enabled
+      value: "{{ monit_enabled }}"

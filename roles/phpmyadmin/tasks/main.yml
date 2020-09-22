@@ -1,92 +1,35 @@
-- name: "Set 'apache_install: True' and 'apache_enabled: True'"
-  set_fact:
-    apache_install: True
-    apache_enabled: True
+# "How do i fail a task in Ansible if the variable contains a boolean value?
+# I want to perform input validation for Ansible playbooks"
+# https://stackoverflow.com/questions/46664127/how-do-i-fail-a-task-in-ansible-if-the-variable-contains-a-boolean-value-i-want/46667499#46667499
 
-- name: APACHE - run 'httpd' role
-  include_role:
-    name: httpd
+# We assume 0-init/tasks/validate_vars.yml has DEFINITELY been run, so no need
+# to re-check whether vars are defined here.  As Ansible vars cannot be unset:
+# https://serverfault.com/questions/856729/how-to-destroy-delete-unset-a-variable-value-in-ansible
 
+- name: Assert that "phpmyadmin_install is sameas true" (boolean not string etc)
+  assert:
+    that: phpmyadmin_install is sameas true
+    fail_msg: "PLEASE SET 'phpmyadmin_install: True' e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
 
-- name: Download {{ iiab_download_url }}/{{ phpmyadmin_name_zip }} to {{ downloads_dir }}
-  get_url:
-    url: "{{ iiab_download_url }}/{{ phpmyadmin_name_zip }}"
-    dest: "{{ downloads_dir }}"
-    timeout: "{{ download_timeout }}"
-  when: internet_available | bool
-
-- name: Does {{ downloads_dir }}/{{ phpmyadmin_name_zip }} exist?    # e.g. /opt/iiab/downloads/phpMyAdmin-4.8.3-all-languages.zip
-  stat:
-    path: "{{ downloads_dir }}/{{ phpmyadmin_name_zip }}"
-  register: phpmyadmin_dl
-
-- name: FAIL (force Ansible to exit) IF /opt/iiab/downloads/{{ phpmyadmin_name_zip }} doesn't exist
-  fail:
-    msg: "{{ downloads_dir }}/{{ phpmyadmin_name_zip }} is REQUIRED in order to install phpMyAdmin."
-  when: not phpmyadmin_dl.stat.exists
-
-- name: Unzip to permanent location /opt/{{ phpmyadmin_name }}, owned by {{ apache_user }}
-  unarchive:
-    src: "{{ downloads_dir }}/{{ phpmyadmin_name_zip }}"
-    dest: /opt
-    owner: "{{ apache_user }}"
-
-- name: Symlink /opt/phpmyadmin -> {{ phpmyadmin_name }}
-  file:
-    src: "{{ phpmyadmin_name }}"
-    path: /opt/phpmyadmin
-    owner: "{{ apache_user }}"    # Some Linux's ignore symlink owners?
-    state: link
-
-- name: Install /opt/phpmyadmin/config.inc.php owned by {{ apache_user }}, from template
-  template:
-    src: config.inc.php
-    dest: /opt/phpmyadmin/config.inc.php
-    owner: "{{ apache_user }}"
-
-# Above 3 stanzas set link/tree/contents ownership to {{ apache_user }}:root
-# OOPS: CHOWN BELOW CHANGED LINK ALONE (TREE/CONTENTS REMAINED root:root)
-
-# - name: Change the owner of the PHP tree to Apache
-#   shell: "chown -R {{ apache_user }} /opt/phpmyadmin"
-#   #file:
-#   #  path: "/opt/{{ phpmyadmin_name_zip }}"
-#   #  owner: "{{ apache_user }}"
-#   #  recurse: yes
-#   #  state: directory
-
-- name: Install /etc/{{ apache_conf_dir }}/phpmyadmin.conf from template, if phpmyadmin_enabled
-  template:
-    src: phpmyadmin.j2
-    dest: "/etc/{{ apache_conf_dir }}/phpmyadmin.conf"
-  when: apache_installed is defined
+- name: Assert that "phpmyadmin_enabled | type_debug == 'bool'" (boolean not string etc)
+  assert:
+    that: phpmyadmin_enabled | type_debug == 'bool'
+    fail_msg: "PLEASE GIVE VARIABLE 'phpmyadmin_enabled' A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
 
 
-# RECORD phpMyAdmin AS INSTALLED
-
-- name: "Set 'phpmyadmin_installed: True'"
-  set_fact:
-    phpmyadmin_installed: True
-
-- name: "Add 'phpmyadmin_installed: True' to {{ iiab_state_file }}"
-  lineinfile:
-    path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
-    regexp: '^phpmyadmin_installed'
-    line: 'phpmyadmin_installed: True'
+- name: Install phpMyAdmin if 'phpmyadmin_installed' not defined, e.g. in {{ iiab_state_file }}    # /etc/iiab/iiab_state.yml
+  include_tasks: install.yml
+  when: phpmyadmin_installed is undefined
 
 
-- name: Enable phpMyAdmin via Apache, if phpmyadmin_enabled
-  command: a2ensite phpmyadmin.conf
-  when: apache_installed is defined and phpmyadmin_enabled
-
-- name: Disable phpMyAdmin via Apache, if not phpmyadmin_enabled
-  command: a2dissite phpmyadmin.conf
-  when: apache_installed is defined and not phpmyadmin_enabled
+- include_tasks: enable-or-disable.yml
 
 
 - name: Add 'phpmyadmin' variable values to {{ iiab_ini_file }}
   ini_file:
-    path: "{{ iiab_ini_file }}"
+    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
     section: phpmyadmin
     option: "{{ item.option }}"
     value: "{{ item.value | string }}"

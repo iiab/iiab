@@ -1,49 +1,35 @@
-- name: Install 'vnstat' package
-  package:
-    name: vnstat
-    state: present
+# "How do i fail a task in Ansible if the variable contains a boolean value?
+# I want to perform input validation for Ansible playbooks"
+# https://stackoverflow.com/questions/46664127/how-do-i-fail-a-task-in-ansible-if-the-variable-contains-a-boolean-value-i-want/46667499#46667499
 
-- name: Install /etc/vnstat.conf from template
-  template:
-    src: vnstat.conf.j2
-    dest: /etc/vnstat.conf
-    # owner: root
-    # group: root
-    mode: '0744'
+# We assume 0-init/tasks/validate_vars.yml has DEFINITELY been run, so no need
+# to re-check whether vars are defined here.  As Ansible vars cannot be unset:
+# https://serverfault.com/questions/856729/how-to-destroy-delete-unset-a-variable-value-in-ansible
 
-- name: Create database for WAN to collect vnStat data
-  shell: /usr/bin/vnstat -i {{ iiab_wan_iface }}
+- name: Assert that "vnstat_install is sameas true" (boolean not string etc)
+  assert:
+    that: vnstat_install is sameas true
+    fail_msg: "PLEASE SET 'vnstat_install: True' e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
 
-- name: Create database for LAN to collect vnStat data if not appliance config
-  shell: /usr/bin/vnstat -i {{ iiab_lan_iface }}
-  when: iiab_lan_iface is defined and iiab_lan_iface != "none"
-
-
-# RECORD vnStat AS INSTALLED
-
-- name: "Set 'vnstat_installed: True'"
-  set_fact:
-    vnstat_installed: True
-
-- name: "Add 'vnstat_installed: True' to {{ iiab_state_file }}"
-  lineinfile:
-    path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
-    regexp: '^vnstat_installed'
-    line: 'vnstat_installed: True'
+- name: Assert that "vnstat_enabled | type_debug == 'bool'" (boolean not string etc)
+  assert:
+    that: vnstat_enabled | type_debug == 'bool'
+    fail_msg: "PLEASE GIVE VARIABLE 'vnstat_enabled' A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
 
 
-- name: Enable & (Re)Start 'vnstat' systemd service, if vnstat_enabled
-  systemd:
-    name: vnstat
-    daemon_reload: yes
-    enabled: yes
-    state: restarted
-  when: vnstat_enabled | bool
+- name: Install vnStat if 'vnstat_installed' not defined, e.g. in {{ iiab_state_file }}    # /etc/iiab/iiab_state.yml
+  include_tasks: install.yml
+  when: vnstat_installed is undefined
+
+
+- include_tasks: enable-or-disable.yml
 
 
 - name: Add 'vnstat' variable values to {{ iiab_ini_file }}
   ini_file:
-    path: "{{ iiab_ini_file }}"
+    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
     section: vnstat
     option: "{{ item.option }}"
     value: "{{ item.value | string }}"

@@ -1,0 +1,51 @@
+- name: Enable http://box/cups via Apache (MIGHT NOT WORK?)
+  command: a2ensite cups.conf
+  when: cups_enabled | bool
+
+- name: Disable http://box/cups via Apache
+  command: a2dissite cups.conf
+  when: not cups_enabled
+
+- name: systemd daemon-reload
+  systemd:
+    daemon_reload: yes
+
+- name: Enable & (Re)Start 'cups' and 'cups-browsed' systemd services (OS's other than Fedora 18)
+  systemd:
+    name: "{{ item }}"
+    enabled: yes
+    state: restarted
+  with_items:
+    - cups
+    - cups-browsed
+  when: cups_enabled | bool
+  #when: cups_enabled and not is_F18
+
+# - name: Enable & Start 'cups' systemd service (Fedora 18, for XO laptops)
+#   systemd:
+#     name: cups
+#     state: started
+#     enabled: yes
+#   when: cups_enabled and is_F18
+
+- name: Permit headless admin of CUPS -- only works when CUPS daemon is running (if cups_enabled)
+  shell: "cupsctl --remote-admin"
+  when: cups_enabled | bool
+
+- name: Disable & Stop 'cups' & 'cups-browsed' systemd services (OS's other than Fedora 18)
+  systemd:
+    name: "{{ item }}"
+    enabled: no
+    state: stopped
+  with_items:
+    - cups
+    - cups-browsed
+  when: not cups_enabled
+  #when: not cups_enabled and not is_F18
+
+# - name: Disable & Stop 'cups' systemd service (Fedora 18, for XO laptops)
+#   systemd:
+#     name: cups
+#     enabled: no
+#     state: stopped
+#   when: not cups_enabled and is_F18

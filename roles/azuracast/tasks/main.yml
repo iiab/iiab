@@ -1,8 +1,43 @@
-- name: Install AzuraCast if azuracast_install
-  include_tasks: install.yml
-  when: azuracast_install and not azuracast_installed is defined | bool
+# "How do i fail a task in Ansible if the variable contains a boolean value?
+# I want to perform input validation for Ansible playbooks"
+# https://stackoverflow.com/questions/46664127/how-do-i-fail-a-task-in-ansible-if-the-variable-contains-a-boolean-value-i-want/46667499#46667499
 
-# TODO figure out what to turn off for azuracast
-#- name: Enable AzuraCast
-#  include_tasks: enable.yml
-#  when: azuracast_install or azuracast_installed is defined | bool
+# We assume 0-init/tasks/validate_vars.yml has DEFINITELY been run, so no need
+# to re-check whether vars are defined here.  As Ansible vars cannot be unset:
+# https://serverfault.com/questions/856729/how-to-destroy-delete-unset-a-variable-value-in-ansible
+
+- name: Assert that "azuracast_install is sameas true" (boolean not string etc)
+  assert:
+    that: azuracast_install is sameas true
+    fail_msg: "PLEASE SET 'azuracast_install: True' e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+
+- name: Assert that "azuracast_enabled | type_debug == 'bool'" (boolean not string etc)
+  assert:
+    that: azuracast_enabled | type_debug == 'bool'
+    fail_msg: "PLEASE GIVE VARIABLE 'azuracast_enabled' A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+
+
+- name: Install AzuraCast if 'azuracast_installed' not defined, e.g. in {{ iiab_state_file }}    # /etc/iiab/iiab_state.yml
+  include_tasks: install.yml
+  when: azuracast_installed is undefined
+
+
+# TODO figure out what to turn off/on for AzuraCast
+# - include_tasks: enable-or-disable.yml
+
+
+- name: Add 'azuracast' variable values to {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+    section: azuracast
+    option: "{{ item.option }}"
+    value: "{{ item.value | string }}"
+  with_items:
+    - option: name
+      value: azuracast
+    - option: description
+      value: '"AzuraCast is a self-hosted, all-in-one radio station platform.  Use AzuraCast to schedule podcasts, music, and even do live streaming of audio content.  A variety of streaming formats are supported."'
+    - option: enabled
+      value: "{{ azuracast_enabled }}"
