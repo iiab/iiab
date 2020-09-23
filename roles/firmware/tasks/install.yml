@@ -1,32 +1,35 @@
-# check the timestamps, might want to preserve the old ones
-- name: Back up OS-provided firmware (for RPi's internal WiFi)
-  copy:
-    src: "/lib/firmware/brcm/{{ item }}"
-    dest: "/lib/firmware/brcm/{{ item }}.orig"
-  with_items:
-    - brcmfmac43430-sdio.bin
-    - brcmfmac43455-sdio.bin
-    - brcmfmac43455-sdio.clm_blob
+- name: Back up originals then download firmware (for RPi internal WiFi)
+  include_tasks: download.yml
+  when: firmware_downloaded is undefined    # SEE ALSO firmware_installed below
 
-- name: Download older firmware (for RPi high-capacity internal WiFi)
-  get_url:
-    url: "{{ item.url }}"
+- name: 'Install from template: check-firmware.service, iiab-check-firmware & fw_warn.sh'
+  template:
+    src: "{{ item.src }}"
     dest: "{{ item.dest }}"
+    mode: "{{ item.mode }}"
   with_items:
-    - { url: 'http://d.iiab.io/packages/brcmfmac43430-sdio.bin_2018-09-11_7.45.98.65', dest: '/lib/firmware/brcm/brcmfmac43430-sdio.bin.iiab' }
-    - { url: 'http://d.iiab.io/packages/brcmfmac43430-sdio.clm_blob_2018-09-11_7.45.98.65', dest: '/lib/firmware/brcm/brcmfmac43430-sdio.clm_blob.iiab' }
-    - { url: 'http://d.iiab.io/packages/brcmfmac43455-sdio.bin_2015-03-01_7.45.18.0_ub19.10.1', dest: '/lib/firmware/brcm/brcmfmac43455-sdio.bin.iiab' }
-    - { url: 'http://d.iiab.io/packages/brcmfmac43455-sdio.clm_blob_2018-02-26_rpi', dest: '/lib/firmware/brcm/brcmfmac43455-sdio.clm_blob.iiab' }
+    - { src: 'check-firmware.service', dest: '/etc/systemd/system/', mode: '0644' }
+    - { src: 'iiab-check-firmware', dest: '/usr/sbin/', mode: '0755' }
+    - { src: 'fw_warn.sh', dest: '/etc/profile.d/', mode: '0644' }
+
+- name: Enable & (Re)Start check-firmware.service (also runs on each boot)
+  systemd:
+    name: check-firmware.service
+    daemon_reload: yes
+    state: restarted
+    enabled: yes
 
 
-# RECORD RPi Firmware AS DOWNLOADED
+# RECORD firmware AS INSTALLED
 
-- name: "Set 'rpi_firmware_downloaded: True'"
+- name: "Set 'firmware_installed: True'"
   set_fact:
-    rpi_firmware_downloaded: True
+    firmware_installed: True
 
-- name: "Add 'firmware_retrieved: True' to {{ iiab_state_file }}"
+- name: "Add 'firmware_installed: True' to {{ iiab_state_file }}"
   lineinfile:
     path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
-    regexp: '^rpi_firmware_downloaded'
-    line: 'rpi_firmware_downloaded: True'
+    regexp: '^firmware_installed'
+    line: 'firmware_installed: True'
+
+# SEE ALSO firmware_downloaded above & in download.yml
