@@ -1,0 +1,55 @@
+# TODO:
+#
+# 1) Implement sshd_port IF it's truly needed? Mentioned here as of 2020-09-24:
+#
+#    vars/default_vars.yml  Line 283
+#    roles/sshd/tasks/main.yml  Lines 41-42
+#    roles/network/tasks/avahi.yml  Line 46
+#    roles/network/templates/gateway/iiab-gen-iptables  Line 49 & 135
+#
+# 2) Use Ansible handler to reload ssh?
+
+- name: "Install ssh daemon using package: {{ sshd_package }}"
+  package:
+    name: "{{ sshd_package }}"
+    state: present
+
+- name: Disable password-based logins to root
+  lineinfile:
+    dest: /etc/ssh/sshd_config
+    regexp: '^PermitRootLogin'
+    line: 'PermitRootLogin without-password'
+    state: present
+  #when: sshd_enabled | bool
+
+- name: mkdir /root/.ssh
+  file:
+    state: directory
+    path: /root/.ssh
+    owner: root
+    group: root
+    mode: '0700'
+  #when: sshd_enabled | bool
+
+- name: Install dummy root keys as placeholder
+  copy:
+    src: dummy_authorized_keys
+    dest: /root/.ssh/authorized_keys
+    owner: root
+    group: root
+    mode: '0600'
+    force: no
+  #when: sshd_enabled | bool
+
+
+# RECORD sshd AS INSTALLED
+
+- name: "Set 'sshd_installed: True'"
+  set_fact:
+    sshd_installed: True
+
+- name: "Add 'sshd_installed: True' to {{ iiab_state_file }}"
+  lineinfile:
+    path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
+    regexp: '^sshd_installed'
+    line: 'sshd_installed: True'
