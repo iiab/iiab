@@ -113,7 +113,6 @@ wifi_up_down: True    # Creates a 2nd virtual WiFi adapter for upstream WiFi
 # Gateway mode
 iiab_lan_enabled: True
 iiab_wan_enabled: True
-ssh_port: 22    # SEE sshd_* vars below.
 # Ties in what the user populated in the GUI for static WAN IP address info:
 gui_wan: True
 adm_cons_force_ssl: False
@@ -207,13 +206,13 @@ wan_try_dhcp_before_static_ip: True   # Facilitate field updates w/ cablemodems
 
 # 1-PREP
 
-# SEE ssh_port var above.
-sshd_install: True    # 2020-01-21: do not rely on this var for now (might be implemented in future)
+# SSHD runs here & also below in 4-SERVER-OPTIONS
+sshd_install: True    # Required by OpenVPN
 sshd_enabled: True
+sshd_port: 22    # Not fully functional.  SEE: roles/sshd/tasks/install.yml
 
-# roles/iiab-admin runs here
-# SEE IIAB-ADMIN VARIABLES NEAR TOP OF THIS FILE: e.g. iiab_admin_user_install,
-# iiab_admin_user, iiab_admin_published_pwd, iiab_admin_pwd_hash
+# IIAB-ADMIN runs here - see its vars near top of this file:
+# e.g. iiab_admin_user_install, iiab_admin_user, iiab_admin_pwd_hash
 
 openvpn_install: True
 openvpn_enabled: False
@@ -244,12 +243,17 @@ pi_swap_file_size: 1024
 admin_console_install: True
 admin_console_enabled: True
 
-# MySQL MANDATORY - THESE 2 VARS HAVE NO EFFECT - SEE roles/0-init/tasks/main.yml & roles/mysql/tasks/main.yml
+# 2020-09-24: MySQL / MariaDB is MANDATORY but still evolving - please see:
+# https://github.com/iiab/iiab/blob/master/roles/mysql/tasks/install.yml
+# https://github.com/iiab/iiab/blob/master/roles/3-base-server/tasks/main.yml
+# THESE 2 LEGACY VARS ARE PRESERVED BUT HAVE NO EFFECT:
 mysql_install: True
 mysql_enabled: True
 
-# 2019-01-13: IIAB's use of NGINX is still evolving -- please review this
-# evolving doc: https://github.com/iiab/iiab/blob/master/roles/nginx/README.md
+# 2020-09-24: NGINX is MANDATORY but still evolving - please see:
+# https://github.com/iiab/iiab/blob/master/roles/nginx/README.md
+# https://github.com/iiab/iiab/blob/master/roles/3-base-server/tasks/main.yml
+# THESE 2 LEGACY VARS ARE PRESERVED BUT HAVE NO EFFECT:
 nginx_install: True
 nginx_enabled: True
 nginx_port: 80
@@ -269,12 +273,9 @@ apache_allow_sudo: True
 
 # See also Apache vars {default_language, language_priority} @ top of this file
 #
-# 2020-05-21: apache_install is completely ignored as Apache is installed on
-# demand as a dependency -- by CUPS, Elgg, Lokole, Moodle, Node-RED and/or
-# phpMyAdmin -- but for now we set fake value 'apache_install: True' so that
-# 'apache_installed is defined' input validation works, e.g. in
-# 0-init/tasks/validate_vars.yml
-apache_install: True
+# 2020-09-24: BOTH VALUES BELOW ARE IGNORED as Apache is installed on demand as
+# a dependency -- by CUPS, Elgg, Lokole, Moodle, Node-RED, PBX &/or phpMyAdmin
+apache_install: False
 apache_enabled: False
 #
 # NGINX proxies to Apache for legacy IIAB services, using:
@@ -283,6 +284,8 @@ apache_interface: 127.0.0.1    # 2020-01-13: Var unused
 
 
 # 4-SERVER-OPTIONS
+
+# SSHD runs here & also above in 1-PREP
 
 # DNS prep (dnsmasq, named &/or dhcpd) run here.  The full network stage runs
 # after 9-LOCAL-ADDONS (or manually run "cd /opt/iiab/iiab; ./iiab-network")
@@ -294,14 +297,6 @@ squid_enabled: False
 # DansGuardian is NO LONGER AVAILABLE in Debian Buster i.e. since June 2019.
 dansguardian_install: False
 dansguardian_enabled: False
-
-# 2020-02-04: postgresql_install is completely ignored as PostgreSQL is
-# installed on demand as a dependency -- by Moodle &/or Pathagar -- but for now
-# we set fake value 'postgresql_install: True' so that
-# 'postgresql_installed is defined' input validation works, e.g. in
-# 0-init/tasks/validate_vars.yml
-postgresql_install: True
-postgresql_enabled: False
 
 # Common UNIX Printing System (CUPS)
 cups_install: False
@@ -351,7 +346,7 @@ idmgr_enabled: False    # 2020-01-23: UNUSED
 
 # UNMAINTAINED as of September 2020
 azuracast_install: False
-azuracast_enabled: False    # This var is currently IGNORED.
+azuracast_enabled: False    # This var is currently IGNORED
 azuracast_http_port: 10080
 azuracast_https_port: 10443
 #
@@ -393,12 +388,9 @@ mosquitto_install: False
 mosquitto_enabled: False
 mosquitto_port: 1883
 
-# 2020-02-04: nodejs_install is completely ignored as Node.js is installed on
-# demand as a dependency -- by Node-RED, Sugarizer and/or Internet Archive --
-# but for now we set fake value 'nodejs_install: True' so that
-# 'nodejs_installed is defined' input validation works, e.g. in
-# 0-init/tasks/validate_vars.yml
-nodejs_install: True
+# 2020-09-24: BOTH VALUES BELOW ARE IGNORED as Node.js is installed on demand
+# as a dependency -- by Node-RED, Sugarizer &/or Internet Archive
+nodejs_install: False
 nodejs_enabled: False
 # Node.js version used by roles/nodejs/tasks/main.yml for 3 roles:
 # nodered (Node-RED), pbx (Asterix, FreePBX) & sugarizer (Sugarizer)
@@ -463,24 +455,14 @@ kiwix_incl_apk: False
 kiwix_apk_url: /software/kiwix
 kiwix_apk_src: https://download.kiwix.org/release/kiwix-android/kiwix.apk
 
+# 2020-09-24: BOTH VALUES BELOW ARE IGNORED as PostgreSQL is installed on
+# demand as a dependency -- by Moodle &/or Pathagar
+postgresql_install: False
+postgresql_enabled: False
+
 moodle_install: False
 moodle_enabled: False
 # If using Moodle intensively, set nginx_high_php_limits further above.
-
-# MongoDB (/library/dbdata/mongodb) greatly enhances the Sugarizer experience.
-# This role was formerly installed by roles/sugarizer/meta/main.yml
-#
-# 2020-02-04: mongodb_install is completely ignored as MongoDB is installed on
-# demand as a dependency -- by Sugarizer -- but for now we set fake value
-# 'mongodb_install: True' so that 'mongodb_installed is defined' input
-# validation works, e.g. in 0-init/tasks/validate_vars.yml
-mongodb_install: True
-# FYI 'mongodb_enabled: False' works when Sugarizer is disabled.  Required by
-# mongodb/tasks/enable.yml to shut down the service and log status, but that is
-# misleading as Sugarizer starts mongodb's systemd service on its own, due to
-# 'Requires=mongodb.service' within /etc/systemd/system/sugarizer.service
-mongodb_enabled: False
-mongodb_port: 27018
 
 # Regional OSM vector maps use far less disk space than bitmap/raster versions.
 # Instructions: https://github.com/iiab/iiab/wiki/IIAB-Maps
@@ -488,6 +470,19 @@ osm_vector_maps_install: True
 osm_vector_maps_enabled: False
 iiab_map_url : http://download.iiab.io/content/OSM/vector-tiles/maplist/hidden
 vector_map_path: "{{ content_base }}/www/osm-vector-maps"    # /library/www/osm-vector-maps
+
+# MongoDB (/library/dbdata/mongodb) greatly enhances the Sugarizer experience.
+# This role was formerly installed by roles/sugarizer/meta/main.yml
+#
+# 2020-09-24: BOTH VALUES BELOW ARE IGNORED as MongoDB is installed on demand
+# as a dependency -- by Sugarizer
+mongodb_install: False
+# 'mongodb_enabled: False' MAY work when Sugarizer is disabled.  Required by
+# mongodb/tasks/enable.yml to shut down the service and log status, but that is
+# misleading as Sugarizer starts mongodb's systemd service on its own, due to
+# 'Requires=mongodb.service' within /etc/systemd/system/sugarizer.service
+mongodb_enabled: False
+mongodb_port: 27018
 
 # roles/sugarizer/meta/main.yml auto-invokes 2 above prereqs: mongodb & nodejs
 # Might stall MongoDB on Power Failure: github.com/xsce/xsce/issues/879
@@ -564,11 +559,9 @@ vnstat_enabled: False
 
 # 9-LOCAL-ADDONS
 
-# 2020-02-04: yarn_install is completely ignored as the Yarn package manager is
-# installed on demand as a dependency -- by Internet Archive -- but for now we
-# set fake value 'yarn_install: True' so that 'yarn_installed is defined' input
-# validation works, e.g. in 0-init/tasks/validate_vars.yml
-yarn_install: True
+# 2020-09-24: BOTH VALUES BELOW ARE IGNORED as Yarn is installed on demand as a
+# dependency -- by Internet Archive
+yarn_install: False
 yarn_enabled: False
 
 # Internet Archive Offline / Decentralized Web - create your own offline
