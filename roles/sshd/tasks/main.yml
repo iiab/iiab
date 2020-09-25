@@ -1,61 +1,44 @@
-- name: "Install ssh daemon using package: {{ sshd_package }}"
-  package:
-    name: "{{ sshd_package }}"
-    state: present
+# "How do i fail a task in Ansible if the variable contains a boolean value?
+# I want to perform input validation for Ansible playbooks"
+# https://stackoverflow.com/questions/46664127/how-do-i-fail-a-task-in-ansible-if-the-variable-contains-a-boolean-value-i-want/46667499#46667499
 
-- name: Disable password-based logins to root
-  lineinfile:
-    dest: /etc/ssh/sshd_config
-    regexp: '^PermitRootLogin'
-    line: 'PermitRootLogin without-password'
-    state: present
-  #when: sshd_enabled | bool
-#TODO: use handler to reload ssh
+# We assume 0-init/tasks/validate_vars.yml has DEFINITELY been run, so no need
+# to re-check whether vars are defined here.  As Ansible vars cannot be unset:
+# https://serverfault.com/questions/856729/how-to-destroy-delete-unset-a-variable-value-in-ansible
 
-- name: mkdir /root/.ssh
-  file:
-    state: directory
-    path: /root/.ssh
-    owner: root
-    group: root
-    mode: '0700'
-  #when: sshd_enabled | bool
+- name: Assert that "sshd_install is sameas true" (boolean not string etc)
+  assert:
+    that: sshd_install is sameas true
+    fail_msg: "PLEASE SET 'sshd_install: True' e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
 
-- name: Install dummy root keys as placeholder
-  copy:
-    src: dummy_authorized_keys
-    dest: /root/.ssh/authorized_keys
-    owner: root
-    group: root
-    mode: '0600'
-    force: no
-  #when: sshd_enabled | bool
+- name: Assert that "sshd_enabled | type_debug == 'bool'" (boolean not string etc)
+  assert:
+    that: sshd_enabled | type_debug == 'bool'
+    fail_msg: "PLEASE GIVE VARIABLE 'sshd_enabled' A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
 
 
-# RECORD sshd AS INSTALLED
-
-- name: "Set 'sshd_installed: True'"
-  set_fact:
-    sshd_installed: True
-
-- name: "Add 'sshd_installed: True' to {{ iiab_state_file }}"
-  lineinfile:
-    path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
-    regexp: '^sshd_installed'
-    line: 'sshd_installed: True'
+- name: Install sshd if 'sshd_installed' not defined, e.g. in {{ iiab_state_file }}    # /etc/iiab/iiab_state.yml
+  include_tasks: install.yml
+  when: sshd_installed is undefined
 
 
-- name: Enable & Start ssh daemon ({{ sshd_service }}) if sshd_enabled
-  systemd:
-    name: "{{ sshd_service }}"
-    daemon_reload: yes
-    enabled: yes
-    state: started
-  when: sshd_enabled | bool
+- include_tasks: enable-or-disable.yml
 
-- name: Disable & Stop ssh daemon ({{ sshd_service }}) if not sshd_enabled
-  systemd:
-    name: "{{ sshd_service }}"
-    enabled: no
-    state: stopped
-  when: not sshd_enabled
+
+- name: Add 'sshd' variable values to {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+    section: sshd
+    option: "{{ item.option }}"
+    value: "{{ item.value | string }}"
+  with_items:
+  - option: name
+    value: sshd
+  - option: description
+    value: '"Secure Shell daemon (typically implemented by openssh-server) for remote login using the ''ssh'' low-level protocol."'
+  - option: sshd_port
+    value: "{{ sshd_port }}"
+  - option: sshd_enabled
+    value: "{{ sshd_enabled }}"
