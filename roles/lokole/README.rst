@@ -17,7 +17,9 @@ For an up-to-date list of supported languages, refer to the `Lokole translations
 Using It
 --------
 
-The Lokole web app can be accessed at http://box/lokole
+If your IIAB was `installed <http://wiki.laptop.org/go/IIAB/FAQ#Is_a_quick_installation_possible.3F>`_ with the Lokole web app[*] it can be accessed at http://box/lokole
+
+[*] If you're not sure, verify that your IIAB's `/etc/iiab/local_vars.yml <http://wiki.laptop.org/go/IIAB/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it.3F>`_ contains ``lokole_install: True`` and ``lokole_enabled: True``
 
 Administration
 --------------
