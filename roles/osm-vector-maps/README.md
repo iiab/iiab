@@ -11,3 +11,5 @@
 6. More recent OSM data is used in the vector tiles (2017 => 2019) [is this included in all 12 Map Packs?].
 7. Increase the base install (world view) from zoom 9 to 10, so that city search is successful more of the time [is this included in all 12 Map Packs?].
 8. There is a new drag-and-drop feature which permits the student to add descriptions and pictures about local points of interest, and then save and restore them using their local browser [how does one do this?].
+
+#### Please also see our IIAB Maps doc: https://github.com/iiab/iiab/wiki/IIAB-Maps
