@@ -1,8 +1,9 @@
 ## What's Changed in Maps for the IIAB 7.2 Release?
 
-1. Two variables have new meanings:
+1. Variables have new meanings:
     1. `osm_vector_maps_install` in `/etc/iiab/local_vars.yml` means install the map program (about 40MB).
-    2. `osm_vector_maps_installed` in `/etc/iiab/iiab_state.yml` means it's been installed [no longer means "install a functioning world map to zoom 10 (about 2.8GB)" right?].
+    2. `osm_vector_maps_enabled` in `/etc/iiab/local_vars.yml` is not currently in use [why if so?].
+    3. `osm_vector_maps_installed` in `/etc/iiab/iiab_state.yml` means it's been installed [no longer means "install a functioning world map to zoom 10 (about 2.8GB)" right?].
 2. There is a new installer page (http://box/osm-vector-maps/installer/) separate from the Admin Console, with installs regions and downloads higher resolution satellite imagery from zoom 11 [10?] to zoom 13 (16 times [5x5 km to 5x5 m pixels implies 1000X ?] the resolution provided by zoom 10 [9?]).
 3. Multiple vector OpenStreetMap regions may be installed, and viewed on the same map.
 4. Multiple regions of satellite improvements can be added to the same map.
