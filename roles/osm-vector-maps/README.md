@@ -6,7 +6,7 @@
     3. `osm_vector_maps_installed` in `/etc/iiab/iiab_state.yml` means a functioning world map to with 7 levels of zoom (z0-z6) has been installed.  [NO LONGER 2.8GB & HOURLONG WAIT TO DOWNLOAD 10 ZOOM LEVELS PER #2484, PR #2486, PR #2487 ETC]
 2. There's an "Install IIAB Maps" page (http://box/osm-vector-maps/installer/) separate from the Admin Console, to help you download Map Pack(s) for your favorite continents, and Hi-Res Satellite Photo Regions serving local communities.
     1. Hi-Res Satellite Photo Regions are 'squares' with 4 more levels of satellite photo zoom (i.e. zoom levels 10-13) giving you 16X the resolution (i.e. 19 x 19 m pixels) and 256X more photographic information density.
-    2. As compared to Lo-Res Satellite Photos i.e. zooms level 0-9 (306 x 306 m pixels) everywhere else on the planet.
+    2. As compared to Lo-Res Satellite Photos i.e. zooms level 0-9 (305 x 305 m pixels) everywhere else on the planet.
 3. OpenStreetMap Vector Maps: multiple Map Packs can be installed (one "continent" at a time).
 4. Hi-Res Satellite Photos: multiple local regions can be installed (one "square" at a time).
 5. Hi-Res Satellite Photos can be downloaded for any 100 x 100 km, 300 x 300 km, or 1000 x 1000 km square region (around a selected map point).
