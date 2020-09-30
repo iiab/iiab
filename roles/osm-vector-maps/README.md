@@ -3,7 +3,7 @@
 1. Some variables have newer meanings:
     1. `osm_vector_maps_install` in `/etc/iiab/local_vars.yml` means install the map program (about 40MB).
     2. `osm_vector_maps_enabled` in `/etc/iiab/local_vars.yml` was not in use.  [CAN WE SPELL OUT WHY?  SEE tasks/nginx.yml AND TKTS BELOW]
-    3. `osm_vector_maps_installed` in `/etc/iiab/iiab_state.yml` means a functioning world map to with 7 levels of zoom (z0-z6) has been installed.  [NO LONGER 2.8GB & HOURLONG WAIT TO DOWNLOAD 10 ZOOM LEVELS PER #2484, PR #2486, PR #2487 ETC]
+    3. `osm_vector_maps_installed` in `/etc/iiab/iiab_state.yml` means a functioning world map to with 7 levels of zoom (z0-z6) has been installed.  [LIKELY EXPLANATION: THE HOURLONG WAIT FOR 2.8 GB TO DOWNLOAD 10 ZOOM LEVELS WAS REDUCED, TO A PREVIEW OF 7 ZOOM LEVELS, PER #2484, PR #2486, PR #2487 ETC]
 2. There's an "Install IIAB Maps" page (http://box/osm-vector-maps/installer/) separate from the Admin Console, to help you download Map Pack(s) for your favorite continents, and Hi-Res Satellite Photo Regions serving local communities.
     1. Hi-Res Satellite Photo Regions are 'squares' with 4 more levels of satellite photo zoom (i.e. zoom levels 10-13) giving you 16X the resolution (i.e. 19 x 19 m pixels) and 256X more photographic information density.
     2. As compared to Lo-Res Satellite Photos i.e. zooms level 0-9 (305 x 305 m pixels) everywhere else on the planet.
