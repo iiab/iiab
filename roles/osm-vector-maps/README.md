@@ -22,6 +22,6 @@
 
 5. **Drag-and-Drop Map Overlays** — try this by dragging and dropping any relevant GeoJSON file onto the IIAB Maps (http://box/maps) in your browser!  For example try this GeoJSON file, to explore the shape of gerrymandered US Congressional districts: https://eric.clst.org/assets/wiki/uploads/Stuff/gz_2010_us_500_11_20m.json
 
-6. Separately: Students can _right click_ on IIAB Maps (http://box/maps) to **add descriptions and photos** of local points of interest — and then save and restore them using their local browser.  [CAN ANYBODY SUGGEST STUDENT/TEACHER GEOGRAPHIC ADVENTURE & LOCAL EXPLORATION TIPS THAT WORK ON PHONES?]
+6. Similarly but separately: Students can _Right-Click_ on IIAB Maps (http://box/maps) to **add descriptions and photos** of local points of interest<!-- — and then save and restore them using their local browser-->.  Choose "Add Data Point" after right-clicking, and then later "Export Points" to share with others.  [CAN ANYBODY SUGGEST STUDENT/TEACHER OUTDOOR EXPLORATION / GEOSPATIAL ADVENTURE TIPS THAT WORK WELL WITH STUDENT PHONES?]
 
 #### Please also see the IIAB Maps doc: https://github.com/iiab/iiab/wiki/IIAB-Maps
