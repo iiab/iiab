@@ -1,4 +1,4 @@
-## What's New with IIAB Maps for the IIAB 7.2 Release?
+## What's New with IIAB Maps in IIAB 7.2?
 
 1. If you install [IIAB 7.2](https://github.com/iiab/iiab/wiki/IIAB-7.2-Release-Notes) with [IIAB Maps](https://github.com/iiab/iiab/wiki/IIAB-Maps), a new **Install IIAB Maps** page is available (http://box/osm-vector-maps/installer/) with [instructions](https://github.com/iiab/iiab/wiki/IIAB-Maps#how-do-i-install-map-packs-and-satellite-photo-regions-on-iiab-72-), separate from IIAB's Admin Console:
    1. This [very visual page](https://user-images.githubusercontent.com/2458907/94740848-46c4eb00-0341-11eb-93ea-e3e4758dce48.png) facilitates selecting/downloading/installing of Map Pack(s) for your favorite "continent(s)".  (SEE 2. BELOW)
