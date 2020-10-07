@@ -6,6 +6,7 @@ import os
 import json
 import subprocess
 import shlex
+import yaml
 import xml.etree.ElementTree as ET
 import iiab.iiab_const as CONST
 
@@ -207,3 +208,11 @@ def get_iiab_env(name):
         return iiab_env
     else:
         return iiab_env_var
+
+def read_yaml(file_name, loader=yaml.SafeLoader):
+    try:
+        with open(file_name, 'r') as f:
+            y = yaml.load(f, Loader=loader)
+            return y
+    except:
+        raise
