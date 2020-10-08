@@ -1,4 +1,4 @@
-#!/usr/bin/env  python3
+#!{{ bittorrent_venv }}/bin/python3
 # Get a map from InternetArchive using bittorrent
 
 import os,sys
