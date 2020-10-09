@@ -1,4 +1,5 @@
 #!{{ bittorrent_venv }}/bin/python3
+####!/opt/iiab/bittorrent_venv/bin/python3
 # Get a map from InternetArchive using bittorrent
 
 import os,sys
@@ -53,8 +54,8 @@ def get_local_torrent_files():
    files_info = bt_client.get_files()
    '''
    for item in files_info.keys():
-      print(str(item),str(files_info[item][0]['name']))
-      #print('index: %2s  status: %8s file: %s'%(item,local_torrents[item-1].status,files_info[item][0]['name'].split('/')[0] ))
+      print(str(item),str(files_info[item][0].name))
+      #print('index: %2s  status: %8s file: %s'%(item,local_torrents[item-1].status,files_info[item][0].name.split('/')[0] ))
       pass
    
    for index in range(len(local_torrents)):
@@ -71,7 +72,7 @@ def get_bittorrent_sizes(tor):
 def get_torrent_index(key):
    torrent_index = -1
    for index in range(len(local_torrents)):
-      fn = local_torrents[index].files()[0]['name']
+      fn = local_torrents[index].files()[0].name
       #print('local:%s  key: %s'%(fn,key))
       if fn.find(key) != -1: 
          torrent_index = index
@@ -82,7 +83,7 @@ def get_filelist_index_from_catalog_key(key):
    found_file_num = -1
    archive_name = '%s/%s'%(key,key)
    for file_num in files_info:
-      if files_info[file_num][0]['name'] == archive_name:
+      if files_info[file_num][0].name == archive_name:
          found_file_num = file_num
    return found_file_num
 
@@ -164,9 +165,9 @@ if args.catalog:
             status = tor.status
             percent = tor.progress
             files = tor.files()
-            bytesCompleted = files[0]['completed']
+            bytesCompleted = files[0].completed
             length = tor._fields['totalSize'].value
-            name = files[0]['name'].split('/')[0]
+            name = files[0].name.split('/')[0]
             num,units = transmission_rpc.utils.format_size(length)
          else:
             status = 'absent'
@@ -184,9 +185,10 @@ if args.catalog:
 if args.torrents:
    for tor in local_torrents:
       files = tor.files()
-      bytesCompleted = files[0]['completed']
+      #print(str(files))
+      bytesCompleted = files[0].completed
       length = tor._fields['totalSize'].value
-      name = files[0]['name'].split('/')[0]
+      name = files[0].name.split('/')[0]
       num,units = transmission_rpc.utils.format_size(length)
       print('%3.0f%% %5.1f %s %s'%(tor.progress,num,units,name))
    
