@@ -36,9 +36,9 @@ check_user_pwd() {
     [ $(python3 -c "import crypt; print(crypt.crypt('$2', '\$$meth\$$salt'))") == "\$$meth\$$salt\$$hash" ]
 }
 
-if check_user_pwd "iiab-admin" "g0adm1n"; then
+if check_user_pwd "{{ iiab_admin_user }}" "g0adm1n"; then    # iiab-admin
     echo
-    echo $(/usr/bin/gettext "The published password for user 'iiab-admin' is in use.")
-    echo $(/usr/bin/gettext "THIS IS A SECURITY RISK - please run 'sudo passwd iiab-admin' to change it.")
+    echo $(/usr/bin/gettext "The published password for user '{{ iiab_admin_user }}' is in use.")
+    echo $(/usr/bin/gettext "THIS IS A SECURITY RISK - please run 'sudo passwd {{ iiab_admin_user }}' to change it.")
     echo
 fi
