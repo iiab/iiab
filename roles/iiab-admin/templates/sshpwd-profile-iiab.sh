@@ -26,7 +26,7 @@ check_user_pwd() {
     # if sudo access set with "%wheel ALL= NOPASSWD: ALL" in /etc/sudoers per
     # https://github.com/iiab/iiab/blob/master/roles/iiab-admin/tasks/admin-user.yml
     # BUT: warning popups did not result on most OS's, much as mentioned here:
-    # https://github.com/iiab/iiab/blob/master/roles/iiab-admin/tasks/main.yml#L38-L44
+    # https://github.com/iiab/iiab/blob/master/roles/iiab-admin/tasks/main.yml#L24-L30
 
     # $meth (hashing method) is typically '6' which implies 5000 rounds
     # of SHA-512 per /etc/login.defs -> /etc/pam.d/common-password
