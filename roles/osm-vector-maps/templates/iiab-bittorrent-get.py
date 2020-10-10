@@ -1,5 +1,5 @@
-#!{{ bittorrent_venv }}/bin/python3
-####!/opt/iiab/bittorrent_venv/bin/python3
+#!/opt/iiab/bittorrent_venv/bin/python3
+####!{{ bittorrent_venv }}/bin/python3
 # Get a map from InternetArchive using bittorrent
 
 import os,sys
@@ -65,8 +65,8 @@ def get_local_torrent_files():
 
 def get_bittorrent_sizes(tor):
    files = tor.files()
-   bytesCompleted = files[0]['completed']
-   length = files[0]['size']
+   bytesCompleted = files[0].completed
+   length = files[0].size
    return (bytesCompleted, length)
 
 def get_torrent_index(key):
@@ -101,9 +101,12 @@ def start_download(key):
          local_torrents[torrent_id].start()
          print("Status:%s Retarting torrent for %s"%(status,catalog[key]['detail_url']))
 
-def show_download_progress(key):
+def show_download_progress():
+   PERIOD = 10
+   last_bytes = {}
    #torrent_id = get_torrent_index(key)
    downloading = True
+   start_period = time.time() - PERIOD
    while downloading:
       downloading = False
       for seq,key,title in map_key_list:
@@ -120,11 +123,18 @@ def show_download_progress(key):
          completed,units = transmission_rpc.utils.format_size(bytes_completed)
          total,tot_units = transmission_rpc.utils.format_size(bytes_total)
          eta = tor.format_eta()
-         print('%3.0f%% %3.1f %s/%3.1f %s   %s %s'%(percent,completed,units,total,tot_units,eta,tor.name))
+         bytes_this_period = bytes_completed - last_bytes.get(tor.name,0)
+         this_period = time.time() - start_period
+         bytes_per_second = bytes_this_period / this_period
+         bpsec,bpsec_units = transmission_rpc.utils.format_size(int(bytes_per_second))
+         print('%4.0f%%  %4.1f%s/%3.1f%s  %4.1f%s/sec  %s %s'%(percent,completed,units,total,tot_units,bpsec,bpsec_units,eta,tor.name))
          if completed == total:
             print('%3.0f%% %3.1f %s/%3.1f %s   %s %s'%(percent,completed,units,total,tot_units,eta,tor.name))
             continue
-         time.sleep(10)
+         last_bytes[tor.name] = bytes_completed
+         start_period = time.time()
+         time.sleep(PERIOD)
+   print('All active torrents are downloaded')
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Download OSM Bittorrent files.")
@@ -132,6 +142,7 @@ def parse_args():
     parser.add_argument("-c","--catalog", help='List Map Catalog Index numbers and torrent info.',action='store_true')
     parser.add_argument("-g","--get", help='Download Map via Catalog key (MapID).')
     parser.add_argument("-i","--idx", help='Download Map via Index number from -c option above.')
+    parser.add_argument("-p","--progress", help='Show progress of current bitTorrent downloads.',action='store_true')
     parser.add_argument("-t","--torrents", help='List status of local torrents.',action='store_true')
     return parser.parse_args()
 
@@ -236,7 +247,8 @@ if args.idx:
       sys.exit(1)
    enough_space(key)
    start_download(key)
-   show_download_progress(key)
+   time.sleep(5)
+   show_download_progress()
          
 if args.get:
    key = catalog.get(args.get,'')
@@ -245,6 +257,8 @@ if args.get:
       print('See catelog source at http://download.iiab.io/content/OSM/vector-tiles/map-catalog.json')
       sys.exit(1)
    start_download(key)
-   show_download_progress(key)
+   time.sleep(5)
+   show_download_progress()
        
-   
+if args.progress:   
+   show_download_progress()
