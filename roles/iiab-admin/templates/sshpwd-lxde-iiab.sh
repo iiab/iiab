@@ -17,10 +17,10 @@ check_user_pwd() {
 
 # Credit to the folks at the Raspberry Pi Foundation
 check_hash() {
-   if ! id -u iiab-admin > /dev/null 2>&1 ; then return 0 ; fi
-   if grep -q "^PasswordAuthentication\s*no" /etc/ssh/sshd_config ; then return 0 ; fi
-   if check_user_pwd "iiab-admin" "{{ iiab_admin_published_pwd }}"; then
-       zenity --warning --width=600 --text="SSH is enabled and the default password for user 'iiab-admin' is in use.\n\nTHIS IS A SECURITY RISK - please change its password using IIAB's Admin Console (http://box.lan/admin) -> Utilities -> Change Password.\n\nSee 'What are the default passwords?' at http://FAQ.IIAB.IO"
+   if ! id -u {{ iiab_admin_user }} > /dev/null 2> &1 ; then return 0 ; fi    # iiab-admin
+   if grep -q "^PasswordAuthentication\s\+no\b" /etc/ssh/sshd_config ; then return 0 ; fi
+   if check_user_pwd "{{ iiab_admin_user }}" "{{ iiab_admin_published_pwd }}" ; then
+       zenity --warning --width=600 --text="SSH is enabled and the default password is in use by user '{{ iiab_admin_user }}'.\n\nTHIS IS A SECURITY RISK - please change its password using IIAB's Admin Console (http://box.lan/admin) -> Utilities -> Change Password.\n\nSee 'What are the default passwords?' at http://FAQ.IIAB.IO"
    fi
 }
 
