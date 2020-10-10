@@ -5,7 +5,7 @@
 # ...invoked by /etc/xdg/lxsession/LXDE-pi/autostart which is customized by...
 # https://github.com/iiab/iiab/blob/master/roles/iiab-admin/tasks/main.yml#L46-L50
 
-# For Localisation:
+# For Localization/Translation: (use /usr/bin/gettext below if later nec!)
 #export TEXTDOMAIN=Linux-PAM
 #. gettext.sh
 # https://github.com/raspberrypi-ui/pam/blob/master/etc/profile.d/sshpwd.sh
@@ -38,7 +38,7 @@ check_user_pwd() {
 
 if check_user_pwd "{{ iiab_admin_user }}" "g0adm1n"; then    # iiab-admin
     echo
-    echo $(/usr/bin/gettext "The published password is in use by user '{{ iiab_admin_user }}'.")
-    echo $(/usr/bin/gettext "THIS IS A SECURITY RISK - please run 'sudo passwd {{ iiab_admin_user }}' to change it.")
+    echo "The published password is in use by user '{{ iiab_admin_user }}'."
+    echo "THIS IS A SECURITY RISK - please run 'sudo passwd {{ iiab_admin_user }}' to change it."
     echo
 fi
