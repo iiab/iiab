@@ -38,7 +38,7 @@ check_user_pwd() {
 
 if check_user_pwd "{{ iiab_admin_user }}" "g0adm1n"; then    # iiab-admin
     echo
-    echo $(/usr/bin/gettext "The published password for user '{{ iiab_admin_user }}' is in use.")
+    echo $(/usr/bin/gettext "The published password is in use by user '{{ iiab_admin_user }}'.")
     echo $(/usr/bin/gettext "THIS IS A SECURITY RISK - please run 'sudo passwd {{ iiab_admin_user }}' to change it.")
     echo
 fi
