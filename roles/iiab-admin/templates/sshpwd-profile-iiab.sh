@@ -3,7 +3,7 @@
 # SEE ALSO: /etc/xdg/lxsession/LXDE-pi/sshpwd-lxde-iiab.sh sourced from...
 # https://github.com/iiab/iiab/blob/master/roles/iiab-admin/templates/sshpwd-lxde-iiab.sh
 # ...invoked by /etc/xdg/lxsession/LXDE-pi/autostart which is customized by...
-# https://github.com/iiab/iiab/blob/master/roles/iiab-admin/tasks/main.yml#L46-L50
+# https://github.com/iiab/iiab/blob/master/roles/iiab-admin/tasks/main.yml#L32-L36
 
 # For Localization/Translation: (use /usr/bin/gettext below if later nec!)
 #export TEXTDOMAIN=Linux-PAM
