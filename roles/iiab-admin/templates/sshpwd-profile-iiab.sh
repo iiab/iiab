@@ -40,7 +40,7 @@ check_user_pwd() {
 # HISTORICAL: if password-free sudo access is truly nec, it can be set with
 # "iiab-admin ALL=(ALL) NOPASSWD: ALL" in /etc/sudoers as seen in the older:
 # https://github.com/iiab/iiab/blob/master/roles/iiab-admin/tasks/admin-user.yml
-# BUT: popup warning still don't result on most OS's, much as mentioned here:
+# BUT: popup warnings still don't appear on most OS's, much as mentioned here:
 # https://github.com/iiab/iiab/blob/master/roles/iiab-admin/tasks/main.yml#L24-L30
 
 if check_user_pwd "{{ iiab_admin_user }}" "{{ iiab_admin_published_pwd }}" ; then    # iiab-admin
