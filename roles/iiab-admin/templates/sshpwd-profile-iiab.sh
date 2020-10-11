@@ -26,17 +26,17 @@ check_user_pwd() {
     [ $(python3 -c "import crypt; print(crypt.crypt('$2', '\$$meth\$$salt'))") == "\$$meth\$$salt\$$hash" ]
 }
 
-[ $(id -un) = "root" ] || exit   # Exit if run by non-root.  So non-root logins
-# don't block on above permissions to grep /etc/shadow.  As it's unreasonable
+[ $(id -un) = "root" ] || return   # MUST be executed as root!  Non-root logins
+# were blocking on above permissions to grep /etc/shadow.  As it's unreasonable
 # to provide sudo privs to every user (with "NOPASSWD:" password-free sudo
 # access or not, as required by graphical logins!)  iiab/iiab#2561
 
-# 2020-10-10 RECAP: logins (graphical or tty) were blocked on above "sudo grep"
+# 2020-10-10 RECAP: most logins (graphical or tty) blocked on above [sudo] grep
 # (at least tty logins finally let sudoers in, after entering password twice!)
-# EXCEPTION: ALL GRAPHICAL logins to Raspberry Pi OS still work, no matter
-# whether sshpwd-lxde-iiab.sh's "sudo grep" displays our popup warning or not!
+# EXCEPTION: ALL GRAPHICAL logins to Raspberry Pi OS still worked, no matter
+# whether sshpwd-lxde-iiab.sh's "sudo grep" displayed our popup warning or not!
 
-#[ $(id -un) = "{{ iiab_admin_user }}" ] || [ $(id -un) = "root" ] || exit
+#[ $(id -un) = "{{ iiab_admin_user }}" ] || [ $(id -un) = "root" ] || return
 # HISTORICAL: if password-free sudo access is truly nec, it can be set with
 # "iiab-admin ALL=(ALL) NOPASSWD: ALL" in /etc/sudoers as seen in the older:
 # https://github.com/iiab/iiab/blob/master/roles/iiab-admin/tasks/admin-user.yml
