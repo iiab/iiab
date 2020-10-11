@@ -15,18 +15,8 @@
 # lightdm/graphical logins (incl autologin) on Raspbian: #1252 -> PR #1253
 check_user_pwd() {
 
-    # 1. 'sudo su -' invokes this script as root:
-    [ $(id -un) = "root" ] || return 1    # FORCE ERROR IF RUN BY NON-root
+    id -u $1 > /dev/null 2>&1 || return 2    # FORCE ERROR if no such user
     # *BUT* overall bash script still returns exit code 0 ("success")
-    # as needed by Ubuntu 20.04 graphical logins, etc!
-
-    # 2. Graphical Logins invoke this script as the user logging in: (USELESSLY)
-    #[ $(id -un) = "$1" ] || [ $(id -un) = "root" ] || return 1
-    # SO FORMERLY: this could also be run by non-root accounts e.g. iiab-admin
-    # if sudo access set with "%wheel ALL= NOPASSWD: ALL" in /etc/sudoers per
-    # https://github.com/iiab/iiab/blob/master/roles/iiab-admin/tasks/admin-user.yml
-    # BUT: warning popups did not result on most OS's, much as mentioned here:
-    # https://github.com/iiab/iiab/blob/master/roles/iiab-admin/tasks/main.yml#L24-L30
 
     # $meth (hashing method) is typically '6' which implies 5000 rounds
     # of SHA-512 per /etc/login.defs -> /etc/pam.d/common-password
@@ -36,9 +26,26 @@ check_user_pwd() {
     [ $(python3 -c "import crypt; print(crypt.crypt('$2', '\$$meth\$$salt'))") == "\$$meth\$$salt\$$hash" ]
 }
 
-if check_user_pwd "{{ iiab_admin_user }}" "g0adm1n"; then    # iiab-admin
+[ $(id -un) = "root" ] || exit   # Exit if run by non-root.  So non-root logins
+# don't block on above permissions to grep /etc/shadow.  As it's unreasonable
+# to provide sudo privs to every user (with "NOPASSWD:" password-free sudo
+# access or not, as required by graphical logins!)  iiab/iiab#2561
+
+# 2020-10-10 RECAP: logins (graphical or tty) were blocked on above "sudo grep"
+# (at least tty logins finally let sudoers in, after entering password twice!)
+# EXCEPTION: ALL GRAPHICAL logins to Raspberry Pi OS still work, no matter
+# whether sshpwd-lxde-iiab.sh's "sudo grep" displays our popup warning or not!
+
+#[ $(id -un) = "{{ iiab_admin_user }}" ] || [ $(id -un) = "root" ] || exit
+# HISTORICAL: if password-free sudo access is truly nec, it can be set with
+# "iiab-admin ALL=(ALL) NOPASSWD: ALL" in /etc/sudoers as seen in the older:
+# https://github.com/iiab/iiab/blob/master/roles/iiab-admin/tasks/admin-user.yml
+# BUT: popup warning still don't result on most OS's, much as mentioned here:
+# https://github.com/iiab/iiab/blob/master/roles/iiab-admin/tasks/main.yml#L24-L30
+
+if check_user_pwd "{{ iiab_admin_user }}" "{{ iiab_admin_published_pwd }}" ; then    # iiab-admin
     echo
-    echo "The published password is in use by user '{{ iiab_admin_user }}'."
+    echo "Published password in use by user '{{ iiab_admin_user }}'."
     echo "THIS IS A SECURITY RISK - please run 'sudo passwd {{ iiab_admin_user }}' to change it."
     echo
 fi
