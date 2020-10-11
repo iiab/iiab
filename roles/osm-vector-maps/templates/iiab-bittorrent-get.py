@@ -18,6 +18,7 @@ BITTORRENT_USER = 'Admin'
 BITTORRENT_PASSWORD = 'changeme'
 DOWNLOAD_URL = 'https://archive.org/download'
 MAP_CATALOG_URL = 'http://d.iiab.io/content/OSM/vector-tiles/map-catalog.json'
+MAP_PREFIX = '/library/www/osm-vector-maps/viewer/tiles/'
 bt_client = object
 local_torrents = object
 files_info = object
@@ -141,6 +142,7 @@ def parse_args():
     parser.add_argument("-a","--all", help='Start downloading all Archive.org  maps.',action='store_true')
     parser.add_argument("-c","--catalog", help='List Map Catalog Index numbers and torrent info.',action='store_true')
     parser.add_argument("-g","--get", help='Download Map via Catalog key (MapID).')
+    parser.add_argument("-l","--link", help='Make bittorrent files available to maps.',action='store_true')
     parser.add_argument("-i","--idx", help='Download Map via Index number from -c option above.')
     parser.add_argument("-p","--progress", help='Show progress of current bitTorrent downloads.',action='store_true')
     parser.add_argument("-t","--torrents", help='List status of local torrents.',action='store_true')
@@ -202,6 +204,21 @@ if args.torrents:
       name = files[0].name.split('/')[0]
       num,units = transmission_rpc.utils.format_size(length)
       print('%3.0f%% %5.1f %s %s'%(tor.progress,num,units,name))
+   
+if args.link:
+   for tor in local_torrents:
+      files = tor.files()
+      #print(str(files))
+      key = os.path.basename(files[0].name)
+      filename = catalog.get(key,'')
+      if filename == '':
+         continue
+      dest = MAP_PREFIX + key
+      if os.path.exists(dest):
+         continue
+      src = '/library/bittorrent/' + key + '/' + key
+      os.symlink(src,dest)      
+      sys.exit(0)
    
 if args.all:
    total_size = 0
