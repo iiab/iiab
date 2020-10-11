@@ -216,7 +216,7 @@ if args.link:
       dest = MAP_PREFIX + key
       if os.path.exists(dest):
          continue
-      src = '/library/bittorrent/' + key + '/' + key
+      src = '/library/transmission/' + key + '/' + key
       os.symlink(src,dest)      
       sys.exit(0)
    
