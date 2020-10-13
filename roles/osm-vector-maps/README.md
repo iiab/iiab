@@ -3,6 +3,7 @@
 1. If you install [IIAB 7.2](https://github.com/iiab/iiab/wiki/IIAB-7.2-Release-Notes) with [IIAB Maps](https://github.com/iiab/iiab/wiki/IIAB-Maps), a new **Install IIAB Maps** page is available (http://box/osm-vector-maps/installer/) with [instructions](https://github.com/iiab/iiab/wiki/IIAB-Maps#how-do-i-install-map-packs-and-satellite-photo-regions-on-iiab-72-), separate from IIAB's Admin Console:
    1. This [very visual page](https://user-images.githubusercontent.com/2458907/94740848-46c4eb00-0341-11eb-93ea-e3e4758dce48.png) facilitates selecting/downloading/installing of Map Pack(s) for your favorite "continent(s)".  (SEE 2. BELOW)
    2. If you've installed at least one Map Pack, you can then use this same page to select/download/install Hi-Res Satellite Photo Region(s) for your local communities.  (SEE 3. BELOW)
+   3. All these downloads can now happen 10X to 100X faster, thanks to [PR #38](https://github.com/iiab/maps/pull/38) !
 
 2. **Map Packs** no longer bundle both data and program in a .zip file.  All Map Packs are really now just a collection of 3 .mbtiles files:
    1. The main focus of a Map Pack remains Hi-Res Vector Map data from OpenStreetMap, for your selected "continent" — but Lo-Res vector map tiles (1.74GB .mbtiles) and Lo-Res satellite photos (932MB .mbtiles) are also included for the entire planet.  Read more at: https://github.com/iiab/iiab/wiki/IIAB-Maps
