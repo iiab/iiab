@@ -43,7 +43,7 @@ check_user_pwd() {
 # BUT: popup warnings still don't appear on most OS's, much as mentioned here:
 # https://github.com/iiab/iiab/blob/master/roles/iiab-admin/tasks/main.yml#L24-L30
 
-if check_user_pwd "{{ iiab_admin_user }}" "{{ iiab_admin_published_pwd }}" ; then    # iiab-admin
+if check_user_pwd "{{ iiab_admin_user }}" "{{ iiab_admin_published_pwd }}" ; then    # iiab-admin g0adm1n
     echo
     echo "Published password in use by user '{{ iiab_admin_user }}'."
     echo "THIS IS A SECURITY RISK - please run 'sudo passwd {{ iiab_admin_user }}' to change it."
