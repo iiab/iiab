@@ -26,7 +26,7 @@ check_user_pwd() {
 #grep -q "^PasswordAuthentication\s\+no\b" /etc/ssh/sshd_config && return
 #systemctl is-active {{ sshd_service }} || return
 
-if check_user_pwd "{{ iiab_admin_user }}" "{{ iiab_admin_published_pwd }}" ; then    # iiab-admin
+if check_user_pwd "{{ iiab_admin_user }}" "{{ iiab_admin_published_pwd }}" ; then    # iiab-admin g0adm1n
     zenity --warning --width=600 --text="Published password in use by user '{{ iiab_admin_user }}'.\n\nTHIS IS A SECURITY RISK - please change its password using IIAB's Admin Console (http://box.lan/admin) -> Utilities -> Change Password.\n\nSee 'What are the default passwords?' at http://FAQ.IIAB.IO"
     #zenity --warning --width=600 --text="SSH is enabled and the published password is in use by user '{{ iiab_admin_user }}'.\n\nTHIS IS A SECURITY RISK - please change its password using IIAB's Admin Console (http://box.lan/admin) -> Utilities -> Change Password.\n\nSee 'What are the default passwords?' at http://FAQ.IIAB.IO"
 fi
