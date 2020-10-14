@@ -12,8 +12,9 @@
 # bash syntax "function check_user_pwd() {" was removed, as it prevented all
 # lightdm/graphical logins (incl autologin) on Raspbian: #1252 -> PR #1253
 check_user_pwd() {
-    id -u $1 > /dev/null 2>&1 || return 2    # FORCE ERROR if no such user
-    # *BUT* overall bash script still returns exit code 0 ("success")
+    #id -u $1 > /dev/null 2>&1 || return 2    # Not needed if return 1 is good
+    # enough when user does not exist.  Or uncomment to FORCE ERROR CODE 2.
+    # Either way, overall bash script still returns exit code 0 ("success")
 
     # $meth (hashing method) is typically '6' which implies 5000 rounds
     # of SHA-512 per /etc/login.defs -> /etc/pam.d/common-password
