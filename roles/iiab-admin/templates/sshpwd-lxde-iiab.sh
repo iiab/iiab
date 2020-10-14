@@ -16,6 +16,11 @@ check_user_pwd() {
     # enough when user does not exist.  Or uncomment to FORCE ERROR CODE 2.
     # Either way, overall bash script still returns exit code 0 ("success")
 
+    # sudo works below (unlike in sshpwd-profile-iiab.sh) b/c RaspiOS ships w/
+    # /etc/sudoers.d/010_pi-nopasswd containing "pi ALL=(ALL) NOPASSWD: ALL"
+    # (read access to /etc/shadow is otherwise restricted to just root and
+    # group www-data i.e. Apache, NGINX get special access).  SEE: #2431, #2561
+
     # $meth (hashing method) is typically '6' which implies 5000 rounds
     # of SHA-512 per /etc/login.defs -> /etc/pam.d/common-password
     meth=$(sudo grep "^$1:" /etc/shadow | cut -d: -f2 | cut -d$ -f2)
