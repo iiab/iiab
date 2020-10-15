@@ -29,20 +29,23 @@ Configure user 'iiab-admin'
    * You can set ``iiab_admin_can_sudo: False`` if you want a strict security lockdown (if you're really sure you'll never need IIAB community support commands like `/usr/bin/iiab-diagnostics <https://github.com/iiab/iiab/blob/master/scripts/iiab-diagnostics.README.md>`_, `/usr/bin/iiab-hotspot-on <https://github.com/iiab/iiab/blob/master/roles/network/templates/network/iiab-hotspot-on>`_, `iiab-check-firmware <https://github.com/iiab/iiab/blob/master/roles/firmware/templates/iiab-check-firmware>`_, etc!)
    * You can also set ``iiab_admin_user_install: False`` if you're sure you know how to do all this `account and sudo configuration <tasks/admin-user.yml>`_ manually.
 
-Desiderata:
+Security
+--------
 
 * Please read much more about what escalated (root) actions are authorized when you log into IIAB's Admin Console, and how this works: https://github.com/iiab/iiab-admin-console/blob/master/Authentication.md
 * If your IIAB includes OpenVPN, ``/root/.ssh/authorized_keys`` should be installed by `roles/openvpn/tasks/install.yml <https://github.com/iiab/iiab/blob/master/roles/openvpn/tasks/install.yml>`_ to faciliate remote community support.  Feel free to remove this as mentioned here: http://wiki.laptop.org/go/IIAB/Security
 * Auto-checking for the default/published password (as specified by ``iiab_admin_published_pwd`` in `/opt/iiab/iiab/vars/default_vars.yml <https://github.com/iiab/iiab/blob/master/vars/default_vars.yml>`_) is implemented in `/etc/profile.d <https://github.com/iiab/iiab/blob/master/roles/iiab-admin/templates/sshpwd-profile-iiab.sh>`_ (and `/etc/xdg/lxsession/LXDE-pi <https://github.com/iiab/iiab/blob/master/roles/iiab-admin/templates/sshpwd-lxde-iiab.sh>`_ when it exists, i.e. on Raspberry Pi OS with desktop).
 
-Example:
+Example
+=======
 
 * If you later change your mind about ``sudo`` privileges for user 'iiab-admin' (as specified by ``iiab_admin_user``) then do this:
    #. Go ahead and change the value of ``iiab_admin_can_sudo`` (to either True or False) in `/etc/iiab/local_vars.yml <http://wiki.laptop.org/go/IIAB/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it.3F>`_
    #. Make sure that ``iiab_admin_user_install: True`` is also set.
    #. Then re-run this Ansible playbook, by running ``cd /opt/iiab/iiab`` followed by ``sudo ./runrole --reinstall iiab-admin``
 
-Historical:
+Historical Notes
+================
 
 * We no longer recommend setting your password using a hash e.g. ``python -c 'import crypt; print crypt.crypt("<plaintext>", "$6$<salt>")'`` (or the Python 3 equivalent) as this is very cumbersome — and worse, exposes your "salt" opens up your password to `possible attack <https://stackoverflow.com/questions/6776050/how-long-to-brute-force-a-salted-sha-512-hash-salt-provided>`_.
 * The sudo flag ``NOPASSWORD:`` and the ``wheel`` group are also no longer recommended as of October 2020.
