@@ -32,7 +32,7 @@ Configure user 'iiab-admin'
 Security
 --------
 
-* A user MUST be a member of one of these 2 Linux groups, in order to log in to Admin Console:
+* A user MUST be a member of one of these 2 Linux groups, in order to log in to IIAB's Admin Console: (http://box.lan/admin)
    #. ``sudo``
    #. ``iiab-admin`` (as set by ``iiab_admin_user_group`` near the bottom of `/opt/iiab/iiab-admin-console/vars/default_vars.yml <https://github.com/iiab/iiab-admin-console/blob/master/vars/default_vars.yml>`_)
 * Please read much more about what escalated (root) actions are authorized when you log into IIAB's Admin Console, and how this works: https://github.com/iiab/iiab-admin-console/blob/master/Authentication.md
