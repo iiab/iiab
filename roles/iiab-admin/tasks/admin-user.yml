@@ -1,28 +1,43 @@
-- name: Create user {{ iiab_admin_user }} in group sudo for Admin Console; set password from iiab_admin_pwd_hash if newly creating account
+- name: Check if user '{{ iiab_admin_user }}' exists    # iiab-admin
+  command: "id {{ iiab_admin_user | quote }}"    # quote to avoid ';' exploits
+  register: user_info
+  failed_when: False    # Hides red errors (stronger than 'ignore_errors: yes')
+
+- name: Establish user {{ iiab_admin_user }} with shell /bin/bash, for login to IIAB's Admin Console (http://box.lan/admin) AND for IIAB support commands at the command-line (/usr/bin/iiab-* and /usr/sbin/iiab-*)
   user:
-    name: "{{ iiab_admin_user }}"    # iiab-admin
-    password: "{{ iiab_admin_pwd_hash }}"
-    update_password: on_create
+    name: "{{ iiab_admin_user }}"
     shell: /bin/bash
-    groups: sudo
+    #password: "{{ iiab_admin_pwd_hash }}"
+    #update_password: on_create
 
-#- name: Create a wheel group
-#  group:
-#    name: wheel
-#    state: present
+- name: If user didn't exist, set password to '{{ iiab_admin_published_pwd }}'    # g0adm1n
+  #shell: "echo {{ iiab_admin_user }}:{{ iiab_admin_published_pwd }} | chpasswd"
+  command: chpasswd
+  args:
+    stdin: "{{ iiab_admin_user | quote }}:{{ iiab_admin_published_pwd | quote }}"
+  when: user_info.rc != 0
 
-#- name: Create a sudo group (redhat)
-#  group:
-#    name: sudo
-#    state: present
-#  when: is_redhat | bool
 
-#- name: 'Add user {{ iiab_admin_user }} to groups: wheel, sudo'
-#  user:
-#    name: "{{ iiab_admin_user }}"
-#    groups: wheel,sudo
+# roles/2-common/tasks/packages.yml also installs sudo, but that's too late
+- name: 'Install package: sudo'
+  package:
+    name: sudo
 
-- name: Edit the sudoers file -- first make it editable
+- name: Add user {{ iiab_admin_user }} to group sudo, for support commands like {iiab-diagnostics, iiab-hotspot-on, iiab-check-firmware}, if iiab_admin_can_sudo
+  command: "gpasswd -a {{ iiab_admin_user | quote }} sudo"
+  #user:
+  #  name: "{{ iiab_admin_user }}"
+  #  groups: sudo
+  #  append: yes
+  when: iiab_admin_can_sudo | bool
+
+- name: Remove user {{ iiab_admin_user }} from group sudo, if not iiab_admin_can_sudo
+  command: "gpasswd -d {{ iiab_admin_user | quote }} sudo"
+  when: not iiab_admin_can_sudo
+  failed_when: False    # Hides red errors (stronger than 'ignore_errors: yes')
+
+
+- name: Edit the sudoers file -- first make it editable (0640)
   file:
     path: /etc/sudoers
     mode: 0640
@@ -47,7 +62,7 @@
     dest: /etc/sudoers
     state: absent
 
-- name: End editing the sudoers file -- protect it again
+- name: End editing the sudoers file -- protect it again (0440)
   file:
     path: /etc/sudoers
     mode: 0440
