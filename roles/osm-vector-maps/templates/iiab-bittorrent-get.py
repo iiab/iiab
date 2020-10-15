@@ -25,10 +25,14 @@ files_info = object
 catalog = object
 
 def get_catalog():
-   r = requests.get(MAP_CATALOG_URL)
-   if r.status_code == 200:
-      catalog= json.loads(r.content)
-      return catalog['maps']
+   catalog = {}
+   #r = requests.get(MAP_CATALOG_URL)
+   #if r.status_code == 200:
+   with open('/etc/iiab/map-catalog.json','r') as filedesc:
+      data= json.loads(filedesc.read())
+      catalog.update(data['maps'])
+      catalog.update(data['base'])
+      return catalog
    return {}
 
 def enough_space(key):
@@ -264,7 +268,7 @@ if args.idx:
       sys.exit(1)
    enough_space(key)
    start_download(key)
-   time.sleep(5)
+   time.sleep(15)
    show_download_progress()
          
 if args.get:
@@ -274,7 +278,7 @@ if args.get:
       print('See catelog source at http://download.iiab.io/content/OSM/vector-tiles/map-catalog.json')
       sys.exit(1)
    start_download(key)
-   time.sleep(5)
+   time.sleep(15)
    show_download_progress()
        
 if args.progress:   
