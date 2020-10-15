@@ -32,6 +32,9 @@ Configure user 'iiab-admin'
 Security
 --------
 
+* A user MUST be a member of one of these 2 Linux groups, in order to log in to Admin Console:
+   #. ``sudo``
+   #. ``iiab-admin`` (as set by ``iiab_admin_user_group`` near the bottom of `/opt/iiab/iiab-admin-console/vars/default_vars.yml <https://github.com/iiab/iiab-admin-console/blob/master/vars/default_vars.yml>`_)
 * Please read much more about what escalated (root) actions are authorized when you log into IIAB's Admin Console, and how this works: https://github.com/iiab/iiab-admin-console/blob/master/Authentication.md
 * If your IIAB includes OpenVPN, ``/root/.ssh/authorized_keys`` should be installed by `roles/openvpn/tasks/install.yml <https://github.com/iiab/iiab/blob/master/roles/openvpn/tasks/install.yml>`_ to faciliate remote community support.  Feel free to remove this as mentioned here: http://wiki.laptop.org/go/IIAB/Security
 * Auto-checking for the default/published password (as specified by ``iiab_admin_published_pwd`` in `/opt/iiab/iiab/vars/default_vars.yml <https://github.com/iiab/iiab/blob/master/vars/default_vars.yml>`_) is implemented in `/etc/profile.d <https://github.com/iiab/iiab/blob/master/roles/iiab-admin/templates/sshpwd-profile-iiab.sh>`_ (and `/etc/xdg/lxsession/LXDE-pi <https://github.com/iiab/iiab/blob/master/roles/iiab-admin/templates/sshpwd-lxde-iiab.sh>`_ when it exists, i.e. on Raspberry Pi OS with desktop).
@@ -47,8 +50,8 @@ Example
 Historical Notes
 ================
 
-* We no longer recommend setting your password using a hash e.g. ``python -c 'import crypt; print crypt.crypt("<plaintext>", "$6$<salt>")'`` (or the Python 3 equivalent) as this is very cumbersome — and worse, exposes your "salt" opens up your password to `possible attack <https://stackoverflow.com/questions/6776050/how-long-to-brute-force-a-salted-sha-512-hash-salt-provided>`_.
-* The sudo flag ``NOPASSWORD:`` and the ``wheel`` group are also no longer recommended as of October 2020.
+* We no longer recommend setting your password using a hash e.g. ``python -c 'import crypt; print crypt.crypt("<plaintext>", "$6$<salt>")'`` (or the Python 3 equivalent) as this is very cumbersome — and worse, exposes your "salt" opens up your password to `possible attack <https://stackoverflow.com/questions/6776050/how-long-to-brute-force-a-salted-sha-512-hash-salt-provided>`_.  [October 2020]
+* The sudo flag ``NOPASSWORD:`` and the ``wheel`` group are also no longer recommended.  [October 2020]
 
 Tools to facilitate Remote Support
 ----------------------------------
