@@ -15,6 +15,6 @@ this is to include the following two lines at the top of the file:
     Licensed under the terms of the GNU GPL v2 or later; see LICENSE for details.
 
 All files not containing an explicit copyright notice or terms of license in
-the file are Copyright © 2015-2018, Unleash Kids, and are licensed under the
+the file are Copyright © 2015-2020, Unleash Kids, and are licensed under the
 terms of the GPLv2 license in the file named LICENSE in the root of the
 repository.

@@ -14,9 +14,14 @@
 # bash syntax "function check_user_pwd() {" was removed, as it prevented all
 # lightdm/graphical logins (incl autologin) on Raspbian: #1252 -> PR #1253
 check_user_pwd() {
+    #[ $(id -un) = "root" ] || return 2
+    #[ $(id -un) = "root" ] || [ $(id -un) = "iiab-admin" ] || return 2
+    [ -r /etc/shadow ] || return 2    # FORCE ERROR if /etc/shadow not readable
+    # *BUT* overall bash script still returns exit code 0 ("success").
 
-    id -u $1 > /dev/null 2>&1 || return 2    # FORCE ERROR if no such user
-    # *BUT* overall bash script still returns exit code 0 ("success")
+    #id -u $1 > /dev/null 2>&1 || return 2    # Not needed if return 1 is good
+    # enough when user does not exist.  Or uncomment to FORCE ERROR CODE 2.
+    # Either way, overall bash script still returns exit code 0 ("success").
 
     # $meth (hashing method) is typically '6' which implies 5000 rounds
     # of SHA-512 per /etc/login.defs -> /etc/pam.d/common-password
@@ -26,21 +31,20 @@ check_user_pwd() {
     [ $(python3 -c "import crypt; print(crypt.crypt('$2', '\$$meth\$$salt'))") == "\$$meth\$$salt\$$hash" ]
 }
 
-[ $(id -un) = "root" ] || return   # MUST be executed as root!  Non-root logins
-# were blocking on above permissions to grep /etc/shadow.  As it's unreasonable
-# to provide sudo privs to every user (with "NOPASSWD:" password-free sudo
-# access or not, as required by graphical logins!)  iiab/iiab#2561
+# 2020-10-13 https://github.com/iiab/iiab/issues/2561 RECAP: Above was blocking
+# logins, lacking permissions to grep /etc/shadow.  As it's unreasonable to
+# provide sudo privs to every user (with "NOPASSWD:" password-free sudo access
+# or not, as required by graphical logins!)
 
-# 2020-10-10 RECAP: most logins (graphical or tty) blocked on above [sudo] grep
+# MORE DETAILS: most logins (graphical or tty) blocked on above [sudo] grep
 # (at least tty logins finally let sudoers in, after entering password twice!)
 # EXCEPTION: ALL GRAPHICAL logins to Raspberry Pi OS still worked, no matter
 # whether sshpwd-lxde-iiab.sh's "sudo grep" displayed our popup warning or not!
 
-#[ $(id -un) = "{{ iiab_admin_user }}" ] || [ $(id -un) = "root" ] || return
 # HISTORICAL: if password-free sudo access is truly nec, it can be set with
 # "iiab-admin ALL=(ALL) NOPASSWD: ALL" in /etc/sudoers as seen in the older:
 # https://github.com/iiab/iiab/blob/master/roles/iiab-admin/tasks/admin-user.yml
-# BUT: popup warnings still don't appear on most OS's, much as mentioned here:
+# CAUTION: popup warnings still don't appear on most OS's, as mentioned here:
 # https://github.com/iiab/iiab/blob/master/roles/iiab-admin/tasks/main.yml#L24-L30
 
 if check_user_pwd "{{ iiab_admin_user }}" "{{ iiab_admin_published_pwd }}" ; then    # iiab-admin g0adm1n
