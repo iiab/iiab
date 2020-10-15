@@ -24,8 +24,8 @@ Configure user 'iiab-admin'
    * If initial creation of the user and password was somehow not already taken care of by IIAB's 1-line installer (http://download.iiab.io) or by your underlying OS, that too will be taken care of here.
 * By default the user is ``iiab-admin`` with password ``g0adm1n``
    * *Do change the default password if you haven't yet, by running:* **sudo passwd iiab-admin**
-   * After IIAB is installed, you can also change the password by logging into Admin Console (http://box.lan/admin) > Utilities > Change Password
-* If you prefer to use a pre-existing user like ``pi`` or ``ubuntu`` (or any other username) customize the variable ``iiab_admin_user`` in your `/etc/iiab/local_vars.yml <http://wiki.laptop.org/go/IIAB/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it.3F>`_ (preferably do this prior to installing IIAB !)
+   * After IIAB is installed, you can also change the password by logging into Admin Console (http://box.lan/admin) > Utilities > Change Password.
+* If you prefer to use a pre-existing user like ``pi`` or ``ubuntu`` (or any other username) customize the variable ``iiab_admin_user`` in your `/etc/iiab/local_vars.yml <http://wiki.laptop.org/go/IIAB/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it.3F>`_ (preferably do this prior to installing IIAB!)
    * You can set ``iiab_admin_can_sudo: False`` if you want a strict security lockdown (if you're really sure you'll never need IIAB community support commands like `/usr/bin/iiab-diagnostics <https://github.com/iiab/iiab/blob/master/scripts/iiab-diagnostics.README.md>`_, `/usr/bin/iiab-hotspot-on <https://github.com/iiab/iiab/blob/master/roles/network/templates/network/iiab-hotspot-on>`_, `iiab-check-firmware <https://github.com/iiab/iiab/blob/master/roles/firmware/templates/iiab-check-firmware>`_, etc!)
    * You can also set ``iiab_admin_user_install: False`` if you're sure you know how to do all this `account and sudo configuration <tasks/admin-user.yml>`_ manually.
 
