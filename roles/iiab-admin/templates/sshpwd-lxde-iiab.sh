@@ -3,6 +3,9 @@
 # SEE ALSO: /etc/profile.d/sshpwd-profile-iiab.sh sourced from...
 # https://github.com/iiab/iiab/blob/master/roles/iiab-admin/templates/sshpwd-profile-iiab.sh
 
+# CAUTION: popup warnings still don't appear on most OS's, as mentioned here:
+# https://github.com/iiab/iiab/blob/master/roles/iiab-admin/tasks/pwd-warnings.yml#L19-L25
+
 # For Localization/Translation: (use /usr/bin/gettext below if later nec!)
 #export TEXTDOMAIN=pprompt-iiab
 #. gettext.sh

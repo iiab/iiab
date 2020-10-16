@@ -33,7 +33,7 @@ Security
 --------
 
 * A user MUST be a member of at least one of these 2 Linux groups, in order to log in to IIAB's Admin Console: (http://box.lan/admin)
-   #. ``iiab-admin`` (specified by ``iiab_admin_user_group`` near the bottom of `/opt/iiab/iiab-admin-console/vars/default_vars.yml <https://github.com/iiab/iiab-admin-console/blob/master/vars/default_vars.yml>`_)
+   #. ``iiab-admin`` (specified by ``admin_console_group`` near the bottom of `/opt/iiab/iiab-admin-console/vars/default_vars.yml <https://github.com/iiab/iiab-admin-console/blob/master/vars/default_vars.yml>`_)
    #. ``sudo``
 * Please read much more about what escalated (root) actions are authorized when you log into IIAB's Admin Console, and how this works: https://github.com/iiab/iiab-admin-console/blob/master/Authentication.md
 * If your IIAB includes OpenVPN, ``/root/.ssh/authorized_keys`` should be installed by `roles/openvpn/tasks/install.yml <https://github.com/iiab/iiab/blob/master/roles/openvpn/tasks/install.yml>`_ to faciliate remote community support.  Feel free to remove this as mentioned here: http://wiki.laptop.org/go/IIAB/Security
@@ -50,18 +50,20 @@ Example
 Historical Notes
 ================
 
-* We no longer recommend setting your password using a hash e.g. ``python -c 'import crypt; print crypt.crypt("<plaintext>", "$6$<salt>")'`` (or the Python 3 equivalent) as this is very cumbersome — and worse, exposes your "salt" opens up your password to `possible attack <https://stackoverflow.com/questions/6776050/how-long-to-brute-force-a-salted-sha-512-hash-salt-provided>`_.  [October 2020]
-* The sudo flag ``NOPASSWORD:`` and the ``wheel`` group are also no longer recommended.  [October 2020]
+* We no longer support setting your password using a hash e.g. ``python -c 'import crypt; print crypt.crypt("<plaintext>", "$6$<salt>")'`` (or the Python 3 equivalent, ``python3 -c 'import crypt; print(crypt.crypt("<plaintext>", crypt.mksalt(crypt.METHOD_SHA512)))'``) as these are very cumbersome — and worse, exposing your "salt" opens up your password to `possible attack <https://stackoverflow.com/questions/6776050/how-long-to-brute-force-a-salted-sha-512-hash-salt-provided>`_.  [October 2020]
+* The sudo flag ``NOPASSWORD:`` and the ``wheel`` group are similarly no longer recommended, so that your IIAB faces fewer security risks.  [October 2020]
 
 Tools to facilitate Remote Support
 ----------------------------------
 
-In addition to the iiab-diagnostics and OpenVPN options mentioned above, `/opt/iiab/iiab/roles/iiab-admin/tasks/access.yml <https://github.com/holta/iiab/blob/sudoers_anonymous/roles/iiab-admin/tasks/access.yml>`_ adds a few more essential tools:
+The iiab-diagnostics and OpenVPN options mentioned can greatly help you help your community, typically during the implementation phase of your project, even if Linux is new to you.
 
-* screen
-* lynx
+Similarly, `/opt/iiab/iiab/roles/iiab-admin/tasks/access.yml <tasks/access.yml>`_ adds a couple text mode tools, very helpful at a distance with expensive / low-bandwidth connections:
 
-*Please also see:*
+* `lynx <https://en.wikipedia.org/wiki/Lynx_(web_browser)>`_
+* `screen <https://linuxize.com/post/how-to-use-linux-screen/>`_
+
+*More great tools to help you jumpstart community work at a distance:*
 
 http://FAQ.IIAB.IO > "How can I remotely manage my Internet-in-a-Box?"
 
