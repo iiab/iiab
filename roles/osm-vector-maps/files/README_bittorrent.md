@@ -5,19 +5,23 @@ Files uploaded to Archive.org can be downloaded via the bittorrent protocol. Thi
 The IIAB-get-torrent.py program is a python script which controls the bitTorrent client (named transmissioon-daemon). This python program provides a connection between the map_catalog.json which specifies the required maps, and the transmission-daemon which actually does the downloading, and peer-to-peer file sharing. It has a number of options which are outlined below:
 #### Use help to remember the meaning o the options
 ```
-root@box:/opt/iiab/iiab/roles/osm-vector-maps/files# ./iiab-get-torrent.py -h
-usage: iiab-get-torrent.py [-h] [-a] [-c] [-g GET] [-i IDX] [-t]
+./iiab-bittorrent-get.py -h
+usage: iiab-bittorrent-get.py [-h] [-a] [-c] [-g GET] [-i IDX] [-l] [-p] [-t]
+                              [-u UPLD]
 
 Download OSM Bittorrent files.
 
 optional arguments:
-  -h, --help         show this help message and exit
-  -a, --all          Start downloading all Archive.org maps.
-  -c, --catalog      List Map Catalog Index numbers and torrent info.
-  -g GET, --get GET  Download Map via Catalog key (MapID).
-  -i IDX, --idx IDX  Download Map via Index number from -c option above.
-  -t, --torrents     List status of local torrents.
-root@box:/opt/iiab/iiab/roles/osm-vector-maps/files# 
+  -h, --help            show this help message and exit
+  -a, --all             Start downloading all Archive.org maps.
+  -c, --catalog         List Map Catalog Index numbers and torrent info.
+  -g GET, --get GET     Download Map via Catalog key (MapID).
+  -i IDX, --idx IDX     Download Map via Index number from -c option above.
+  -l, --link            Make bittorrent files available to maps.
+  -p, --progress        Show progress of current bitTorrent downloads.
+  -t, --torrents        List status of local torrents.
+  -u UPLD, --upld UPLD  Max upload speed in KB. Set to 0 to disable uploading.
+
 ```
 #### Use -c --catalog option to see which of the IIAB Maps are already in your BitTorrent Cache
 ```
@@ -59,3 +63,10 @@ root@box:/opt/iiab/iiab/roles/osm-vector-maps/files# ./iiab-get-torrent.py -t
 100%  16.6 GiB osm_north_asia_z11-z14_2019.mbtiles
 100%  43.6 GiB ka-lite-0.17-resized-videos-english
 root@box:/opt/iiab/iiab/roles/osm-vector-maps/files# 
+```
+#### Use -u --UPLD to set the upload speed, when you are willing to share your MAP data with others. Setting the -u --UPLD value to 0 (zero) disables uploading. The IIAB default, without changeing local_ars.yml, is to disable uploading.
+```
+iiab-bittorrent-get.py -u 1000
+
+Upload speed limit: 1000 KB. Limit enabled:True
+```

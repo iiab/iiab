@@ -13,6 +13,7 @@ from transmission_rpc import Client,Torrent
 import transmission_rpc
 import requests
 import argparse
+#import pdb; pdb.set_trace()
 
 BITTORRENT_USER = 'Admin'
 BITTORRENT_PASSWORD = 'changeme'
@@ -146,10 +147,11 @@ def parse_args():
     parser.add_argument("-a","--all", help='Start downloading all Archive.org  maps.',action='store_true')
     parser.add_argument("-c","--catalog", help='List Map Catalog Index numbers and torrent info.',action='store_true')
     parser.add_argument("-g","--get", help='Download Map via Catalog key (MapID).')
-    parser.add_argument("-l","--link", help='Make bittorrent files available to maps.',action='store_true')
     parser.add_argument("-i","--idx", help='Download Map via Index number from -c option above.')
+    parser.add_argument("-l","--link", help='Make bittorrent files available to maps.',action='store_true')
     parser.add_argument("-p","--progress", help='Show progress of current bitTorrent downloads.',action='store_true')
     parser.add_argument("-t","--torrents", help='List status of local torrents.',action='store_true')
+    parser.add_argument("-u","--upld", help='Max upload speed in KB. Set to 0 to disable uploading.')
     return parser.parse_args()
 
 ############# Action ##############
@@ -283,3 +285,12 @@ if args.get:
        
 if args.progress:   
    show_download_progress()
+
+if args.upld:
+   bt_client.set_session(speed_limit_up=args.upld,speed_limit_up_enabled=True)
+   # wait for transmission-daemon to process request
+   #time.sleep(3)
+   session = bt_client.get_session()
+   speed_limit_up = session._fields['speed_limit_up'].value
+   speed_limit_up_enabled = session._fields['speed_limit_up_enabled'].value
+   print('\nUpload speed limit: %s KB. Limit enabled:%s\n'%(speed_limit_up, speed_limit_up_enabled,)) 
