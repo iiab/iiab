@@ -20,21 +20,21 @@ This Ansible playbook is one of the very first that runs when you install IIAB, 
 Configure user 'iiab-admin'
 ---------------------------
 
-* `admin-user.yml <tasks/admin-user.yml>`_ configures the Linux user that will give you access to IIAB's Admin Console (http://box.lan/admin) after IIAB is installed — and can also help you at the command-line with IIAB community support commands like {iiab-diagnostics, iiab-hotspot-on, iiab-check-firmware, etc}.
+* `admin-user.yml <tasks/admin-user.yml>`_ configures a Linux user that will give you access to IIAB's Admin Console (http://box.lan/admin) after IIAB is installed — and can also help you at the command-line with IIAB community support commands like {iiab-diagnostics, iiab-hotspot-on, iiab-check-firmware, etc}.
    * If initial creation of the user and password was somehow not already taken care of by IIAB's 1-line installer (http://download.iiab.io) or by your underlying OS, that too will be taken care of here.
-* By default the user is ``iiab-admin`` with password ``g0adm1n``
+* By default this user is ``iiab-admin`` with password ``g0adm1n``
    * *Do change the default password if you haven't yet, by running:* **sudo passwd iiab-admin**
    * After IIAB is installed, you can also change the password by logging into Admin Console (http://box.lan/admin) > Utilities > Change Password.
 * If you prefer to use a pre-existing user like ``pi`` or ``ubuntu`` (or any other username) customize the variable ``iiab_admin_user`` in your `/etc/iiab/local_vars.yml <http://wiki.laptop.org/go/IIAB/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it.3F>`_ (preferably do this prior to installing IIAB!)
-   * You can set ``iiab_admin_can_sudo: False`` if you want a strict security lockdown (if you're really sure you'll never need IIAB community support commands like `/usr/bin/iiab-diagnostics <https://github.com/iiab/iiab/blob/master/scripts/iiab-diagnostics.README.md>`_, `/usr/bin/iiab-hotspot-on <https://github.com/iiab/iiab/blob/master/roles/network/templates/network/iiab-hotspot-on>`_, `iiab-check-firmware <https://github.com/iiab/iiab/blob/master/roles/firmware/templates/iiab-check-firmware>`_, etc!)
+   * You can set ``iiab_admin_can_sudo: False`` if you want a strict security lockdown (if you're really sure you won't need IIAB community support commands like `/usr/bin/iiab-diagnostics <https://github.com/iiab/iiab/blob/master/scripts/iiab-diagnostics.README.md>`_, `/usr/bin/iiab-hotspot-on <https://github.com/iiab/iiab/blob/master/roles/network/templates/network/iiab-hotspot-on>`_, `iiab-check-firmware <https://github.com/iiab/iiab/blob/master/roles/firmware/templates/iiab-check-firmware>`_, etc!)
    * You can also set ``iiab_admin_user_install: False`` if you're sure you know how to do all this `account and sudo configuration <tasks/admin-user.yml>`_ manually.
 
 Security
 --------
 
-* A user MUST be a member of one of these 2 Linux groups, in order to log in to IIAB's Admin Console: (http://box.lan/admin)
+* A user MUST be a member of at least one of these 2 Linux groups, in order to log in to IIAB's Admin Console: (http://box.lan/admin)
+   #. ``iiab-admin`` (specified by ``iiab_admin_user_group`` near the bottom of `/opt/iiab/iiab-admin-console/vars/default_vars.yml <https://github.com/iiab/iiab-admin-console/blob/master/vars/default_vars.yml>`_)
    #. ``sudo``
-   #. ``iiab-admin`` (as set by ``iiab_admin_user_group`` near the bottom of `/opt/iiab/iiab-admin-console/vars/default_vars.yml <https://github.com/iiab/iiab-admin-console/blob/master/vars/default_vars.yml>`_)
 * Please read much more about what escalated (root) actions are authorized when you log into IIAB's Admin Console, and how this works: https://github.com/iiab/iiab-admin-console/blob/master/Authentication.md
 * If your IIAB includes OpenVPN, ``/root/.ssh/authorized_keys`` should be installed by `roles/openvpn/tasks/install.yml <https://github.com/iiab/iiab/blob/master/roles/openvpn/tasks/install.yml>`_ to faciliate remote community support.  Feel free to remove this as mentioned here: http://wiki.laptop.org/go/IIAB/Security
 * Auto-checking for the default/published password (as specified by ``iiab_admin_published_pwd`` in `/opt/iiab/iiab/vars/default_vars.yml <https://github.com/iiab/iiab/blob/master/vars/default_vars.yml>`_) is implemented in `/etc/profile.d <https://github.com/iiab/iiab/blob/master/roles/iiab-admin/templates/sshpwd-profile-iiab.sh>`_ (and `/etc/xdg/lxsession/LXDE-pi <https://github.com/iiab/iiab/blob/master/roles/iiab-admin/templates/sshpwd-lxde-iiab.sh>`_ when it exists, i.e. on Raspberry Pi OS with desktop).
