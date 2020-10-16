@@ -2,7 +2,7 @@
 #### Overview
 Files uploaded to Archive.org can be downloaded via the bittorrent protocol. This protocol allows many computers to distribute files in a peer-to-peer manner, by dividing a file into many "chunks". A bittorrent client gets its instructions from a torrent file. Early versions of bittorrent clients needed to contact a bittorrent "seeder" (or server), to get a list of peers who might be able to supply any of these chunks. The main advantage of using bittorrent, for IIAB, is that the downloading can proceed at a much faster rate when there are a number of "seeders" across the internet who are providing chunks simultaneously. 
 #### Setting up a BitTorrent Cache using IIAB-get-torrent.py
-The IIAB-get-torrent.py program is a python script which controls the bitTorrent client (named transmissioon-daemon). This python program provides a connection between the map_catalog.json which specifies the required maps, and the transmission-daemon which actually does the downloading, and peer-to-peer file sharing. It has a number of options which are outlined below:
+The ```iiab-bittorrent-get.py``` program is a python script which controls the bitTorrent client (named transmissioon-daemon). This python program provides a connection between the map_catalog.json which specifies the required maps, and the transmission-daemon which actually does the downloading, and peer-to-peer file sharing. It has a number of options which are outlined below:
 #### Use help to remember the meaning o the options
 ```
 ./iiab-bittorrent-get.py -h
