@@ -1,53 +1,56 @@
-- name: Create user {{ iiab_admin_user }} in group sudo for Admin Console; set password from iiab_admin_pwd_hash if newly creating account
-  user:
-    name: "{{ iiab_admin_user }}"    # iiab-admin
-    password: "{{ iiab_admin_pwd_hash }}"
-    update_password: on_create
-    shell: /bin/bash
-    groups: sudo
+# Summary of how this works with IIAB's Admin Console etc:
+# https://github.com/iiab/iiab/blob/master/roles/iiab-admin/README.rst
 
-#- name: Create a wheel group
-#  group:
-#    name: wheel
-#    state: present
 
-#- name: Create a sudo group (redhat)
-#  group:
-#    name: sudo
-#    state: present
-#  when: is_redhat
+# YOU CAN CHANGE THIS USER TO 'pi' OR 'ubuntu' ETC, IN /etc/iiab/local_vars.yml
+- name: Does user '{{ iiab_admin_user }}' (iiab_admin_user) exist?    # iiab-admin BY DEFAULT
+  command: "id {{ iiab_admin_user | quote }}"    # quote to avoid ';' exploits
+  register: user_info
+  failed_when: False    # Hides red errors (stronger than 'ignore_errors: yes')
 
-#- name: 'Add user {{ iiab_admin_user }} to groups: wheel, sudo'
-#  user:
-#    name: "{{ iiab_admin_user }}"
-#    groups: wheel,sudo
-
-- name: Edit the sudoers file -- first make it editable
-  file:
-    path: /etc/sudoers
-    mode: 0640
-
-- name: Have sudo log all commands it handles
-  lineinfile:
-    regexp: logfile
-    line: "Defaults     logfile = /var/log/sudo.log"
-    dest: /etc/sudoers
+# admin_console_group: iiab-admin   # PER default_vars.yml, SHOULD NEVER CHANGE
+- name: Establish Linux group '{{ admin_console_group }}' group, for login to Admin Console
+  group:
+    name: "{{ admin_console_group }}"
     state: present
+
+- name: Configure user '{{ iiab_admin_user }}' with group '{{ admin_console_group }}' for login to IIAB's Admin Console (http://box.lan/admin) AND for IIAB community support commands (/usr/bin/iiab-* and /usr/sbin/iiab-*) at the command-line
+  user:
+    name: "{{ iiab_admin_user }}"
+    #group: "{{ iiab_admin_user }}"    # Not nec.  Anyway this happens during account creation b/c 'USERGROUPS_ENAB yes' is set in any modern /etc/login.defs
+    groups: "{{ admin_console_group }}"    # What guarantees any user's ability to login to Admin Console, just in case the user is not a member of sudo in future.  FWIW Ansible adds the user to this group in /etc/group even in cases where that's not nec -- i.e. user iiab-admin's primary group is normally sufficient if it (the correct GID, corresponding to group iiab-admin) is in the 4th column of /etc/passwd.
+    append: yes
+    shell: /bin/bash
+    #password: "{{ iiab_admin_pwd_hash }}"    # 2020-10-14: DEPRECATED in favor
+    #update_password: on_create               # of 'command: chpasswd' below.
+
+- name: If user didn't exist, set password to '{{ iiab_admin_published_pwd }}'    # g0adm1n
+  #shell: "echo {{ iiab_admin_user }}:{{ iiab_admin_published_pwd }} | chpasswd"
+  command: chpasswd    # Equiv to line above, but safer
+  args:
+    stdin: "{{ iiab_admin_user | quote }}:{{ iiab_admin_published_pwd | quote }}"
+  when: user_info.rc != 0
+
+
+# sudo-prereqs.yml needs to have been run!
+
+- name: Add user {{ iiab_admin_user }} to group sudo, for IIAB community support commands like {iiab-diagnostics, iiab-hotspot-on, iiab-check-firmware}, if iiab_admin_can_sudo
+  #command: "gpasswd -a {{ iiab_admin_user | quote }} sudo"
+  user:
+    name: "{{ iiab_admin_user }}"
+    groups: sudo
+    append: yes
+  when: iiab_admin_can_sudo
+
+- name: Remove user {{ iiab_admin_user }} from group sudo, if not iiab_admin_can_sudo
+  command: "gpasswd -d {{ iiab_admin_user | quote }} sudo"
+  when: not iiab_admin_can_sudo
+  failed_when: False    # Hides red errors (stronger than 'ignore_errors: yes')
+
 
 #- name: Lets {{ iiab_admin_user }} sudo without password
 ##- name: Lets wheel sudo without password
 #  lineinfile:
+#    path: /etc/sudoers
 #    line: "{{ iiab_admin_user }} ALL=(ALL) NOPASSWD: ALL"
 ##    line: "%wheel ALL= NOPASSWD: ALL"
-#    dest: /etc/sudoers
-
-- name: Remove the line which requires tty
-  lineinfile:
-    regexp: requiretty
-    dest: /etc/sudoers
-    state: absent
-
-- name: End editing the sudoers file -- protect it again
-  file:
-    path: /etc/sudoers
-    mode: 0440
