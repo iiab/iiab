@@ -1,5 +1,5 @@
 #!/opt/iiab/bittorrent_venv/bin/python3
-####!{{ bittorrent_venv }}/bin/python3
+####!{{ transmission_venv }}/bin/python3
 # Get a map from InternetArchive using bittorrent
 
 import os,sys
