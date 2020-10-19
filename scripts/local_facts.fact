@@ -1,27 +1,47 @@
 #!/bin/bash
 
-# 2020-10-19: Displays all errors on purpose, and uses '|| true' to continue.
+# 2020-10-19: Most of the 12 variables require a command[*] to be run to
+# establish the var's value.  WE DISPLAY ALL ERRORS / DIAGNOSTICS AND CONTINUE.
+#
+# [*] DOESN'T MATTER WHAT COMMAND: so long as it fails with Return Code != 0
+# If statements then use that RC to force the var to these default values...
+
+STAGE=0
+OS="none"
+VERSION_ID="none"    # This var's combined with the above, before being output
+IIAB_BRANCH="none"
+IIAB_COMMIT="none"
+PHPLIB_DIR="none"
+XO_MODEL="none"
+RPI_MODEL="none"
+ANSIBLE_VERSION="none"
+DHCPCD="none"    # The last 3 conditioned on string output not RC.  SEE BELOW.
+NETWORK_MANAGER="none"
+SYSTEMD_NETWORKD="none"
+
 
 # STAGE is for ./iiab-install which runs Ansible with iiab-stages.yml
 # - fresh installs start at STAGE 0
 # - interrupted installs record the last completed STAGE (1-9)
 #
-# We initialize to '0' (zero) to cover both situations: (1) where iiab.env does
-# not exist and (2) where iiab.env exists but fails to set STAGE=<something>
-# (source command below tries to use this file, to the STAGE variable)
-STAGE=0
-source /etc/iiab/iiab.env || true
+# We initialize it to '0' (zero) to cover both situations: (1) iiab.env doesn't
+# exist and (2) iiab.env exists but fails to set STAGE=<something> (source
+# command below tries to use the file...to set the STAGE variable).
+source /etc/iiab/iiab.env || true    # Var auto-populated so no if required!
 
-OS="none"
-OS=$(grep ^ID= /etc/*elease | cut -d= -f2) || true
-OS=${OS//\"/}    # Remove all '"'
+if tmp=$(grep ^ID= /etc/*elease); then
+    OS=$(echo $tmp | cut -d= -f2)
+    OS=${OS//\"/}    # Remove all '"'
+fi
 if [ -f /etc/rpi-issue ]; then
     OS="raspbian"
 fi
-VERSION_ID="none"
-VERSION_ID=$(grep ^VERSION_ID= /etc/*elease | cut -d= -f2) || true
-VERSION_ID=${VERSION_ID//\"/}    # Remove all '"'
-VERSION_ID=${VERSION_ID%%.*}     # Remove all '.' and stuff to the right of 'em
+
+if tmp=$(grep ^VERSION_ID= /etc/*elease); then
+    VERSION_ID=$(echo $tmp | cut -d= -f2)
+    VERSION_ID=${VERSION_ID//\"/}   # Remove all '"'
+    VERSION_ID=${VERSION_ID%%.*}    # Remove all '.' & stuff to the right of em
+fi
 OS_VER=$OS-$VERSION_ID
 
 # Previously supported Linux distributions / versions:
@@ -47,14 +67,13 @@ case $OS_VER in
        ;;
 esac
 
-# Get git branch and commit, indicating IIAB version
-BRANCH="none"
-BRANCH=$(git rev-parse --abbrev-ref HEAD) || true
+# These next 2 help indicate what version of IIAB
+tmp=$(git rev-parse --abbrev-ref HEAD) &&
+    IIAB_BRANCH=$tmp
 
-COMMIT="none"
-COMMIT=$(git rev-parse --verify HEAD) || true
+tmp=$(git rev-parse --verify HEAD) &&
+    IIAB_COMMIT=$tmp
 
-PHPLIB_DIR="none"
 if [ -d /usr/lib64/php ]; then
     PHPLIB_DIR=/usr/lib64/php
 elif [ -d /usr/lib/php5 ]; then
@@ -63,36 +82,40 @@ elif [ -d /usr/lib/php ]; then
     PHPLIB_DIR=/usr/lib/php
 fi
 
-XO_VERSION="none"
-XO_VERSION=$(cat /proc/device-tree/mfg-data/MN) || true
+tmp=$(cat /proc/device-tree/mfg-data/MN) &&
+    XO_MODEL=$tmp
 
-RPI_VERSION="none"
-RPI_VERSION=$(cat /proc/device-tree/model) || true
+tmp=$(cat /proc/device-tree/model) &&
+    RPI_MODEL=$tmp
 
-ANSIBLE_VERSION="none"
-ANSIBLE_VERSION=$(ansible --version | head -n 1 | cut -f 2 -d " ") || true
+tmp=$(ansible --version) &&
+    ANSIBLE_VERSION=$(echo $tmp | head -n 1 | cut -f 2 -d " ")
 
-DHCPCD="none"
-DHCPCD=$(systemctl is-enabled dhcpcd) || true
+# THESE LAST 3 ARE DIFFEENT as "systemctl is-enabled" unhelpfully returns the
+# same rerror code (i.e. 1) REGARDLESS whether service is (A) disabled or
+# (B) doesn't exist.  SO WE TEST THE STRING OUTPUT INSTEAD OF THE RETURN CODE.
 
-# This check is Debian family only.
-# is_redhat would use NetworkManager as the service name.
-NM="none"
-NM=$(systemctl is-enabled network-manager) || true
+tmp=$(systemctl is-enabled dhcpcd)
+[[ $tmp = "" ]] || DHCPCD=$tmp
 
-SYSD_NETD="none"
-SYSD_NETD=$(systemctl is-enabled systemd-networkd) || true
+# Debian family only, as is_redhat would use NetworkManager as the service name
+tmp=$(systemctl is-enabled network-manager)
+[[ $tmp = "" ]] || NETWORK_MANAGER=$tmp
+
+tmp=$(systemctl is-enabled systemd-networkd)
+[[ $tmp = "" ]] || SYSTEMD_NETWORKD=$tmp
+
 
 cat <<EOF
 {"phplib_dir"             : "$PHPLIB_DIR",
 "stage"                   : "$STAGE",
 "dhcpcd"                  : "$DHCPCD",
-"network_manager"         : "$NM",
-"systemd_networkd"        : "$SYSD_NETD",
-"iiab_branch"             : "$BRANCH",
-"iiab_commit"             : "$COMMIT",
-"xo_model"                : "$XO_VERSION",
-"rpi_model"               : "$RPI_VERSION",
+"network_manager"         : "$NETWORK_MANAGER",
+"systemd_networkd"        : "$SYSTEMD_NETWORKD",
+"iiab_branch"             : "$IIAB_BRANCH",
+"iiab_commit"             : "$IIAB_COMMIT",
+"xo_model"                : "$XO_MODEL",
+"rpi_model"               : "$RPI_MODEL",
 "ansible_version"         : "$ANSIBLE_VERSION",
 "os"                      : "$OS",
 "os_ver"                  : "$OS_VER"}
