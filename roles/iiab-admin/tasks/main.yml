@@ -1,39 +1,32 @@
-- include_tasks: admin-user.yml
-  when: iiab_admin_user_install | bool
+# Summary of how this works with IIAB's Admin Console etc:
+# https://github.com/iiab/iiab/blob/master/roles/iiab-admin/README.rst
 
-- include_tasks: access.yml
 
-- name: Install /etc/profile.d/sshpwd-profile-iiab.sh from template, to issue warnings (during shell/ssh logins) if iiab-admin password is the default
-  template:
-    src: sshpwd-profile-iiab.sh
-    dest: /etc/profile.d/
-    mode: '0644'
+- name: Install lynx, screen
+  include_tasks: access.yml
 
-- name: Is this LXDE-pi?
-  stat:
-    path: /etc/xdg/lxsession/LXDE-pi
-  register: lx
+- name: Install sudo & /etc/sudoers with logging to /var/log/sudo.log
+  include_tasks: sudo-prereqs.yml
 
-- name: "Likewise for Raspbian, installing: /etc/xdg/lxsession/LXDE-pi/sshpwd-lxde-iiab.sh"
-  template:
-    src: sshpwd-lxde-iiab.sh
-    dest: /etc/xdg/lxsession/LXDE-pi/
-    mode: '0755'
-  when: lx.stat.isdir is defined and lx.stat.isdir and is_raspbian and is_debuntu
+- name: Configure user iiab-admin / password and its group(s), if iiab_admin_user_install
+  include_tasks: admin-user.yml
+  when: iiab_admin_user_install
 
-# 2019-03-07: This popup (/etc/xdg/lxsession/LXDE-pi/sshpwd-lxde-iiab.sh) does
-# not actually appear when triggered by /etc/xdg/autostart/pprompt-iiab.desktop
-# (or pprompt.desktop as Raspbian has working since 2018-11-13!)  Too bad as it
-# would be really nice to standardize this popup across Ubermix & all distros..
-# Is this a permissions/security issue presumably?  Official autostart spec is:
-# https://specifications.freedesktop.org/autostart-spec/autostart-spec-latest.html
-# Raspbian's 2016-2018 evolution here: https://github.com/iiab/iiab/issues/1537
+# Idea: institute precautionary system-wide published password warning(s)
+# for user iiab-admin / g0adm1n, i.e. {{ iiab_admin_user }} with password
+# {{ iiab_admin_published_pwd }}, regardless whether the password is set:
+#
+# (1) by the OS installer
+# (2) by the OS's graphical desktop tools
+# (3) at the command-line: sudo passwd iiab-admin
+# (4) by IIAB's 1-line installer: http://download.iiab.io
+# (5) by this role: roles/iiab-admin/tasks/admin-user.yml
+# (6) by IIAB's Admin Console during installation
+# ...and/or...
+# (7) by IIAB's Admin Console > Utilities > Change Password
 
-- name: Put line in /etc/xdg/lxsession/LXDE-pi/autostart to run the above (raspbian)
-  lineinfile:
-    path: /etc/xdg/lxsession/LXDE-pi/autostart
-    line: "@/etc/xdg/lxsession/LXDE-pi/sshpwd-lxde-iiab.sh"
-  when: lx.stat.isdir is defined and lx.stat.isdir and is_raspbian and is_debuntu
+- name: Install password warning(s)
+  include_tasks: pwd-warnings.yml
 
 
 # RECORD iiab-admin AS INSTALLED
@@ -62,3 +55,7 @@
       value: '"Admin User"'
     - option: iiab_admin_user
       value: "{{ iiab_admin_user }}"
+    - option: iiab_admin_user_install
+      value: "{{ iiab_admin_user_install }}"
+    - option: iiab_admin_can_sudo
+      value: "{{ iiab_admin_can_sudo }}"
