@@ -108,6 +108,8 @@ def start_download(key):
          print("Status:%s Retarting torrent for %s"%(status,catalog[key]['detail_url']))
 
 def show_download_progress():
+   global local_torrents
+   local_torrents = bt_client.get_torrents()
    PERIOD = 10
    last_bytes = {}
    #torrent_id = get_torrent_index(key)
