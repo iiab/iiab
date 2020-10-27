@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# 2020-10-19: Most of the 12 variables require a command[*] to be run to
+# 2020-10-27: Most of the 11 variables require a command[*] to be run to
 # establish the var's value.  WE DISPLAY ALL ERRORS / DIAGNOSTICS AND CONTINUE.
 #
 # [*] DOESN'T MATTER WHAT COMMAND: so long as it fails with Return Code != 0
@@ -11,7 +11,6 @@ OS="none"
 VERSION_ID="none"    # This var's combined with the above, before being output
 IIAB_BRANCH="none"
 IIAB_COMMIT="none"
-PHPLIB_DIR="none"
 XO_MODEL="none"
 RPI_MODEL="none"
 ANSIBLE_VERSION="none"
@@ -36,7 +35,9 @@ if [ -f /etc/rpi-issue ]; then
     OS="raspbian"
 fi
 
-if tmp=$(grep ^VERSION_ID= /etc/*elease); then
+# /etc/lsb-release could also be grep'd.  But /etc/upstream-release/lsb-release
+# on Linux Mint 20 caused grep of /etc/*elease to fail (on directory not file)
+if tmp=$(grep ^VERSION_ID= /etc/os-release); then
     VERSION_ID=$(echo $tmp | cut -d= -f2)
     VERSION_ID=${VERSION_ID//\"/}   # Remove all '"'
     VERSION_ID=${VERSION_ID%%.*}    # Remove all '.' & stuff to the right of em
@@ -77,14 +78,6 @@ tmp=$(git rev-parse --abbrev-ref HEAD) &&
 tmp=$(git rev-parse --verify HEAD) &&
     IIAB_COMMIT=$tmp
 
-if [ -d /usr/lib64/php ]; then
-    PHPLIB_DIR=/usr/lib64/php
-elif [ -d /usr/lib/php5 ]; then
-    PHPLIB_DIR=/usr/lib/php5
-elif [ -d /usr/lib/php ]; then
-    PHPLIB_DIR=/usr/lib/php
-fi
-
 tmp=$(cat /proc/device-tree/mfg-data/MN) &&
     XO_MODEL=$tmp
 
@@ -104,8 +97,10 @@ tmp=$(systemctl is-enabled dhcpcd)
     DHCPCD=$tmp
 #[[ $tmp ]] && DHCPCD=$tmp    # Short Ain't Sweet (less understandable)
 
-# Debian family only, as is_redhat would use NetworkManager as the service name
-tmp=$(systemctl is-enabled network-manager)
+# is_redhat uses "NetworkManager".  Debian 7 & Ubuntu 14.10 required
+# "network-manager" (prior to 2015/systemd).  Ubuntu 20.10 dropped the
+# legacy symlink from "network-manager.service" to "NetworkManager.service"
+tmp=$(systemctl is-enabled NetworkManager)
 [[ $tmp != "" ]] &&
     NETWORK_MANAGER=$tmp
 
@@ -115,8 +110,7 @@ tmp=$(systemctl is-enabled systemd-networkd)
 
 
 cat <<EOF
-{"phplib_dir"             : "$PHPLIB_DIR",
-"stage"                   : "$STAGE",
+{"stage"                  : "$STAGE",
 "dhcpcd"                  : "$DHCPCD",
 "network_manager"         : "$NETWORK_MANAGER",
 "systemd_networkd"        : "$SYSTEMD_NETWORKD",
