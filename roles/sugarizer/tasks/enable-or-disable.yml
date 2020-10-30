@@ -1,0 +1,32 @@
+- name: Enable & (Re)Start 'sugarizer.service' (WHICH AUTO-STARTS BUT DOES NOT ENABLE OR DISABLE 'mongodb.service', LIKEWISE WE DON'T TOUCH ANSIBLE VAR mongodb_enabled) if sugarizer_enabled
+  systemd:
+    name: sugarizer
+    enabled: yes
+    state: restarted
+  when: sugarizer_enabled
+
+- name: Disable & Stop 'sugarizer.service' (BUT LEAVE 'mongodb.service' COMPLETETY UNCHANGED, LIKEWISE WE DON'T TOUCH ANSIBLE VAR mongodb_enabled) if not sugarizer_enabled
+  systemd:
+    name: sugarizer
+    enabled: no
+    state: stopped
+  when: not sugarizer_enabled
+
+
+- name: Enable http://box/sugarizer if sugarizer_enabled, by installing {{ nginx_conf_dir }}/sugarizer-nginx.conf from template
+  template:
+    src: sugarizer-nginx.conf
+    dest: "{{ nginx_conf_dir }}/sugarizer-nginx.conf"    # /etc/nginx/conf.d
+  when: sugarizer_enabled
+
+- name: Disable http://box/sugarizer if not sugarizer_enabled, by removing {{ nginx_conf_dir }}/sugarizer-nginx.conf
+  file:
+    path: "{{ nginx_conf_dir }}/sugarizer-nginx.conf"
+    state: absent
+  when: not sugarizer_enabled
+
+
+- name: Restart 'nginx' systemd service
+  systemd:
+    name: nginx
+    state: restarted

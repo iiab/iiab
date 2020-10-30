@@ -27,6 +27,10 @@
 
 
 - debug:
+    var: rpi_model    # 0-init sets it from ansible_local.local_facts.rpi_model
+- debug:
+    var: ansible_local.local_facts.os_ver   # Like OS_VER in /etc/iiab/iiab.env
+- debug:
     var: is_debian
 - debug:
     var: is_raspbian
@@ -39,19 +43,16 @@
   ignore_errors: yes
 
 # ELSE...
+
 - name: Install MongoDB if 'mongodb_installed' not defined, e.g. in {{ iiab_state_file }}    # /etc/iiab/iiab_state.yml
   include_tasks: install.yml
   when: mongodb_installed is undefined and not (ansible_architecture == "aarch64" and is_debian_10 and not is_raspbian)
 
-- name: Disable & Stop 'mongodb' service, if not mongodb_enabled
-  systemd:
-    name: mongodb
-    enabled: no
-    state: stopped
-  when: not mongodb_enabled and mongodb_installed is defined
 
-#'mongodb' systemd service - started on demand by sugarizer
-# Just recording that mongodb should be running
+- name: Enable or Disable MongoDB, if mongodb_installed is defined (Sugarizer starts MongoDB on demand, so doesn't need this or care what happens here!)
+  include_tasks: enable-or-disable.yml
+  when: mongodb_installed is defined
+
 
 - name: Add 'mongodb' variable values to {{ iiab_ini_file }}
   ini_file:
