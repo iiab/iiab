@@ -68,32 +68,31 @@
     group: postgres
     mode: '0640'
 
-# Likely No Longer Nec!  Given stanza below does the same...
-#- name: 'Stop postgresql service: /etc/init.d/postgresql stop (debuntu)'
-#  command: "/etc/init.d/postgresql stop"
-#  ignore_errors: True
-#  when: postgresql_install and is_debuntu
-
-- name: Disable & Stop stock 'postgresql' systemd service
+- name: Disable & Stop stock 'postgresql' (parent) systemd service
   systemd:
     name: postgresql
     state: stopped
     enabled: no
 
-- name: Disable & Stop stock 'postgresql@11-main.service' systemd service - debian-10
-  systemd:
-    name: postgresql@11-main.service
-    state: stopped
-    enabled: no
-#  when: is_debian_10
-  when: is_debian_10 and not is_raspbian
+# Above parent service postgresql.service uses template postgresql@.service to
+# start/stop` child service e.g. postgresql@11-main.service on Debian 10, or
+# postgresql@13-main.service on Debian 11. So these 2 stanzas dont do anything:
 
-- name: Disable & Stop stock 'postgresql@' systemd service - debian-10
-  systemd:
-    name: postgresql@
-    enabled: no
-#  when: is_debian_10
-  when: is_debian_10 and not is_raspbian
+# 'systemctl is-enabled postgresql@' shows 'indirect' before + after
+#- name: Disable stock 'postgresql@' (template) if real Debian
+#  systemd:
+#    name: postgresql@
+#    #state: stopped    # Error if you attempt to stop template
+#    enabled: no        # Doesn't do anything
+#  when: is_debian and not is_raspbian
+
+# 'systemctl is-enabled postgresql@13-main.service' shows 'enabled-runtime' before + after
+#- name: Disable & Stop stock 'postgresql@{{ postgresql_version }}-main.service' (child service) if real Debian
+#  systemd:
+#    name: "postgresql@{{ postgresql_version }}-main.service"
+#    state: stopped    # Already done by parent above
+#    enabled: no       # Doesn't do anything
+#  when: is_debian and not is_raspbian
 
 
 # RECORD PostgreSQL AS INSTALLED
