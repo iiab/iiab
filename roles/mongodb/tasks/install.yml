@@ -19,7 +19,7 @@
   - name: Download & unzip 20MB http://download.iiab.io/packages/mongodb_stretch_3_0_14_core.zip to /tmp/mongodb-3.0.1x (aarch32)
     unarchive:
       remote_src: yes
-      src: "{{ iiab_download_url }}/mongodb_stretch_3_0_14_core.zip"
+      src: "{{ iiab_download_url }}/mongodb_stretch_3_0_14_core.zip"    # http://download.iiab.io/packages
       dest: /tmp/mongodb-3.0.1x
 
   - name: Install (move) its 3 CORE binaries from /tmp/mongodb-3.0.1x/core to /usr/bin (aarch32)
@@ -47,24 +47,22 @@
       home: /var/lib/mongodb
       shell: /usr/sbin/nologin
 
-  - name: Install /etc/mongod.conf from template (aarch32)
+  - name: Install {{ mongodb_conf }} from template (aarch32)
     template:
-      src: "{{ item.src }}"
-      dest: "{{ item.dest }}"
-      owner: root
-      group: root
-      mode: "{{ item.mode }}"
-    with_items:
-      - { src: 'mongod.conf.j2', dest: "{{ mongodb_conf }}", mode: '0644' }    # i.e. /etc/mongod.conf
+      src: mongod.conf.j2
+      dest: "{{ mongodb_conf }}"    # /etc/mongod.conf
+      #owner: root
+      #group: root
+      #mode: 0644
 
   # end block
   when: not (ansible_architecture == "x86_64" or ansible_architecture == "aarch64")
 
-# 32 bit OS's get caught above should handle aarch32 including 32-bit ubuntu
-# from https://ubuntu.com/download/raspberry-pi. 20.4-32bit might fail untested
-# 32bit intel might puke as this was orginally deployed for raspbian. Haven't
-# see bootable 32bit intel installers for a while now.
-# 64 bit OS's proceed below.
+# 32-bit OS's are handled above: this should handle aarch32 including 32-bit Ubuntu
+# from https://ubuntu.com/download/raspberry-pi but Ubuntu 20.04 32-bit might fail
+# untested, and 32-bit Intel might puke as this was orginally deployed for Raspbian.
+# (Haven't seen bootable 32-bit Intel installers for a while now.)
+# 64-bit OS's proceed below.
 
 - block:
   - name: Add mongodb.org signing key (only 64-bit support available)
@@ -74,7 +72,11 @@
 
   - name: Use mongodb-org's Debian repo for Debian (only amd64 support available)
     apt_repository:
-      repo: deb http://repo.mongodb.org/apt/debian {{ ansible_distribution_release }}/mongodb-org/4.4 main
+      # 2020-10-28: http://repo.mongodb.org/apt/debian/dists/ supports only
+      # {buster 10, stretch 9, jessie 8, wheezy 7}
+      # so Debian 11 "Bullseye" (testing branch) can revert to buster for now:
+      repo: deb http://repo.mongodb.org/apt/debian buster/mongodb-org/4.4 main
+      #repo: deb http://repo.mongodb.org/apt/debian {{ ansible_distribution_release }}/mongodb-org/4.4 main
       state: present
       filename: mongodb-org
     when: is_debian and (ansible_architecture == "x86_64")
@@ -112,12 +114,12 @@
         - mongodb-org-server
       state: present
 
-  - name: Change the mongodb port to 27018
+  - name: Change {{ mongodb_conf }} port to {{ mongodb_port }} -- takes effect on next (re)start of the service -- via enable-or-disable.yml or via sugarizer.service auto-starting MongoDB on demand
     lineinfile:
-      path: /etc/mongod.conf
-      regexp: 'port: 27017'
+      path: "{{ mongodb_conf }}"
+      regexp: "port: 27017"
       backrefs: yes
-      line: '  port: 27018'
+      line: "  port: {{ mongodb_port }}"    # 27018
 
   # end block
   when: (ansible_architecture == "aarch64") or (ansible_architecture == "x86_64")
@@ -135,7 +137,7 @@
     #- { path: '/var/run/mongodb' }
     - /var/lib/mongodb
     - /var/log/mongodb
-    - "{{ mongodb_db_path }}"    # i.e. /library/dbdata/mongodb/
+    - "{{ mongodb_db_path }}"    # /library/dbdata/mongodb
 
 - name: Install mongodb.service, /usr/bin/iiab-mongodb-repair-if-no-lock from templates
   template:
@@ -148,14 +150,9 @@
     - { src: 'mongodb.service.j2', dest: '/etc/systemd/system/mongodb.service', mode: '0644' }
     - { src: 'iiab-mongodb-repair-if-no-lock.j2', dest: '/usr/bin/iiab-mongodb-repair-if-no-lock', mode: '0755' }
 
-# daemon_reload is used to force systemd to recognize a newly installed .service file
-# restarted here to ensure the port has been changed
-- name: Disable 'mongodb' systemd service - started on demand by sugarizer
+- name: systemctl daemon_reload, so systemd (re)reads mongodb.service
   systemd:
-    name: mongodb
     daemon_reload: yes
-    enabled: no
-    state: restarted
 
 
 # 3. RECORD MongoDB AS INSTALLED
