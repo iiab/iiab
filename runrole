@@ -1,12 +1,15 @@
 #!/bin/bash
 
+DEFAULT_VARS_FILE=/opt/iiab/iiab/vars/default_vars.yml
+LOCAL_VARS_FILE=/etc/iiab/local_vars.yml
+IIAB_STATE_FILE=/etc/iiab/iiab_state.yml
+ROLE_VAR=""
+INSTALL=false
+REINSTALL=false
+CWD=`pwd`
+ARGS="--extra-vars {"    # bash forces {...} to '{...}' for Ansible, SEE BOTTOM
 INVENTORY=ansible_hosts
 PLAYBOOK=run-one-role.yml
-ARGS=""
-REINSTALL=0
-CWD=`pwd`
-IIAB_STATE_FILE=/etc/iiab/iiab_state.yml
-LOCAL_VARS_FILE=/etc/iiab/local_vars.yml
 
 if [ ! -f $PLAYBOOK ]; then
     echo "Exiting: IIAB Playbook not found."
@@ -14,7 +17,7 @@ if [ ! -f $PLAYBOOK ]; then
     exit 1
 fi
 
-if [[ $# -eq 0 ]] || [ "$2" == "--reinstall" ] || [ "$3" == "--reinstall" ] ; then
+if [ $# -eq 0 ] || [ "$2" == "--reinstall" ] || [ "$3" == "--reinstall" ]; then
     echo "Usage: ./runrole <name of role>"
     echo "Usage: ./runrole --reinstall <name of role>"
     echo
@@ -22,17 +25,6 @@ if [[ $# -eq 0 ]] || [ "$2" == "--reinstall" ] || [ "$3" == "--reinstall" ] ; th
     echo "If omitted, <current directory>/iiab-debug.log is used."
     exit 0
 fi
-
-if [ "$1" == "--reinstall" ]; then
-    ARGS="$ARGS -e reinstall=True"
-    REINSTALL=1
-    shift 1
-fi
-
-#if ! grep -q "^""$1""_install: True" $LOCAL_VARS_FILE; then
-#    echo "ERROR: $LOCAL_VARS_FILE must contain '""$1""_install: True'"
-#    exit 1
-#fi
 
 # 2020-08-05: yes /etc/iiab/iiab_state.yml is necessary, but we DON'T
 # want to encourage sloppy operators to delete/touch this file.
@@ -50,38 +42,57 @@ fi
 #    touch $IIAB_STATE_FILE
 #fi
 
-#if ! grep -q $1_install $LOCAL_VARS_FILE; then
-#    echo " $1_install: not found in $VARS"
-#    echo " Please review $VARS and edit as required"
-#    exit 1
-#elif grep $1_install $LOCAL_VARS_FILE | grep -q --exclude "#" False; then
-#    echo " $1_install: set to False found in $VARS"
-#    echo " Please review $VARS and edit as required"
-#    exit 1
-#elif grep $1_install $LOCAL_VARS_FILE | grep -q "#"; then
-#    echo " $1_install: commented out (#) in $VARS"
-#    echo " Please review $VARS and edit as required"
-#    exit 1
-#else
-#    if grep $1_install $LOCAL_VARS_FILE | grep -q --exclude "#" True; then
-#        echo " $1_install: set to True found in $VARS"
-#        echo " continuing...."
-#    else
-#        echo "somthing went wrong to get here"
-#        exit 1
-#    fi
-#fi
+if [ "$1" == "--reinstall" ]; then
+    ARGS="$ARGS\"reinstall\":True," # Needs boolean not string so use JSON list
+    REINSTALL=true
+    shift
+fi
 
-if [ "$REINSTALL" == "1" ]; then
-    if [ $1 == "calibre-web" ]; then # role directory & installed marker differ
-        sed -i -e '/^calibreweb/d' $IIAB_STATE_FILE
-    elif [ $1 == "httpd" ]; then # role directory & installed marker differ
-        sed -i -e '/^apache/d' $IIAB_STATE_FILE
-    elif [ $1 == "osm-vector-maps" ]; then # role directory & installed marker differ
-        sed -i -e '/^osm_vector_maps/d' $IIAB_STATE_FILE
+ROLE_VAR=$1    # Ansible role name & var name sometimes differ :/
+if [ $1 == "calibre-web" ]; then 
+    ROLE_VAR=calibreweb
+elif [ $1 == "httpd" ]; then
+    ROLE_VAR=apache
+elif [ $1 == "osm-vector-maps" ]; then
+    ROLE_VAR=osm_vector_maps
+fi
+
+echo
+if $REINSTALL; then   # Add '_' so '--reinstall calibre' doesn't zap calibreweb
+    if grep -q "^${ROLE_VAR}_" $IIAB_STATE_FILE; then
+        echo -e "\e[1mThese line(s) in $IIAB_STATE_FILE are now being deleted:\e[0m\n"
+        grep "^${ROLE_VAR}_" $IIAB_STATE_FILE; echo
+        sed -i "/^${ROLE_VAR}_/d" $IIAB_STATE_FILE
     else
-        sed -i -e "/^$1/d" $IIAB_STATE_FILE
+        echo -e "\e[1mERROR: $IIAB_STATE_FILE has no lines that begin with '${ROLE_VAR}_'\e[0m\n"
+        echo -e "Try again without the '--reinstall' flag?\n"
+        exit 1
     fi
+else
+    if grep -q "^${ROLE_VAR}_" $IIAB_STATE_FILE; then
+        echo -e "\e[1mWARNING: $IIAB_STATE_FILE already has this/these line(s):\e[0m\n"
+        grep "^${ROLE_VAR}_" $IIAB_STATE_FILE; echo
+        echo -e "To reinstall it, run: ./runrole --reinstall $1\n"
+        echo -n "Or continue, e.g. to enable/disable it based on var '${ROLE_VAR}_enabled' ? [Y/n] "
+        read ans < /dev/tty
+        echo
+        [ "$ans" = "n" ] || [ "$ans" = "N" ] &&
+            exit 1
+    fi
+fi
+
+grep -q "^${ROLE_VAR}_install:\s\+[Tt]rue\b" $DEFAULT_VARS_FILE && INSTALL=true
+grep -q "^${ROLE_VAR}_install:\s\+[Ff]alse\b" $LOCAL_VARS_FILE && INSTALL=false
+grep -q "^${ROLE_VAR}_install:\s\+[Tt]rue\b" $LOCAL_VARS_FILE && INSTALL=true
+if ! $INSTALL; then
+    echo -e "\e[1m'${ROLE_VAR}_install: True' MUST BE SET!\e[0m\n"
+    echo -e "Usually it's best to set variables in: $LOCAL_VARS_FILE\n"
+    echo -n "Just for now, pass '${ROLE_VAR}_install: True' directly to Ansible? [Y/n] "
+    read ans < /dev/tty
+    echo
+    [ "$ans" = "n" ] || [ "$ans" = "N" ] &&
+        exit 1
+    ARGS="$ARGS\"${ROLE_VAR}_install\":True,"
 fi
 
 if [ $# -eq 2 ]; then
@@ -90,5 +101,19 @@ else
    export ANSIBLE_LOG_PATH="$CWD/iiab-debug.log"
 fi
 
-ansible -m setup -i $INVENTORY localhost ${ARGS} --connection=local | grep python
-ansible-playbook -i $INVENTORY $PLAYBOOK ${ARGS} --connection=local -e "role_to_run=$1"
+ARGS="$ARGS\"role_to_run\":\"$1\"}"    # $1 works like \"$1\" if str validated
+CMD="ansible-playbook -i $INVENTORY $PLAYBOOK --connection=local $ARGS"
+echo -e "\e[1mbash will now run this, adding single quotes around the {...} curly braces:\e[0m\n\n$CMD\n"
+ansible -m setup -i $INVENTORY localhost --connection=local | grep python
+$CMD
+
+# bash forces (NECESSARY) single quotes around {} at runtime (if $ARGS contains
+# curly braces).  If you also add single quotes *within* $ARGS, Ansible will
+# FAIL as you will end up with 2-not-1 single-quotes on each side of the {}.
+# https://docs.ansible.com/ansible/latest/user_guide/playbooks_variables.html#json-string-format
+#
+# Change the top line of this file to 'bash -x' to see this happen live.  Or,
+# if you prefer the single quotes in the $ARGS var itself, run it this way:
+#
+# echo $CMD > /tmp/runrole-ansible-cmd
+# bash /tmp/runrole-ansible-cmd
