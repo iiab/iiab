@@ -5,6 +5,7 @@ LOCAL_VARS_FILE=/etc/iiab/local_vars.yml
 IIAB_STATE_FILE=/etc/iiab/iiab_state.yml
 ROLE_VAR=""
 INSTALL=false
+ENABLED=false
 REINSTALL=false
 CWD=`pwd`
 ARGS="--extra-vars {"    # bash forces {...} to '{...}' for Ansible, SEE BOTTOM
@@ -72,8 +73,16 @@ else
     if grep -q "^${ROLE_VAR}_" $IIAB_STATE_FILE; then
         echo -e "\e[1mWARNING: $IIAB_STATE_FILE already has this/these line(s):\e[0m\n"
         grep "^${ROLE_VAR}_" $IIAB_STATE_FILE; echo
-        echo -e "To reinstall it, run: ./runrole --reinstall $1\n"
-        echo -n "Or continue, e.g. to enable/disable it based on var '${ROLE_VAR}_enabled' ? [Y/n] "
+        echo -e "If you prefer to reinstall it, run: ./runrole --reinstall $1\n"
+
+        grep -q "^${ROLE_VAR}_enabled:\s\+[Tt]rue\b" $DEFAULT_VARS_FILE && ENABLED=true
+        grep -q "^${ROLE_VAR}_enabled:\s\+[Ff]alse\b" $LOCAL_VARS_FILE && ENABLED=false
+        grep -q "^${ROLE_VAR}_enabled:\s\+[Tt]rue\b" $LOCAL_VARS_FILE && ENABLED=true
+        if $ENABLED; then
+            echo -n "Or just continue, to try to enforce var '${ROLE_VAR}_enabled: True' ? [Y/n] "
+        else
+            echo -n "Or just continue, to try to enforce var '${ROLE_VAR}_enabled: False' ? [Y/n] "
+        fi
         read ans < /dev/tty
         echo
         [ "$ans" = "n" ] || [ "$ans" = "N" ] &&
@@ -87,7 +96,7 @@ grep -q "^${ROLE_VAR}_install:\s\+[Tt]rue\b" $LOCAL_VARS_FILE && INSTALL=true
 if ! $INSTALL; then
     echo -e "\e[1m'${ROLE_VAR}_install: True' MUST BE SET!\e[0m\n"
     echo -e "Usually it's best to set variables in: $LOCAL_VARS_FILE\n"
-    echo -n "Just for now, pass '${ROLE_VAR}_install: True' directly to Ansible? [Y/n] "
+    echo -n "Just for now, force '${ROLE_VAR}_install: True' directly to Ansible? [Y/n] "
     read ans < /dev/tty
     echo
     [ "$ans" = "n" ] || [ "$ans" = "N" ] &&
