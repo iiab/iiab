@@ -30,51 +30,41 @@
     kiwix_src_file: "{{ kiwix_src_dir }}.tar.gz"
 
 
-# 1. PUT IN PLACE: ESSENTIAL DIRS, library.xml, test.zim
+# 1. PUT IN PLACE: /opt/iiab/downloads/kiwix-tools_linux-*.tar.gz, essential dirs, and test.zim if nec (library.xml is created later, by enable-or-disable.yml)
 
 - name: Download {{ iiab_download_url }}/{{ kiwix_src_file }} to /opt/iiab/downloads
   get_url:
     url: "{{ iiab_download_url }}/{{ kiwix_src_file }}"    # http://download.iiab.io/packages
-    dest: "{{ downloads_dir }}/{{ kiwix_src_file }}"
+    dest: "{{ downloads_dir }}/{{ kiwix_src_file }}"    # /opt/iiab/downloads
     timeout: "{{ download_timeout }}"
   when: internet_available
 
-- name: Create dir {{ iiab_zim_path }} and subdirs {content, index} for Kiwix ZIM files
+- name: "Create dirs, including parent dirs: {{ kiwix_path }}/bin (executables), {{ iiab_zim_path }}/content (ZIM files), {{ iiab_zim_path }}/index (legacy indexes)"
   file:
     path: "{{ item }}"
     state: directory
   with_items:
-    - "{{ iiab_zim_path }}"    # /library/zims
-    - "{{ iiab_zim_path }}/content"
+    - "{{ kiwix_path }}/bin"           # /opt/iiab/kiwix
+    - "{{ iiab_zim_path }}/content"    # /library/zims
     - "{{ iiab_zim_path }}/index"
 
-- name: Check for {{ kiwix_library_xml }}
-  stat:
-    path: "{{ kiwix_library_xml }}"    # /library/zims/library.xml
-  register: kiwix_xml
+- name: Count *.zim files in {{ iiab_zim_path }}/content
+  find:
+    paths: "{{ iiab_zim_path }}/content"
+    patterns: '*.zim'
+  register: kiwix_zims
 
-- name: Install stub /library/zims/library.xml from template, if one doesn't exist
-  template:
-    src: library.xml
-    dest: "{{ kiwix_library_xml }}"
-    force: no
-  when: not kiwix_xml.stat.exists
-
-- name: Install {{ iiab_zim_path }}/content/test.zim
+- name: If there were none, install {{ iiab_zim_path }}/content/test.zim
   copy:
     src: test.zim
     dest: "{{ iiab_zim_path }}/content/test.zim"
-    force: no
-
-- name: Create {{ kiwix_path }}/bin directory
-  file:
-    path: "{{ kiwix_path }}/bin"    # /opt/iiab/kiwix
-    state: directory
+    #force: no
+  when: kiwix_zims.matched == 0
 
 
 # 2. INSTALL KIWIX-TOOLS EXECUTABLES
 
-- name: Unarchive {{ kiwix_src_file }} to /tmp    # e.g. kiwix-tools_linux-armhf-0.6.1-1.tar.gz
+- name: Unarchive {{ kiwix_src_file }} to /tmp    # e.g. kiwix-tools_linux-armhf-3.1.2-3.tar.gz
   unarchive:
     src: "{{ downloads_dir }}/{{ kiwix_src_file }}"
     dest: /tmp
@@ -110,10 +100,14 @@
     - { src: 'iiab-make-kiwix-lib', dest: '/usr/bin/iiab-make-kiwix-lib', mode: '0755' }
     - { src: 'iiab-make-kiwix-lib3.py', dest: '/usr/bin/iiab-make-kiwix-lib.py', mode: '0755' }
 
-- name: "Install from template: Apache's kiwix.conf"
+- name: daemon_reload, so systemd (re)reads newly installed kiwix-serve.service
+  systemd:
+    daemon_reload: yes
+
+- name: "Install from template: /etc/{{ apache_conf_dir }}/kiwix.conf"
   template:
     src: kiwix.conf.j2
-    dest: "/etc/{{ apache_conf_dir }}/kiwix.conf"
+    dest: "/etc/{{ apache_conf_dir }}/kiwix.conf"    # apache2/sites-available
     #mode: '0644'
   when: apache_installed is defined
 
@@ -121,6 +115,7 @@
 - name: Install Kiwix Android app
   include_tasks: kiwix-apk.yml
   when: kiwix_incl_apk
+
 
 # 5. RECORD Kiwix AS INSTALLED
 
