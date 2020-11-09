@@ -44,32 +44,22 @@
     path: "{{ item }}"
     state: directory
   with_items:
+    - "{{ kiwix_path }}/bin"    # /opt/iiab/kiwix
     - "{{ iiab_zim_path }}"    # /library/zims
     - "{{ iiab_zim_path }}/content"
     - "{{ iiab_zim_path }}/index"
 
-- name: Check for {{ kiwix_library_xml }}
+- name: Check for {{ iiab_zim_path }}/content/*.zim
   stat:
-    path: "{{ kiwix_library_xml }}"    # /library/zims/library.xml
-  register: kiwix_xml
-
-- name: Install stub /library/zims/library.xml from template, if one doesn't exist
-  template:
-    src: library.xml
-    dest: "{{ kiwix_library_xml }}"
-    force: no
-  when: not kiwix_xml.stat.exists
+    path: "{{ iiab_zim_path }}/content/*.zim"
+  register: kiwix_zims
 
 - name: Install {{ iiab_zim_path }}/content/test.zim
   copy:
     src: test.zim
     dest: "{{ iiab_zim_path }}/content/test.zim"
     force: no
-
-- name: Create {{ kiwix_path }}/bin directory
-  file:
-    path: "{{ kiwix_path }}/bin"    # /opt/iiab/kiwix
-    state: directory
+  when: not kiwix_zims.stat.exists
 
 
 # 2. INSTALL KIWIX-TOOLS EXECUTABLES
@@ -109,6 +99,10 @@
     - { src: 'kiwix-serve.service.j2', dest: '/etc/systemd/system/kiwix-serve.service', mode: '0644' }
     - { src: 'iiab-make-kiwix-lib', dest: '/usr/bin/iiab-make-kiwix-lib', mode: '0755' }
     - { src: 'iiab-make-kiwix-lib3.py', dest: '/usr/bin/iiab-make-kiwix-lib.py', mode: '0755' }
+
+- name: Reload systemd for new kiwix-serve.service file
+  systemd:
+    daemon_reload: yes
 
 - name: "Install from template: Apache's kiwix.conf"
   template:
