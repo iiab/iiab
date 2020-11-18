@@ -18,11 +18,17 @@ if [ ! -f $PLAYBOOK ]; then
     exit 1
 fi
 
-if [[ $# -eq 0 ]] || [ "$2" == "--reinstall" ] || [ "$3" == "--reinstall" ] ; then
-    echo "Usage: sudo ./runrole <name of role>"
-    echo "Usage: sudo ./runrole --reinstall <name of role>"
+if [ "$1" == "--reinstall" ]; then
+    ARGS="$ARGS\"reinstall\":True," # Needs boolean not string so use JSON list
+    REINSTALL=true
+    shift
+fi
+
+if [[ $# -gt 3 ]] || [[ $# -eq 0 ]] || [ "$2" == "--reinstall" ] || [ "$3" == "--reinstall" ]; then
+    echo "Usage: sudo ./runrole <name of role> (alternate logfile)"
+    echo "Usage: sudo ./runrole --reinstall <name of role> (alternate logfile)"
     echo
-    echo "Optional 2nd parameter is full PATH/FILENAME for logging."
+    echo "Optional last parameter is full PATH/FILENAME for logging."
     echo "If omitted, <current directory>/iiab-debug.log is used."
     exit 0
 fi
@@ -49,12 +55,6 @@ fi
 #    touch $IIAB_STATE_FILE
 #fi
 
-if [ "$1" == "--reinstall" ]; then
-    ARGS="$ARGS\"reinstall\":True," # Needs boolean not string so use JSON list
-    REINSTALL=true
-    shift
-fi
-
 ROLE_VAR=$1    # Ansible role name & var name sometimes differ :/
 if [ $1 == "calibre-web" ]; then
     ROLE_VAR=calibreweb
@@ -66,7 +66,9 @@ fi
 
 echo
 if $REINSTALL; then   # Add '_' so '--reinstall calibre' doesn't zap calibreweb
-    if grep -q "^${ROLE_VAR}_" $IIAB_STATE_FILE; then
+    echo -n "Continue to Re-Install '$1' ? [Y/n]"
+    read ans < /dev/tty
+    if [ "$ans" = "y" ] || [ "$ans" = "Y" ] && grep -q "^${ROLE_VAR}_" $IIAB_STATE_FILE; then
         echo -e "\e[1mThese line(s) in $IIAB_STATE_FILE are now being deleted:\e[0m\n"
         grep "^${ROLE_VAR}_" $IIAB_STATE_FILE; echo
         sed -i "/^${ROLE_VAR}_/d" $IIAB_STATE_FILE
