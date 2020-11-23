@@ -1,12 +1,12 @@
 #!/bin/bash -x
 # Small daemon to identify this machine to the OpenVPN server
 
-HANDLE=
-UUID=
-if [ -f /etc/iiab/openvpn_handle ]; then
+#HANDLE=
+#UUID=
+#if [ -f /etc/iiab/openvpn_handle ]; then
     # Option #1: Source directly from /etc/iiab/local_vars.yml in future?
     # Option #2
-    HANDLE=`cat /etc/iiab/openvpn_handle`
+    HANDLE=$(cat /etc/iiab/openvpn_handle)    # Sets to "" if file doesn't exist (error is ok!)
 
 # Sourcing a variable from ~4 different places is a recipe for total confusion
 # (or worse!)  Far better to make variable openvpn_handle and file
@@ -25,20 +25,24 @@ if [ -f /etc/iiab/openvpn_handle ]; then
 #        HANDLE=`cat {{ iiab_ini_file }} | gawk \
 #        '{ if((toupper($1) == "HANDLE") && ($2 == "=")) { print $3;}}'`
 #    fi
-fi
+#fi
 HANDLE=${HANDLE// /_}
-if [ -f /etc/iiab/uuid ]; then
-    UUID=`cat /etc/iiab/uuid`
-fi
+#if [ -f /etc/iiab/uuid ]; then
+    UUID=$(cat /etc/iiab/uuid)    # Sets to "" if file doesn't exist (error is ok!)
+#fi
 
 SERVER=/usr/bin/ncat
-ID=`printf "HANDLE = %s|UUID = %s" $HANDLE $UUID`
-# August 2018: Removal of trailing slash tested on Raspbian, Ubuntu 18.04 & Ubuntu 16.04
+#ID=$(printf "HANDLE = %s|UUID = %s" $HANDLE $UUID)
+#ID=$(echo "HANDLE = ${HANDLE}|UUID = ${UUID}")
+ID=$(echo "HANDLE = $HANDLE|UUID = $UUID")
+# August 2018: Removal of trailing '|' tested on Raspbian, Ubuntu 18.04 & Ubuntu 16.04
 #ID=`printf "HANDLE = %s|UUID = %s|" $HANDLE $UUID`
 
 # Start the daemon which will serve the handle on demand
 {% if is_debuntu %}
 $SERVER -l -k -p1705 --exec "/bin/echo $ID" &
+# 2020-11-23: USE 1 LINE INSTEAD OF 9 LINES, IF WE MANDATE debuntu:
+#/usr/bin/ncat -l -k -p1705 --exec "/bin/echo HANDLE = $HANDLE|UUID = $UUID" &
 {% else %}
 source /etc/init.d/functions
 PID_FILE=/var/run/openvpn/announce.pid
