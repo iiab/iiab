@@ -55,7 +55,7 @@ def get_zim_list(path):
                 zim_versions[perma_ref] = zim_info # if there are multiples, last should win
     return files_processed, zim_versions
 
-def read_library_xml(lib_xml_file, kiwix_exclude_attr=[""]): # duplicated from iiab-cmdsrv
+def read_library_xml(lib_xml_file, kiwix_exclude_attr=["favicon"]): # duplicated from iiab-cmdsrv but changed
     '''
     Read zim properties from library.xml
     Returns dict of library.xml and map of zim id to zim file name (under <dev>/library/zims)
@@ -69,8 +69,7 @@ def read_library_xml(lib_xml_file, kiwix_exclude_attr=[""]): # duplicated from i
       path_to_id_map (dict): A dictionary that translates zim ids to physical names
     '''
 
-    kiwix_exclude_attr.append("id") # don't include id
-    kiwix_exclude_attr.append("favicon") # don't include large favicon
+    kiwix_exclude_attr.append("id") # don't include id because is key
     zims_installed = {}
     path_to_id_map = {}
     try:
