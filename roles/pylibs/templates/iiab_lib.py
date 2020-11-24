@@ -107,7 +107,7 @@ def rem_libr_xml(zim_id, kiwix_library_xml):
         if e.returncode != 2: # skip bogus file open error in kiwix-manage
             print(outp)
 
-def add_libr_xml(kiwix_library_xml, zim_path, zimname, zimidx):
+def add_libr_xml(kiwix_library_xml, zim_path, zimname, zimidx=None):
     '''
     Add a zim to library.xml
 
