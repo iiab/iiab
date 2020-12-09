@@ -31,28 +31,28 @@ outfile=/etc/iiab/diag/${IIAB_RELEASE}_${OS_VER}_${YMDT}_$nickname
 # roles/0-init/tasks/main.yml.  A bit like system logs, but only on request.
 
 function cat_file_raw() {    # $1 = path/filename; $2 = # of lines, for tail
-    if [ -f $1 ]; then
-        ls -l $1 >> $outfile
-        if [ ! -s $1 ]; then
+    if [ -f "$1" ]; then
+        ls -l "$1" >> $outfile
+        if [ ! -s "$1" ]; then
             echo >> $outfile
             echo "FILE EXISTS BUT IS EMPTY!" >> $outfile
         elif [ $# -eq 1 ]; then
             echo >> $outfile
             # Redact most passwords from /etc/iiab/local_vars.yml, /etc/hostapd/hostapd.conf, /etc/wpa_supplicant/wpa_supplicant.conf, /etc/netplan/*, /etc/network/interfaces, /etc/network/interfaces.d/* ETC -- not much to worry about in /etc/iiab/iiab.ini (' = ')
-            cat $1 | sed 's/^\(\s*[[:alnum:]_-]*\(psk\|passphrase\|password\):\).*/\1 [REDACTED]/; s/^\(\s*[[:alnum:]_-]*\(psk\|passphrase\|password\)[= \t]\).*/\1[REDACTED]/' | iconv -t UTF-8//IGNORE >> $outfile
+            cat "$1" | sed 's/^\(\s*[[:alnum:]_-]*\(psk\|passphrase\|password\):\).*/\1 [REDACTED]/; s/^\(\s*[[:alnum:]_-]*\(psk\|passphrase\|password\)[= \t]\).*/\1[REDACTED]/' | iconv -t UTF-8//IGNORE >> $outfile
         else    # e.g. last 100 lines, maximum
             echo "                        ...ITS LAST $2 LINES FOLLOW..." >> $outfile
             echo >> $outfile
-	    tail -$2 $1 | sed 's/^\(\s*[[:alnum:]_-]*\(psk\|passphrase\|password\):\).*/\1 [REDACTED]/; s/^\(\s*[[:alnum:]_-]*\(psk\|passphrase\|password\)[= \t]\).*/\1[REDACTED]/' | iconv -t UTF-8//IGNORE >> $outfile
+            tail -$2 "$1" | sed 's/^\(\s*[[:alnum:]_-]*\(psk\|passphrase\|password\):\).*/\1 [REDACTED]/; s/^\(\s*[[:alnum:]_-]*\(psk\|passphrase\|password\)[= \t]\).*/\1[REDACTED]/' | iconv -t UTF-8//IGNORE >> $outfile
         fi
         echo >> $outfile
-    elif [ -h $1 ]; then
-        ls -l $1 >> $outfile
+    elif [ -h "$1" ]; then
+        ls -l "$1" >> $outfile
         echo >> $outfile
         echo "SYMLINK DOES NOT LEAD TO A REGULAR FILE!" >> $outfile
         echo >> $outfile
-    elif [ -d $1 ]; then
-        ls -ld $1 >> $outfile
+    elif [ -d "$1" ]; then
+        ls -ld "$1" >> $outfile
         echo >> $outfile
         echo "THIS IS A DIRECTORY NOT A FILE!" >> $outfile
         echo >> $outfile
@@ -64,7 +64,7 @@ function cat_file_raw() {    # $1 = path/filename; $2 = # of lines, for tail
 function cat_file() {
     echo "     $1"
     echo "=IIAB==========================================================================" >> $outfile
-    cat_file_raw $1
+    cat_file_raw "$1"
 }
 
 function cat_dir() {
@@ -72,9 +72,10 @@ function cat_dir() {
     echo "=IIAB==========================================================================" >> $outfile
     if [ -d "$1" ]; then
         echo "DIRECTORY $1 FILES WILL FOLLOW...IF THEY EXIST" >> $outfile
-        for f in $(ls $1); do
+        shopt -s nullglob    # To avoid looping over empty directories
+        for f in "$1"/*; do
             echo "-IIAB--------------------------------------------------------------------------" >> $outfile
-            cat_file_raw $1/$f 100
+            cat_file_raw "$f" 100
         done
     else
         echo "DIRECTORY DOES NOT EXIST: $1" >> $outfile
@@ -84,7 +85,7 @@ function cat_dir() {
 function cat_cmd() {                        # $1 = command + params, $2 = explanation
     echo "     $1  # $2"
     echo "=IIAB==========================================================================" >> $outfile
-    cmd=$(echo $1 | sed 's/\s.*$//')        # Keep command on left; Drop params on right
+    cmd=$(echo "$1" | sed 's/\s.*$//')        # Keep command on left; Drop params on right
     pth=$(which $cmd | sed 's/[^/]*$//')    # Keep only path on left; Drop command on right
     echo "COMMAND: $pth$1    # $2" >> $outfile
     echo >> $outfile
@@ -99,7 +100,7 @@ function cat_cmd() {                        # $1 = command + params, $2 = explan
 function cat_tail() {     # $1 = path/filename; $2 = # of lines, for tail
     echo "     $1"
     echo "=IIAB==========================================================================" >> $outfile
-    cat_file_raw $1 $2    # e.g. last 100 lines, maximum
+    cat_file_raw "$1" $2    # e.g. last 100 lines, maximum
 }
 
 # START BUILDING UP THE FILE THAT'LL CONTAIN THE DIAGNOSTICS!
