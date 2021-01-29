@@ -12,7 +12,7 @@ Specifically, this 'network' role is run...
 
 Many IIAB networking questions can be answered in these 2 documents:
 
-- `IIAB Networking <https://github.com/iiab/iiab/wiki/IIAB-Networking>`_ is a high-level summary, that reviews IIAB's 3 modes of operation distinguishing WAN from LAN, `common ports <https://github.com/iiab/iiab/wiki/IIAB-Networking#list-of-open-ports--services>`_, DNS name resolution and some common customizations.
+- `IIAB Networking <https://github.com/iiab/iiab/wiki/IIAB-Networking>`_ is a high-level summary, that reviews IIAB's 3 modes of operation distinguishing WAN from LAN, `common ports <https://github.com/iiab/iiab/wiki/IIAB-Networking#list-of-ports--services>`_, DNS name resolution and some common customizations.
 - http://FAQ.IIAB.IO includes answers to common questions like:
 
   - What is local_vars.yml and how do I customize it?
