@@ -179,17 +179,17 @@ if [ "$wan" != "none" ]; then
     if [ "$lan" != "none" ]; then
         # Typically False, to keep client machines (e.g. students) off the Internet
         if [ "$iiab_gateway_enabled" == "True" ]; then
+            # 3 or 4 IP forwarding rules
             $IPTABLES -A POSTROUTING -t nat -o $wan -j MASQUERADE
+            $IPTABLES -A FORWARD -i $wan -o $lan -m state --state ESTABLISHED,RELATED -j ACCEPT
+            # Allow outgoing connections from the LAN side
+            $IPTABLES -A FORWARD -i $lan -o $wan -j ACCEPT
         fi
 
-        # 3 or 4 IP forwarding rules
-        $IPTABLES -A FORWARD -i $wan -o $lan -m state --state ESTABLISHED,RELATED -j ACCEPT
         # Block https traffic except if directed at server
         if [ "$gw_block_https" == "True" ]; then
             $IPTABLES -A FORWARD -p tcp ! -d {{ lan_ip }} --dport 443 -j DROP
         fi
-        # Allow outgoing connections from the LAN side
-        $IPTABLES -A FORWARD -i $lan -o $wan -j ACCEPT
         # Don't forward from the outside to the inside
         $IPTABLES -A FORWARD -i $wan -o $lan -j DROP
         # Enable routing (kernel IP forwarding)
