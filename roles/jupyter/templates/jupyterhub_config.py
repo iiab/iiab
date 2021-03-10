@@ -114,7 +114,7 @@
 #    - dummy: jupyterhub.auth.DummyAuthenticator
 #    - pam: jupyterhub.auth.PAMAuthenticator
 #  Default: 'jupyterhub.auth.PAMAuthenticator'
-# c.JupyterHub.authenticator_class = 'jupyterhub.auth.PAMAuthenticator'
+c.JupyterHub.authenticator_class = 'firstuseauthenticator.FirstUseAuthenticator'
 
 ## The base URL of the entire application.
 #  
@@ -194,7 +194,7 @@
 #  
 #  Should be exactly 256 bits (32 bytes).
 #  Default: b''
-# c.JupyterHub.cookie_secret = b''
+c.JupyterHub.cookie_secret = b'helloiiabitsrainingb123456789012'
 
 ## File in which to store the cookie secret.
 #  Default: 'jupyterhub_cookie_secret'
@@ -589,7 +589,7 @@
 #    - localprocess: jupyterhub.spawner.LocalProcessSpawner
 #    - simple: jupyterhub.spawner.SimpleLocalProcessSpawner
 #  Default: 'jupyterhub.spawner.LocalProcessSpawner'
-# c.JupyterHub.spawner_class = 'jupyterhub.spawner.LocalProcessSpawner'
+c.JupyterHub.spawner_class = 'systemdspawner.SystemdSpawner'
 
 ## Path to SSL certificate file for the public facing interface of the proxy
 #  
@@ -1229,3 +1229,10 @@
 ## Maximum number of entries per page for paginated results.
 #  Default: 250
 # c.Pagination.max_per_page = 250
+
+#------------------------------------------------------------------------------
+#  Systemdspawner config
+#------------------------------------------------------------------------------
+c.SystemdSpawner.dynamic_users = True
+c.SystemdSpawner.user_workingdir = '/opt/iiab/notebooks/{USERNAME}'
+
