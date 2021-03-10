@@ -124,7 +124,7 @@ c.JupyterHub.authenticator_class = 'firstuseauthenticator.FirstUseAuthenticator'
 #  .. deprecated: 0.9
 #      Use JupyterHub.bind_url
 #  Default: '/'
-# c.JupyterHub.base_url = '/'
+# c.JupyterHub.base_url = '/jupyterhub'
 
 ## The public facing URL of the whole JupyterHub application.
 #  
