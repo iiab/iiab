@@ -59,7 +59,7 @@ Then edit the file::
 
   nano /etc/transmission-daemon/settings.json
 
-Here are some short explanations, as to what those 70+ variables mean: https://github.com/transmission/transmission/wiki/Editing-Configuration-Files
+Here are some short explanations, as to what those ~68 variables mean: https://github.com/transmission/transmission/wiki/Editing-Configuration-Files
 
 After saving your changes in 'settings.json' restart Transmission by running::
 
@@ -74,7 +74,7 @@ Please read the lettered instructions (A, B, C, D) in `/etc/iiab/local_vars.yml 
 
 You can also download other torrents using Transmission's web interface, or by typing 'transmission-remote' at the command-line::
 
-  transmission-remote -a <path_to_the.torrent>
+  transmission-remote -n Admin:changeme -a <path_to_the.torrent>
 
 Known Issues
 ------------
@@ -95,3 +95,14 @@ Re-check that Transmission's settings are correct here: (by following the instru
 ::
 
   /etc/transmission-daemon/settings.json
+
+More advanced configuration and status are in directory ``/var/lib/transmission-daemon/info/`` here::
+
+  blocklists/
+  dht.dat
+  resume/
+  settings.json -> /etc/transmission-daemon/settings.json
+  stats.json
+  torrents/
+
+These are further explained in https://github.com/transmission/transmission/wiki/Configuration-Files (to correspond with the above path, apt package transmission-daemon sets user debian-transmission's home directory to /var/lib/transmission-daemon in /etc/passwd).
