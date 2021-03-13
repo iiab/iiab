@@ -1,27 +1,32 @@
----
 language: python
-python: "2.7"
+python: 3.8    # "3.8" also works
+dist: focal
 
-# Use the new container infrastructure
-dist: trusty
-sudo: false
-
-# Install ansible
 addons:
   apt:
+    sources:
+      - sourceline: ppa:ansible/ansible
     packages:
-    - python-pip
+#      - python-pip    # @arky had used this starting in 2018
+      - ansible-base    # Install latest ansible-base e.g. 2.10.6+, similar to https://github.com/iiab/iiab/blob/master/scripts/ansible
+#      - python3-pymysql    # These 7-or-8 packages are not needed during this very rapid --syntax-check
+#      - python3-psycopg2
+#      - python3-passlib
+#      - python3-pip
+#      - python3-setuptools
+      - python3-packaging    # To avoid warning "packaging Python module unavailable; unable to validate collection..."
+#      - python3-venv
+#      - virtualenv
 
 install:
-  # Install ansible
-  - pip install ansible
-
-  # Create ansible.cfg with correct roles_path and local_tmp
-  - "{ echo '[defaults]'; echo 'roles_path = ./roles/'; } >> ansible.cfg"
+#  - scripts/ansible    # See #2105: fails to install latest Ansible (& ~4 Ansible Collections from collections.yml) due to Travis VM's disk layout/perms being different
+#  - pip install ansible    # SLOW/OVERWEIGHT: installs Ansible 3.0.0+ with ~80 Ansible Collections
+#  - pip install ansible-base    # ALSO WORKS e.g. if the above addons: / apt: section is commented out.  To install latest ansible-base e.g. 2.10.6+, similar to https://github.com/iiab/iiab/blob/master/scripts/ansible
+  - ansible-galaxy collection install -r collections.yml    # Install ~4 Ansible Collections
+  - "{ echo 'roles_path = ./roles/'; } >> ansible.cfg"    # Add correct roles_path to ansible.cfg, appending to https://github.com/iiab/iiab/blob/master/ansible.cfg
+#  - "{ echo '[defaults]'; echo 'roles_path = ./roles/'; } >> ansible.cfg"    # 2021-02-24: suddenly no longer works, with the newer ansible-base install methods above (error arises due to '[defaults]' appearing twice)
+#  - cat ansible.cfg    # UNCOMMENT TO VERIFY!
+  - apt -a list ansible-base    # VERIFY ansible-base VERSIONS OFFERED BY apt
 
 script:
-  #  Basic role syntax check
   - ansible-playbook tests/test.yml -i tests/inventory --syntax-check
-
-#notifications:
-#  webhooks:  https://galaxy.ansible.com/api/v1/notifications/

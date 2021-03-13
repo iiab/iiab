@@ -18,42 +18,26 @@
     name: postgresql
 
 
-# - name: "Install packages: python-psycopg2, php-pgsql (OS's other than debuntu)"
-#   package:
-#     name:
-#       - python-psycopg2
-#       - php-pgsql
-#     state: present
-#   when: not is_debuntu
-
-- name: Install 4 php packages (debuntu)
+- name: Install 8 php packages (debuntu)
   package:
     name:
       - php{{ php_version }}-pgsql
       - php{{ php_version }}-curl
       - php{{ php_version }}-zip
       - php{{ php_version }}-gd
-      - php{{ php_version }}-mbstring    # 2020-06-15: Now required by Moodle 3.9+
-      - php{{ php_version }}-cli    # 2020-06-15: In the past this included (above) mbstring? However this is not true on Ubuntu Server 20.04 LTS.
+      - php{{ php_version }}-mbstring    # 2020-06-15: Required by Moodle 3.9+
+      - php{{ php_version }}-cli     # 2020-06-15: In the past this included (above) mbstring? However this is not true on Ubuntu Server 20.04 LTS.
+      - php{{ php_version }}-intl    # 2020-12-03: Required by Moodle 3.10+
+      - php{{ php_version }}-soap    # 2020-12-03: Recommended by Moodle 3.10+
     state: present
   when: is_debuntu
 
-# - name: "Install package: php{{ php_version }}-zip (Ubuntu or Debian 9+)"
-#   package:
-#     name: "php{{ php_version }}-zip"
-#   when: is_ubuntu or (is_debian and not is_debian_8)
-
-# - name: "Install package: php-pclzip (debian-8)"
-#   package:
-#     name: php-pclzip
-#   when: is_debian_8
-
 - name: Does {{ moodle_base }}/config-dist.php exist? (indicating Moodle is/was installed)
   stat:
-    path: "{{ moodle_base }}/config-dist.php"
+    path: "{{ moodle_base }}/config-dist.php"    # /opt/iiab/moodle
   register: moodle
 
-- name: Clone (i.e. use git to download) {{ moodle_repo_url }} to {{ moodle_base }}
+- name: Clone (i.e. use git to download) {{ moodle_repo_url }} to {{ moodle_base }} (~300 MB)
   git:
     repo: "{{ moodle_repo_url }}"
     dest: "{{ moodle_base }}"
@@ -68,37 +52,36 @@
   file:
     state: directory
     path: "{{ moodle_base }}"
-    owner: "{{ apache_user }}"
+    owner: "{{ apache_user }}"    # www-data
     recurse: yes
 
 - name: Create dir {{ content_base }}/dbdata/moodle owned by {{ apache_user }}
   file:
     state: directory
-    path: "{{ content_base }}/dbdata/moodle"
+    path: "{{ content_base }}/dbdata/moodle"    # /library
     owner: "{{ apache_user }}"
-    # mode: '0755'
 
-- name: Create dir {{ moodle_data }} ({{ apache_user }}:{{ apache_user }}, '0770')    # /library/moodle
+- name: Create dir {{ moodle_data }} ({{ apache_user }}:{{ apache_user }}, '0770')
   file:
     state: directory
-    path: "{{ moodle_data }}"
+    path: "{{ moodle_data }}"    # /library/moodle
     owner: "{{ apache_user }}"
     group: "{{ apache_user }}"
-    mode: '0770'
+    #mode: '0770'    # Regardless, permissions end up as: drwxrwsrwx
 
 - name: Remove stock /etc/{{ apache_conf_dir }}/moodle.conf
   file:
-    path: "/etc/{{ apache_conf_dir }}/moodle.conf"
+    path: "/etc/{{ apache_conf_dir }}/moodle.conf"    # apache2/sites-available
     state: absent
 
+# 2021-02-01: Not nec if we can hopefully migrate from Apache to NGINX soon!
 - name: Install /etc/{{ apache_conf_dir }}/022-moodle.conf from template
   template:
     src: 022-moodle.j2
     dest: "/etc/{{ apache_conf_dir }}/022-moodle.conf"
-    # owner: root
-    # group: root
-    # mode: '0644'
 
+# roles/postgresql/templates/postgresql-iiab.service WAS INSTALLED HERE:
+# /etc/systemd/system/postgresql-iiab.service
 - name: Start 'postgresql-iiab' systemd service, to configure Moodle's DB
   systemd:
     name: postgresql-iiab
@@ -134,8 +117,7 @@
   systemd:
     name: postgresql-iiab
     state: restarted
-    #enabled: yes
-  #when: moodle_enabled
+    #enabled: yes    # Service ends up enabled regardless
 
 - name: (Re)Start '{{ apache_service }}' systemd service
   systemd:
@@ -151,11 +133,12 @@
   shell: "{{ moodle_base }}/moodle_installer"
   when: config.stat.exists is defined and not config.stat.exists
 
-- name: Make {{ moodle_base }}/config.php readable, with permission '0644'
-  #command: chown -R {{ apache_user }} {{ moodle_base }}
-  file:
-    path: "{{ moodle_base }}/config.php"    # /opt/iiab/moodle
-    mode: '0644'
+# 2021-02-01: Let's stick with Moodle's default (640)
+#- name: Make {{ moodle_base }}/config.php readable, with permission '0644'
+#  #command: chown -R {{ apache_user }} {{ moodle_base }}
+#  file:
+#    path: "{{ moodle_base }}/config.php"    # /opt/iiab/moodle
+#    mode: '0644'
 
 
 # RECORD Moodle AS INSTALLED

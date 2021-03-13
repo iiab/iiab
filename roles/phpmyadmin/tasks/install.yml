@@ -8,58 +8,36 @@
     name: httpd
 
 
-- name: Download {{ phpmyadmin_dl_url }} to {{ downloads_dir }}
-  get_url:
-    url: "{{ phpmyadmin_dl_url }}"    # e.g. https://files.phpmyadmin.net/phpMyAdmin/5.0.4/phpMyAdmin-5.0.4-all-languages.zip
-    dest: "{{ downloads_dir }}"    # /opt/iiab/downloads
-    timeout: "{{ download_timeout }}"    # 200
-  when: internet_available
-
-- name: Does {{ downloads_dir }}/{{ phpmyadmin_name_zip }} exist?
-  stat:
-    path: "{{ downloads_dir }}/{{ phpmyadmin_name_zip }}"    # e.g. /opt/iiab/downloads/phpMyAdmin-5.0.4-all-languages.zip
-  register: phpmyadmin_dl
-
-- name: FAIL (force Ansible to exit) IF {{ downloads_dir }}/{{ phpmyadmin_name_zip }} doesn't exist
-  fail:
-    msg: "{{ downloads_dir }}/{{ phpmyadmin_name_zip }} is REQUIRED in order to install phpMyAdmin."
-  when: not phpmyadmin_dl.stat.exists
-
-- name: Unzip to permanent location /opt/{{ phpmyadmin_name }}, owned by {{ apache_user }}:root    # e.g. /opt/phpMyAdmin-5.0.4-all-languages, owned by www-data:root
+- name: Unarchive {{ phpmyadmin_dl_url }} (7+ MB) to /opt (60+ MB)
   unarchive:
-    src: "{{ downloads_dir }}/{{ phpmyadmin_name_zip }}"
+    remote_src: yes    # Overwrite even if "already exists on the target"
+    src: "{{ phpmyadmin_dl_url }}"    # e.g. https://files.phpmyadmin.net/phpMyAdmin/5.1.0/phpMyAdmin-5.1.0-all-languages.tar.xv
     dest: /opt
-    owner: "{{ apache_user }}"
+    owner: "{{ apache_user }}"    # www-data on debuntu
+    group: "{{ apache_user }}"
+    #timeout: "{{ download_timeout }}" # Use get_url if timeout (200s) required
+  when: internet_available
 
 - name: Symlink /opt/phpmyadmin -> {{ phpmyadmin_name }}
   file:
     src: "{{ phpmyadmin_name }}"
     path: /opt/phpmyadmin
-    owner: "{{ apache_user }}"    # Some Linux's ignore symlink owners?
+    #owner: "{{ apache_user }}"    # Generally not used by Linux
+    #group: "{{ apache_user }}"    # Generally not used by Linux
     state: link
 
-- name: Install /opt/phpmyadmin/config.inc.php owned by {{ apache_user }}:root, from template
+- name: Install /opt/phpmyadmin/config.inc.php owned by {{ apache_user }}:{{ apache_user }}, from template
   template:
     src: config.inc.php
     dest: /opt/phpmyadmin/config.inc.php
     owner: "{{ apache_user }}"
+    group: "{{ apache_user }}"
 
-# Above 3 stanzas set link/tree/contents ownership to {{ apache_user }}:root
-# OOPS: CHOWN BELOW CHANGED LINK ALONE (TREE/CONTENTS REMAINED root:root)
-
-# - name: Change the owner of the PHP tree to Apache
-#   shell: "chown -R {{ apache_user }} /opt/phpmyadmin"
-#   #file:
-#   #  path: "/opt/{{ phpmyadmin_name_zip }}"
-#   #  owner: "{{ apache_user }}"
-#   #  recurse: yes
-#   #  state: directory
-
-- name: Install /etc/{{ apache_conf_dir }}/phpmyadmin.conf from template, if phpmyadmin_enabled
+- name: Install /etc/{{ apache_conf_dir }}/phpmyadmin.conf from template
   template:
     src: phpmyadmin.j2
     dest: "/etc/{{ apache_conf_dir }}/phpmyadmin.conf"
-  when: apache_installed is defined
+  #when: apache_installed is defined
 
 
 # RECORD phpMyAdmin AS INSTALLED
