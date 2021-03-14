@@ -84,13 +84,13 @@ Verify that transmission-daemon is running::
 
   systemctl status transmission-daemon
 
-Re-check that Transmission's settings are correct here: (by following the instructions above, under 'Configuration')
+Re-check that Transmission's settings are correct here: (by following the instructions above, under `Configuration <./README.rst#Configuration>`_)
 
 ::
 
   /etc/transmission-daemon/settings.json
 
-More advanced configuration and status are in directory ``/var/lib/transmission-daemon/info/`` here::
+More advanced configuration and status are in directory ``/var/lib/transmission-daemon/info/`` (symlinked to /var/lib/transmission-daemon/.config/transmission-daemon/) here::
 
   blocklists/
   dht.dat
@@ -99,4 +99,4 @@ More advanced configuration and status are in directory ``/var/lib/transmission-
   stats.json
   torrents/
 
-These are further explained in https://github.com/transmission/transmission/wiki/Configuration-Files (to correspond with the above path, apt package transmission-daemon sets user debian-transmission's home directory to /var/lib/transmission-daemon in /etc/passwd).
+These are further explained in https://github.com/transmission/transmission/wiki/Configuration-Files (to align with the above, apt package transmission-daemon sets user debian-transmission's home directory to ``/var/lib/transmission-daemon`` in /etc/passwd).
