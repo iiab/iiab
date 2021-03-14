@@ -59,6 +59,8 @@ After saving your changes in 'settings.json', restart Transmission by running::
 
   systemctl restart transmission-daemon
 
+*2021-03-14: Transmission 2.94 and 3.00 were intermittently* **ignoring** */etc/transmission-daemon/settings.json (presumably when the file was deemed problematic/missing/etc) and creating their own* ``/var/lib/transmission-daemon/.config/transmission-daemon/settings.json`` *(i.e. suddenly a FILE instead of transmission-deamon's out-of-the-box SYMLINK to /etc/transmission-daemon/settings.json).  IIAB `PR #2707 <https://github.com/iiab/iiab/pull/2707>`_ should fix this problem, by reversing the direction of the symlink created by apt.  See* `Troubleshooting <./README.rst#Troubleshooting>`_ *below.*
+
 Adding Torrents
 ---------------
 
@@ -95,7 +97,7 @@ More advanced configuration and status are in directory ``/var/lib/transmission-
   blocklists/
   dht.dat
   resume/
-  settings.json -> /etc/transmission-daemon/settings.json
+  settings.json <- /etc/transmission-daemon/settings.json (`PR #2707 <https://github.com/iiab/iiab/pull/2707>`_ CREATES THIS SYMLINK!)
   stats.json
   torrents/
 
