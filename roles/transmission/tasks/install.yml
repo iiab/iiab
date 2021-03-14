@@ -19,13 +19,38 @@
     state: stopped
   ignore_errors: yes
 
-- name: Install /etc/transmission-daemon/settings.json from template
-  template:
-    src: settings.json.j2
-    dest: /etc/transmission-daemon/settings.json
+- name: Back up prior /etc/transmission-daemon/settings.json (original file from apt, or new symlink contents) to /etc/transmission-daemon/settings.json.old*
+  copy:
+    src: /etc/transmission-daemon/settings.json
+    dest: /etc/transmission-daemon/settings.json.old
+    mode: preserve
     owner: "{{ transmission_user }}"     # debian-transmission
     group: "{{ transmission_group }}"    # debian-transmission
-    # mode: '0600'
+    backup: yes
+  ignore_errors: yes
+
+- name: "Back up IIAB's templated version to /etc/transmission-daemon/settings.json.iiab"
+  template:
+    src: settings.json.j2
+    dest: /etc/transmission-daemon/settings.json.iiab
+    owner: "{{ transmission_user }}"     # debian-transmission
+    group: "{{ transmission_group }}"    # debian-transmission
+    mode: '0600'
+
+- name: Install /var/lib/transmission-daemon/.config/transmission-daemon/settings.json from template
+  template:
+    src: settings.json.j2
+    dest: /var/lib/transmission-daemon/.config/transmission-daemon/settings.json
+    owner: "{{ transmission_user }}"     # debian-transmission
+    group: "{{ transmission_group }}"    # debian-transmission
+    mode: '0600'
+
+- name: "Reverse Transmission's fragile OOTB symlink -- instead we establish /etc/transmission-daemon/settings.json -> /var/lib/transmission-daemon/.config/transmission-daemon/settings.json -- REASON: /etc/transmission-daemon/settings.json was intermittently being IGNORED, as Transmission sometimes breaks its own symlink from /var/lib/transmission-daemon/.config/transmission-daemon/settings.json (by turning it into a file instead)"
+  file:
+    path: /etc/transmission-daemon/settings.json
+    src: /var/lib/transmission-daemon/.config/transmission-daemon/settings.json
+    state: link
+    force: yes
 
 
 # RECORD Transmission AS INSTALLED
