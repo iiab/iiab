@@ -102,3 +102,16 @@ More advanced configuration and status are in directory ``/var/lib/transmission-
   torrents/
 
 These are further explained in https://github.com/transmission/transmission/wiki/Configuration-Files (to align with the above, apt package transmission-daemon sets user debian-transmission's home directory to ``/var/lib/transmission-daemon`` in /etc/passwd).
+
+Logging
+-------
+
+To turn on logging and/or record the Process ID (PID), follow these instructions: https://pawelrychlicki.pl/Home/Details/59/transmission-daemon-doesnt-create-a-log-file-nor-a-pid-file-ubuntu-server-1804
+
+This gives permissions to user ``debian-transmission`` — if you use these 3 lines in ``/lib/systemd/system/transmission-daemon.service`` :
+
+::
+
+  RuntimeDirectory=transmission-daemon
+  LogsDirectory=transmission-daemon
+  ExecStart=/usr/bin/transmission-daemon -f --log-error --log-debug --logfile /var/log/transmission-daemon/transmission.log --pid-file /run/transmission-daemon/transmission.pid
