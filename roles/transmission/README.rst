@@ -77,7 +77,7 @@ Known Issues
 
 * |ss| Default Transmission user/group may need fixing (https://github.com/transmission/transmission/issues/537) in some circumstances.  You can set Ansible variables 'transmission_user' and 'transmission_group' e.g. in /opt/iiab/iiab/roles/transmission/defaults/main.yml (you might need 'User=' and 'Group=' in systemd unit file /lib/systemd/system/transmission-daemon.service — e.g. both might need to be set to 'debian-transmission' — if so then run 'systemctl daemon-reload' and 'systemctl restart transmission-daemon'). |se| |nbsp| `PR #2703 <https://github.com/iiab/iiab/pull/2703>`_
 
-* Random Ports: Currently it is not possible to use random ports in the range 49152-65535.  It is difficult to open multiple ports in IIAB's `iptables-based firewall <https://github.com/iiab/iiab/wiki/IIAB-Networking#firewall-iptables>`_.
+* Random Ports: Currently it is not possible to use random ports in the range 49152-65535, as it's difficult to open multiple ports in IIAB's `iptables-based firewall <https://github.com/iiab/iiab/wiki/IIAB-Networking#firewall-iptables>`_.
 
 Troubleshooting
 ---------------
