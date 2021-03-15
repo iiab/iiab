@@ -115,3 +115,5 @@ This gives permissions to user ``debian-transmission`` — if you use these 3 li
   RuntimeDirectory=transmission-daemon
   LogsDirectory=transmission-daemon
   ExecStart=/usr/bin/transmission-daemon -f --log-error --log-debug --logfile /var/log/transmission-daemon/transmission.log --pid-file /run/transmission-daemon/transmission.pid
+
+Noting that one should not normally edit files in ``/lib`` or ``/usr/lib`` — systemd has a command for customizing unit files: ``systemctl edit --full transmission-daemon.service``
