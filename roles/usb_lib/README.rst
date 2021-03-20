@@ -20,7 +20,7 @@ Automount is handled by usbmount, and scripts in this role look in the root of t
 
 USB drives must be formatted with one of the filesystems listed under "FILESYSTEMS=" at /etc/usbmount/usbmount.conf
 
-Official Documentation, from 2010:
+Official `usbmount <https://github.com/hfuchs/usbmount>`_ documentation, from 2010:
 
 * https://github.com/hfuchs/usbmount/blob/master/README
 * https://github.com/hfuchs/usbmount/blob/master/usbmount.conf
