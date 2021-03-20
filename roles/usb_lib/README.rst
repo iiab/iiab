@@ -20,6 +20,12 @@ Automount is handled by usbmount, and scripts in this role look in the root of t
 
 USB drives must be formatted with one of the filesystems listed under "FILESYSTEMS=" at /etc/usbmount/usbmount.conf
 
-There is also a patch for problems with automount on Fedora 21+
+Official Documentation, from 2010:
 
-Please Note that as of the 4.1.8-200.fc22.x86_64 not all USB drives will mount even with this patch.
+* https://github.com/hfuchs/usbmount/blob/master/README
+* https://github.com/hfuchs/usbmount/blob/master/usbmount.conf
+
+As of March 2021, better Kolibri integration/support is being investigated: `#2713 <https://github.com/iiab/iiab/issues/2713>`_
+
+Legacy: There is also a patch for problems with automount on Fedora 21+.
+Please Note that as of 4.1.8-200.fc22.x86_64 not all USB drives will mount, even with this patch.
