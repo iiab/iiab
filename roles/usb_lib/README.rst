@@ -20,12 +20,11 @@ Automount is handled by usbmount, and scripts in this role look in the root of t
 
 USB drives must be formatted with one of the filesystems listed under "FILESYSTEMS=" at ``/etc/usbmount/usbmount.conf`` — these are specified on/around Line 67 of: `/opt/iiab/iiab/roles/usb_lib/tasks/install.yml <https://github.com/iiab/iiab/blob/master/roles/usb_lib/tasks/install.yml#L67>`_
 
+In March 2021, Kolibri exports were enabled, using ``umask=0000`` (also within /etc/usbmount/usbmount.conf) to override what was ``umask=0022`` by default: `PR #2715 <https://github.com/iiab/iiab/issues/2715>`_
+
 Official `usbmount <https://github.com/hfuchs/usbmount>`_ documentation, from 2010:
 
 * https://github.com/hfuchs/usbmount/blob/master/README
 * https://github.com/hfuchs/usbmount/blob/master/usbmount.conf
 
-In March 2021, Kolibri exports were enabled, using ``umask=0000`` (also within /etc/usbmount/usbmount.conf) to override what was ``umask=0022`` by default: `PR #2715 <https://github.com/iiab/iiab/issues/2715>`_
-
-Legacy: There is also a patch for problems with automount on Fedora 21+.
-Please Note that as of 4.1.8-200.fc22.x86_64 not all USB drives will mount, even with this patch.
+Legacy warning: There is also a patch for problems with automount on Fedora 21+.  Please note that as of 4.1.8-200.fc22.x86_64 not all USB drives will mount, even with this patch.
