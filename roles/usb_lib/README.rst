@@ -18,7 +18,7 @@ Automount is handled by usbmount, and scripts in this role look in the root of t
 
 ...and if found, creates a symlink of the form /library/www/html/local_content/USBn pointing to /media/usbn — where n is generally one of {0, 1, 2, 3, 4, 5, 6, 7}.
 
-USB drives must be formatted with one of the filesystems listed under "FILESYSTEMS=" at ``/etc/usbmount/usbmount.conf`` — these are specified on/around Line 70 of: `/opt/iiab/iiab/roles/usb_lib/tasks/install.yml <https://github.com/iiab/iiab/blob/master/roles/usb_lib/tasks/install.yml#L67>`_
+USB drives must be formatted with one of the filesystems listed under "FILESYSTEMS=" at ``/etc/usbmount/usbmount.conf`` — these are specified on/around Line 76 of: `/opt/iiab/iiab/roles/usb_lib/tasks/install.yml <https://github.com/iiab/iiab/blob/master/roles/usb_lib/tasks/install.yml#L76>`_
 
 IIAB will generally mount USB drives 'rw' allowing root to both read and write to them.  In addition, in March 2021 (`PR #2715 <https://github.com/iiab/iiab/issues/2715>`_) Kolibri exports were enabled by also giving non-root users read and write access to VFAT/FAT32, NTFS and exFAT USB drives, using ``umask=0000`` (in /etc/usbmount/usbmount.conf) to override the ``umask=0022`` default.  If however you prefer to restore usbmount's default, set ``usb_lib_umask0000_for_kolibri: False`` in `/etc/iiab/local_vars.yml <http://FAQ.IIAB.IO/#What_is_local_vars.yml_and_how_do_I_customize_it.3F>`_ prior to installing IIAB.
 
