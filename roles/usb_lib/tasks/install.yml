@@ -1,3 +1,9 @@
+# Official usbmount 0.0.22 (2011-08-08) documentation:
+# https://github.com/rbrito/usbmount/releases
+# https://github.com/hfuchs/usbmount/blob/master/README (2010-08-11)
+# https://github.com/rbrito/usbmount/blob/master/README.md (2018-08-10)
+# https://github.com/rbrito/usbmount/blob/master/usbmount.conf (2010-04-25)
+
 - name: Does systemd-udevd.service exist
   stat:
     path: "{{ systemd_location }}/systemd-udevd.service"
@@ -61,12 +67,39 @@
     - { src: 'iiab-usb_lib-show-all-off', dest: '/usr/bin/', mode: '0755' }
     - { src: 'iiab-clean-usb.sh', dest: '/usr/sbin/', mode: '0755' }
 
-- name: Enable exFAT and NTFS in /etc/usbmount/usbmount.conf
+# 2021-03-21: If usbmount is repackaged by apt as a result of Linux kernel 5.4+
+# supporting exFAT, the stanza below (might) in future no longer be needed...
+# SEE ALSO: https://github.com/iiab/iiab/blob/master/roles/2-common/tasks/packages.yml#L22-L23
+- name: Add ' exfat fuseblk ntfs' to FILESYSTEMS var in /etc/usbmount/usbmount.conf
   lineinfile:
-    regexp: '^FILESYSTEMS.*'
+    regexp: '^FILESYSTEMS=.*'
     line: 'FILESYSTEMS="vfat ext2 ext3 ext4 hfsplus exfat fuseblk ntfs"'
     path: /etc/usbmount/usbmount.conf
 
+- name: "Set 'umask=0000' for {VFAT/FAT32, NTFS, exFAT} using var FS_MOUNTOPTIONS in /etc/usbmount/usbmount.conf, so Kolibri exports work"
+  lineinfile:
+    regexp: '^FS_MOUNTOPTIONS=.*'
+    line: 'FS_MOUNTOPTIONS="-fstype=vfat,umask=0000 -fstype=ntfs,umask=0000 -fstype=exfat,umask=0000"'
+    path: /etc/usbmount/usbmount.conf
+  when: usb_lib_umask0000_for_kolibri
+
+# Setting 'umask=0000' for all filesystems: (much the same thing as above, as
+# the mount command does not use this umask setting for filesystems like ext4)
+#- name: "Add ',umask=0000' to MOUNTOPTIONS var in /etc/usbmount/usbmount.conf, so Kolibri exports work"
+#  lineinfile:
+#    regexp: '^MOUNTOPTIONS=.*'
+#    line: 'MOUNTOPTIONS="sync,noexec,nodev,noatime,nodiratime,umask=0000"'
+#    path: /etc/usbmount/usbmount.conf
+#  when: usb_lib_umask0000_for_kolibri
+
+- name: 'Set FS_MOUNTOPTIONS="" in /etc/usbmount/usbmount.conf, e.g. if Kolibri will not be used'
+  lineinfile:
+    regexp: '^FS_MOUNTOPTIONS=.*'
+    line: 'FS_MOUNTOPTIONS=""'    # Restore apt pkg default, if runrole forced
+    path: /etc/usbmount/usbmount.conf
+  when: not usb_lib_umask0000_for_kolibri
+
+# 2021-03-25: Consider removing this stanza & all of this role's Apache logic!
 - name: Install /etc/{{ apache_conf_dir }}/content_dir.conf from template
   template:
     src: content_dir.conf
