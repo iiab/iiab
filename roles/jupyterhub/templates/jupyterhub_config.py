@@ -211,7 +211,7 @@ c.JupyterHub.cookie_secret = b'helloiiabitsrainingb123456789012'
 
 ## url for the database. e.g. `sqlite:///jupyterhub.sqlite`
 #  Default: 'sqlite:///jupyterhub.sqlite'
-# c.JupyterHub.db_url = 'sqlite:///jupyterhub.sqlite'
+c.JupyterHub.db_url = 'sqlite:///{{ jupyterhub_venv }}/jupyterhub.sqlite'
 
 ## log all database transactions. This has A LOT of output
 #  Default: False
