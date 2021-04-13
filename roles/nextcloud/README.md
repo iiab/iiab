@@ -35,6 +35,11 @@ To further refine Nextcloud access controls based on IPv4 addresses, you can edi
 
 Useful PHP recommendations for these settings (while largely tailored to WordPress, and aimed at very low-end hardware) can be found here: [/opt/iiab/iiab/roles/www_options/tasks/main.yml#L47-L51](../www_options/tasks/main.yml#L47-L51)
 
+(4) If you're running Nextcloud 21+ in production, carefully check that Nextcloud's latest formal prereqs (required AND recommended) are included per your community's needs.  In places like these:
+
+- https://docs.nextcloud.com/server/21/admin_manual/installation/source_installation.html#prerequisites-for-manual-installation
+- https://github.com/iiab/iiab/blob/master/roles/nextcloud/tasks/install.yml
+
 ## Using It
 
 Log in to Nextcloud at http://box/nextcloud, http://box.lan/nextcloud, http://172.18.96.1/nextcloud (or similar) using:
