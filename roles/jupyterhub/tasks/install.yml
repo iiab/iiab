@@ -1,12 +1,3 @@
-- name: Make the directories to hold jupyter config
-  file:
-    state: directory
-    path: '{{ item }}'
-  with_items:
-     - '{{ jupyterhub_venv }}/etc/jupyter'
-     - '{{ jupyterhub_venv }}/etc/jupyterhub'
-     - '{{ jupyterhub_venv }}/etc/systemd'
-
 - name: "Set 'nodejs_install: True' and 'nodejs_enabled: True'"
   set_fact:
     nodejs_install: True
@@ -18,38 +9,61 @@
 
 - name: FAIL (STOP THE INSTALL) IF 'nodejs_installed is undefined'
   fail:
-    msg: "Jupyter install cannot proceed, as Node.js is not installed."
+    msg: "JupyterHub install cannot proceed, as Node.js is not installed."
   when: nodejs_installed is undefined
 
-- name: use npm to install configurable http proxy
-  npm:
-      name: configurable-http-proxy
-      global: yes
-      state: latest
 
-- name: Use pip to install into a virtual environment
+- name: Make the directories to hold JupyterHub config
+  file:
+    state: directory
+    path: '{{ item }}'
+  with_items:
+    - '{{ jupyterhub_venv }}/etc/jupyter'
+    - '{{ jupyterhub_venv }}/etc/jupyterhub'
+    - '{{ jupyterhub_venv }}/etc/systemd'
+
+- name: Use npm to install configurable-http-proxy
+  npm:
+    name: configurable-http-proxy
+    global: yes
+    state: latest
+
+- name: 'Use pip to install into a virtual environment: {{ jupyterhub_venv }}'
   pip:
     name:
-       - pip
-       - wheel
-       - ipywidgets
-       - jupyterhub
-       - jupyterlab
-       - jupyterhub_firstuseauthenticator
-       - jupyterhub-systemdspawner
+      - pip
+      - wheel
+      - ipywidgets
+      - jupyterhub
+      - jupyterlab
+      - jupyterhub_firstuseauthenticator
+      - jupyterhub-systemdspawner
     virtualenv: "{{ jupyterhub_venv }}"    # /opt/iiab/jupyter
     virtualenv_site_packages: no
     virtualenv_command: /usr/bin/virtualenv
     virtualenv_python: python3
     extra_args: "--no-cache-dir"
   when: internet_available
-    
-- name: Install the config file for jupyterhub
-  template:
-      src: jupyterhub_config.py
-      dest: '{{ jupyterhub_venv }}/etc/jupyterhub/'
 
-- name: Use systemd to start jupyterhub
+- name: 'Install from template: {{ jupyterhub_venv }}/etc/jupyterhub/jupyterhub_config.py'
   template:
-      src: jupyterhub.service
-      dest: /etc/systemd/system/
+    src: jupyterhub_config.py
+    dest: '{{ jupyterhub_venv }}/etc/jupyterhub/'
+
+- name: 'Install from template: /etc/systemd/system/jupyterhub.service'
+  template:
+    src: jupyterhub.service
+    dest: /etc/systemd/system/
+
+
+# RECORD JupyterHub AS INSTALLED
+
+- name: "Set 'jupyterhub_installed: True'"
+  set_fact:
+    jupyterhub_installed: True
+
+- name: "Add 'jupyterhub_installed: True' to {{ iiab_state_file }}"
+  lineinfile:
+    path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
+    regexp: '^jupyterhub_installed'
+    line: 'jupyterhub_installed: True'
