@@ -1,0 +1,41 @@
+- name: systemd daemon-reload
+  systemd:
+    daemon_reload: yes
+
+
+# enable or disable 
+- name: Enable & Restart jupyterhub
+  systemd:
+    name: "{{ item }}"
+    enabled: yes
+    state: restarted
+  with_items:
+    - jupyterhub.service
+  when: jupyterhub_enabled
+
+- name: Disable jupyterhub
+  systemd:
+    name: "{{ item }}"
+    enabled: no
+    state: stopped
+  with_items:
+    - jupyterhub
+  when: not jupyterhub_enabled
+
+
+- name: Put the nginx config file in place
+  template:
+    src: jupyterhub-nginx.conf
+    dest: "{{ nginx_conf_dir }}/"
+  when: jupyterhub_enabled
+
+- name: Disable jupyterhub
+  file:
+    path: "{{ nginx_conf_dir }}/jupyterhub-nginx.conf"
+    state: absent
+  when: not jupyterhub_enabled
+
+- name: Restart 'nginx' systemd service
+  systemd:
+    name: nginx
+    state: restarted
