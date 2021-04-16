@@ -45,7 +45,7 @@ To learn more about our open community architecture for "offline" education, sta
 
 ## Versions
 
-Pre-releases of Internet-in-a-Box (IIAB) undergo continuous QA / continuous deployment and are strongly recommended.
+Pre-releases of Internet-in-a-Box (IIAB) undergo continuous QA / continuous deployment and are **strongly recommended!**
 
 Install our latest pre-release using the 1-line installer at: [download.iiab.io](http://download.iiab.io/)
 
