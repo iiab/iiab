@@ -1,0 +1,44 @@
+# "How do i fail a task in Ansible if the variable contains a boolean value?
+# I want to perform input validation for Ansible playbooks"
+# https://stackoverflow.com/questions/46664127/how-do-i-fail-a-task-in-ansible-if-the-variable-contains-a-boolean-value-i-want/46667499#46667499
+
+# We assume 0-init/tasks/validate_vars.yml has DEFINITELY been run, so no need
+# to re-check whether vars are defined here.  As Ansible vars cannot be unset:
+# https://serverfault.com/questions/856729/how-to-destroy-delete-unset-a-variable-value-in-ansible
+
+- name: Assert that "jupyterhub_install is sameas true" (boolean not string etc)
+  assert:
+    that: jupyterhub_install is sameas true
+    fail_msg: "PLEASE SET 'jupyterhub_install: True' e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+
+- name: Assert that "jupyterhub_enabled | type_debug == 'bool'" (boolean not string etc)
+  assert:
+    that: jupyterhub_enabled | type_debug == 'bool'
+    fail_msg: "PLEASE GIVE VARIABLE 'jupyterhub_enabled' A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+
+
+- name: Install Jupyter if jupyterhub_installed not defined, e.g. in {{ iiab_state_file }}    # /etc/iiab/iiab_state.yml
+  include_tasks: install.yml
+  when: jupyterhub_installed is undefined
+
+
+- include_tasks: enable-or-disable.yml
+
+
+- name: Add 'jupyterhub' variable values to {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+    section: jupyterhub
+    option: "{{ item.option }}"
+    value: "{{ item.value | string }}"
+  with_items:
+    - option: name
+      value: JupyterHub
+    - option: description
+      value: '"High Schools may want to consider JupyterHub to integrate coding with dynamic interactive graphing — A New Way to Think About Programming — allowing students to integrate science experiment results and program output within their notebook/document/blog."'
+    - option: jupyterhub_install
+      value: "{{ jupyterhub_install }}"
+    - option: jupyterhub_enabled
+      value: "{{ jupyterhub_enabled }}"
