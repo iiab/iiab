@@ -10,12 +10,13 @@
 
 2. Without PHP available via FastCGI, any function at all for PHP-based applications validates NGINX.
 
-3. Current state of IIAB App/Service migrations as of 2020-09-24:
+3. Current state of IIAB App/Service migrations as of 2021-04-15:
 
    1. These support "Native" NGINX but ***NOT*** Apache
       * Admin Console
       * captiveportal
       * IIAB documentation (http://box/info)
+      * JupyterHub
       * osm-vector-maps
       * OER2Go/RACHEL modules
       * usb_lib
@@ -54,4 +55,4 @@
       * transmission
       * vnstat
 
-[*] The 4 above starred roles could use improvement, as of 2020-09-24.
+[*] The 4 above starred roles could use improvement, as of 2021-04-15.
