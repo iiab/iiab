@@ -16,7 +16,7 @@
       * Admin Console
       * captiveportal
       * IIAB documentation (http://box/info)
-      * JupyterHub
+      * jupyterhub
       * osm-vector-maps
       * OER2Go/RACHEL modules
       * usb_lib
