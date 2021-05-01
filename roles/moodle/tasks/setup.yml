@@ -1,0 +1,66 @@
+# roles/postgresql/templates/postgresql-iiab.service WAS INSTALLED HERE:
+# /etc/systemd/system/postgresql-iiab.service
+- name: Start 'postgresql-iiab' systemd service, to configure Moodle's DB
+  systemd:
+    name: postgresql-iiab
+    state: started
+
+- name: Create PostgreSQL db user Admin/changeme
+  postgresql_user:
+    name: Admin
+    password: changeme
+    encrypted: yes   # Required by PostgreSQL 10+ e.g. Ubuntu 18.04's PostgreSQL 10.3+, see https://github.com/iiab/iiab/issues/759
+    role_attr_flags: NOSUPERUSER,NOCREATEROLE,NOCREATEDB
+    state: present
+  become: yes
+  become_user: postgres
+
+- name: 'Create database: {{ moodle_database_name }}'
+  postgresql_db:
+    name: "{{ moodle_database_name }}"
+    encoding: utf8
+    owner: Admin
+    template: template1
+    state: present
+  become: yes
+  become_user: postgres
+
+- name: Install {{ moodle_base }}/moodle_installer from template ('0755')
+  template:
+    src: moodle_installer
+    dest: "{{ moodle_base }}"
+    mode: '0755'
+
+- name: (Re)Start 'postgresql-iiab' systemd service
+  systemd:
+    name: postgresql-iiab
+    state: restarted
+    #enabled: yes    # Service ends up enabled regardless
+
+- name: (Re)Start '{{ apache_service }}' systemd service
+  systemd:
+    name: "{{ apache_service }}"
+    state: restarted
+
+- name: Does {{ moodle_base }}/config.php exist?
+  stat:
+    path: "{{ moodle_base }}/config.php"
+  register: config
+
+- name: Execute {{ moodle_base }}/moodle_installer
+  shell: "{{ moodle_base }}/moodle_installer"
+  when: config.stat.exists is defined and not config.stat.exists
+
+# 2021-02-01: Let's stick with Moodle's default (640)
+#- name: Make {{ moodle_base }}/config.php readable, with permission '0644'
+#  #command: chown -R {{ apache_user }} {{ moodle_base }}
+#  file:
+#    path: "{{ moodle_base }}/config.php"    # /opt/iiab/moodle
+#    mode: '0644'
+
+
+- name: "Add 'moodle_setup: True' to {{ iiab_state_file }}"
+  lineinfile:
+    path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
+    regexp: '^moodle_setup'
+    line: 'moodle_setup: True'
