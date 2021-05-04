@@ -49,19 +49,35 @@
     extra_args: --no-cache-dir    # To avoid caching issues e.g. soon after new releases hit https://pypi.org/project/opwen-email-client/
   when:
     - internet_available
-    - lokole_version is undefined and lokole_commit is undefined
+    - lokole_version is undefined # and lokole_commit is undefined
 
 # For development purposes -- To add latest Lokole from a given git commit, add the following line to roles/lokole/defaults/main.yml:
 # JV the git checkout is missing opwen_email_client/webapp/static/js due to the .gitignore?
 # lokole_commit: <git_commit_id>
-- name: "OPTIONAL add: pip install opwen_email_client (Lokole, git commit {{ lokole_commit }}) from GitHub to {{ lokole_venv }}, if lokole_commit is defined"
-  pip:
-    name: "git+https://github.com/ascoderu/lokole.git@{{ lokole_commit }}#egg=opwen_email_client"
-    virtualenv: "{{ lokole_venv }}"
-    virtualenv_command: python3 -m venv "{{ lokole_venv }}"
-    extra_args: --no-cache-dir    # To avoid caching issues e.g. soon after new releases hit https://pypi.org/project/opwen-email-client/
+#- name: "OPTIONAL add: pip install opwen_email_client (Lokole, git commit {{ lokole_commit }}) from GitHub to {{ lokole_venv }}, if lokole_commit is defined"
+#  pip:
+#    name: "git+https://github.com/ascoderu/lokole.git@{{ lokole_commit }}#egg=opwen_email_client"
+#    virtualenv: "{{ lokole_venv }}"
+#    virtualenv_command: python3 -m venv "{{ lokole_venv }}"
+#    extra_args: --no-cache-dir    # To avoid caching issues e.g. soon after new releases hit https://pypi.org/project/opwen-email-client/
+#  when:
+
+
+- name: Clone lokole from GitHub to /tmp/
+  git:
+    repo: https://github.com/ascoderu/lokole
+    dest: /tmp/lokole
+    force: yes
+    depth: 1
   when:
     - internet_available
+    - lokole_commit is defined
+
+- name: Copy the latest opwen_email_client to "{{ lokole_venv }}"
+  shell: |
+    python_version=$(python3 -c 'from sys import version_info; print("%s.%s" % (version_info.major, version_info.minor));';)
+    cp -a /tmp/lokole/opwen_email_client/* {{ lokole_venv }}/lib/python${python_version}/site-packages/opwen_email_client/
+  when:
     - lokole_commit is defined
 
 - name: Compile translations
