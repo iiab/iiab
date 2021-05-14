@@ -27,6 +27,7 @@
       * gitea
       * kiwix
       * kolibri
+      * lokole
       * mediawiki
       * munin
       * nextcloud
@@ -35,7 +36,6 @@
 
    3. These support Apache but ***NOT*** "Native" NGINX.  They use a "Shim" to [proxy_pass](https://docs.nginx.com/nginx/admin-guide/web-server/reverse-proxy/) from NGINX to Apache on port 8090.  See [roles/3-base-server/tasks/main.yml#L11](../3-base-server/tasks/main.yml#L11) for a list of IIAB Apps/Services that auto-enable Apache.
       * elgg
-      * lokole
       * moodle
       * nodered
 
