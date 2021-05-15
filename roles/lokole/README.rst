@@ -21,11 +21,11 @@ If your IIAB was `installed <http://wiki.laptop.org/go/IIAB/FAQ#Is_a_quick_insta
 
 [*] If you're not sure, verify that your IIAB's `/etc/iiab/local_vars.yml <http://wiki.laptop.org/go/IIAB/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it.3F>`_ contains ``lokole_install: True`` and ``lokole_enabled: True``
 
-By default, email addresses will look like: (e.g. when ``lokole_sim_type: LocalOnly``)
+By default in an offline community, ``lokole_sim_type: LocalOnly`` is set (e.g. instead of ``lokole_sim_type: Ethernet``) and email addresses will look like:
 
 ``joe@none.lokole.ca``
 
-2021-05-15: in future, communities should be able to customize their subdomain, setting up Internet-capable email addresses like:
+2021-05-15: in future, communities should be able to customize their subdomain, to set up Internet-capable email addresses like:
 
 ``sue@kinshasalibrary.lokole.ca``
 
