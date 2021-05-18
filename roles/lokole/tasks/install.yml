@@ -71,11 +71,36 @@
   with_items:
     - "{{ lokole_venv }}/lib/python${python_version}/site-packages/opwen_email_client/webapp"
 
+- name: Create system {{ lokole_user }} user
+  ansible.builtin.user:
+    state: present
+    name: "{{ lokole_user }}"
+    system: yes
+    uid: "{{ lokole_uid }}"
+    home: /home/{{ lokole_user }}
+
 - name: mkdir {{ lokole_run_directory }}
   file:
     state: directory
     path: "{{ lokole_run_directory }}"
     #mode: a+x    # Not nec, given above 'state: directory'
+
+# lets try to catch settings.env creation at registration time
+# can't tell if the routine doesn't like settings.env being missing
+- name: mkdir /{{ lokole_user }}/state for registration testing
+  file:
+    state: directory
+    path: /{{ lokole_user }}/state
+
+- name: Install dummy target for registration testing fake
+  template:
+    src: settings.env.j2
+    dest: "/{{ lokole_user }}/state/settings.env"
+
+- name: Install dummy target for registration testing run
+  template:
+    src: settings.env.j2
+    dest: "{{ lokole_run_directory }}/settings.env"
 
 - name: Install {{ lokole_run_directory }}/webapp_secrets.sh from template, to configure Lokole
   template:
@@ -89,7 +114,7 @@
     dest: "{{ lokole_run_directory }}/webapp.sh"
     mode: a+x
 
-- name: Create admin user with password, for http://box{{ lokole_url }}    # http://box/lokole
+- name: Create Lokole admin user with password, for http://box{{ lokole_url }}    # http://box/lokole
   shell: |
     . {{ lokole_run_directory }}/webapp_secrets.sh
     {{ lokole_venv }}/bin/manage.py createadmin --name='{{ lokole_admin_user }}' --password='{{ lokole_admin_password }}'
