@@ -4,12 +4,13 @@ dist: focal
 
 addons:
   apt:
-    sources:
-      - sourceline: ppa:ansible/ansible
+#    sources:
+#      - sourceline: ppa:ansible/ansible
     packages:
 #      - python-pip    # @arky had used this starting in 2018
-      - ansible-base    # Install latest ansible-base e.g. 2.10.9+, similar to https://github.com/iiab/iiab/blob/master/scripts/ansible
-#      - python3-pymysql    # These 7-or-8 packages are not needed during this very rapid --syntax-check
+#      - python3-pip    # Modern equivalent (not nec here on Travis?)
+#      - ansible-core    # SLOW.  WHEN IT WORKS AT ALL.  Using 'pip3 install ansible-core' instead (below) is faster and greatly simplifies.  Certainly let's try to mimic https://github.com/iiab/iiab/blob/master/scripts/ansible (as it evolves) for linting etc?
+#      - python3-pymysql    # These 7-or-8 packages (below) are not needed during the very rapid --syntax-check (core script, at bottom)
 #      - python3-psycopg2
 #      - python3-passlib
 #      - python3-pip
@@ -20,14 +21,13 @@ addons:
 
 install:
 #  - scripts/ansible    # See #2105: fails to install latest Ansible (& ~4 Ansible Collections from collections.yml) due to Travis VM's disk layout/perms being different
-#  - pip install ansible    # SLOW/OVERWEIGHT: installs Ansible 3.0.0+ with ~80 Ansible Collections
-#  - pip install ansible-base    # ALSO WORKS (FASTER THAN ALL ABOVE!) e.g. if the above addons: / apt: section is commented out.  To install latest ansible-base e.g. 2.10.7+, similar to https://github.com/iiab/iiab/blob/master/scripts/ansible
-#  - pip3 install ansible-core    # APRIL 2021: ansible-base is being renamed to ansible-core -- latest version number is listed at https://pypi.org/project/ansible-core/
-  - ansible-galaxy collection install -r collections.yml    # Install ~4 Ansible Collections
-  - "{ echo 'roles_path = ./roles/'; } >> ansible.cfg"    # Add correct roles_path to ansible.cfg, appending to https://github.com/iiab/iiab/blob/master/ansible.cfg
-#  - "{ echo '[defaults]'; echo 'roles_path = ./roles/'; } >> ansible.cfg"    # 2021-02-24: suddenly no longer works, with the newer ansible-base install methods above (error arises due to '[defaults]' appearing twice)
-#  - cat ansible.cfg    # UNCOMMENT TO VERIFY!
-  - apt -a list ansible-base    # VERIFY ansible-base VERSIONS OFFERED BY apt
+#  - pip3 install ansible    # SLOW / OVERWEIGHT: installs Ansible 4.0.0+ superset, with more than 80 (far more than we need) Ansible Collections
+  - pip3 install ansible-core    # SIGNIFICANTLY FASTER than apt install of ansible-core (in 'packages:' section above).  APRIL 2021: ansible-base (2.10) was renamed to ansible-core (2.11+) with the latest version number shown at https://pypi.org/project/ansible-core/
+  - ansible-galaxy collection install -r collections.yml    # Install ~4 Ansible Collections.  Slow but nec, as per https://github.com/iiab/iiab/blob/master/scripts/ansible
+  - echo 'roles_path = ./roles/' >> ansible.cfg    # Add correct roles_path to ansible.cfg, appending to https://github.com/iiab/iiab/blob/master/ansible.cfg
+#  - "{ echo '[defaults]'; echo 'roles_path = ./roles/'; } >> ansible.cfg"    # 2021-02-24: suddenly no longer works, with the newer ansible-base -> ansible-core install methods above (error arises due to '[defaults]' appearing twice)
+  - cat ansible.cfg    # VISUAL VERIFICATION OF ABOVE!
+#  - apt -a list ansible-core    # VERIFY ansible-core VERSIONS OFFERED BY apt, from https://launchpad.net/~ansible/+archive/ubuntu/ansible
 
 script:
   - ansible-playbook tests/test.yml -i tests/inventory --syntax-check
