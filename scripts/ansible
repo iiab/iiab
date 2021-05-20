@@ -9,9 +9,19 @@
 
 APT_PATH=/usr/bin     # Avoids problematic /usr/local/bin/apt on Linux Mint
 CURR_VER=undefined    # Ansible version you currently have installed
-GOOD_VER=2.10.9       # Orig for 'yum install [rpm]' & XO laptops (pip install)
+GOOD_VER=2.11.0       # Orig for 'yum install [rpm]' & XO laptops (pip install)
 
-# We install the latest 'ansible-base' from PPA, using an OS 'CODENAME' below:
+# 2021-05-19 PR #2743: As a result of Ansible / Red Hat / IBM's extensive
+# delays in publishing the PPA (.deb installer files) for ansible-core, this
+# file bypasses the apt approach (and associated PPA source) in favor of:
+#
+# pip3 install ansible-core
+#
+# What the future holds for 2022+ is not yet clear.  So the apt approach (with
+# PPA source in /etc/apt/sources.list.d and .gpg key etc) and much associated
+# guidance/comments below are NOT being commented out or deleted at this time.
+
+# We install the latest 'ansible-core' from PPA, using an OS 'CODENAME' below:
 # https://launchpad.net/~ansible/+archive/ubuntu/ansible
 
 # 'lsb_release -sc' gives Mint 20 codename 'ulyana' etc: (TOO FINE-GRAINED)
@@ -21,33 +31,41 @@ else
     CODENAME=focal     # Debian 11+, RaspiOS 11+, Ubuntu 20.04+, Mint 20+ (ETC)
 fi
 
-# 'ansible-base' being renamed 'ansible-code' early in 2021. RELEASE LINK REFS:
-# http://ppa.launchpad.net/ansible/ansible/ubuntu/pool/main/a/ansible-base/
-# https://launchpad.net/~ansible/+archive/ubuntu/ansible-2.10
-# https://github.com/ansible/ansible/commits/stable-2.10/changelogs/CHANGELOG-v2.10.rst
-# https://github.com/ansible/ansible/blob/devel/docs/docsite/rst/roadmap/ROADMAP_2_11.rst
+# APRIL 2021 - ansible-base (2.10) was renamed to ansible-core (2.11+):
 # https://www.ansible.com/blog/ansible-3.0.0-qa
 # https://github.com/ansible/ansible/releases
+# https://pypi.org/project/ansible-base/
+# https://pypi.org/project/ansible-core/
 # https://releases.ansible.com/ansible-base/
 # https://releases.ansible.com/ansible-core/
+# https://launchpad.net/~ansible/+archive/ubuntu/ansible-2.10
+# https://launchpad.net/~ansible/+archive/ubuntu/ansible-2.11 ?
+# http://ppa.launchpad.net/ansible/ansible/ubuntu/pool/main/a/ansible-base/
+# http://ppa.launchpad.net/ansible/ansible/ubuntu/pool/main/a/ansible-core/ ?
+# https://github.com/ansible/ansible/blob/stable-2.10/changelogs/CHANGELOG-v2.10.rst
+# https://github.com/ansible/ansible/blob/stable-2.11/changelogs/CHANGELOG-v2.11.rst
+# https://github.com/ansible/ansible/blob/devel/docs/docsite/rst/roadmap/ROADMAP_2_10.rst
+# https://github.com/ansible/ansible/blob/devel/docs/docsite/rst/roadmap/ROADMAP_2_11.rst
 
-# FYI .travis.yml installs ansible-base in a slightly different way (PR #2689).
+# FYI .travis.yml installs ansible-core in a slightly different way (PRs #2689, #2742 or #2743 ?)
 
 # IIAB implementers might instead consider these 4 GENERAL TECHNIQUES below
 # ("in an emergency!") e.g. if apt fails & you need a newer/older Ansible:
 
 # TEMPORARILY USE pip3 to install the latest ansible-core as listed at
 # https://pypi.org/project/ansible-core/ (REMOVE W/ "pip3 uninstall ansible-core")
+#apt install python3-pip
 #pip3 install ansible-core    # Then start a new shell, so /usr/local/bin works
 #apt install python3-pymysql python3-psycopg2 python3-passlib python3-pip python3-setuptools python3-packaging python3-venv virtualenv
 #ansible-galaxy collection install -r collections.yml
 
 # TEMPORARILY USE ansible-base 2.10.9 (REMOVE W/ "pip3 uninstall ansible-base")
+#apt install python3-pip
 #pip3 install ansible-base==2.10.9   # Start new shell, so /usr/local/bin works
 
 # TEMPORARILY USE ANSIBLE 2.9.21 (REMOVE IT WITH "pip uninstall ansible")
-#apt install python-pip
-#pip install ansible==2.9.21
+#apt install python3-pip
+#pip3 install ansible==2.9.21
 
 # TEMPORARILY USE ANSIBLE 2.4.2 DUE TO 2.4.3 MEMORY BUG. Details: iiab/iiab#669
 #echo "Install http://download.iiab.io/packages/ansible_2.4.2.0-1ppa~xenial_all.deb"
@@ -65,8 +83,9 @@ echo -e "\n\nYOU ARE RUNNING: /opt/iiab/iiab/scripts/ansible (TO INSTALL ANSIBLE
 echo -e "RECOMMENDED PREREQUISITES:"
 echo -e "(1) Verify you're online"
 echo -e "(2) Remove all prior versions of Ansible using..."
+echo -e "    'apt purge ansible-core'  and/or  'pip3 uninstall ansible-core'  and/or"
 echo -e "    'apt purge ansible-base'  and/or  'pip3 uninstall ansible-base'  and/or"
-echo -e "    'apt purge ansible'       and/or  'pip uninstall ansible'"
+echo -e "    'apt purge ansible'       and/or  'pip3 uninstall ansible'"
 echo -e "(3) Remove all lines containing 'ansible' from..."
 echo -e "    /etc/apt/sources.list and /etc/apt/sources.list.d/*\n"
 
@@ -82,7 +101,7 @@ if [ $(command -v ansible) ]; then    # "command -v" is POSIX compliant; also ca
 else
     echo -e "ANSIBLE NOT FOUND ON THIS COMPUTER -- LET'S TRY TO INSTALL IT!"
 fi
-echo -e "(Internet-in-a-Box requests ansible-base $GOOD_VER or higher)\n"
+echo -e "(Internet-in-a-Box requests ansible-core $GOOD_VER or higher)\n"
 
 # Code above designed to work on all Linux distributions, to preserve options,
 # in support of any volunteer(s) wanting to port IIAB to a new Linux/distro.
@@ -130,10 +149,13 @@ echo -e "IF *OTHER* ANSIBLE SOURCES APPEAR BELOW, PLEASE MANUALLY REMOVE THEM TO
 echo -e 'ENSURE ANSIBLE UPDATES CLEANLY: (then re-run this script to be sure!)\n'
 grep '^deb .*ansible' /etc/apt/sources.list /etc/apt/sources.list.d/*.list | grep -v '^/etc/apt/sources.list.d/iiab-ansible.list:' || true    # Override bash -e (instead of aborting at 1st error)
 
-echo -e "\napt update; apt install ansible-base and python3 dependencies explained at:"
-echo -e "https://github.com/iiab/iiab/tree/master/scripts/ansible.md\n"
+echo -e "\napt update; apt install ansible-core and python3 dependencies explained at:"
+echo -e "https://github.com/iiab/iiab/blob/master/scripts/ansible.md\n"
 $APT_PATH/apt update
-$APT_PATH/apt -y --allow-downgrades install ansible-base \
+$APT_PATH/apt -y install python3-pip
+pip3 install ansible-core
+#$APT_PATH/apt -y --allow-downgrades install ansible-core \
+$APT_PATH/apt -y --allow-downgrades install \
               python3-pymysql python3-psycopg2 python3-passlib python3-pip \
               python3-setuptools python3-packaging python3-venv virtualenv
 
@@ -148,11 +170,15 @@ ansible-galaxy collection install --force-with-deps \
 # 2021-02-24: 'ansible-galaxy collection list' lists those installed. (#2659)
 # 2020-11-28: The ~3 Ansible Collections used by IIAB (~37MB) once lived here:
 #    /root/.ansible/collections/ansible_collections
-# But going forward they'll be stored herein:
+# But going forward they'll be stored herein: [~24MB for 4 Collections as of 2021-05-19]
 #    /usr/share/ansible/collections/ansible_collections
 
-echo -e "\n\nCreating/verifying directory /etc/ansible & installing /etc/ansible/hosts\n"
-mkdir -p /etc/ansible
-echo -e '[local]\nlocalhost\n' > /etc/ansible/hosts
+# 2021-04-19: No longer needed, per PR #2743 testing
+#echo -e "\n\nCreating/verifying directory /etc/ansible & installing /etc/ansible/hosts\n"
+#mkdir -p /etc/ansible    # LIKELY REDUNDANT, due to above installation of Ansible
+#echo -e '[local]\nlocalhost\n' > /etc/ansible/hosts    # LIKELY REDUNDANT, due to https://github.com/iiab/iiab/blob/master/ansible_hosts
 
-echo -e "SUCCESS: VERIFY ANSIBLE WITH 'ansible --version' & 'apt -a list ansible-base'\n\n"
+echo -e "SUCCESS INSTALLING ANSIBLE!  PLEASE VERIFY WITH COMMANDS LIKE:"
+echo -e "    ansible --version"
+echo -e "    pip show ansible-core"
+echo -e "    apt -a list ansible-core\n\n"
