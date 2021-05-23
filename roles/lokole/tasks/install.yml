@@ -25,6 +25,7 @@
       - libjpeg-dev
       - libssl-dev
       - libopenjp2-7    # 2020-02-01: To solve bug #2221
+      - supervisor
     state: present
 
 # For development purposes -- To install Lokole from a given commit, add the
@@ -75,47 +76,47 @@
   ansible.builtin.user:
     state: present
     name: "{{ lokole_user }}"
+    group: "{{ lokole_user }}"
     system: yes
     uid: "{{ lokole_uid }}"
-    home: /home/{{ lokole_user }}
+    home: "{{ lokole_home_dir }}"
 
-- name: mkdir {{ lokole_run_directory }}
+- name: mkdir {{ lokole_run_dir }}
   file:
     state: directory
-    path: "{{ lokole_run_directory }}"
+    path: "{{ lokole_run_dir }}/lokole_restarter"
     group: "{{ lokole_user }}"
     owner: "{{ lokole_user }}"
     mode: g+rw
 
-- name: mkdir /{{ lokole_user }}/log
+- name: mkdir {{ lokole_log_dir }}
   file:
     state: directory
-    path: "{{ lokole_log_directory }}"
+    path: "{{ lokole_log_dir }}"
     group: "{{ lokole_user }}"
     owner: "{{ lokole_user }}"
     mode: g+rw
 
-- name: Install {{ lokole_run_directory }}/settings.env
+- name: Install {{ lokole_run_dir }}/settings.env
   template:
     src: settings.env.j2
-    dest: "{{ lokole_run_directory }}/settings.env"
+    dest: "{{ lokole_run_dir }}/settings.env"
     group: "{{ lokole_user }}"
     owner: "{{ lokole_user }}"
     mode: a+rw
 
-- name: Install {{ lokole_run_directory }}/webapp_secrets.sh from template, to configure Lokole
+- name: Install {{ lokole_confd }} templates to configure Lokole
   template:
-    src: webapp_secrets.sh.j2
-    dest: "{{ lokole_run_directory }}/webapp_secrets.sh"
-    mode: a+x
-
-- name: Install {{ lokole_run_directory }}/webapp.sh from template, to configure Gunicorn
-  template:
-    src: webapp.sh.j2
-    dest: "{{ lokole_run_directory }}/webapp.sh"
+    src: "{{ item.src }}"
+    dest: "{{ lokole_confd }}"
     group: "{{ lokole_user }}"
     owner: "{{ lokole_user }}"
-    mode: a+x
+    mode: 0644
+  with_items:
+    - { src: 'lokole_gunicorn.conf' }
+    - { src: 'lokole_celery_beat.conf' }
+    - { src: 'lokole_celery_worker.conf' }
+    - { src: 'lokole_restarter.conf' }
 
 - name: Create Lokole admin user with password, for http://box{{ lokole_url }}    # http://box/lokole
   shell: |
@@ -128,18 +129,6 @@
     dest: "/etc/{{ apache_conf_dir }}/lokole.conf"
     mode: 0644
   when: apache_install
-
-- name: Install unit files {lokole.service, celery.service, celerybeat.service, lokole_restarter.service} into /etc/systemd/system, from template
-  template:
-    src: "{{ item.src }}"
-    dest: "{{ item.dest}}"
-    mode: 0644
-  with_items:
-    - { src: 'lokole.service.j2', dest: '/etc/systemd/system/lokole.service' }
-    - { src: 'celery.service.j2', dest: '/etc/systemd/system/celery.service' }
-    - { src: 'celerybeat.service.j2', dest: '/etc/systemd/system/celerybeat.service' }
-    - { src: 'lokole_restarter.service.j2', dest: '/etc/systemd/system/lokole_restarter.service' }
-
 
 # RECORD Lokole AS INSTALLED
 
