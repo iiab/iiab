@@ -50,13 +50,13 @@
       lxde_present.stat.exists and chromium_present.stat.exists
 
 - debug:
-    msg: 'THE 3 ANSIBLE STANZAS BELOW ONLY RUN... when: (moodle_install or nextcloud_install or pbx_install or wordpress_install) and nginx_enabled'
+    msg: 'THE 3 ANSIBLE STANZAS BELOW ONLY RUN... when: moodle_install or nextcloud_install or pbx_install or wordpress_install'
 
 - block:    # 3-STANZA BLOCK BEGINS
 
   # FYI roles/nginx has already installed package php-fpm, in 3-base-server
 
-  - name: Raise 2+2 PHP default values in /etc/php/{{ php_version }}/fpm/php.ini for lightweight use of WordPress/Nextcloud/Moodle/PBX (allow photos/docs up to 100MB, 100s timeouts, but preserve PHP's 128MB RAM limit)
+  - name: "Enact 'nginx_high_php_limits: False' in /etc/php/{{ php_version }}/fpm/php.ini for lightweight use of WordPress/Nextcloud/PBX (allow photos/docs up to 100MB, 100s timeouts, with 2 PHP system defaults: memory_limit = 128M, max_input_vars = 1000)"
     lineinfile:
       path: "/etc/php/{{ php_version }}/fpm/php.ini"
       #path: "/etc/php/{{ php_version }}/{{ apache_service }}/php.ini"
@@ -69,7 +69,7 @@
       - { regexp: '^max_input_time', line: 'max_input_time = 100    ; default is 60' }
       - { regexp: '^memory_limit', line: 'memory_limit = 128M    ; default is 128M / Nextcloud requests 512M' }
       - { regexp: '^max_input_vars', line: 'max_input_vars = 1000    ; default is 1000 / Moodle 3.11+ requests 5000' }
-    when: not nginx_high_php_limits    # REMINDER: THIS ENTIRE 3-STANZA BLOCK IS ONLY INVOKED... when: (moodle_install or nextcloud_install or pbx_install or wordpress_install) and nginx_enabled
+    when: not nginx_high_php_limits and not moodle_install    # REMINDER: THIS ENTIRE 3-STANZA BLOCK IS ONLY INVOKED... when: moodle_install or nextcloud_install or pbx_install or wordpress_install
 
   # 2020-03-08: IIAB does not support uninstalling apps, so a 3rd clause
   # (to reset/restore PHP's defaults) is not necessary at this time.
@@ -77,8 +77,8 @@
   # COMPARE apache_allow_sudo further below.
 
   # WARNING: This might cause excess use of RAM/disk or other resources!
-  # The 5 values below were chosen by @ericnitschke and @kananigit in ~2018.
-  - name: Enact nginx_high_php_limits in /etc/php/{{ php_version }}/fpm/php.ini for schools that use WordPress/Nextcloud/Moodle/PBX intensively (allow photos/docs up to 500MB, 300s timeouts, 512MB RAM limit)
+  # The 5 first values below were chosen by @ericnitschke and @kananigit in ~2018.
+  - name: "Enact 'nginx_high_php_limits: True' in /etc/php/{{ php_version }}/fpm/php.ini for schools that use WordPress/Moodle/Nextcloud/PBX intensively (allow photos/docs up to 500MB, 300s timeouts, memory_limit = 512M for Nextcloud, max_input_vars = 5000 for Moodle)"
     lineinfile:
       path: "/etc/php/{{ php_version }}/fpm/php.ini"
       #path: "/etc/php/{{ php_version }}/{{ apache_service }}/php.ini"
@@ -91,14 +91,14 @@
       - { regexp: '^max_input_time', line: 'max_input_time = 300    ; default is 60' }
       - { regexp: '^memory_limit', line: 'memory_limit = 512M    ; default is 128M / Nextcloud requests 512M' }
       - { regexp: '^max_input_vars', line: 'max_input_vars = 5000    ; default is 1000 / Moodle 3.11+ requests 5000' }
-    when: nginx_high_php_limits    # REMINDER: THIS ENTIRE 3-STANZA BLOCK IS ONLY INVOKED... when: (moodle_install or nextcloud_install or pbx_install or wordpress_install) and nginx_enabled
+    when: nginx_high_php_limits or moodle_install    # REMINDER: THIS ENTIRE 3-STANZA BLOCK IS ONLY INVOKED... when: moodle_install or nextcloud_install or pbx_install or wordpress_install
 
   - name: Restart 'php{{ php_version }}-fpm' systemd service
     systemd:
       name: "php{{ php_version }}-fpm"
       state: restarted
 
-  when: (moodle_install or nextcloud_install or pbx_install or wordpress_install) and nginx_enabled    # 3-STANZA BLOCK ENDS
+  when: moodle_install or nextcloud_install or pbx_install or wordpress_install    # 3-STANZA BLOCK ENDS
 
 
 # 'Is a "Rapid Power Off" button possible for low-electricity environments?'
