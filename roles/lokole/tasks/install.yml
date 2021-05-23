@@ -75,9 +75,10 @@
   ansible.builtin.user:
     state: present
     name: "{{ lokole_user }}"
-    system: yes
+    group: "{{ lokole_user }}"
     uid: "{{ lokole_uid }}"
-    home: /home/{{ lokole_user }}
+    system: yes
+    home: "{{ lokole_home_directory }}"
 
 - name: mkdir {{ lokole_run_directory }}
   file:
@@ -85,7 +86,7 @@
     path: "{{ lokole_run_directory }}"
     group: "{{ lokole_user }}"
     owner: "{{ lokole_user }}"
-    mode: g+rw
+    mode: u+rw,g+rw,o+r
 
 - name: mkdir /{{ lokole_user }}/log
   file:
@@ -93,7 +94,7 @@
     path: "{{ lokole_log_directory }}"
     group: "{{ lokole_user }}"
     owner: "{{ lokole_user }}"
-    mode: g+rw
+    mode: u+rw,g+rw,o+r
 
 - name: Generate key and salt
   set_fact:
@@ -106,7 +107,7 @@
     dest: "{{ lokole_run_directory }}/settings.env"
     group: "{{ lokole_user }}"
     owner: "{{ lokole_user }}"
-    mode: a+rw
+    mode: u+rw,g+rw,o+r
 
 - name: Install {{ lokole_run_directory }}/webapp_secrets.sh from template, to configure Lokole
   template:
@@ -114,7 +115,7 @@
     dest: "{{ item.dest }}"
     group: "{{ lokole_user }}"
     owner: "{{ lokole_user }}"
-    mode: a+x
+    mode: u+rwx,g+rwx
   with_items:
     - { src: webapp_secrets.sh.j2, dest: "{{ lokole_run_directory }}/webapp_secrets.sh" }
     - { src: webapp.sh.j2, dest: "{{ lokole_run_directory }}/webapp.sh" }
@@ -126,6 +127,16 @@
   shell: |
     . {{ lokole_run_directory }}/webapp_secrets.sh
     {{ lokole_venv }}/bin/manage.py createadmin --name='{{ lokole_admin_user }}' --password='{{ lokole_admin_password }}'
+
+- name: Change owner of dbfiles
+  file:
+    path: "{{ item.path }}"
+    state: file
+    owner: "{{ lokole_user }}"
+    group: "{{ lokole_user }}"
+    mode: u=rw,g=rw
+  loop:
+    - { path: "{{ lokole_run_directory }}/users.sqlite3" }
 
 - name: Install /etc/{{ apache_conf_dir }}/lokole.conf from template, for http://box{{ lokole_url }} via Apache    # http://box/lokole
   template:
