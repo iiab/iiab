@@ -35,11 +35,12 @@ Finally, you can [customize your Internet-in-a-Box home page](http://wiki.laptop
 
 Internet-in-a-Box (IIAB) greatly welcomes contributions from educators, librarians *and* IT/UX/QA people of all kinds!
 
-Please see "[How can I help?](http://wiki.laptop.org/go/IIAB/FAQ#How_can_I_help.3F)" at: [FAQ.IIAB.IO](http://FAQ.IIAB.IO)
+If you would like to volunteer, please [make contact](http://internet-in-a-box.org/pages/contributing.html) after looking over "[How can I help?](http://wiki.laptop.org/go/IIAB/FAQ#How_can_I_help.3F)" at: [FAQ.IIAB.IO](http://FAQ.IIAB.IO)
 
-To learn about our software architecture, check out our [Contributors Guide](https://github.com/iiab/iiab/wiki/IIAB-Contributors-Guide).  FYI we use [Ansible](http://wiki.laptop.org/go/IIAB/FAQ#What_is_Ansible_and_what_version_should_I_use.3F) <!--as the underlying technology--> to install, deploy, configure and manage the various software components.
+<!-- To learn about our software architecture, check out our [Contributors Guide](https://github.com/iiab/iiab/wiki/IIAB-Contributors-Guide).-->
 
-To learn more about our open community architecture for "offline" education, start by reviewing "[What technical documentation exists?](http://wiki.laptop.org/go/IIAB/FAQ#What_technical_documentation_exists.3F)"
+To learn more about our open community architecture for "offline" learning, check out "[What technical documentation exists?](http://wiki.laptop.org/go/IIAB/FAQ#What_technical_documentation_exists.3F)"
+FYI we use [Ansible](http://wiki.laptop.org/go/IIAB/FAQ#What_is_Ansible_and_what_version_should_I_use.3F) <!--as the underlying technology--> to install, deploy, configure and manage the various software components.
 
 *Thank you for helping us enable offline access to the Internet's free/open knowledge jewels, as well as "Sneakernet-of-Alexandria" distribution of local/indigenous content, when mass media channels do not serve grassroots voices.*
 
