@@ -42,6 +42,8 @@ Kolibri 0.10 introduced ``kolibri manage deprovision`` which will remove user co
 Troubleshooting
 ---------------
 
+An unproxied version of Kolibri is available here if necessary: http://box:8009/kolibri/
+
 You can run the server manually with the following commands::
 
   systemctl stop kolibri           # Make sure the systemd service is not running
