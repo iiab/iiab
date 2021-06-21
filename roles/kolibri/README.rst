@@ -42,7 +42,7 @@ Kolibri 0.10 introduced ``kolibri manage deprovision`` which will remove user co
 Troubleshooting
 ---------------
 
-An unproxied version of Kolibri is available here if necessary: http://box:8009/kolibri/
+This unproxied version of Kolibri can sometimes help: http://box:8009/kolibri/
 
 You can run the server manually with the following commands::
 
