@@ -44,12 +44,14 @@ Troubleshooting
 
 This unproxied version of Kolibri can sometimes help: http://box:8009/kolibri/
 
-You can run the server manually with the following commands::
+You can run Kolibri manually with commands like::
 
   systemctl stop kolibri           # Make sure the systemd service is not running
   export KOLIBRI_HOME=/library/kolibri
   export KOLIBRI_HTTP_PORT=8009    # Otherwise Kolibri will try to run on default port 8080
   kolibri start
+
+...while you look over Kolibri's systemd unit file (`/etc/systemd/system/kolibri.service <https://github.com/iiab/iiab/blob/master/roles/kolibri/templates/kolibri.service.j2>`_) for the latest parameters!
 
 To return to using the systemd unit file::
 
