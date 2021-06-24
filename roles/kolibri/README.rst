@@ -27,8 +27,8 @@ Automatic Device Provisioning
 When kolibri_provision is enabled (e.g. in `/etc/iiab/local_vars.yml <http://FAQ.IIAB.IO#What_is_local_vars.yml_and_how_do_I_customize_it.3F>`_) the installation will set up the following defaults::
 
   kolibri_facility: Kolibri-in-a-Box   
-  kolibri_language: en     # Options: see KOLIBRI_SUPPORTED_LANGUAGES at the bottom of https://github.com/learningequality/kolibri/blob/develop/kolibri/utils/i18n.py
-  kolibri_preset: formal   # Options: formal, nonformal, informal
+  kolibri_language: en      # See KOLIBRI_SUPPORTED_LANGUAGES at the bottom of https://github.com/learningequality/kolibri/blob/develop/kolibri/utils/i18n.py
+  kolibri_preset: formal    # formal, nonformal, informal
   kolibri_admin_user: Admin
   kolibri_admin_password: changeme
 
