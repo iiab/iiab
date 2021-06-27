@@ -40,10 +40,11 @@
 #     var: php_new
 
 
-# https://docs.nextcloud.com/server/18/admin_manual/installation/source_installation.html#prerequisites-for-manual-installation
 # 2021-04-11: If you're running Nextcloud 21+ in production, carefully check the latest required AND recommended prereqs:
 # https://docs.nextcloud.com/server/21/admin_manual/installation/source_installation.html#prerequisites-for-manual-installation
-- name: Install ffmpeg + libxml2 + 8 PHP packages (run 'php -m' or 'php -i' to verify)
+# 2021-06-27: Use this after Nextcloud 22 is released "2021-07-06" :
+# https://docs.nextcloud.com/server/22/admin_manual/installation/source_installation.html#prerequisites-for-manual-installation
+- name: Install ffmpeg + libxml2 + 11 PHP packages (run 'php -m' or 'php -i' to verify)
   package:
     name:
       #- dnsutils    # NOT REQUESTED by Nextcloud
@@ -52,13 +53,13 @@
       #- libapache2-mod-php    # 2020-02-15: NO LONGER NEEDED?
       - php{{ php_version }}-bcmath        # Highly recommended by Nextcloud 21 for "improved performance and better compatibility"
       - php{{ php_version }}-bz2           # Optional (for extraction of apps)
-      #- php{{ php_version }}-cli          # Likely optional: @jvonau said this drags in php{{ php_version }}-common as @m-anish wanted in PR #2119 / #2258 ?  Certainly php{{ php_version }}-common is already installed by www_base/tasks/main.yml
-      #- php{{ php_version }}-curl         # ALREADY INSTALLED by www_base/tasks/main.yml
-      #- php{{ php_version }}-gd           # ALREADY INSTALLED by www_base/tasks/main.yml
+      #- php{{ php_version }}-common       # Auto-installed as an apt dependency.  @jvonau said php{{ php_version }}-cli drags in php{{ php_version }}-common as @m-anish wanted in PR #2119 / #2258
+      - php{{ php_version }}-curl          # Likewise installed by moodle/tasks/install.yml
+      - php{{ php_version }}-gd            # Likewise installed by moodle/tasks/install.yml
       - php{{ php_version }}-gmp           # Optional (for SFTP storage)
-      - php{{ php_version }}-imagick       # Optional (for preview generation)
+      - php-imagick                        # Optional (for preview generation).  Drags in many deps (apt depends php-imagick).  FYI php{{ php_version }}-imagick appears flawed: (1) 'apt depends php7.4-imagick' yields incomplete output; (2) Version-in-name package not available according to 'apt list "php*imagick"'
       - php{{ php_version }}-intl          # Optional (increases language translation performance and fixes sorting of non-ASCII characters)
-      #- php{{ php_version }}-json         # Part of PHP 8.0+ core, so MOVED to stanza just below.
+      #- php{{ php_version }}-json         # See stanza just below
       #- php{{ php_version }}-libxml       # NOT INSTALLABLE: ENABLED BY DEFAULT (https://www.php.net/manual/en/libxml.installation.php)
       - php{{ php_version }}-mbstring
       - php{{ php_version }}-mysql
@@ -67,16 +68,20 @@
       #- php{{ php_version }}-redis        # @m-anish future work?
       #- php{{ php_version }}-session      # NOT INSTALLABLE: ENABLED BY DEFAULT?
       #- php{{ php_version }}-smbclient    # Optional (SMB/CIFS integration)
-      #- php{{ php_version }}-xml          # ALREADY INSTALLED by www_base/tasks/main.yml.  NOT FORMALLY REQUESTED by Nextcloud (BUT hopefully delivers php-simplexml if not {php-xmlreader, php-xmlwriter} on Raspbian?)
+      - php{{ php_version }}-xml           # Likewise installed by mediawiki/tasks/install.yml -- NOT FORMALLY REQUESTED by Nextcloud (BUT hopefully delivers php-simplexml if not {php-xmlreader, php-xmlwriter} on Raspbian?)
+      #- php{{ php_version }}-xmlrpc       # 2021-06-27: Experimentally remove
       - php{{ php_version }}-zip
       #- php{{ php_version }}-zlib         # NOT INSTALLABLE: ENABLED BY DEFAULT?
     state: present
 
-- name: Install php{{ php_version }}-json if PHP < 8.0
-  package:
-    name: php{{ php_version }}-json
-    state: present
-  when: php_version is version('8.0', '<')
+# For PHP >= 8.0: phpX.Y-json is baked into PHP itself.
+# For PHP <  8.0: Auto-installed by phpX.Y-fpm AND phpX.Y-cli in roles/3-base-server, as confirmed by: apt rdepends phpX.Y-json
+#
+#- name: Install php{{ php_version }}-json if PHP < 8.0
+#  package:
+#    name: php{{ php_version }}-json
+#    state: present
+#  when: php_version is version('8.0', '<')
 
 # https://docs.nextcloud.com/server/18/admin_manual/installation/source_installation.html#prerequisites-for-manual-installation
 #- name: Install 9 additional php packages, if OS is not Raspbian (these are not available on Raspbian on RPi, as of Feb 2020)
