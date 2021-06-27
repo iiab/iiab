@@ -5,7 +5,7 @@
 This 3rd stage installs base server infra that Internet-in-a-Box requires, including:
 
 - MySQL (database underlying many/most user-facing apps)
-- NGINX web server (with Apache in some lingering cases)
+- `NGINX <https://github.com/iiab/iiab/blob/master/roles/nginx/README.md>`_ web server (with Apache in some lingering cases)
 - *A few core PHP packages are also installed by the above 2 roles, e.g.*
    - php{{ php_version }}-common
    - php{{ php_version }}-cli
