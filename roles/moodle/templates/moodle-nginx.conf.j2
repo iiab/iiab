@@ -1,16 +1,20 @@
 location ^/moodle {
-   alias /opt/iiab/moodle;
-   try_files $uri $uri/ index.php =404;
+    alias {{ moodle_base }};
+    try_files $uri $uri/ index.php =404;
 }
-location ~ /moodle/(.*)\.php {
-    root /opt/iiab/;
-    proxy_set_header X-Real-IP  $remote_addr;
-    proxy_set_header X-Forwarded-For $remote_addr;
-    proxy_set_header Host $host;
+
+location /moodle/dataroot/ {
+    internal;
+    alias {{ moodle_data }};
+}
+
+location ~ /moodle/[^/]\.php(/|$) {
     include fastcgi_params;
-    fastcgi_index index.php;
-    fastcgi_pass php;
     fastcgi_split_path_info ^(.+\.php)(/.+)$;
-    fastcgi_param   SCRIPT_FILENAME    $document_root$fastcgi_script_name;
-    fastcgi_param   SCRIPT_NAME        $fastcgi_script_name;
+    fastcgi_read_timeout 300;
+    fastcgi_pass php;
+    fastcgi_index index.php;
+    fastcgi_param   PATH_INFO        $fastcgi_path_info;
+    fastcgi_param   SCRIPT_FILENAME    $fastcgi_script_name;
+    fastcgi_param   PHP_VALUE "max_execution_time={{ max_execution_time }}\n upload_max_filesize={{ upload_max_filesize }}\n post_max_size={{ post_max_size }}\n max_input_vars={{ max_input_vars }}";
 }
