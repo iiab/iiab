@@ -37,6 +37,11 @@
 #     append: yes
 
 
+- name: Insure alternate nginx path is present
+  file:
+    state: directory
+    path: "{{ nginx_conf_dir }}"
+
 - name: Remove NGINX default config /etc/nginx/sites-enabled/default
   file:
     path: /etc/nginx/sites-enabled/default
@@ -47,9 +52,9 @@
     src: "{{ item.src }}"
     dest: "{{ item.dest }}"
   with_items:
-    - { src: 'server.conf.j2', dest: '/etc/nginx/server.conf' }
-    - { src: 'nginx.conf.j2', dest: '/etc/nginx/nginx.conf' }
-    - { src: 'mime.types.j2', dest: '/etc/nginx/mime.types' }
+    - { src: 'server.conf.j2', dest: '{{ nginx_dir }}/server.conf' }
+    - { src: 'nginx.conf.j2', dest: '{{ nginx_dir }}/nginx.conf' }
+    - { src: 'mime.types.j2', dest: '{{ nginx_dir }}/mime.types' }
     # - { src: 'ports.conf', dest: '/etc/{{ apache_service }}/ports.conf' }    # 2021-08-09: Restored from enable-or-disable.yml then moved to roles/pbx/tasks/apache.yml
     # - { src: 'iiab.conf.j2', dest: "{{ nginx_conf_dir }}/iiab.conf" }    # Moved into homepage.yml, invoked later by roles/www_options/tasks/main.yml (see below!)
 
@@ -57,11 +62,25 @@
     msg: roles/nginx/tasks/homepage.yml will run LATER (invoked by roles/www_options/tasks/main.yml) SO THAT NGINX CAN REDIRECT http://box TO http://box{{ iiab_home_url }} (based on var iiab_home_url)
 # - include_tasks: roles/nginx/tasks/homepage.yml
 
+#ubuntu@box:/opt/iiab/iiab$ grep -r 'fastcgi_pass' roles
+#roles/awstats/templates/awstats-nginx.conf:    fastcgi_pass    php;
+#roles/nextcloud/templates/nextcloud-nginx.conf.j2:        fastcgi_pass php;
+#roles/moodle/templates/moodle-nginx.conf.j2:    fastcgi_pass php;
+#roles/osm-vector-maps/templates/osm-vector-maps-nginx.conf.j2:    fastcgi_pass php;
+#roles/pbx/templates/freepbx-nginx.conf.j2:        fastcgi_pass unix:/run/php/php-asterisk.sock;
+#roles/mediawiki/templates/mediawiki-nginx.conf.j2:    fastcgi_pass php; # or whatever port your PHP-FPM listens on
+#roles/mediawiki/templates/mediawiki-nginx.conf.j2:#        fastcgi_pass 127.0.0.1:9000; # or whatever port your PHP-FPM listens on
+#roles/wordpress/templates/wordpress-nginx.conf.j2:        fastcgi_pass php;
+#roles/wordpress/templates/wordpress-nginx.conf.j2:        fastcgi_pass php;
+#roles/nginx/templates/admin-console-nginx.conf.unused:    fastcgi_pass php;
+ 
+# should really be 'state: stopped' 'enabled: no' and each role should enable and restart as needed to keep system resources in check when
+# php{{ php_version }}-fpm is not required by any selected roles.
+
 - name: Restart php{{ php_version }}-fpm systemd service
   systemd:
     name: "php{{ php_version }}-fpm"
     state: restarted
-
 
 # RECORD NGINX AS INSTALLED
 
