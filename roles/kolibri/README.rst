@@ -26,11 +26,11 @@ Automatic Device Provisioning
 
 When kolibri_provision is enabled (e.g. in `/etc/iiab/local_vars.yml <http://FAQ.IIAB.IO#What_is_local_vars.yml_and_how_do_I_customize_it.3F>`_) the installation will set up the following defaults::
 
-  Kolibri Facility name: 'Kolibri-in-a-Box'
-  Kolibri Preset type: formal     # Options: formal, nonformal, informal
-  Kolibri default language: en    # Options: ar, bn-bd, en, es-es, fa, fr-fr, hi-in, mr, nyn, pt-br, sw-tz, ta, te, ur-pk, yo, zu
-  Kolibri Admin username: Admin
-  Kolibri Admin password: changeme
+  kolibri_facility: Kolibri-in-a-Box   
+  kolibri_language: en      # See KOLIBRI_SUPPORTED_LANGUAGES at the bottom of https://github.com/learningequality/kolibri/blob/develop/kolibri/utils/i18n.py
+  kolibri_preset: formal    # formal, nonformal, informal
+  kolibri_admin_user: Admin
+  kolibri_admin_password: changeme
 
 *Feel free to override any of the above, by copying the relevant line from /opt/iiab/iiab/roles/kolibri/defaults/main.yml to /etc/iiab/local_vars.yml (then run 'cd /opt/iiab/iiab' followed by './runrole kolibri' per IIAB's general guidelines at http://FAQ.IIAB.IO).*
 
@@ -42,12 +42,16 @@ Kolibri 0.10 introduced ``kolibri manage deprovision`` which will remove user co
 Troubleshooting
 ---------------
 
-You can run the server manually with the following commands::
+This unproxied version of Kolibri can sometimes help: http://box:8009/kolibri/
+
+You can run Kolibri manually with commands like::
 
   systemctl stop kolibri           # Make sure the systemd service is not running
   export KOLIBRI_HOME=/library/kolibri
   export KOLIBRI_HTTP_PORT=8009    # Otherwise Kolibri will try to run on default port 8080
   kolibri start
+
+...while you look over Kolibri's systemd unit file (`/etc/systemd/system/kolibri.service <https://github.com/iiab/iiab/blob/master/roles/kolibri/templates/kolibri.service.j2>`_) for the latest parameters!
 
 To return to using the systemd unit file::
 
