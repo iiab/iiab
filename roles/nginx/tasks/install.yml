@@ -21,17 +21,6 @@
 #    name: "{{ apache_user }}"    # www-data or apache, per /opt/iiab/iiab/vars/<OS>.yml
 #    groups: shadow
 
-- name: Insure alternate nginx path is present
-  file:
-    path: "{{ item }}"
-    state: directory
-  with_items:
-    - "{{ nginx_conf_dir }}"
-    - "{{ nginx_dir }}/modules-available"
-    - "{{ nginx_dir }}/modules-enabled"
-    - "{{ nginx_dir }}/sites-available"
-    - "{{ nginx_dir }}/sites-enabled"
-
 - name: Remove NGINX default config /etc/nginx/sites-enabled/default
   file:
     path: /etc/nginx/sites-enabled/default
@@ -51,6 +40,21 @@
 
 # start block
 - block:
+  - name: Insure alternate nginx path is present
+    file:
+      path: "{{ item }}"
+      state: directory
+    with_items:
+      - "{{ nginx_conf_dir }}"
+      - "{{ nginx_dir }}/sites-available"
+      - "{{ nginx_dir }}/sites-enabled"
+
+  - name: Link {{ nginx_dir }}/modules-enabled
+    file:
+      src: /etc/nginx/modules-enabled
+      path: "{{ nginx_dir }}/modules-enabled"
+      state: link
+
   - name: Grab stock unit file
     copy:
       force: yes
@@ -58,7 +62,7 @@
       dest: /etc/systemd/system/iiab-nginx.service
 
   - name: shove {{ nginx_dir }}/nginx.conf into unit file
-    command: sed -i 's|/usr/sbin/nginx|/usr/sbin/nginx -c {{ nginx_dir }}/nginx.conf|' /etc/systemd/system/nginx.service
+    command: sed -i 's|/usr/sbin/nginx|/usr/sbin/nginx -c {{ nginx_dir }}/nginx.conf|' /etc/systemd/system/iiab-nginx.service
 #    lineinfile:
 #      path: /etc/systemd/system/nginx.service
 #      state: present
@@ -68,14 +72,14 @@
 #    - { regexp: '^ExecStartPre=/usr/sbin/nginx' , line: 'ExecStartPre=/usr/sbin/nginx -c {{ nginx_dir }}/nginx.conf' }
 #    - { regexp: '^ExecStart=/usr/sbin/nginx', line: 'ExecStart=/usr/sbin/nginx -c {{ nginx_dir }}/nginx.conf'  }
 #    - { regexp: '^ExecReload=/usr/sbin/nginx', line: 'ExecReload=/usr/sbin/nginx -c {{ nginx_dir }}/nginx.conf' }
+
   - name: start iiab-nginx on port {{ nginx_port }}
     systemd:
       daemon_reload: yes
       name: iiab-nginx.service
       state: restarted
-
 # end block
-  when: is_guest or nginx_dir != "/etc/nginx"
+  when: nginx_port|int != 80 or nginx_dir != "/etc/nginx"
 
 - debug:
     msg: roles/nginx/tasks/homepage.yml will run LATER (invoked by roles/www_options/tasks/main.yml) SO THAT NGINX CAN REDIRECT http://box TO http://box{{ iiab_home_url }} (based on var iiab_home_url)
