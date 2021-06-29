@@ -66,6 +66,34 @@
     # - { src: 'ports.conf', dest: '/etc/{{ apache_service }}/ports.conf' }    # 2021-08-09: Restored from enable-or-disable.yml then moved to roles/pbx/tasks/apache.yml
     # - { src: 'iiab.conf.j2', dest: "{{ nginx_conf_dir }}/iiab.conf" }    # Moved into homepage.yml, invoked later by roles/www_options/tasks/main.yml (see below!)
 
+# start block
+- block:
+  - name: Grab stock unit file
+    copy:
+      force: yes
+      src: /lib/systemd/system/nginx.service
+      dest: /etc/systemd/system/iiab-nginx.service
+
+  - name: shove {{ nginx_dir }}/nginx.conf into unit file
+    command: sed -i 's|/usr/sbin/nginx|/usr/sbin/nginx -c {{ nginx_dir }}/nginx.conf|' /etc/systemd/system/nginx.service
+#    lineinfile:
+#      path: /etc/systemd/system/nginx.service
+#      state: present
+#      regexp: "{{ item.regexp }}"
+#      line: "{{ item.line }}"
+#    with_items:
+#    - { regexp: '^ExecStartPre=/usr/sbin/nginx' , line: 'ExecStartPre=/usr/sbin/nginx -c {{ nginx_dir }}/nginx.conf' }
+#    - { regexp: '^ExecStart=/usr/sbin/nginx', line: 'ExecStart=/usr/sbin/nginx -c {{ nginx_dir }}/nginx.conf'  }
+#    - { regexp: '^ExecReload=/usr/sbin/nginx', line: 'ExecReload=/usr/sbin/nginx -c {{ nginx_dir }}/nginx.conf' }
+  - name: start iiab-nginx on port {{ nginx_port }}
+    systemd:
+      daemon_reload: yes
+      name: iiab-nginx.service
+      state: restarted
+
+# end block
+  when: is_guest or nginx_dir != "/etc/nginx"
+
 - debug:
     msg: roles/nginx/tasks/homepage.yml will run LATER (invoked by roles/www_options/tasks/main.yml) SO THAT NGINX CAN REDIRECT http://box TO http://box{{ iiab_home_url }} (based on var iiab_home_url)
 # - include_tasks: roles/nginx/tasks/homepage.yml
