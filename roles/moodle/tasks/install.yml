@@ -1,9 +1,12 @@
 # 2021-05-22: FYI nginx_high_php_limits is effectively now auto-enabled by
-# www_options/tasks/main.yml#L81-L94 (as required by Moodle 3.11 with PHP 8) IF
+# www_options/tasks/main.yml#L100-L112 (as required by Moodle 3.11 w/ PHP 8) IF
 # 'moodle_install: True'. Happens at the end of 4-server-options/tasks/main.yml
 # See the 6 settings in /etc/php/{{ php_version }}/fpm/php.ini -- which Moodle
 # should take advantage of soon, as it transitions from Apache to Moodle: #2785
 
+# 2021-06-28: This ALSO now happens in /etc/php/{{ php_version }}/cli/php.ini
+# (as required by Moodle's CLI installer) AND THIRDLY below (for now, until
+# Moodle's ported to NGINX!) in /etc/php/{{ php_version }}/apache2/php.ini
 
 - name: "Set 'apache_install: True' and 'apache_enabled: True'"
   set_fact:
@@ -13,6 +16,21 @@
 - name: APACHE - run 'httpd' role
   include_role:
     name: httpd
+
+- name: "Enact the equivalent of 'nginx_high_php_limits: True' in /etc/php/{{ php_version }}/{{ apache_service }}/php.ini for Moodle 3.11+"
+  lineinfile:
+    path: /etc/php/{{ php_version }}/{{ apache_service }}/php.ini    # COMPARE /etc/php/{{ php_version }}/fpm/php.ini AND /etc/php/{{ php_version }}/cli/php.ini
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+  with_items:
+    - { regexp: '^upload_max_filesize', line: 'upload_max_filesize = 500M    ; default is 2M' }
+    - { regexp: '^post_max_size', line: 'post_max_size = 500M    ; default is 8M' }
+    - { regexp: '^max_execution_time', line: 'max_execution_time = 300    ; default is 30' }
+    - { regexp: '^max_input_time', line: 'max_input_time = 300    ; default is 60' }
+    - { regexp: '^memory_limit', line: 'memory_limit = 512M    ; default is 128M / Nextcloud requests 512M' }
+    - { regexp: '^max_input_vars', line: 'max_input_vars = 5000    ; default is 1000 / Moodle 3.11+ requires 5000+ with PHP 8+' }
+
+# Apache's restarted prior to moodle_installer below, so no need right here!
 
 
 - name: "Set 'postgresql_install: True' and 'postgresql_enabled: True'"
@@ -25,20 +43,22 @@
     name: postgresql
 
 
-- name: Install 8 php packages (debuntu)
+- name: Install libsodium23 + 7 PHP packages (run 'php -m' or 'php -i' to verify)
   package:
     name:
-      - php{{ php_version }}-pgsql
-      - php{{ php_version }}-curl
-      - php{{ php_version }}-zip
-      - php{{ php_version }}-gd
-      - php{{ php_version }}-mbstring    # 2020-06-15: Required by Moodle 3.9+
-      - php{{ php_version }}-cli         # 2020-06-15: In the past this included (above) mbstring? However this is not true on Ubuntu Server 20.04 LTS.
-      - php{{ php_version }}-intl        # 2020-12-03: Required by Moodle 3.10+
+      - libsodium23                      # 2021-06-28: Likewise installed by nginx/tasks/install.yml via php{{ php_version }}-fpm AND httpd/tasks/install.yml via libapache2-mod-php{{ php_version }} -- it can ALSO be auto-installed by phpX.Y-cgi OR phpX.Y-cli as confirmed by 'apt rdepends libsodium23' -- Recommended by Moodle 3.11+ at https://docs.moodle.org/311/en/Environment_-_PHP_extension_sodium -- whereas https://www.php.net/manual/en/sodium.installation.php says it's always bundled with PHP 7.2+ -- VERIFY USING 'php -i | grep sodium' AND 'apt list "*sodium*"'
+      #- php{{ php_version }}-common     # 2021-06-27: Auto-installed as an apt dependency.  REGARDLESS: php{{ php_version }}-common superset php{{ php_version }}-cli is auto-installed by php{{ php_version }}-fpm in nginx/tasks/install.yml
+      #- php{{ php_version }}-cli        # 2021-06-27: Compare to php{{ php_version }}-common just above!  2020-06-15: In the past this included (below) mbstring?  However this is not true on Ubuntu Server 20.04 LTS.
+      - php{{ php_version }}-curl        # 2021-06-27: Likewise installed by nextcloud/tasks/install.yml AND pbx/tasks/freepbx_dependencies.yml
+      - php{{ php_version }}-gd          # 2021-06-27: Likewise installed by nextcloud/tasks/install.yml AND pbx/tasks/freepbx_dependencies.yml
+      - php{{ php_version }}-intl        # 2020-12-03: Likewise installed by nextcloud/tasks/install.yml AND mediawiki/tasks/install.yml -- Required by Moodle 3.10+
+      - php{{ php_version }}-mbstring    # 2020-06-15: Likewise installed by nextcloud/tasks/install.yml AND mediawiki/tasks/install.yml AND pbx/tasks/freepbx_dependencies.yml -- Required by Moodle 3.9+
+      - php{{ php_version }}-pgsql       # 2021-06-27: Required for PostgreSQL
       - php{{ php_version }}-soap        # 2020-12-03: Recommended by Moodle 3.10+
-      #- php-sodium                      # 2021-05-17: Recommended by Moodle 3.11+ at https://docs.moodle.org/311/en/Environment_-_PHP_extension_sodium AND ALREADY PRE-ENABLED BY PHP 7.2+ https://www.php.net/manual/en/sodium.installation.php AS CONFIRMED BY 'php -i | grep sodium' AND 'apt list "*sodium*"'
+      - php{{ php_version }}-xml         # 2021-06-28: Likewise installed by nextcloud/tasks/install.yml AND mediawiki/tasks/install.yml AND pbx/tasks/freepbx_dependencies.yml -- AND REGARDLESS dragged in later by Admin Console's use of php-pear for roles/cmdsrv/tasks/main.yml
+      #- php{{ php_version }}-xmlrpc     # 2021-06-27: Required per https://docs.moodle.org/19/en/PHP_settings_by_Moodle_version#PHP_Extensions_and_libraries BUT UNMAINTAINED FOR YEARS (POSSIBLE SECURITY RISK) SO MOVED TO PECL: https://php.watch/versions/8.0/xmlrpc
+      - php{{ php_version }}-zip         # 2021-06-27: Likewise installed by nextcloud/tasks/install.yml AND pbx/tasks/freepbx_dependencies.yml
     state: present
-  when: is_debuntu
 
 - name: Does {{ moodle_base }}/config-dist.php exist? (indicating Moodle is/was installed)
   stat:
@@ -137,7 +157,7 @@
     path: "{{ moodle_base }}/config.php"
   register: config
 
-- name: Execute {{ moodle_base }}/moodle_installer
+- name: Execute {{ moodle_base }}/moodle_installer -- REQUIRES 'max_input_vars = 5000' (or higher) in /etc/php/{{ php_version }}/cli/php.ini with PHP 8+ (as set up by www_options/tasks/main.yml) -- WHEREAS Moodle uses /etc/php/{{ php_version }}/{{ apache_service }}/php.ini or /etc/php/{{ php_version }}/fpm/php.ini during regular operation
   shell: "{{ moodle_base }}/moodle_installer"
   when: config.stat.exists is defined and not config.stat.exists
 

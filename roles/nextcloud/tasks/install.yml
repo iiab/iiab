@@ -40,10 +40,12 @@
 #     var: php_new
 
 
-# https://docs.nextcloud.com/server/18/admin_manual/installation/source_installation.html#prerequisites-for-manual-installation
+# February 2020: See @m-anish's PR #2119 and follow-up PR #2258.
 # 2021-04-11: If you're running Nextcloud 21+ in production, carefully check the latest required AND recommended prereqs:
 # https://docs.nextcloud.com/server/21/admin_manual/installation/source_installation.html#prerequisites-for-manual-installation
-- name: Install ffmpeg + libxml2 + 13 php packages
+# 2021-06-27: Use this after Nextcloud 22 is released "2021-07-06" :
+# https://docs.nextcloud.com/server/22/admin_manual/installation/source_installation.html#prerequisites-for-manual-installation
+- name: Install ffmpeg + libxml2 + 11 PHP packages (run 'php -m' or 'php -i' to verify)
   package:
     name:
       #- dnsutils    # NOT REQUESTED by Nextcloud
@@ -52,25 +54,35 @@
       #- libapache2-mod-php    # 2020-02-15: NO LONGER NEEDED?
       - php{{ php_version }}-bcmath        # Highly recommended by Nextcloud 21 for "improved performance and better compatibility"
       - php{{ php_version }}-bz2           # Optional (for extraction of apps)
-      - php{{ php_version }}-cli           # Likely optional?  @jvonau says this drags in php{{ php_version }}-common as @m-anish wanted in PR #2119 / #2258
-      - php{{ php_version }}-curl
-      - php{{ php_version }}-gd
+      #- php{{ php_version }}-common       # Auto-installed as an apt dependency.  REGARDLESS: php{{ php_version }}-common superset php{{ php_version }}-cli is auto-installed by php{{ php_version }}-fpm in nginx/tasks/install.yml
+      - php{{ php_version }}-curl          # Likewise installed by moodle/tasks/install.yml AND pbx/tasks/freepbx_dependencies.yml
+      - php{{ php_version }}-gd            # Likewise installed by moodle/tasks/install.yml AND pbx/tasks/freepbx_dependencies.yml
       - php{{ php_version }}-gmp           # Optional (for SFTP storage)
-      - php{{ php_version }}-imagick       # Optional (for preview generation)
-      - php{{ php_version }}-intl          # Optional (increases language translation performance and fixes sorting of non-ASCII characters)
-      - php{{ php_version }}-json
+      - php-imagick                        # Optional (for preview generation).  BUT drags in Apache's libapache2-mod-phpX.Y etc, as confirmed by 'apt depends php-imagick' -- while php{{ php_version }}-imagick installs (despite not being shown within 'apt list "php*imagick"') it's no better -- and 'apt depends phpX.Y-imagick' mysteriously does NOT show its deps.
+      - php{{ php_version }}-intl          # Likewise installed by moodle/tasks/install.yml AND mediawiki/tasks/install.yml -- Optional (increases language translation performance and fixes sorting of non-ASCII characters)
+      #- php{{ php_version }}-json         # See stanza just below
       #- php{{ php_version }}-libxml       # NOT INSTALLABLE: ENABLED BY DEFAULT (https://www.php.net/manual/en/libxml.installation.php)
-      - php{{ php_version }}-mbstring
-      - php{{ php_version }}-mysql
+      - php{{ php_version }}-mbstring      # Likewise installed by moodle/tasks/install.yml AND mediawiki/tasks/install.yml AND pbx/tasks/freepbx_dependencies.yml
+      - php{{ php_version }}-mysql         # Likewise installed by mysql/tasks/install.yml AND pbx/tasks/freepbx_dependencies.yml
       #- php{{ php_version }}-openssl      # NOT INSTALLABLE: ENABLED BY DEFAULT?
-      #- php{{ php_version }}-pdo_mysql    # NOT INSTALLABLE: php-mysql handles this on all OS's?
+      #- php{{ php_version }}-pdo_mysql    # NOT INSTALLABLE: php{{ php_version }}-mysql handles this on all OS's?
       #- php{{ php_version }}-redis        # @m-anish future work?
       #- php{{ php_version }}-session      # NOT INSTALLABLE: ENABLED BY DEFAULT?
       #- php{{ php_version }}-smbclient    # Optional (SMB/CIFS integration)
-      - php{{ php_version }}-xml           # NOT FORMALLY REQUESTED by Nextcloud (BUT hopefully delivers php-simplexml if not {php-xmlreader, php-xmlwriter} on Raspbian?)
-      - php{{ php_version }}-zip
+      - php{{ php_version }}-xml           # Likewise installed by moodle/tasks/install.yml AND mediawiki/tasks/install.yml AND pbx/tasks/freepbx_dependencies.yml -- AND REGARDLESS dragged in later by Admin Console's use of php-pear for roles/cmdsrv/tasks/main.yml -- Nextcloud's official requirements include {SimpleXML, XMLReader, XMLWriter} as confirmed by 'php -m | grep -i xml' which in the end shows {libxml, SimpleXML, xml, xmlreader, xmlwriter}
+      #- php{{ php_version }}-xmlrpc       # 2021-06-27: Experimentally remove, as explained in moodle/tasks/install.yml
+      - php{{ php_version }}-zip           # Likewise installed by moodle/tasks/install.yml AND pbx/tasks/freepbx_dependencies.yml
       #- php{{ php_version }}-zlib         # NOT INSTALLABLE: ENABLED BY DEFAULT?
     state: present
+
+# For PHP >= 8.0: phpX.Y-json is baked into PHP itself.
+# For PHP <  8.0: phpX.Y-json auto-installed by phpX.Y-fpm AND phpX.Y-cli in 3-base-server's nginx/tasks/install.yml, as confirmed by: apt rdepends phpX.Y-json
+#
+#- name: Install php{{ php_version }}-json if PHP < 8.0
+#  package:
+#    name: php{{ php_version }}-json
+#    state: present
+#  when: php_version is version('8.0', '<')
 
 # https://docs.nextcloud.com/server/18/admin_manual/installation/source_installation.html#prerequisites-for-manual-installation
 #- name: Install 9 additional php packages, if OS is not Raspbian (these are not available on Raspbian on RPi, as of Feb 2020)
