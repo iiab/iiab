@@ -27,17 +27,6 @@
     state: absent
   when: not is_guest
 
-- name: 'Install 3 (of 5) files from template: /etc/nginx/server.conf, /etc/nginx/nginx.conf, /etc/nginx/mime.types'
-  template:
-    src: "{{ item.src }}"
-    dest: "{{ item.dest }}"
-  with_items:
-    - { src: 'server.conf.j2', dest: '{{ nginx_dir }}/server.conf' }
-    - { src: 'nginx.conf.j2', dest: '{{ nginx_dir }}/nginx.conf' }
-    - { src: 'mime.types.j2', dest: '{{ nginx_dir }}/mime.types' }
-    #- { src: 'ports.conf.j2', dest: '/etc/{{ apache_service }}/ports.conf' }    # Moved to enable-or-disable.yml
-    #- { src: 'iiab.conf.j2', dest: "{{ nginx_conf_dir }}/iiab.conf" }    # Moved into homepage.yml below
-
 # start block
 - block:
   - name: Insure alternate nginx path is present
@@ -49,11 +38,23 @@
       - "{{ nginx_dir }}/sites-available"
       - "{{ nginx_dir }}/sites-enabled"
 
-  - name: Link {{ nginx_dir }}/modules-enabled
+  - name: Link {{ nginx_dir }}/ files
     file:
-      src: /etc/nginx/modules-enabled
-      path: "{{ nginx_dir }}/modules-enabled"
+      src: /etc/nginx/{{ item }}
+      path: "{{ nginx_dir }}/{{ item }}"
       state: link
+    with_items:
+      - modules-available
+      - modules-enabled
+      - snippets
+      - fastcgi.conf
+      - fastcgi_params
+      - koi-win
+      - koi-utf
+      - proxy_params
+      - scgi_params
+      - uwsgi_params
+      - win-utf
 
   - name: Grab stock unit file
     copy:
@@ -73,13 +74,19 @@
 #    - { regexp: '^ExecStart=/usr/sbin/nginx', line: 'ExecStart=/usr/sbin/nginx -c {{ nginx_dir }}/nginx.conf'  }
 #    - { regexp: '^ExecReload=/usr/sbin/nginx', line: 'ExecReload=/usr/sbin/nginx -c {{ nginx_dir }}/nginx.conf' }
 
-  - name: start iiab-nginx on port {{ nginx_port }}
-    systemd:
-      daemon_reload: yes
-      name: iiab-nginx.service
-      state: restarted
 # end block
   when: nginx_port|int != 80 or nginx_dir != "/etc/nginx"
+
+- name: 'Install 3 (of 5) files from template: /etc/nginx/server.conf, /etc/nginx/nginx.conf, /etc/nginx/mime.types'
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+  with_items:
+    - { src: 'server.conf.j2', dest: '{{ nginx_dir }}/server.conf' }
+    - { src: 'nginx.conf.j2', dest: '{{ nginx_dir }}/nginx.conf' }
+    - { src: 'mime.types.j2', dest: '{{ nginx_dir }}/mime.types' }
+    #- { src: 'ports.conf.j2', dest: '/etc/{{ apache_service }}/ports.conf' }    # Moved to enable-or-disable.yml
+    #- { src: 'iiab.conf.j2', dest: "{{ nginx_conf_dir }}/iiab.conf" }    # Moved into homepage.yml below
 
 - debug:
     msg: roles/nginx/tasks/homepage.yml will run LATER (invoked by roles/www_options/tasks/main.yml) SO THAT NGINX CAN REDIRECT http://box TO http://box{{ iiab_home_url }} (based on var iiab_home_url)
