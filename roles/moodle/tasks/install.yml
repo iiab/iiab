@@ -8,30 +8,14 @@
 # (as required by Moodle's CLI installer) AND THIRDLY below (for now, until
 # Moodle's ported to NGINX!) in /etc/php/{{ php_version }}/apache2/php.ini
 
-- name: "Set 'apache_install: True' and 'apache_enabled: True'"
-  set_fact:
-    apache_install: True
-    apache_enabled: True
+#- name: "Set 'apache_install: True' and 'apache_enabled: True'"
+#  set_fact:
+#    apache_install: True
+#    apache_enabled: True
 
-- name: APACHE - run 'httpd' role
-  include_role:
-    name: httpd
-
-- name: "Enact the equivalent of 'nginx_high_php_limits: True' in /etc/php/{{ php_version }}/{{ apache_service }}/php.ini for Moodle 3.11+"
-  lineinfile:
-    path: /etc/php/{{ php_version }}/{{ apache_service }}/php.ini    # COMPARE /etc/php/{{ php_version }}/fpm/php.ini AND /etc/php/{{ php_version }}/cli/php.ini
-    regexp: "{{ item.regexp }}"
-    line: "{{ item.line }}"
-  with_items:
-    - { regexp: '^upload_max_filesize', line: 'upload_max_filesize = 500M    ; default is 2M' }
-    - { regexp: '^post_max_size', line: 'post_max_size = 500M    ; default is 8M' }
-    - { regexp: '^max_execution_time', line: 'max_execution_time = 300    ; default is 30' }
-    - { regexp: '^max_input_time', line: 'max_input_time = 300    ; default is 60' }
-    - { regexp: '^memory_limit', line: 'memory_limit = 512M    ; default is 128M / Nextcloud requests 512M' }
-    - { regexp: '^max_input_vars', line: 'max_input_vars = 5000    ; default is 1000 / Moodle 3.11+ requires 5000+ with PHP 8+' }
-
-# Apache's restarted prior to moodle_installer below, so no need right here!
-
+#- name: APACHE - run 'httpd' role
+#  include_role:
+#    name: httpd
 
 - name: "Set 'postgresql_install: True' and 'postgresql_enabled: True'"
   set_fact:
@@ -47,6 +31,8 @@
 - name: Install libsodium23 + 8 PHP packages (run 'php -m' or 'php -i' to verify)
   package:
     name:
+      - php-apcu
+      - ghostscript
       - libsodium23                      # 2021-06-28: Likewise installed in nginx/tasks/install.yml via php{{ php_version }}-fpm AND httpd/tasks/install.yml via libapache2-mod-php{{ php_version }} AND wordpress/tasks/install.yml -- it can ALSO be auto-installed by phpX.Y-cgi OR phpX.Y-cli as confirmed by 'apt rdepends libsodium23' -- Recommended by Moodle 3.11+ at https://docs.moodle.org/311/en/Environment_-_PHP_extension_sodium -- whereas https://www.php.net/manual/en/sodium.installation.php says it's always bundled with PHP 7.2+ -- VERIFY USING 'php -i | grep sodium' AND 'apt list "*sodium*"'
       #- php{{ php_version }}-common     # 2021-06-27: Auto-installed as an apt dependency.  REGARDLESS: php{{ php_version }}-common superset php{{ php_version }}-cli is auto-installed by php{{ php_version }}-fpm in nginx/tasks/install.yml
       #- php{{ php_version }}-cli        # 2021-06-27: Compare to php{{ php_version }}-common just above!  2020-06-15: In the past this included (below) mbstring?  However this is not true on Ubuntu Server 20.04 LTS.
@@ -55,9 +41,12 @@
       - php{{ php_version }}-intl        # 2020-12-03: Required by Moodle 3.10+ -- Likewise installed in mediawiki/tasks/install.yml, nextcloud/tasks/install.yml, wordpress/tasks/install.yml
       - php{{ php_version }}-mbstring    # 2020-06-15: Required by Moodle 3.9+ -- Likewise installed in mediawiki/tasks/install.yml, nextcloud/tasks/install.yml, pbx/tasks/freepbx_dependencies.yml, wordpress/tasks/install.yml
       - php{{ php_version }}-pgsql       # 2021-06-27: Required for PostgreSQL
+      - php{{ php_version }}-json
+      - php{{ php_version }}-opcache
+      - php{{ php_version }}-readline
       - php{{ php_version }}-soap        # 2020-12-03: Recommended by Moodle 3.10+
       - php{{ php_version }}-xml         # 2021-06-28: Likewise installed in mediawiki/tasks/install.yml, nextcloud/tasks/install.yml, pbx/tasks/freepbx_dependencies.yml, wordpress/tasks/install.yml -- AND REGARDLESS dragged in later by Admin Console's use of php-pear for roles/cmdsrv/tasks/main.yml -- run 'php -m | grep -i xml' which in the end shows {libxml, SimpleXML, xml, xmlreader, xmlwriter}
-      #- php{{ php_version }}-xmlrpc     # 2021-06-27: Required per https://docs.moodle.org/19/en/PHP_settings_by_Moodle_version#PHP_Extensions_and_libraries BUT UNMAINTAINED FOR YEARS (POSSIBLE SECURITY RISK) SO MOVED TO PECL: https://php.watch/versions/8.0/xmlrpc
+      - php{{ php_version }}-xmlrpc     # 2021-06-27: Required per https://docs.moodle.org/19/en/PHP_settings_by_Moodle_version#PHP_Extensions_and_libraries BUT UNMAINTAINED FOR YEARS (POSSIBLE SECURITY RISK) SO MOVED TO PECL: https://php.watch/versions/8.0/xmlrpc
       - php{{ php_version }}-zip         # 2021-06-27: Likewise installed in nextcloud/tasks/install.yml, pbx/tasks/freepbx_dependencies.yml, wordpress/tasks/install.yml
     state: present
 
@@ -82,6 +71,8 @@
     state: directory
     path: "{{ moodle_base }}"
     owner: "{{ apache_user }}"    # www-data
+    group: "{{ apache_user }}"
+    mode: u+rw,g+r,o+r    # '0755' forced executable bits on files
     recurse: yes
 
 - name: Create dir {{ content_base }}/dbdata/moodle owned by {{ apache_user }}
@@ -98,16 +89,16 @@
     group: "{{ apache_user }}"
     #mode: '0770'    # Regardless, permissions end up as: drwxrwsrwx
 
-- name: Remove stock /etc/{{ apache_conf_dir }}/moodle.conf
-  file:
-    path: "/etc/{{ apache_conf_dir }}/moodle.conf"    # apache2/sites-available
-    state: absent
+#- name: Remove stock /etc/{{ apache_conf_dir }}/moodle.conf
+#  file:
+#    path: "/etc/{{ apache_conf_dir }}/moodle.conf"    # apache2/sites-available
+#    state: absent
 
 # 2021-02-01: Not nec if we can hopefully migrate from Apache to NGINX soon!
-- name: Install /etc/{{ apache_conf_dir }}/022-moodle.conf from template
-  template:
-    src: 022-moodle.j2
-    dest: "/etc/{{ apache_conf_dir }}/022-moodle.conf"
+#- name: Install /etc/{{ apache_conf_dir }}/022-moodle.conf from template
+#  template:
+#    src: 022-moodle.j2
+#    dest: "/etc/{{ apache_conf_dir }}/022-moodle.conf"
 
 # roles/postgresql/templates/postgresql-iiab.service WAS INSTALLED HERE:
 # /etc/systemd/system/postgresql-iiab.service
@@ -148,10 +139,10 @@
     state: restarted
     #enabled: yes    # Service ends up enabled regardless
 
-- name: (Re)Start '{{ apache_service }}' systemd service
-  systemd:
-    name: "{{ apache_service }}"
-    state: restarted
+#- name: (Re)Start '{{ apache_service }}' systemd service
+#  systemd:
+#    name: "{{ apache_service }}"
+#    state: restarted
 
 - name: Does {{ moodle_base }}/config.php exist?
   stat:
