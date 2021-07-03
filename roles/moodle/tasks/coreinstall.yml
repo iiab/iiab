@@ -1,0 +1,106 @@
+
+- name: get Moodle version '{{ moodlebox_moodle_branch }}' from git repository
+  git:
+    repo: 'git://git.moodle.org/moodle.git'
+    version: '{{ moodlebox_moodle_branch }}'
+    dest: '{{ moodlebox_moodle_source_dir }}'
+    depth: 1
+
+- name: create Moodle data and cache directories and set adequate permissions
+  file:
+    path: '{{ item }}'
+    state: 'directory'
+    owner: 'www-data'
+    group: '{{ moodlebox_username }}'
+    mode: 'ug+w,o-w'
+    recurse: 'yes'
+  with_items:
+    - '{{ moodlebox_moodle_source_dir }}'
+    - '{{ moodlebox_moodle_data_dir }}/repository'
+    - '{{ moodlebox_moodle_data_dir }}/temp'
+    - '{{ moodlebox_moodle_data_dir }}/backup'
+    - '/var/cache/moodle'
+    - '/var/cache/moodle-cache-backup'
+
+- name: set sticky bit for moodledata directory
+  file:
+    path: '{{ moodlebox_moodle_data_dir }}'
+    state: 'directory'
+    mode: 'g+s'
+    recurse: 'yes'
+
+- name: create file repository directory
+  file:
+    path: '/home/{{ moodlebox_username }}/files'
+    state: 'directory'
+    owner: '{{ moodlebox_username }}'
+    group: 'www-data'
+    mode: 'g+s'
+
+- name: link directories
+  file:
+    src: '{{ item.src }}'
+    path: '{{ item.path }}'
+    state: 'link'
+  with_items:
+    - { src: '/home/{{ moodlebox_username }}/files', path: '{{ moodlebox_moodle_data_dir }}/repository/files' }
+    - { src: '/media/usb', path: '{{ moodlebox_moodle_data_dir }}/repository/usb' }
+
+- name: configure temporary storage for Moodle cache
+  mount:
+    path: '{{ item.name }}'
+    src: 'tmpfs'
+    fstype: 'tmpfs'
+    opts: 'size={{ item.size }},mode=775,uid=www-data,gid=www-data'
+    dump: '0'
+    passno: '0'
+    state: 'mounted'
+  with_items:
+    - { name: '/var/cache/moodle', size: '64M' }
+    - { name: '{{ moodlebox_moodle_data_dir }}/temp', size: '64M' }
+    - { name: '{{ moodlebox_moodle_data_dir }}/sessions', size: '16M' }
+
+# https://github.com/HCPSS/ansible-role-moodle/blob/master/tasks/install.yml
+- name: install Moodle via CLI
+  command: '/usr/bin/php "{{ moodlebox_moodle_source_dir }}/admin/cli/install.php"
+    --lang="{{ moodlebox_moodle_lang }}"
+    --wwwroot="http://{{ moodlebox_hostname }}.{{ moodlebox_tld }}"
+    --dataroot="{{ moodlebox_moodle_data_dir }}"
+    --dbtype="mariadb"
+    --dbname="{{ moodlebox_moodle_db }}"
+    --prefix="{{ moodlebox_moodle_db_prefix }}"
+    --dbuser="{{ moodlebox_db_username }}"
+    --dbpass="{{ moodlebox_db_password }}"
+    --fullname="{{ moodlebox_moodle_name }}"
+    --shortname="{{ moodlebox_moodle_name }}"
+    --summary="{{ moodlebox_moodle_summary }}"
+    --adminuser="{{ moodlebox_moodle_username }}"
+    --adminpass="{{ moodlebox_moodle_password }}"
+    --adminemail="{{ moodlebox_moodle_username }}@{{ moodlebox_hostname }}.invalid"
+    --non-interactive
+    --allow-unstable
+    --agree-license'
+  args:
+    chdir: '{{ moodlebox_moodle_source_dir }}'
+    creates: '{{ moodlebox_moodle_source_dir }}/config.php'
+
+- name: set Moodle config file owner, group and permissions
+  file:
+    path: '{{ moodlebox_moodle_source_dir }}/config.php'
+    owner: 'www-data'
+    group: '{{ moodlebox_username }}'
+    mode: 'ug+w,o-w'
+
+- name: write extra parameters to the Moodle config file
+  lineinfile:
+    path: '{{ moodlebox_moodle_source_dir }}/config.php'
+    line: '$CFG->{{ item.name }} = {{ item.value }};'
+    insertbefore: '^\$CFG->directorypermissions'
+  with_items:
+    - { name: 'backuptempdir', value: "'{{ moodlebox_moodle_data_dir }}/backup'" }
+    - { name: 'xsendfile', value: "'X-Accel-Redirect'" }
+    - { name: 'xsendfilealiases', value: "array('/dataroot/' => $CFG->dataroot)" }
+    # noqa 204
+    # this long line is OK
+    - { name: 'customfiletypes', value: "array(\n  (object)array(\n    'extension' => 'crt',\n    'icon' => 'sourcecode',\n    'type' => 'application/x-x509-ca-cert',\n    'customdescription' => 'X.509 CA certificate'\n  )\n)"} # noqa 204
+    - { name: 'showcampaigncontent', value: 'false' }

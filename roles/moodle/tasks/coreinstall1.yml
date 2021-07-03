@@ -1,0 +1,60 @@
+- name: get Moodle version '{{ moodlebox_moodle_branch }}' from git repository
+  git:
+    repo: 'git://git.moodle.org/moodle.git'
+    version: '{{ moodlebox_moodle_branch }}'
+    dest: '{{ moodlebox_moodle_source_dir }}'
+    depth: 1
+
+- name: create Moodle data and cache directories and set adequate permissions
+  file:
+    path: '{{ item }}'
+    state: 'directory'
+    owner: 'www-data'
+    group: '{{ moodlebox_username }}'
+    mode: 'ug+w,o-w'
+    recurse: 'yes'
+  with_items:
+    - '{{ moodlebox_moodle_source_dir }}'
+    - '{{ moodlebox_moodle_data_dir }}/repository'
+    - '{{ moodlebox_moodle_data_dir }}/temp'
+    - '{{ moodlebox_moodle_data_dir }}/backup'
+    - '/var/cache/moodle'
+    - '/var/cache/moodle-cache-backup'
+
+- name: set sticky bit for moodledata directory
+  file:
+    path: '{{ moodlebox_moodle_data_dir }}'
+    state: 'directory'
+    mode: 'g+s'
+    recurse: 'yes'
+
+- name: create file repository directory
+  file:
+    path: '/home/{{ moodlebox_username }}/files'
+    state: 'directory'
+    owner: '{{ moodlebox_username }}'
+    group: 'www-data'
+    mode: 'g+s'
+
+- name: link directories
+  file:
+    src: '{{ item.src }}'
+    path: '{{ item.path }}'
+    state: 'link'
+  with_items:
+    - { src: '/home/{{ moodlebox_username }}/files', path: '{{ moodlebox_moodle_data_dir }}/repository/files' }
+#    - { src: '/media/usb', path: '{{ moodlebox_moodle_data_dir }}/repository/usb' }
+
+- name: configure temporary storage for Moodle cache
+  mount:
+    path: '{{ item.name }}'
+    src: 'tmpfs'
+    fstype: 'tmpfs'
+    opts: 'size={{ item.size }},mode=775,uid=www-data,gid=www-data'
+    dump: '0'
+    passno: '0'
+    state: 'mounted'
+  with_items:
+    - { name: '/var/cache/moodle', size: '64M' }
+    - { name: '{{ moodlebox_moodle_data_dir }}/temp', size: '64M' }
+    - { name: '{{ moodlebox_moodle_data_dir }}/sessions', size: '16M' }
