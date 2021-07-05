@@ -7,16 +7,6 @@
 # (as required by Moodle's CLI installer, DESPITE it using fpm/php.ini later!)
 
 
-#- name: "Set 'apache_install: True' and 'apache_enabled: True'"
-#  set_fact:
-#    apache_install: True
-#    apache_enabled: True
-
-#- name: APACHE - run 'httpd' role
-#  include_role:
-#    name: httpd
-
-
 - name: "Set 'postgresql_install: True' and 'postgresql_enabled: True'"
   set_fact:
     postgresql_install: True
@@ -52,57 +42,30 @@
       - php{{ php_version }}-zip         # 2021-06-27: Likewise installed in nextcloud/tasks/install.yml, pbx/tasks/freepbx_dependencies.yml, wordpress/tasks/install.yml
     state: present
 
-- name: Does {{ moodle_base }}/config-dist.php exist? (indicating Moodle is/was installed)
-  stat:
-    path: "{{ moodle_base }}/config-dist.php"    # /opt/iiab/moodle
-  register: moodle
-
-- name: Clone (i.e. use git to download) {{ moodle_repo_url }} to {{ moodle_base }} (~288 MB)
+- name: Download (clone) {{ moodle_repo_url }} to {{ moodle_base }} (~350MB initially, ~371MB later)
   git:
-    repo: "{{ moodle_repo_url }}"
-    dest: "{{ moodle_base }}"
+    repo: "{{ moodle_repo_url }}"    # https://github.com/moodle/moodle
+    dest: "{{ moodle_base }}"        # /opt/iiab/moodle
     depth: 1
-    force: yes
     version: "MOODLE_{{ moodle_version }}_STABLE"
     #version: master   # TEMPORARY DURING MAY 2018 TESTING, installed 3.5beta+ = https://download.moodle.org/releases/development/
   #ignore_errors: yes
-  when: internet_available and moodle.stat.exists is defined and not moodle.stat.exists
 
-- name: Create dir {{ moodle_base }} owned by {{ apache_user }} (for config file?)
+- name: chown -R {{ apache_user }}:{{ apache_user }} {{ moodle_base }} (by default dirs 755 & files 644)
   file:
-    state: directory
     path: "{{ moodle_base }}"
     owner: "{{ apache_user }}"    # www-data
     group: "{{ apache_user }}"
-    mode: u+rw,g+r,o+r    # '0755' forced executable bits on files
     recurse: yes
 
-- name: Create dir {{ content_base }}/dbdata/moodle owned by {{ apache_user }}
-  file:
-    state: directory
-    path: "{{ content_base }}/dbdata/moodle"    # /library
-    owner: "{{ apache_user }}"
-
-- name: Create dir {{ moodle_data }} ({{ apache_user }}:{{ apache_user }}, '0770')
+- name: Create dir {{ moodle_data }} ({{ apache_user }}:{{ apache_user }}) (by default 755 = drwxr-xr-x initially, but moodle_installer sets drwxrwsrwx below)
   file:
     state: directory
     path: "{{ moodle_data }}"    # /library/moodle
     owner: "{{ apache_user }}"
     group: "{{ apache_user }}"
-    #mode: '0770'    # Regardless, permissions end up as: drwxrwsrwx
 
-#- name: Remove stock /etc/{{ apache_conf_dir }}/moodle.conf
-#  file:
-#    path: "/etc/{{ apache_conf_dir }}/moodle.conf"    # apache2/sites-available
-#    state: absent
 
-# 2021-02-01: Not nec if we can hopefully migrate from Apache to NGINX soon!
-#- name: Install /etc/{{ apache_conf_dir }}/022-moodle.conf from template
-#  template:
-#    src: 022-moodle.j2
-#    dest: "/etc/{{ apache_conf_dir }}/022-moodle.conf"
-
-# roles/postgresql/templates/postgresql-iiab.service WAS INSTALLED HERE:
 # /etc/systemd/system/postgresql-iiab.service
 - name: Start 'postgresql-iiab' systemd service, to configure Moodle's DB
   systemd:
@@ -129,42 +92,40 @@
   become: yes
   become_user: postgres
 
-- name: Install {{ moodle_base }}/moodle_installer from template ('0755')
-  template:
-    src: moodle_installer
-    dest: "{{ moodle_base }}"
-    mode: '0755'
-
 - name: (Re)Start 'postgresql-iiab' systemd service
   systemd:
     name: postgresql-iiab
     state: restarted
     #enabled: yes    # Service ends up enabled regardless
 
-#- name: (Re)Start '{{ apache_service }}' systemd service
-#  systemd:
-#    name: "{{ apache_service }}"
-#    state: restarted
 
-# - name: Does {{ moodle_base }}/config.php exist?
-#   stat:
-#     path: "{{ moodle_base }}/config.php"
-#   register: config
+- name: Install {{ moodle_base }}/moodle_installer from template (0755)
+  template:
+    src: moodle_installer
+    dest: "{{ moodle_base }}"
+    mode: 0755
 
 - name: Execute {{ moodle_base }}/moodle_installer IF {{ moodle_base }}/config.php doesn't yet exist -- REQUIRES 'max_input_vars = 5000' (or higher) in /etc/php/{{ php_version }}/cli/php.ini with PHP 8+ (as set up by www_options/tasks/main.yml) -- WHEREAS Moodle uses /etc/php/{{ php_version }}/fpm/php.ini during regular operation
   shell: "{{ moodle_base }}/moodle_installer"
   args:
     creates: "{{ moodle_base }}/config.php"
-  #when: config.stat.exists is defined and not config.stat.exists
 
-# 2021-07-05: Let's stick with Moodle's default (755 dirs & 644 files), as we do in moodle/tasks/mathjax.yml
-#- name: Make {{ moodle_base }}/config.php readable, with permission '0644'
-#  #command: chown -R {{ apache_user }} {{ moodle_base }}
-#  file:
-#    path: "{{ moodle_base }}/config.php"    # /opt/iiab/moodle
-#    mode: '0644'
+# 2021-07-05: For /opt/iiab/moodle, let's stick with default permissions from
+# above (755 dirs & 644 files), and ownership (www-data:www-data), as we do in
+# moodle/tasks/mathjax.yml
+
+# 2021-07-05: Seems like a good idea but Moodle's permissions recommendations
+# at https://docs.moodle.org/20/en/Creating_Moodle_site_data_directory don't
+# actually mandate this:
+#
+# - name: chmod -R o-rwx {{ moodle_data }} e.g. drwxrwsrwx to drwxrws---
+#   file:
+#     path: "{{ moodle_data }}"    # /library/moodle
+#     mode: o-rwx
+#     recurse: yes
 
 # https://docs.moodle.org/311/en/Nginx#XSendfile_aka_X-Accel-Redirect
+# https://github.com/moodle/moodle/blob/master/config-dist.php#L274-L287
 - name: Write extra parameters to {{ moodle_base }}/config.php -- "Setting Moodle and Nginx to use XSendfile functionality is a big win as it frees PHP from delivering files allowing Nginx to do what it does best, i.e. deliver files"
   lineinfile:
     path: "{{ moodle_base }}/config.php"
