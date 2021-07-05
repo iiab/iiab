@@ -146,21 +146,36 @@
 #    name: "{{ apache_service }}"
 #    state: restarted
 
-- name: Does {{ moodle_base }}/config.php exist?
-  stat:
-    path: "{{ moodle_base }}/config.php"
-  register: config
+# - name: Does {{ moodle_base }}/config.php exist?
+#   stat:
+#     path: "{{ moodle_base }}/config.php"
+#   register: config
 
-- name: Execute {{ moodle_base }}/moodle_installer -- REQUIRES 'max_input_vars = 5000' (or higher) in /etc/php/{{ php_version }}/cli/php.ini with PHP 8+ (as set up by www_options/tasks/main.yml) -- WHEREAS Moodle uses /etc/php/{{ php_version }}/{{ apache_service }}/php.ini or /etc/php/{{ php_version }}/fpm/php.ini during regular operation
+- name: Execute {{ moodle_base }}/moodle_installer IF {{ moodle_base }}/config.php doesn't yet exist -- REQUIRES 'max_input_vars = 5000' (or higher) in /etc/php/{{ php_version }}/cli/php.ini with PHP 8+ (as set up by www_options/tasks/main.yml) -- WHEREAS Moodle uses /etc/php/{{ php_version }}/fpm/php.ini during regular operation
   shell: "{{ moodle_base }}/moodle_installer"
-  when: config.stat.exists is defined and not config.stat.exists
+  args:
+    creates: "{{ moodle_base }}/config.php"
+  #when: config.stat.exists is defined and not config.stat.exists
 
-# 2021-02-01: Let's stick with Moodle's default (640)
+# 2021-07-05: Let's stick with Moodle's default (755 dirs & 644 files), as we do in moodle/tasks/mathjax.yml
 #- name: Make {{ moodle_base }}/config.php readable, with permission '0644'
 #  #command: chown -R {{ apache_user }} {{ moodle_base }}
 #  file:
 #    path: "{{ moodle_base }}/config.php"    # /opt/iiab/moodle
 #    mode: '0644'
+
+# https://docs.moodle.org/311/en/Nginx#XSendfile_aka_X-Accel-Redirect
+- name: Write extra parameters to {{ moodle_base }}/config.php -- "Setting Moodle and Nginx to use XSendfile functionality is a big win as it frees PHP from delivering files allowing Nginx to do what it does best, i.e. deliver files"
+  lineinfile:
+    path: "{{ moodle_base }}/config.php"
+    line: '$CFG->{{ item.name }} = {{ item.value }};'
+    insertbefore: '^\$CFG->directorypermissions'
+  with_items:
+    #- { name: 'backuptempdir', value: "'{{ moodlebox_moodle_data_dir }}/backup'" }
+    - { name: 'xsendfile', value: "'X-Accel-Redirect'" }
+    - { name: 'xsendfilealiases', value: "array('/dataroot/' => $CFG->dataroot)" }
+    #- { name: 'customfiletypes', value: "array(\n  (object)array(\n    'extension' => 'crt',\n    'icon' => 'sourcecode',\n    'type' => 'application/x-x509-ca-cert',\n    'customdescription' => 'X.509 CA certificate'\n  )\n)"}
+    #- { name: 'showcampaigncontent', value: 'false' }
 
 - include_tasks: mathjax.yml
 
