@@ -1,0 +1,28 @@
+# 2021-07-05: Thanks to https://github.com/moodlebox/moodlebox/blob/master/roles/moodleinstall/tasks/mathjax.yml
+
+# Verify this Moodle plugin after installation at:
+# http://box.lan/moodle/admin/plugins.php
+# http://box.lan/moodle/admin/settings.php?section=filtersettingmathjaxloader
+
+- name: Download (clone) MathJax library/plugin from https://github.com/mathjax/MathJax to {{ moodle_base }}/lib/MathJax
+  git:
+    repo: https://github.com/mathjax/MathJax    # Or: git://github.com/mathjax/MathJax.git
+    dest: "{{ moodle_base }}/lib/MathJax"       # /opt/iiab/moodle
+    #version: "{{ moodle_mathjax_version }}"    # 2021-07-05: https://github.com/moodlebox/moodlebox/blob/master/default.config.yml uses 2.7.9 from 2020-08-25 -- whereas https://github.com/mathjax/MathJax/releases offers 3.2.0 from 2021-07-17
+    depth: 1
+
+- name: chmod -R ug+w,o-w {{ moodle_base }}/lib/MathJax (dirs 755 -> 775, files 644 -> 664, {{ apache_user }}:{{ apache_user }})
+  file:
+    path: "{{ moodle_base }}/lib/MathJax"
+    state: directory
+    owner: "{{ apache_user }}"    # www-data
+    group: "{{ apache_user }}"    # MoodleBox uses {{ moodlebox_username }} set to 'moodlebox' in https://github.com/moodlebox/moodlebox/blob/master/default.config.yml
+    mode: ug+w,o-w
+    recurse: yes
+
+# SEE https://github.com/moodle/moodle/blob/master/filter/mathjaxloader/lang/en/filter_mathjaxloader.php
+- name: Run {{ moodle_base }}/admin/cli/cfg.php --component=filter_mathjaxloader to change MathJax library/plugin URL
+  command: >
+    /usr/bin/php {{ moodle_base }}/admin/cli/cfg.php --component=filter_mathjaxloader --name=httpsurl --set=/lib/MathJax/MathJax.js
+  register: mathjax_url_result
+  changed_when: mathjax_url_result.rc == 0
