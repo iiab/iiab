@@ -20,6 +20,7 @@
       * jupyterhub
       * lokole
       * moodle
+      * nextcloud
       * nodered
       * OER2Go/RACHEL modules
       * osm-vector-maps
@@ -34,7 +35,6 @@
       * kolibri
       * mediawiki
       * munin
-      * nextcloud
       * sugarizer
       * wordpress
 
