@@ -18,7 +18,7 @@
     groups: gitea
     home: "{{ gitea_home }}"    # /home/gitea
 
-- name: Create Gitea directory structure
+- name: Create {{ gitea_root_directory }} directory structures
   file:
     path: "{{ gitea_root_directory }}/{{ item }}"    # /library/gitea
     state: directory
@@ -43,15 +43,15 @@
     msg: "Could not find a binary for the CPU architecture \"{{ ansible_architecture }}\""
   when: gitea_iset_suffix == "unknown"
 
-- name: Download Gitea binary {{ gitea_download_url }} to {{ gitea_install_path }} (~103 MB, CAN TAKE 20 MIN)
+- name: Download Gitea binary {{ gitea_download_url }} to {{ gitea_install_path }} (0775, ~104 MB)
   get_url:
     url: "{{ gitea_download_url }}"
-    dest: "{{ gitea_install_path }}"
-    mode: '0775'
+    dest: "{{ gitea_install_path }}"    # e.g. /library/gitea/bin/gitea-1.14
+    mode: 0775
     timeout: "{{ download_timeout }}"
   when: internet_available
 
-- name: Download Gitea GPG signature
+- name: Download Gitea GPG signature {{ gitea_integrity_url }} to {{ gitea_checksum_path }}
   get_url:
     url: "{{ gitea_integrity_url }}"
     dest: "{{ gitea_checksum_path }}"
@@ -79,35 +79,29 @@
 # Gitea. User gitea needs write permissions during the first run but not 
 # subsequent runs.
 
-- name: mkdir /etc/gitea
+- name: mkdir /etc/gitea (0770)
   file:
     state: directory
     path: /etc/gitea
     owner: root
     group: gitea
-    mode: '0770'
+    mode: 0770
 
-- name: Install /etc/gitea/app.ini from template
+- name: Install /etc/gitea/app.ini from template (0664)
   template:
     src: app.ini.j2
     dest: /etc/gitea/app.ini
     owner: root
     group: gitea
-    mode: '0664'
+    mode: 0664
 
 
-# 4. Create systemd service & prepare Apache for http://box/gitea
+# 4. Create systemd service & prepare NGINX for http://box/gitea
 
 - name: "Install from template: /etc/systemd/system/gitea.service"
   template:
     src: gitea.service.j2
     dest: /etc/systemd/system/gitea.service
-
-- name: "Install from template: /etc/{{ apache_conf_dir }}/gitea.conf"
-  template:
-    src: gitea.conf.j2
-    dest: "/etc/{{ apache_conf_dir }}/gitea.conf"    # apache2/sites-available
-  when: apache_installed is defined
 
 
 # 5. RECORD Gitea AS INSTALLED
