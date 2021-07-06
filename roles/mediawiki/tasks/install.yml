@@ -1,9 +1,22 @@
-- name: 'Install packages: php{{ php_version }}-intl, php{{ php_version }}-mbstring'
+# https://www.mediawiki.org/wiki/Manual:Installation_requirements#PHP
+- name: 'Install packages: php{{ php_version }}-intl, php{{ php_version }}-mbstring, php{{ php_version }}-xml'
   package:
     name:
-      - "php{{ php_version }}-intl"
-      - "php{{ php_version }}-mbstring"
+      #- php{{ php_version }}-common     # Auto-installed as an apt dependency.  REGARDLESS: php{{ php_version }}-common superset php{{ php_version }}-cli is auto-installed by php{{ php_version }}-fpm in nginx/tasks/install.yml
+      - php{{ php_version }}-intl        # Likewise installed in moodle/tasks/install.yml, nextcloud/tasks/install.yml, wordpress/tasks/install.yml
+      #- php{{ php_version }}-json       # See stanza just below
+      - php{{ php_version }}-mbstring    # Likewise installed in moodle/tasks/install.yml, nextcloud/tasks/install.yml, pbx/tasks/freepbx_dependencies.yml, wordpress/tasks/install.yml
+      - php{{ php_version }}-xml         # 2021-06-27: REQUIRED (AND ENFORCED) despite this being missing from MediaWiki's above requirements doc!  Likewise installed in moodle/tasks/install.yml, nextcloud/tasks/install.yml, pbx/tasks/freepbx_dependencies.yml, wordpress/tasks/install.yml -- AND REGARDLESS dragged in later by Admin Console's use of php-pear for roles/cmdsrv/tasks/main.yml
     state: present
+
+# For PHP >= 8.0: phpX.Y-json is baked into PHP itself.
+# For PHP <  8.0: phpX.Y-json auto-installed by phpX.Y-fpm AND phpX.Y-cli in 3-base-server's nginx/tasks/install.yml, as confirmed by: apt rdepends phpX.Y-json
+#
+#- name: Install php{{ php_version }}-json if PHP < 8.0
+#  package:
+#    name: php{{ php_version }}-json
+#    state: present
+#  when: php_version is version('8.0', '<')
 
 - name: Download {{ mediawiki_download_base_url }}/{{ mediawiki_src }} to {{ downloads_dir }}
   get_url:
@@ -18,7 +31,7 @@
   unarchive:
     src: "{{ downloads_dir }}/{{ mediawiki_src }}"
     dest: "{{ mediawiki_install_path }}"    # /library
-    owner: "{{ apache_user }}"
+    owner: "{{ apache_user }}"    # www-data on debuntu
     group: "{{ apache_user }}"
     mode: u+rw,g+r,o+r    # '0755' forced executable bits on files
     keep_newer: yes
@@ -31,7 +44,7 @@
 
 - name: Start MySQL systemd service ({{ mysql_service }}) so we can create db
   systemd:
-    name: "{{ mysql_service }}"
+    name: "{{ mysql_service }}"    # mariadb on debuntu
     state: started
 
 - name: Create MySQL database {{ mediawiki_db_name }}
@@ -64,7 +77,7 @@
     chdir: "{{ mediawiki_abs_path }}"    # /library/mediawiki-1.XY.Z
     creates: "{{ mediawiki_abs_path }}/LocalSettings.php"
 
-- name: Configure wgArticlePath variable in {{ mediawiki_abs_path }}/LocalSettings.php
+- name: Configure $wgArticlePath variable in {{ mediawiki_abs_path }}/LocalSettings.php
   lineinfile:
     path: "{{ mediawiki_abs_path }}/LocalSettings.php"    # /library/mediawiki-1.XY.Z
     line: '$wgArticlePath = "/wiki/$1";'

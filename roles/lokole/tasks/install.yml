@@ -25,6 +25,13 @@
       - libjpeg-dev
       - libssl-dev
       - libopenjp2-7    # 2020-02-01: To solve bug #2221
+      - supervisor
+      - usb-modeswitch
+      - usb-modeswitch-data
+      - mobile-broadband-provider-info
+      - ppp
+      - wvdial
+
     state: present
 
 # For development purposes -- To install Lokole from a given commit, add the
@@ -75,52 +82,63 @@
   ansible.builtin.user:
     state: present
     name: "{{ lokole_user }}"
+    #group: "{{ lokole_user }}"
+    groups: dialout, dip
     system: yes
-    uid: "{{ lokole_uid }}"
-    home: /home/{{ lokole_user }}
+    #uid: "{{ lokole_uid }}"
+    home: "{{ lokole_home_dir }}"
 
-- name: mkdir {{ lokole_run_directory }}
+- name: mkdir {{ lokole_run_dir }}
   file:
     state: directory
-    path: "{{ lokole_run_directory }}"
+    path: "{{ lokole_run_dir }}/lokole_restarter"
     group: "{{ lokole_user }}"
     owner: "{{ lokole_user }}"
     mode: g+rw
 
-- name: mkdir /{{ lokole_user }}/log
+- name: mkdir {{ lokole_log_dir }}
   file:
     state: directory
-    path: "{{ lokole_log_directory }}"
+    path: "{{ lokole_log_dir }}"
     group: "{{ lokole_user }}"
     owner: "{{ lokole_user }}"
     mode: g+rw
 
-- name: Install {{ lokole_run_directory }}/settings.env
+- name: Generate key and salt
+  set_fact:
+    lokole_key: "{{ lookup('password', '/dev/null chars=ascii_letters,digits,_ length=32') }}"
+    lokole_salt: "{{ lookup('password', '/dev/null chars=ascii_letters,digits,_ length=16') }}"
+
+- name: Install {{ lokole_settings }}
   template:
     src: settings.env.j2
-    dest: "{{ lokole_run_directory }}/settings.env"
+    dest: "{{ lokole_settings }}"
     group: "{{ lokole_user }}"
     owner: "{{ lokole_user }}"
-    mode: a+rw
+    mode: g+rw
 
-- name: Install {{ lokole_run_directory }}/webapp_secrets.sh from template, to configure Lokole
-  template:
-    src: webapp_secrets.sh.j2
-    dest: "{{ lokole_run_directory }}/webapp_secrets.sh"
-    mode: a+x
+#- name: Fixup supervisorctl
+#  file:
+#    path: /usr/bin/supervisorctl
+#    owner: root
+#    group: "{{ lokole_user }}"
+#    mode: u=rw+s,g=rx,o=rx
 
-- name: Install {{ lokole_run_directory }}/webapp.sh from template, to configure Gunicorn
+- name: Install {{ lokole_confd }} templates to configure Lokole
   template:
-    src: webapp.sh.j2
-    dest: "{{ lokole_run_directory }}/webapp.sh"
+    src: "{{ item.src }}"
+    dest: "{{ lokole_confd }}"
     group: "{{ lokole_user }}"
     owner: "{{ lokole_user }}"
-    mode: a+x
+    mode: 0644
+  with_items:
+    - { src: 'lokole_gunicorn.conf' }
+    - { src: 'lokole_celery_beat.conf' }
+    - { src: 'lokole_celery_worker.conf' }
+    - { src: 'lokole_restarter.conf' }
 
 - name: Create Lokole admin user with password, for http://box{{ lokole_url }}    # http://box/lokole
-  shell: |
-    . {{ lokole_run_directory }}/webapp_secrets.sh
-    {{ lokole_venv }}/bin/manage.py createadmin --name='{{ lokole_admin_user }}' --password='{{ lokole_admin_password }}'
+  include_tasks: setup.yml
 
 #- name: Install /etc/{{ apache_conf_dir }}/lokole.conf from template, for http://box{{ lokole_url }} via Apache    # http://box/lokole
 #  template:
@@ -129,23 +147,11 @@
 #    mode: 0644
 #  when: apache_install
 
-- name: Install unit files {lokole.service, celery.service, celerybeat.service, lokole_restarter.service} into /etc/systemd/system, from template
-  template:
-    src: "{{ item.src }}"
-    dest: "{{ item.dest}}"
-    mode: 0644
-  with_items:
-    - { src: 'lokole.service.j2', dest: '/etc/systemd/system/lokole.service' }
-    - { src: 'celery.service.j2', dest: '/etc/systemd/system/celery.service' }
-    - { src: 'celerybeat.service.j2', dest: '/etc/systemd/system/celerybeat.service' }
-    - { src: 'lokole_restarter.service.j2', dest: '/etc/systemd/system/lokole_restarter.service' }
-
-
-# RECORD Lokole AS INSTALLED
-
 - name: "Set 'lokole_installed: True'"
   set_fact:
     lokole_installed: True
+
+# RECORD Lokole AS INSTALLED
 
 - name: "Add 'lokole_installed: True' to {{ iiab_state_file }}"
   lineinfile:

@@ -1,11 +1,10 @@
-- name: "Set 'apache_install: True' and 'apache_enabled: True'"
-  set_fact:
-    apache_install: True
-    apache_enabled: True
+# 2021-05-22: FYI nginx_high_php_limits is effectively now auto-enabled by
+# www_options/tasks/main.yml#L100-L112 (as required by Moodle 3.11 w/ PHP 8) IF
+# 'moodle_install: True'. Happens at the end of 4-server-options/tasks/main.yml
+# See the 6 settings in /etc/php/{{ php_version }}/fpm/php.ini
 
-- name: APACHE - run 'httpd' role
-  include_role:
-    name: httpd
+# 2021-06-28: This ALSO now happens in /etc/php/{{ php_version }}/cli/php.ini
+# (as required by Moodle's CLI installer, DESPITE it using fpm/php.ini later!)
 
 
 - name: "Set 'postgresql_install: True' and 'postgresql_enabled: True'"
@@ -18,70 +17,55 @@
     name: postgresql
 
 
-- name: Install 8 php packages (debuntu)
+# 2021-07-02: Let's monitor & learn from these 2 pages year-by-year:
+# https://docs.moodle.org/19/en/PHP_settings_by_Moodle_version#PHP_Extensions_and_libraries
+# https://github.com/moodlebox/moodlebox/blob/master/roles/packages/vars/main.yml
+- name: Install ghostscript + libsodium23 + 8 PHP packages (run 'php -m' or 'php -i' to verify)
   package:
     name:
-      - php{{ php_version }}-pgsql
-      - php{{ php_version }}-curl
-      - php{{ php_version }}-zip
-      - php{{ php_version }}-gd
-      - php{{ php_version }}-mbstring    # 2020-06-15: Required by Moodle 3.9+
-      - php{{ php_version }}-cli         # 2020-06-15: In the past this included (above) mbstring? However this is not true on Ubuntu Server 20.04 LTS.
-      - php{{ php_version }}-intl        # 2020-12-03: Required by Moodle 3.10+
+      #- php-apcu                        # 2021-07-02: Experiment with fewer dependencies
+      - ghostscript                      # 2021-07-02: OPTIONAL -- but useful for annotation of PDF's / assignments
+      - libsodium23                      # 2021-06-28: Likewise installed in nginx/tasks/install.yml via php{{ php_version }}-fpm AND httpd/tasks/install.yml via libapache2-mod-php{{ php_version }} AND wordpress/tasks/install.yml -- it can ALSO be auto-installed by phpX.Y-cgi OR phpX.Y-cli as confirmed by 'apt rdepends libsodium23' -- Recommended by Moodle 3.11+ at https://docs.moodle.org/311/en/Environment_-_PHP_extension_sodium -- whereas https://www.php.net/manual/en/sodium.installation.php says it's always bundled with PHP 7.2+ -- VERIFY USING 'php -i | grep sodium' AND 'apt list "*sodium*"'
+      #- php{{ php_version }}-common     # 2021-06-27: Auto-installed as an apt dependency.  REGARDLESS: php{{ php_version }}-common superset php{{ php_version }}-cli is auto-installed by php{{ php_version }}-fpm in nginx/tasks/install.yml
+      #- php{{ php_version }}-cli        # 2021-06-27: Compare to php{{ php_version }}-common just above!  2020-06-15: In the past this included (below) mbstring?  However this is not true on Ubuntu Server 20.04 LTS.
+      - php{{ php_version }}-curl        # 2021-06-27: Likewise installed in nextcloud/tasks/install.yml, pbx/tasks/freepbx_dependencies.yml, wordpress/tasks/install.yml
+      - php{{ php_version }}-gd          # 2021-06-27: Likewise installed in nextcloud/tasks/install.yml, pbx/tasks/freepbx_dependencies.yml
+      - php{{ php_version }}-intl        # 2020-12-03: Required by Moodle 3.10+ -- Likewise installed in mediawiki/tasks/install.yml, nextcloud/tasks/install.yml, wordpress/tasks/install.yml
+      - php{{ php_version }}-mbstring    # 2020-06-15: Required by Moodle 3.9+ -- Likewise installed in mediawiki/tasks/install.yml, nextcloud/tasks/install.yml, pbx/tasks/freepbx_dependencies.yml, wordpress/tasks/install.yml
+      - php{{ php_version }}-pgsql       # 2021-06-27: Required for PostgreSQL
+      #- php{{ php_version }}-json       # 2021-07-02: Not requested by Moodle's PHP doc above.  Package baked into PHP 8+.  FWIW with PHP < 8, phpX.Y-json is already auto-installed by phpX.Y-fpm in 3-base-server's nginx/tasks/install.yml
+      #- php{{ php_version }}-opcache    # 2021-07-02: Experiment with fewer dependencies
+      #- php{{ php_version }}-readline   # 2021-07-02: Experiment with fewer dependencies
       - php{{ php_version }}-soap        # 2020-12-03: Recommended by Moodle 3.10+
-      #- php-sodium                      # 2021-05-17: Recommended by Moodle 3.11+ at https://docs.moodle.org/311/en/Environment_-_PHP_extension_sodium AND ALREADY PRE-ENABLED BY PHP 7.2+ https://www.php.net/manual/en/sodium.installation.php AS CONFIRMED BY 'php -i | grep sodium' AND 'apt list "*sodium*"'
+      - php{{ php_version }}-xml         # 2021-06-28: Likewise installed in mediawiki/tasks/install.yml, nextcloud/tasks/install.yml, pbx/tasks/freepbx_dependencies.yml, wordpress/tasks/install.yml -- AND REGARDLESS dragged in later by Admin Console's use of php-pear for roles/cmdsrv/tasks/main.yml -- run 'php -m | grep -i xml' which in the end shows {libxml, SimpleXML, xml, xmlreader, xmlwriter}
+      #- php{{ php_version }}-xmlrpc     # 2021-07-02: Doesn't exist with PHP 8.0 -- officially required per https://docs.moodle.org/19/en/PHP_settings_by_Moodle_version#PHP_Extensions_and_libraries BUT UNMAINTAINED FOR YEARS (POSSIBLE SECURITY RISK) SO MOVED TO PECL: https://php.watch/versions/8.0/xmlrpc
+      - php{{ php_version }}-zip         # 2021-06-27: Likewise installed in nextcloud/tasks/install.yml, pbx/tasks/freepbx_dependencies.yml, wordpress/tasks/install.yml
     state: present
-  when: is_debuntu
 
-- name: Does {{ moodle_base }}/config-dist.php exist? (indicating Moodle is/was installed)
-  stat:
-    path: "{{ moodle_base }}/config-dist.php"    # /opt/iiab/moodle
-  register: moodle
-
-- name: Clone (i.e. use git to download) {{ moodle_repo_url }} to {{ moodle_base }} (~300 MB)
+- name: Download (clone) {{ moodle_repo_url }} to {{ moodle_base }} (~350MB initially, ~371MB later)
   git:
-    repo: "{{ moodle_repo_url }}"
-    dest: "{{ moodle_base }}"
+    repo: "{{ moodle_repo_url }}"    # https://github.com/moodle/moodle
+    dest: "{{ moodle_base }}"        # /opt/iiab/moodle
     depth: 1
-    force: yes
     version: "MOODLE_{{ moodle_version }}_STABLE"
     #version: master   # TEMPORARY DURING MAY 2018 TESTING, installed 3.5beta+ = https://download.moodle.org/releases/development/
   #ignore_errors: yes
-  when: internet_available and moodle.stat.exists is defined and not moodle.stat.exists
 
-- name: Create dir {{ moodle_base }} owned by {{ apache_user }} (for config file?)
+- name: chown -R {{ apache_user }}:{{ apache_user }} {{ moodle_base }} (by default dirs 755 & files 644)
   file:
-    state: directory
     path: "{{ moodle_base }}"
     owner: "{{ apache_user }}"    # www-data
+    group: "{{ apache_user }}"
     recurse: yes
 
-- name: Create dir {{ content_base }}/dbdata/moodle owned by {{ apache_user }}
-  file:
-    state: directory
-    path: "{{ content_base }}/dbdata/moodle"    # /library
-    owner: "{{ apache_user }}"
-
-- name: Create dir {{ moodle_data }} ({{ apache_user }}:{{ apache_user }}, '0770')
+- name: Create dir {{ moodle_data }} ({{ apache_user }}:{{ apache_user }}) (by default 755 = drwxr-xr-x initially, but moodle_installer sets drwxrwsrwx below)
   file:
     state: directory
     path: "{{ moodle_data }}"    # /library/moodle
     owner: "{{ apache_user }}"
     group: "{{ apache_user }}"
-    #mode: '0770'    # Regardless, permissions end up as: drwxrwsrwx
 
-- name: Remove stock /etc/{{ apache_conf_dir }}/moodle.conf
-  file:
-    path: "/etc/{{ apache_conf_dir }}/moodle.conf"    # apache2/sites-available
-    state: absent
 
-# 2021-02-01: Not nec if we can hopefully migrate from Apache to NGINX soon!
-- name: Install /etc/{{ apache_conf_dir }}/022-moodle.conf from template
-  template:
-    src: 022-moodle.j2
-    dest: "/etc/{{ apache_conf_dir }}/022-moodle.conf"
-
-# roles/postgresql/templates/postgresql-iiab.service WAS INSTALLED HERE:
 # /etc/systemd/system/postgresql-iiab.service
 - name: Start 'postgresql-iiab' systemd service, to configure Moodle's DB
   systemd:
@@ -108,38 +92,53 @@
   become: yes
   become_user: postgres
 
-- name: Install {{ moodle_base }}/moodle_installer from template ('0755')
-  template:
-    src: moodle_installer
-    dest: "{{ moodle_base }}"
-    mode: '0755'
-
 - name: (Re)Start 'postgresql-iiab' systemd service
   systemd:
     name: postgresql-iiab
     state: restarted
     #enabled: yes    # Service ends up enabled regardless
 
-- name: (Re)Start '{{ apache_service }}' systemd service
-  systemd:
-    name: "{{ apache_service }}"
-    state: restarted
 
-- name: Does {{ moodle_base }}/config.php exist?
-  stat:
-    path: "{{ moodle_base }}/config.php"
-  register: config
+- name: Install {{ moodle_base }}/moodle_installer from template (0755)
+  template:
+    src: moodle_installer
+    dest: "{{ moodle_base }}"
+    mode: 0755
 
-- name: Execute {{ moodle_base }}/moodle_installer
+- name: Execute {{ moodle_base }}/moodle_installer IF {{ moodle_base }}/config.php doesn't yet exist -- REQUIRES 'max_input_vars = 5000' (or higher) in /etc/php/{{ php_version }}/cli/php.ini with PHP 8+ (as set up by www_options/tasks/main.yml) -- WHEREAS LATER Moodle uses /etc/php/{{ php_version }}/fpm/php.ini during regular operation
   shell: "{{ moodle_base }}/moodle_installer"
-  when: config.stat.exists is defined and not config.stat.exists
+  args:
+    creates: "{{ moodle_base }}/config.php"
 
-# 2021-02-01: Let's stick with Moodle's default (640)
-#- name: Make {{ moodle_base }}/config.php readable, with permission '0644'
-#  #command: chown -R {{ apache_user }} {{ moodle_base }}
-#  file:
-#    path: "{{ moodle_base }}/config.php"    # /opt/iiab/moodle
-#    mode: '0644'
+# 2021-07-05: For /opt/iiab/moodle, let's stick with default permissions from
+# above (755 dirs & 644 files), and ownership (www-data:www-data), as we do in
+# moodle/tasks/mathjax.yml
+
+# 2021-07-05: Seems like a good idea but Moodle's permissions recommendations
+# at https://docs.moodle.org/20/en/Creating_Moodle_site_data_directory don't
+# actually mandate this:
+#
+# - name: chmod -R o-rwx {{ moodle_data }} e.g. drwxrwsrwx to drwxrws---
+#   file:
+#     path: "{{ moodle_data }}"    # /library/moodle
+#     mode: o-rwx
+#     recurse: yes
+
+# https://docs.moodle.org/311/en/Nginx#XSendfile_aka_X-Accel-Redirect
+# https://github.com/moodle/moodle/blob/master/config-dist.php#L274-L287
+- name: Write extra parameters to {{ moodle_base }}/config.php -- "Setting Moodle and Nginx to use XSendfile functionality is a big win as it frees PHP from delivering files allowing Nginx to do what it does best, i.e. deliver files"
+  lineinfile:
+    path: "{{ moodle_base }}/config.php"
+    line: '$CFG->{{ item.name }} = {{ item.value }};'
+    insertbefore: '^\$CFG->directorypermissions'
+  with_items:
+    #- { name: 'backuptempdir', value: "'{{ moodlebox_moodle_data_dir }}/backup'" }
+    - { name: 'xsendfile', value: "'X-Accel-Redirect'" }
+    - { name: 'xsendfilealiases', value: "array('/dataroot/' => $CFG->dataroot)" }
+    #- { name: 'customfiletypes', value: "array(\n  (object)array(\n    'extension' => 'crt',\n    'icon' => 'sourcecode',\n    'type' => 'application/x-x509-ca-cert',\n    'customdescription' => 'X.509 CA certificate'\n  )\n)"}
+    #- { name: 'showcampaigncontent', value: 'false' }
+
+- include_tasks: mathjax.yml
 
 
 # RECORD Moodle AS INSTALLED

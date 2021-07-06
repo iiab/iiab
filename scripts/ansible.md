@@ -7,7 +7,7 @@ Starting in November 2019, IIAB's Ansible installer ([/opt/iiab/iiab/scripts/ans
 1. Ansible module: [pip](https://docs.ansible.com/ansible/latest/modules/pip_module.html)
 
    IIAB installs apt packages:
-   - **python3-pip** (for IIAB's [Admin Console](https://github.com/iiab/iiab-admin-console))
+   - **python3-pip** (for `pip3 install ansible-core` & IIAB's [Admin Console](https://github.com/iiab/iiab-admin-console))
    - **python3-setuptools**
    - **virtualenv** (is Python 3 only, for [roles/kalite](https://github.com/iiab/iiab/tree/master/roles/kalite) & [roles/calibre-web](https://github.com/iiab/iiab/tree/master/roles/calibre-web) ?) and pulls in additional packages... (`apt show virtualenv` shows "Depends: python3, python3-virtualenv")
       - **python3-virtualenv** and pulls in additional package... (`apt show python3-virtualenv` shows "Depends: python-pip-whl (>= 8.1.1-2), python3, python3-distutils, python3-pkg-resources") 
