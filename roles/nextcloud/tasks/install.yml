@@ -41,10 +41,9 @@
 
 
 # February 2020: See @m-anish's PR #2119 and follow-up PR #2258.
-# 2021-04-11: If you're running Nextcloud 21+ in production, carefully check the latest required AND recommended prereqs:
+# 2021-07-06: If you're running Nextcloud 22+ in production, carefully check the latest required AND recommended prereqs:
+# https://docs.nextcloud.com/server/latest/admin_manual/installation/source_installation.html#prerequisites-for-manual-installation
 # https://docs.nextcloud.com/server/21/admin_manual/installation/source_installation.html#prerequisites-for-manual-installation
-# 2021-06-27: Use this after Nextcloud 22 is released "2021-07-06" :
-# https://docs.nextcloud.com/server/22/admin_manual/installation/source_installation.html#prerequisites-for-manual-installation
 - name: Install ffmpeg + libxml2 + 11 PHP packages (run 'php -m' or 'php -i' to verify)
   package:
     name:
@@ -56,7 +55,8 @@
       - php{{ php_version }}-bz2           # OPTIONAL (for extraction of apps)
       #- php{{ php_version }}-common       # Auto-installed as an apt dependency.  REGARDLESS: php{{ php_version }}-common superset php{{ php_version }}-cli is auto-installed by php{{ php_version }}-fpm in nginx/tasks/install.yml
       - php{{ php_version }}-curl          # Likewise installed in moodle/tasks/install.yml, pbx/tasks/freepbx_dependencies.yml, wordpress/tasks/install.yml
-      #- php{{ php_version }}-exif         # Optional (for image rotation in pictures app) but somehow already installed in our PHP core.
+      #- php{{ php_version }}-exif         # OPTIONAL (for image rotation in pictures app) but somehow already installed with PHP's core, as confirmed by 'php -m'
+      #- php{{ php_version }}-fileinfo     # OPTIONAL (enhances file analysis performance) but somehow already installed with PHP's core, as confirmed by 'php -m'
       - php{{ php_version }}-gd            # Likewise installed in moodle/tasks/install.yml, pbx/tasks/freepbx_dependencies.yml
       - php{{ php_version }}-gmp           # OPTIONAL (for SFTP storage)
       - php-imagick                        # OPTIONAL (for preview generation).  BUT drags in Apache's libapache2-mod-phpX.Y etc, as confirmed by 'apt depends php-imagick' -- while php{{ php_version }}-imagick installs (despite not being shown within 'apt list "php*imagick"') it's no better -- and 'apt depends phpX.Y-imagick' mysteriously does NOT show its deps.  Likewise installed in wordpress/tasks/install.yml
@@ -85,22 +85,6 @@
 #    state: present
 #  when: php_version is version('8.0', '<')
 
-# https://docs.nextcloud.com/server/18/admin_manual/installation/source_installation.html#prerequisites-for-manual-installation
-#- name: Install 9 additional php packages, if OS is not Raspbian (these are not available on Raspbian on RPi, as of Feb 2020)
-#  package:
-#    name:
-#      - php{{ php_version }}-ctype
-#      - php{{ php_version }}-dom
-#      - php{{ php_version }}-exif        # Optional (for image rotation in pictures app)
-#      - php{{ php_version }}-fileinfo    # Optional (enhances file analysis performance)
-#      - php{{ php_version }}-iconv
-#      - php{{ php_version }}-posix
-#      - php{{ php_version }}-simplexml
-#      - php{{ php_version }}-xmlreader
-#      - php{{ php_version }}-xmlwriter
-#    state: present
-#  when: not is_raspbian
-
 
 - name: Create dir {{ nextcloud_root_dir }}
   file:
@@ -120,12 +104,6 @@
 
 - name: Provision Nextcloud's MySQL DB, run Nextcloud's install wizard, etc
   include_tasks: setup.yml
-
-- name: Install /etc/{{ apache_conf_dir }}/nextcloud.conf from template, for http://box{{ nextcloud_url }}    # http://box/nextcloud
-  template:
-    src: nextcloud.conf.j2
-    dest: "/etc/{{ apache_conf_dir }}/nextcloud.conf"    # apache2/sites-available on debuntu
-  when: apache_installed is defined
 
 
 # RECORD Nextcloud AS INSTALLED
