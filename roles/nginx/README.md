@@ -1,10 +1,10 @@
 ### Transition to NGINX
 
-1. Initial testing strategy (December 2019 - February 2020) is to move NGINX to [port 80](https://github.com/iiab/iiab/wiki/IIAB-Networking#list-of-ports--services), and proxy everything to Apache on [port 8090](https://github.com/iiab/iiab/wiki/IIAB-Networking#list-of-ports--services) &mdash; creating "Shims" for each IIAB App/Service in *Section iii.* below.
+1. Initial testing strategy (December 2019 - February 2020) was to move NGINX to [port 80](https://github.com/iiab/iiab/wiki/IIAB-Networking#list-of-ports--services), and proxy everything to Apache on [port 8090](https://github.com/iiab/iiab/wiki/IIAB-Networking#list-of-ports--services) &mdash; creating "Shims" for each IIAB App/Service in *Section iii.* below.
 
-   Until "Native" NGINX is later implemented for that IIAB App/Service &mdash; allowing it to move up to *Section ii.* below.
+   Until "Native" NGINX is later implemented for each such IIAB App/Service &mdash; allowing each to move up to *Section ii.* below.
 
-   And potentially later moving it up to *Section i.* if its Apache support is dropped!
+   And potentially later moving each up to *Section i.* if its Apache support is dropped!
 
    (Background: IIAB Apps/Services are generally [Ansible roles](https://github.com/iiab/iiab/wiki/IIAB-Contributors-Guide#ansible) that live in [/opt/iiab/iiab/roles](https://github.com/iiab/iiab/tree/master/roles))
 
@@ -18,6 +18,8 @@
       * captiveportal
       * IIAB documentation (http://box/info)
       * jupyterhub
+      * moodle
+      * nodered
       * osm-vector-maps
       * OER2Go/RACHEL modules
       * usb_lib
@@ -31,10 +33,8 @@
       * kolibri
       * lokole
       * mediawiki
-      * moodle
       * munin
       * nextcloud
-      * nodered
       * sugarizer
       * wordpress
 
