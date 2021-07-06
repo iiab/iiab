@@ -1,13 +1,37 @@
-location /moodle {
-    proxy_set_header X-Real-IP  $remote_addr;
-    proxy_set_header X-Forwarded-For $remote_addr;
-    proxy_set_header Host $host;
-    proxy_pass http://127.0.0.1:{{ apache_port }};
+# 2021-07-02: Let's monitor & learn from these 3 pages year-by-year:
+# https://docs.moodle.org/311/en/Nginx
+# https://github.com/moodlebox/moodlebox/blob/master/roles/moodleinstall/tasks/coreinstall.yml
+# https://github.com/moodlebox/moodlebox/blob/master/roles/webserver/templates/etc/nginx/sites-available/default.j2
+
+# This passes 404 pages to Moodle so they can be themed
+#error_page 404 /error/index.php;    error_page 403 =404 /error/index.php;
+
+# https://docs.moodle.org/311/en/Nginx#XSendfile_aka_X-Accel-Redirect
+# https://github.com/moodle/moodle/blob/master/config-dist.php#L274-L287
+location /dataroot/ {
+    internal;
+    alias {{ moodle_data }}/;
 }
 
-location ~ ^/moodle.*\.php$ {
-    proxy_set_header X-Real-IP  $remote_addr;
-    proxy_set_header X-Forwarded-For $remote_addr;
-    proxy_set_header Host $host;
-    proxy_pass http://127.0.0.1:{{ apache_port }};
+location ~ ^/moodle(.*)\.php(.*)$ {
+    alias {{ moodle_base }}$1.php$2;
+
+    fastcgi_split_path_info ^(.+\.php)(/.+)$;
+    fastcgi_index index.php;
+    fastcgi_pass php;
+
+    fastcgi_read_timeout 300;    # Default is 60s
+
+    include fastcgi_params;    # fastcgi.conf also works
+    fastcgi_param PATH_INFO $fastcgi_path_info;
+    fastcgi_param SCRIPT_FILENAME $document_root/$fastcgi_script_name;
+
+    # Uncomment to override /etc/php/<VERSION>/fpm/php.ini -- FYI Stage 4's
+    # roles/www_options/tasks/main.yml FORCES these same settings and more
+    # (equivalent to 'nginx_high_php_limits: True') when 'moodle_install: True' 
+    #fastcgi_param PHP_VALUE "max_execution_time=300\n upload_max_filesize=500M\n post_max_size=500M\n max_input_vars=5000";
+}
+
+location ~ ^/moodle {
+    root {{ iiab_base }};
 }
