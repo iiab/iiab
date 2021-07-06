@@ -18,6 +18,7 @@
       * captiveportal
       * IIAB documentation (http://box/info)
       * jupyterhub
+      * kolibri
       * lokole
       * moodle
       * nextcloud
@@ -32,7 +33,6 @@
       * calibre-web
       * gitea
       * kiwix
-      * kolibri
       * mediawiki
       * munin
       * sugarizer
