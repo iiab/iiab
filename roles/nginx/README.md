@@ -18,6 +18,7 @@
       * captiveportal
       * IIAB documentation (http://box/info)
       * jupyterhub
+      * lokole
       * moodle
       * nodered
       * osm-vector-maps
@@ -31,7 +32,6 @@
       * gitea
       * kiwix
       * kolibri
-      * lokole
       * mediawiki
       * munin
       * nextcloud
