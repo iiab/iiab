@@ -5,7 +5,7 @@
    Until "Native" NGINX is later implemented for that IIAB App/Service &mdash; allowing it to move up to *Section ii.* below.
 
    And potentially later moving it up to *Section i.* if its Apache support is dropped!
-   
+
    (Background: IIAB Apps/Services are generally [Ansible roles](https://github.com/iiab/iiab/wiki/IIAB-Contributors-Guide#ansible) that live in [/opt/iiab/iiab/roles](https://github.com/iiab/iiab/tree/master/roles))
 
 2. Without PHP available via FastCGI, any function at all for PHP-based applications validates NGINX.
@@ -33,11 +33,11 @@
       * nextcloud
       * sugarizer
       * wordpress
+      * nodered
 
    3. These support Apache but ***NOT*** "Native" NGINX.  They use a "Shim" to [proxy_pass](https://docs.nginx.com/nginx/admin-guide/web-server/reverse-proxy/) from NGINX to Apache on port 8090.  See [roles/3-base-server/tasks/main.yml#L11](../3-base-server/tasks/main.yml#L11) for a list of ~6 IIAB Apps/Services that auto-enable Apache.
       * elgg
       * moodle [*, PLEASE HELP IF YOU CAN: [#2785](https://github.com/iiab/iiab/issues/2785)]
-      * nodered
 
    4. These each run their own web server or non-web / backend services, e.g. off of their own [unique port(s)](https://github.com/iiab/iiab/wiki/IIAB-Networking#list-of-ports--services) (IIAB home pages link directly to these destinations).  In future we'd like mnemonic URL's for all of these: (e.g. http://box/calibre, http://box/archive, http://box/kalite)
       * bluetooth
