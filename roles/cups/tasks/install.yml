@@ -29,6 +29,11 @@
 
 # OPTION #2: NEW WAY (MORE FUTURE-PROOF, WE HOPE!)
 
+- name: FILE /etc/cups/cupsd.conf WILL BE CREATED BY THE ~5 STANZAS BELOW...
+  meta: noop
+# - debug:
+#     msg: FILE /etc/cups/cupsd.conf WILL BE CREATED BY THE ~5 STANZAS BELOW...
+
 - name: Copy /usr/share/cups/cupsd.conf.default to /etc/cups/cupsd.conf (root:lp, 0640) -- a timestamped backup of the prior 'cupsd.conf' is saved in /etc/cups
   copy:
     src: /usr/share/cups/cupsd.conf.default
@@ -47,22 +52,24 @@
     - cups
     - cups-browsed
 
-- name: Run 'cupsctl --remote-admin --share-printers --user-cancel-any --debug-logging' for /var/log/cups/error_log (if cups_enabled) -- PLEASE ALSO MANUALLY RUN 'sudo cupsctl' AND 'sudo cupsd -t' TO VERIFY /etc/cups/cupsd.conf
-  command: cupsctl --remote-admin --share-printers --user-cancel-any --debug-logging    # RISKY: REPEATED USE OF 'cupsctl' CAN *DAMAGE* /etc/cups/cupsd.conf BY ADDING DUPLICATE LINES.  FYI IT ALSO MANGLES COMMENTS AND SPACING.
+- name: Run 'cupsctl --remote-admin --share-printers --user-cancel-any --debug-logging' for /var/log/cups/error_log (if cups_enabled) -- REPEATED USE OF 'cupsctl' COMMANDS CAN *DAMAGE* /etc/cups/cupsd.conf BY ADDING DUPLICATE LINES (AND WORSE!) -- SO PLEASE ALSO MANUALLY RUN 'sudo cupsctl' AND 'sudo cupsd -t' TO VERIFY /etc/cups/cupsd.conf
+  command: cupsctl --remote-admin --share-printers --user-cancel-any --debug-logging
 
 # 2021-07-11: BOTH FLAGS *CANNOT* BE USED TOGETHER -- CHOOSE ONE OR THE OTHER:
 # (1) '--remote-admin' AS ABOVE, OR (2) '--remote-any' AS BELOW.
 # (RUN 'cupsctl' WITHOUT PARAMETERS TO CONFIRM THIS!)
 
-# - name: Run 'cupsctl --remote-any --share-printers --user-cancel-any --debug-logging' for /var/log/cups/error_log (if cups_enabled) -- PLEASE ALSO MANUALLY RUN 'sudo cupsctl' AND 'sudo cupsd -t' TO VERIFY /etc/cups/cupsd.conf
-#   command: cupsctl --remote-any --share-printers --user-cancel-any --debug-logging    # RISKY: REPEATED USE OF 'cupsctl' CAN *DAMAGE* /etc/cups/cupsd.conf BY ADDING DUPLICATE LINES.  FYI IT ALSO MANGLES COMMENTS AND SPACING.
+# - name: Run 'cupsctl --remote-any --share-printers --user-cancel-any --debug-logging' for /var/log/cups/error_log (if cups_enabled) -- REPEATED USE OF 'cupsctl' COMMANDS CAN *DAMAGE* /etc/cups/cupsd.conf BY ADDING DUPLICATE LINES (AND WORSE!) -- SO PLEASE ALSO MANUALLY RUN 'sudo cupsctl' AND 'sudo cupsd -t' TO VERIFY /etc/cups/cupsd.conf
+#   command: cupsctl --remote-any --share-printers --user-cancel-any --debug-logging
 
-# 2021-07-11: In theory 'cupsctl' stanzas could be put to enable-or-disable.yml
-# BUT LET'S AVOID THAT -- AS REPEATED USE OF 'cupsctl' CAN *DAMAGE*
+# 2021-07-11: In theory 'cupsctl' stanzas could be put in enable-or-disable.yml
+# BUT LET'S AVOID THAT -- AS REPEATED USE OF 'cupsctl' COMMANDS CAN *DAMAGE*
 # /etc/cups/cupsd.conf BY ADDING DUPLICATE LINES (AND WORSE!)
 #
-# - name: Run 'cupsctl --no-remote-admin --no-remote-any --no-share-printers --no-user-cancel-any --no-debug-logging' (if not cups_enabled) -- PLEASE ALSO MANUALLY RUN 'sudo cupsctl' AND 'sudo cupsd -t' TO VERIFY /etc/cups/cupsd.conf
-#   command: cupsctl --no-remote-admin --no-remote-any --no-share-printers --no-user-cancel-any --no-debug-logging    # RISKY: REPEATED USE OF 'cupsctl' CAN *DAMAGE* /etc/cups/cupsd.conf BY ADDING DUPLICATE LINES.  FYI IT ALSO MANGLES COMMENTS AND SPACING.
+# FYI repeated use of 'cupsctl' commands also removes comments and blank lines.
+#
+# - name: Run 'cupsctl --no-remote-admin --no-remote-any --no-share-printers --no-user-cancel-any --no-debug-logging' (if not cups_enabled) -- REPEATED USE OF 'cupsctl' COMMANDS CAN *DAMAGE* /etc/cups/cupsd.conf BY ADDING DUPLICATE LINES (AND WORSE!) -- SO PLEASE ALSO MANUALLY RUN 'sudo cupsctl' AND 'sudo cupsd -t' TO VERIFY /etc/cups/cupsd.conf
+#   command: cupsctl --no-remote-admin --no-remote-any --no-share-printers --no-user-cancel-any --no-debug-logging
 #   when: not cups_enabled
 
 - name: "2021-07-11: UNFORTUNATELY http://box:631 AND http://box/print DO NOT YET WORK RELIABLY -- CUPS NEEDS TO WORK FROM MANY MORE URL'S THAN JUST http://localhost:631 AND http://192.168.0.x:631 AND http://172.18.96.1:631 -- please help us find the correct directive(s) for /etc/cups/cupsd.conf and /etc/nginx/conf.d/cups.conf followed by 'systemctl restart cups' and 'systemctl restart nginx'"
@@ -78,13 +85,13 @@
     - "#Listen 0.0.0.0:631"
     - "#Listen *:631"
 
-- name: Change 'MaxLogSize 0' (no log rotation) to 'MaxLogSize 1m' (log rotation at 1MB) in /etc/cups/cupsd.conf (EITHER WAY LOG BLOAT IS A RISK!)
+- name: "OPTIONAL: Change 'MaxLogSize 0' (no log rotation) to 'MaxLogSize 1m' (log rotation at 1MB) in /etc/cups/cupsd.conf (EITHER WAY LOG BLOAT IS A RISK!)"
   lineinfile:
     path: /etc/cups/cupsd.conf
     regexp: '^MaxLogSize '
     insertbefore: 'Listen '
     firstmatch: yes
-    line: "MaxLogSize 1m"    # Documentation (claims!) log rotation at "1m" is the default.  But In Practice: 'MaxLogSize 0' (no log rotation) is now part of /usr/share/cups/cupsd.conf.default
+    line: "MaxLogSize 1m"    # CUPS Documentation (claims!) log rotation at "1m" is the default.  But In Practice: 'MaxLogSize 0' (no log rotation) is now part of /usr/share/cups/cupsd.conf.default
 
 # REMINDER: 3 systemd services should be restarted (cups, cups-browsed, nginx)
 # within enable-or-disable.yml, so /etc/cups/cupsd.conf (ETC) take effect!
