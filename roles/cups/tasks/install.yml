@@ -1,12 +1,93 @@
+# 2021-07-11: (1) WE NEED TO GET http://box:631 AND http://box.lan:631 WORKING.
+# /var/log/cups/error_log* shows "400 Bad Request" errors as follows:
+#
+# Request from "localhost" using invalid Host: field "box:631".
+# Request from "localhost" using invalid Host: field "box.lan:631".
+#
+# (2) WE NEED NGINX PROXY TO GET http://box/print WORKING RELIABLY ON ALL OS's.
+
 - name: Install 'cups' package
   package:
     name: cups
     state: present
 
-- name: Install our own /etc/cups/cupsd.conf from template, to permit local LAN admin
-  template:
-    src: cupsd.conf
+- name: Add user '{{ iiab_admin_user }}' to Linux group 'lpadmin' for remote administration (or modify default 'SystemGroup lpadmin' in /etc/cups/cups-files.conf -- in coordination with ~14 '@SYSTEM' lines in /etc/cups/cupsd.conf)
+  command: "gpasswd -a {{ iiab_admin_user | quote }} lpadmin"    # iiab-admin
+  #command: "gpasswd -d {{ iiab_admin_user | quote }} lpadmin"
+
+
+# WARNING: 'apt install cups' AND 'apt install --reinstall cups'
+# UNFORTUNATELY DO *NOT* RECREATE /etc/cups/cupsd.conf IF A PRIOR
+# INSTALL OF CUPS EXISTED!  SO OPTION #1 OR #2 ARE NEEDED BELOW:
+
+# OPTION #1: OLD WAY (BRITTLE)
+#
+# - name: Install our own /etc/cups/cupsd.conf from template, to permit local LAN admin
+#   template:
+#     src: cupsd.conf.j2
+#     dest: /etc/cups/cupsd.conf
+
+# OPTION #2: NEW WAY (MORE FUTURE-PROOF, WE HOPE!)
+
+- name: Copy /usr/share/cups/cupsd.conf.default to /etc/cups/cupsd.conf (root:lp, 0640) -- a timestamped backup of the prior 'cupsd.conf' is saved in /etc/cups
+  copy:
+    src: /usr/share/cups/cupsd.conf.default
     dest: /etc/cups/cupsd.conf
+    owner: root
+    group: lp
+    mode: 0640
+    backup: yes
+
+- name: (Re)Start 'cups' and 'cups-browsed' systemd services -- CUPS DAEMON MUST BE RUNNING FOR 'cupsctl' COMMAND JUST BELOW
+  systemd:
+    daemon_reload: yes
+    name: "{{ item }}"
+    state: restarted
+  with_items:
+    - cups
+    - cups-browsed
+
+- name: Run 'cupsctl --remote-admin --share-printers --user-cancel-any --debug-logging' for /var/log/cups/error_log (if cups_enabled) -- PLEASE ALSO MANUALLY RUN 'sudo cupsctl' AND 'sudo cupsd -t' TO VERIFY /etc/cups/cupsd.conf
+  command: cupsctl --remote-admin --share-printers --user-cancel-any --debug-logging    # RISKY: REPEATED USE OF 'cupsctl' CAN *DAMAGE* /etc/cups/cupsd.conf BY ADDING DUPLICATE LINES.  FYI IT ALSO MANGLES COMMENTS AND SPACING.
+
+# 2021-07-11: BOTH FLAGS *CANNOT* BE USED TOGETHER -- CHOOSE ONE OR THE OTHER:
+# (1) '--remote-admin' AS ABOVE, OR (2) '--remote-any' AS BELOW.
+# (RUN 'cupsctl' WITHOUT PARAMETERS TO CONFIRM THIS!)
+
+# - name: Run 'cupsctl --remote-any --share-printers --user-cancel-any --debug-logging' for /var/log/cups/error_log (if cups_enabled) -- PLEASE ALSO MANUALLY RUN 'sudo cupsctl' AND 'sudo cupsd -t' TO VERIFY /etc/cups/cupsd.conf
+#   command: cupsctl --remote-any --share-printers --user-cancel-any --debug-logging    # RISKY: REPEATED USE OF 'cupsctl' CAN *DAMAGE* /etc/cups/cupsd.conf BY ADDING DUPLICATE LINES.  FYI IT ALSO MANGLES COMMENTS AND SPACING.
+
+# 2021-07-11: In theory 'cupsctl' stanzas could be put to enable-or-disable.yml
+# BUT LET'S AVOID THAT -- AS REPEATED USE OF 'cupsctl' CAN *DAMAGE*
+# /etc/cups/cupsd.conf BY ADDING DUPLICATE LINES (AND WORSE!)
+#
+# - name: Run 'cupsctl --no-remote-admin --no-remote-any --no-share-printers --no-user-cancel-any --no-debug-logging' (if not cups_enabled) -- PLEASE ALSO MANUALLY RUN 'sudo cupsctl' AND 'sudo cupsd -t' TO VERIFY /etc/cups/cupsd.conf
+#   command: cupsctl --no-remote-admin --no-remote-any --no-share-printers --no-user-cancel-any --no-debug-logging    # RISKY: REPEATED USE OF 'cupsctl' CAN *DAMAGE* /etc/cups/cupsd.conf BY ADDING DUPLICATE LINES.  FYI IT ALSO MANGLES COMMENTS AND SPACING.
+#   when: not cups_enabled
+
+- name: "2021-07-11: UNFORTUNATELY http://box:631 AND http://box/print DO NOT YET WORK RELIABLY -- CUPS NEEDS TO WORK FROM MANY MORE URL'S THAN JUST http://localhost:631 AND http://192.168.0.x:631 AND http://172.18.96.1:631 -- please help us find the correct directive(s) for /etc/cups/cupsd.conf and /etc/nginx/conf.d/cups.conf followed by 'systemctl restart cups' and 'systemctl restart nginx'"
+  lineinfile:
+    path: /etc/cups/cupsd.conf
+    line: "{{ item }}"
+    insertbefore: '^Listen .*/run/cups/cups.sock$'    # Also matches old form: '^Listen /var/run/cups/cups.sock$'
+  with_items:
+    - "#ServerAlias *"
+    - "#ServerName {{ iiab_hostname }}.{{ iiab_domain }}"    # box.lan
+    - "#Listen {{ lan_ip }}:631"    # 172.18.96.1
+    - "Listen 127.0.0.1:631"
+    - "#Listen 0.0.0.0:631"
+    - "#Listen *:631"
+
+- name: Change 'MaxLogSize 0' (no log rotation) to 'MaxLogSize 1m' (log rotation at 1MB) in /etc/cups/cupsd.conf (EITHER WAY LOG BLOAT IS A RISK!)
+  lineinfile:
+    path: /etc/cups/cupsd.conf
+    regexp: '^MaxLogSize '
+    insertbefore: 'Listen '
+    firstmatch: yes
+    line: "MaxLogSize 1m"    # Documentation (claims!) log rotation at "1m" is the default.  But In Practice: 'MaxLogSize 0' (no log rotation) is now part of /usr/share/cups/cupsd.conf.default
+
+# REMINDER: 3 systemd services should be restarted (cups, cups-browsed, nginx)
+# within enable-or-disable.yml, so /etc/cups/cupsd.conf (ETC) take effect!
 
 
 # RECORD CUPS AS INSTALLED
