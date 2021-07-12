@@ -53,7 +53,7 @@
       * minetest
       * mosquitto
       * openvpn
-      * pbx [*, requires Apache for now, as in Section iii.]
+      * pbx [*, requires Apache for now, as in Section iii., [#2856](https://github.com/iiab/iiab/issues/2856)]
       * phpmyadmin [*, requires Apache for now, as in Section iii.]
       * samba
       * sshd
