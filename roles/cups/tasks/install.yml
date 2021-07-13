@@ -1,10 +1,14 @@
+# ADMINISTER CUPS AT http://box/print/admin WITH USERNAME 'Admin' AND PASSWORD
+# 'changeme' (OR ANY MEMBER OF LINUX GROUP 'lpadmin') AS SET UP BELOW...
+
+
 - name: Install 'cups' package
   package:
     name: cups
     state: present
 
-# 2021-07-12: LET'S STICK CLOSE TO THE DEFAULT /etc/cups/cupsd.conf SO WE CAN
-# SKIP MOST OF THE NEXT ~100 LINES, THX TO NEW NGINX (cups/templates/cups.conf)
+# 2021-07-12: LET'S STICK CLOSER TO THE DEFAULT /etc/cups/cupsd.conf SO WE CAN
+# SKIP MOST OF THE NEXT ~120 LINES, THX TO NEW NGINX (cups/templates/cups.conf)
 
 # # WARNING: 'apt install cups' AND 'apt install --reinstall cups'
 # # UNFORTUNATELY DO *NOT* RECREATE /etc/cups/cupsd.conf IF A PRIOR
@@ -19,13 +23,13 @@
 
 # # OPTION #2: NEW WAY (MORE FUTURE-PROOF, WE HOPE!)
 
-# # - name: FILE /etc/cups/cupsd.conf WILL BE CREATED BY THE ~2 STANZAS BELOW...
-# #   meta: noop
-
 # # - debug:
 # #     msg: FILE /etc/cups/cupsd.conf WILL BE CREATED BY THE ~5 STANZAS BELOW...
 
-- name: Copy /usr/share/cups/cupsd.conf.default to /etc/cups/cupsd.conf (root:lp, 0640) -- a timestamped backup of the prior 'cupsd.conf' is saved in /etc/cups
+- name: PLEASE RUN 'sudo cupsctl' AND 'sudo cupsd -t' TO VERIFY /etc/cups/cupsd.conf IF YOU MODIFY IT!  The file will now be created -- by the ~2 stanzas below.
+  meta: noop
+
+- name: Copy /usr/share/cups/cupsd.conf.default to /etc/cups/cupsd.conf (root:lp, 0640) -- a timestamped backup of the prior 'cupsd.conf' will be saved in /etc/cups
   copy:
     src: /usr/share/cups/cupsd.conf.default
     dest: /etc/cups/cupsd.conf
@@ -47,7 +51,7 @@
 #     - "  Require user @SYSTEM"    # Will appear BELOW, in /etc/cups/cupsd.conf
 #     - "  AuthType Default"        # Will appear ABOVE, in /etc/cups/cupsd.conf
 
-- name: Insert 2-line block into /etc/cups/cupsd.conf to LOCK DOWN URL'S LIKE http://box/print/admin -- REQUIRING '{{ iiab_admin_user }}' AND ITS LINUX PASSWORD (to avoid accidental damage to /etc/cups/cupsd.conf and other CUPS settings)
+- name: "CUPS web administration: Insert 2-line block into /etc/cups/cupsd.conf to LOCK DOWN URL'S LIKE http://box/print/admin TO LINUX GROUP 'lpadmin' -- to avoid accidental damage to /etc/cups/cupsd.conf and other CUPS settings.  This uses 'SystemGroup lpadmin' in /etc/cups/cups-files.conf -- in coordination with ~14 -> ~15 '@SYSTEM' lines and 'DefaultAuthType Basic' in /etc/cups/cupsd.conf"
   blockinfile:
     path: /etc/cups/cupsd.conf
     insertafter: '^<Location /admin>$'
@@ -55,9 +59,22 @@
         AuthType Default
         Require user @SYSTEM
 
-- name: Add user '{{ iiab_admin_user }}' to Linux group 'lpadmin' for web administration (or modify default 'SystemGroup lpadmin' in /etc/cups/cups-files.conf -- in coordination with ~14 -> ~15 '@SYSTEM' lines in /etc/cups/cupsd.conf)
-  command: "gpasswd -a {{ iiab_admin_user | quote }} lpadmin"    # iiab-admin
-  #command: "gpasswd -d {{ iiab_admin_user | quote }} lpadmin"
+- name: "CUPS web administration: Create Linux username 'Admin' with password 'changeme' in Linux group 'lpadmin' (shell: /usr/sbin/nologin, create_home: no)"
+  user:
+    name: Admin
+    append: yes    # Don't clobber other groups, that other IIAB Apps might need.
+    groups: lpadmin
+    password: "{{ 'changeme' | password_hash('sha512') }}"    # Random salt.  Presumably runs 5000 rounds of SHA-512 per /etc/login.defs & /etc/pam.d/common-password -- https://docs.ansible.com/ansible/latest/user_guide/playbooks_filters.html#encrypting-and-checksumming-strings-and-passwords
+    create_home: no
+    shell: /usr/sbin/nologin    # Debian/Ubuntu norm -- instead of /sbin/nologin, /bin/false
+
+# - name: Add user '{{ iiab_admin_user }}' to Linux group 'lpadmin' -- for CUPS web administration (or modify default 'SystemGroup lpadmin' in /etc/cups/cups-files.conf -- in coordination with ~14 -> ~15 '@SYSTEM' lines in /etc/cups/cupsd.conf)
+#   #command: "gpasswd -a {{ iiab_admin_user | quote }} lpadmin"
+#   #command: "gpasswd -d {{ iiab_admin_user | quote }} lpadmin"
+#   user:
+#     name: "{{ iiab_admin_user }}"    # iiab-admin
+#     append: yes
+#     groups: lpadmin
 
 # - name: (Re)Start 'cups' and 'cups-browsed' systemd services -- CUPS DAEMON MUST BE RUNNING FOR 'cupsctl' COMMAND JUST BELOW
 #   systemd:
