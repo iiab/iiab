@@ -10,7 +10,7 @@
 
 2. Without PHP available via FastCGI, any function at all for PHP-based applications validates NGINX.
 
-3. Current state of IIAB App/Service migrations as of 2021-07-06: *(SEE ALSO [#2762](https://github.com/iiab/iiab/issues/2762))*
+3. Current state of IIAB App/Service migrations as of 2021-07-13: *(SEE ALSO [#2762](https://github.com/iiab/iiab/issues/2762))*
 
    1. These support "Native" NGINX but ***NOT*** Apache
 
@@ -41,13 +41,13 @@
 
    3. These support Apache but ***NOT*** "Native" NGINX.  They use a "Shim" to [proxy_pass](https://docs.nginx.com/nginx/admin-guide/web-server/reverse-proxy/) from NGINX to Apache on port 8090.  See [roles/3-base-server/tasks/main.yml#L11](../3-base-server/tasks/main.yml#L11) for a list of ~6 IIAB Apps/Services that auto-enable Apache.
 
-      * elgg
+      * elgg [*, should be deprecated, or considered for a complete overhaul from ancient Elgg 2.x to 4.x?]
 
    4. These each run their own web server or non-web / backend services, e.g. off of their own [unique port(s)](https://github.com/iiab/iiab/wiki/IIAB-Networking#list-of-ports--services) (IIAB home pages link directly to these destinations).  In future we'd like mnemonic URL's for all of these: (e.g. http://box/calibre, http://box/archive, http://box/kalite)
 
       * bluetooth
       * calibre (menu goes directly to port 8080)
-      * cups (menu goes directly to port 631) [*, shim not yet in place, [PR #2775](https://github.com/iiab/iiab/pull/2775)]
+      * cups (NGINX redirects http://box/print to port 631, changing hostname as appropriate, per [PR #2858](https://github.com/iiab/iiab/pull/2858))
       * internetarchive (menu goes directly to port 4244) [*, [PR #2120](https://github.com/iiab/iiab/pull/2120)]
       * kalite (menu goes directly to ports 8006-8008)
       * minetest
@@ -60,4 +60,4 @@
       * transmission
       * vnstat
 
-[*] The 4 above starred roles could use improvement, as of 2021-07-06.
+[*] The 4 above starred roles could use improvement, as of 2021-07-13.
