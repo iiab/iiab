@@ -1,12 +1,125 @@
+# ADMINISTER CUPS AT http://box/print -- USERNAME 'Admin' & PASSWORD 'changeme'
+# (OR ANY MEMBER OF LINUX GROUP 'lpadmin') AS SET UP BELOW...
+
+
 - name: Install 'cups' package
   package:
     name: cups
     state: present
 
-- name: Install our own /etc/cups/cupsd.conf from template, to permit local LAN admin
-  template:
-    src: cupsd.conf
+# WARNING: 'apt install cups' AND 'apt install --reinstall cups'
+# UNFORTUNATELY DO *NOT* RECREATE /etc/cups/cupsd.conf IF A PRIOR
+# INSTALL OF CUPS EXISTED!  SO OPTION #1 OR #2 ARE NEEDED BELOW:
+
+# OPTION #1: OLD WAY (BRITTLE)
+#
+# - name: Install our own /etc/cups/cupsd.conf from template, to permit local LAN admin
+#   template:
+#     src: cupsd.conf.j2
+#     dest: /etc/cups/cupsd.conf
+
+# OPTION #2: NEW WAY (MORE FUTURE-PROOF, WE HOPE!)
+
+- name: PLEASE RUN 'sudo cupsctl' AND 'sudo cupsd -t' TO VERIFY /etc/cups/cupsd.conf IF YOU MODIFY IT!  The file will now be created -- by ~4 stanzas below.  Also keep an eye on /var/log/cups/error_log
+  meta: noop
+
+- name: Copy /usr/share/cups/cupsd.conf.default to /etc/cups/cupsd.conf (root:lp, 0640) -- a timestamped backup of the prior 'cupsd.conf' will be saved in /etc/cups
+  copy:
+    src: /usr/share/cups/cupsd.conf.default
     dest: /etc/cups/cupsd.conf
+    owner: root
+    group: lp
+    mode: 0640
+    backup: yes
+
+# 2021-07-12: lineinfile fails to insert the needed lines, as these same 2 lines
+# already appear throughout /etc/cups/cupsd.conf -- so we use blockinfile below.
+#
+# - name: Insert 2 lines into /etc/cups/cupsd.conf to LOCK DOWN URL'S LIKE http://box/print/admin -- REQUIRING '{{ iiab_admin_user }}' AND ITS LINUX PASSWORD (to avoid accidental damage to /etc/cups/cupsd.conf and other CUPS settings)
+#   lineinfile:
+#     path: /etc/cups/cupsd.conf
+#     #regexp:
+#     line: "{{ item }}"
+#     insertafter: '^<Location /admin>$'
+#   with_items:
+#     - "  Require user @SYSTEM"    # Will appear BELOW, in /etc/cups/cupsd.conf
+#     - "  AuthType Default"        # Will appear ABOVE, in /etc/cups/cupsd.conf
+
+- name: "CUPS web administration: Insert 2-line block into /etc/cups/cupsd.conf to LOCK DOWN URL'S LIKE http://box/print/admin TO LINUX GROUP 'lpadmin' -- to avoid accidental damage to /etc/cups/cupsd.conf and other CUPS settings.  This uses 'SystemGroup lpadmin' in /etc/cups/cups-files.conf -- in coordination with ~14 -> ~15 '@SYSTEM' lines and 'DefaultAuthType Basic' in /etc/cups/cupsd.conf"
+  blockinfile:
+    path: /etc/cups/cupsd.conf
+    insertafter: '^<Location /admin>$'
+    block: |2    # Indent with 2 spaces, and surround block with 2 comment lines: "# BEGIN ANSIBLE MANAGED BLOCK", "# END ANSIBLE MANAGED BLOCK"
+        AuthType Default
+        Require user @SYSTEM
+
+- name: "CUPS web administration: Create Linux username 'Admin' with password 'changeme' in Linux group 'lpadmin' (shell: /usr/sbin/nologin, create_home: no)"
+  user:
+    name: Admin
+    append: yes    # Don't clobber other groups, that other IIAB Apps might need.
+    groups: lpadmin
+    password: "{{ 'changeme' | password_hash('sha512') }}"    # Random salt.  Presumably runs 5000 rounds of SHA-512 per /etc/login.defs & /etc/pam.d/common-password -- https://docs.ansible.com/ansible/latest/user_guide/playbooks_filters.html#encrypting-and-checksumming-strings-and-passwords
+    create_home: no
+    shell: /usr/sbin/nologin    # Debian/Ubuntu norm -- instead of /sbin/nologin, /bin/false
+
+# - name: Add user '{{ iiab_admin_user }}' to Linux group 'lpadmin' -- for CUPS web administration (or modify default 'SystemGroup lpadmin' in /etc/cups/cups-files.conf -- in coordination with ~14 -> ~15 '@SYSTEM' lines in /etc/cups/cupsd.conf)
+#   #command: "gpasswd -a {{ iiab_admin_user | quote }} lpadmin"
+#   #command: "gpasswd -d {{ iiab_admin_user | quote }} lpadmin"
+#   user:
+#     name: "{{ iiab_admin_user }}"    # iiab-admin
+#     append: yes
+#     groups: lpadmin
+
+- name: Start 'cups' systemd service as nec -- CUPS DAEMON MUST BE RUNNING FOR 'cupsctl' COMMAND JUST BELOW
+  systemd:
+    #daemon_reload: yes
+    name: cups
+    state: started
+
+# - name: Run 'cupsctl --remote-admin --share-printers --user-cancel-any' to enable http://192.168.0.x:631 AND http://172.18.96.1:631 (if cups_enabled) -- REPEATED USE OF 'cupsctl' COMMANDS CAN *DAMAGE* /etc/cups/cupsd.conf BY ADDING DUPLICATE LINES (AND WORSE!) -- SO PLEASE ALSO MANUALLY RUN 'sudo cupsctl' AND 'sudo cupsd -t' TO VERIFY /etc/cups/cupsd.conf
+#   command: cupsctl --remote-admin --share-printers --user-cancel-any
+
+# 2021-07-11: BOTH FLAGS *CANNOT* BE USED TOGETHER -- CHOOSE ONE OR THE OTHER:
+# (1) '--remote-admin' AS ABOVE, OR (2) '--remote-any' AS BELOW.
+# (RUN 'cupsctl' WITHOUT PARAMETERS TO CONFIRM THIS!)
+
+- name: Run 'cupsctl --remote-any --share-printers --user-cancel-any' to enable http://192.168.0.x:631 AND http://172.18.96.1:631 AND http://10.8.0.y:631 (if cups_enabled) -- REPEATED USE OF 'cupsctl' COMMANDS CAN *DAMAGE* /etc/cups/cupsd.conf BY ADDING DUPLICATE LINES (AND WORSE!) -- SO PLEASE ALSO MANUALLY RUN 'sudo cupsctl' AND 'sudo cupsd -t' TO VERIFY /etc/cups/cupsd.conf
+  command: cupsctl --remote-any --share-printers --user-cancel-any
+
+# 2021-07-11: In theory 'cupsctl' stanzas could be put in enable-or-disable.yml
+# BUT LET'S AVOID THAT -- AS REPEATED USE OF 'cupsctl' COMMANDS CAN *DAMAGE*
+# /etc/cups/cupsd.conf BY ADDING DUPLICATE LINES (AND WORSE!)
+#
+# FYI repeated use of 'cupsctl' commands also removes comments and blank lines.
+#
+# - name: Run 'cupsctl --no-remote-admin --no-remote-any --no-share-printers --no-user-cancel-any --no-debug-logging' (if not cups_enabled) -- REPEATED USE OF 'cupsctl' COMMANDS CAN *DAMAGE* /etc/cups/cupsd.conf BY ADDING DUPLICATE LINES (AND WORSE!) -- SO PLEASE ALSO MANUALLY RUN 'sudo cupsctl' AND 'sudo cupsd -t' TO VERIFY /etc/cups/cupsd.conf
+#   command: cupsctl --no-remote-admin --no-remote-any --no-share-printers --no-user-cancel-any --no-debug-logging
+#   when: not cups_enabled
+
+# - name: "2021-07-12: EXPERIMENTALLY ADD DIRECTIVES TO /etc/cups/cupsd.conf followed by 'systemctl restart cups'.  As should no longer be nec thanks to NEW cups/templates/cups.conf for /etc/nginx/conf.d/cups.conf (followed by 'systemctl restart nginx').  Which FIXED URL'S LIKE: http://box/print, http://box.lan/print, http://192.168.0.x/print, http://172.18.96.1/print and http://10.8.0.x/print (WITH OR WITHOUT THE TRAILING SLASH!)  RECAP: (1) So be it that these 2 URL'S STILL DON'T WORK: http://box:631, http://box.lan:631 (due to CUPS' internal web server's overly stringent hostname checks, i.e. '400 Bad Request' and 'Request from \"localhost\" using invalid Host: field \"box[.lan]:631\".' in /var/log/cups/error_log) -- (2) While these 2 URL'S STILL DO WORK: http://localhost:631, http://127.0.0.1:631 -- (3) Whereas these 3 URL'S NO LONGER WORK: http://192.168.0.x:631, http://172.18.96.1:631, http://10.8.0.x:631 (now that we're suddenly hewing closer to the default /etc/cups/cupsd.conf)"
+#   lineinfile:
+#     path: /etc/cups/cupsd.conf
+#     line: "{{ item }}"
+#     insertbefore: '^Listen .*/run/cups/cups.sock$'    # Also matches old form: '^Listen /var/run/cups/cups.sock$'
+#   with_items:
+#     - "HostNameLookups On"    # More False Leads: https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=530027
+#     - "ServerAlias *"
+#     - "#ServerName {{ iiab_hostname }}.{{ iiab_domain }}"    # box.lan
+#     - "#Listen {{ lan_ip }}:631"    # 172.18.96.1
+#     - "#Listen 127.0.0.1:631"
+#     - "#Listen 0.0.0.0:631"
+#     - "#Listen *:631"
+
+# - name: "OPTIONAL: Change 'MaxLogSize 0' (no log rotation) to 'MaxLogSize 1m' (log rotation at 1MB) in /etc/cups/cupsd.conf (EITHER WAY LOG BLOAT IS A RISK!)"
+#   lineinfile:
+#     path: /etc/cups/cupsd.conf
+#     regexp: '^MaxLogSize '
+#     insertbefore: 'Listen '
+#     firstmatch: yes
+#     line: "MaxLogSize 1m"    # CUPS Documentation (claims!) log rotation at "1m" is the default.  But In Practice: 'MaxLogSize 0' (no log rotation) is now part of /usr/share/cups/cupsd.conf.default
+
+# REMINDER: 3 SYSTEMD SERVICES WILL BE RESTARTED (cups, cups-browsed, nginx)
+# LATER IN enable-or-disable.yml, SO /etc/cups/cupsd.conf (ETC) TAKE EFFECT!
 
 
 # RECORD CUPS AS INSTALLED
