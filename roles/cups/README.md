@@ -1,8 +1,8 @@
 # CUPS Printing README
 
-[CUPS](https://en.wikipedia.org/wiki/CUPS) (also known as the "Common UNIX Printing System") allows your Internet-in-a-Box (IIAB) to act as a print server.
+[CUPS](https://en.wikipedia.org/wiki/CUPS) (also known as the "Common UNIX Printing System") allows your [Internet-in-a-Box (IIAB)](http://internet-in-a-box.org) to act as a print server.
 
-This can be useful if a printer is attached to your IIAB &mdash; so print jobs from client computers and phones can be processed &mdash; and then sent to the appropriate printer.
+This can be useful if a printer is attached to your IIAB &mdash; so student/teacher print jobs from client computers and phones can be processed &mdash; and then sent to the appropriate printer.
 
 ## Web Administration
 
