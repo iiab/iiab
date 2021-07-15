@@ -8,7 +8,14 @@ This can be useful if a printer is attached to your IIAB &mdash; so student/teac
 
 ## Using it
 
-Visit your IIAB's http://box/print -> **Administration** and then log in using:
+Make sure your IIAB was installed with these 2 lines in [/etc/iiab/local_vars.yml](http://faq.iiab.io/#What_is_local_vars.yml_and_how_do_I_customize_it.3F) :
+
+```
+cups_install: True
+cups_enabled: True
+```
+
+Visit your IIAB's http://box/print > **Administration** and log in using:
 
 - Username: `Admin`
 - Password: `changeme`
@@ -42,7 +49,7 @@ systemctl restart cups cups-browsed nginx
 
 ## Troubleshooting
 
-Visit your IIAB's http://box/print -> **Help** for printer configuration suggestions, Etc!
+Visit your IIAB's http://box/print > **Help** for printer configuration suggestions, Etc!
 
 http://localhost:631 is very useful if NGINX redirects or CUPS permissions are set wrong.
 
@@ -50,7 +57,7 @@ Beware that http://box:631 and http://box.lan:631 _will not work,_ due to a [kno
 
 Run `ps aux | grep cups` and `systemctl status cups` to verify the CUPS systemd service is running well.
 
-Finally, keep an eye on `/var/log/cups/error_log` to be sure.
+Finally, keep an eye on: `/var/log/cups/error_log`
 
 ## Docs and Updates
 
