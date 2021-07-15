@@ -6,14 +6,16 @@ It allows your [Internet-in-a-Box (IIAB)](http://internet-in-a-box.org) to act a
 
 This can be useful if a printer is attached to your IIAB &mdash; so student/teacher print jobs from client computers and phones can be processed &mdash; and then sent to the appropriate printer.
 
-## Web Administration
+## Using it
 
-Please administer CUPS at http://box/print using:
+Visit your IIAB's http://box/print -> **Administration** and then log in using:
 
 - Username: `Admin`
 - Password: `changeme`
 
-Or use any Linux user that is a member of the Linux group: `lpadmin`
+Or use any Linux account that is a member of the Linux group: `lpadmin`
+
+_Browser pop-ups will try to scare you &mdash; click (and persist!) to log in despite these exaggerated warnings._
 
 ## Security
 
@@ -23,7 +25,7 @@ CUPS creates a 10-year (unsigned) HTTPS certificate during installation, that wi
 
 ## How it Works
 
-Understand how IIAB configures CUPS for all IP addresses and all hostnames (IIAB redirects around the "since 2009" CUPS problem mentioned below!) by reading these in-line explanations:
+Understand how IIAB configures CUPS for all IP addresses and all hostnames (IIAB redirects to bypass the "since 2009" CUPS problem mentioned below!) by reading these in-line explanations:
 
 - [/opt/iiab/iiab/roles/cups/tasks/install.yml](tasks/install.yml)
 
@@ -37,11 +39,14 @@ If you make modifications to the above files, don't forget to restart systemd se
 ```
 systemctl restart cups cups-browsed nginx
 ```
+
 ## Troubleshooting
+
+Visit your IIAB's http://box/print -> **Help** for printer configuration suggestions, Etc!
 
 http://localhost:631 is very useful if NGINX redirects or CUPS permissions are set wrong.
 
-Beware that http://box:631 and http://box.lan:631 will not work, due to a [known issue](https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=530027) with CUPS since 2009.
+Beware that http://box:631 and http://box.lan:631 _will not work,_ due to a [known issue](https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=530027) with CUPS since 2009.
 
 Run `ps aux | grep cups` and `systemctl status cups` to verify the CUPS systemd service is running well.
 
