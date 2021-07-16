@@ -15,7 +15,7 @@ cups_install: True
 cups_enabled: True
 ```
 
-Visit your IIAB's http://box/print > **Administration** and log in using:
+Then visit your IIAB's http://box/print > **Administration** and log in using:
 
 - Username: `Admin`
 - Password: `changeme`
