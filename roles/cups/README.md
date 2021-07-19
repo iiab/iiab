@@ -15,7 +15,7 @@ cups_install: True
 cups_enabled: True
 ```
 
-Visit your IIAB's http://box/print > **Administration** and log in using:
+Then visit your IIAB's http://box/print > **Administration** and log in using:
 
 - Username: `Admin`
 - Password: `changeme`
@@ -28,7 +28,7 @@ _Browser pop-ups will try to scare you &mdash; click (and persist!) to log in de
 
 The above uses 'SystemGroup lpadmin' in `/etc/cups/cups-files.conf` &mdash; in coordination with about 15 '@SYSTEM' lines and 'DefaultAuthType Basic' in `/etc/cups/cupsd.conf`
 
-CUPS creates a 10-year (unsigned) HTTPS certificate during installation, that will be very confusing to non-technical users when they log in, as a result of modern browser warnings.
+CUPS creates a 10-year ["self-signed" HTTPS certificate](https://www.cups.org/doc/encryption.html) during installation, that will be very confusing to non-technical users when they log in, as a result of modern browser warnings.
 
 ## How it Works
 
