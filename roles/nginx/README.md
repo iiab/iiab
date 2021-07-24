@@ -47,7 +47,7 @@
 
       * bluetooth
       * calibre (menu goes directly to port 8080)
-      * cups (NGINX redirects http://box/print to port 631, changing hostname as appropriate, per [PR #2858](https://github.com/iiab/iiab/pull/2858))
+      * cups (NGINX redirects http://box/print to port 631, changing URL hostname to localhost when necessary, per [PR #2858](https://github.com/iiab/iiab/pull/2858))
       * internetarchive (menu goes directly to port 4244) [*, [PR #2120](https://github.com/iiab/iiab/pull/2120)]
       * kalite (menu goes directly to ports 8006-8008)
       * minetest
