@@ -22,7 +22,7 @@
     path: /boot/firmware/usercfg.txt
     line: "dtoverlay=i2c-rtc,{{ rtc_id }}=on"
     state: present
-  when: rtc_id is defined and rtc_id != "none" and is_ubuntu
+  when: rtc_id is defined and rtc_id != "none" and is_ubuntu    # CLARIF: Ubuntu runs increasingly well on RPi hardware, starting in 2020 especially
 
 #- name: Enable bluetooth in /boot/firmware/syscfg.txt on Ubuntu (needs reboot)
 #  lineinfile:
@@ -31,15 +31,28 @@
 #    line: 'include btcfg.txt'
 #  when: is_ubuntu
 
-- name: 'Ensure packages are installed: dphys-swapfile, fake-hwclock, iw, rfkill, wireless-tools'
+- name: '2021-07-27: SEE ALSO ~4 networking packages LATER installed by https://github.com/iiab/iiab/blob/master/roles/2-common/tasks/packages.yml'
+  meta: noop
+
+- name: '2021-07-27: SEE ALSO 4-5 networking packages LATER installed by https://github.com/iiab/iiab/blob/master/roles/2-common/tasks/network.yml'
+  meta: noop
+
+# 2021-07-27 explanation from @jvonau: The 3 BELOW (iw, rfkill, wireless-tools)
+# are provided by RaspiOS.  Ubuntu|Debian on the other hand are hit or miss:
+# desktops might have some/all 3 preinstalled, while servers tend not to have
+# these present at all, but are needed to be installed if you want to take full
+# advantage of WiFi on Ubuntu and friends -- but it's only enforced on RPi
+# hardware where we know in advance of the likelihood of WiFi being present.
+
+- name: 'Install packages: cloud-guest-utils, dphys-swapfile, fake-hwclock, iw, rfkill, wireless-tools'
   package:
     name:
-      - dphys-swapfile
-      - fake-hwclock
-      - iw
-      - rfkill
-      - wireless-tools
-      - cloud-guest-utils
+      - cloud-guest-utils    # Contains 'growpart' for resizing a partition during boot, which is normally done with the aid of cloud-init
+      - dphys-swapfile       # 2021-07-27: RaspiOS installs this regardless -- autogenerate and use a swap file
+      - fake-hwclock         # 2021-07-27: RaspiOS installs this regardless -- save/restore system clock on machines without working RTC hardware
+      - iw                # 2021-07-27: RaspiOS installs this regardless -- configure Linux wireless devices -- hard dependence for ap0 creation, SEE https://github.com/iiab/iiab/blob/master/roles/network/templates/hostapd/clone-wifi.service.j2
+      - rfkill            # 2021-07-27: RaspiOS installs this regardless -- enable & disable wireless devices
+      - wireless-tools    # 2021-07-27: RaspiOS installs this regardless -- manipulate Linux Wireless Extensions
     state: present
 
 - name: Increase swap file size (to CONF_SWAPSIZE={{ pi_swap_file_size }} in /etc/dphys-swapfile) as kalite pip download fails
