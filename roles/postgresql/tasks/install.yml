@@ -1,21 +1,11 @@
-- name: Install 'postgresql' package
+- name: 'Install packages: postgresql, postgresql-client'
   package:
-    name: postgresql
+    name:
+      - postgresql
+      - postgresql-client
     state: present
 
-- name: Install 'postgresql-client' package (debuntu)
-  package:
-    name: postgresql-client
-    state: present
-  when: is_debuntu
-
-- name: Install 'postgresql-server' package (OS's other than debuntu)
-  package:
-    name: postgresql-server
-    state: present
-  when: not is_debuntu
-
-- name: Install /etc/systemd/system/postgresql-iiab.service from template
+- name: Install /etc/systemd/system/postgresql-iiab.service from template (0644 by default)
   template:
     src: postgresql-iiab.service
     dest: /etc/systemd/system/postgresql-iiab.service
@@ -23,50 +13,47 @@
     # group: root
     # mode: '0644'
 
-- name: Create PostgreSQL data dir /library/pgsql-iiab, owned by postgres:postgres
+- name: Create PostgreSQL data dir /library/pgsql-iiab, owned by postgres:postgres (0700)
   file:
+    state: directory
     path: /library/pgsql-iiab
     owner: postgres
     group: postgres
-    mode: '0700'
-    state: directory
+    mode: 0700
 
-- name: Make sure locale {{ postgresql_locale }} is enabled (debuntu)    # en_US.UTF-8
+- name: Make sure locale {{ postgresql_locale }} is enabled    # en_US.UTF-8
   lineinfile:
     dest: /etc/locale.gen
     line: "{{ postgresql_locale }} UTF-8"
-  when: is_debuntu
 
-- name: Generate locales (debuntu)
+- name: Generate locales
   command: /usr/sbin/locale-gen
-  when: is_debuntu
 
-- name: Initialize the PostgreSQL db, creating /library/pgsql-iiab/pg_hba.conf (debuntu)
+- name: Initialize the PostgreSQL db, creating /library/pgsql-iiab/pg_hba.conf
   #command: su - postgres -c "/usr/lib/postgresql/{{ postgresql_version }}/bin/initdb -E 'UTF-8' --locale={{ postgresql_locale }} -D /library/pgsql-iiab"
   command: /usr/lib/postgresql/{{ postgresql_version }}/bin/initdb -E 'UTF-8' --locale={{ postgresql_locale }} -D /library/pgsql-iiab
   args:
     creates: /library/pgsql-iiab/pg_hba.conf
   become: yes
   become_user: postgres
-  when: is_debuntu
 
-- name: Initialize the PostgreSQL db, creating /library/pgsql-iiab/pg_hba.conf (OS's other than debuntu)
-  #command: su - postgres -c "/usr/bin/initdb -E 'UTF-8' --lc-collate={{ postgresql_locale }} --lc-ctype={{ postgresql_locale }} -D /library/pgsql-iiab"
-  command: /usr/bin/initdb -E 'UTF-8' --lc-collate={{ postgresql_locale }} --lc-ctype={{ postgresql_locale }} -D /library/pgsql-iiab
-  args:
-    creates: /library/pgsql-iiab/pg_hba.conf
-  become: yes
-  become_user: postgres
-  when: not is_debuntu
+# - name: Initialize the PostgreSQL db, creating /library/pgsql-iiab/pg_hba.conf (OS's other than debuntu)
+#   #command: su - postgres -c "/usr/bin/initdb -E 'UTF-8' --lc-collate={{ postgresql_locale }} --lc-ctype={{ postgresql_locale }} -D /library/pgsql-iiab"
+#   command: /usr/bin/initdb -E 'UTF-8' --lc-collate={{ postgresql_locale }} --lc-ctype={{ postgresql_locale }} -D /library/pgsql-iiab
+#   args:
+#     creates: /library/pgsql-iiab/pg_hba.conf
+#   become: yes
+#   become_user: postgres
+#   when: not is_debuntu
 
-- name: Install /library/pgsql-iiab/postgresql.conf owned by postgres:postgres, from template
+- name: Install /library/pgsql-iiab/postgresql.conf from template (postgres:postgres, 0640)
   template:
     backup: yes
     src: postgresql.conf.j2
     dest: /library/pgsql-iiab/postgresql.conf
     owner: postgres
     group: postgres
-    mode: '0640'
+    mode: 0640
 
 - name: Disable & Stop stock 'postgresql' (parent) systemd service
   systemd:
