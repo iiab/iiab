@@ -8,7 +8,7 @@ The ``pastebinit`` command can then be used to auto-upload this file, creating a
 
 But first off, the file is compiled by harvesting 1 + 6 kinds of things:
 
-0. Filename Header + Git Hashes + Raspberry Pi Model + OS
+0. Filename Header + Git Hashes + Raspberry Pi Model + OS + CPU Architecture(s)
 
 1. Files specially requested (if you run ``sudo iiab-diagnostics PATH/FILE1 PATH/FILE2``)
 
@@ -62,4 +62,4 @@ But first off, the file is compiled by harvesting 1 + 6 kinds of things:
 
 ## Source Code
 
-Please look over the bottom of [iiab-diagnostics](iiab-diagnostics) (lines 106-222 especially) to learn more about which common IIAB files and commands make this rapid troubleshooting possible.
+Please look over the bottom of [iiab-diagnostics](iiab-diagnostics) (lines 106-224 especially) to learn more about which common IIAB files and commands make this rapid troubleshooting possible.
