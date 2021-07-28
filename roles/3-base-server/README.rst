@@ -10,6 +10,6 @@ This 3rd `stage <https://github.com/iiab/iiab/wiki/IIAB-Contributors-Guide#ansib
    - **php{{ php_version }}-fpm** — which forcibly installs **php{{ php_version }}-cli**, **php{{ php_version }}-common** and **libsodium23**
 - `www_base <https://github.com/iiab/iiab/blob/master/roles/www_base>`_ (similar to `www_options <https://github.com/iiab/iiab/blob/master/roles/www_options>`_ which runs later in 4-server-options)
 
-Recap: as with 0-init, 1-prep, 2-common, 4-server-options and 5-xo-services, this 3rd stage installs core server infra (that is not user-facing).
+Recap: As with 0-init, 1-prep, 2-common, 4-server-options and 5-xo-services — this 3rd stage installs core server infra (that is not user-facing).
 
 The next stage (4-server-options) brings more diverse/optional server infra functionality.
