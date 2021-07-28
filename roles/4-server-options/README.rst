@@ -16,4 +16,4 @@ Specifically, these might be installed:
 - Samba for Windows filesystems
 - `www_options <https://github.com/iiab/iiab/blob/master/roles/www_options/tasks/main.yml>`_
 
-Recap: as with 0-init, 1-prep, 2-common, 3-base-server and 5-xo-services ⁠— this 4th stage installs core server infra (that is not user-facing).
+Recap: As with 0-init, 1-prep, 2-common, 3-base-server and 5-xo-services ⁠— this 4th stage installs core server infra (that is not user-facing).
