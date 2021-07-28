@@ -11,4 +11,4 @@ These are (partially) put in place:
 - Networking (including the `iptables <https://en.wikipedia.org/wiki/Iptables>`_ firewall)
 - `/usr/libexec/iiab-startup.sh <tasks/iiab-startup.yml>`_ similar to AUTOEXEC.BAT and /etc/rc.local, in order to run jobs on boot
 
-Recap: as with 0-init, 1-prep, 3-base-server, 4-server-options and 5-xo-services, this 2nd stage installs core server infra (that is not user-facing).
+Recap: As with 0-init, 1-prep, 3-base-server, 4-server-options and 5-xo-services — this 2nd stage installs core server infra (that is not user-facing).
