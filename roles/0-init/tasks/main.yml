@@ -1,25 +1,39 @@
 # Initialize
+
 - name: ...IS BEGINNING ============================================
   stat:
-    path: "{{ iiab_env_file }}"
-  register: NewInstall
+    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+  register: iiab_ini_test
 
-- name: Set first_run flag
-  set_fact:
-    first_run: True
-  when: not NewInstall.stat.exists
-
-- name: Set top-level variables from local_facts for convenience
+# Higher-level purpose explained at the bottom of:
+# https://github.com/iiab/iiab/blob/master/vars/default_vars.yml
+- name: "Ansible just ran /etc/ansible/facts.d/local_facts.fact to set vars -- here we extract 3 of those 11 -- rpi_model: {{ ansible_local.local_facts.rpi_model }}, xo_model: {{ ansible_local.local_facts.xo_model }}, iiab_stage: {{ ansible_local.local_facts.stage }}"
   set_fact:
     rpi_model: "{{ ansible_local.local_facts.rpi_model }}"
     xo_model: "{{ ansible_local.local_facts.xo_model }}"
     iiab_stage: "{{ ansible_local.local_facts.stage }}"
 
-# We need to inialize the ini file and only write the location and version
-# sections once and only once to preserve the install date and git hash.
-- name: Create IIAB tools and {{ iiab_ini_file }}, if first_run
-  include_tasks: first_run.yml
-  when: first_run
+# Initialize /etc/iiab/iiab.ini writing the 'location' and 'version' sections
+# once and only once, to preserve the install date and git hash.
+- name: Create {{ iiab_ini_file }}, if it doesn't exist
+  include_tasks: create_iiab_ini.yml
+  when: not iiab_ini_test.stat.exists
+
+# 2021-07-30: The 'first_run' flag isn't much used anymore.  In theory it's
+# still used in these 2 places:
+#   (1) roles/1-prep/tasks/main.yml for raspberry_pi.yml
+#   (2) roles/network/tasks/named.yml for "Stop named before copying files"
+# In practice however, it's no longer important, and might be reconsidered?
+- name: Set first_run flag
+  set_fact:
+    first_run: True
+  when: not iiab_ini_test.stat.exists
+
+# 2020-10-29: Appears no longer nec (see 3 above ansible_local.local_facts.*)
+#- name: Re-read local_facts.facts from /etc/ansible/facts.d
+#  setup:
+#    filter: ansible_local
+
 
 # Copies the latest/known version of iiab-diagnostics into /usr/bin (so it can
 # be run even if local source tree /opt/iiab/iiab is deleted to conserve disk).
@@ -29,90 +43,26 @@
     dest: /usr/bin/
     mode: '0755'
 
-- name: Create globally-writable directory /etc/iiab/diag so non-root users can run iiab-diagnostics
+- name: Create globally-writable directory /etc/iiab/diag (0777) so non-root users can run 'iiab-diagnostics'
   file:
     state: directory
     path: /etc/iiab/diag
     mode: '0777'
 
-# 2020-10-29: Appears no longer nec (see 3 above ansible_local.local_facts.*)
-#- name: Re-read local_facts.facts from /etc/ansible/facts.d
-#  setup:
-#    filter: ansible_local
 
 - name: Pre-check that IIAB's "XYZ_install" + "XYZ_enabled" vars (1) are defined, (2) are boolean-not-string variables, and (3) contain plausible values.  Also checks that "XYZ_install" is True when "XYZ_installed" is defined.
   include_tasks: validate_vars.yml
 
-# Discover: do we have a gateway?
-# If Ansible detects gateway, becomes WAN candidate.
-- name: "Do we have a gateway? If so set discovered_wan_iface: {{ ansible_default_ipv4.alias }}"
-  set_fact:
-    discovered_wan_iface: "{{ ansible_default_ipv4.alias }}"
-  when: ansible_default_ipv4.gateway is defined
-
-- name: "Verify gateway active: ping -c4 {{ ansible_default_ipv4.gateway }}"
-  shell: ping -c4 "{{ ansible_default_ipv4.gateway }}" | grep icmp_seq=4 | wc -l
-  when: discovered_wan_iface != "none"
-  register: gw_active_test
-
-- name: If so, set gw_active, iiab_wan_iface to {{ discovered_wan_iface }}
-  set_fact:
-    iiab_wan_iface: "{{ discovered_wan_iface }}"
-    gw_active: True
-  when: discovered_wan_iface != "none" and gw_active_test.stdout == "1"
-
-- name: Test with {{ iiab_wan_iface }} for Internet access ({{ iiab_download_url }}/heart-beat.txt)
-  get_url:
-    url: "{{ iiab_download_url }}/heart-beat.txt"
-    dest: /tmp/heart-beat.txt
-    #timeout: "{{ download_timeout }}"
-    # @jvonau recommends: 100sec is too much (keep 10sec default)
-  ignore_errors: True
-  #async: 10
-  #poll: 2
-  register: internet_access_test
-
-- name: Set internet_available if download succeeded and not disregard_network
-  set_fact:
-    internet_available: True
-  when: not internet_access_test.failed and not disregard_network
-
-- name: Remove downloaded Internet test file /tmp/heart-beat.txt
-  file:
-    path: /tmp/heart-beat.txt
-    state: absent
-
-# Put all computed vars here so derive properly from any prior var file.
-- name: If the TZ is not set in env, set it to UTC
+- name: "Time Zone / TZ: Set symlink /etc/localtime to UTC if it doesn't exist?"
   include_tasks: tz.yml
 
-- name: Set port 80 for Admin Console if not adm_cons_force_ssl
-  set_fact:
-    gui_port: 80
-  when: not adm_cons_force_ssl
+- name: Test Gateway + Test Internet + Set new hostname if nec + Set 'gui_port' to 80 or 443 for Admin Console
+  include_tasks: network.yml
 
-- name: Set port 443 for Admin Console if adm_cons_force_ssl
-  set_fact:
-    gui_port: 443
-  when: adm_cons_force_ssl
-
-- name: "Set iiab_fqdn: {{ iiab_hostname }}.{{ iiab_domain }}"
-  set_fact:
-    iiab_fqdn: "{{ iiab_hostname }}.{{ iiab_domain }}"
-    FQDN_changed: False
-
-- name: Set FQDN_changed when iiab_fqdn != ansible_fqdn ({{ ansible_fqdn }})
-  set_fact:
-    FQDN_changed: True
-  when: iiab_fqdn != ansible_fqdn
-
-- name: Set hostname if FQDN_changed
-  include_tasks: hostname.yml
-  when: FQDN_changed
 
 - name: Add 'runtime' variable values to {{ iiab_ini_file }}
   ini_file:
-    dest: "{{ iiab_ini_file }}"
+    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
     section: runtime
     option: "{{ item.option }}"
     value: "{{ item.value | string }}"
@@ -137,9 +87,6 @@
       value: "{{ ansible_memtotal_mb }}"
     - option: swap_mb
       value: "{{ ansible_swaptotal_mb }}"
-    # 2021-01-28: Non-existent var, so fails with ansible-base 2.10.5 (#2669)
-    #- option: product_id
-    #  value: "{{ ansible_product_uuid }}"
     - option: gw_active
       value: "{{ gw_active }}"
     - option: internet_available
@@ -148,8 +95,10 @@
       value: "{{ rpi_model }}"
     - option: first_run
       value: "{{ first_run }}"
-    - option: local_tz
+    - option: local_tz    # e.g. EDT after Ansible interprets /etc/localtime below
       value: "{{ local_tz }}"
+    - option: etc_localtime.stdout    # e.g. America/New_York
+      value: "{{ etc_localtime.stdout }}"
     - option: no_NM_reload
       value: "{{ no_NM_reload }}"
     - option: is_F18
@@ -159,7 +108,7 @@
 
 - name: Add 'runtime' variable 'is_VM' value if defined, to {{ iiab_ini_file }}
   ini_file:
-    dest: "{{ iiab_ini_file }}"
+    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
     section: runtime
     option: "{{ item.option }}"
     value: "{{ item.value | string }}"
@@ -169,4 +118,4 @@
   when: is_VM is defined
 
 - name: STAGE 0 HAS COMPLETED ======================================
-  command: echo    # "name: XYZ" fails to appear with "meta: noop"
+  meta: noop    # Or use "command: echo" to force instantiation of vars e.g. "name: {{ var }}"
