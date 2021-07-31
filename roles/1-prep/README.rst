@@ -2,7 +2,7 @@
 1-prep README
 =============
 
-This 1st `stage <https://github.com/iiab/iiab/wiki/IIAB-Contributors-Guide#ansible>`_ (1-prep) arranges low-level things like hardware, DNS, basic security -- and critical pieces sometimes needed for remote support:
+This 1st `stage <https://github.com/iiab/iiab/wiki/IIAB-Contributors-Guide#ansible>`_ (1-prep) arranges low-level things like remote support infra, DNS prep, hardware, low-level OS quirks, and basic security:
 
 - SSHD
 - OpenVPN if/as needed later for remote support
