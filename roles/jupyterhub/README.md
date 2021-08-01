@@ -5,9 +5,9 @@
 * Jupyter Notebooks are widely used in the scientific community:
   * Intitutional FAQ: https://jupyterhub.readthedocs.io/en/stable/getting-started/institutional-faq.html
   * Getting Started: https://jupyterhub.readthedocs.io/en/stable/getting-started/
-* This IIAB package (Ansible role) permits individual users to start using their own Notebook on the IIAB server (http://box.lan/jupyterhub) without needing an individual server account:
-  * Once a user signs in with a username and password, these credentials are stored, and are used thereafter to gain access to the user's files.
-  * If necessary, use Admin password: http://FAQ.IIAB.IO#What_are_the_default_passwords.3F
-* Individual folders are created for all student work in path `/var/lib/protected/` &mdash; individual students will only be able to see their own work in that directory:
-  * Students will not have any privileges outside of their own folder.
-  * They may upload Jupyter Notebooks from a local machine, and download the current state of their work via a normal browser download.
+* Students create their own accounts on first use, e.g. at http://box.lan/jupyterhub — the teacher does not need to be involved!
+  * A student can then sign in with their username and password, to gain access to their files (Jupyter Notebooks).
+  * The teacher should modify and protect JupyterHub's overall ``Admin`` password, just in case: http://FAQ.IIAB.IO#What_are_the_default_passwords.3F
+* Individual student folders are created in ``/var/lib/protected/`` on the Internet-in-a-Box (IIAB) server:
+  * A student will only be able to see their own work — they do not have privileges outside of their own folder.
+  * Students may upload Jupyter Notebooks to the IIAB server, and download the current state of their work via a normal browser.
