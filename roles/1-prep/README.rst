@@ -19,7 +19,7 @@ This 1st `stage <https://github.com/iiab/iiab/wiki/IIAB-Contributors-Guide#ansib
          - fake-hwclock (as RTC is often missing or dead!)
          - Wi-Fi
       - Increase swap file size
-      - rootfs auto-resizing
+      - `rootfs auto-resizing <https://github.com/iiab/iiab/blob/master/roles/1-prep/templates/iiab-rpi-max-rootfs.sh>`_
    - NUC 6 Wi-Fi firmware
 
 Recap: Similar to 0-init, 2-common, 3-base-server, 4 server-options and 5-xo-services — this 1st stage installs core server infra (that is not user-facing).
