@@ -1,6 +1,6 @@
 ## JupyterHub programming environment with student Notebooks
 
-#### High Schools may want to consider JupyterHub to integrate coding with dynamic interactive graphing — A New Way to Think About Programming — allowing students to integrate science experiment results and program output within their own blog-like "Jupyter Notebooks."
+#### Secondary schools may want to consider JupyterHub to integrate coding with dynamic interactive graphing — A New Way to Think About Programming — allowing students to integrate science experiment results and program output within their own blog-like "Jupyter Notebooks."
 
 * Jupyter Notebooks are widely used in the scientific community:
   * Intitutional FAQ: https://jupyterhub.readthedocs.io/en/stable/getting-started/institutional-faq.html
