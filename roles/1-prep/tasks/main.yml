@@ -1,84 +1,30 @@
-# Preparations (Hardware Level)
+# Preparations (low-level e.g. remote support, DNS prep, HW/OS, basic security)
 
 - name: ...IS BEGINNING ============================================
   meta: noop
-
-- name: dnsmasq (install now, configure LATER in 'network', after Stage 9)
-  include_tasks: roles/network/tasks/dnsmasq.yml
-  #when: dnsmasq_install    # Flag might be used in future?
-
-
-- name: 'Install packages: sudo, uuid-runtime'
-  package:
-    name:
-      - sudo
-      - uuid-runtime
-    state: present
-
-- name: Does /etc/iiab/uuid exist?
-  stat:
-    path: /etc/iiab/uuid
-  register: uuid_file
-
-- name: If not, run 'uuidgen' to create a uuid, in register uuid_response
-  command: uuidgen
-  register: uuid_response
-  when: not uuid_file.stat.exists
-
-- name: Save it to /etc/iiab/uuid
-  shell: echo {{ uuid_response.stdout_lines[0] }} > /etc/iiab/uuid
-  when: not uuid_file.stat.exists
-
-- name: Load /etc/iiab/uuid, into register stored_uuid
-  command: cat /etc/iiab/uuid
-  register: stored_uuid
-
-- name: Store it in Ansible variable 'uuid'
-  set_fact:
-    uuid: "{{ stored_uuid.stdout_lines[0] }}"
-
-
-- name: Does 'ubermix' exist in /etc/lsb-release?
-  shell: grep -i ubermix /etc/lsb-release    # Pipe to cat to avoid red errors?
-  register: grep_ubermix
-  failed_when: False    # Universal way to hide alarmist red errors!
-  #ignore_errors: True
-  #check_mode: no
-
-- name: If so, install /etc/tmpfiles.d/iiab.conf to create /var/log subdirs on each boot, so {Apache, MongoDB, Munin} run on Ubermix
-  copy:
-    src: roles/1-prep/files/iiab.conf
-    dest: /etc/tmpfiles.d/
-    # owner: root
-    # group: root
-    # mode: '0644'
-    force: yes
-  when: grep_ubermix.rc == 0    # 1 if absent in file, 2 if file doesn't exist
-
-# 2020-03-19: for KA Lite, but moved from roles/kalite/tasks/install.yml
-# This effectively does nothing at all on Ubuntu & Raspbian, where libgeos-*
-# pkgs are not installed FWIW.  But it's included to safeguard us across all
-# OS's, in case others OS's like Ubermix later appear.  See #1382 for details.
-# Removing pkgs libgeos-3.6.2 & libgeos-c1v5 fixed the situation on Ubermix!
-- name: Remove libgeos-* pkgs, avoiding KA Lite Django failure on Ubermix
-  shell: apt -y remove "libgeos-*"
-  when: grep_ubermix.rc == 0    # 1 if absent in file, 2 if file doesn't exist
-
 
 - name: SSHD -- required by OpenVPN below -- also run by roles/4-server-options/tasks/main.yml
   include_role:
     name: sshd
   when: sshd_install
 
-- name: IIAB-ADMIN
-  include_role:
-    name: iiab-admin
-  #when: iiab_admin_install    # Flag might be created in future?
-
 - name: OPENVPN
   include_role:
     name: openvpn
   when: openvpn_install
+
+- name: IIAB-ADMIN -- includes roles/iiab-admin/tasks/access.yml
+  include_role:
+    name: iiab-admin
+  #when: iiab_admin_install    # Flag might be created in future?
+
+- name: Install dnsmasq -- configure LATER in 'network', after Stage 9
+  include_tasks: roles/network/tasks/dnsmasq.yml
+  #when: dnsmasq_install    # Flag might be used in future?
+
+- include_tasks: uuid.yml
+- include_tasks: ubermix.yml
+- include_tasks: hardware.yml    # Can run raspberry_pi.yml
 
 
 # Debian 10 "Buster" is apparently enabling AppArmor in 2019:
@@ -107,25 +53,6 @@
 #- name: Disable SELinux for this session (OS's other than debuntu, if needed)
 #  command: setenforce Permissive
 #  when: not is_debuntu and selinux_disabled is defined and selinux_disabled.changed
-
-
-##  DISCOVER PLATFORMS ######
-# Put conditional actions for hardware platforms here
-
-- include_tasks: raspberry_pi.yml
-  when: first_run and rpi_model != "none"
-
-- name: Check if the identifier for Intel's NUC6 built-in WiFi is present
-  shell: "lsusb | grep 8087:0a2b | wc | awk '{print $1}'"
-  register: usb_NUC6
-  ignore_errors: True
-
-- name: Download {{ iiab_download_url }}/iwlwifi-8000C-13.ucode to /lib/firmware for built-in WiFi on NUC6    # iiab_download_url is http://download.iiab.io/packages
-  get_url:
-    url: "{{ iiab_download_url }}/iwlwifi-8000C-13.ucode"
-    dest: /lib/firmware
-    timeout: "{{ download_timeout }}"
-  when: internet_available and usb_NUC6.stdout|int > 0
 
 
 - name: Recording STAGE 1 HAS COMPLETED ============================
