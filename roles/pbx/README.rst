@@ -6,9 +6,9 @@ This "pbx" playbook adds `Asterisk <https://asterisk.org/>`_ and `FreePBX <https
 
 The initial release (for IIAB 6.7 in February 2019) supported Ubuntu 18.04, Debian 9 "Stretch" — and experimentally, Raspberry Pi: `#1467 <https://github.com/iiab/iiab/issues/1467>`_
 
-*2021-08-02 GOOD NEWS: IIAB has upgraded from Asterisk 16.x to 18.x* (`docs <https://wiki.asterisk.org/wiki/display/AST/Asterisk+18+Documentation>`_).
+*2021-08-02 GOOD NEWS: IIAB has upgraded from Asterisk 16.x (released 2018-10-09) to 18.x (released 2020-10-20*, `docs <https://wiki.asterisk.org/wiki/display/AST/Asterisk+18+Documentation>`_).
 
-*2021-08-02 BAD NEWS: The latest versions of Ubuntu (20.04, 20.10, 21.04), Debian 11 "Bullseye" and the imminent Raspberry Pi OS 11 "Bullseye" all include PHP 7.4 — which does not work with FreePBX 15 — so we could use some help looking into 2021-06-21's FreePBX 16.0 Beta:* `#2897 <https://github.com/iiab/iiab/issues/2897#issuecomment-891371536>`_
+*2021-08-02 BAD NEWS: The latest versions of Ubuntu (20.04, 20.10, 21.04), Debian 11 "Bullseye" and the imminent Raspberry Pi OS 11 "Bullseye" all include PHP 7.4 — which does not work with FreePBX 15 — so we could use some help looking into 2021-06-21's FreePBX 16 Beta:* `#2897 <https://github.com/iiab/iiab/issues/2897#issuecomment-891371536>`_
 
 What Asterisk & FreePBX Do
 --------------------------
