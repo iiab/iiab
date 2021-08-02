@@ -1,0 +1,25 @@
+- name: Does 'ubermix' exist in /etc/lsb-release?
+  shell: grep -i ubermix /etc/lsb-release    # Pipe to cat to avoid red errors?
+  register: grep_ubermix
+  failed_when: False    # Universal way to hide alarmist red errors!
+  #ignore_errors: True
+  #check_mode: no
+
+- name: If so, install /etc/tmpfiles.d/iiab.conf to create /var/log subdirs on each boot, so {Apache, MongoDB, Munin} run on Ubermix (root:root, 0644 by default)
+  copy:
+    src: roles/1-prep/files/iiab.conf
+    dest: /etc/tmpfiles.d/
+    # owner: root
+    # group: root
+    # mode: 0644
+    force: yes
+  when: grep_ubermix.rc == 0    # 1 if absent in file, 2 if file doesn't exist
+
+# 2020-03-19: for KA Lite, but moved from roles/kalite/tasks/install.yml
+# This effectively does nothing at all on Ubuntu & Raspbian, where libgeos-*
+# pkgs are not installed FWIW.  But it's included to safeguard us across all
+# OS's, in case others OS's like Ubermix later appear.  See #1382 for details.
+# Removing pkgs libgeos-3.6.2 & libgeos-c1v5 fixed the situation on Ubermix!
+- name: Remove libgeos-* pkgs, avoiding KA Lite Django failure on Ubermix
+  shell: apt -y remove "libgeos-*"
+  when: grep_ubermix.rc == 0    # 1 if absent in file, 2 if file doesn't exist
