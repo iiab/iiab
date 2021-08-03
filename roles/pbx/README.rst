@@ -1,3 +1,14 @@
+.. |ss| raw:: html
+
+   <strike>
+
+.. |se| raw:: html
+
+   </strike>
+
+.. |nbsp| unicode:: 0xA0
+   :trim:
+
 ==========
 PBX README
 ==========
@@ -37,12 +48,12 @@ You can monitor the FreePBX service with command::
 
   systemctl status freepbx
 
-Raspberry Pi Known Issue
-------------------------
+Raspberry Pi Known Issues
+-------------------------
 
-As of 2019-02-14, "systemctl restart freepbx" failed more than 50% of the time when run on a `BIG-sized <http://wiki.laptop.org/go/IIAB/FAQ#What_services_.28IIAB_apps.29_are_suggested_during_installation.3F>`_ install of IIAB 6.7 on RPi 3 or RPi 3 B+.
+|ss| As of 2019-02-14, "systemctl restart freepbx" failed more than 50% of the time when run on a `BIG-sized <http://wiki.laptop.org/go/IIAB/FAQ#What_services_.28IIAB_apps.29_are_suggested_during_installation.3F>`_ install of IIAB 6.7 on RPi 3 or RPi 3 B+.
 
-It is possible that FreePBX restarts much more reliably when run on a MIN-sized install of IIAB?  Please `contact us <http://wiki.laptop.org/go/IIAB/FAQ#What_are_the_best_places_for_community_support.3F>`_ if you can assist here in any way: `#1493 <https://github.com/iiab/iiab/issues/1493>`_
+It is possible that FreePBX restarts much more reliably when run on a MIN-sized install of IIAB?  Please `contact us <http://wiki.laptop.org/go/IIAB/FAQ#What_are_the_best_places_for_community_support.3F>`_ if you can assist here in any way: `#1493 <https://github.com/iiab/iiab/issues/1493>`_ |se|
 
 Raspberry Pi Zero W Warning
 ---------------------------
