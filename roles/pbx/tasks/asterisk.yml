@@ -1,5 +1,6 @@
-- name: Asterisk - Install dependencies
-  include: asterisk_dependencies.yml
+# 2021-08-03: Not nec on Debian 11, and hopefully other OS's likewise
+#- name: Asterisk - Install dependencies
+#  include: asterisk_dependencies.yml
 
 - name: Asterisk - Download software to /opt/iiab/downloads
   get_url:
@@ -32,13 +33,10 @@
     extra_opts: [--strip-components=1]
     creates: "{{ asterisk_src_dir }}/Makefile"
 
-- name: Asterisk - Download mp3 decoder library into source tree
-  command: ./contrib/scripts/get_mp3_source.sh
-  args:
-    chdir: "{{ asterisk_src_dir }}"
-    creates: addons/mp3/mpg123.h
-
-# 2021-08-03: Experiment w/o aptitude
+# 2021-08-03: Asterisk's install_prereq script (stanza just below) installs
+# 'aptitude' regardless, within handle_debian() here:
+# https://github.com/asterisk/asterisk/blob/master/contrib/scripts/install_prereq#L262-L271
+#
 #- name: Asterisk - Install aptitude (otherwise install_prereq fails?)
 #  package:
 #    name: aptitude
@@ -48,6 +46,13 @@
   shell: export DEBIAN_FRONTEND=noninteractive && ./contrib/scripts/install_prereq install
   args:
     chdir: "{{ asterisk_src_dir }}"
+
+# 2021-08-03: Requires subversion (installed just above)
+- name: Asterisk - Download mp3 decoder library into source tree
+  command: ./contrib/scripts/get_mp3_source.sh
+  args:
+    chdir: "{{ asterisk_src_dir }}"
+    creates: addons/mp3/mpg123.h
 
 - name: Asterisk - Run the configure script
   command: ./configure --with-jansson-bundled
