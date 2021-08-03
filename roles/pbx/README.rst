@@ -10,6 +10,8 @@ The initial release (for IIAB 6.7 in February 2019) supported Ubuntu 18.04, Debi
 
 *2021-08-02 WORK IN PROGRESS: The latest versions of Ubuntu (20.04, 20.10, 21.04), Debian 11 "Bullseye" and the imminent Raspberry Pi OS 11 "Bullseye" all include PHP 7.4 — which does not work with FreePBX 15 — so we're now making the transition to FreePBX 16 whose Beta emerged on 2021-06-21:* `#2897 <https://github.com/iiab/iiab/issues/2897#issuecomment-891371536>`_, `PR #2899 <https://github.com/iiab/iiab/pull/2899>`_
 
+*PLEASE UNDERSTAND THIS MEANS THAT: IIAB no longer supports FreePBX 15 (i.e. Linux distros with PHP <= 7.3, e.g. on Raspberry Pi OS 10 "Buster").  Thank you for your understanding, as we look to the future together!*
+
 What Asterisk & FreePBX Do
 --------------------------
 
