@@ -42,6 +42,10 @@ Optionally, you may want to enable `chan_dongle <https://github.com/wdoekes/aste
 
   asterisk_chan_dongle: True
 
+If using PBX intensively, please adjust ``/etc/php/7.4/apache2/php.ini`` as outlined within `/opt/iiab/iiab/roles/www_options/tasks/main.yml <https://github.com/iiab/iiab/blob/master/roles/www_options/tasks/main.yml#L88-L131>`_ — much like other IIAB Apps that use::
+
+  nginx_high_php_limits: True
+
 After installing PBX as part of IIAB, please visit http://box.lan:83/freepbx and proceed with initial configuration (no login/password is required initially — you will be asked to set this up).
 
 You can monitor the FreePBX service with command::
