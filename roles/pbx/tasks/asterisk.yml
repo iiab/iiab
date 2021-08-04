@@ -2,26 +2,26 @@
 #- name: Asterisk - Install dependencies
 #  include: asterisk_dependencies.yml
 
-- name: Asterisk - Download software to /opt/iiab/downloads
+- name: Asterisk - Download software to {{ downloads_dir }}
   get_url:
     url: "{{ asterisk_url }}/{{ asterisk_src_file }}"
-    dest: "{{ downloads_dir }}/{{ asterisk_src_file }}"
+    dest: "{{ downloads_dir }}/{{ asterisk_src_file }}"    # e.g. /opt/iiab/downloads/asterisk-18-current.tar.gz
     timeout: "{{ download_timeout }}"
   when: internet_available
 
-- name: Asterisk - Check for /opt/iiab/downloads/{{ asterisk_src_file }}
+- name: Asterisk - Check for {{ downloads_dir }}/{{ asterisk_src_file }}
   stat:
     path: "{{ downloads_dir }}/{{ asterisk_src_file }}"
   register: asterisk_src
 
-- name: Asterisk - FAIL (force Ansible to exit) IF /opt/iiab/downloads/{{ asterisk_src_file }} doesn't exist
+- name: Asterisk - FAIL (force Ansible to exit) IF {{ downloads_dir }}/{{ asterisk_src_file }} doesn't exist
   fail:
-    msg: "{ downloads_dir }}/{{ asterisk_src_file }} is REQUIRED in order to install."
+    msg: "{{ downloads_dir }}/{{ asterisk_src_file }} is REQUIRED in order to install."
   when: not asterisk_src.stat.exists
 
-- name: Asterisk - Create install source directory
+- name: Asterisk - Create install source dir {{ asterisk_src_dir }}
   file:
-    path: "{{ asterisk_src_dir }}"
+    path: "{{ asterisk_src_dir }}"    # /opt/iiab/asterisk
     state: directory
 
 - name: Asterisk - Extract source
@@ -42,7 +42,7 @@
 #    name: aptitude
 #    state: latest
 
-- name: Asterisk - Ensure all dependencies are resolved - CAN TAKE 5 MIN OR LONGER!
+- name: Asterisk - Run 'install_prereq install' for dependencies - CAN TAKE 5 MIN OR LONGER!
   shell: export DEBIAN_FRONTEND=noninteractive && ./contrib/scripts/install_prereq install
   args:
     chdir: "{{ asterisk_src_dir }}"
@@ -59,7 +59,7 @@
   args:
     chdir: "{{ asterisk_src_dir }}"
 
-- name: Asterisk - Run make menuselect.makeopts
+- name: Asterisk - Run 'make menuselect.makeopts'
   command: make menuselect.makeopts
   args:
     chdir: "{{ asterisk_src_dir }}"
@@ -106,7 +106,7 @@
     name: asterisk
     state: present
 
-- name: Asterisk - Ensure user 'asterisk' exists, and belongs to the required groups
+- name: "Asterisk - Ensure user 'asterisk' exists, and belongs to groups: audio,dialout"
   user:
     name: asterisk
     group: asterisk
@@ -115,7 +115,7 @@
     system: yes
     append: yes
 
-- name: "Asterisk - Set ownership of 5 directories: /etc/asterisk, /var/lib/asterisk, /var/log/asterisk, /var/spool/asterisk, /usr/lib/asterisk (asterisk:asterisk)"
+- name: "Asterisk - Set ownership (asterisk:asterisk) for 5 directories: /etc/asterisk, /var/lib/asterisk, /var/log/asterisk, /var/spool/asterisk, /usr/lib/asterisk"
   file:
     dest: "{{ item }}"
     owner: asterisk
