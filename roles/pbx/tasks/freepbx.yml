@@ -1,10 +1,10 @@
 - name: FreePBX - Install dependencies
   include: freepbx_dependencies.yml
 
-- name: FreePBX - Download software to /opt/iiab/downloads
+- name: FreePBX - Download software to {{ downloads_dir }}/{{ freepbx_src_file }}
   get_url:
     url: "{{ freepbx_url }}/{{ freepbx_src_file }}"
-    dest: "{{ downloads_dir }}/{{ freepbx_src_file }}"
+    dest: "{{ downloads_dir }}/{{ freepbx_src_file }}"    # e.g. /opt/iiab/downloads/freepbx-16.0-latest.tgz
     timeout: "{{ download_timeout }}"
   when: internet_available
 
@@ -18,9 +18,9 @@
     msg: "{ downloads_dir }}/{{ freepbx_src_file }} is REQUIRED in order to install."
   when: not freepbx_src.stat.exists
 
-- name: FreePBX - Create install source directory
+- name: FreePBX - Create install source dir {{ freepbx_src_dir }}
   file:
-    path: "{{ freepbx_src_dir }}"
+    path: "{{ freepbx_src_dir }}"    # /opt/iiab/freepbx
     state: directory
 
 - name: FreePBX - Extract source
@@ -42,14 +42,14 @@
     src: roles/pbx/templates/pbx.patch
     dest: "{{ freepbx_src_dir }}/amp_conf/htdocs/admin/libraries/Composer/vendor/neitanod/forceutf8/src/ForceUTF8/Encoding.php"
 
-- name: FreePBX - Disable & Stop asterisk service
+- name: FreePBX - Disable & Stop 'asterisk' systemd service
   systemd:
     daemon_reload: yes
     name: asterisk
     enabled: no
     state: stopped
 
-- name: FreePBX - Add mysql user
+- name: FreePBX - Add MySQL user ({{ asterisk_db_user }})
   mysql_user:
     name: "{{ asterisk_db_user }}"
     password: "{{ asterisk_db_password }}"
@@ -60,7 +60,7 @@
     host: "{{ (asterisk_db_host == 'localhost') | ternary('localhost', ansible_default_ipv4.address) }}"
     state: present
 
-- name: FreePBX - Add mysql db
+- name: FreePBX - Add MySQL db ({{ asterisk_db_dbname }})
   mysql_db:
     name: "{{ asterisk_db_dbname }}"
     encoding: utf8
@@ -70,7 +70,7 @@
     # login_password: "{{ mysql_root_password }}"
     state: present
 
-- name: FreePBX - Add cdr mysql db
+- name: FreePBX - Add cdr MySQL db ({{ asterisk_db_cdrdbname }})
   mysql_db:
     name: "{{ asterisk_db_cdrdbname }}"
     encoding: utf8
@@ -78,7 +78,7 @@
     login_host: "{{ asterisk_db_host }}"
     state: present
 
-- name: FreePBX - Don't let freepbx take over the php sessions dir
+- name: FreePBX - Prevent /etc/asterisk/freepbx_chown.conf take over of /var/lib/php/sessions
   blockinfile:
     content: |
       [blacklist]
@@ -89,12 +89,12 @@
     group: asterisk
     create: yes
 
-- name: FreePBX - Create php sessions directory
+- name: FreePBX - Create new php sessions dir /var/lib/php/asterisk_sessions/
   file:
     path: /var/lib/php/asterisk_sessions/
     state: directory
 
-- name: FreePBX - Set ownership for php sessions directory
+- name: FreePBX - Set ownership for new php sessions dir (asterisk:asterisk)
   file:
     dest: /var/lib/php/asterisk_sessions/
     owner: asterisk
@@ -123,9 +123,6 @@
   template:
     src: odbc.ini.j2
     dest: /etc/odbc.ini
-    # owner: root
-    # group: root
-    # mode: '0644'
 
 - name: FreePBX - Install /etc/apache2/sites-available/freepbx.conf from template ({{ apache_user }}:{{ apache_user }}, 0644 by default)
   template:
@@ -133,7 +130,6 @@
     dest: /etc/apache2/sites-available/freepbx.conf
     owner: "{{ apache_user }}"
     group: "{{ apache_user }}"
-    # mode: '0644'
 
 - name: FreePBX - Add directive "Listen {{ pbx_http_port }}" to /etc/apache2/ports.conf
   lineinfile:
@@ -145,4 +141,3 @@
   template:
     src: freepbx.service.j2
     dest: /etc/systemd/system/freepbx.service
-    # mode: '0755'    # Let's go with '0644' per unit file norms
