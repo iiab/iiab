@@ -1,30 +1,31 @@
-- name: Asterisk - Install dependencies
-  include: asterisk_dependencies.yml
+# 2021-08-03: Asterisk's own install_prereq (below) handles these?
+#- name: Asterisk - Install dependencies
+#  include: asterisk_dependencies.yml
 
-- name: Asterisk - Download software to /opt/iiab/downloads
+- name: Asterisk - Download software to {{ downloads_dir }}
   get_url:
     url: "{{ asterisk_url }}/{{ asterisk_src_file }}"
-    dest: "{{ downloads_dir }}/{{ asterisk_src_file }}"
+    dest: "{{ downloads_dir }}/{{ asterisk_src_file }}"    # e.g. /opt/iiab/downloads/asterisk-18-current.tar.gz
     timeout: "{{ download_timeout }}"
   when: internet_available
 
-- name: Asterisk - Check for /opt/iiab/downloads/{{ asterisk_src_file }}
+- name: Asterisk - Check for {{ downloads_dir }}/{{ asterisk_src_file }}
   stat:
     path: "{{ downloads_dir }}/{{ asterisk_src_file }}"
   register: asterisk_src
 
-- name: Asterisk - FAIL (force Ansible to exit) IF /opt/iiab/downloads/{{ asterisk_src_file }} doesn't exist
+- name: Asterisk - FAIL (force Ansible to exit) IF {{ downloads_dir }}/{{ asterisk_src_file }} doesn't exist
   fail:
-    msg: "{ downloads_dir }}/{{ asterisk_src_file }} is REQUIRED in order to install."
+    msg: "{{ downloads_dir }}/{{ asterisk_src_file }} is REQUIRED in order to install."
   when: not asterisk_src.stat.exists
 
-- name: Asterisk - Create install source directory
-  file: 
-    path: "{{ asterisk_src_dir }}"
+- name: Asterisk - Create install source dir {{ asterisk_src_dir }}
+  file:
+    path: "{{ asterisk_src_dir }}"    # /opt/iiab/asterisk
     state: directory
 
 - name: Asterisk - Extract source
-  unarchive: 
+  unarchive:
     src: "{{ downloads_dir }}/{{ asterisk_src_file }}"
     dest: "{{ asterisk_src_dir }}"
     owner: root
@@ -32,53 +33,58 @@
     extra_opts: [--strip-components=1]
     creates: "{{ asterisk_src_dir }}/Makefile"
 
+# 2021-08-03: Asterisk's install_prereq script (stanza just below) installs
+# 'aptitude' regardless, within handle_debian() here:
+# https://github.com/asterisk/asterisk/blob/master/contrib/scripts/install_prereq#L262-L271
+#
+#- name: Asterisk - Install aptitude (otherwise install_prereq fails?)
+#  package:
+#    name: aptitude
+#    state: latest
+
+- name: Asterisk - Run 'install_prereq install' for dependencies - CAN TAKE 5 MIN OR LONGER!
+  shell: export DEBIAN_FRONTEND=noninteractive && ./contrib/scripts/install_prereq install
+  args:
+    chdir: "{{ asterisk_src_dir }}"
+
+# 2021-08-03: Requires subversion (installed just above)
 - name: Asterisk - Download mp3 decoder library into source tree
-  command: "./contrib/scripts/get_mp3_source.sh"
+  command: ./contrib/scripts/get_mp3_source.sh
   args:
     chdir: "{{ asterisk_src_dir }}"
-    creates: "addons/mp3/mpg123.h"
-
-- name: Asterisk - Install aptitude (otherwise install_prereq fails?)
-  package: 
-    name: aptitude
-    state: latest
-
-- name: Asterisk - Ensure all dependencies are resolved - CAN TAKE 5 MIN OR LONGER!
-  shell: export DEBIAN_FRONTEND=noninteractive && ./contrib/scripts/install_prereq install 
-  args:
-    chdir: "{{ asterisk_src_dir }}"
+    creates: addons/mp3/mpg123.h
 
 - name: Asterisk - Run the configure script
-  command: "./configure --with-jansson-bundled"
+  command: ./configure --with-jansson-bundled
   args:
     chdir: "{{ asterisk_src_dir }}"
 
-- name: Asterisk - Run make menuselect.makeopts
-  command: "make menuselect.makeopts"
+- name: Asterisk - Run 'make menuselect.makeopts'
+  command: make menuselect.makeopts
   args:
     chdir: "{{ asterisk_src_dir }}"
-    creates: "menuselect.makeopts"  
+    creates: menuselect.makeopts
 
 - name: Asterisk - Do a bit of menuselect configuration
   command: >
     menuselect/menuselect --enable app_macro --enable format_mp3
     --enable CORE-SOUNDS-EN-WAV --enable CORE-SOUNDS-EN-G722
     --enable EXTRA-SOUNDS-EN-WAV --enable EXTRA-SOUNDS-EN-G722 --enable EXTRA-SOUNDS-EN-GSM
-    --disable-category MENUSELECT_MOH        
+    --disable-category MENUSELECT_MOH
   args:
     chdir: "{{ asterisk_src_dir }}"
 
 - name: Asterisk - Run 'make' - CAN TAKE 30 MIN OR LONGER!
-  command: make 
+  command: make
   args:
     chdir: "{{ asterisk_src_dir }}"
-    creates: "defaults.h"
+    creates: defaults.h
 
 - name: Asterisk - Run 'make install' - CAN TAKE 2 MIN OR LONGER!
   command: make install
   args:
     chdir: "{{ asterisk_src_dir }}"
-    creates: "/usr/sbin/asterisk"
+    creates: /usr/sbin/asterisk
 
 - name: Asterisk - Run 'make config'
   command: make config
@@ -100,19 +106,19 @@
     name: asterisk
     state: present
 
-- name: Asterisk - Ensure user 'asterisk' exists, and belongs to the required groups
+- name: "Asterisk - Ensure user 'asterisk' exists, and belongs to groups: audio,dialout"
   user:
     name: asterisk
     group: asterisk
     groups: audio,dialout
-    home: "/var/lib/asterisk"
+    home: /var/lib/asterisk
     system: yes
     append: yes
 
-- name: 'Asterisk - Set ownership of 5 directories: /etc/asterisk, /var/lib/asterisk, /var/log/asterisk, /var/spool/asterisk, /usr/lib/asterisk'
-  file: 
-    dest: "{{ item }}" 
-    owner: asterisk 
+- name: "Asterisk - Set ownership (asterisk:asterisk) for 5 directories: /etc/asterisk, /var/lib/asterisk, /var/log/asterisk, /var/spool/asterisk, /usr/lib/asterisk"
+  file:
+    dest: "{{ item }}"
+    owner: asterisk
     group: asterisk
     recurse: yes
   with_items:
