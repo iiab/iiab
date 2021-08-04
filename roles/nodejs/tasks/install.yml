@@ -7,11 +7,12 @@
 # 2019-07-04: FOR A SOMEWHAT MORE MODERN "VERSION DETECTOR" SEE:
 # github.com/iiab/iiab/blob/master/roles/nextcloud/tasks/install.yml#L1-L40
 
-- name: Try to run 'nodejs -v' to get Node.js version
-  # 'node -v' doesn't work with older versions e.g. Ubuntu 16.04's nodejs 4.2.6
+- name: Try to run 'node -v' to get Node.js version
+  # 'node -v' doesn't work with older versions e.g. Ubuntu 16.04's Node.js 4.2.6
+  # 'nodejs -v' doesn't work with newer versions e.g. Node.js 16.x
   # Both below convert v10.15.1 to 10.x, but this is safer: (removes non-digits)
-  shell: nodejs -v | sed 's/[^0-9]*//' | sed 's/[^0-9].*/.x/'
-  #shell: nodejs -v | sed 's/^[vV]//' | sed 's/\..*/.x/'
+  shell: node -v | sed 's/[^0-9]*//' | sed 's/[^0-9].*/.x/'
+  #shell: node -v | sed 's/^[vV]//' | sed 's/\..*/.x/'
   register: nodejs_version_installed
 
 #- debug:
@@ -32,12 +33,13 @@
 #      /etc/iiab/local_vars.yml -- then re-run this IIAB installer.
 #  when: nodejs_version_installed is defined and nodejs_version_installed.stdout != nodejs_version and nodejs_version_installed.stderr == ""
 
+# 2021-08-04: Regardless, nodesource.com (below) overwrites /etc/apt/sources.list.d/nodesource.list
 # Forces < 16.x or > 16.x to be removed, ignored if file is absent
-- name: Remove /etc/apt/sources.list.d/nodesource.list if nodejs_version_installed.stdout is not {{ nodejs_version }}
-  file:
-    state: absent
-    path: /etc/apt/sources.list.d/nodesource.list
-  when: nodejs_version_installed is defined and nodejs_version_installed.stdout != nodejs_version and nodejs_version_installed.stdout != ""
+#- name: Remove /etc/apt/sources.list.d/nodesource.list if nodejs_version_installed.stdout is not {{ nodejs_version }}
+#  file:
+#    state: absent
+#    path: /etc/apt/sources.list.d/nodesource.list
+#  when: nodejs_version_installed is defined and nodejs_version_installed.stdout != nodejs_version and nodejs_version_installed.stdout != ""
 
 # BRUTAL but ensures consistency across OS's / distros like Raspbian Desktop & Ubermix that often include an older version of Node.js
 # Forces < 16.x or > 16.x to be uninstalled
@@ -45,9 +47,9 @@
   package:
     name: nodejs
     state: absent
-  when: nodejs_version_installed is defined and nodejs_version_installed.stdout != nodejs_version and nodejs_version_installed.stdout != ""
+  when: nodejs_version_installed is defined and nodejs_version_installed.stdout != nodejs_version
+  #when: nodejs_version_installed is defined and nodejs_version_installed.stdout != nodejs_version and nodejs_version_installed.stdout != ""
 
-# Forces == 16.x
 - name: Warn if Node.js {{ nodejs_version}} already installed & might be updated
   debug:
     msg: "WARN: YOUR Node.js {{ nodejs_version }} MIGHT NOW BE UPDATED USING nodesource.com"
@@ -65,12 +67,12 @@
 #    state: absent
 #  when: internet_available and is_debuntu
 
-- name: Set up Node.js {{ nodejs_version }} apt sources
+- name: Run 'curl -sL https://deb.nodesource.com/setup_{{ nodejs_version }} | bash -' to overwrite /etc/apt/sources.list.d/nodesource.list
   shell: curl -sL https://deb.nodesource.com/setup_{{ nodejs_version }} | bash -
-  args:
-    warn: no
-    creates: /etc/apt/sources.list.d/nodesource.list
-  when: internet_available
+  #args:
+  #  warn: no
+  #  creates: /etc/apt/sources.list.d/nodesource.list
+  #when: internet_available    # 2021-08-04: Better to fail & notify implementer!
   #when: internet_available and (is_debian_8 or is_debian_9 or is_ubuntu_16 or is_ubuntu_17)
   # NOT NEC TO TEST FOR is_raspbian_8 OR is_raspbian_9 AS /opt/iiab/iiab/vars/<OS>.yml
   # DEFINES THESE AS SUBSETS OF is_debian_8 OR is_debian_9 (FOR NOW!)
@@ -86,14 +88,8 @@
     name: nodejs
     state: latest
     #state: present
-  when: internet_available
+  #when: internet_available    # 2021-08-04: Better to fail & notify implementer!
   #when: internet_available and (is_debian_8 or is_debian_9 or is_ubuntu_16 or is_ubuntu_17)
-
-# - name: Set up & install Node.js {{ nodejs_version }} which includes /usr/bin/npm (redhat)
-#   shell: curl -sL https://rpm.nodesource.com/setup_{{ nodejs_version }} | bash -
-#   args:
-#     warn: no
-#   when: internet_available and is_redhat
 
 
 # 2018-07-14: BOTH STEPS ABOVE TAKE TIME, but Raspbian (apt offers npm

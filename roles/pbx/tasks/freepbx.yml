@@ -1,10 +1,10 @@
 - name: FreePBX - Install dependencies
   include: freepbx_dependencies.yml
 
-- name: FreePBX - Download software to {{ downloads_dir }}/{{ freepbx_src_file }}
+- name: FreePBX - Download {{ freepbx_url }}/{{ freepbx_src_file }} to {{ downloads_dir }}
   get_url:
     url: "{{ freepbx_url }}/{{ freepbx_src_file }}"
-    dest: "{{ downloads_dir }}/{{ freepbx_src_file }}"    # e.g. /opt/iiab/downloads/freepbx-16.0-latest.tgz
+    dest: "{{ downloads_dir }}"    # e.g. /opt/iiab/downloads/freepbx-16.0-latest.tgz
     timeout: "{{ download_timeout }}"
   when: internet_available
 
@@ -15,15 +15,15 @@
 
 - name: FreePBX - FAIL (force Ansible to exit) IF {{ downloads_dir }}/{{ freepbx_src_file }} doesn't exist
   fail:
-    msg: "{ downloads_dir }}/{{ freepbx_src_file }} is REQUIRED in order to install."
+    msg: "{{ downloads_dir }}/{{ freepbx_src_file }} is REQUIRED to install FreePBX."
   when: not freepbx_src.stat.exists
 
-- name: FreePBX - Create install source dir {{ freepbx_src_dir }}
+- name: FreePBX - Create source dir {{ freepbx_src_dir }}
   file:
     path: "{{ freepbx_src_dir }}"    # /opt/iiab/freepbx
     state: directory
 
-- name: FreePBX - Extract source
+- name: FreePBX - Extract to source dir (root:root)
   unarchive:
     src: "{{ downloads_dir }}/{{ freepbx_src_file }}"
     dest: "{{ freepbx_src_dir }}"
@@ -32,15 +32,18 @@
     extra_opts: [--strip-components=1]
     creates: "{{ freepbx_src_dir }}/install"
 
-- name: FreePBX - Patch FreePBX source - IIAB Bug 1685
-  patch:
-    src: roles/pbx/templates/71-freepbx-framework.patch
-    dest: "{{ freepbx_src_dir }}/amp_conf/htdocs/admin/libraries/BMO/Framework.class.php"
+# 2021-08-04: FreePBX 16 no longer needs this FreePBX 15 patch
+# - name: FreePBX - Patch FreePBX source - IIAB Bug 1685
+#   patch:
+#     src: roles/pbx/templates/71-freepbx-framework.patch
+#     dest: "{{ freepbx_src_dir }}/amp_conf/htdocs/admin/libraries/BMO/Framework.class.php"
 
-- name: FreePBX - Patch FreePBX source - wants [] not {}
-  patch:
-    src: roles/pbx/templates/pbx.patch
-    dest: "{{ freepbx_src_dir }}/amp_conf/htdocs/admin/libraries/Composer/vendor/neitanod/forceutf8/src/ForceUTF8/Encoding.php"
+# 2021-08-04: FreePBX 16 no longer needs this FreePBX 15 patch
+# - name: FreePBX - Patch FreePBX source - wants [] not {}
+#   patch:
+#     src: roles/pbx/templates/pbx.patch
+#     dest: "{{ freepbx_src_dir }}/amp_conf/htdocs/admin/libraries/Composer/vendor/neitanod/forceutf8/src/ForceUTF8/Encoding.php"
+
 
 - name: FreePBX - Disable & Stop 'asterisk' systemd service
   systemd:
@@ -101,19 +104,17 @@
     group: asterisk
     recurse: yes
 
-- name: FreePBX - Install (just run once) - CAN TAKE 12 MIN OR LONGER!
-  command: ./start_asterisk start
+
+- name: FreePBX - 2-stage install (just run once) - CAN TAKE 12 MIN OR LONGER!
+  command: "{{ item }}"
   args:
     chdir: "{{ freepbx_src_dir }}"
     creates: "{{ freepbx_install_dir }}"
+  with_items:
+    - ./start_asterisk start
+    - ./install -n --webroot {{ freepbx_install_dir }} --dbuser {{ asterisk_db_user }} --dbpass {{ asterisk_db_password }} --dbname {{ asterisk_db_dbname }} --cdrdbname {{ asterisk_db_cdrdbname }}
 
-- name: FreePBX - Install (just run once) - CAN TAKE 12 MIN OR LONGER!
-  command: ./install -n --webroot {{ freepbx_install_dir }} --dbuser {{ asterisk_db_user }} --dbpass {{ asterisk_db_password }} --dbname {{ asterisk_db_dbname }} --cdrdbname {{ asterisk_db_cdrdbname }}
-  args:
-    chdir: "{{ freepbx_src_dir }}"
-    creates: "{{ freepbx_install_dir }}"
-
-# 2021-08-02: FreePBX 16 seems to no longer need this FreePBX 15 patch?
+# 2021-08-04: FreePBX 16 no longer needs this FreePBX 15 patch
 # - name: FreePBX - Patch FreePBX source - disable get_magic_quotes_gpc()
 #   patch:
 #     src: roles/pbx/templates/pbx2.patch
@@ -124,11 +125,17 @@
     src: odbc.ini.j2
     dest: /etc/odbc.ini
 
+- name: FreePBX - Install /etc/systemd/system/freepbx.service systemd unit file from template (root:root, 0644 by default)
+  template:
+    src: freepbx.service.j2
+    dest: /etc/systemd/system/freepbx.service
+
+
 - name: FreePBX - Install /etc/apache2/sites-available/freepbx.conf from template ({{ apache_user }}:{{ apache_user }}, 0644 by default)
   template:
     src: freepbx.conf.j2
     dest: /etc/apache2/sites-available/freepbx.conf
-    owner: "{{ apache_user }}"
+    owner: "{{ apache_user }}"    # www-data
     group: "{{ apache_user }}"
 
 - name: FreePBX - Add directive "Listen {{ pbx_http_port }}" to /etc/apache2/ports.conf
@@ -136,8 +143,3 @@
     path: /etc/apache2/ports.conf
     line: "Listen {{ pbx_http_port }}"
     # insertafter: Listen 80
-
-- name: FreePBX - Install /etc/systemd/system/freepbx.service systemd unit file from template (root:root, 0644 by default)
-  template:
-    src: freepbx.service.j2
-    dest: /etc/systemd/system/freepbx.service
