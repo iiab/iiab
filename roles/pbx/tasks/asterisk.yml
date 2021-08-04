@@ -2,10 +2,10 @@
 #- name: Asterisk - Install dependencies
 #  include: asterisk_dependencies.yml
 
-- name: Asterisk - Download software to {{ downloads_dir }}
+- name: Asterisk - Download {{ asterisk_url }}/{{ asterisk_src_file }} to {{ downloads_dir }}
   get_url:
     url: "{{ asterisk_url }}/{{ asterisk_src_file }}"
-    dest: "{{ downloads_dir }}/{{ asterisk_src_file }}"    # e.g. /opt/iiab/downloads/asterisk-18-current.tar.gz
+    dest: "{{ downloads_dir }}"    # e.g. /opt/iiab/downloads/asterisk-18-current.tar.gz
     timeout: "{{ download_timeout }}"
   when: internet_available
 
@@ -16,15 +16,15 @@
 
 - name: Asterisk - FAIL (force Ansible to exit) IF {{ downloads_dir }}/{{ asterisk_src_file }} doesn't exist
   fail:
-    msg: "{{ downloads_dir }}/{{ asterisk_src_file }} is REQUIRED in order to install."
+    msg: "{{ downloads_dir }}/{{ asterisk_src_file }} is REQUIRED to install Asterisk."
   when: not asterisk_src.stat.exists
 
-- name: Asterisk - Create install source dir {{ asterisk_src_dir }}
+- name: Asterisk - Create source dir {{ asterisk_src_dir }}
   file:
     path: "{{ asterisk_src_dir }}"    # /opt/iiab/asterisk
     state: directory
 
-- name: Asterisk - Extract source
+- name: Asterisk - Extract to source dir (root:root)
   unarchive:
     src: "{{ downloads_dir }}/{{ asterisk_src_file }}"
     dest: "{{ asterisk_src_dir }}"
@@ -32,6 +32,7 @@
     group: root
     extra_opts: [--strip-components=1]
     creates: "{{ asterisk_src_dir }}/Makefile"
+
 
 # 2021-08-03: Asterisk's install_prereq script (stanza just below) installs
 # 'aptitude' regardless, within handle_debian() here:
@@ -100,6 +101,7 @@
   shell: ldconfig
   args:
     chdir: "{{ asterisk_src_dir }}"
+
 
 - name: Asterisk - Ensure group 'asterisk' exists
   group:
