@@ -1,6 +1,15 @@
-# 2021-08-03: Asterisk's own install_prereq (below) handles these?
+# 2021-08-05: Asterisk's own install_prereq (below) handles essentially all of these
 #- name: Asterisk - Install dependencies
 #  include: asterisk_dependencies.yml
+
+# BEWARE: 'systemctl is-active asterix' falsely reports 'inactive' even when systemd
+# is compiled in below!   FWIW: /opt/iiab/asterisk/contrib/systemd/asterisk.service
+# https://github.com/asterisk/asterisk/blob/master/contrib/systemd/asterisk.service
+
+- name: Asterisk - Install package 'libsystemd-dev' so Asterisk compiles in imperfect-but-improving systemd support -- if ./configure below places '#define HAVE_SYSTEMD 1' in /opt/iiab/asterisk/include/asterisk/autoconfig.h -- please later confirm with 'ldd /usr/sbin/asterisk | grep systemd' -- per https://community.asterisk.org/t/systemctl-start-asterisk-is-fail-with-timeout/81123/3
+  package:
+    name: libsystemd-dev
+    state: present
 
 - name: Asterisk - Download {{ asterisk_url }}/{{ asterisk_src_file }} to {{ downloads_dir }}
   get_url:
@@ -48,8 +57,7 @@
   args:
     chdir: "{{ asterisk_src_dir }}"
 
-# 2021-08-03: Requires subversion (installed just above)
-- name: Asterisk - Download mp3 decoder library into source tree
+- name: Asterisk - Download mp3 decoder library into source tree - requires 'subversion' installed just above
   command: ./contrib/scripts/get_mp3_source.sh
   args:
     chdir: "{{ asterisk_src_dir }}"
@@ -75,7 +83,7 @@
   args:
     chdir: "{{ asterisk_src_dir }}"
 
-- name: Asterisk - Run 'make' - CAN TAKE 30 MIN OR LONGER!
+- name: Asterisk - Run 'make' - CAN TAKE 8-30 MIN OR LONGER!
   command: make
   args:
     chdir: "{{ asterisk_src_dir }}"
@@ -98,7 +106,7 @@
     chdir: "{{ asterisk_src_dir }}"
 
 - name: Asterisk - Run 'ldconfig'
-  shell: ldconfig
+  command: ldconfig
   args:
     chdir: "{{ asterisk_src_dir }}"
 
@@ -108,7 +116,7 @@
     name: asterisk
     state: present
 
-- name: "Asterisk - Ensure user 'asterisk' exists, and belongs to groups: audio,dialout"
+- name: Asterisk - Ensure system user 'asterisk' has primary group 'asterisk', groups 'audio,dialout', home '/var/lib/asterisk'
   user:
     name: asterisk
     group: asterisk
@@ -117,7 +125,7 @@
     system: yes
     append: yes
 
-- name: "Asterisk - Set ownership (asterisk:asterisk) for 5 directories: /etc/asterisk, /var/lib/asterisk, /var/log/asterisk, /var/spool/asterisk, /usr/lib/asterisk"
+- name: Asterisk - Set ownership for 5 directories (asterisk:asterisk, recurse)
   file:
     dest: "{{ item }}"
     owner: asterisk
