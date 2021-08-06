@@ -125,7 +125,7 @@
 #     dest: "{{ freepbx_install_dir }}/admin/libraries/view.functions.php"
 
 
-- name: FreePBX - 4-step install (just run once) - CAN TAKE 3-12 MIN OR LONGER!
+- name: FreePBX - 2-step install (just run once) - CAN TAKE 3-12 MIN OR LONGER!
   command: "{{ item }}"
   args:
     chdir: "{{ freepbx_src_dir }}"
@@ -133,10 +133,10 @@
   with_items:
     - ./start_asterisk start
     - ./install -n --webroot {{ freepbx_install_dir }} --dbuser {{ asterisk_db_user }} --dbpass {{ asterisk_db_password }} --dbname {{ asterisk_db_dbname }} --cdrdbname {{ asterisk_db_cdrdbname }}
-    - /usr/sbin/asterisk -rx "core stop gracefully"    # 2021-08-05: For 1st run of enable-or-disable.yml, so 'systemctl status freepbx' doesn't show "Unable to run Pre-Asterisk hooks, because Asterisk is already running" -- allowing http://box:83/freepbx to connect to Asterix reliably/immediately -- even prior to the 1st reboot
     # - ./start_asterisk stop
-    # - killall -9 safe_asterisk    # 2021-08-05: Thanks to @jvonau's PR $2912, these 2 lines attempt a (brute force for now, not enough?!) workaround to intermittent
-    # - killall -9 asterisk         # #2908 install issue of 'systemctl status freepbx' showing "Unable to run Pre-Asterisk hooks, because Asterisk is already running"
+    # - killall -9 safe_asterisk    # 2021-08-05: These 2 lines from PR #2912 attempted a (brute force, not enough?!) workaround to frequent #2908 install
+    # - killall -9 asterisk         # annoyance 'systemctl status freepbx' showing "Unable to run Pre-Asterisk hooks, because Asterisk is already running"
+    # - /usr/sbin/asterisk -rx "core stop gracefully"
 
 # - name: 'FreePBX - fix file permissions for NGINX: /etc/freepbx.conf (0644), /var/log/asterisk/freepbx.log (0666)'
 #   file:
@@ -174,6 +174,13 @@
     dest: /etc/apache2/sites-available/freepbx.conf
     owner: "{{ apache_user }}"    # www-data
     group: "{{ apache_user }}"
+
+- name: FreePBX - Run 'systemctl restart freepbx' TWICE (THIS IS #1 OF 2) to get past 'systemctl status freepbx' glitch "Unable to run Pre-Asterisk hooks, because Asterisk is already running"
+  systemd:
+    daemon_reload: yes
+    name: freepbx
+    enabled: yes
+    state: restarted
 
 - name: FreePBX - Add directive "Listen {{ pbx_http_port }}" to /etc/apache2/ports.conf
   lineinfile:
