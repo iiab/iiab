@@ -1,6 +1,7 @@
 # https://wiki.freepbx.org/display/FOP/Installing+FreePBX+16+on+Debian+10.9
 # https://computingforgeeks.com/how-to-install-asterisk-16-with-freepbx-15-on-ubuntu-debian/
 # RPi: http://mghadam.blogspot.com/2021/03/install-asterisk-18-freepbx-15-on.html
+# 2012-2017: http://www.raspberry-asterisk.org
 
 - name: FreePBX - Install dependencies
   include: freepbx_dependencies.yml
@@ -56,6 +57,14 @@
 #     name: asterisk
 #     enabled: no
 #     state: stopped
+
+# 2021-08-05: Asterisk's systemd / systemctl support is getting there but Very
+# Imperfect (even when compiled in, as a result of package 'libsystemd-dev' at
+# top of asterisk.tml) so let's follow these "official" instructions for now:
+
+- name: FreePBX - Run 'update-rc.d -f asterisk remove' similar to 'systemctl disable asterisk' giving FreePBX full control during boot - not strictly required but recommended by https://wiki.freepbx.org/display/FOP/Installing+FreePBX+16+on+Debian+10.9
+  command: update-rc.d -f asterisk remove
+
 
 - name: FreePBX - Add MySQL user ({{ asterisk_db_user }})
   mysql_user:
@@ -116,7 +125,7 @@
 #     dest: "{{ freepbx_install_dir }}/admin/libraries/view.functions.php"
 
 
-- name: FreePBX - 4-step install (just run once) - CAN TAKE 12 MIN OR LONGER!
+- name: FreePBX - 2-step install (just run once) - CAN TAKE 3-12 MIN OR LONGER!
   command: "{{ item }}"
   args:
     chdir: "{{ freepbx_src_dir }}"
@@ -124,9 +133,10 @@
   with_items:
     - ./start_asterisk start
     - ./install -n --webroot {{ freepbx_install_dir }} --dbuser {{ asterisk_db_user }} --dbpass {{ asterisk_db_password }} --dbname {{ asterisk_db_dbname }} --cdrdbname {{ asterisk_db_cdrdbname }}
-    # - ./start_asterisk stop    
-    - killall -9 safe_asterisk    # 2021-08-05: Thanks to @jvonau's PR $2912, these 2 lines are a (brute force for now!) workaround to the intermittent #2908
-    - killall -9 asterisk         # install issue of 'systemctl status freepbx' showing "Unable to run Pre-Asterisk hooks, because Asterisk is already running"
+    # - ./start_asterisk stop
+    # - killall -9 safe_asterisk    # 2021-08-05: These 2 lines from PR #2912 attempted a brute force (not enough!) workaround for the #2908 annoyance on 1st
+    # - killall -9 asterisk         # install, of 'systemctl status freepbx' showing "Unable to run Pre-Asterisk hooks, because Asterisk is already running"
+    # - /usr/sbin/asterisk -rx "core stop gracefully"
 
 # - name: 'FreePBX - fix file permissions for NGINX: /etc/freepbx.conf (0644), /var/log/asterisk/freepbx.log (0666)'
 #   file:
@@ -147,7 +157,7 @@
 #     # - /var/www/html/freepbx/admin/assets/less/cache
 #     - /var/spool/asterisk/cache
 
-- name: FreePBX - Install /etc/odbc.ini from template (root:root, 0644 by default)
+- name: FreePBX - Install /etc/odbc.ini from template (root:root, 0644 by default) - in future consider compiling ODBC driver for aarch64 per http://mghadam.blogspot.com/2021/03/install-asterisk-18-freepbx-15-on.html ?
   template:
     src: odbc.ini
     dest: /etc/
@@ -156,6 +166,13 @@
   template:
     src: freepbx.service
     dest: /etc/systemd/system/
+
+- name: FreePBX - Run 'systemctl restart freepbx' TWICE (THIS IS #1 OF 2) to get past 'systemctl status freepbx' glitch "Unable to run Pre-Asterisk hooks, because Asterisk is already running"
+  systemd:
+    daemon_reload: yes
+    name: freepbx
+    enabled: yes
+    state: restarted
 
 
 - name: FreePBX - Install /etc/apache2/sites-available/freepbx.conf from template ({{ apache_user }}:{{ apache_user }}, 0644 by default)
