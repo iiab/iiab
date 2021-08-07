@@ -134,13 +134,13 @@
     - ./start_asterisk start
     - ./install -n --webroot {{ freepbx_install_dir }} --dbuser {{ asterisk_db_user }} --dbpass {{ asterisk_db_password }} --dbname {{ asterisk_db_dbname }} --cdrdbname {{ asterisk_db_cdrdbname }}
 
-- name: "2021-08-06: Does 'fwconsole stop' gracefully stop both Asterisk processes, to avoid #2915 \"Unable to run Pre-Asterisk hooks, because Asterisk is already running\" in 'journalctl -u freepbx' logs?"
+- name: "Run 'fwconsole stop' to stop both Asterisk processes -- this avoids \"Unable to run Pre-Asterisk hooks, because Asterisk is already running\" in 'journalctl -u freepbx' logs"
   command: fwconsole stop
   # command: "{{ item }}"
   # with_items:
   #   # - ./start_asterisk stop
-  #   # - killall -9 safe_asterisk    # 2021-08-05: These 2 lines from PR #2912 attempt a brute force workaround for #2908 annoyances on 1st install,
-  #   # - killall -9 asterisk         # i.e. 'systemctl status freepbx' showing "Unable to run Pre-Asterisk hooks, because Asterisk is already running"
+  #   # - killall -9 safe_asterisk    # 2021-08-05: These 2 lines from PR #2912 brute force a workaround for #2908 #2913 #2915
+  #   # - killall -9 asterisk         # glitches on 1st install.  In the end, above 'fwconsole stop' does the job more gracefully.
   #   # - /usr/sbin/asterisk -rx "core stop gracefully"
   #   # - fwconsole reload
   #   - fwconsole stop
@@ -190,11 +190,15 @@
     src: freepbx.service
     dest: /etc/systemd/system/
 
-- name: "2021-08-06: Try \"$amp_conf['AMPASTERISKWEBUSER'] = 'www-data';\" in /etc/freepbx.conf for #2916 registration cron fix ?'"
-  lineinfile:
-    path: /etc/freepbx.conf
-    insertafter: '^<\?php$'    # Match exact line '<?php'
-    line: "$amp_conf['AMPASTERISKWEBUSER'] = 'www-data';"
+# FreePBX's initial registration tries to set up a cron job and fails:
+# "Exception: Trying to edit user asterisk, when I'm running as www-data"
+# https://github.com/iiab/iiab/pull/2916#issuecomment-894585322
+# Hacking /etc/freepbx.conf in this way does not help in the end...
+# - name: "2021-08-06: Try \"$amp_conf['AMPASTERISKWEBUSER'] = 'www-data';\" in /etc/freepbx.conf for #2916 registration cron fix ?'"
+#   lineinfile:
+#     path: /etc/freepbx.conf
+#     insertafter: '^<\?php$'    # Match exact line '<?php'
+#     line: "$amp_conf['AMPASTERISKWEBUSER'] = 'www-data';"
 
 
 # - name: FreePBX - Install /etc/apache2/sites-available/freepbx.conf from template ({{ apache_user }}:{{ apache_user }}, 0644 by default)
