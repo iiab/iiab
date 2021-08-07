@@ -22,7 +22,7 @@ Note that `/opt/iiab/jupyterhub` is a Python 3 virtual environment, that can be 
 source /opt/iiab/jupyterhub/bin/activate
 ```
 
-### Known Issues:
+### Known Issues
 
 * 2021-08-07: The page that allows you to reset/change your own password is not accessible.  Likewise Admin users cannot reset/change the password of any _individual_ user at this time.  <sub><sub>[#2918](https://github.com/iiab/iiab/pull/2918)</sub></sub>
   * If necessary, a Linux administrator can delete the `/passwords.dbm.db` file at the very top of your Linux filesystem, allowing all JupyterHub users to (re)create new passwords.  This does work, but is very heavy-handed.  <sub><sub>[PR #2892](https://github.com/iiab/iiab/pull/2892#issuecomment-890551682)</sub></sub>
