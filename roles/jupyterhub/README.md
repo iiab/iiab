@@ -14,7 +14,9 @@
 
 ### Settings
 
-Linux administrators please see `/opt/iiab/jupyterhub/etc/jupyterhub/jupyterhub_config.py` which originates from https://github.com/iiab/iiab/blob/master/roles/jupyterhub/templates/jupyterhub_config.py
+Linux administrators please see `/opt/iiab/jupyterhub/etc/jupyterhub/jupyterhub_config.py` which originates from:
+
+https://github.com/iiab/iiab/blob/master/roles/jupyterhub/templates/jupyterhub_config.py
 
 Note that `/opt/iiab/jupyterhub` is a Python 3 virtual environment, that can be activated with the usual formula:
 
