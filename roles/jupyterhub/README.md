@@ -11,3 +11,9 @@
 * Individual student folders are created in ``/var/lib/private/`` on the Internet-in-a-Box (IIAB) server:
   * A student will only be able to see their own work — they do not have privileges outside of their own folder.
   * Students may upload Jupyter Notebooks to the IIAB server, and download the current state of their work via a normal browser.
+
+### Known Issues:
+
+* 2021-08-07: The page that allows you to reset/change your own password is not accessible.  Likewise Admin users cannot reset/change the password of any _individual_ user at this time.
+  * If necessary, a Linux administrator can delete the `/passwords.dbm.db` file at the very top of your Linux filesystem, allowing all JupyterHub users to (re)create new passwords.  This does work, but is very heavy-handed ([#2016](https://github.com/iiab/iiab/pull/2892#issuecomment-890551682)).
+* 2021-08-07: Teachers (i.e. Admin users) cannot currently access the very helpful "administrator's page" discussed at [JupyterHub FAQ >> "How do I manage users?"](https://jupyterhub.readthedocs.io/en/stable/getting-started/institutional-faq.html#how-do-i-manage-users) and [roles/jupyterhub/templates/jupyterhub_config.py#L1049-L1054 >> "Admin users have extra privileges"](https://github.com/iiab/iiab/blob/d0e8e048347bf46c02a2cdb0da9c5cd0c489fe40/roles/jupyterhub/templates/jupyterhub_config.py#L1049-L1054).
