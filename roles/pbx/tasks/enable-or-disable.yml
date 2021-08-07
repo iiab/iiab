@@ -15,33 +15,41 @@
   when: not pbx_enabled
 
 
-# - name: Enable http://box:{{ pbx_http_port }}/freepbx via Apache, if pbx_enabled    # http://box:83/freepbx
-#   command: a2ensite freepbx.conf
-#   when: pbx_enabled
+- block:
 
-# - name: Disable http://box:{{ pbx_http_port }}/freepbx via Apache, if not pbx_enabled
-#   command: a2dissite freepbx.conf
-#   when: not pbx_enabled
+  - name: Enable http://box:{{ pbx_http_port }}/freepbx via Apache, if pbx_enabled    # http://box:83/freepbx
+    command: a2ensite freepbx.conf
+    when: pbx_enabled
 
-# - name: Restart Apache service ({{ apache_service }})
-#   systemd:
-#     name: "{{ apache_service }}"    # apache2
-#     state: restarted
+  - name: Disable http://box:{{ pbx_http_port }}/freepbx via Apache, if not pbx_enabled
+    command: a2dissite freepbx.conf
+    when: not pbx_enabled
+
+  - name: Restart Apache service ({{ apache_service }})
+    systemd:
+      name: "{{ apache_service }}"    # apache2
+      state: restarted
+
+  when: not pbx_try_nginx
 
 
-- name: Enable http://box/freepbx via NGINX, by installing {{ nginx_conf_dir }}/freepbx-nginx.conf from template
-  template:
-    src: freepbx-nginx.conf.j2
-    dest: "{{ nginx_conf_dir }}/freepbx-nginx.conf"    # /etc/nginx/conf.d
-  when: pbx_enabled
+- block:
 
-- name: Disable http://box/freepbx via NGINX, by removing {{ nginx_conf_dir }}/freepbx-nginx.conf
-  file:
-    path: "{{ nginx_conf_dir }}/freepbx-nginx.conf"
-    state: absent
-  when: not pbx_enabled
+  - name: Enable http://box/freepbx via NGINX, by installing {{ nginx_conf_dir }}/freepbx-nginx.conf from template
+    template:
+      src: freepbx-nginx.conf.j2
+      dest: "{{ nginx_conf_dir }}/freepbx-nginx.conf"    # /etc/nginx/conf.d
+    when: pbx_enabled
 
-- name: Restart 'nginx' systemd service
-  systemd:
-    name: nginx
-    state: restarted
+  - name: Disable http://box/freepbx via NGINX, by removing {{ nginx_conf_dir }}/freepbx-nginx.conf
+    file:
+      path: "{{ nginx_conf_dir }}/freepbx-nginx.conf"
+      state: absent
+    when: not pbx_enabled
+
+  - name: Restart 'nginx' systemd service
+    systemd:
+      name: nginx
+      state: restarted
+
+  when: pbx_try_nginx
