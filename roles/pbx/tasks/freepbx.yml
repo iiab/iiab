@@ -134,7 +134,7 @@
     - ./start_asterisk start
     - ./install -n --webroot {{ freepbx_install_dir }} --dbuser {{ asterisk_db_user }} --dbpass {{ asterisk_db_password }} --dbname {{ asterisk_db_dbname }} --cdrdbname {{ asterisk_db_cdrdbname }}
 
-- name: "Does 'fwconsole stop' gracefully stop both Asterisk processes, to avoid #2915 \"Unable to run Pre-Asterisk hooks, because Asterisk is already running\" in 'journalctl -u freepbx' logs?"
+- name: "2021-08-06: Does 'fwconsole stop' gracefully stop both Asterisk processes, to avoid #2915 \"Unable to run Pre-Asterisk hooks, because Asterisk is already running\" in 'journalctl -u freepbx' logs?"
   command: fwconsole stop
   # command: "{{ item }}"
   # with_items:
@@ -150,6 +150,16 @@
   #   # - fwconsole ma delete firewall
   #   # - fwconsole reload
   #   # - fwconsole restart
+
+# 2021-08-06: This stanza might be removed in future, if Asterix/FreePBX fix
+# this install glitch in a future release?  FYI #2908, #2912, #2913 attempts
+# didn't work.  This workaround helps: https://github.com/iiab/iiab/pull/2915
+# - name: FreePBX - Run 'systemctl restart freepbx' TWICE (THIS IS 1 OF 2) to get past 'systemctl status freepbx' glitch "Unable to run Pre-Asterisk hooks, because Asterisk is already running"
+#   systemd:
+#     daemon_reload: yes
+#     name: freepbx
+#     enabled: yes
+#     state: restarted
 
 # - name: 'FreePBX - fix file permissions for NGINX: /etc/freepbx.conf (0644), /var/log/asterisk/freepbx.log (0666)'
 #   file:
@@ -180,15 +190,11 @@
     src: freepbx.service
     dest: /etc/systemd/system/
 
-# 2021-08-06: This stanza might be removed in future, if Asterix/FreePBX fix
-# the install glitch in a future release.  FYI #2908, #2912, #2913 attempts
-# didn't work.   This one did: https://github.com/iiab/iiab/pull/2915
-# - name: FreePBX - Run 'systemctl restart freepbx' TWICE (THIS IS 1 OF 2) to get past 'systemctl status freepbx' glitch "Unable to run Pre-Asterisk hooks, because Asterisk is already running"
-#   systemd:
-#     daemon_reload: yes
-#     name: freepbx
-#     enabled: yes
-#     state: restarted
+- name: "2021-08-06: Try \"$amp_conf['AMPASTERISKWEBUSER'] = 'www-data';\" in /etc/freepbx.conf for #2916 registration cron fix ?'"
+  lineinfile:
+    path: /etc/freepbx.conf
+    insertafter: '^<\?php$'    # Match exact line '<?php'
+    line: "$amp_conf['AMPASTERISKWEBUSER'] = 'www-data';"
 
 
 # - name: FreePBX - Install /etc/apache2/sites-available/freepbx.conf from template ({{ apache_user }}:{{ apache_user }}, 0644 by default)
