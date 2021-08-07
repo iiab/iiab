@@ -12,6 +12,16 @@
   * A student will only be able to see their own work — they do not have privileges outside of their own folder.
   * Students may upload Jupyter Notebooks to the IIAB server, and download the current state of their work via a normal browser.
 
+### Settings
+
+Linux administrators please see `/opt/iiab/jupyterhub/etc/jupyterhub/jupyterhub_config.py` which originates from https://github.com/iiab/iiab/blob/master/roles/jupyterhub/templates/jupyterhub_config.py
+
+Note that `/opt/iiab/jupyterhub` is a Python 3 virtual environment, that can be activated with the usual formula:
+
+```
+source /opt/iiab/jupyterhub/bin/activate
+```
+
 ### Known Issues:
 
 * 2021-08-07: The page that allows you to reset/change your own password is not accessible.  Likewise Admin users cannot reset/change the password of any _individual_ user at this time.
