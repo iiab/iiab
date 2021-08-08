@@ -2,13 +2,13 @@
 
 1. Initial testing strategy (December 2019 - February 2020) was to move NGINX to [port 80](https://github.com/iiab/iiab/wiki/IIAB-Networking#list-of-ports--services), and proxy everything to Apache on [port 8090](https://github.com/iiab/iiab/wiki/IIAB-Networking#list-of-ports--services) &mdash; creating "Shims" for each IIAB App/Service in *Section iii.* below.
 
-   Until "Native" NGINX is later implemented for each such IIAB App/Service &mdash; allowing each to move up to *Section ii.* below.
+   Until "Native" NGINX was later implemented for each such IIAB App/Service &mdash; allowing each to move up to *Section ii.* below.
 
-   And potentially later moving each up to *Section i.* if its Apache support is dropped!
+   And progressively later moving each up to *Section i.* when its Apache support was dropped.
 
    (Background: IIAB Apps/Services are generally [Ansible roles](https://github.com/iiab/iiab/wiki/IIAB-Contributors-Guide#ansible) that live in [/opt/iiab/iiab/roles](https://github.com/iiab/iiab/tree/master/roles))
 
-2. Without PHP available via FastCGI, any function at all for PHP-based applications validates NGINX.
+2. Without PHP available via FastCGI, any function at all for PHP-based applications validated NGINX.
 
 3. Current state of IIAB App/Service migrations as of 2021-08-08: *(SEE ALSO [#2762](https://github.com/iiab/iiab/issues/2762))*
 
