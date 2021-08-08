@@ -1,13 +1,13 @@
-- name: FreePBX - Install ~19 dependencies (run 'php -m' or 'php -i' to verify PHP modules)
+- name: FreePBX - Install wget, git, unixodbc, sudo, net-tools, cron, sox + ~12 PHP dependencies (run 'php -m' or 'php -i' to verify PHP modules)
   package:
     name:
       - wget
       - git
-      - unixodbc     # for Asterisk CDR (Call Detail Records)
-      - sudo         # required by FreePBX install script
-      - net-tools    # required by FWConsole (command-line utility, that controls FreePBX)
-      - cron         # required by FreePBX UCP package (User Control Panel)
-      - sox          # required for CDR web-playback
+      - unixodbc     # For Asterisk CDR (Call Detail Records)
+      - sudo         # Required by FreePBX install script
+      - net-tools    # Required by FWConsole (command-line utility, that controls FreePBX)
+      - cron         # Required by FreePBX UCP package (User Control Panel)
+      - sox          # Required for CDR web-playback
       #- php{{ php_version }}            # Basically drags in phpX.Y-cgi (already below!)
       - php{{ php_version }}-bcmath      # Likewise installed in nextcloud/tasks/install.yml, wordpress/tasks/install.yml
       - php{{ php_version }}-cgi
@@ -27,13 +27,6 @@
       #- python-mysqldb        # https://github.com/Yannik/ansible-role-freepbx/blob/master/tasks/freepbx.yml#L33
     state: latest
 
-- name: "FreePBX - Install packages: libapache2-mod-php, libapache2-mpm-itk - if not pbx_try_nginx"
-  package:
-    name:
-      - libapache2-mod-php    # NOTE duplication: roles/httpd/tasks.install.yml installs libapache2-mod-php{{ php_version }} ostensibly for "Elgg, Moodle, etc"
-      - libapache2-mpm-itk    # To serve FreePBX through a VirtualHost as asterisk user (#2914: Is this possible via NGINX?)
-  when: not pbx_try_nginx
-
 # For PHP >= 8.0: phpX.Y-json is baked into PHP itself.
 # For PHP <  8.0: phpX.Y-json auto-installed by phpX.Y-fpm AND phpX.Y-cli in 3-base-server's nginx/tasks/install.yml, as confirmed by: apt rdepends phpX.Y-json
 #
@@ -42,3 +35,21 @@
 #    name: php{{ php_version }}-json
 #    state: present
 #  when: php_version is version('8.0', '<')
+
+- name: "FreePBX - Install Apache packages: {{ apache_service }}, libapache2-mod-php, libapache2-mpm-itk - if not pbx_try_nginx"
+  package:
+    name:
+      - "{{ apache_service }}"    # 2021-08-07: Install apache2 directly, as we prepare to deprecate roles/httpd
+      - libapache2-mod-php        # NOTE duplication: roles/httpd/tasks.install.yml installed libapache2-mod-php{{ php_version }} ostensibly for "Elgg, Moodle, etc"
+      - libapache2-mpm-itk        # To serve FreePBX through a VirtualHost as asterisk user (#2914: Is this possible via NGINX?)
+  when: not pbx_try_nginx
+
+# - name: 'Enable 5 Apache modules, as with "a2enmod" command: headers, proxy, proxy_html, proxy_http, rewrite (for http://box/kiwix, http://box/kolibri, http://box/nodered, etc)'
+#   apache2_module:
+#     name: "{{ item }}"
+#   with_items:
+#     - headers
+#     - proxy
+#     - proxy_html
+#     - proxy_http
+#     - rewrite
