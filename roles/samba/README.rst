@@ -3,13 +3,13 @@ Samba README
 
 Do you want your Internet-in-a-Box (IIAB) to act as a file server for your classroom or school?
 
-If `Samba <https://www.samba.org/samba/docs/>`_ is installed and enabled as part of your IIAB's `/etc/iiab/local_vars.yml <https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it.3F>`_, your IIAB server can advertise a shared "public" folder, available to Windows machines on your network.
+If `Samba <https://www.samba.org/samba/docs/>`_ is installed and enabled as part of your IIAB's `/etc/iiab/local_vars.yml <https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it.3F>`_, your IIAB server can advertise a shared "public" folder, available to Windows PC's and laptops on your network.
 
 Default Permissions
 -------------------
 
 - Users may read and write to the "public" shared folder.
-- The are forced to store their files as a user who has no ability to log on to the server.
+- They are forced to store their files as a user who has no ability to log on to the server.
 - The user, with no ability to log on, has a password which is very difficult to guess e.g. ``verylong%and$hard^to@guess``
 
 Security
