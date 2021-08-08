@@ -55,7 +55,7 @@
       * openvpn
       * pbx [*, recommends Apache for now, as in Section iii., [#2914](https://github.com/iiab/iiab/issues/2914)]
       * phpmyadmin [*, requires Apache for now, as in Section iii.]
-      * samba [*]
+      * samba [*, [PR #2923](https://github.com/iiab/iiab/pull/2923)]
       * sshd
       * transmission
       * vnstat
