@@ -125,9 +125,6 @@
 #     dest: "{{ freepbx_install_dir }}/admin/libraries/view.functions.php"
 
 
-# - pause:
-
-
 - name: FreePBX - 2-step install (just run once) - CAN TAKE 3-12 MIN OR LONGER!
   command: "{{ item }}"
   args:
@@ -137,26 +134,24 @@
     - ./start_asterisk start
     - ./install -n --webroot {{ freepbx_install_dir }} --dbuser {{ asterisk_db_user }} --dbpass {{ asterisk_db_password }} --dbname {{ asterisk_db_dbname }} --cdrdbname {{ asterisk_db_cdrdbname }}
 
-- name: "Run 'fwconsole stop' to stop both Asterisk processes -- this avoids \"Unable to run Pre-Asterisk hooks, because Asterisk is already running\" in 'journalctl -u freepbx' logs"
-  command: fwconsole stop
-  # command: "{{ item }}"
-  # with_items:
-  #   # - ./start_asterisk stop
-  #   # - killall -9 safe_asterisk    # 2021-08-05: These 2 lines from PR #2912 brute force a workaround for #2908 #2913 #2915
-  #   # - killall -9 asterisk         # glitches on 1st install.  In the end, above 'fwconsole stop' does the job more gracefully.
-  #   # - /usr/sbin/asterisk -rx "core stop gracefully"
-  #   # - fwconsole reload
-  #   - fwconsole stop
-  #   # - fwconsole restart
-  #   # - fwconsole ma disablerepo commercial
-  #   # - fwconsole ma installall
-  #   # - fwconsole ma delete firewall
-  #   # - fwconsole reload
-  #   # - fwconsole restart
+- name: "Run 'fwconsole stop' and 'killall -9 safe_asterisk' to stop both Asterisk processes -- this avoids \"Unable to run Pre-Asterisk hooks, because Asterisk is already running\" in 'journalctl -u freepbx' logs"
+  command: "{{ item }}"
+  with_items:
+    - fwconsole stop
+    - killall -9 safe_asterisk    # 2021-08-08: Stronger medicine needed for 64-bit Ubuntu Server 21.04 on RPi 4.  Originally from @jvonau's PR #2912.
+    # - killall -9 asterisk       # 2021-08-05: Also from @jvonau's PR #2912, to brute force this.  In the end, above 'fwconsole stop' works more gracefully.
+    # - ./start_asterisk stop     # Buggy!
+    # - /usr/sbin/asterisk -rx "core stop gracefully"
+    # - fwconsole reload
+    # - fwconsole restart
+    # - fwconsole ma disablerepo commercial
+    # - fwconsole ma installall
+    # - fwconsole ma delete firewall
+    # - fwconsole reload
+    # - fwconsole restart
 
-# 2021-08-06: This stanza might be removed in future, if Asterix/FreePBX fix
-# this install glitch in a future release?  FYI #2908, #2912, #2913 attempts
-# didn't work.  This workaround helps: https://github.com/iiab/iiab/pull/2915
+# 2021-08-06: This stanza works, but above is more graceful.  (FYI PRs #2908,
+# #2912, #2913 didn't quite work -- whereas this PR #2915 at least worked!)
 # - name: FreePBX - Run 'systemctl restart freepbx' TWICE (THIS IS 1 OF 2) to get past 'systemctl status freepbx' glitch "Unable to run Pre-Asterisk hooks, because Asterisk is already running"
 #   systemd:
 #     daemon_reload: yes
@@ -193,29 +188,32 @@
     src: freepbx.service
     dest: /etc/systemd/system/
 
-# FreePBX's initial page (Admin user registration) tries to set up a cron job and
-# fails: "Exception: Trying to edit user asterisk, when I'm running as www-data"
-# DETAILS: https://github.com/iiab/iiab/pull/2916#issuecomment-894585322
-# FWIW hacking /etc/freepbx.conf in this way does not help in the end...
+
+# For 'pbx_try_nginx: True' -- FreePBX's initial page (Admin user registration)
+# tries to set up a cron job but fails:
+#   "Exception: Trying to edit user asterisk, when I'm running as www-data"
+# #2916 DETAILS: https://github.com/iiab/iiab/pull/2916#issuecomment-894585322
+# FWIW hacking /etc/freepbx.conf (lineinfile or manually) did not solve it...
 # - name: "2021-08-06: Try \"$amp_conf['AMPASTERISKWEBUSER'] = 'www-data';\" in /etc/freepbx.conf for #2916 registration cron fix ?'"
 #   lineinfile:
 #     path: /etc/freepbx.conf
 #     insertafter: '^<\?php$'    # Match exact line '<?php'
 #     line: "$amp_conf['AMPASTERISKWEBUSER'] = 'www-data';"
+#   when: pbx_try_nginx
 
 
 - block:
 
-  - name: FreePBX - Install /etc/apache2/sites-available/freepbx.conf from template ({{ apache_user }}:{{ apache_user }}, 0644 by default)
+  - name: FreePBX - Install /etc/{{ apache_service }}/sites-available/freepbx.conf from template ({{ apache_user }}:{{ apache_user }}, 0644 by default)
     template:
       src: freepbx.conf.j2
-      dest: /etc/apache2/sites-available/freepbx.conf
+      dest: /etc/{{ apache_service }}/sites-available/freepbx.conf    # apache2
       owner: "{{ apache_user }}"    # www-data
       group: "{{ apache_user }}"
 
-  - name: FreePBX - Add directive "Listen {{ pbx_http_port }}" to /etc/apache2/ports.conf
+  - name: FreePBX - Add directive "Listen {{ pbx_http_port }}" to /etc/{{ apache_service }}/ports.conf
     lineinfile:
-      path: /etc/apache2/ports.conf
+      path: /etc/{{ apache_service }}/ports.conf
       line: "Listen {{ pbx_http_port }}"
       # insertafter: Listen 80
 
