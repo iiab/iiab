@@ -35,13 +35,31 @@
 
 - block:
 
-  - name: Enable http://box/freepbx via NGINX, by installing {{ nginx_conf_dir }}/freepbx-nginx.conf from template
+  - name: Install /etc/php/{{ php_version }}/fpm/pool.d/asterisk.conf converted from www.conf for user 'asterisk', if pbx_enabled
+    copy:
+      src: roles/pbx/templates/asterisk.conf
+      dest: /etc/php/{{ php_version }}/fpm/pool.d/asterisk.conf
+    when: pbx_enabled
+
+  - name: Remove /etc/php/{{ php_version }}/fpm/pool.d/asterisk.conf, if not pbx_enabled
+    file:
+      path: /etc/php/{{ php_version }}/fpm/pool.d/asterisk.conf
+      state: absent
+    when: not pbx_enabled
+
+  - name: Enable & Restart 'php{{ php_version }}-fpm' systemd service
+    systemd:
+      name: php{{ php_version }}-fpm
+      state: restarted
+      enabled: yes
+
+  - name: Enable http://box/freepbx via NGINX, by installing {{ nginx_conf_dir }}/freepbx-nginx.conf from template, if pbx_enabled
     template:
       src: freepbx-nginx.conf.j2
       dest: "{{ nginx_conf_dir }}/freepbx-nginx.conf"    # /etc/nginx/conf.d
     when: pbx_enabled
 
-  - name: Disable http://box/freepbx via NGINX, by removing {{ nginx_conf_dir }}/freepbx-nginx.conf
+  - name: Disable http://box/freepbx via NGINX, by removing {{ nginx_conf_dir }}/freepbx-nginx.conf, if not pbx_enabled
     file:
       path: "{{ nginx_conf_dir }}/freepbx-nginx.conf"
       state: absent
