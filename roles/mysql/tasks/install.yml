@@ -1,52 +1,28 @@
-# Stanzas as of 2021-08-02:
-#
-# - 1 base install
-# - 6 double timeout for slow CPUs
-# - 2 DB config
-# - 2 record as installed
-
-- name: 'Install MySQL packages: mariadb-server, mariadb-client, php{{ php_version }}-mysql'
+- name: 'Install MySQL packages: mariadb-server, mariadb-client, php{{ php_version }}-mysql, python3-pymysql'
   package:
     name:
       - mariadb-server
       - mariadb-client
       #- php{{ php_version }}-common    # Auto-installed as an apt dependency.  REGARDLESS: php{{ php_version }}-common superset php{{ php_version }}-cli is auto-installed by php{{ php_version }}-fpm in nginx/tasks/install.yml
-      - php{{ php_version }}-mysql      # Likewise installed in nextcloud/tasks/install.yml, pbx/tasks/freepbx_dependencies.yml, wordpress/tasks/install.yml
+      - php{{ php_version }}-mysql      # Likewise installed in nextcloud/tasks/install.yml, pbx/tasks/freepbx.yml, wordpress/tasks/install.yml
       - python3-pymysql                 # For Ansible modules {mysql_db, mysql_user} in Ansible collection community.mysql -- used in MySQL roles {mediawiki, nextcloud, wordpress} and possibly {elgg, pbx}
     state: present
 
-# 2020-07-11:
-# 10 PHP package installs moved to roles/www_base/tasks/main.yml
+# 2020-07-11: 10 PHP package installs moved to roles/www_base/tasks/main.yml
 # php{{ php_version }}-sqlite3 install moved to roles/osm-vector-maps/tasks/install.yml
 
-# - name: "Install packages: mysql, MySQL-python and 9 php packages (OS's other than debuntu)"
-#   package:
-#     name:
-#       - MySQL-python
-#       - mysql
-#       - php
-#       - php-mysql
-#       - php-pear
-#       - php-gd
-#       - php-imap
-#       - php-ldap
-#       - php-odbc
-#       - php-xml
-#       - php-xmlrpc
-#     state: present
-#   when: not is_debuntu
-#
-# - include_tasks: centos.yml
-#   when: ansible_distribution == "CentOS"
-#
-# - include_tasks: fedora.yml
-#   when: ansible_distribution == "Fedora"
+# 2021-08-11: 50 lines (6 stanzas) removed, that had been doubling MariaDB's
+# default boot timeout (90s to 180s) since 2019-07-03, for slow CPUs like this
+# Ubuntu 18.04.2 VM: https://github.com/iiab/iiab/issues/1802 -> PR #1813
+# https://mariadb.com/kb/en/library/what-to-do-if-mariadb-doesnt-start/#systemd
+# OS's have finally caught up - default timeout is now 900 seconds:
+# https://github.com/iiab/iiab/pull/2936
 
 # Name of MySQL service varies by OS, so hardcoded in /opt/iiab/iiab/vars/<OS>.yml (formerly in roles/0-init/tasks/main.yml)
-- name: Start MySQL systemd service ({{ mysql_service }}) to permit configuration
+- name: Restart MySQL systemd service ({{ mysql_service }}) to permit configuration
   systemd:
-    name: "{{ mysql_service }}"
     daemon_reload: yes
+    name: "{{ mysql_service }}"
     state: restarted
 
 - name: "Install /root/.my.cnf file from template -- used to contain root password credential, prior to 2020-08-24: https://github.com/iiab/iiab/pull/2488"
