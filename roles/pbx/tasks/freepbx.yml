@@ -48,6 +48,11 @@
       - php{{ php_version }}-snmp
       - php{{ php_version }}-xml         # Likewise installed in mediawiki/tasks/install.yml, moodle/tasks/install.yml, nextcloud/tasks/install.yml, wordpress/tasks/install.yml -- AND REGARDLESS dragged in later by Admin Console's use of php-pear for roles/cmdsrv/tasks/main.yml -- run 'php -m | grep -i xml' which in the end shows {libxml, SimpleXML, xml, xmlreader, xmlwriter}
       - php{{ php_version }}-zip         # Likewise installed in moodle/tasks/install.yml, nextcloud/tasks/install.yml, wordpress/tasks/install.yml
+      - cmake
+      - make
+      - gcc
+      - libssl-dev
+      - unixodbc-dev
     state: latest
 
 # For PHP >= 8.0: phpX.Y-json is baked into PHP itself.
@@ -143,7 +148,6 @@
     login_host: "{{ asterisk_db_host }}"
     state: present
 
-
 - name: FreePBX - Create new php sessions dir /var/lib/php/asterisk_sessions/ - SEE 'php_value session.save_path /var/lib/php/asterisk_sessions/' IN pbx/templates/freepbx.conf.j2
   file:
     path: /var/lib/php/asterisk_sessions/
@@ -167,11 +171,27 @@
     group: asterisk
     create: yes
 
+- name: Freepbx -  Clone mariadb-connector-odbc
+  git:
+    repo: https://github.com/mariadb-corporation/mariadb-connector-odbc
+    dest: /usr/src/mariadb-connector-odbc
+    version: master
+    force: yes
+    depth: 1
 
-- name: FreePBX - Install /etc/odbc.ini from template (root:root, 0644 by default) for CDR 'asteriskcdrdb' - in future consider compiling ODBC driver for aarch64 per http://mghadam.blogspot.com/2021/03/install-asterisk-18-freepbx-15-on.html ?
+- name: FreePBX - Build mariadb-connector-odbc
+  command: "{{ iiab_dir }}/scripts/mk-odbc-connector"
+  args:
+    creates: /usr/local/lib/mariadb/libmaodbc.so
+
+# http://mghadam.blogspot.com/2021/03/install-asterisk-18-freepbx-15-on.html
+- name: FreePBX - Install /etc/odbc.ini /etc/odbconit.ini from template (root:root, 0644 by default)
   template:
-    src: odbc.ini
+    src: "{{ item }}"
     dest: /etc/
+  with_items:
+  - odbc.ini
+  - odbcinst.ini
 
 - name: FreePBX - 2-step install - won't run if {{ freepbx_install_dir }} already exists - CAN TAKE 3-12 MIN OR LONGER!
   command: "{{ item }}"
