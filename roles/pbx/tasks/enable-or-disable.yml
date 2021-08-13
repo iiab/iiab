@@ -1,44 +1,82 @@
-- name: Enable & (Re)start 'asterisk' systemd service (if pbx_enabled)
+- name: Enable & (Re)start 'freepbx' systemd service, if pbx_enabled
   systemd:
     daemon_reload: yes
-    name: asterisk
-    enabled: yes
-    state: restarted
-  when: pbx_enabled
-
-- name: Disable & Stop 'asterisk' systemd service (if not pbx_enabled)
-  systemd:
-    daemon_reload: yes
-    name: asterisk
-    enabled: no
-    state: stopped
-  when: not pbx_enabled
-
-
-- name: Enable & (Re)start 'freepbx' systemd service (if pbx_enabled)
-  systemd:
     name: freepbx
     enabled: yes
     state: restarted
   when: pbx_enabled
 
-- name: Disable & Stop 'freepbx' systemd service (if not pbx_enabled)
+- name: Disable & Stop 'freepbx' systemd service, if not pbx_enabled
   systemd:
+    daemon_reload: yes
     name: freepbx
     enabled: no
     state: stopped
   when: not pbx_enabled
 
 
-- name: Enable http://box:{{ pbx_http_port }}/freepbx via Apache, if pbx_enabled    # http://box:83/freepbx
-  command: a2ensite freepbx.conf
-  when: pbx_enabled
+- block:
 
-- name: Disable http://box:{{ pbx_http_port }}/freepbx via Apache, if not pbx_enabled
-  command: a2dissite freepbx.conf
-  when: not pbx_enabled
+  - name: Enable http://box:{{ pbx_http_port }}/freepbx via Apache, if pbx_enabled    # http://box:83/freepbx
+    command: a2ensite freepbx.conf
+    when: pbx_enabled
 
-- name: Restart Apache service ({{ apache_service }})
-  systemd:
-    name: "{{ apache_service }}"    # httpd or apache2
-    state: restarted
+  - name: Disable http://box:{{ pbx_http_port }}/freepbx via Apache, if not pbx_enabled
+    command: a2dissite freepbx.conf
+    when: not pbx_enabled
+
+  - name: Restart & Enable '{{ apache_service }}' systemd service, if pbx_enabled
+    systemd:
+      name: "{{ apache_service }}"    # apache2
+      state: restarted
+      enabled: yes
+    when: pbx_enabled
+
+  - name: Stop & Disable '{{ apache_service }}' systemd service, if not pbx_enabled
+    systemd:
+      name: "{{ apache_service }}"
+      state: stopped
+      enabled: no
+    when: not pbx_enabled
+
+  when: not pbx_try_nginx
+
+
+- block:
+
+  - name: Install /etc/php/{{ php_version }}/fpm/pool.d/asterisk.conf converted from www.conf for user 'asterisk', if pbx_enabled
+    copy:
+      src: roles/pbx/templates/asterisk.conf
+      dest: /etc/php/{{ php_version }}/fpm/pool.d/asterisk.conf
+    when: pbx_enabled
+
+  - name: Remove /etc/php/{{ php_version }}/fpm/pool.d/asterisk.conf, if not pbx_enabled
+    file:
+      path: /etc/php/{{ php_version }}/fpm/pool.d/asterisk.conf
+      state: absent
+    when: not pbx_enabled
+
+  - name: Enable & Restart 'php{{ php_version }}-fpm' systemd service
+    systemd:
+      name: php{{ php_version }}-fpm
+      state: restarted
+      enabled: yes
+
+  - name: Enable http://box/freepbx via NGINX, by installing {{ nginx_conf_dir }}/freepbx-nginx.conf from template, if pbx_enabled
+    template:
+      src: freepbx-nginx.conf.j2
+      dest: "{{ nginx_conf_dir }}/freepbx-nginx.conf"    # /etc/nginx/conf.d
+    when: pbx_enabled
+
+  - name: Disable http://box/freepbx via NGINX, by removing {{ nginx_conf_dir }}/freepbx-nginx.conf, if not pbx_enabled
+    file:
+      path: "{{ nginx_conf_dir }}/freepbx-nginx.conf"
+      state: absent
+    when: not pbx_enabled
+
+  - name: Restart 'nginx' systemd service
+    systemd:
+      name: nginx
+      state: restarted
+
+  when: pbx_try_nginx

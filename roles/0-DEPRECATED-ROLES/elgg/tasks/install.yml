@@ -1,11 +1,12 @@
-- name: "Set 'apache_install: True' and 'apache_enabled: True'"
-  set_fact:
-    apache_install: True
-    apache_enabled: True
+# - name: "Set 'apache_install: True' and 'apache_enabled: True'"
+#   set_fact:
+#     apache_install: True
+#     apache_enabled: True
+#
+# - name: APACHE - run 'httpd' role
+#   include_role:
+#     name: httpd
 
-- name: APACHE - run 'httpd' role
-  include_role:
-    name: httpd
 
 # 2020-06-15: roles/httpd/tasks/install.yml now takes care of this.
 # # 2020-05-21: Required now that mysql/tasks/install.yml installs
@@ -32,7 +33,7 @@
   #  creates: "{{ downloads_dir }}/elgg-{{ elgg_version }}.zip"
   get_url:
     url: "{{ iiab_download_url }}/elgg-{{ elgg_version }}.zip"
-    dest: "{{ downloads_dir }}"
+    dest: "{{ downloads_dir }}"    # /opt/iiab/downloads
     timeout: "{{ download_timeout }}"
   when: internet_available
 
@@ -41,7 +42,7 @@
     path: "/opt/elgg-{{ elgg_version }}/index.php"
   register: elgg
 
-- name: Unpack (unarchive) .zip to /opt, if above index.php doesn't exist
+- name: Unpack (unarchive) .zip to /opt, if above index.php doesn't exist ({{ apache_user }}:{{ apache_user }})
   #shell: "/usr/bin/unzip -o {{ downloads_dir }}/elgg-{{ elgg_version }}.zip -d /opt"
   unarchive:
     #remote_src: yes
@@ -52,7 +53,7 @@
     group: "{{ apache_user }}"
   when: elgg.stat.exists is defined and not elgg.stat.exists
 
-- name: Create softlink from /opt/elgg to /opt/elgg-{{ elgg_version }}
+- name: Symlink /opt/elgg -> /opt/elgg-{{ elgg_version }}
   file:
     src: "./elgg-{{ elgg_version }}"
     path: /opt/elgg
@@ -69,13 +70,13 @@
     group: "{{ apache_user }}"
 
 # The name of this file changed from 1.9 to 1.10.
-- name: Copy default .htaccess into /opt/{{ elgg_xx }}, root of Elgg tree
+- name: Copy default .htaccess into /opt/{{ elgg_xx }}, root of Elgg tree (0644)
   copy:
     src: "/opt/{{ elgg_xx }}/vendor/elgg/elgg/install/config/htaccess.dist"
     dest: "/opt/{{ elgg_xx }}/.htaccess"
     owner: "{{ apache_user }}"
     group: "{{ apache_user }}"
-    mode: '0644'
+    mode: 0644
 
 #regexp='^#RewriteBase'
 - name: Change .htaccess to include RewriteBase for http://box{{ elgg_url }}    # http://box/elgg
@@ -86,12 +87,12 @@
     insertafter: '^#RewriteBase'
     line: "RewriteBase {{ elgg_url }}/"
 
-- name: Set /opt/elgg/engine directory permissions to 0755 so Apache can write there
+- name: Set /opt/elgg/engine directory permissions to 0755 (owner {{ apache_user }}) so Apache can write there
   file:
     state: directory
     path: /opt/elgg/engine/
     owner: "{{ apache_user }}"
-    mode: '0755'
+    mode: 0755
 
 - name: Change /opt/elgg-{{ elgg_version }} ownership to {{ apache_user }}:{{ apache_user }} (likely not nec, as unarchive & all do this above)
   file:
@@ -103,14 +104,14 @@
 
 - name: Create upload directory {{ elgg_upload_path }} that Apache (and Elgg) can write to
   file:
-    path: "{{ elgg_upload_path }}"
+    path: "{{ elgg_upload_path }}"    # /library/elgg
     state: directory
     owner: "{{ apache_user }}"
 
-- name: Install /etc/{{ apache_conf_dir }}/elgg.conf from template, for http://box{{ elgg_url }}    # http://box/elgg
-  template:
-    src: elgg.conf
-    dest: "/etc/{{ apache_conf_dir }}/elgg.conf"
+# - name: Install /etc/{{ apache_conf_dir }}/elgg.conf from template, for http://box{{ elgg_url }}    # http://box/elgg
+#   template:
+#     src: elgg.conf
+#     dest: "/etc/{{ apache_conf_dir }}/elgg.conf"
 
 
 - name: Set up Elgg's MySQL database

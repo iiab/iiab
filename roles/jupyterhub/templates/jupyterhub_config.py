@@ -64,7 +64,7 @@
 #  
 #  Users should be properly informed if this is enabled.
 #  Default: False
-# c.JupyterHub.admin_access = False
+c.JupyterHub.admin_access = True
 
 ## DEPRECATED since version 0.7.2, use Authenticator.admin_users instead.
 #  Default: set()
@@ -1057,7 +1057,7 @@ c.JupyterHub.spawner_class = 'systemdspawner.SystemdSpawner'
 #  
 #  Defaults to an empty set, in which case no user has admin access.
 #  Default: set()
-c.Authenticator.admin_users = set('iiab-admin')
+c.Authenticator.admin_users = set('Admin')
 
 ## Set of usernames that are allowed to log in.
 #  
