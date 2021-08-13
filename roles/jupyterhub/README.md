@@ -24,6 +24,12 @@ Note that `/opt/iiab/jupyterhub` is a Python 3 virtual environment, that can be 
 source /opt/iiab/jupyterhub/bin/activate
 ```
 
+### PAWS/Jupyter Notebooks for Python Beginners
+
+While PAWS is a little bit off topic, if you have an interest in Wikipedia, please do see this 23m 42s video ["Intro to PAWS/Jupyter notebooks for Python beginners"](https://www.youtube.com/watch?v=AUZkioRI-aA&list=PLeoTcBlDanyNQXBqI1rVXUqUTSSiuSIXN&index=8) by Chico Venancio, from 2021-06-01.
+
+He explains PAWS as a "powerful Python execution environment http://paws.wmcloud.org [allowing] ordinary folks to write interactive scripts to work with Wikimedia content."
+
 ### Known Issues
 
 * 2021-08-07: The page that allows you to reset/change your own password is not accessible.  Likewise Admin users cannot reset/change the password of any _individual_ user at this time.  <sub><sub>[#2918](https://github.com/iiab/iiab/pull/2918)</sub></sub>
