@@ -1,0 +1,31 @@
+location ~ ^/freepbx(|/.*)$ {    # '~' -> '~*' for case-insensitive regex
+
+    root /var/www/html;
+    # root {{ freepbx_install_dir }};    # /var/www/html/freepbx
+    # root {{ doc_root }};               # /library/www/html
+
+    # location ~ ^/freepbx {
+    #   root  {{ doc_root }};
+    # }
+
+    location ~ ^/freepbx(.*)\.php(.*)$ {
+        alias {{ freepbx_install_dir }}$1.php$2;
+        fastcgi_split_path_info ^(.+\.php)(/.+)$;
+        fastcgi_index index.php;
+        fastcgi_pass unix:/run/php/php-asterisk.sock;
+
+        include fastcgi_params;
+        fastcgi_param PATH_INFO $fastcgi_path_info;
+        fastcgi_param SCRIPT_FILENAME $document_root/$fastcgi_script_name;
+        #fastcgi_param PATH_TRANSLATED $document_root$fastcgi_path_info;
+        fastcgi_param HTACCESS on;    # disables FreePBX htaccess warning
+    }
+
+    # disallows the things that the FreePBX .htaccess files disallow
+    location ~ /freepbx(/\.ht|/\.git|\.ini$|/libraries|/helpers|/i18n|/node|/views/.+php$) {
+        deny all;
+    }
+
+    # from the api module .htaccess file
+    rewrite ^/freepbx/admin/api/([^/]*)/([^/]*)/?(.*)?$ /freepbx/admin/api/api.php?module=$1&command=$2&route=$3 last;
+}

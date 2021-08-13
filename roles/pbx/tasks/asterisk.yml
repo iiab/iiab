@@ -1,80 +1,91 @@
-# 2021-08-03: Asterisk's own install_prereq (below) handles these?
-#- name: Asterisk - Install dependencies
-#  include: asterisk_dependencies.yml
+# 2021-08-05: Asterisk's own install_prereq (below) handles essentially all of these
+# - name: Asterisk - Install dependencies
+#   include_tasks: asterisk_dependencies.yml
 
-- name: Asterisk - Download software to /opt/iiab/downloads
+# BEWARE: 'systemctl is-active asterix' falsely reports 'inactive' even when systemd
+# is compiled in below!   FWIW: /opt/iiab/asterisk/contrib/systemd/asterisk.service
+# https://github.com/asterisk/asterisk/blob/master/contrib/systemd/asterisk.service
+
+- name: Asterisk - Install package 'libsystemd-dev' so Asterisk compiles in imperfect-but-improving systemd support -- if ./configure below places '#define HAVE_SYSTEMD 1' in /opt/iiab/asterisk/include/asterisk/autoconfig.h -- please later confirm with 'ldd /usr/sbin/asterisk | grep systemd' -- per https://community.asterisk.org/t/systemctl-start-asterisk-is-fail-with-timeout/81123/3
+  package:
+    name: libsystemd-dev
+    state: present
+
+- name: Asterisk - Download {{ asterisk_url }}/{{ asterisk_src_file }} to {{ downloads_dir }}
   get_url:
     url: "{{ asterisk_url }}/{{ asterisk_src_file }}"
-    dest: "{{ downloads_dir }}/{{ asterisk_src_file }}"
+    dest: "{{ downloads_dir }}"    # e.g. /opt/iiab/downloads/asterisk-18-current.tar.gz
     timeout: "{{ download_timeout }}"
   when: internet_available
 
-- name: Asterisk - Check for /opt/iiab/downloads/{{ asterisk_src_file }}
+- name: Asterisk - Check for {{ downloads_dir }}/{{ asterisk_src_file }}
   stat:
     path: "{{ downloads_dir }}/{{ asterisk_src_file }}"
   register: asterisk_src
 
-- name: Asterisk - FAIL (force Ansible to exit) IF /opt/iiab/downloads/{{ asterisk_src_file }} doesn't exist
+- name: Asterisk - FAIL (force Ansible to exit) IF {{ downloads_dir }}/{{ asterisk_src_file }} doesn't exist
   fail:
-    msg: "{ downloads_dir }}/{{ asterisk_src_file }} is REQUIRED in order to install."
+    msg: "{{ downloads_dir }}/{{ asterisk_src_file }} is REQUIRED to install Asterisk."
   when: not asterisk_src.stat.exists
 
-- name: Asterisk - Create install source directory
+- name: Asterisk - Create source dir {{ asterisk_src_dir }}
   file:
-    path: "{{ asterisk_src_dir }}"
+    path: "{{ asterisk_src_dir }}"    # /opt/iiab/asterisk
     state: directory
 
-- name: Asterisk - Extract source
+- name: Asterisk - Extract to source dir (root:root by default)
   unarchive:
     src: "{{ downloads_dir }}/{{ asterisk_src_file }}"
     dest: "{{ asterisk_src_dir }}"
-    owner: root
-    group: root
+    # owner: root
+    # group: root
     extra_opts: [--strip-components=1]
     creates: "{{ asterisk_src_dir }}/Makefile"
+
 
 # 2021-08-03: Asterisk's install_prereq script (stanza just below) installs
 # 'aptitude' regardless, within handle_debian() here:
 # https://github.com/asterisk/asterisk/blob/master/contrib/scripts/install_prereq#L262-L271
 #
-#- name: Asterisk - Install aptitude (otherwise install_prereq fails?)
-#  package:
-#    name: aptitude
-#    state: latest
+# - name: Asterisk - Install aptitude (otherwise install_prereq fails?)
+#   package:
+#     name: aptitude
+#     state: latest
 
-- name: Asterisk - Ensure all dependencies are resolved - CAN TAKE 5 MIN OR LONGER!
+- name: Asterisk - Run 'install_prereq install' for dependencies - CAN TAKE 5 MIN OR LONGER!
   shell: export DEBIAN_FRONTEND=noninteractive && ./contrib/scripts/install_prereq install
   args:
     chdir: "{{ asterisk_src_dir }}"
 
-# 2021-08-03: Requires subversion (installed just above)
-- name: Asterisk - Download mp3 decoder library into source tree
+- name: Asterisk - Download mp3 decoder library into source tree - requires 'subversion' installed just above
   command: ./contrib/scripts/get_mp3_source.sh
   args:
     chdir: "{{ asterisk_src_dir }}"
     creates: addons/mp3/mpg123.h
 
-- name: Asterisk - Run the configure script
-  command: ./configure --with-jansson-bundled
+- name: Asterisk - Run './configure --with-pjproject-bundled --with-jansson-bundled'
+  command: ./configure --with-pjproject-bundled --with-jansson-bundled
   args:
     chdir: "{{ asterisk_src_dir }}"
 
-- name: Asterisk - Run make menuselect.makeopts
+- name: Asterisk - Run 'make menuselect.makeopts'
   command: make menuselect.makeopts
   args:
     chdir: "{{ asterisk_src_dir }}"
     creates: menuselect.makeopts
 
 - name: Asterisk - Do a bit of menuselect configuration
-  command: >
-    menuselect/menuselect --enable app_macro --enable format_mp3
-    --enable CORE-SOUNDS-EN-WAV --enable CORE-SOUNDS-EN-G722
-    --enable EXTRA-SOUNDS-EN-WAV --enable EXTRA-SOUNDS-EN-G722 --enable EXTRA-SOUNDS-EN-GSM
-    --disable-category MENUSELECT_MOH
+  command: menuselect/menuselect --enable app_macro --enable format_mp3 menuselect.makeopts
+  # 2021-08-06: Let's standardize (ABOVE) if 6 others (BELOW) aren't needed?
+  # command: >
+  #   menuselect/menuselect --enable app_macro --enable format_mp3
+  #   --enable CORE-SOUNDS-EN-WAV --enable CORE-SOUNDS-EN-G722
+  #   --enable EXTRA-SOUNDS-EN-WAV --enable EXTRA-SOUNDS-EN-G722 --enable EXTRA-SOUNDS-EN-GSM
+  #   --disable-category MENUSELECT_MOH
   args:
     chdir: "{{ asterisk_src_dir }}"
 
-- name: Asterisk - Run 'make' - CAN TAKE 30 MIN OR LONGER!
+- name: Asterisk - Run 'make' - CAN TAKE 8-30 MIN OR LONGER!
   command: make
   args:
     chdir: "{{ asterisk_src_dir }}"
@@ -91,37 +102,52 @@
   args:
     chdir: "{{ asterisk_src_dir }}"
 
-- name: Asterisk - Run 'make samples'
+- name: Asterisk - Run 'make samples' - this creates /etc/asterisk/asterisk.conf used below
   command: make samples
   args:
     chdir: "{{ asterisk_src_dir }}"
 
 - name: Asterisk - Run 'ldconfig'
-  shell: ldconfig
+  command: ldconfig
   args:
     chdir: "{{ asterisk_src_dir }}"
 
-- name: Asterisk - Ensure group 'asterisk' exists
-  group:
-    name: asterisk
-    state: present
+# 2021-08-06: Most install recipes do 'update-rc.d -f asterisk remove' here.
+# Can't hurt but we do that a bit later in freepbx.yml
 
-- name: Asterisk - Ensure user 'asterisk' exists, and belongs to the required groups
+
+# 2021-08-06: Taken care of just below
+# - name: Asterisk - Ensure group 'asterisk' exists
+#   group:
+#     name: asterisk
+#     state: present
+
+#- name: Asterisk - Ensure system user 'asterisk' has primary group 'asterisk', groups 'audio,dialout', home '/var/lib/asterisk'
+- name: Asterisk - Create Linux user 'asterisk'
   user:
     name: asterisk
-    group: asterisk
-    groups: audio,dialout
-    home: /var/lib/asterisk
-    system: yes
-    append: yes
+    # group: asterisk            # 2021-08-06: Implicit
+    groups: audio,dialout        # 2021-08-08: Plausibly might help?
+    home: /var/lib/asterisk      # 2021-08-07: /home/asterisk (default) ok too
+    system: yes                  # 2021-08-08: No evidence this is needed.  Hopefully it doesn't cause harm?  (FYI Ansible doesn't change pre-existing users)
+    append: yes                  # 2021-08-08: Not essential.  So Ansible adds groups w/o deleting existing group memberships.
 
-- name: "Asterisk - Set ownership of 5 directories: /etc/asterisk, /var/lib/asterisk, /var/log/asterisk, /var/spool/asterisk, /usr/lib/asterisk (asterisk:asterisk)"
+- name: Asterisk - Add user 'www-data' to group 'asterisk' - if pbx_try_nginx
+  user:
+    name: www-data
+    groups: asterisk
+    # system: yes                # 2021-08-06: Ansible doesn't change pre-existing users
+    append: yes
+  when: pbx_try_nginx
+
+- name: Asterisk - Set ownership for 6 directories (asterisk:asterisk, recurse)
   file:
     dest: "{{ item }}"
     owner: asterisk
     group: asterisk
     recurse: yes
   with_items:
+    - /var/run/asterisk
     - /etc/asterisk
     - /var/lib/asterisk
     - /var/log/asterisk
