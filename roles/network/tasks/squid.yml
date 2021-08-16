@@ -20,12 +20,24 @@
     createhome: False
     shell: /bin/false
 
+# 2021-08-16: Squid runs as 'nobody' when started as root:
+# http://www.squid-cache.org/Doc/config/cache_effective_user/
+# Much more detail here, but neither directive is recommended:
+# http://www.squid-cache.org/Doc/config/cache_effective_group/
+#
+# So nobody:root or root:root ownership don't work for cache_dir /library/cache
+#
+# Squid auto-creation of cache_dir (or the old way, 'squid -z') both fail:
+# "FATAL: Failed to make swap directory /library/cache: (13) Permission denied"
+#
+# SEE ALSO: https://github.com/iiab/iiab/blob/master/roles/network/templates/squid/squid.conf.j2#L10-L30
+
 - name: Create Squid directory /library/cache ({{ proxy_user }}:{{ proxy_user }}, 0750)
   file:
     state: directory
     path: /library/cache
-    owner: "{{ proxy_user }}"    # Squid runs as 'nobody' according to http://www.squid-cache.org/Doc/config/cache_effective_user/
-    group: "{{ proxy_user }}"    # So root:root ownership doesn't work for dir /library/cache
+    owner: "{{ proxy_user }}"
+    group: "{{ proxy_user }}"
     mode: 0750
 
 - name: Install site allowlists/whitelists /etc/{{ proxy }}/allow_dst_domains, /etc/{{ proxy }}/allow_url_regexs from template (root:root, 0644 by default)
