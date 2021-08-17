@@ -213,12 +213,11 @@
     - ./install -n --webroot {{ freepbx_install_dir }} --dbuser {{ asterisk_db_user }} --dbpass {{ asterisk_db_password }}
     # - ./install -n --webroot {{ freepbx_install_dir }} --dbuser {{ asterisk_db_user }} --dbpass {{ asterisk_db_password }} --dbname {{ asterisk_db_dbname }} --cdrdbname {{ asterisk_db_cdrdbname }}
 
-- name: "Run 'fwconsole stop' and 'killall -9 safe_asterisk' to stop both Asterisk processes -- this avoids \"Unable to run Pre-Asterisk hooks, because Asterisk is already running\" in 'journalctl -u freepbx' logs"
+- name: FreePBX - Run 'fwconsole stop', 'killall -9 safe_asterisk' to stop both main Asterisk processes - this avoids "Unable to run Pre-Asterisk hooks, because Asterisk is already running" in 'journalctl -u freepbx' logs
   command: "{{ item }}"
   with_items:
     - fwconsole stop
-    - killall -9 safe_asterisk        # 2021-08-08: Stronger medicine needed for 64-bit Ubuntu Server 21.04 on RPi 4.  Originally from @jvonau's PR #2912.
-    - killall -9 "PM2 v4.5.0: God"    # 2021-08-09: Missed by fwconsole (does this matter?)
+    - killall -9 safe_asterisk    # 2021-08-08: Stronger medicine needed for 64-bit Ubuntu Server 21.04 on RPi 4.  Originally from @jvonau's PR #2912.
     # - killall -9 asterisk       # 2021-08-05: Also from @jvonau's PR #2912, to brute force this.  In the end, above 'fwconsole stop' works more gracefully.
     # - ./start_asterisk stop     # Buggy!
     # - /usr/sbin/asterisk -rx "core stop gracefully"
@@ -229,7 +228,11 @@
     # - fwconsole ma delete firewall
     # - fwconsole reload
     # - fwconsole restart
-  ignore_errors: yes    # 2021-08-08: For things like 'killall -9 safe_asterisk' that fail when process doesn't exist
+  ignore_errors: yes    # 2021-08-08: As 'killall -9 safe_asterisk' will fail when process doesn't exist (on many OS's!)
+
+- name: "FreePBX - Run 'killall -9 \"PM2 v4.5.0: God\"' for good measure"
+  command: 'killall -9 "PM2 v4.5.0: God"'    # 2021-08-09: Missed by above 'fwconsole stop' (does this matter?)
+  ignore_errors: yes    # 2021-08-16: As 'killall -9 "PM2 v4.5.0: God"' will fail if process doesn't exist (e.g. if version number changes, etc)
 
 # 2021-08-06: This stanza works, but above is more graceful.  (FYI PRs #2908,
 # #2912, #2913 didn't quite work -- whereas this PR #2915 at least worked!)
@@ -255,7 +258,7 @@
   when: pbx_try_nginx
 
 
-# - name: Add "$amp_conf['CHECKREFERER'] = false;" to /etc/freepbx.conf #2931 - if pbx_try_nginx"
+# - name: FreePBX - Add "$amp_conf['CHECKREFERER'] = false;" to /etc/freepbx.conf #2931 - if pbx_try_nginx"
 #   lineinfile:
 #     path: /etc/freepbx.conf
 #     insertbefore: '^\?>$'    # Match exact line '?>' -- BOTTOM OF FILE NEC!
