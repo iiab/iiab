@@ -1,7 +1,5 @@
-# "Official" recipe: https://wiki.freepbx.org/display/FOP/Installing+FreePBX+16+on+Debian+10.9
-# Comprehensive & recent recipe for RPi: http://mghadam.blogspot.com/2021/03/install-asterisk-18-freepbx-15-on.html
-# Quirky but still useful for comparison: https://computingforgeeks.com/how-to-install-asterisk-16-with-freepbx-15-on-ubuntu-debian/
-# 2012-2017: http://www.raspberry-asterisk.org
+# 2021-08-16 README.adoc, with screenshots:
+# https://github.com/iiab/iiab/tree/master/roles/pbx#pbx-readme
 
 
 # 2021-08-04: Non-native systemd service 'asterisk.service' (redirects via
@@ -13,15 +11,15 @@
 # 2021-08-12: Let's try to track the "official" init.d / update-rc.d
 # instructions ('update-rc.d -f asterisk remove') but using systemd instead,
 # to be more future-proof?
-- name: FreePBX - Disable 'asterisk' service
+- name: "FreePBX - Disable 'asterisk' systemd service, giving FreePBX full control during boot - similar to officially recommended 'update-rc.d -f asterisk remove' at: https://wiki.freepbx.org/display/FOP/Installing+FreePBX+16+on+Debian+10.9"
   systemd:
     daemon_reload: yes
     name: asterisk
-    state: stopped
+    #state: stopped
     enabled: no
 
 
-- name: FreePBX - Install wget, git, unixodbc, sudo, net-tools, cron, sox + ~12 PHP dependencies (run 'php -m' or 'php -i' to verify PHP modules)
+- name: FreePBX - Install 24 packages = 7 (wget, git, unixodbc, sudo, net-tools, cron, sox) + 12 PHP dependencies (run 'php -m' or 'php -i' to verify PHP modules) + 5 for CDR ODBC (cmake, make, gcc, libssl-dev, unixodbc-dev)
   package:
     name:
       - wget
@@ -136,19 +134,22 @@
     encoding: utf8
     collation: utf8_general_ci
     login_host: "{{ asterisk_db_host }}"
-    login_user: "{{ asterisk_db_user  }}"
+    login_user: "{{ asterisk_db_user }}"
     login_password: "{{ asterisk_db_password }}"
     state: present
 
-- name: FreePBX - Add cdr MySQL db ({{ asterisk_db_cdrdbname }})
+- name: FreePBX - Add CDR MySQL db ({{ asterisk_db_cdrdbname }})
   mysql_db:
     name: "{{ asterisk_db_cdrdbname }}"    # asteriskcdrdb
     encoding: utf8
     collation: utf8_general_ci
     login_host: "{{ asterisk_db_host }}"
-    login_user: "{{ asterisk_db_user  }}"
+    login_user: "{{ asterisk_db_user }}"
     login_password: "{{ asterisk_db_password }}"
     state: present
+
+
+# 2021-08-16: DOES NGINX NEED THE NEXT 2 STANZAS?  (If not, should 'when: not pbx_try_nginx' be added?)
 
 - name: FreePBX - Create new php sessions dir /var/lib/php/asterisk_sessions/ - SEE 'php_value session.save_path /var/lib/php/asterisk_sessions/' IN pbx/templates/freepbx.conf.j2
   file:
@@ -173,7 +174,8 @@
     group: asterisk
     create: yes
 
-- name: Freepbx -  Clone mariadb-connector-odbc
+
+- name: FreePBX - git clone https://github.com/mariadb-corporation/mariadb-connector-odbc to /usr/src/mariadb-connector-odbc
   git:
     repo: https://github.com/mariadb-corporation/mariadb-connector-odbc
     dest: /usr/src/mariadb-connector-odbc
@@ -181,26 +183,25 @@
     force: yes
     depth: 1
 
-- name: FreePBX - Build mariadb-connector-odbc
+- name: FreePBX - Run scripts/mk-odbc-connector to build mariadb-connector-odbc, creating /usr/local/lib/mariadb/libmaodbc.so
   command: "{{ iiab_dir }}/scripts/mk-odbc-connector"
   args:
     creates: /usr/local/lib/mariadb/libmaodbc.so
 
 # http://mghadam.blogspot.com/2021/03/install-asterisk-18-freepbx-15-on.html
-- name: FreePBX - Install /etc/odbc.ini /etc/odbcinst.ini from template (root:root, 0644 by default)
+- name: FreePBX - Install /etc/odbc.ini, /etc/odbcinst.ini from template (root:root, 0644 by default)
   template:
     src: "{{ item }}"
     dest: /etc/
   with_items:
-  - odbc.ini
-  - odbcinst.ini
+    - odbc.ini
+    - odbcinst.ini
 
-- name: FreePBX - Create /etc/asterisk/cdr_mysql.conf
+- name: FreePBX - Install /etc/asterisk/cdr_mysql.conf from template (root:root, 0644 by default)
   template:
-    src: "{{ item }}"
+    src: cdr_mysql.conf
     dest: /etc/asterisk/
-  with_items:
-    - cdr_mysql.conf
+
 
 - name: FreePBX - 2-step install - won't run if {{ freepbx_install_dir }} already exists - CAN TAKE 3-12 MIN OR LONGER!
   command: "{{ item }}"
@@ -210,13 +211,14 @@
   with_items:
     - ./start_asterisk start
     - ./install -n --webroot {{ freepbx_install_dir }} --dbuser {{ asterisk_db_user }} --dbpass {{ asterisk_db_password }}
+    # - ./install -n --webroot {{ freepbx_install_dir }} --dbuser {{ asterisk_db_user }} --dbpass {{ asterisk_db_password }} --dbname {{ asterisk_db_dbname }} --cdrdbname {{ asterisk_db_cdrdbname }}
 
 - name: "Run 'fwconsole stop' and 'killall -9 safe_asterisk' to stop both Asterisk processes -- this avoids \"Unable to run Pre-Asterisk hooks, because Asterisk is already running\" in 'journalctl -u freepbx' logs"
   command: "{{ item }}"
   with_items:
-    - killall -9 "PM2 v4.5.0: God"    # 2021-08-09: Missed by fwconsole (does this matter?)
     - fwconsole stop
     - killall -9 safe_asterisk        # 2021-08-08: Stronger medicine needed for 64-bit Ubuntu Server 21.04 on RPi 4.  Originally from @jvonau's PR #2912.
+    - killall -9 "PM2 v4.5.0: God"    # 2021-08-09: Missed by fwconsole (does this matter?)
     # - killall -9 asterisk       # 2021-08-05: Also from @jvonau's PR #2912, to brute force this.  In the end, above 'fwconsole stop' works more gracefully.
     # - ./start_asterisk stop     # Buggy!
     # - /usr/sbin/asterisk -rx "core stop gracefully"
@@ -244,14 +246,14 @@
     src: freepbx.service
     dest: /etc/systemd/system/
 
-
-# default module list https://github.com/iiab/iiab/pull/2916#issuecomment-894601522
+# Default module list https://github.com/iiab/iiab/pull/2916#issuecomment-894601522
 - name: FreePBX - Run 'fwconsole ma upgradeall' on installed FreePBX modules, e.g. 16 default modules (of about 70 total) - CAN TAKE 2 MIN OR LONGER!
   command: fwconsole ma upgradeall
 
 - name: FreePBX - Run 'fwconsole set CHECKREFERER 0' (0 means false) - if pbx_try_nginx - so 'Submit' button definitively works at http://box/freepbx >> Settings >> Advanced Settings -- FYI you can run 'fwconsole set -l' or 'fwconsole set CHECKREFERER' to view FreePBX settings -- FYI /etc/freepbx.conf can completely override FreePBX's stored settings if nec
   command: fwconsole set CHECKREFERER 0    # Or/later run 'fwconsole set CHECKREFERER 1' (1 means true) to restore FreePBX's default strict checking.
   when: pbx_try_nginx
+
 
 # - name: Add "$amp_conf['CHECKREFERER'] = false;" to /etc/freepbx.conf #2931 - if pbx_try_nginx"
 #   lineinfile:
@@ -284,8 +286,8 @@
 # For 'pbx_try_nginx: True' -- FreePBX's initial page (Admin user registration)
 # tries to set up a cron job but fails:
 #   "Exception: Trying to edit user asterisk, when I'm running as www-data"
-# 2021-08-10: Hacking /etc/freepbx.conf WAS NOT TESTED PROPERLY -- AS VARS MUST
-# BE NEAR BOTTOM OF FILE: github.com/iiab/iiab/pull/2916#issuecomment-894585322
+# 2021-08-10: Hacking /etc/freepbx.conf WAS NOT TESTED PROPERLY -- some vars MAY
+# need to be NEAR BOTTOM: github.com/iiab/iiab/pull/2916#issuecomment-894585322
 # - name: "2021-08-06: Try \"$amp_conf['AMPASTERISKWEBUSER'] = 'www-data';\" in /etc/freepbx.conf for #2916 registration cron fix ?'"
 #   lineinfile:
 #     path: /etc/freepbx.conf
