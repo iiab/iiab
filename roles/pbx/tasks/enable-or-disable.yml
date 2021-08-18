@@ -1,86 +1,120 @@
-- name: Enable & (Re)start 'freepbx' systemd service, if pbx_enabled
+- name: JUST 1 SETTING TO TURN ON/OFF FOR APACHE - whereas NGINX below has 4...
+  meta: noop
+
+- name: EITHER - Create symlink /etc/{{ apache_service }}/sites-enabled/freepbx.conf to enable Apache's http://box:{{ pbx_http_port }}/freepbx - if pbx_use_apache and pbx_enabled    # http://box:83/freepbx
+  command: a2ensite freepbx.conf
+  when: pbx_use_apache and pbx_enabled
+
+- name: OR ELSE - Delete symlink /etc/{{ apache_service }}/sites-enabled/freepbx.conf to disable Apache's http://box:{{ pbx_http_port }}/freepbx - if not (pbx_use_apache and pbx_enabled)
+  file:    # As 'a2dissite freepbx.conf' might not be installed
+    path: /etc/{{ apache_service }}/sites-enabled/freepbx.conf    # apache2
+    state: absent
+  when: not (pbx_use_apache and pbx_enabled)
+
+
+- name: "ENACT ABOVE SETTING FOR APACHE - 'pbx_use_apache: False' might arise later, so best ALWAYS run..."
+  meta: noop
+
+- name: EITHER - Restart & Enable '{{ apache_service }}' systemd service - if pbx_use_apache and pbx_enabled
   systemd:
     daemon_reload: yes
+    name: "{{ apache_service }}"    # apache2
+    state: restarted
+    enabled: yes
+  when: pbx_use_apache and pbx_enabled
+  ignore_errors: yes    # In case Apache not installed
+
+- name: OR ELSE - Stop & Disable '{{ apache_service }}' systemd service - if not (pbx_use_apache and pbx_enabled)
+  systemd:
+    daemon_reload: yes
+    name: "{{ apache_service }}"
+    state: stopped
+    enabled: no
+  when: not (pbx_use_apache and pbx_enabled)
+  ignore_errors: yes    # In case Apache not installed
+
+- name: Open-or-Close Asterix ports (including Apache port {{ pbx_http_port }}) in iptables firewall, depending on pbx_enabled [{{ pbx_enabled }}] in local_vars.yml - in support of './runrole pbx'
+  command: /usr/bin/iiab-gen-iptables
+  ignore_errors: yes    # iptables installed in 2-common, but iiab-gen-tables may not be set up until roles/network runs later
+
+
+- name: EITHER - TURN ON 4 SETTINGS FOR NGINX - if pbx_use_nginx and pbx_enabled
+  meta: noop
+
+- block:
+
+  - name: "Add user 'www-data' to group 'asterisk' BEFORE restarting Asterisk (via FreePBX, below) -- Ansible doesn't support removing a single non-primary group, so if you later change to 'pbx_use_nginx: False' please manually edit /etc/group to revert this"
+    user:
+      name: www-data
+      groups: asterisk
+      append: yes
+
+  - name: Run 'fwconsole set CHECKREFERER 0' (0 means false) so 'Submit' button definitively works with NGINX at http://box/freepbx >> Settings >> Advanced Settings -- FYI you can run 'fwconsole set -l' or 'fwconsole set CHECKREFERER' to view FreePBX settings -- FYI /etc/freepbx.conf can completely override FreePBX's stored settings if nec
+    command: fwconsole set CHECKREFERER 0    # Or/later try to run 'fwconsole set CHECKREFERER 1' (1 means true) to restore FreePBX's default strict checking!
+
+  - name: Install /etc/php/{{ php_version }}/fpm/pool.d/asterisk.conf converted from www.conf for user 'asterisk'
+    copy:
+      src: roles/pbx/templates/asterisk.conf
+      dest: /etc/php/{{ php_version }}/fpm/pool.d/asterisk.conf
+
+  - name: Enable http://box/freepbx via NGINX, by installing {{ nginx_conf_dir }}/freepbx-nginx.conf from template
+    template:
+      src: freepbx-nginx.conf.j2
+      dest: "{{ nginx_conf_dir }}/freepbx-nginx.conf"    # /etc/nginx/conf.d
+
+  when: pbx_use_nginx and pbx_enabled
+
+- name: OR ELSE - TURN OFF 3 SETTINGS FOR NGINX (1st of 4 above settings too hard!) - if not (pbx_use_nginx and pbx_enabled)
+  meta: noop
+
+- block:
+
+  - name: Restore FreePBX default by running 'fwconsole set CHECKREFERER 1' (1 means true) as works with Apache -- FYI you can run 'fwconsole set -l' or 'fwconsole set CHECKREFERER' to view FreePBX settings -- FYI /etc/freepbx.conf can completely override FreePBX's stored settings if nec
+    command: fwconsole set CHECKREFERER 1
+
+  - name: Remove /etc/php/{{ php_version }}/fpm/pool.d/asterisk.conf
+    file:
+      path: /etc/php/{{ php_version }}/fpm/pool.d/asterisk.conf
+      state: absent
+
+  - name: Disable http://box/freepbx via NGINX, by removing {{ nginx_conf_dir }}/freepbx-nginx.conf
+    file:
+      path: "{{ nginx_conf_dir }}/freepbx-nginx.conf"
+      state: absent
+
+  when: not (pbx_use_nginx and pbx_enabled)
+
+
+- name: "ENACT ABOVE 3-4 SETTINGS FOR NGINX - 'pbx_use_nginx: False' might arise later, so best ALWAYS run these 2..."
+  meta: noop
+
+- name: Enable & Restart 'php{{ php_version }}-fpm' systemd service
+  systemd:
+    name: php{{ php_version }}-fpm
+    state: restarted
+    enabled: yes
+
+- name: Restart 'nginx' systemd service
+  systemd:
+    name: nginx
+    state: restarted
+
+
+
+
+- name: WRAP UP - Asterisk VIA FreePBX systemd service...
+  meta: noop
+
+- name: EITHER - Enable & (Re)start 'freepbx' systemd service, if pbx_enabled
+  systemd:
     name: freepbx
     enabled: yes
     state: restarted
   when: pbx_enabled
 
-- name: Disable & Stop 'freepbx' systemd service, if not pbx_enabled
+- name: OR ELSE - Disable & Stop 'freepbx' systemd service, if not pbx_enabled
   systemd:
-    daemon_reload: yes
     name: freepbx
     enabled: no
     state: stopped
   when: not pbx_enabled
-
-
-- block:
-
-  - name: Enable http://box:{{ pbx_http_port }}/freepbx via Apache, if pbx_enabled    # http://box:83/freepbx
-    command: a2ensite freepbx.conf
-    when: pbx_enabled
-
-  - name: Disable http://box:{{ pbx_http_port }}/freepbx via Apache, if not pbx_enabled
-    command: a2dissite freepbx.conf
-    when: not pbx_enabled
-
-  - name: Restart & Enable '{{ apache_service }}' systemd service, if pbx_enabled
-    systemd:
-      name: "{{ apache_service }}"    # apache2
-      state: restarted
-      enabled: yes
-    when: pbx_enabled
-
-  - name: Stop & Disable '{{ apache_service }}' systemd service, if not pbx_enabled
-    systemd:
-      name: "{{ apache_service }}"
-      state: stopped
-      enabled: no
-    when: not pbx_enabled
-
-  when: pbx_use_apache
-
-
-- block:
-
-  - name: Install /etc/php/{{ php_version }}/fpm/pool.d/asterisk.conf converted from www.conf for user 'asterisk', if pbx_enabled
-    copy:
-      src: roles/pbx/templates/asterisk.conf
-      dest: /etc/php/{{ php_version }}/fpm/pool.d/asterisk.conf
-    when: pbx_enabled
-
-  - name: Remove /etc/php/{{ php_version }}/fpm/pool.d/asterisk.conf, if not pbx_enabled
-    file:
-      path: /etc/php/{{ php_version }}/fpm/pool.d/asterisk.conf
-      state: absent
-    when: not pbx_enabled
-
-  - name: Enable & Restart 'php{{ php_version }}-fpm' systemd service
-    systemd:
-      name: php{{ php_version }}-fpm
-      state: restarted
-      enabled: yes
-
-  - name: Enable http://box/freepbx via NGINX, by installing {{ nginx_conf_dir }}/freepbx-nginx.conf from template, if pbx_enabled
-    template:
-      src: freepbx-nginx.conf.j2
-      dest: "{{ nginx_conf_dir }}/freepbx-nginx.conf"    # /etc/nginx/conf.d
-    when: pbx_enabled
-
-  - name: Disable http://box/freepbx via NGINX, by removing {{ nginx_conf_dir }}/freepbx-nginx.conf, if not pbx_enabled
-    file:
-      path: "{{ nginx_conf_dir }}/freepbx-nginx.conf"
-      state: absent
-    when: not pbx_enabled
-
-  - name: Restart 'nginx' systemd service
-    systemd:
-      name: nginx
-      state: restarted
-
-  when: pbx_use_nginx
-
-- name: FreePBX - Run 'fwconsole set CHECKREFERER 0' (0 means false) - if pbx_try_nginx - so 'Submit' button definitively works at http://box/freepbx >> Settings >> Advanced Settings -- FYI you can run 'fwconsole set -l' or 'fwconsole set CHECKREFERER' to view FreePBX settings -- FYI /etc/freepbx.conf can completely override FreePBX's stored settings if nec
-  command: fwconsole set CHECKREFERER 0    # Or/later run 'fwconsole set CHECKREFERER 1' (1 means true) to restore FreePBX's default strict checking.
-  when: pbx_use_nginx and not pbx_use_apache
