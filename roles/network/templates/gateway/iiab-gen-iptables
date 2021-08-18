@@ -50,15 +50,20 @@ iiab_var_value() {
     [ "$v2" != "" ] && echo $v2 || echo $v1    # [ "$v2" ] ALSO WORKS
 }
 
-source {{ iiab_env_file }}
+source /etc/iiab/iiab.env
 lan=$IIAB_LAN_DEVICE
 wan=$IIAB_WAN_DEVICE
 iiab_gateway_enabled=$IIAB_GATEWAY_ENABLED
-# iiab_gateway_enabled=$(iiab_var_value iiab_gateway_enabled)
-echo -e "\nLAN: $lan"
-echo -e "WAN: $wan\n"
-#network_mode=`grep iiab_network_mode_applied {{ iiab_ini_file }} | gawk '{print $3}'`
+echo
+echo "Extracted 3 network vars from /etc/iiab/iiab.env :"
+echo
+echo "lan: $lan"
+echo "wan: $wan"
+echo "iiab_gateway_enabled: $iiab_gateway_enabled"
+echo
+#network_mode=`grep iiab_network_mode_applied /etc/iiab/iiab.ini | gawk '{print $3}'`
 #echo -e "Network Mode: $network_mode\n"
+lan_ip=$(iiab_var_value lan_ip)    # 172.18.96.1
 
 ports_externally_visible=$(iiab_var_value ports_externally_visible)
 gw_block_https=$(iiab_var_value gw_block_https)
@@ -199,7 +204,7 @@ if [ "$wan" != "none" ]; then
         $IPTABLES -A FORWARD -i $wan -o $lan -m state --state ESTABLISHED,RELATED -j ACCEPT
         # Block https traffic except if directed at server
         if [ "$gw_block_https" == "True" ]; then
-            $IPTABLES -A FORWARD -p tcp ! -d {{ lan_ip }} --dport 443 -j DROP
+            $IPTABLES -A FORWARD -p tcp ! -d $lan_ip --dport 443 -j DROP
         fi
         # Allow outgoing connections from the LAN side
         $IPTABLES -A FORWARD -i $lan -o $wan -j ACCEPT
@@ -218,13 +223,13 @@ fi
 
 # TCP & UDP block of DNS port 53 if truly nec
 if [ "$block_DNS" == "True" ]; then
-    $IPTABLES -t nat -A PREROUTING -i $lan -p tcp --dport 53 ! -d {{ lan_ip }} -j DNAT --to {{ lan_ip }}:53
-    $IPTABLES -t nat -A PREROUTING -i $lan -p udp --dport 53 ! -d {{ lan_ip }} -j DNAT --to {{ lan_ip }}:53
+    $IPTABLES -t nat -A PREROUTING -i $lan -p tcp --dport 53 ! -d $lan_ip -j DNAT --to $lan_ip:53
+    $IPTABLES -t nat -A PREROUTING -i $lan -p udp --dport 53 ! -d $lan_ip -j DNAT --to $lan_ip:53
 fi
 
 # if [ "$HTTPCACHE_ON" == "True" ]; then    # Via /etc/iiab/iiab.env
 if [ "$squid_enabled" == "True" ]; then     # Direct from default_vars.yml and local_vars.yml
-    $IPTABLES -t nat -A PREROUTING -i $lan -p tcp --dport 80 ! -d {{ lan_ip }} -j DNAT --to {{ lan_ip }}:3128
+    $IPTABLES -t nat -A PREROUTING -i $lan -p tcp --dport 80 ! -d $lan_ip -j DNAT --to $lan_ip:3128
 fi
 
 # Save the whole rule set
