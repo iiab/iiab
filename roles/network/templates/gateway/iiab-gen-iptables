@@ -34,56 +34,68 @@ IPTABLES=/usr/sbin/iptables
 IPTABLES_DATA=/etc/sysconfig/iptables
 {% endif %}
 
+# 2021-08-17: bash scripts using default_vars.yml &/or local_vars.yml
+# https://github.com/iiab/iiab-factory/blob/master/iiab#L79-L97
+# https://github.com/iiab/iiab/blob/master/roles/firmware/templates/iiab-check-firmware#L12
+# https://github.com/iiab/iiab/blob/master/roles/network/templates/gateway/iiab-gen-iptables#L47-L51
+# https://github.com/iiab/maps/blob/master/osm-source/pages/viewer/scripts/iiab-install-map-region#L25-L34
+# https://github.com/iiab/iiab/blob/master/iiab-support READS AND WRITES, INCL NON-BOOLEAN (openvpn_handle)
+
+# "awk '{print $2}'" almost works, but: (1) Fails to remove outer quotes.
+# (2) Chops up Ansible vars containing multiple words w/o surrounding quotes.
+# SO: sed is used instead, to emulate Ansible's parsing of vars from .yml
+iiab_var_value() {
+    v1=$(grep "^$1:\s" /opt/iiab/iiab/vars/default_vars.yml | sed "s/^$1:\s\+//; s/#.*//; s/\s*$//; s/^\(['\"]\)\(.*\)\1$/\2/")
+    v2=$(grep "^$1:\s" /etc/iiab/local_vars.yml | sed "s/^$1:\s\+//; s/#.*//; s/\s*$//; s/^\(['\"]\)\(.*\)\1$/\2/")
+    [ "$v2" != "" ] && echo $v2 || echo $v1    # [ "$v2" ] ALSO WORKS
+}
+
 source {{ iiab_env_file }}
 lan=$IIAB_LAN_DEVICE
 wan=$IIAB_WAN_DEVICE
 iiab_gateway_enabled=$IIAB_GATEWAY_ENABLED
+# iiab_gateway_enabled=$(iiab_var_value iiab_gateway_enabled)
 echo -e "\nLAN: $lan"
 echo -e "WAN: $wan\n"
 #network_mode=`grep iiab_network_mode_applied {{ iiab_ini_file }} | gawk '{print $3}'`
 #echo -e "Network Mode: $network_mode\n"
 
-# "Good thing we replace this file; should be treated like Squid below" ?
-ports_externally_visible={{ ports_externally_visible }}
-# 2021-08-17: bash scripts using default_vars.yml &/or local_vars.yml
-# https://github.com/iiab/iiab/blob/master/roles/firmware/templates/iiab-check-firmware#L11
-# https://github.com/iiab/iiab/blob/master/roles/network/templates/gateway/iiab-gen-iptables#L53-L54
-# https://github.com/iiab/maps/blob/master/osm-source/pages/viewer/scripts/iiab-install-map-region#L25-L34
-# https://github.com/iiab/iiab/blob/master/iiab-support READS AND WRITES, INCL NON-BOOLEAN (openvpn_handle)
-grep -q '^gw_block_https:\s\+[tT]rue\b' /opt/iiab/iiab/vars/default_vars.yml && gw_block_https=True || gw_block_https=False
-grep -q '^gw_block_https:\s\+[tT]rue\b' /etc/iiab/local_vars.yml && gw_block_https=True
-sshd_port={{ sshd_port }}
+ports_externally_visible=$(iiab_var_value ports_externally_visible)
+gw_block_https=$(iiab_var_value gw_block_https)
+sshd_port=$(iiab_var_value sshd_port)
 #gui_wan= [no longer needed]
-gui_port={{ gui_port }}
-grep -q '^block_DNS:\s\+[tT]rue\b' /opt/iiab/iiab/vars/default_vars.yml && block_DNS=True || block_DNS=False
-grep -q '^block_DNS:\s\+[tT]rue\b' /etc/iiab/local_vars.yml && block_DNS=True
+gui_port=$(iiab_var_value gui_port)
+block_DNS=$(iiab_var_value block_DNS)
 
-azuracast_ports="{{ azuracast_port_range_prefix }}000:{{ azuracast_port_range_prefix }}100"
-azuracast_https_port={{ azuracast_https_port }}
-azuracast_http_port={{ azuracast_http_port }}
-calibre_port={{ calibre_port }}
-calibreweb_port={{ calibreweb_port }}
-cups_port={{ cups_port }}
-internetarchive_port={{ internetarchive_port }}
-kalite_server_port={{ kalite_server_port }}
-kiwix_port={{ kiwix_port }}
-kolibri_http_port={{ kolibri_http_port }}
-minetest_port={{ minetest_port }}
-mosquitto_port={{ mosquitto_port }}
-nodered_port={{ nodered_port }}
-grep -q '^pbx_enabled:\s\+[tT]rue\b' /opt/iiab/iiab/vars/default_vars.yml && pbx_enabled=True || pbx_enabled=False
-grep -q '^pbx_enabled:\s\+[tT]rue\b' /etc/iiab/local_vars.yml && pbx_enabled=True
-pbx_http_port={{ pbx_http_port }}
-pbx_signaling_ports_chan_sip={{ pbx_signaling_ports_chan_sip }}
-pbx_signaling_ports_chan_pjsip={{ pbx_signaling_ports_chan_pjsip }}
-pbx_data_ports={{ pbx_data_ports }}
-sugarizer_port={{ sugarizer_port }}
-transmission_http_port={{ transmission_http_port }}
-transmission_peer_port={{ transmission_peer_port }}
-jupyterhub_port={{ jupyterhub_port }}
+azuracast_ports=$(iiab_var_value azuracast_port_range_prefix)000:$(iiab_var_value azuracast_port_range_prefix)100
+azuracast_https_port=$(iiab_var_value azuracast_https_port)
+azuracast_http_port=$(iiab_var_value azuracast_http_port)
+calibre_port=$(iiab_var_value calibre_port)
+calibreweb_port=$(iiab_var_value calibreweb_port)
+cups_port=$(iiab_var_value cups_port)
+internetarchive_port=$(iiab_var_value internetarchive_port)
+jupyterhub_port=$(iiab_var_value jupyterhub_port)
+kalite_server_port=$(iiab_var_value kalite_server_port)
+kiwix_port=$(iiab_var_value kiwix_port)
+kolibri_http_port=$(iiab_var_value kolibri_http_port)
+minetest_port=$(iiab_var_value minetest_port)
+mosquitto_port=$(iiab_var_value mosquitto_port)
+nodered_port=$(iiab_var_value nodered_port)
 
-samba_udp_ports={{ samba_udp_ports }}
-samba_tcp_mports={{ samba_tcp_mports }}
+pbx_enabled=$(iiab_var_value pbx_enabled)
+pbx_http_port=$(iiab_var_value pbx_http_port)
+pbx_signaling_ports_chan_sip=$(iiab_var_value pbx_signaling_ports_chan_sip)
+pbx_signaling_ports_chan_pjsip=$(iiab_var_value pbx_signaling_ports_chan_pjsip)
+pbx_data_ports=$(iiab_var_value pbx_data_ports)
+
+sugarizer_port=$(iiab_var_value sugarizer_port)
+transmission_http_port=$(iiab_var_value transmission_http_port)
+transmission_peer_port=$(iiab_var_value transmission_peer_port)
+
+samba_udp_ports=$(iiab_var_value samba_udp_ports)
+samba_tcp_mports=$(iiab_var_value samba_tcp_mports)
+
+squid_enabled=$(iiab_var_value squid_enabled)
 
 echo -e "\nports_externally_visible: "$ports_externally_visible"\n"
 if ! [ "$ports_externally_visible" -eq "$ports_externally_visible" ] 2> /dev/null; then
@@ -151,6 +163,7 @@ if [ "$wan" != "none" ]; then
         $IPTABLES -A INPUT -p tcp --dport $calibreweb_port -m state --state NEW -i $wan -j ACCEPT
         $IPTABLES -A INPUT -p tcp --dport $cups_port -m state --state NEW -i $wan -j ACCEPT
         $IPTABLES -A INPUT -p tcp --dport $internetarchive_port -m state --state NEW -i $wan -j ACCEPT
+        $IPTABLES -A INPUT -p tcp --dport $jupyterhub_port -m state --state NEW -i $wan -j ACCEPT
         $IPTABLES -A INPUT -p tcp --dport $kalite_server_port -m state --state NEW -i $wan -j ACCEPT
         $IPTABLES -A INPUT -p tcp --dport $kiwix_port -m state --state NEW -i $wan -j ACCEPT
         $IPTABLES -A INPUT -p tcp --dport $kolibri_http_port -m state --state NEW -i $wan -j ACCEPT
@@ -168,7 +181,6 @@ if [ "$wan" != "none" ]; then
         $IPTABLES -A INPUT -p tcp --dport $sugarizer_port -m state --state NEW -i $wan -j ACCEPT
         $IPTABLES -A INPUT -p tcp --dport $transmission_http_port -m state --state NEW -i $wan -j ACCEPT
         $IPTABLES -A INPUT -p tcp --dport $transmission_peer_port -m state --state NEW -i $wan -j ACCEPT
-        $IPTABLES -A INPUT -p tcp --dport $jupyterhub_port -m state --state NEW -i $wan -j ACCEPT
     fi
 
     # 4 = ssh + http-or-https + common IIAB services + Samba
@@ -210,8 +222,8 @@ if [ "$block_DNS" == "True" ]; then
     $IPTABLES -t nat -A PREROUTING -i $lan -p udp --dport 53 ! -d {{ lan_ip }} -j DNAT --to {{ lan_ip }}:53
 fi
 
-# If Squid enabled, as indicated by "HTTPCACHE_ON=True" in /etc/iiab/iiab.env
-if [ "$HTTPCACHE_ON" == "True" ]; then
+# if [ "$HTTPCACHE_ON" == "True" ]; then    # Via /etc/iiab/iiab.env
+if [ "$squid_enabled" == "True" ]; then     # Direct from default_vars.yml and local_vars.yml
     $IPTABLES -t nat -A PREROUTING -i $lan -p tcp --dport 80 ! -d {{ lan_ip }} -j DNAT --to {{ lan_ip }}:3128
 fi
 
