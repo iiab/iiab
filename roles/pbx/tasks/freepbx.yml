@@ -62,10 +62,9 @@
 #     state: present
 #   when: php_version is version('8.0', '<')
 
-- name: FreePBX - Install and configure Apache - if not pbx_try_nginx
+- name: FreePBX - Install and configure Apache - if pbx_use_apache
   include_tasks: apache.yml
-  when: not pbx_try_nginx
-
+  when: pbx_use_apache
 
 - name: FreePBX - Download {{ freepbx_url }}/{{ freepbx_src_file }} to {{ downloads_dir }}
   get_url:
@@ -149,7 +148,7 @@
     state: present
 
 
-# 2021-08-16: DOES NGINX NEED THE NEXT 2 STANZAS?  (If not, should 'when: not pbx_try_nginx' be added?)
+# 2021-08-16: DOES NGINX NEED THE NEXT 2 STANZAS?  (If not, should 'when: pbx_use_apache' be added?)
 
 - name: FreePBX - Create new php sessions dir /var/lib/php/asterisk_sessions/ - SEE 'php_value session.save_path /var/lib/php/asterisk_sessions/' IN pbx/templates/freepbx.conf.j2
   file:
@@ -253,17 +252,12 @@
 - name: FreePBX - Run 'fwconsole ma upgradeall' on installed FreePBX modules, e.g. 16 default modules (of about 70 total) - CAN TAKE 1 MIN OR LONGER!
   command: fwconsole ma upgradeall
 
-- name: FreePBX - Run 'fwconsole set CHECKREFERER 0' (0 means false) - if pbx_try_nginx - so 'Submit' button definitively works at http://box/freepbx >> Settings >> Advanced Settings -- FYI you can run 'fwconsole set -l' or 'fwconsole set CHECKREFERER' to view FreePBX settings -- FYI /etc/freepbx.conf can completely override FreePBX's stored settings if nec
-  command: fwconsole set CHECKREFERER 0    # Or/later run 'fwconsole set CHECKREFERER 1' (1 means true) to restore FreePBX's default strict checking.
-  when: pbx_try_nginx
-
-
-# - name: FreePBX - Add "$amp_conf['CHECKREFERER'] = false;" to /etc/freepbx.conf #2931 - if pbx_try_nginx"
+# - name: FreePBX - Add "$amp_conf['CHECKREFERER'] = false;" to /etc/freepbx.conf #2931 - if pbx_use_nginx"
 #   lineinfile:
 #     path: /etc/freepbx.conf
 #     insertbefore: '^\?>$'    # Match exact line '?>' -- BOTTOM OF FILE NEC!
 #     line: "$amp_conf['CHECKREFERER'] = false;"
-#   when: pbx_try_nginx
+#   when: pbx_use_nginx
 
 # - name: 'FreePBX - fix file permissions for NGINX: /etc/freepbx.conf (0644), /var/log/asterisk/freepbx.log (0666)'
 #   file:
@@ -273,7 +267,7 @@
 #   with_items:
 #     - { path: '/etc/freepbx.conf', mode: u=rw,g=r,o=r }                  # 2021-08-04: LATER ENDS UP AS 0660
 #     - { path: '/var/log/asterisk/freepbx.log', mode: u=rw,g=rw,o=rw }    # 2021-08-04: LATER ENDS UP AS 0664
-#   when: pbx_try_nginx
+#   when: pbx_use_nginx
 
 # - name: 'FreePBX - fix dir permissions for NGINX: /var/spool/asterisk/cache (0777)'
 #   file:
@@ -284,9 +278,9 @@
 #   with_items:
 #     # - /var/www/html/freepbx/admin/assets/less/cache
 #     - /var/spool/asterisk/cache
-#   when: pbx_try_nginx
+#   when: pbx_use_nginx
 
-# For 'pbx_try_nginx: True' -- FreePBX's initial page (Admin user registration)
+# For 'pbx_use_nginx: True' -- FreePBX's initial page (Admin user registration)
 # tries to set up a cron job but fails:
 #   "Exception: Trying to edit user asterisk, when I'm running as www-data"
 # 2021-08-10: Hacking /etc/freepbx.conf WAS NOT TESTED PROPERLY -- some vars MAY
@@ -297,4 +291,4 @@
 #     #insertafter: '^<\?php$'    # Match exact line '<?php' -- BUT TOP OF FILE FAILS :(
 #     insertbefore: '^\?>$'       # Match exact line '?>' -- BOTTOM OF FILE NECESSARY :)
 #     line: "$amp_conf['AMPASTERISKWEBUSER'] = 'www-data';"
-#   when: pbx_try_nginx
+#   when: pbx_use_nginx
