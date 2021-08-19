@@ -40,35 +40,9 @@
     path: /tmp/heart-beat.txt
     state: absent
 
-
-- name: "Set 'iiab_fqdn: {{ iiab_hostname }}.{{ iiab_domain }}'"
-  set_fact:
-    iiab_fqdn: "{{ iiab_hostname }}.{{ iiab_domain }}"
-    FQDN_changed: False
-
-- name: Set hostname / domain (etc) in various places -- if iiab_fqdn != ansible_fqdn ({{ ansible_fqdn }})
-  include_tasks: hostname.yml
-  when: iiab_fqdn != ansible_fqdn
-
-# 2021-07-30: FQDN_changed isn't used as in the past -- its remaining use is
-# for {named, dhcpd, squid} in roles/network/tasks/main.yml -- possibly it
-# should be reconsidered?  See PR #2876: roles/network might become optional?
-- name: "Also set 'FQDN_changed: True' -- if iiab_fqdn != ansible_fqdn ({{ ansible_fqdn }})"
-  set_fact:
-    FQDN_changed: True
-  when: iiab_fqdn != ansible_fqdn
-
-
-# 2021-08-17: (1) iiab-gen-iptables works better if gui_port is set directly in
-# default_vars.yml and/or local_vars.yml (2) Admin Console's iiab-admin.yml
-# and js-menu.yml set 'adm_cons_force_ssl: False'
-
-# - name: "Set 'gui_port: 80' for Admin Console if not adm_cons_force_ssl"
-#   set_fact:
-#     gui_port: 80
-#   when: not adm_cons_force_ssl
-
-# - name: "Set 'gui_port: 443' for Admin Console if adm_cons_force_ssl"
-#   set_fact:
-#     gui_port: 443
-#   when: adm_cons_force_ssl
+- block:
+  - name: Stop the installer portion if internet is unavailable
+    fail:
+      msg: "New installs requires internet access which is not available"
+  - meta: end_play
+  when: not internet_available and iiab_stage|int < 9
