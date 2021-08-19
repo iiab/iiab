@@ -30,8 +30,8 @@ read ans < /dev/tty
 
 # BEHAVIOR LIKE ANSIBLE'S parsing of vars from .yml:
 # (0) No need to remove hash/comments b/c it's live input here, unlike above.
-# (1) sed: Remove outer spacing IF NEC, then...
-# (2) sed: Remove 1 pair of matching outer quotes (IF NEC)
+# (1) sed: Trim outer spacing IF NEC, then...
+# (2) sed: Trim 1 pair of matching outer quotes (IF NEC)
 # (3) Ansible vars can have non-string value null.  SEE /opt/iiab/iiab/test.yml
 #     Here in bash, we focus only on string values e.g. "" empty string if nec.
 # (4) When writing to disk, we aggressively overwrite such null var lines, e.g.
@@ -39,9 +39,10 @@ read ans < /dev/tty
 
 ans=$(echo $ans | sed "s/^\s*//; s/\s*$//; s/^\(['\"]\)\(.*\)\1$/\2/")
 
-# if ( [ "$ans" = "$handle" ] || [ "$ans" = "" ] ) && [ "$handle" != "" ]; then    # Overkill
-if [ "$ans" = "" ] || [ "$ans" = "$handle" ]; then
-    echo -e "\n\e[1mWARNING: openvpn_handle remains unchanged in /etc/iiab/local_vars.yml\e[0m\n"
+if [ "$ans" = "" ]; then    # (A) Simple!  Writes to local_vars.yml a bit more than nec.
+# if [ "$ans" = "" ] || [ "$ans" = "$handle" ]; then    # (B) Only write to disk when nec?
+# if ( [ "$ans" = "" ] || [ "$ans" = "$handle" ] ) && [ "$handle" != "" ]; then    # (C) Overkill
+    echo -e "\n        \e[100mopenvpn_handle REMAINS UNCHANGED IN /etc/iiab/local_vars.yml\e[0m\n"
 else
     if grep -q '^openvpn_handle:' /etc/iiab/local_vars.yml; then
         sed -i "s/^openvpn_handle:.*/openvpn_handle: $ans/" /etc/iiab/local_vars.yml
@@ -49,7 +50,7 @@ else
         echo "openvpn_handle: $ans" >> /etc/iiab/local_vars.yml
     fi
 
-    echo -e "\n\e[1mSAVED YOUR NEW openvpn_handle to /etc/iiab/local_vars.yml\e[0m\n"
+    echo -e "\n                     \e[7mSAVED TO: /etc/iiab/local_vars.yml\e[0m\n"
     handle=$ans;    # For display at bottom
 fi
 
@@ -88,24 +89,24 @@ echo -e "\nNow let's restart OpenVPN..."
 #systemctl start openvpn
 systemctl restart openvpn
 
-echo -en "\n    "
+echo -en "\n      "
 for i in {16..40} ; do echo -en "\e[48;5;${i}m \e[0m" ; done
 echo -en " OpenVPN TIPS "
 for i in {40..16} ; do echo -en "\e[48;5;${i}m \e[0m" ; done
 
-echo -e "\n\n  1. Check your Internet connection: run 'ping 8.8.8.8' and 'ping mit.edu'"
-echo -e "  2. Check your OpenVPN connection: run 'ping 10.8.0.1'"
-echo -e "  3. Run 'ip a' and look for a 'tun0' IP address like 10.8.0.x"
-echo -e "  4. If necessary, run 'systemctl restart openvpn' which should"
-echo -e "     run 'systemctl restart openvpn@xscenet' for you."
-echo -e "  5. SOMETIMES WAITING A MINUTE HELPS -- retry steps 2 and 3 to monitor."
-echo -e "  6. If in future you want to disable OpenVPN connections to-and-from your"
-echo -e "     Internet-in-a-Box (IIAB) please run 'iiab-support-off' at that time."
-echo -e "  7. Read 'How can I remotely manage my Internet-in-a-Box?' at"
-echo -e "     http://FAQ.IIAB.IO to learn about DIY remote support alternatives"
-echo -e "     like ngrok, serveo, remot3.it and TeamViewer.\n"
+echo -e "\n\n    1. Check your Internet connection: run 'ping 8.8.8.8' and 'ping mit.edu'"
+echo -e "    2. Check your OpenVPN connection: run 'ping 10.8.0.1'"
+echo -e "    3. Run 'ip a' and look for a 'tun0' IP address like 10.8.0.x"
+echo -e "    4. If necessary, run 'systemctl restart openvpn' which should"
+echo -e "       run 'systemctl restart openvpn@xscenet' for you."
+echo -e "    5. SOMETIMES WAITING A MINUTE HELPS -- retry steps 2 and 3 to monitor."
+echo -e "    6. If in future you want to disable OpenVPN connections to-and-from your"
+echo -e "       Internet-in-a-Box (IIAB) please run 'iiab-support-off' at that time."
+echo -e "    7. Read 'How can I remotely manage my Internet-in-a-Box?' at"
+echo -e "       http://FAQ.IIAB.IO to learn about DIY remote support alternatives"
+echo -e "       like ngrok, serveo, remot3.it and TeamViewer.\n"
 
-echo -en "    "
+echo -en "      "
 for i in {16..40} ; do echo -en "\e[48;5;${i}m \e[0m" ; done
 echo -en " OpenVPN TIPS "
 for i in {40..16} ; do echo -en "\e[48;5;${i}m \e[0m" ; done
@@ -121,6 +122,6 @@ vpnip=$(ip a | grep tun0$ | awk '{print $2}')
 if [ "$vpnip" != "" ]; then
     echo -e "\nYour OpenVPN IP address (which can change) is: \e[32m$vpnip\e[0m\n"
 else
-    echo -e "\n \e[41m       ERROR: OpenVPN IP address not ready - PLEASE TRY THE ABOVE TIPS        \e[0m\n"
+    echo -e "\n\n \e[41m       ERROR: OpenVPN IP address not ready - PLEASE TRY THE ABOVE TIPS        \e[0m\n"
     exit 1
 fi
