@@ -1,0 +1,74 @@
+#!/bin/bash -x
+# Small daemon to identify this machine to the OpenVPN server
+
+# SEE /usr/bin/iiab-support for local_vars.yml var extraction explanation
+
+# EMULATE ANSIBLE: but additionally Force Empty String Where Nec, e.g. whether
+# local_vars.yml sets openvpn_handle to "" (or worst case null, or not at all!)
+HANDLE=$(grep "^openvpn_handle:\s" /etc/iiab/local_vars.yml | tail -1 | sed "s/^openvpn_handle:\s\+//; s/#.*//; s/\s*$//; s/^\(['\"]\)\(.*\)\1$/\2/")
+
+# ALSO GO 1 STEP FURTHER THAN ANSIBLE: convert remaining spaces to underscores,
+# for OpenVPN server.  iiab-support emulates this, to help folks understand.
+HANDLE=${HANDLE// /_}    # Same as "s/ /_/g"
+
+# Likewise empty string is the worst case, e.g. if file doesn't exist.
+# If $HANDLE is "", OpenVPN server tries to use the 1st 6 chars of UUID,
+# e.g. e1a3d4 from e1a3d4e2-2d1a-4f37-9ba0-e836d7c8e3ca
+# SEE "AUGUST 2018 - AUGUST 2021" RECAP ON TOP OF: roles/openvpn/tasks/main.yml
+UUID=$(cat /etc/iiab/uuid)
+
+/usr/bin/ncat -l -k -p1705 --exec "/bin/echo HANDLE = $HANDLE|UUID = $UUID" &
+
+
+
+# 2021-08-18: Let's finally do it 3 years lster, simplifying from 4 places to 1
+# at long last.  Per SSOT (single source of truth).
+
+# #HANDLE=
+# #UUID=
+# #if [ -f /etc/iiab/openvpn_handle ]; then
+#     # Option #1: Source directly from /etc/iiab/local_vars.yml in future?
+#     # Option #2
+#     HANDLE=$(cat /etc/iiab/openvpn_handle)    # Sets to "" if file doesn't exist (error is ok!)
+
+# # Sourcing a variable from ~4 different places is a recipe for total confusion
+# # (or worse!)  Far better to make variable openvpn_handle and file
+# # /etc/iiab/openvpn_handle "obligatory" (EMPTY STRING "" IS TOLERATED, IN WHICH
+# # CASE OPENVPN SERVER TRIES TO USE /etc/iiab/uuid BELOW, IN LIEU OF HANDLE...)
+
+# # CLARIF: "systemctl restart openvpn" still works tolerably even if the above
+# # is defied, auto-starting child service openvpn@xscenet per usual
+# # (e.g. if /etc/iiab/openvpn_handle is deleted by accident!)
+
+# #else
+# #    # Option #3: Dangerous to invoke hypothetical variables :(
+# #    source {{ iiab_env_file }}
+# #    # Option #4: CAUSED FAILURES IN AUGUST 2018, invoking stale variable from {{ iiab_ini_file }}, but safer now that relegated to #4 ?
+# #    if [ -z "$HANDLE" ]; then
+# #        HANDLE=`cat {{ iiab_ini_file }} | gawk \
+# #        '{ if((toupper($1) == "HANDLE") && ($2 == "=")) { print $3;}}'`
+# #    fi
+# #fi
+# HANDLE=${HANDLE// /_}    # Change all spaces to underscores
+# #if [ -f /etc/iiab/uuid ]; then
+#     UUID=$(cat /etc/iiab/uuid)    # Sets to "" if file doesn't exist (error is ok!)
+# #fi
+
+# SERVER=/usr/bin/ncat
+# #ID=$(printf "HANDLE = %s|UUID = %s" $HANDLE $UUID)
+# #ID=$(echo "HANDLE = ${HANDLE}|UUID = ${UUID}")
+# ID=$(echo "HANDLE = $HANDLE|UUID = $UUID")
+# # August 2018: Removal of trailing '|' tested on Raspbian, Ubuntu 18.04 & Ubuntu 16.04
+# #ID=`printf "HANDLE = %s|UUID = %s|" $HANDLE $UUID`
+
+# # Start the daemon which will serve the handle on demand
+# {% if is_debuntu %}
+# $SERVER -l -k -p1705 --exec "/bin/echo $ID" &
+# # 2020-11-23: USE 1 LINE INSTEAD OF 9 LINES, IF WE MANDATE debuntu:
+# #/usr/bin/ncat -l -k -p1705 --exec "/bin/echo HANDLE = $HANDLE|UUID = $UUID" &
+# {% else %}
+# source /etc/init.d/functions
+# PID_FILE=/var/run/openvpn/announce.pid
+# daemon --pidfile=${PID_FILE} $SERVER "-l -k -p1705 --exec \"/usr/bin/echo $ID\"" &
+# #daemon --pidfile=${PID_FILE} $SERVER "-l -k -p1705 --exec \"/usr/bin/echo $(printf 'HANDLE = %s|UUID = %s' $HANDLE $UUID)\"" &
+# {% endif %}
