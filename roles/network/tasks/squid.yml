@@ -1,85 +1,108 @@
-- name: "Install 2 packages: {{ proxy }}, cadaver"
+- name: "Install package: {{ proxy }}"
   package:
-    name:
-      - "{{ proxy }}"
-      - cadaver
+    name: "{{ proxy }}"    # squid (or 'squid3' on vars/debian-8.yml, vars/raspbian-8.yml)
+      # - cadaver
     state: present
 
-- name: "Bigger hammer for Ubuntu, run: /etc/init.d/squid stop"
-  command: /etc/init.d/squid stop
-  when: is_ubuntu
+# - name: "Bigger hammer for Ubuntu, run: /etc/init.d/squid stop"
+#   command: /etc/init.d/squid stop
+#   when: is_ubuntu
 
-- name: Stop Squid
-  service:
+- name: Stop systemd service '{{ proxy }}'
+  systemd:
     name: "{{ proxy }}"
     state: stopped
-  when: not installing
+  when: squid_installed is undefined
 
-- name: "Create the Squid user: {{ proxy_user }}"
+# 2021-08-17: This stanza is gratuitous on most distros, where the user 'proxy'
+# or 'squid' is preinstalled (typically with UID and GID 13 in /etc/passwd) but
+# let's be sure, as distro internals / favorite distros change without warning.
+- name: Ensure Linux user:group '{{ proxy_user }}:{{ proxy_user }}' exists, to own /library/cache -- and for recent versions of /usr/lib/systemd/system/squid.service that use 'Group=proxy'
   user:
-    name: "{{ proxy_user }}"
-    createhome: False
-    shell: /bin/false
+    name: "{{ proxy_user }}"    # proxy (or 'squid' on vars/centos-7.yml, vars/fedora-18.yml, vars/fedora-12.yml)
+    group: "{{ proxy_user }}"
+    create_home: False
+    shell: /bin/false    # UNIX norm should work across all distros, overriding Debian/Ubuntu norm /usr/sbin/nologin
 
-- name: "Install from template: /usr/bin/iiab-httpcache, /etc/sysconfig/squid, /etc/{{ proxy }}/sites.whitelist.txt and 3 .rules files"
-  template:
-    src: "{{ item.src }}"
-    dest: "{{ item.dest }}"
-    owner: "{{ item.owner }}"
-    group: "{{ item.group }}"
-    mode: "{{ item.mode }}"
-    force: no
-  with_items:
-    - src: 'roles/network/templates/squid/squid.sysconfig'
-      dest: '/etc/sysconfig/squid'
-      owner: 'root'
-      group: 'root'
-      mode: '0755'
-    - src: 'roles/network/templates/squid/sites.whitelist.txt'
-      dest: '/etc/{{ proxy }}/sites.whitelist.txt'
-      owner: '{{ proxy_user }}'
-      group: '{{ proxy_user }}'
-      mode: '0644'
-    - src: 'roles/network/templates/squid/allowregex.rules'
-      dest: '/etc/{{ proxy }}/allowregex.rules'
-      owner: '{{ proxy_user }}'
-      group: '{{ proxy_user }}'
-      mode: '0644'
-    - src: 'roles/network/templates/squid/denyregex.rules'
-      dest: '/etc/{{ proxy }}/denyregex.rules'
-      owner: '{{ proxy_user }}'
-      group: '{{ proxy_user }}'
-      mode: '0644'
-    - src: 'roles/network/templates/squid/dstaddress.rules'
-      dest: '/etc/{{ proxy }}/dstaddress.rules'
-      owner: '{{ proxy_user }}'
-      group: '{{ proxy_user }}'
-      mode: '0644'
-    - src: 'roles/network/templates/squid/iiab-httpcache.j2'
-      dest: '/usr/bin/iiab-httpcache'
-      owner: 'root'
-      group: 'root'
-      mode: '0755'
+# 2021-08-16: Squid runs as 'nobody' when started as root:
+# http://www.squid-cache.org/Doc/config/cache_effective_user/
+# Much more detail here, but neither directive is recommended:
+# http://www.squid-cache.org/Doc/config/cache_effective_group/
+#
+# So nobody:root or root:root ownership don't work for cache_dir /library/cache
+#
+# Squid auto-creation of cache_dir (or the old way, 'squid -z') both fail:
+# "FATAL: Failed to make swap directory /library/cache: (13) Permission denied"
+#
+# SEE ALSO: https://github.com/iiab/iiab/blob/master/roles/network/templates/squid/squid.conf.j2#L10-L30
 
-- name: Create Squid directory /library/cache
+- name: Create Squid directory /library/cache ({{ proxy_user }}:{{ proxy_user }}, 0750)
   file:
+    state: directory
     path: /library/cache
     owner: "{{ proxy_user }}"
     group: "{{ proxy_user }}"
-    mode: '0750'
-    state: directory
+    mode: 0750
 
-- name: Create Squid directory /var/log/{{ proxy }}
-  file:
-    path: "/var/log/{{ proxy }}"
-    owner: "{{ proxy_user }}"
-    group: "{{ proxy_user }}"
-    mode: '0750'
-    state: directory
+- name: Install site allowlists/whitelists /etc/{{ proxy }}/allow_dst_domains, /etc/{{ proxy }}/allow_url_regexs from template (root:root, 0644 by default)
+  template:
+    src: "{{ item }}"
+    dest: /etc/{{ proxy }}/
+    backup: yes
+  with_items:
+    - roles/network/templates/squid/allow_dst_domains
+    - roles/network/templates/squid/allow_url_regexs
 
+# - name: "Install from template: /usr/bin/iiab-httpcache, /etc/sysconfig/squid, /etc/{{ proxy }}/sites.whitelist.txt and 3 .rules files"
+#   template:
+#     src: "{{ item.src }}"
+#     dest: "{{ item.dest }}"
+#     owner: "{{ item.owner }}"
+#     group: "{{ item.group }}"
+#     mode: "{{ item.mode }}"
+#     force: no
+#   with_items:
+#     - src: 'roles/network/templates/squid/squid.sysconfig'
+#       dest: '/etc/sysconfig/squid'
+#       owner: 'root'
+#       group: 'root'
+#       mode: '0755'
+#     - src: 'roles/network/templates/squid/sites.whitelist.txt'
+#       dest: '/etc/{{ proxy }}/sites.whitelist.txt'
+#       owner: '{{ proxy_user }}'
+#       group: '{{ proxy_user }}'
+#       mode: '0644'
+#     - src: 'roles/network/templates/squid/allowregex.rules'
+#       dest: '/etc/{{ proxy }}/allowregex.rules'
+#       owner: '{{ proxy_user }}'
+#       group: '{{ proxy_user }}'
+#       mode: '0644'
+#     - src: 'roles/network/templates/squid/denyregex.rules'
+#       dest: '/etc/{{ proxy }}/denyregex.rules'
+#       owner: '{{ proxy_user }}'
+#       group: '{{ proxy_user }}'
+#       mode: '0644'
+#     - src: 'roles/network/templates/squid/dstaddress.rules'
+#       dest: '/etc/{{ proxy }}/dstaddress.rules'
+#       owner: '{{ proxy_user }}'
+#       group: '{{ proxy_user }}'
+#       mode: '0644'
+#     - src: 'roles/network/templates/squid/iiab-httpcache.j2'
+#       dest: '/usr/bin/iiab-httpcache'
+#       owner: 'root'
+#       group: 'root'
+#       mode: '0755'
 
-- include_tasks: roles/network/tasks/dansguardian.yml
-  when: dansguardian_install
+# - name: Create Squid directory /var/log/{{ proxy }}
+#   file:
+#     path: "/var/log/{{ proxy }}"
+#     owner: "{{ proxy_user }}"
+#     group: "{{ proxy_user }}"
+#     mode: '0750'
+#     state: directory
+
+# - include_tasks: roles/network/tasks/dansguardian.yml
+#   when: dansguardian_install
 
 
 # RECORD Squid AS INSTALLED
@@ -98,7 +121,7 @@
 # {{ proxy }} is normally "squid", but is "squid3" on raspbian-8 & debian-8
 - name: Add '{{ proxy }}' variable values to {{ iiab_ini_file }}
   ini_file:
-    dest: "{{ iiab_ini_file }}"
+    dest: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
     section: "{{ proxy }}"
     option: "{{ item.option }}"
     value: "{{ item.value | string }}"
@@ -112,18 +135,18 @@
     - option: squid_enabled
       value: "{{ squid_enabled }}"
 
-- name: Add 'dansguardian' variable values to {{ iiab_ini_file }}
-  ini_file:
-    dest: "{{ iiab_ini_file }}"
-    section: dansguardian
-    option: "{{ item.option }}"
-    value: "{{ item.value | string }}"
-  with_items:
-    - option: name
-      value: DansGuardian
-    - option: description
-      value: '"DansGuardian searches web content for objectionable references and denies access when found."'
-    - option: dansguardian_install
-      value: "{{ dansguardian_install }}"
-    - option: dansguardian_enabled
-      value: "{{ dansguardian_enabled }}"
+# - name: Add 'dansguardian' variable values to {{ iiab_ini_file }}
+#   ini_file:
+#     dest: "{{ iiab_ini_file }}"
+#     section: dansguardian
+#     option: "{{ item.option }}"
+#     value: "{{ item.value | string }}"
+#   with_items:
+#     - option: name
+#       value: DansGuardian
+#     - option: description
+#       value: '"DansGuardian searches web content for objectionable references and denies access when found."'
+#     - option: dansguardian_install
+#       value: "{{ dansguardian_install }}"
+#     - option: dansguardian_enabled
+#       value: "{{ dansguardian_enabled }}"

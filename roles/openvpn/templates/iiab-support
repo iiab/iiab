@@ -1,0 +1,184 @@
+#!/bin/bash
+
+# Run 'sudo iiab-support' to turn on OpenVPN without hassle.  GENERAL TIPS:
+# http://FAQ.IIAB.IO -> "How can I remotely manage my Internet-in-a-Box?"
+
+# "AUGUST 2018 - AUGUST 2021" Technical Recap at the top of:
+# https://github.com/iiab/iiab/blob/master/roles/openvpn/tasks/main.yml
+
+DEBUG=false    # Using /usr/bin/true or /usr/bin/false
+PLAYBOOK="install-support.yml"
+INVENTORY="ansible_hosts"
+
+# 2021-08-18: bash scripts using default_vars.yml &/or local_vars.yml
+# https://github.com/iiab/iiab-factory/blob/master/iiab#L79-L97
+# https://github.com/iiab/iiab/blob/master/roles/firmware/templates/iiab-check-firmware#L13
+# https://github.com/iiab/iiab/blob/master/roles/network/templates/gateway/iiab-gen-iptables#L48-L52
+# https://github.com/iiab/maps/blob/master/osm-source/pages/viewer/scripts/iiab-install-map-region#L25-L34
+# https://github.com/iiab/iiab/blob/master/roles/openvpn/templates/iiab-support READS AND WRITES, INCL NON-BOOLEAN
+
+# PARSE local_vars.yml JUST AS Ansible & /etc/openvpn/scripts/announcer DO:
+# (1) In case var's defined multiple times, 'tail 1' takes the last assignment.
+# (2) sed: Strip 'varname:\s' on left.
+# (3) sed: Strip '#comment' on right.
+# (4) sed: Strip any outer spacing.
+# (5) sed: Strip up-to-1 pair of matching outer quotes.
+
+# 'announcer' (from openvpn/templates) ALSO GOES ONE STEP FURTHER THAN ANSIBLE:
+# (6) Convert remaining spaces to underscores.
+
+# Steps (1) and (2) are Not Applicable with live/keyboard input.
+# Steps (3), (4) and (5) are Optional with live/keyboard input (here we do it!)
+# Step (6) is always required for OpenVPN here (file input or live/keyboard!)
+
+# NOTE Ansible vars can have non-string value null.  This is different from
+# undefined -- from Ansible's perspective -- SEE /opt/iiab/iiab/test.yml
+# BUT HERE IN BASH, we focus only on string values e.g. "" empty string if nec:
+# (a) WITH INPUT, we choose to ignore lines like "^var:$" that lack whitespace.
+#     Ansible would have assigned the null value.  We do not.  We force ""
+# (b) INPUT LINES "^var:\s\+$" (trailing whitespace) we force to empty string.
+#     Ansible would have assigned the null value.  We do not.  We force ""
+# (c) WITH *OUTPUT* we aggressively overwrite null var lines, including both
+#     "^var:$" (no trailing whitespace) and "^var:\s\+$" (trailing whitespace).
+
+echo -e "\e[0m"    # Turn off all ANSI/VT100 colors
+
+if [ -f /etc/iiab/openvpn_handle ]; then
+    echo -e "\n             \e[41mFYI /etc/iiab/openvpn_handle is no longer supported.\e[0m\n"
+    echo -e "             \e[41m/etc/iiab/local_vars.yml is now used instead (SSOT).\e[0m\n\n"
+fi
+
+# (1), (2), (3) and (4) for now -- then (5) and (6) further below
+handle=$(grep "^openvpn_handle:\s" /etc/iiab/local_vars.yml | tail -1 | sed "s/^openvpn_handle:\s\+//; s/#.*//; s/\s*$//")
+
+if $($DEBUG); then
+    echo -e "/etc/iiab/local_vars.yml shows:\n"
+    grep "^openvpn_" /etc/iiab/local_vars.yml
+    echo
+    echo "Your OpenVPN machine name -- source: $handle"
+fi
+
+# Preview of steps (5) and (6)
+echo -ne "\e[1mYour OpenVPN machine name is set to: \e[100m"
+echo -n "$handle" | sed "s/^\(['\"]\)\(.*\)\1$/\2/; s/ /_/g"    # Avoid '-e' interpreting backlash escapes, to show var accurately!  Double quote var to prevent field splitting (eats spaces)
+echo -e "\e[0m\n"    # Separate line also for trailing backslash in var
+
+echo -e "\e[1mPlease type a descriptive OpenVPN machine name (openvpn_handle) such as:\n"
+
+echo -e "                     cape-town-school-36-rpi-2019-05-31\n"
+
+echo -en "Or hit [Enter] to keep the existing name:\e[0m "
+read ans < /dev/tty    # Strips outer whitespace, whether we like it or not!
+
+if [ "$ans" = "" ]; then    # (A) Simple!  Writes to local_vars.yml a bit more often than nec.
+# if [ "$ans" = "" ] || [ "$ans" = "$handle" ]; then    # (B) Only write when nec?  Also works.
+# if ( [ "$ans" = "" ] || [ "$ans" = "$handle" ] ) && [ "$handle" != "" ]; then    # (C) Overkill.
+    echo -e "\n        \e[100mopenvpn_handle REMAINS UNCHANGED IN /etc/iiab/local_vars.yml\e[0m\n"
+else
+    if grep -q '^openvpn_handle:' /etc/iiab/local_vars.yml; then
+        sed -i "s/^openvpn_handle:.*/openvpn_handle: $ans/" /etc/iiab/local_vars.yml
+    else
+        echo "openvpn_handle: $ans" >> /etc/iiab/local_vars.yml
+    fi
+
+    echo -e "\n                     \e[7mSAVED TO: /etc/iiab/local_vars.yml\e[0m\n"
+
+    if $($DEBUG); then
+	echo -e "/etc/iiab/local_vars.yml shows:\n"
+	grep "^openvpn_" /etc/iiab/local_vars.yml
+	echo
+    fi
+
+    # NEXT 4 LINES AREN'T ESSENTIAL: but they allow user to type in a '# comment' for the right side of /etc/iiab/local_vars.yml
+
+    # (3) sed: Strip '# comment' on right, as Ansible would do.
+    ans=$(echo "$ans" | sed "s/#.*//")    # Double quote var to prevent field splitting (eats spaces)
+    # (4) sed: Strip any outer spacing, as Ansible would do.
+    ans=$(echo "$ans" | sed "s/^\s*//; s/\s*$//")    # Code Safety: lstrip not nec, given "read" command above, but one day $ans might arise from elsewhere
+
+    handle=$ans;    # For display at bottom
+fi
+
+if $($DEBUG); then
+    echo '$handle after (1)-(4), prior to (5)-(6):' "$handle"
+    echo
+fi
+
+# (5) sed: Strip up-to-1 pair of matching outer quotes, as Ansible would do.
+handle=$(echo "$handle" | sed "s/^\(['\"]\)\(.*\)\1$/\2/")
+# (6) Convert remaining spaces to underscores, just as /etc/openvpn/scripts/announcer does -- same as "s/ /_/g"
+handle=${handle// /_}
+
+if grep -q '^openvpn_installed:\s\+[tT]rue\b' /etc/iiab/iiab_state.yml; then
+    echo -e "Your IIAB installation appears normal, with OpenVPN already installed...\n"
+else
+    echo -e "Plz wait a few minutes as sshd & OpenVPN are confirmed/installed...\n"
+    if grep -q '^openvpn_install:' /etc/iiab/local_vars.yml; then
+        sed -i "s/^openvpn_install:.*/openvpn_install: True/" /etc/iiab/local_vars.yml
+    else
+        echo "openvpn_install: True" >> /etc/iiab/local_vars.yml
+    fi
+
+    if [ -d /opt/iiab/iiab ]; then
+        cd /opt/iiab/iiab
+        export ANSIBLE_LOG_PATH="/opt/iiab/iiab/iiab-install.log"
+        ansible -m setup -i $INVENTORY localhost --connection=local | grep python
+        ansible-playbook -i $INVENTORY $PLAYBOOK --connection=local
+        # 2 roles (sshd & openvpn) faster than running all of "./runrole 1-prep"
+        echo
+    else
+        echo -e " \e[41m       Directory /opt/iiab/iiab does not exist: CANNOT INSTALL OPENVPN!       \e[0m\n"
+        exit 1
+    fi
+fi
+
+echo -e "Now let's (re)enable OpenVPN...\n"
+if grep -q '^openvpn_enabled:' /etc/iiab/local_vars.yml; then
+    sed -i "s/^openvpn_enabled:.*/openvpn_enabled: True/" /etc/iiab/local_vars.yml
+else
+    echo "openvpn_enabled: True" >> /etc/iiab/local_vars.yml
+fi
+systemctl enable openvpn
+
+echo -e "\nNow let's restart OpenVPN..."
+#systemctl start openvpn
+systemctl restart openvpn
+
+echo -en "\n      "
+for i in {16..40} ; do echo -en "\e[48;5;${i}m \e[0m" ; done
+echo -en " OpenVPN TIPS "
+for i in {40..16} ; do echo -en "\e[48;5;${i}m \e[0m" ; done
+
+echo -e "\n\n    1. Check your Internet connection: run 'ping 8.8.8.8' and 'ping mit.edu'"
+echo -e "    2. Check your OpenVPN connection: run 'ping 10.8.0.1'"
+echo -e "    3. Run 'ip a' and look for a 'tun0' IP address like 10.8.0.x"
+echo -e "    4. If necessary, run 'systemctl restart openvpn' which should"
+echo -e "       run 'systemctl restart openvpn@xscenet' for you."
+echo -e "    5. SOMETIMES WAITING A MINUTE HELPS -- retry steps 2 and 3 to monitor."
+echo -e "    6. If in future you want to disable OpenVPN connections to-and-from your"
+echo -e "       Internet-in-a-Box (IIAB) please run 'iiab-support-off' at that time."
+echo -e "    7. Read 'How can I remotely manage my Internet-in-a-Box?' at"
+echo -e "       http://FAQ.IIAB.IO to learn about DIY remote support alternatives"
+echo -e "       like ngrok, serveo, remot3.it and TeamViewer.\n"
+
+echo -en "      "
+for i in {16..40} ; do echo -en "\e[48;5;${i}m \e[0m" ; done
+echo -en " OpenVPN TIPS "
+for i in {40..16} ; do echo -en "\e[48;5;${i}m \e[0m" ; done
+
+echo -e "\n\nNow let's wait 15 seconds, as OpenVPN handshake sometimes needs that (or more!)"
+sleep 15
+
+# echo -ne "\nYour OpenVPN machine name, per openpvn_handle: \e[32m"
+# echo -ne "\nYour OpenVPN machine name is set to..........: \e[32m"
+echo -ne "\nYour OpenVPN machine name (openvpn_handle) is: \e[32m"    # Actually step (6) above took it just beyond Ansible's (1)-(5) interpretation of openvpn_handle -- i.e. this line just provides a hint to users -- as to how /etc/openvpn/scripts/announcer converts their spaces to underscores when starting OpenVPN.
+echo -n "$handle"    # Avoid '-e' interpreting backlash escapes, to show var accurately!  Double quote var to prevent field splitting (eats spaces)
+echo -e "\e[0m"
+
+vpnip=$(ip a | grep tun0$ | awk '{print $2}')
+if [ "$vpnip" != "" ]; then
+    echo -e "Your OpenVPN IP address (which can change) is: \e[32m$vpnip\e[0m\n"
+else
+    echo -e "\n \e[41m       ERROR: OpenVPN IP address not ready - PLEASE TRY THE ABOVE TIPS        \e[0m\n"
+    exit 1
+fi

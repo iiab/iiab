@@ -1,0 +1,41 @@
+# Must happen before install of Apache, or it'll collide with NGINX port 80.
+# 2021-08-09: Used to be done by roles/nginx/tasks/install.yml
+- name: "FreePBX - Install from template: /etc/{{ apache_service }}/ports.conf containing 'Listen {{ pbx_http_port }}'"    # i.e. port 83
+  template:
+    src: ports.conf
+    dest: /etc/{{ apache_service }}/
+
+- name: "FreePBX - Install Apache packages: {{ apache_service }}, libapache2-mod-php, libapache2-mpm-itk"
+  package:
+    name:
+      - "{{ apache_service }}"    # 2021-08-07: Install apache2 directly, as we prepare to deprecate roles/httpd
+      - libapache2-mod-php        # NOTE duplication: roles/httpd/tasks.install.yml installed libapache2-mod-php{{ php_version }} ostensibly for "Elgg, Moodle, etc"
+      - libapache2-mpm-itk        # To serve FreePBX through a VirtualHost as asterisk user (#2914: Is this possible via NGINX?)
+
+- name: 'FreePBX - Enable Apache module, as with "a2enmod" command: rewrite'
+  apache2_module:
+    name: rewrite
+
+# Legacy code from roles/httpd/tasks/install.yml
+# - name: 'Enable 5 Apache modules, as with "a2enmod" command: headers, proxy, proxy_html, proxy_http, rewrite (for http://box/kiwix, http://box/kolibri, http://box/nodered, etc)'
+#   apache2_module:
+#     name: "{{ item }}"
+#   with_items:
+#     - headers
+#     - proxy
+#     - proxy_html
+#     - proxy_http
+#     - rewrite
+
+# 2021-08-08: Security risks?  But official install doc recommends this:
+# https://wiki.freepbx.org/display/FOP/Installing+FreePBX+16+on+Debian+10.9
+# (lineinfile doesn't quite do the job, as all instances are replaced)
+- name: FreePBX - Run "sed -i 's/AllowOverride None/AllowOverride All/' /etc/apache2/apache2.conf"
+  command: sed -i 's/AllowOverride None/AllowOverride All/' /etc/apache2/apache2.conf
+
+- name: FreePBX - Install /etc/{{ apache_service }}/sites-available/freepbx.conf from template ({{ apache_user }}:{{ apache_user }}, 0644 by default)
+  template:
+    src: freepbx.conf.j2
+    dest: /etc/{{ apache_service }}/sites-available/freepbx.conf    # apache2
+    owner: "{{ apache_user }}"    # www-data
+    group: "{{ apache_user }}"

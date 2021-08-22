@@ -1,10 +1,75 @@
-- name: FreePBX - Install dependencies
-  include: freepbx_dependencies.yml
+# 2021-08-16 README.adoc, with screenshots:
+# https://github.com/iiab/iiab/tree/master/roles/pbx#pbx-readme
 
-- name: FreePBX - Download software to /opt/iiab/downloads
+
+# 2021-08-04: Non-native systemd service 'asterisk.service' (redirects via
+# systemd-sysv-install, to '/etc/init.d/asterisk status' etc) is Enabled but
+# Not Active at this point.
+# 2021-08-05: Asterisk's systemd / systemctl support is getting there but Very
+# Imperfect (even when compiled in, as a result of package 'libsystemd-dev' at
+# the top of asterisk.yml).
+# 2021-08-12: Let's try to track the "official" init.d / update-rc.d
+# instructions ('update-rc.d -f asterisk remove') but using systemd instead,
+# to be more future-proof?
+- name: "FreePBX - Disable 'asterisk' systemd service, giving FreePBX full control during boot - similar to officially recommended 'update-rc.d -f asterisk remove' at: https://wiki.freepbx.org/display/FOP/Installing+FreePBX+16+on+Debian+10.9"
+  systemd:
+    daemon_reload: yes
+    name: asterisk
+    #state: stopped
+    enabled: no
+
+
+- name: FreePBX - Install 24 packages = 7 (wget, git, unixodbc, sudo, net-tools, cron, sox) + 12 PHP dependencies (run 'php -m' or 'php -i' to verify PHP modules) + 5 for CDR ODBC (cmake, make, gcc, libssl-dev, unixodbc-dev)
+  package:
+    name:
+      - wget
+      - git
+      - unixodbc     # For Asterisk CDR (Call Detail Records)
+      - sudo         # Required by FreePBX install script
+      - net-tools    # Required by FWConsole (command-line utility, that controls FreePBX)
+      - cron         # Required by FreePBX UCP package (User Control Panel)
+      - sox          # Required for CDR web-playback
+      # - php{{ php_version }}           # Basically drags in phpX.Y-cgi (already below!)
+      - php{{ php_version }}-bcmath      # Likewise installed in nextcloud/tasks/install.yml, wordpress/tasks/install.yml
+      - php{{ php_version }}-cgi
+      # - php{{ php_version }}-common    # Auto-installed as an apt dependency.  REGARDLESS: php{{ php_version }}-common superset php{{ php_version }}-cli is auto-installed by php{{ php_version }}-fpm in nginx/tasks/install.yml
+      - php{{ php_version }}-curl        # Likewise installed in moodle/tasks/install.yml, nextcloud/tasks/install.yml, wordpress/tasks/install.yml
+      - php{{ php_version }}-fpm         # Likewise installed in nginx/tasks/install.yml
+      # - php{{ php_version }}-gettext
+      - php{{ php_version }}-gd          # Likewise installed in moodle/tasks/install.yml, nextcloud/tasks/install.yml
+      - php{{ php_version }}-imap
+      # - php{{ php_version }}-json      # See stanza just below
+      - php{{ php_version }}-mbstring    # Likewise installed in mediawiki/tasks/install.yml, moodle/tasks/install.yml, nextcloud/tasks/install.yml, wordpress/tasks/install.yml
+      # - python-mysqldb                 # https://github.com/Yannik/ansible-role-freepbx/blob/master/tasks/freepbx.yml#L33
+      - php{{ php_version }}-mysql       # Likewise installed in mysql/tasks/install.yml, nextcloud/tasks/install.yml, wordpress/tasks/install.yml
+      - php-pear                         # Likewise installed for ADMIN CONSOLE https://github.com/iiab/iiab-admin-console/blob/master/roles/cmdsrv/tasks/main.yml#L19
+      - php{{ php_version }}-snmp
+      - php{{ php_version }}-xml         # Likewise installed in mediawiki/tasks/install.yml, moodle/tasks/install.yml, nextcloud/tasks/install.yml, wordpress/tasks/install.yml -- AND REGARDLESS dragged in later by Admin Console's use of php-pear for roles/cmdsrv/tasks/main.yml -- run 'php -m | grep -i xml' which in the end shows {libxml, SimpleXML, xml, xmlreader, xmlwriter}
+      - php{{ php_version }}-zip         # Likewise installed in moodle/tasks/install.yml, nextcloud/tasks/install.yml, wordpress/tasks/install.yml
+      - cmake
+      - make
+      - gcc
+      - libssl-dev
+      - unixodbc-dev
+    state: latest
+
+# For PHP >= 8.0: phpX.Y-json is baked into PHP itself.
+# For PHP <  8.0: phpX.Y-json auto-installed by phpX.Y-fpm AND phpX.Y-cli in 3-base-server's nginx/tasks/install.yml, as confirmed by: apt rdepends phpX.Y-json
+#
+# - name: Install php{{ php_version }}-json if PHP < 8.0
+#   package:
+#     name: php{{ php_version }}-json
+#     state: present
+#   when: php_version is version('8.0', '<')
+
+- name: FreePBX - Install and configure Apache - if pbx_use_apache
+  include_tasks: apache.yml
+  when: pbx_use_apache
+
+- name: FreePBX - Download {{ freepbx_url }}/{{ freepbx_src_file }} to {{ downloads_dir }}
   get_url:
     url: "{{ freepbx_url }}/{{ freepbx_src_file }}"
-    dest: "{{ downloads_dir }}/{{ freepbx_src_file }}"
+    dest: "{{ downloads_dir }}"    # e.g. /opt/iiab/downloads/freepbx-16.0-latest.tgz
     timeout: "{{ download_timeout }}"
   when: internet_available
 
@@ -15,16 +80,16 @@
 
 - name: FreePBX - FAIL (force Ansible to exit) IF {{ downloads_dir }}/{{ freepbx_src_file }} doesn't exist
   fail:
-    msg: "{ downloads_dir }}/{{ freepbx_src_file }} is REQUIRED in order to install."
+    msg: "{{ downloads_dir }}/{{ freepbx_src_file }} is REQUIRED to install FreePBX."
   when: not freepbx_src.stat.exists
 
-- name: FreePBX - Create install source directory
-  file: 
-    path: "{{ freepbx_src_dir }}"
+- name: FreePBX - Create source dir {{ freepbx_src_dir }}
+  file:
+    path: "{{ freepbx_src_dir }}"    # /opt/iiab/freepbx
     state: directory
 
-- name: FreePBX - Extract source
-  unarchive: 
+- name: FreePBX - Extract to source dir (root:root)
+  unarchive:
     src: "{{ downloads_dir }}/{{ freepbx_src_file }}"
     dest: "{{ freepbx_src_dir }}"
     owner: root
@@ -32,53 +97,72 @@
     extra_opts: [--strip-components=1]
     creates: "{{ freepbx_src_dir }}/install"
 
-- name: FreePBX - Patch FreePBX source - IIAB Bug 1685
-  patch:
-    src: "roles/pbx/templates/71-freepbx-framework.patch"
-    dest: "{{ freepbx_src_dir }}/amp_conf/htdocs/admin/libraries/BMO/Framework.class.php"
+# 2021-08-04: FreePBX 16 no longer needs this FreePBX 15 patch
+# - name: FreePBX - Patch FreePBX source - IIAB Bug 1685
+#   patch:
+#     src: roles/pbx/templates/71-freepbx-framework.patch
+#     dest: "{{ freepbx_src_dir }}/amp_conf/htdocs/admin/libraries/BMO/Framework.class.php"
 
-- name: FreePBX - Patch FreePBX source - wants [] not {}
-  patch:
-    src: "roles/pbx/templates/pbx.patch"
-    dest: "{{ freepbx_src_dir }}/amp_conf/htdocs/admin/libraries/Composer/vendor/neitanod/forceutf8/src/ForceUTF8/Encoding.php"
+# 2021-08-04: FreePBX 16 no longer needs this FreePBX 15 patch
+# - name: FreePBX - Patch FreePBX source - wants [] not {}
+#   patch:
+#     src: roles/pbx/templates/pbx.patch
+#     dest: "{{ freepbx_src_dir }}/amp_conf/htdocs/admin/libraries/Composer/vendor/neitanod/forceutf8/src/ForceUTF8/Encoding.php"
 
-- name: FreePBX - Disable & Stop asterisk service
-  systemd:
-    daemon_reload: yes
-    name: asterisk
-    enabled: no
-    state: stopped
+# 2021-08-04: FreePBX 16 no longer needs this FreePBX 15 patch
+# - name: FreePBX - Patch FreePBX source - disable get_magic_quotes_gpc()
+#   patch:
+#     src: roles/pbx/templates/pbx2.patch
+#     dest: "{{ freepbx_install_dir }}/admin/libraries/view.functions.php"
 
-- name: FreePBX - Add mysql user
+
+- name: FreePBX - Add MySQL user ({{ asterisk_db_user }})
   mysql_user:
-    name: "{{ asterisk_db_user }}"
-    password: "{{ asterisk_db_password }}"
+    name: "{{ asterisk_db_user }}"            # asterisk
+    password: "{{ asterisk_db_password }}"    # asterisk
     priv: "{{ asterisk_db_dbname }}.*:ALL/{{ asterisk_db_cdrdbname }}.*:ALL"
-#    login_host: "{{ asterisk_db_host }}"
-#    login_user: "root"
-#    login_password: "{{ mysql_root_password }}"
+    # login_host: "{{ asterisk_db_host }}"
+    # login_user: root
+    # login_password: "{{ mysql_root_password }}"
     host: "{{ (asterisk_db_host == 'localhost') | ternary('localhost', ansible_default_ipv4.address) }}"
     state: present
 
-- name: FreePBX - Add mysql db
+- name: FreePBX - Add MySQL db ({{ asterisk_db_dbname }})
   mysql_db:
-    name: "{{ asterisk_db_dbname }}"
-    encoding: utf8
-    collation: utf8_general_ci
-#    login_host: "{{ asterisk_db_host }}"
-#    login_user: "root"
-#    login_password: "{{ mysql_root_password }}"
-    state: present
-
-- name: FreePBX - Add cdr mysql db
-  mysql_db:
-    name: "{{ asterisk_db_cdrdbname }}"
+    name: "{{ asterisk_db_dbname }}"    # asterisk
     encoding: utf8
     collation: utf8_general_ci
     login_host: "{{ asterisk_db_host }}"
+    login_user: "{{ asterisk_db_user }}"
+    login_password: "{{ asterisk_db_password }}"
     state: present
 
-- name: FreePBX - Don't let freepbx take over the php sessions dir
+- name: FreePBX - Add CDR MySQL db ({{ asterisk_db_cdrdbname }})
+  mysql_db:
+    name: "{{ asterisk_db_cdrdbname }}"    # asteriskcdrdb
+    encoding: utf8
+    collation: utf8_general_ci
+    login_host: "{{ asterisk_db_host }}"
+    login_user: "{{ asterisk_db_user }}"
+    login_password: "{{ asterisk_db_password }}"
+    state: present
+
+
+# 2021-08-16: DOES NGINX NEED THE NEXT 2 STANZAS?  (If not, should 'when: pbx_use_apache' be added?)
+
+- name: FreePBX - Create new php sessions dir /var/lib/php/asterisk_sessions/ - SEE 'php_value session.save_path /var/lib/php/asterisk_sessions/' IN pbx/templates/freepbx.conf.j2
+  file:
+    path: /var/lib/php/asterisk_sessions/
+    state: directory
+
+- name: FreePBX - Set ownership for new php sessions dir (asterisk:asterisk)
+  file:
+    dest: /var/lib/php/asterisk_sessions/
+    owner: asterisk
+    group: asterisk
+    recurse: yes
+
+- name: "FreePBX - Populate /etc/asterisk/freepbx_chown.conf to prevent 'fwconsole chown' takeover of /var/lib/php/sessions"    # And possibly later /etc/freepbx.conf, /var/log/asterisk/freepbx.log, /var/spool/asterisk/cache
   blockinfile:
     content: |
       [blacklist]
@@ -89,59 +173,122 @@
     group: asterisk
     create: yes
 
-- name: FreePBX - Create php sessions directory
-  file: 
-    path: "/var/lib/php/asterisk_sessions/"
-    state: directory
 
-- name: FreePBX - Set ownership for php sessions directory
-  file: 
-    dest: "/var/lib/php/asterisk_sessions/" 
-    owner: asterisk 
-    group: asterisk
-    recurse: yes
- 
-- name: FreePBX - Install (just run once) - CAN TAKE 12 MIN OR LONGER!
-  command: ./start_asterisk start
+- name: FreePBX - git clone https://github.com/mariadb-corporation/mariadb-connector-odbc to /usr/src/mariadb-connector-odbc
+  git:
+    repo: https://github.com/mariadb-corporation/mariadb-connector-odbc
+    dest: /usr/src/mariadb-connector-odbc
+    version: master
+    force: yes
+    depth: 1
+
+- name: FreePBX - Run scripts/mk-odbc-connector to build mariadb-connector-odbc, creating /usr/local/lib/mariadb/libmaodbc.so
+  command: "{{ iiab_dir }}/scripts/mk-odbc-connector"
+  args:
+    creates: /usr/local/lib/mariadb/libmaodbc.so
+
+# http://mghadam.blogspot.com/2021/03/install-asterisk-18-freepbx-15-on.html
+- name: FreePBX - Install /etc/odbc.ini, /etc/odbcinst.ini from template (root:root, 0644 by default)
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+  with_items:
+    - { src: odbc.ini.j2, dest: /etc/odbc.ini }
+    - { src: odbcinst.ini, dest: /etc/odbcinst.ini }
+
+- name: FreePBX - Install /etc/asterisk/cdr_mysql.conf from template (root:root, 0644 by default)
+  template:
+    src: cdr_mysql.conf.j2
+    dest: /etc/asterisk/cdr_mysql.conf
+
+
+- name: FreePBX - 2-step install - won't run if {{ freepbx_install_dir }} already exists - CAN TAKE 3-12 MIN OR LONGER!
+  command: "{{ item }}"
   args:
     chdir: "{{ freepbx_src_dir }}"
-    creates: "{{ freepbx_install_dir }}"
+    creates: "{{ freepbx_install_dir }}"    # /var/www/html/freepbx
+  with_items:
+    - ./start_asterisk start
+    - ./install -n --webroot {{ freepbx_install_dir }} --dbuser {{ asterisk_db_user }} --dbpass {{ asterisk_db_password }}
+    # - ./install -n --webroot {{ freepbx_install_dir }} --dbuser {{ asterisk_db_user }} --dbpass {{ asterisk_db_password }} --dbname {{ asterisk_db_dbname }} --cdrdbname {{ asterisk_db_cdrdbname }}
 
-- name: FreePBX - Install (just run once) - CAN TAKE 12 MIN OR LONGER!
-  command: ./install -n --webroot {{ freepbx_install_dir }} --dbuser {{ asterisk_db_user }} --dbpass {{ asterisk_db_password }} --dbname {{ asterisk_db_dbname }} --cdrdbname {{ asterisk_db_cdrdbname }}
-  args:
-    chdir: "{{ freepbx_src_dir }}"
-    creates: "{{ freepbx_install_dir }}"
+- name: FreePBX - Run 'fwconsole stop', 'killall -9 safe_asterisk' to stop both main Asterisk processes - this avoids "Unable to run Pre-Asterisk hooks, because Asterisk is already running" in 'journalctl -u freepbx' logs
+  command: "{{ item }}"
+  with_items:
+    - fwconsole stop
+    - killall -9 safe_asterisk    # 2021-08-08: Stronger medicine needed for 64-bit Ubuntu Server 21.04 on RPi 4.  Originally from @jvonau's PR #2912.
+    # - killall -9 asterisk       # 2021-08-05: Also from @jvonau's PR #2912, to brute force this.  In the end, above 'fwconsole stop' works more gracefully.
+    # - ./start_asterisk stop     # Buggy!
+    # - /usr/sbin/asterisk -rx "core stop gracefully"
+    # - fwconsole reload
+    # - fwconsole restart
+    # - fwconsole ma disablerepo commercial
+    # - fwconsole ma installall
+    # - fwconsole ma delete firewall
+    # - fwconsole reload
+    # - fwconsole restart
+  ignore_errors: yes    # 2021-08-08: As 'killall -9 safe_asterisk' will fail when process doesn't exist (on many OS's!)
 
-- name: FreePBX - Patch FreePBX source - disable get_magic_quotes_gpc()
-  patch:
-    src: "roles/pbx/templates/pbx2.patch"
-    dest: "{{ freepbx_install_dir }}/admin/libraries/view.functions.php"
+- name: "FreePBX - Run 'killall -9 \"PM2 v4.5.0: God\"' for good measure"
+  command: 'killall -9 "PM2 v4.5.0: God"'    # 2021-08-09: Missed by above 'fwconsole stop' (does this matter?)
+  ignore_errors: yes    # 2021-08-16: As 'killall -9 "PM2 v4.5.0: God"' will fail if process doesn't exist (e.g. if version number changes, etc)
 
-- name: FreePBX - Create /etc/odbc.ini
+# 2021-08-06: This stanza works, but above is more graceful.  (FYI PRs #2908,
+# #2912, #2913 didn't quite work -- whereas this PR #2915 at least worked!)
+# - name: FreePBX - Run 'systemctl restart freepbx' TWICE (THIS IS 1 OF 2) to get past 'systemctl status freepbx' glitch "Unable to run Pre-Asterisk hooks, because Asterisk is already running"
+#   systemd:
+#     daemon_reload: yes
+#     name: freepbx
+#     enabled: yes
+#     state: restarted
+
+
+- name: FreePBX - Install /etc/systemd/system/freepbx.service from template (root:root, 0644 by default)
   template:
-    src: odbc.ini.j2
-    dest: /etc/odbc.ini
-    # owner: root
-    # group: root
-    # mode: '0644'
+    src: freepbx.service
+    dest: /etc/systemd/system/
 
-- name: FreePBX - Install Apache's sites-available/freepbx.conf from template
-  template:
-    src: freepbx.conf.j2
-    dest: /etc/apache2/sites-available/freepbx.conf
-    owner: "{{ apache_user }}"
-    group: "{{ apache_user }}"
-    mode: '0644'
+# Default module list https://github.com/iiab/iiab/pull/2916#issuecomment-894601522
+- name: FreePBX - Run 'fwconsole ma upgradeall' on installed FreePBX modules, e.g. 16 default modules (of about 70 total) - CAN TAKE 1 MIN OR LONGER!
+  command: fwconsole ma upgradeall
 
-- name: FreePBX - Add {{ pbx_http_port }} as a Listen directive to apache ports.conf
-  lineinfile:
-    path: /etc/apache2/ports.conf
-    line: "Listen {{ pbx_http_port }}"
-    insertafter: Listen 80  
+# - name: FreePBX - Add "$amp_conf['CHECKREFERER'] = false;" to /etc/freepbx.conf #2931 - if pbx_use_nginx"
+#   lineinfile:
+#     path: /etc/freepbx.conf
+#     insertbefore: '^\?>$'    # Match exact line '?>' -- BOTTOM OF FILE NEC!
+#     line: "$amp_conf['CHECKREFERER'] = false;"
+#   when: pbx_use_nginx
 
-- name: FreePBX - Install /etc/systemd/system/freepbx.service systemd unit file from template
-  template:
-    src: freepbx.service.j2
-    dest: /etc/systemd/system/freepbx.service
-    # mode: '0755'    # Let's go with '0644' per unit file norms
+# - name: 'FreePBX - fix file permissions for NGINX: /etc/freepbx.conf (0644), /var/log/asterisk/freepbx.log (0666)'
+#   file:
+#     #state: file
+#     path: "{{ item.path }}"
+#     mode: "{{ item.mode }}"
+#   with_items:
+#     - { path: '/etc/freepbx.conf', mode: u=rw,g=r,o=r }                  # 2021-08-04: LATER ENDS UP AS 0660
+#     - { path: '/var/log/asterisk/freepbx.log', mode: u=rw,g=rw,o=rw }    # 2021-08-04: LATER ENDS UP AS 0664
+#   when: pbx_use_nginx
+
+# - name: 'FreePBX - fix dir permissions for NGINX: /var/spool/asterisk/cache (0777)'
+#   file:
+#     state: directory
+#     path: "{{ item }}"
+#     mode: u=rwx,g=rwx,o=rwx    # 2021-08-04: MOST CONTENT THEREIN ENDS UP AS asterisk:asterisk 664 (files) & 775 (dirs)
+#     # recurse: yes             # Probably Doesn't Help?
+#   with_items:
+#     # - /var/www/html/freepbx/admin/assets/less/cache
+#     - /var/spool/asterisk/cache
+#   when: pbx_use_nginx
+
+# For 'pbx_use_nginx: True' -- FreePBX's initial page (Admin user registration)
+# tries to set up a cron job but fails:
+#   "Exception: Trying to edit user asterisk, when I'm running as www-data"
+# 2021-08-10: Hacking /etc/freepbx.conf WAS NOT TESTED PROPERLY -- some vars MAY
+# need to be NEAR BOTTOM: github.com/iiab/iiab/pull/2916#issuecomment-894585322
+# - name: "2021-08-06: Try \"$amp_conf['AMPASTERISKWEBUSER'] = 'www-data';\" in /etc/freepbx.conf for #2916 registration cron fix ?'"
+#   lineinfile:
+#     path: /etc/freepbx.conf
+#     #insertafter: '^<\?php$'    # Match exact line '<?php' -- BUT TOP OF FILE FAILS :(
+#     insertbefore: '^\?>$'       # Match exact line '?>' -- BOTTOM OF FILE NECESSARY :)
+#     line: "$amp_conf['AMPASTERISKWEBUSER'] = 'www-data';"
+#   when: pbx_use_nginx

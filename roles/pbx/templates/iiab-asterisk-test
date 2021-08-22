@@ -1,0 +1,245 @@
+#!/bin/bash
+
+#
+# This script creates two extensions (301 and 302)
+# Credentials can be found in pjsip_custom.conf
+# For regular implementation, you are requested to create extensions using the FreePBX webpage to avoid any issues
+#
+# Usage:
+#	sudo ./iiab-asterisk-test
+#		Default option
+#       Reverts file changes done during the test and restarts asterisk towards the end
+#
+#   sudo ./iiab-asterisk-test retain
+#		Files not reverted after the test. Extensions created remain active
+#
+#   sudo ./iiab-asterisk-test revert
+#		This option exists in case you selected retain earlier, but now like to revert the changes
+#		This only reverts the changes to the files and restarts asterisk, no other actions are performed
+#
+#   sudo ./iiab-asterisk-test restart
+#		Restarts asterisk, no other actions are performed
+#
+#   sudo ./iiab-asterisk-test testcall
+#		Makes a test call from asterisk console to extension 1000 which just responds with some audio
+#
+# Algo:
+#   Please run the script as root
+#
+#   1. First check that asterisk -rx "pjsip show endpoints" returns no extensions as we haven't created any yet
+#
+#   2. Take a backup of existing files
+#      * Rename existing pjsip_custom.conf at /etc/asterisk/ to pjsip_custom.freepbx.conf
+#      * Rename existing extensions_custom.conf at /etc/asterisk/ to extensions_custom.freepbx.conf
+#
+#   3. Copy files pjsip_custom.conf and extensions_custom.conf provided with this script to /etc/asterisk
+#
+#   4. Change file permissions to asterisk:asterisk
+#
+#   5. Run fwconsole restart so that it picks up the new confs
+#
+#   6. asterisk -rx "pjsip show endpoints" should now show the extensions created
+#
+#   7. Make a call from asterisk console to the internal extension 1000. This extension is only used to respond
+#      with an audio message, no need to register this extension.
+#      * Check asterisk logs at /var/log/asterisk/full to see if you can see information about calls to
+#        extension 1000 or to context iiab-test or check if the any of the playback files are executed
+#      * If found, test is successful
+#
+#   8. Once done with the experiment, delete the two newly created files and
+#      * rename pjsip_custom.freepbx.conf to pjsip_custom.conf and
+#      * rename extensions_custom.freepbx.conf to extensions_custom.conf
+#
+#   9. A better test would be to register the extension using your softphone app (using Linphone android app for this example)
+#      * Register the created extension on a softphone with the help of PBX README (check the credentials in pjsip_custom.conf)
+#      * Dial '1000' and hear the automated response
+#      * Or Dial the other extension that you created if you have registered two extensions
+#
+
+
+ROOT_UID=0
+E_NOTROOT=67
+AST_DIR=/etc/asterisk
+AST_LOG_FILE=/var/log/asterisk/full
+PJSIP_CUST_CONF=pjsip_custom.conf
+PJSIP_CUST_CONF_BKUP=pjsip_custom.freepbx.conf
+EXT_CUST_CONF=extensions_custom.conf
+EXT_CUST_CONF_BKUP=extensions_custom.freepbx.conf
+SCRIPT_ARG=$1
+
+#
+# Check if extensions that you created exist
+#
+function check_if_extensions_exist() {
+    echo -e "\n${FUNCNAME[0]}(): Checking if test extension exists..."
+    extn_exists=`asterisk -rx 'pjsip show endpoints'|grep '301'`
+    if [ -z "$extn_exists" ]
+        then
+            echo -e "${FUNCNAME[0]}(): Test extension does not exist"
+        else
+            echo -e "${FUNCNAME[0]}(): Test extension exists"
+    fi
+}
+
+#
+# Copy files to AST_DIR for testing
+#
+function copy_files_for_test() {
+    echo -e "\n${FUNCNAME[0]}(): Copying files for testing..."
+
+    # Proceed if source files exist in pwd
+    if [[ -f "${PJSIP_CUST_CONF}" && -f "${EXT_CUST_CONF}" ]]
+    then
+        # Rename original files
+        mv ${AST_DIR}/${PJSIP_CUST_CONF} ${AST_DIR}/${PJSIP_CUST_CONF_BKUP}
+        mv ${AST_DIR}/${EXT_CUST_CONF} ${AST_DIR}/${EXT_CUST_CONF_BKUP}
+
+        # Copy files supplied with the script to destination and change their owner and permissions
+        cp ${PJSIP_CUST_CONF} ${EXT_CUST_CONF} ${AST_DIR}
+        chown asterisk:asterisk ${AST_DIR}/${PJSIP_CUST_CONF} ${AST_DIR}/${EXT_CUST_CONF}
+        chmod ug=rw,o=r ${AST_DIR}/${PJSIP_CUST_CONF} ${AST_DIR}/${EXT_CUST_CONF}
+    else
+        echo -e "\n${FUNCNAME[0]}(): Files ${PJSIP_CUST_CONF} and ${EXT_CUST_CONF} do not exist in pwd. Exiting!!!"
+        exit 1
+    fi
+}
+
+#
+# Check if test call was successful
+#
+function check_call_success() {
+    echo -e "\n${FUNCNAME[0]}(): Making a test call to extension 1000..."
+
+    # Make a call from asterisk to extension 1000 to receive automated response
+    asterisk -rx 'console dial 1000@iiab-test'
+
+    # This may not be the best way in case you plan to run the script multiple times
+    # or if the script is run at the end of the hour, but since this will be run
+    # as a basic test after first time freepbx install, this should work.
+    # Feel free to try a better search or add minute check - $(date +"%Y-%m-%d %H:%M")
+    # if you find that better
+    test_run=`grep "$(date +'%Y-%m-%d %H')" ${AST_LOG_FILE}|grep "Playing 'goodbye"`
+
+    if [ -z "$test_run" ]
+        then
+            echo -e "${FUNCNAME[0]}(): Test call to extension 1000 not successful"
+        else
+            echo -e "${FUNCNAME[0]}(): Test call to extension 1000 successful"
+    fi
+}
+
+#
+# Restart asterisk and make sure it's running
+#
+function restart_asterisk() {
+    echo -e "\n${FUNCNAME[0]}(): Restarting asterisk..."
+
+    # There should be a better way than a fwconsole restart, but for now this works
+    # If you haven't installed FreePBX, use systemctl restart asterisk
+    # It doesn't work so well, so you may have to execute it twice
+    fwconsole restart
+
+    sleep 5
+
+    # Occasionally displays 3 or 4 during tests, the old process takes time to exit
+    no_of_astersisk_procs=`pgrep -c asterisk`
+    echo -e "${FUNCNAME[0]}(): No of asterisk procs: ${no_of_astersisk_procs}"
+}
+
+#
+# Revert file changes
+#
+function revert_file_changes() {
+
+    # Do this only if extensions_custom.freepbx.conf and pjsip_custom.freepbx.conf exist
+    if [[ -f "${AST_DIR}/${PJSIP_CUST_CONF_BKUP}" && -f "${AST_DIR}/${EXT_CUST_CONF_BKUP}" ]]
+    then
+        echo -e "\n${FUNCNAME[0]}(): Reverting file changes"
+        rm ${AST_DIR}/${PJSIP_CUST_CONF} ${AST_DIR}/${EXT_CUST_CONF}
+        mv ${AST_DIR}/${EXT_CUST_CONF_BKUP} ${AST_DIR}/${EXT_CUST_CONF}
+        mv ${AST_DIR}/${PJSIP_CUST_CONF_BKUP} ${AST_DIR}/${PJSIP_CUST_CONF}
+    else
+        echo -e "\n${FUNCNAME[0]}(): Nothing to revert - Files ${PJSIP_CUST_CONF_BKUP} and ${EXT_CUST_CONF_BKUP} do not exist in ${AST_DIR} Exiting!!!"
+        exit 1
+    fi
+}
+
+#
+# Revert file changes and restart asterisk
+#
+function revert_changes_and_restart_asterisk() {
+    if [ "$SCRIPT_ARG" == "retain" ]
+    then
+        echo -e "\n${FUNCNAME[0]}(): User decided to retain changes done during the test..."
+    else
+        # Default - revert changes
+        echo -e "\n${FUNCNAME[0]}(): Reverting file changes done during the test and restarting asterisk to get back to original state..."
+
+        revert_file_changes
+        restart_asterisk
+    fi
+}
+
+#
+# Script usage
+#
+function script_usage() {
+    echo -e "sudo ./iiab-asterisk-test"
+    echo -e "\tDefault - Reverts file changes done during the test and restarts asterisk"
+    echo -e "sudo ./iiab-asterisk-test retain"
+    echo -e "\tFiles not reverted after the test. Extensions created remain active"
+    echo -e "sudo ./iiab-asterisk-test revert"
+    echo -e "\tIn case you selected retain earlier, but now like to revert the changes"
+    echo -e "\tThis only reverts the changes to the files and restarts asterisk, no other actions are performed"
+    echo -e "sudo ./iiab-asterisk-test restart"
+    echo -e "\tRestarts asterisk, no other actions are performed"
+    echo -e "sudo ./iiab-asterisk-test testcall"
+    echo -e "\tMakes a test call to extension 1000"
+    exit 1
+}
+
+#
+# Main function that runs the script
+#
+function runscript() {
+    echo -e "\n--------- Asterisk extension setup script - START --------------"
+
+    check_if_extensions_exist
+    copy_files_for_test
+    restart_asterisk
+    check_if_extensions_exist
+
+    check_call_success
+    revert_changes_and_restart_asterisk
+
+    echo -e "\n-------- Asterisk extension setup script - COMPLETE -------------"
+    exit 0
+}
+
+
+
+if [ "$UID" -ne "$ROOT_UID" ]
+then
+	echo -e "\nSorry, you must be root to run this script."
+	exit $E_NOTROOT
+fi
+
+
+case "$SCRIPT_ARG" in
+    retain|"")
+        runscript
+    ;;
+    revert)
+        revert_changes_and_restart_asterisk
+    ;;
+    restart)
+        restart_asterisk
+    ;;
+    testcall)
+        check_call_success
+    ;;
+    *)
+        script_usage
+        exit 2
+    ;;
+esac

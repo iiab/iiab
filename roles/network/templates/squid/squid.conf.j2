@@ -1,0 +1,52 @@
+# 2021-08-16 IIAB PR #2948 - April 2007 OLPC School Server legacy moved to:
+# https://github.com/iiab/iiab/blob/master/roles/network/templates/squid/squid-iiab.conf.j2.unused
+
+http_port 3129
+http_port 3128 intercept
+
+# Some measure of privacy: mask off the lowest byte of logged IP addresses
+client_netmask 255.255.255.0
+
+# https://wiki.squid-cache.org/Features/CacheManager
+# https://wiki.squid-cache.org/SquidFaq/SecurityPitfalls#The_manager_ACLs
+http_access allow localhost manager
+http_access deny manager
+
+# 2021-08-16: Squid's auto-creation of cache_dir (or the old way, 'squid -z')
+# don't work well in recent years.  So we do it manually, as explained here:
+# https://github.com/iiab/iiab/blob/master/roles/network/tasks/squid.yml#L17-L45
+
+# Where is the cache stored on disk? http://www.squid-cache.org/Doc/config/cache_dir/
+#
+#         Type (ufs, aufs, or COSS)
+#          |       Where
+#          |         |        Size (in MB)
+#          |         |         |
+#          |         |         |     L1 (directories)
+#          |         |         |     |  L2 (directories)
+#          |         |         |     |  |
+#cache_dir aufs /library/cache 20000 32 256
+cache_dir ufs /library/cache 200 16 128
+# Remove the line above IF YOU WANT SQUID'S CACHE IN MEMORY INSTEAD OF DISK!
+
+{% if gw_squid_whitelist %}
+#acl allow_src_ips src "/etc/squid/allow_src_ips"
+acl allow_dst_domains dstdomain "/etc/squid/allow_dst_domains"
+acl allow_url_regexs url_regex -i "/etc/squid/allow_url_regexs"
+#acl allow_dst_ips dst "/etc/squid/allow_dst_ips"
+#acl deny_url_regexs url_regex -i "/etc/squid/deny_url_regexs"
+#acl deny_dst_ips src "/etc/squid/deny_dst_ips"
+
+#http_access allow allow_src_ips
+http_access allow allow_dst_domains
+http_access allow allow_url_regexs
+#http_access allow allow_dst_ips
+#http_access deny deny_url_regexs
+#http_access deny deny_dst_ips
+{% endif %}
+
+# 2021-08-16: DEFAULTS HAPPEN ANYWAY
+# http_access deny all
+# access_log /var/log/squid/access.log
+# cache_log /var/log/squid/cache.log
+# pid_filename /var/run/squid.pid

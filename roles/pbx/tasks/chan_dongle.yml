@@ -1,49 +1,52 @@
-- name: chan_dongle - Download software to /opt/iiab/downloads
+# RPi: http://mghadam.blogspot.com/2021/03/install-asterisk-18-freepbx-15-on.html
+
+- name: chan_dongle - Download {{ chan_dongle_url }}/{{ chan_dongle_src_file }} to {{ downloads_dir }}
   get_url:
-    url: "{{ chan_dongle_url }}/{{ chan_dongle_src_file }}"
-    dest: "{{ downloads_dir }}/{{ chan_dongle_src_file }}"
+    url: "{{ chan_dongle_url }}/{{ chan_dongle_src_file }}"    # /opt/iiab/downloads/master.zip
+    dest: "{{ downloads_dir }}/{{ chan_dongle_src_file }}"     # Keep name as "master.zip" whereas browsers rename it to asterisk-chan-dongle-master.zip
     timeout: "{{ download_timeout }}"
   when: internet_available
 
-- name: chan_dongle - Check for /opt/iiab/downloads/{{ chan_dongle_src_file }}
+- name: chan_dongle - Check for {{ downloads_dir }}/{{ chan_dongle_src_file }}
   stat:
     path: "{{ downloads_dir }}/{{ chan_dongle_src_file }}"
   register: chan_dongle_src
 
 - name: chan_dongle - FAIL (force Ansible to exit) IF /opt/iiab/downloads/{{ chan_dongle_src_file }} doesn't exist
   fail:
-    msg: "{ downloads_dir }}/{{ chan_dongle_src_file }} is REQUIRED in order to install."
+    msg: "{ downloads_dir }}/{{ chan_dongle_src_file }} is REQUIRED to install chan_dongle."
   when: not chan_dongle_src.stat.exists
 
-- name: chan_dongle - Create install source directory
+- name: chan_dongle - Create source dir {{ chan_dongle_src_dir }}
   file: 
-    path: "{{ chan_dongle_src_dir }}"
+    path: "{{ chan_dongle_src_dir }}"    # /opt/iiab/chan_dongle
     state: directory
 
-- name: chan_dongle - Extract source
+- name: chan_dongle - Extract to {{ downloads_dir }} (root:root)
   unarchive: 
     src: "{{ downloads_dir }}/{{ chan_dongle_src_file }}"
     dest: "{{ downloads_dir }}"
     owner: root
     group: root
 
-- name: chan_dongle - move to {{ chan_dongle_src_dir }}
+- name: chan_dongle - Run 'rsync -av {{ downloads_dir }}/asterisk-chan-dongle-master/ {{ chan_dongle_src_dir }}'
   command: rsync -av {{ downloads_dir }}/asterisk-chan-dongle-master/ {{ chan_dongle_src_dir }}
   args:
     chdir: "{{ downloads_dir }}"
 
-- name: chan_dongle - Run the bootstrap script
-  command: "./bootstrap"
+
+- name: chan_dongle - Run './bootstrap'
+  command: ./bootstrap
   args:
     chdir: "{{ chan_dongle_src_dir }}"
     creates: "{{ chan_dongle_src_dir }}/configure"
 
-- name: chan_dongle - Find out asterisk version
-  shell: asterisk -V |cut -d " " -f 2
+- name: chan_dongle - Run 'asterisk -V | cut -d " " -f 2' for asterisk_ver
+  shell: asterisk -V | cut -d " " -f 2
   register: asterisk_ver
 
-- name: chan_dongle - Run the configure script
-  command: "./configure --with-astversion={{asterisk_ver.stdout}}"
+- name: chan_dongle - Run './configure --with-astversion={{ asterisk_ver.stdout }}'
+  command: ./configure --with-astversion={{ asterisk_ver.stdout }}
   args:
     chdir: "{{ chan_dongle_src_dir }}"
     creates: "{{ chan_dongle_src_dir }}/Makefile"
@@ -60,9 +63,8 @@
     chdir: "{{ chan_dongle_src_dir }}"
     creates: "/usr/lib/asterisk/modules/chan_dongle.so"
 
-- name: chan_dongle - Copy dongle.conf over
+- name: chan_dongle - Run 'cp {{ chan_dongle_src_dir }}/etc/dongle.conf /etc/asterisk/'
   command: cp {{ chan_dongle_src_dir }}/etc/dongle.conf /etc/asterisk/
   args:
     chdir: "{{ chan_dongle_src_dir }}"
     creates: "/etc/asterisk/dongle.conf"
-

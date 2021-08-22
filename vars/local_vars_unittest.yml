@@ -1,0 +1,383 @@
+# This is local_vars_unittest.yml -- copy it to /etc/iiab/local_vars.yml then...
+# modify variables below, to override /opt/iiab/iiab/vars/default_vars.yml
+
+# PLZ READ http://wiki.laptop.org/go/IIAB/local_vars.yml AND http://FAQ.IIAB.IO
+# Orig Idea: branch github.com/xsce/xsce-local for your deployment/community
+
+# IIAB does NOT currently support uninstalling apps!  So: if any IIAB app is
+# installed with 'APP_XYZ_install: True' below, do NOT later change that.
+
+# WARNING: IF YOU CONNECT YOUR IIAB'S INTERNAL WIFI TO THE INTERNET OVER 5 GHz,
+# YOU'LL PREVENT OLDER LAPTOPS/PHONES/TABLETS (WHICH REQUIRE 2.4 GHz) FROM
+# CONNECTING TO YOUR IIAB'S INTERNAL HOTSPOT.  See "wifi_up_down: True" below.
+
+
+# Ansible's default timeout for "get_url:" downloads (10 seconds) often fails
+download_timeout: 200
+
+# Real-time clock: set RTC chip family here.  Future auto-detection plausible?
+rtc_id: none    # Or ds3231 ?
+
+# Please read more about the 'iiab-admin' Linux user, for login to IIAB's
+# Admin Console (http://box.lan/admin) AND to help you at the command-line:
+# https://github.com/iiab/iiab/tree/master/roles/iiab-admin
+# https://github.com/iiab/iiab-admin-console/blob/master/Authentication.md
+#
+iiab_admin_user: iiab-admin    # Some prefer to reuse 'pi' or 'ubuntu' etc.
+# Set iiab_admin_user_install: False if you don't want iiab_admin_user auto-
+# configured e.g. by IIAB's 1-line installer & iiab-admin/tasks/admin-user.yml
+iiab_admin_user_install: True    # If False, THE SETTING BELOW WILL BE IGNORED.
+iiab_admin_can_sudo: True    # For /usr/bin/iiab-* support commands.  Optional.
+
+# Set these to False if you do not want to install/enable IIAB Admin Console
+admin_console_install: False
+admin_console_enabled: False
+#
+# Homepage: set to /home or /wordpress or /wiki (for MediaWiki)
+iiab_home_url: /home
+# You might also want to set captiveportal_splash_page (below!)
+#
+# Set to "False" if you do not want to use the latest js-menus, either because
+# you use WordPress or another home page, or if you prefer the older
+# https://github.com/iiab/iiab-menu (no longer maintained)
+js_menu_install: True
+
+
+# IIAB Networking README: https://github.com/iiab/iiab/tree/master/roles/network
+# IIAB Networking Doc: https://github.com/iiab/iiab/wiki/IIAB-Networking
+# Read it offline too: http://box/info > "IIAB Networking"
+
+iiab_hostname: box
+iiab_domain: lan
+
+# WARNING: IF YOU CONNECT YOUR IIAB'S INTERNAL WIFI TO THE INTERNET OVER 5 GHz,
+# YOU'LL PREVENT OLDER LAPTOPS/PHONES/TABLETS (WHICH REQUIRE 2.4 GHz) FROM
+# CONNECTING TO YOUR IIAB'S INTERNAL HOTSPOT.  See "wifi_up_down: True" below.
+#
+# Raspberry Pi OS requires Wi-Fi country since March 2018.  Please set it here:
+host_country_code: US
+host_ssid: unittest
+host_wifi_mode: g
+host_channel: 6
+hostapd_secure: False # 2021-03-02 #2696 WiFi EAPOL fails if hotspot passwords,
+hostapd_password: changeme # eg if firmware wifi_hotspot_capacity_rpi_fix: True
+wifi_hotspot_capacity_rpi_fix: True    # Restores the ability of RPi internal
+# WiFi hotspots to service 30-to-32 client devices.  Background explanation:
+# https://github.com/iiab/iiab/issues/823#issuecomment-662285202 and PR #2472.
+wifi_up_down: True    # Creates a 2nd virtual WiFi adapter for upstream WiFi
+# (e.g. to Internet) in addition to downstream WiFi (e.g. classroom hotspot).
+
+# Set True if client machines should have "passthrough" access to WAN/Internet:
+iiab_gateway_enabled: False
+
+# See "How do I set a static IP address?" for Ethernet, in http://FAQ.IIAB.IO
+wan_ip: dhcp       # wan_ip: 192.168.1.99
+wan_netmask:       # wan_netmask: 255.255.255.0
+wan_gateway:       # wan_gateway: 192.168.1.254
+# If nec wan_nameserver can override ISP-provided DNS servers via dnsmasq:
+# /etc/resolv.conf dictates which backend is used for the machine itself, so
+# 127.0.0.1 means you get dnsmasq (so it works right away on RaspiOS) while
+# 127.0.0.53 gives you systemd-networkd (so Ubuntu itself does NOT use this
+# dnsmasq-specified upstream DNS [e.g. wan_nameserver] but its LAN clients do!)
+wan_nameserver:    # wan_nameserver: 192.168.1.254 or 8.8.8.8 or 1.1.1.1
+wan_try_dhcp_before_static_ip: True   # Facilitate field updates w/ cablemodems
+# Details @ roles/network/templates/network/dhcpcd.conf.j2 for /etc/dhcpcd.conf
+
+# Enable "campus access" to ~10 common IIAB services like Kiwix (3000), KA Lite
+# (8008) and Calibre (8010 or 8080) etc, on the WAN side of your IIAB server.
+# Only 1 of the 6 lines below should be uncommented:
+#
+#ports_externally_visible: 0    # none
+#ports_externally_visible: 1    # ssh only
+#ports_externally_visible: 2    # ssh + http-or-https (for Admin Console's box.lan/admin too)
+ports_externally_visible: 3     # ssh + http-or-https + common IIAB services
+#ports_externally_visible: 4    # ssh + http-or-https + common IIAB services + Samba
+#ports_externally_visible: 5    # all but databases
+#
+# Or further customize your iptables firewall by editing:
+# /opt/iiab/iiab/roles/network/templates/gateway/iiab-gen-iptables
+# And then run: cd /opt/iiab/iiab; ./iiab-network
+
+# Enable AFTER installing IIAB!  Then run "cd /opt/iiab/iiab; ./iiab-network"
+dns_jail_enabled: False
+
+
+# 1-PREP
+
+# SSHD runs here & also below in 4-SERVER-OPTIONS
+sshd_install: True    # Required by OpenVPN
+sshd_enabled: True
+
+# SECURITY WARNING: See http://wiki.laptop.org/go/IIAB/Security
+openvpn_install: True
+openvpn_enabled: True
+# 2021-08-18 SSOT: Please set it here, no longer in /etc/iiab/openvpn_handle
+openvpn_handle: unittest - Put Your Name Here
+
+# IIAB-ADMIN runs here - see its vars near top of this file:
+# e.g. iiab_admin_user, iiab_admin_user_install, iiab_admin_can_sudo
+
+# dnsmasq is installed here -- configure LATER in 'network', after Stage 9.
+# (The full network stage runs after 9-LOCAL-ADDONS.  Or manually run
+# "cd /opt/iiab/iiab; sudo ./iiab-network").  Design under discussion: #2876
+
+# Some prefer 512MB for Zero W, others prefer 2048MB or higher for RPi 3 and 4.
+# Please see recommendations at: https://itsfoss.com/swap-size/
+pi_swap_file_size: 1024
+
+
+# 2-COMMON
+
+# /usr/libexec/iiab-startup.sh is much like autoexec.bat & /etc/rc.local
+# It's put in place by 2-common/tasks/iiab-startup.yml at the end of Stage 2.
+
+
+# 3-BASE-SERVER
+
+# roles/mysql runs here (mandatory)
+# roles/nginx runs here (mandatory)
+# roles/www_base runs here (mandatory)
+
+# SEE BELOW: nginx_high_php_limits, apache_allow_sudo
+
+
+# 4-SERVER-OPTIONS
+
+# SSHD runs here & also above in 1-PREP
+
+# DNS prep (named &/or dhcpd) used to run here.  See dnsmasq in 1-PREP above.
+
+# Proxy Cache & basic site blocking using /etc/squid allowlists: (whitelists)
+# e.g. /opt/iiab/iiab/roles/network/templates/squid/allow_dst_domains
+# e.g. /opt/iiab/iiab/roles/network/templates/squid/allow_url_regexs
+squid_install: False
+squid_enabled: False         # SET 'iiab_gateway_enabled' FURTHER ABOVE ?
+gw_squid_whitelist: False    # Works with HTTP sites, not HTTPS sites !
+gw_block_https: False
+
+# Bluetooth PAN access to IIAB server - for Raspberry Pi - for 4-SERVER-OPTIONS
+bluetooth_install: False
+bluetooth_enabled: False
+bluetooth_term_enabled: False
+
+# Show entire contents of USB sticks/drives (at http://box/usb)
+iiab_usb_lib_show_all: True
+# Set umask=0000 for VFAT, NTFS and exFAT in /etc/usbmount/usbmount.conf so
+# Kolibri can export & import channels to USB sticks/drive:
+usb_lib_umask0000_for_kolibri: True
+
+# Common UNIX Printing System (CUPS)
+cups_install: False
+cups_enabled: False
+
+# At Your Own Risk: take a security audit seriously before deploying this
+samba_install: False
+samba_enabled: False
+
+# roles/www_options HANDLES THE 3 VARS BELOW:
+
+# For schools that use WordPress/Nextcloud/Moodle/PBX intensively:
+nginx_high_php_limits: False
+# WARNING: Enabling this might cause excess use of RAM/disk or other resources!
+# roles/www_options & roles/moodle FORCE high limits if 'moodle_install: True'
+# REGARDLESS: AFTER INSTALLING IIAB, PLEASE VERIFY THESE 6 SETTINGS...
+# https://github.com/iiab/iiab/blob/master/roles/www_options/tasks/main.yml#L53-L133
+# ...ARE SUITABLE FOR YOUR HARDWARE, as saved in: /etc/php/<VERSION>/*/php.ini
+
+# Make this False to disable http://box/common/services/power_off.php button:
+apache_allow_sudo: True
+
+# Toggle iiab-refresh-wiki-docs scraping for offline docs (http://box/info)
+nodocs: False
+
+
+# 5-XO-SERVICES
+
+# Lesser-supported XO services need additional testing.  Please contact
+# http://lists.laptop.org/pipermail/server-devel/ if you're able to help test.
+
+
+# 6-GENERIC-APPS
+
+# Simple, Self-Hosted Web Radio - from AzuraCast.com
+azuracast_install: False
+azuracast_enabled: False    # This var is currently IGNORED.
+
+# Gitea (lightweight self-hosted "GitHub") from https://gitea.io
+gitea_install: False
+gitea_enabled: False
+
+# JupyterHub programming environment with student Notebooks
+jupyterhub_install: False
+jupyterhub_enabled: False
+
+# Lokole (email for rural communities) from https://ascoderu.ca
+lokole_install: False
+lokole_enabled: False
+
+# Wikipedia's community editing platform - from MediaWiki.org
+mediawiki_install: False
+mediawiki_enabled: False
+
+# MQTT pub-sub broker for IoT on Raspberry Pi etc
+mosquitto_install: False
+mosquitto_enabled: False
+
+# Flow-based visual programming for wiring together IoT hardware devices etc
+nodered_install: False
+nodered_enabled: False
+
+# Store your docs, calendar, contacts & photos on your local server not cloud!
+# If using Nextcloud intensively, set nginx_high_php_limits further above.
+nextcloud_install: False
+nextcloud_enabled: False
+#
+# 2020-02-15: UNUSED at this time.  Legacy remains from Apache:
+# nextcloud_allow_public_ips: True
+#
+# Configuration tips for IPv4 access controls and tuning RAM/resources:
+# https://github.com/iiab/iiab/blob/master/roles/nextcloud/README.md
+#
+# 2020-01-07: If installing IIAB often, download.nextcloud.com may throttle
+# you to ~100 kbit/sec, delaying your IIAB install by an hour or more (#2112).
+# Uncomment the following line to end that: (might install an older Nextcloud!)
+# nextcloud_dl_url: http://d.iiab.io/packages/latest.tar.bz2
+
+# If using WordPress intensively, set nginx_high_php_limits further above.
+wordpress_install: False
+wordpress_enabled: False
+
+
+# 7-EDU-APPS
+
+# KA Lite - SEE THE "Transmission" BITTORRENT DOWNLOADER FURTHER BELOW, TO INSTALL THOUSANDS OF VIDEOS
+kalite_install: False
+kalite_enabled: False
+
+# Successor to KA Lite, for offline-first teaching and learning - from learningequality.org
+kolibri_install: False
+kolibri_enabled: False
+kolibri_language: en    # ar,bg-bg,bn-bd,de,en,es-es,es-419,fa,fr-fr,ff-cm,gu-in,hi-in,it,km,ko,mr,my,nyn,pt-br,sw-tz,te,ur-pk,vi,yo,zh-hans
+
+# kiwix_install: True is REQUIRED, if you install IIAB's Admin Console
+kiwix_install: False
+kiwix_enabled: False
+
+# Warning: Moodle is a serious LMS, that takes a while to install.
+moodle_install: False
+moodle_enabled: False
+# If using Moodle intensively, set nginx_high_php_limits further above.
+
+# Regional OSM vector maps use far less disk space than bitmap/raster versions.
+# Instructions: https://github.com/iiab/iiab/wiki/IIAB-Maps
+osm_vector_maps_install: False
+osm_vector_maps_enabled: False
+# Set to "True" to download .mbtiles files from Archive.org (might be slow!)
+maps_from_internet_archive: False
+
+# Might stall MongoDB on Power Failure: github.com/xsce/xsce/issues/879
+# Sugarizer 1.0.1+ strategies to solve? github.com/iiab/iiab/pull/957
+# 2020-09-22: Both vars WERE IGNORED on Deb 10 (MongoDB) but no longer?  #1437
+sugarizer_install: False
+sugarizer_enabled: False
+
+
+# 8-MGMT-TOOLS
+
+# BitTorrent downloader for large Content Packs etc
+transmission_install: False
+transmission_enabled: False
+# A. UNCOMMENT LANGUAGE(S) TO DOWNLOAD KA Lite VIDEOS TO /library/transmission
+#    using http://pantry.learningequality.org/downloads/ka-lite/0.17/content/
+transmission_kalite_languages:
+  #- english
+  #- french
+  #- hindi
+  #- portugal-portuguese
+  #- brazilian-portuguese
+  #- spanish
+  #- swahili
+# B. Monitor BitTorrent downloads at http://box:9091 using Admin/changeme
+#    until the download is confirmed complete (can take hours if not days!)
+# C. Carefully move all videos/thumbnails into /library/ka-lite/content
+#    (DO NOT OVERWRITE SUBFOLDERS assessment, locale, srt !)
+# D. Log in to KA Lite at http://box:8008/updates/videos/ using Admin/changeme
+#    then click "Scan content folder for videos" (can take many minutes!)
+# E. READ "KA Lite Administration: What tips & tricks exist?" AT http://FAQ.IIAB.IO
+
+# AWStats, originally known as Advanced Web Statistics - from https://awstats.sourceforge.io
+awstats_install: False
+awstats_enabled: False
+
+# Process supervision tool - from https://mmonit.com/monit/
+# 2020-09-22 WARNING: both vars are IGNORED on Debian 10 due to: iiab/iiab#1849
+monit_install: False
+monit_enabled: False
+
+# Networked resource monitoring/graphing tool - from munin-monitoring.org
+munin_install: False
+munin_enabled: False
+
+# UNMAINTAINED as of July 2021
+# Handy for maintaining tables, but DANGEROUS if not locked down
+phpmyadmin_install: False
+phpmyadmin_enabled: False
+
+# Network traffic monitor - from https://humdi.net/vnstat/
+vnstat_install: False
+vnstat_enabled: False
+
+
+# 9-LOCAL-ADDONS
+
+# Python-based Captive Portal, that @m-anish & @jvonau experimented with in
+# July 2018 (https://github.com/iiab/iiab/pull/870) and that @georgejhunt
+# extensively later refined (PRs #1179, #1300, #1327, #2070).
+captiveportal_install: False
+captiveportal_enabled: False
+captiveportal_splash_page: /
+# You might also want to set iiab_home_url (above!)
+# In a pinch, disable Captive Portal using instructions in http://FAQ.IIAB.IO
+
+# Internet Archive Decentralized Web - create your own offline version box:4244
+# (or http://box/archive) arising from digital library https://dweb.archive.org
+internetarchive_install: False
+internetarchive_enabled: False
+
+# Minetest is an open source clone of the Minecraft building blocks game
+minetest_install: False
+minetest_enabled: False
+
+# Calibre-Web E-Book Library -- Alternative to Calibre, offers a clean/modern UX
+calibreweb_install: False
+calibreweb_enabled: False
+calibreweb_port: 8083       # PORT VARIABLE HAS NO EFFECT (as of January 2019)
+# http://box/books works.  Add {box/libros, box/livres, box/livros, box/liv} etc?
+calibreweb_url1: /books     # For SHORT URL http://box/books  (English)
+calibreweb_url2: /libros    # For SHORT URL http://box/libros (Spanish)
+calibreweb_url3: /livres    # For SHORT URL http://box/livres (French)
+calibreweb_home: /library/calibre-web    # default_vars.yml uses: "{{ content_base }}/calibre-web"
+
+# SUGGESTION: Calibre-Web can use Calibre's /usr/bin/ebook-convert program, so
+# ALSO CONSIDER installing Calibre (below, if its graphical bloat is tolerable!)
+
+# Calibre E-Book Library -- https://calibre-ebook.com
+# WARNING: CALIBRE INSTALLS GRAPHICAL LIBRARIES SIMILAR TO X WINDOWS & OPENGL
+# ON (HEADLESS, SERVER, LITE) OS'S THAT DON'T ALREADY HAVE THESE INSTALLED.
+calibre_install: False
+calibre_enabled: False
+# Change calibre_port to 8010 if you're using XO laptops needing above idmgr ?
+calibre_port: 8080
+# Change calibre to XYZ to add your own mnemonic URL like: http://box/XYZ
+calibre_web_path: calibre  #NEEDS WORK: https://github.com/iiab/iiab/issues/529
+# Avoid URL collisions w/ calibreweb_url1, calibreweb_url2, calibreweb_url3 below!
+
+# A full-featured PBX (for rural telephony, etc) based on Asterisk and FreePBX.
+# REQUIRES PHP 7.4 e.g. Ubuntu 20.04, Debian 11 -- RaspiOS 11 might also work.
+# INSTRUCTIONS: https://github.com/iiab/iiab/tree/master/roles/pbx#pbx-readme
+# If using PBX intensively, investigate nginx_high_php_limits further above.
+pbx_install: False
+pbx_enabled: False
+pbx_use_apache: True    # 2021-08-17: Set either to 'False' if nec -- please
+pbx_use_nginx: True     # read github.com/iiab/iiab/issues/2914 & #2916, THX!
+asterisk_chan_dongle: False

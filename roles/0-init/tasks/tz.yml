@@ -1,32 +1,70 @@
-- name: Check if the TZ is not already set via /etc/localtime - Can Fail
-  shell: readlink /etc/localtime | awk -F "zoneinfo/" '{print $2}'
-  register: TZ_set
-  ignore_errors: True
+- name: "'local_tz: {{ local_tz }}' was set by ansible_date_time.tz in /opt/iiab/iiab/vars/default_vars.yml -- e.g. if Ansible finds symlink /etc/localtime -> ../usr/share/zoneinfo/America/New_York -- it will simplify that to 'EDT' (in the summer) or 'EST' (in the winter)"
+  command: echo
 
-- name: Set local and iiab TZ to UTC if /etc/localtime is not set
-  set_fact:
-    local_tz: "UTC"
-    iiab_TZ: "UTC"
-  when: TZ_set.stdout == ""
+- name: "Create symlink /etc/localtime if it doesn't exist, by running 'timedatectl set-timezone UTC' -- THIS ALL MIGHT NO LONGER BE NEC IN 2021, AS ANSIBLE CORRECTLY NOW INTERPRETS THE ABSENCE OF /etc/localtime AS 'UTC' -- PER https://www.freedesktop.org/software/systemd/man/localtime.html"
+  command: timedatectl set-timezone UTC
+  args:
+    creates: /etc/localtime
 
-- name: Override ansible on timezone if TZ set
-  set_fact:
-    local_tz: "{{ TZ_set.stdout }}"
-  when: TZ_set.stdout != ""
+- name: Symlink /etc/localtime points to which TZ?
+  shell: readlink /etc/localtime | awk -F "zoneinfo/" '{print $2}'    # Overall shell command always completes (return code 0) even when /etc/localtime is missing -- due to the '|' pipe
+  register: etc_localtime
 
-- name: Using iiab TZ for local TZ
-  set_fact:
-    local_tz: "{{ iiab_TZ }}"
-  when: iiab_TZ is defined and iiab_TZ != "" and iiab_TZ != "TZ_set.stdout"
+- name: "/etc/localtime now specifies: {{ etc_localtime.stdout }}"
+  command: echo    # 'meta: noop' is not enough to force instantiation of 'name: {{ var }}' just above
 
-- name: Set default Timezone from iiab TZ (debuntu)
-  shell: timedatectl set-timezone {{ iiab_TZ }}
-  when: is_debuntu and iiab_TZ is defined and iiab_TZ != "" and iiab_TZ != "TZ_set.stdout"
 
-- name: Set default Timezone from iiab TZ (redhat)
-  file:
-    path: /etc/localtime
-    src: "/usr/share/zoneinfo/{{ iiab_TZ }}"
-    force: yes
-    state: link
-  when: is_redhat and iiab_TZ is defined and iiab_TZ != "" and iiab_TZ != "TZ_set.stdout"
+#- name: Check for a /etc/localtime symlink to TZ - NEVER FAILS DUE TO PIPE
+#  shell: readlink /etc/localtime | awk -F "zoneinfo/" '{print $2}'
+#  register: tz_set
+
+#- debug:
+#    var: tz_set
+
+#- name: "If /etc/localtime specified TZ, set 'local_tz: {{ tz_set.stdout }}' overriding the value Ansible set via /etc/iiab/default_vars.yml"
+#  set_fact:
+#    local_tz: "{{ tz_set.stdout }}"
+#  when: tz_set.stdout != ""
+
+#- name: "If not, run 'timedatectl set-timezone UTC' and..."
+#  command: timedatectl set-timezone UTC
+#  when: tz_set.stdout == ""
+
+#- name: "...also set 'local_tz: UTC'"
+#  set_fact:
+#    local_tz: UTC
+#  when: tz_set.stdout == ""
+
+
+#- name: Check if the TZ is not already set via /etc/localtime - Can Fail
+#  shell: readlink /etc/localtime | awk -F "zoneinfo/" '{print $2}'
+#  register: TZ_set
+#  ignore_errors: True
+
+#- name: Set local and iiab TZ to UTC if /etc/localtime is not set
+#  set_fact:
+#    local_tz: "UTC"
+#    iiab_TZ: "UTC"
+#  when: TZ_set.stdout == ""
+
+#- name: Override ansible on timezone if TZ set
+#  set_fact:
+#    local_tz: "{{ TZ_set.stdout }}"
+#  when: TZ_set.stdout != ""
+
+#- name: Using iiab TZ for local TZ
+#  set_fact:
+#    local_tz: "{{ iiab_TZ }}"
+#  when: iiab_TZ is defined and iiab_TZ != "" and iiab_TZ != "TZ_set.stdout"
+
+#- name: Set default Timezone from iiab TZ (debuntu)
+#  shell: timedatectl set-timezone {{ iiab_TZ }}
+#  when: is_debuntu and iiab_TZ is defined and iiab_TZ != "" and iiab_TZ != "TZ_set.stdout"
+
+#- name: Set default Timezone from iiab TZ (redhat)
+#  file:
+#    path: /etc/localtime
+#    src: "/usr/share/zoneinfo/{{ iiab_TZ }}"
+#    force: yes
+#    state: link
+#  when: is_redhat and iiab_TZ is defined and iiab_TZ != "" and iiab_TZ != "TZ_set.stdout"

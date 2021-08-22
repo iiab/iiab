@@ -1,0 +1,156 @@
+- name: 'Install 2 packages: {{ apache_service }}, libapache2-mod-php{{ php_version }}'
+  package:
+    #name: [u'apache2', u'php{{ php_version }}', u'php{{ php_version }}-curl']    # FAILS ('u' for Unicode strings)
+    #name: ['apache2', 'php{{ php_version }}', 'php{{ php_version }}-curl']       # WORKS?
+    name:
+      - "{{ apache_service }}"    # apache2 on Debuntu
+      - libapache2-mod-php{{ php_version }}    # 2020-06-15: Required (e.g. for Elgg, Moodle, roles/pbx's FreePBX & possibly others) now that mysql/tasks/install.yml installs "php{{ php_version }}-common" rather than the full "php{{ php_version }}" -- 2021-06-28 FYI: this also drags in libsodium23 (likewise installed via nginx/tasks/install.yml AND moodle/tasks/install.yml)
+      #- "php{{ php_version }}"
+      #- "php{{ php_version }}-curl"
+    state: present
+#  when: is_debian
+
+# - name: 'Install 2 packages: apache2, php (ubuntu)'
+#   package:
+#     #name: [u'apache2', u'php']    # FAILS ('u' for Unicode strings)
+#     #name: ['apache2', 'php']      # WORKS
+#     name:
+#       - "{{ apache_service }}"    # apache2 on Debuntu
+#       - php
+#     state: present
+#   when: is_ubuntu
+
+# 2019-05-30: It's interesting that http://box.lan/admin and everything seems
+# to work even without php{{ php_version }}-sqlite3 as confirmed on Ubuntu
+# 16.04 (SEE PR #1697).  And likely all others?  @tim-moody writes "I think
+# we decided that because sqlite3 and php are part of the base install the
+# connector should be too."
+#
+# We might *try* deprecating this here as we transition beyond {raspbian-9,
+# debian-9, ubuntu-18} in coming months to verify that roles/osm-vector-maps
+# is the only role that needs it?
+#
+# Legacy Comment: SQLite3 no longer included in another package
+#- name: Install php{{ php_version }}-sqlite3 (raspbian-9+ or debian-9+ or ubuntu-18+)
+#  package:
+#    name: "php{{ php_version }}-sqlite3"
+#  #when: is_raspbian_9 or is_debian_9 or is_ubuntu_18
+#  when: is_debuntu and (not is_debian_8) and (not is_ubuntu_16)
+#  #when: (is_debian and ansible_distribution_major_version == "9") or is_ubuntu_18
+
+#- name: 'Install 4 packages: httpd, mod_authnz_external, php, php-curl (redhat)'
+#  package:
+#    #name: [u'httpd', u'php', u'php-curl', u'mod_authnz_external']    # FAILS ('u' for Unicode strings)
+#    #name: ['httpd', 'php', 'php-curl', 'mod_authnz_external']        # WORKS
+#    name:
+#      - httpd
+#      - mod_authnz_external
+#      - php
+#      - php-curl
+#    state: present
+#  when: is_redhat
+
+# Remove symlinks for mpm_event, replace with mpm_prefork
+- name: Remove both mpm_event symlinks from /etc/apache2/mods-enabled
+  file:
+    path: "/etc/apache2/mods-enabled/{{ item }}"
+    state: absent
+  with_items:
+    - mpm_event.conf
+    - mpm_event.load
+  #when: is_debuntu
+
+- name: Create both mpm_prefork symlinks from /etc/apache2/mods-enabled to /etc/apache2/mods-available
+  file:
+    src: "/etc/apache2/mods-available/{{ item }}"
+    path: "/etc/apache2/mods-enabled/{{ item }}"
+    state: link
+  with_items:
+    - mpm_prefork.conf
+    - mpm_prefork.load
+  #when: is_debuntu
+
+- name: 'Enable 5 Apache modules, as with "a2enmod" command: headers, proxy, proxy_html, proxy_http, rewrite (for http://box/kiwix, http://box/kolibri, http://box/nodered, etc)'
+  apache2_module:
+    name: "{{ item }}"
+  with_items:
+    - headers
+    - proxy
+    - proxy_html
+    - proxy_http
+    - rewrite
+  #when: is_debuntu
+
+- name: Remove 000-default.conf from /etc/apache2 and /etc/apache2/sites-enabled
+  file:
+    path: "{{ item }}"
+    state: absent
+  with_items:
+    - /etc/apache2/000-default.conf    # Not nec on Raspbian.  Is this really still needed elsewhere?
+    - /etc/apache2/sites-enabled/000-default.conf
+  #when: is_debuntu
+
+- name: Create Apache's pid dir /var/run/{{ apache_user }}
+  file:
+    state: directory
+    path: "/var/run/{{ apache_user }}"    # www-data on Debuntu
+    #owner: root
+    #group: root
+    #mode: '0755'
+
+- name: 'Create group: admin'
+  group:
+    name: admin
+
+- name: Add user {{ apache_user }} (from variable apache_user) to groups admin,shadow
+  user:
+    name: "{{ apache_user }}"    # www-data on Debuntu
+    groups: admin,shadow    # 2020-06-04: shadow nec for Admin Console login (this line had been clobbering user www-data's membership in group shadow, as set earlier by nginx/tasks/install.yml, SEE #2431)
+    createhome: no
+
+- name: Create Apache dir /var/log/{{ apache_service }} ({{ apache_user }}:{{ apache_user }})
+  file:
+    state: directory
+    path: "/var/log/{{ apache_service }}"    # apache2 on Debuntu
+    owner: "{{ apache_user }}"    # www-data on Debuntu
+    group: "{{ apache_user }}"
+    #mode: '0755'
+
+
+- name: Install Apache's 010-iiab.conf & proxy_ajp.conf into /etc/apache2/sites-available, from templates
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+  with_items:
+    - { src: 'roles/httpd/templates/010-iiab.conf.j2', dest: '/etc/{{ apache_conf_dir }}/010-iiab.conf' }
+    - { src: 'roles/httpd/templates/proxy_ajp.conf.j2', dest: '/etc/{{ apache_conf_dir }}/proxy_ajp.conf' }
+
+- name: "IN CASE NGINX IS DISABLED: Enable IIAB pages via Apache (e.g. on port 80) by running 'a2ensite 010-iiab.conf'"
+  command: a2ensite 010-iiab.conf
+  #when: apache_enabled
+
+# - name: Disable IIAB pages via Apache (e.g. on port 80) by running 'a2dissite 010-iiab.conf', if not apache_enabled"
+#   command: a2dissite 010-iiab.conf
+#   when: not apache_enabled
+
+
+- debug:
+    msg: roles/httpd/tasks/homepage.yml will run LATER (invoked by roles/www_options/tasks/main.yml) SO THAT APACHE CAN REDIRECT http://box TO http://box{{ iiab_home_url }} (based on var iiab_home_url)
+# - include_tasks: roles/httpd/tasks/homepage.yml
+
+- name: Run 'systemctl daemon-reload'
+  systemd:
+    daemon_reload: yes
+
+
+# RECORD Apache AS INSTALLED
+
+- name: "Set 'apache_installed: True'"
+  set_fact:
+    apache_installed: True
+
+- name: "Add 'apache_installed: True' to {{ iiab_state_file }}"
+  lineinfile:
+    path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
+    regexp: '^apache_installed'
+    line: 'apache_installed: True'

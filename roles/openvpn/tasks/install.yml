@@ -1,16 +1,11 @@
-- name: Install OpenVPN and Nmap packages
+- name: "Install packages: ncat, nmap, openvpn, sudo"
   package:
     name:
-      - openvpn
+      - ncat    # Newer versions of NMap do not include NCat, needed to announce openvpn_handle (if Debian > 9 or Ubuntu > 18)
       - nmap
+      - openvpn
+      - sudo    # (1) Should be installed prior to installing IIAB, (2) Can also be installed by 1-prep here, (3) Is definitely installed by 1-prep's roles/iiab-admin/tasks/sudo-prereqs.yml, (4) Used to be installed by roles/2-common/tasks/packages.yml (but that's too late!)
     state: present
-
-# Newer versions of NMap do not include NCat, needed to announce /etc/iiab/openvpn_handle
-- name: Install Ncat package (if Debian > 9 or Ubuntu > 18)
-  package:
-    name: ncat
-    state: present
-  when: is_debuntu and not (is_debian_8 or is_debian_9 or is_ubuntu_16 or is_ubuntu_17 or is_ubuntu_18)
 
 - name: Install ssh public keys for remote support (if openvpn_install)
   lineinfile:
@@ -60,22 +55,23 @@
     mode: "{{ item.mode }}"
     backup: yes
   with_items:
-    - { src: 'ca.crt', dest: '/etc/openvpn/keys/ca.crt', mode: '0644' }
-    - { src: 'client1.crt', dest: '/etc/openvpn/keys/client1.crt', mode: '0644' }
-    - { src: 'client1.key', dest: '/etc/openvpn/keys/client1.key', mode: '0600' }
-    - { src: 'announce', dest: '/etc/openvpn/scripts/announce', mode: '0755' }
-    - { src: 'announcer.j2', dest: '/etc/openvpn/scripts/announcer', mode: '0755' }
-    - { src: 'silence', dest: '/etc/openvpn/scripts/silence', mode: '0755' }
+    - { src: 'ca.crt', dest: '/etc/openvpn/keys/', mode: '0644' }
+    - { src: 'client1.crt', dest: '/etc/openvpn/keys/', mode: '0644' }
+    - { src: 'client1.key', dest: '/etc/openvpn/keys/', mode: '0600' }
+    - { src: 'announce', dest: '/etc/openvpn/scripts/', mode: '0755' }
+    - { src: 'announcer', dest: '/etc/openvpn/scripts/', mode: '0755' }
+    - { src: 'silence', dest: '/etc/openvpn/scripts/', mode: '0755' }
     - { src: 'xscenet.conf.j2', dest: '/etc/openvpn/xscenet.conf', mode: '0644' }
-    - { src: 'openvpn_handle.j2', dest: '/etc/iiab/openvpn_handle', mode: '0644' }
+    # - { src: 'openvpn_handle.j2', dest: '/etc/iiab/openvpn_handle', mode: '0644' }    # 2021-08-18 SSOT: Please instead set it in /etc/iiab/local_vars.yml
+    - { src: 'iiab-support', dest: '/usr/bin/', mode: '0755' }
     - { src: 'iiab-remote-on.j2', dest: '/usr/bin/iiab-remote-on', mode: '0755' }
-    - { src: 'iiab-remote-off', dest: '/usr/bin/iiab-remote-off', mode: '0755' }
+    - { src: 'iiab-remote-off', dest: '/usr/bin/', mode: '0755' }
 
-- name: Copy /opt/iiab/iiab/iiab-support to /usr/bin/iiab-support, in case git tree deleted e.g. on a smaller IIAB install
-  copy:
-    src: "{{ iiab_dir }}/iiab-support"
-    dest: /usr/bin/
-    mode: '0755'
+# - name: Copy /opt/iiab/iiab/iiab-support to /usr/bin/iiab-support, in case git tree deleted e.g. on a smaller IIAB install
+#   copy:
+#     src: "{{ iiab_dir }}/iiab-support"
+#     dest: /usr/bin/
+#     mode: '0755'
 
 - name: Symlink /usr/bin/iiab-support-on -> /usr/bin/iiab-support
   file:
