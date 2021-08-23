@@ -20,6 +20,6 @@ Security
 - `https://en.wikipedia.org/wiki/Samba_(software)#Security <https://en.wikipedia.org/wiki/Samba_(software)#Security>`_
 - https://ubuntu.com/server/docs/samba-securing
 
-Please review the default `/etc/samba/smb.conf <https://github.com/iiab/iiab/blob/master/roles/samba/templates/smb.conf.j2>`_ file, and revise it appropriately.
+Please review the default `/etc/samba/smb.conf <templates/smb.conf.j2>`_ file, and revise it appropriately.
 
 Please also review your overall `IIAB Security <http://wiki.laptop.org/go/IIAB/Security>`_.
