@@ -3,7 +3,7 @@
 #### Secondary schools may want to consider JupyterHub to integrate coding with dynamic interactive graphing — A New Way to Think About Programming — allowing students to integrate science experiment results and program output within their own blog-like "Jupyter Notebooks."
 
 * Jupyter Notebooks are widely used in the scientific community:
-  * [Intitutional FAQ](https://jupyterhub.readthedocs.io/en/stable/getting-started/institutional-faq.html)
+  * [Institutional FAQ](https://jupyterhub.readthedocs.io/en/stable/getting-started/institutional-faq.html)
   * [Getting Started](https://jupyterhub.readthedocs.io/en/stable/getting-started/)
 * Students create their own accounts on first use — e.g. at http://box.lan/jupyterhub — just as if they're logging in regularly (unfortunately the login screen doesn't make that clear, but the teacher _does not_ need to be involved!)
   * A student can then sign in with their username and password, to gain access to their files (Jupyter Notebooks).
