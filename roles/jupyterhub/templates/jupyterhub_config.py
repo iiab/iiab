@@ -1058,6 +1058,9 @@ c.JupyterHub.spawner_class = 'systemdspawner.SystemdSpawner'
 #  Defaults to an empty set, in which case no user has admin access.
 #  Default: set()
 c.Authenticator.admin_users = set(['Admin'])
+c.Authenticator.dbm_path = "{{ jupyterhub_venv }}/etc/passwords.dbm"
+jupyterhub_installed: True
+jupyterhub_installed: True
 
 ## Set of usernames that are allowed to log in.
 #  
