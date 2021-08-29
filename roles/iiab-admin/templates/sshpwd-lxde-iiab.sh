@@ -24,12 +24,17 @@ check_user_pwd() {
     # (read access to /etc/shadow is otherwise restricted to just root and
     # group www-data i.e. Apache, NGINX get special access).  SEE: #2431, #2561
 
-    # $meth (hashing method) is typically '6' which implies 5000 rounds
-    # of SHA-512 per /etc/login.defs -> /etc/pam.d/common-password
-    meth=$(sudo grep "^$1:" /etc/shadow | cut -d: -f2 | cut -d$ -f2)
-    salt=$(sudo grep "^$1:" /etc/shadow | cut -d: -f2 | cut -d$ -f3)
-    hash=$(sudo grep "^$1:" /etc/shadow | cut -d: -f2 | cut -d$ -f4)
-    [ $(python3 -c "import crypt; print(crypt.crypt('$2', '\$$meth\$$salt'))") == "\$$meth\$$salt\$$hash" ]
+    # 2021-08-28: New OS's use 'yescrypt' so use Perl instead of Python (#2949)
+    # This also helps avoid parsing the (NEW) 4th sub-field in $y$j9T$SALT$HASH
+    field2=$(grep "^$1:" /etc/shadow | cut -d: -f2)
+    [[ $(perl -e "print crypt('$2', '$field2')") == $field2 ]]
+
+    # # $meth (hashing method) is typically '6' which implies 5000 rounds
+    # # of SHA-512 per /etc/login.defs -> /etc/pam.d/common-password
+    # meth=$(sudo grep "^$1:" /etc/shadow | cut -d: -f2 | cut -d$ -f2)
+    # salt=$(sudo grep "^$1:" /etc/shadow | cut -d: -f2 | cut -d$ -f3)
+    # hash=$(sudo grep "^$1:" /etc/shadow | cut -d: -f2 | cut -d$ -f4)
+    # [ $(python3 -c "import crypt; print(crypt.crypt('$2', '\$$meth\$$salt'))") == "\$$meth\$$salt\$$hash" ]
 }
 
 #grep -q "^PasswordAuthentication\s\+no\b" /etc/ssh/sshd_config && return

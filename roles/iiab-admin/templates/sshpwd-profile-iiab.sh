@@ -23,12 +23,17 @@ check_user_pwd() {
     # enough when user does not exist.  Or uncomment to FORCE ERROR CODE 2.
     # Either way, overall bash script still returns exit code 0 ("success").
 
-    # $meth (hashing method) is typically '6' which implies 5000 rounds
-    # of SHA-512 per /etc/login.defs -> /etc/pam.d/common-password
-    meth=$(grep "^$1:" /etc/shadow | cut -d: -f2 | cut -d$ -f2)
-    salt=$(grep "^$1:" /etc/shadow | cut -d: -f2 | cut -d$ -f3)
-    hash=$(grep "^$1:" /etc/shadow | cut -d: -f2 | cut -d$ -f4)
-    [ $(python3 -c "import crypt; print(crypt.crypt('$2', '\$$meth\$$salt'))") == "\$$meth\$$salt\$$hash" ]
+    # 2021-08-28: New OS's use 'yescrypt' so use Perl instead of Python (#2949)
+    # This also helps avoid parsing the (NEW) 4th sub-field in $y$j9T$SALT$HASH
+    field2=$(grep "^$1:" /etc/shadow | cut -d: -f2)
+    [[ $(perl -e "print crypt('$2', '$field2')") == $field2 ]]
+
+    # # $meth (hashing method) is typically '6' which implies 5000 rounds
+    # # of SHA-512 per /etc/login.defs -> /etc/pam.d/common-password
+    # meth=$(grep "^$1:" /etc/shadow | cut -d: -f2 | cut -d$ -f2)
+    # salt=$(grep "^$1:" /etc/shadow | cut -d: -f2 | cut -d$ -f3)
+    # hash=$(grep "^$1:" /etc/shadow | cut -d: -f2 | cut -d$ -f4)
+    # [ $(python3 -c "import crypt; print(crypt.crypt('$2', '\$$meth\$$salt'))") == "\$$meth\$$salt\$$hash" ]
 }
 
 # 2020-10-13 https://github.com/iiab/iiab/issues/2561 RECAP: Above was blocking
