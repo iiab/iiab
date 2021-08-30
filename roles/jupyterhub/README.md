@@ -39,14 +39,16 @@ The admin can reset user passwords by deleting the user from the JupyterHub admi
 1. As an admin user, open the Control Panel by clicking the control panel button on the top right of your JupyterHub.
 
 ![Control panel button in notebook, top right](control-panel-button1.png)
-2. In the control panel, open the Admin link in the top left.
 
+2. In the control panel, open the Admin link in the top left.
 ![Admin button in control panel, top left](admin-access-button1.png)
+
 This opens up the JupyterHub admin page, where you can add / delete users, start / stop peoples’ servers and see who is online.
 
 3. Delete the user whose password needs resetting. Remember this does not delete their data or home directory.
 
-![Delete user button for each user](delete_user.png)
+![Delete user button for each user](delete-user.png)
+
 If there is a confirmation dialog, confirm the deletion. This will also log the user out if they were currently running.
 
 4. Re-create the user whose password needs resetting within that same dialog.
