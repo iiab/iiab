@@ -31,9 +31,13 @@ While PAWS is a little bit off topic, if you have an interest in Wikipedia, plea
 He explains PAWS as a "powerful Python execution environment http://paws.wmcloud.org [allowing] ordinary folks to write interactive scripts to work with Wikimedia content."
 
 ### Users changing their own password
-Users can change their password by first logging into their account and then visiting the url <your_server_ip>/hub/auth/change-password.
+Users can change their password by first logging into their account and then visiting the url http://box.lan/jupyterhub/auth/change-password.
 
-### Resetting user password
+This is the only way to change the admin password, because the Admin screen does not permit deletion of the admin account. It will be necessary to restart jupyterhub before the changed password becomes effective:
+```
+sudo systemctl restart jupyterhub
+```
+### Starting the Admin Panel, and changing user passwords
 The admin can reset user passwords by deleting the user from the JupyterHub admin page. This logs the user out, but does not remove any of their data or home directories. The user can then set a new password by logging in again with their new password.
 
 1. As an admin user, open the Control Panel by clicking the control panel button on the top right of your JupyterHub.
@@ -41,6 +45,7 @@ The admin can reset user passwords by deleting the user from the JupyterHub admi
 ![Control panel button in notebook, top right](control-panel-button1.png)
 
 2. In the control panel, open the Admin link in the top left.
+
 ![Admin button in control panel, top left](admin-access-button1.png)
 
 This opens up the JupyterHub admin page, where you can add / delete users, start / stop peoples’ servers and see who is online.
