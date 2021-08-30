@@ -58,7 +58,6 @@ If there is a confirmation dialog, confirm the deletion. This will also log the 
 
 4. Re-create the user whose password needs resetting within that same dialog.
 
-5. Ask the user to log in again with their new password as usual. This will be their new password going forward.Users changing their own password
-Users can change their password by first logging into their account and then visiting the url <your_server_ip>/hub/auth/change-password.
+5. Ask the user to log in again with their new password as usual. This will be their new password going forward.Users changing their own password.
 
 
