@@ -30,9 +30,34 @@ While PAWS is a little bit off topic, if you have an interest in Wikipedia, plea
 
 He explains PAWS as a "powerful Python execution environment http://paws.wmcloud.org [allowing] ordinary folks to write interactive scripts to work with Wikimedia content."
 
-### Known Issues
+### Users changing their own password
+Users can change their password by first logging into their account and then visiting the url http://box.lan/jupyterhub/auth/change-password.
 
-* 2021-08-07: The page that allows you to reset/change your own password is not accessible.  Likewise Admin users cannot reset/change the password of any _individual_ user at this time.  <sub><sub>[#2918](https://github.com/iiab/iiab/pull/2918)</sub></sub>
-  * If necessary, a Linux administrator can delete the `/passwords.dbm.db` file at the very top of your Linux filesystem, allowing all JupyterHub users to (re)create new passwords.  This does work, but is very heavy-handed.  <sub><sub>[PR #2892](https://github.com/iiab/iiab/pull/2892#issuecomment-890551682)</sub></sub>
-* 2021-08-07: Teachers (i.e. Admin users) cannot currently access the very helpful "administrator's page" discussed at [JupyterHub FAQ >> "How do I manage users?"](https://jupyterhub.readthedocs.io/en/stable/getting-started/institutional-faq.html#how-do-i-manage-users) and [roles/jupyterhub/templates/jupyterhub_config.py#L1049-L1054 >> "Admin users have extra privileges"](https://github.com/iiab/iiab/blob/d0e8e048347bf46c02a2cdb0da9c5cd0c489fe40/roles/jupyterhub/templates/jupyterhub_config.py#L1049-L1054).  <sub><sub>[#2919](https://github.com/iiab/iiab/pull/2919)</sub></sub>
-* 2021-08-08: Password [dbm file](https://github.com/jupyterhub/firstuseauthenticator#firstuseauthenticatordbm_path) `/passwords.dbm.db` should be moved from the top of the filesystem to a better place — e.g. to `/opt/iiab/jupyterhub/etc/` ?  <sub><sub>[PR #2892](https://github.com/iiab/iiab/pull/2892#issuecomment-890579789)</sub></sub>
+This is the only way to change the admin password, because the Admin screen does not permit deletion of the admin account. It will be necessary to restart jupyterhub before the changed password becomes effective:
+```
+sudo systemctl restart jupyterhub
+```
+### Starting the Admin Panel, and changing user passwords
+The admin can reset user passwords by deleting the user from the JupyterHub admin page. This logs the user out, but does not remove any of their data or home directories. The user can then set a new password by logging in again with their new password.
+
+1. As an admin user, open the Control Panel by clicking the control panel button on the top right of your JupyterHub.
+
+![Control panel button in notebook, top right](control-panel-button1.png)
+
+2. In the control panel, open the Admin link in the top left.
+
+![Admin button in control panel, top left](admin-access-button1.png)
+
+This opens up the JupyterHub admin page, where you can add / delete users, start / stop peoples’ servers and see who is online.
+
+3. Delete the user whose password needs resetting. Remember this does not delete their data or home directory.
+
+![Delete user button for each user](delete-user.png)
+
+If there is a confirmation dialog, confirm the deletion. This will also log the user out if they were currently running.
+
+4. Re-create the user whose password needs resetting within that same dialog.
+
+5. Ask the user to log in again with their new password as usual. This will be their new password going forward.Users changing their own password.
+
+
