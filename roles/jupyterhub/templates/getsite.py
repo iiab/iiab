@@ -1,4 +1,4 @@
-#!/opt/iiab/jupyterhub/bin/python3
+#!{{jupyterhub_venv }}/bin/python3
 
 import site
 
