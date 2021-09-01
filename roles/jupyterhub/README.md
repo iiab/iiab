@@ -24,40 +24,42 @@ Note that `/opt/iiab/jupyterhub` is a Python 3 virtual environment, that can be 
 source /opt/iiab/jupyterhub/bin/activate
 ```
 
+### Users changing their own password
+
+Users can change their password by first logging into their account and then visiting URL: http://box.lan/jupyterhub/auth/change-password
+
+This is the only way to change the Admin user's password, because the Control Panel > Admin (below) does not permit deletion of the Admin account.  It will be necessary to restart JupyterHub before the changed password becomes effective:
+
+```
+sudo systemctl restart jupyterhub
+```
+
+### Control Panel > Admin page, to change user passwords
+
+Admin users can reset user passwords by deleting the user from the JupyterHub Admin page.  This logs the user out, but does not remove any of their data or home directories.  The user can then set a new password by logging in again with a new password.
+
+1. As an Admin user, click **Control Panel** in the top right of your JupyterHub.
+
+   ![Control panel button in notebook, top right](control-panel-button1.png)
+
+2. In the Control Panel, open the **Admin** link in the top left.
+
+   ![Admin button in control panel, top left](admin-access-button1.png)
+
+   This opens up the JupyterHub Admin page, where you can add / delete users, start / stop peoples’ servers and see who is online.
+
+3. Delete the user whose password needs resetting.  Remember this does not delete their data or home directory.
+
+   ![Delete user button for each user](delete-user.png)
+
+   If there is a confirmation dialog, confirm the deletion.  This will also log the user out if they were currently running.
+
+4. Re-create the user whose password needs resetting within that same dialog.
+
+5. Ask the user to log in, but with a new password of their choosing.  This will be their password going forward.
+
 ### PAWS/Jupyter Notebooks for Python Beginners
 
 While PAWS is a little bit off topic, if you have an interest in Wikipedia, please do see this 23m 42s video ["Intro to PAWS/Jupyter notebooks for Python beginners"](https://www.youtube.com/watch?v=AUZkioRI-aA&list=PLeoTcBlDanyNQXBqI1rVXUqUTSSiuSIXN&index=8) by Chico Venancio, from 2021-06-01.
 
 He explains PAWS as a "powerful Python execution environment http://paws.wmcloud.org [allowing] ordinary folks to write interactive scripts to work with Wikimedia content."
-
-### Users changing their own password
-Users can change their password by first logging into their account and then visiting the url http://box.lan/jupyterhub/auth/change-password.
-
-This is the only way to change the admin password, because the Admin screen does not permit deletion of the admin account. It will be necessary to restart jupyterhub before the changed password becomes effective:
-```
-sudo systemctl restart jupyterhub
-```
-### Starting the Admin Panel, and changing user passwords
-The admin can reset user passwords by deleting the user from the JupyterHub admin page. This logs the user out, but does not remove any of their data or home directories. The user can then set a new password by logging in again with their new password.
-
-1. As an admin user, open the Control Panel by clicking the control panel button on the top right of your JupyterHub.
-
-![Control panel button in notebook, top right](control-panel-button1.png)
-
-2. In the control panel, open the Admin link in the top left.
-
-![Admin button in control panel, top left](admin-access-button1.png)
-
-This opens up the JupyterHub admin page, where you can add / delete users, start / stop peoples’ servers and see who is online.
-
-3. Delete the user whose password needs resetting. Remember this does not delete their data or home directory.
-
-![Delete user button for each user](delete-user.png)
-
-If there is a confirmation dialog, confirm the deletion. This will also log the user out if they were currently running.
-
-4. Re-create the user whose password needs resetting within that same dialog.
-
-5. Ask the user to log in again with their new password as usual. This will be their new password going forward.Users changing their own password.
-
-
