@@ -1,8 +1,7 @@
 #!/bin/bash -x
 # add await to asyncio change password function
 
-SITE_PACKAGES=$({{ jupyterhub_venv }}/bin/python -m site|grep -v exist|grep site)
-SITE_PACKAGES=${SITE_PACKAGES:5:-2}
+SITE_PACKAGES=$({{ jupyterhub_venv }}/bin/getsite.py)
 cat $SITE_PACKAGES/firstuseauthenticator/firstuseauthenticator.py |grep 'await self.render'
 if [ $? -ne 0 ];then
    echo Updating file
