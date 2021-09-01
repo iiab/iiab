@@ -24,6 +24,12 @@ Note that `/opt/iiab/jupyterhub` is a Python 3 virtual environment, that can be 
 source /opt/iiab/jupyterhub/bin/activate
 ```
 
+Passwords are hashed using 4096 rounds of the latest Blowfish (bcrypt's $2b$ algorithm) and stored in:
+
+```
+/opt/iiab/jupyterhub/etc/passwords.dbm.db
+```
+
 ### Users changing their own password
 
 Users can change their password by first logging into their account and then visiting URL: http://box.lan/jupyterhub/auth/change-password
