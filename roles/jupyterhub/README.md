@@ -14,11 +14,17 @@
 
 ### Settings
 
-Linux administrators please see `/opt/iiab/jupyterhub/etc/jupyterhub/jupyterhub_config.py` which originates from:
+Linux administrators may want to review `/opt/iiab/jupyterhub/etc/jupyterhub/jupyterhub_config.py` which originates from:
 
 https://github.com/iiab/iiab/blob/master/roles/jupyterhub/templates/jupyterhub_config.py
 
-Note that `/opt/iiab/jupyterhub` is a Python 3 virtual environment, that can be activated with the usual formula:
+In some rare circumstances, it may be necessary to restart JupyterHub's systemd service:
+
+```
+sudo systemctl restart jupyterhub
+```
+
+FYI `/opt/iiab/jupyterhub` is a Python 3 virtual environment, that can be activated with the usual formula:
 
 ```
 source /opt/iiab/jupyterhub/bin/activate
@@ -30,31 +36,27 @@ Passwords are hashed using 4096 rounds of the latest Blowfish (bcrypt's $2b$ alg
 /opt/iiab/jupyterhub/etc/passwords.dbm.db
 ```
 
-### Users changing their own password
+### Users can change their own password
 
-Users can change their password by first logging into their account and then visiting URL: http://box.lan/jupyterhub/auth/change-password
+Users can change their password by logging in, and then visiting URL: http://box.lan/jupyterhub/auth/change-password
 
 NOTE: This is the only way to change the password for user 'Admin', because Control Panel > Admin (below) does not permit deletion of this account.
 
-```
-sudo systemctl restart jupyterhub
-```
+### Control Panel > Admin page, to manage other accounts
 
-### Control Panel > Admin page, to change user passwords
+The 'Admin' user (and any users given 'Admin' privilege) can reset user passwords by deleting the user from JupyterHub's **Admin** page (below).  This logs the user out, but does not remove any of their data or home directories.  The user can then set a new password in the usual way — simply by logging in.  Example:
 
-The 'Admin' user (and any users given 'Admin' privilege) can reset user passwords by deleting the user from JupyterHub's **Admin** page (below).  This logs the user out, but does not remove any of their data or home directories.  The user can then set a new password in the usual way — simply by logging in:
-
-1. As a user with 'Admin' privilege, click **Control Panel** in the top right of your JupyterHub.
+1. As a user with 'Admin' privilege, click **Control Panel** in the top right of your JupyterHub:
 
    ![Control panel button in notebook, top right](control-panel-button1.png)
 
-2. In the Control Panel, open the **Admin** link in the top left.
+2. In the Control Panel, open the **Admin** link in the top left:
 
    ![Admin button in control panel, top left](admin-access-button1.png)
 
    This opens up the JupyterHub Admin page, where you can add / delete users, start / stop peoples’ servers and see who is online.
 
-3. Delete the user whose password needs resetting.  Remember this does not delete their data or home directory.
+3. Delete the user whose password needs resetting.  Remember this does not delete their data or home directory:
 
    ![Delete user button for each user](delete-user.png)
 
