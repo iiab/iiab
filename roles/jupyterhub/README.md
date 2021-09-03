@@ -7,8 +7,8 @@
   * [Getting Started](https://jupyterhub.readthedocs.io/en/stable/getting-started/)
 * Students create their own accounts on first use — e.g. at http://box.lan/jupyterhub — just as if they're logging in regularly (unfortunately the login screen doesn't make that clear, but the teacher _does not_ need to be involved!)
   * A student can then sign in with their username and password, to gain access to their files (Jupyter Notebooks).
-  * The teacher should set and protect JupyterHub's overall ``Admin`` password, just in case.  As with student accounts, the login screen doesn't make that clear — so just log in with username `Admin` using any password that you want to become permanent.
-* Individual student folders are created in ``/var/lib/private/`` on the Internet-in-a-Box (IIAB) server:
+  * The teacher should set and protect JupyterHub's overall `Admin` password, just in case.  As with student accounts, the login screen doesn't make that clear — so just log in with username `Admin` using any password that you want to become permanent.
+* Individual student folders are created in `/var/lib/private/` on the Internet-in-a-Box (IIAB) server:
   * A student will only be able to see their own work — they do not have privileges outside of their own folder.
   * Students may upload Jupyter Notebooks to the IIAB server, and download the current state of their work via a normal browser.
 
@@ -34,7 +34,7 @@ Passwords are hashed using 4096 rounds of the latest Blowfish (bcrypt's $2b$ alg
 
 Users can change their password by first logging into their account and then visiting URL: http://box.lan/jupyterhub/auth/change-password
 
-This is the only way to change the Admin user's password, because the Control Panel > Admin (below) does not permit deletion of the Admin account.  It will be necessary to restart JupyterHub before the changed password becomes effective:
+NOTE: This is the only way to change the password for user 'Admin', because Control Panel > Admin (below) does not permit deletion of this account.
 
 ```
 sudo systemctl restart jupyterhub
@@ -42,9 +42,9 @@ sudo systemctl restart jupyterhub
 
 ### Control Panel > Admin page, to change user passwords
 
-Admin users can reset user passwords by deleting the user from the JupyterHub Admin page.  This logs the user out, but does not remove any of their data or home directories.  The user can then set a new password by logging in again with a new password.
+The 'Admin' user (and any users given 'Admin' privilege) can reset user passwords by deleting the user from JupyterHub's **Admin** page (below).  This logs the user out, but does not remove any of their data or home directories.  The user can then set a new password in the usual way — simply by logging in:
 
-1. As an Admin user, click **Control Panel** in the top right of your JupyterHub.
+1. As a user with 'Admin' privilege, click **Control Panel** in the top right of your JupyterHub.
 
    ![Control panel button in notebook, top right](control-panel-button1.png)
 
@@ -60,9 +60,11 @@ Admin users can reset user passwords by deleting the user from the JupyterHub Ad
 
    If there is a confirmation dialog, confirm the deletion.  This will also log the user out if they were currently running.
 
-4. Re-create the user whose password needs resetting within that same dialog.
+4. Re-create the user whose password needs resetting, on this same screen.
 
 5. Ask the user to log in, but with a new password of their choosing.  This will be their password going forward.
+
+_WARNING: If on login users see "500 : Internal Server Error", you may need to remove ALL files of the form_ `/run/jupyter-johndoe-singleuser`
 
 ### PAWS/Jupyter Notebooks for Python Beginners
 
