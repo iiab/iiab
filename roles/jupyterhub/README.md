@@ -7,7 +7,7 @@
   * [Getting Started](https://jupyterhub.readthedocs.io/en/stable/getting-started/)
 * Students create their own accounts on first use — e.g. at http://box.lan/jupyterhub — just as if they're logging in regularly (unfortunately the login screen doesn't make that clear, but the teacher _does not_ need to be involved!)
   * A student can then sign in with their username and password, to gain access to their files (Jupyter Notebooks).
-  * The teacher should set and protect JupyterHub's overall `Admin` password, just in case.  As with student accounts, the login screen doesn't make that clear — so just log in with username `Admin` using any password that you want to become permanent.
+  * The teacher should set and protect JupyterHub's overall `Admin` password, just in case.  As with student accounts, the login screen doesn't make that clear — so just log in with username `Admin` — using any password that you want to become permanent.
 * Individual student folders are created in `/var/lib/private/` on the Internet-in-a-Box (IIAB) server:
   * A student will only be able to see their own work — they do not have privileges outside of their own folder.
   * Students may upload Jupyter Notebooks to the IIAB server, and download the current state of their work via a normal browser.
@@ -44,9 +44,9 @@ NOTE: This is the only way to change the password for user 'Admin', because Cont
 
 ### Control Panel > Admin page, to manage other accounts
 
-The 'Admin' user (and any users given 'Admin' privilege) can reset user passwords by deleting the user from JupyterHub's **Admin** page (below).  This logs the user out, but does not remove any of their data or home directories.  The user can then set a new password in the usual way — simply by logging in.  Example:
+The `Admin` user (and any users given `Admin` privilege) can reset user passwords by deleting the user from JupyterHub's **Admin** page (below).  This logs the user out, but does not remove any of their data or home directories.  The user can then set a new password in the usual way — simply by logging in.  Example:
 
-1. As a user with 'Admin' privilege, click **Control Panel** in the top right of your JupyterHub:
+1. As a user with `Admin` privilege, click **Control Panel** in the top right of your JupyterHub:
 
    ![Control panel button in notebook, top right](control-panel-button1.png)
 
@@ -60,7 +60,7 @@ The 'Admin' user (and any users given 'Admin' privilege) can reset user password
 
    ![Delete user button for each user](delete-user.png)
 
-   If there is a confirmation dialog, confirm the deletion.  This will also log the user out if they were currently running.
+   If there is a confirmation dialog, confirm the deletion.  This will also log the user out, if they were currently running.
 
 4. Re-create the user whose password needs resetting, on this same screen.
 
