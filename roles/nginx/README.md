@@ -10,7 +10,7 @@
 
 2. Without PHP available via FastCGI, any function at all for PHP-based applications validated NGINX.
 
-3. Current state of IIAB App/Service migrations as of 2021-08-08: *(SEE ALSO [#2762](https://github.com/iiab/iiab/issues/2762))*
+3. Current state of IIAB App/Service migrations as of 2021-09-05: *(SEE ALSO [#2762](https://github.com/iiab/iiab/issues/2762))*
 
    1. These support "Native" NGINX but ***NOT*** Apache
 
@@ -53,11 +53,11 @@
       * minetest
       * mosquitto
       * openvpn
-      * pbx [*, recommends Apache for now, as in Section iii., [#2914](https://github.com/iiab/iiab/issues/2914)]
+      * pbx [FreePBX is usable with _both_ NGINX and Apache as of 2021-08-18, thanks to PR [#2954](https://github.com/iiab/iiab/pull/2954)]
       * phpmyadmin [*, requires Apache for now, as in Section iii.]
       * samba [*, [PR #2923](https://github.com/iiab/iiab/pull/2923)]
       * sshd
       * transmission
       * vnstat
 
-[*] The 4 above starred roles could use improvement, as of 2021-08-08.
+[*] The 3 above starred roles could use improvement, as of 2021-09-05.
