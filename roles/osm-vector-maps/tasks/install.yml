@@ -1,8 +1,8 @@
-- name: Make the required directories for Maps
+- name: Make ~5 directories in {{ vector_map_path }} (0755 by default)
   file:
     path: "{{ item }}"
     state: directory
-    mode: '0755'
+    # mode: 0755
   with_items:
     - "{{ vector_map_path }}/test-page/assets"    # /library/www/osm-vector-maps
     - "{{ vector_map_path }}/maplist/assets"
@@ -10,25 +10,25 @@
     - "{{ vector_map_path }}/viewer/tiles"
     - "{{ vector_map_path }}/installer"
 
-- name: Copy the map catalog to /etc/iiab/map-catalog.json
+- name: Download {{ map_catalog_url }}/map-catalog.json to {{ iiab_etc_path }}
   get_url:
     url: "{{ map_catalog_url }}/map-catalog.json"    # http://download.iiab.io/content/OSM/vector-tiles
     dest: "{{ iiab_etc_path }}"    # /etc/iiab
 
-- name: Download map catalog {{ iiab_map_url }}/assets/regions.json to {{ iiab_etc_path }}
+- name: Download {{ iiab_map_url }}/assets/regions.json to {{ iiab_etc_path }}
   get_url:
     url: "{{ iiab_map_url }}/assets/regions.json"    # http://download.iiab.io/content/OSM/vector-tiles/maplist/hidden
     dest: "{{ iiab_etc_path }}"
 
-- name: Check for existence of cities database
+- name: Does cities database {{ vector_map_path }}/cities1000.sqlite exist?
   stat:
     path: "{{ vector_map_path }}/cities1000.sqlite"
   register: cities_installed
 
-- name: Fetch the city database
+- name: If not, download {{ iiab_map_url }}/regional-resources/cities1000.sqlite to {{ vector_map_path }}/viewer/
   get_url:
     url: "{{ iiab_map_url }}/regional-resources/cities1000.sqlite"
-    dest: "{{ vector_map_path }}/viewer/cities1000.sqlite"
+    dest: "{{ vector_map_path }}/viewer/"
   when: not cities_installed.stat.exists
 
 - name: Symlink {{ doc_root }}/common/assets/map-catalog.json -> /etc/iiab/map-catalog.json
@@ -49,8 +49,8 @@
     path: "{{ vector_map_path }}/maplist/assets/regions.json"
     state: link
 
-- name: Download the JavaScript bundle with OpenLayers (test-page-bundle.js) for test page http://box/maps/maplist
 # At this point, fetches from github.com/georgejhunt/maps from test branch
+- name: Download OpenLayers test page stuff (JavaScript bundle etc) from {{ osm_repo_url }}/{{ maps_branch }}/osm-source/pages/test-page/build/* to {{ vector_map_path }}/test-page/ -- for test page http://box/maps/maplist
   get_url:
     url: "{{ item }}"
     dest: "{{ vector_map_path }}/test-page/"
@@ -58,7 +58,7 @@
     - "{{ osm_repo_url }}/{{ maps_branch }}/osm-source/pages/test-page/build/test-page-bundle.js"    # https://raw.githubusercontent.com/iiab/maps / master
     - "{{ osm_repo_url }}/{{ maps_branch }}/osm-source/pages/test-page/build/index.html"
 
-- name: Fetch the javascript bundle with openlayers for Viewer page
+- name: Download OpenLayers viewer page stuff (JavaScript bundle etc) from {{ osm_repo_url }}/{{ maps_branch }}/osm-source/pages/viewer/build/* to {{ vector_map_path }}/viewer/
 # At this point, fetches from github.com/iiab/maps from {{ maps_branch }} branch
   get_url:
     url: "{{ osm_repo_url }}/{{ maps_branch }}/osm-source/pages/viewer/build/{{ item }}"
@@ -68,7 +68,7 @@
     - viewer-bundle.js
     - viewer-bundle.js.map
 
-- name: Get the helper files for viewer
+- name: Download ~4 .css and .php helper files from {{ osm_repo_url }}/{{ maps_branch }}/osm-source/pages/viewer/* to {{ vector_map_path }}/viewer/ -- for viewer
   get_url:
     url: "{{ osm_repo_url }}/{{ maps_branch }}/osm-source/pages/viewer/{{ item }}"
     dest: "{{ vector_map_path }}/viewer/"
@@ -78,7 +78,7 @@
     - searchapi.php
     - tileserver.php
 
-- name: Copy the map installer mbtiles
+- name: Download {{ map_catalog_url }}/planet_z0-z6_2019.mbtiles to {{ vector_map_path }}/installer/ -- for map installer
   get_url:
     url: "{{ map_catalog_url }}/planet_z0-z6_2019.mbtiles"
     dest: "{{ vector_map_path }}/installer/"
@@ -95,12 +95,12 @@
     path: "{{ vector_map_path }}/viewer/tiles/planet_z0-z6_2019.mbtiles"
     state: link
 
-- name: Copy the map abbreviated satellite images
+- name: Download abbreviated satellite images from {{ map_catalog_url }}/satellite_z0-z6_v3.mbtiles to {{ vector_map_path }}/viewer/tiles/
   get_url:
     url: "{{ map_catalog_url }}/satellite_z0-z6_v3.mbtiles"
-    dest: "{{ vector_map_path }}/viewer/tiles/satellite_z0-z6_v3.mbtiles"
+    dest: "{{ vector_map_path }}/viewer/tiles/"
 
-- name: Fetch the javascript bundle for map installer
+- name: Download {index.html, installer-bundle.js} from {{ osm_repo_url }}/{{ maps_branch }}/osm-source/pages/installer/build/* to {{ vector_map_path }}/installer/ -- for map installer
   get_url:
     url: "{{ osm_repo_url }}/{{ maps_branch }}/osm-source/pages/installer/build/{{ item }}"
     dest: "{{ vector_map_path }}/installer/"
@@ -108,7 +108,7 @@
     - index.html
     - installer-bundle.js
 
-- name: Fetch the action routines for installer
+- name: Download ~4 action routines from {{ osm_repo_url }}/{{ maps_branch }}/osm-source/pages/installer/* to {{ vector_map_path }}/installer/ -- for installer
   get_url:
     url: "{{ osm_repo_url }}/{{ maps_branch }}/osm-source/pages/installer/{{ item }}"
     dest: "{{ vector_map_path }}/installer/"
@@ -119,7 +119,7 @@
     - tileserver.php
 
 # the following was changed to grab from the iiab/maps repo
-- name: Copy the common assets for the general purpose map viewer
+- name: Download common assets from {{ osm_repo_url }}/{{ maps_branch }}/osm-source/pages/viewer/assets/* to {{ vector_map_path }}/viewer/assets -- for the general purpose map viewer
   get_url:
     url: "{{ osm_repo_url }}/{{ maps_branch }}/osm-source/pages/viewer/assets/{{ item }}"
     dest: "{{ vector_map_path }}/viewer/assets"
@@ -154,17 +154,17 @@
     state: link
     force: True
 
-- name: Copy the fonts for the general purpose map viewer
+- name: Copy fonts to {{ doc_root }}/common/fonts/ for the general purpose map viewer (root:root, 0644 by default)
   copy:
     src: "{{ item }}"
     dest: "{{ doc_root }}/common/fonts/"
-    mode: 0644
-    owner: root
-    group: root
+    # mode: 0644
+    # owner: root
+    # group: root
   with_fileglob:
     - fonts/*
 
-- name: Copy the redirect to the test page
+- name: Copy redirect {{ osm_repo_url }}/{{ maps_branch }}/osm-source/pages/viewer/installer-index.redirect to test page {{ vector_map_path }}/maplist/index.html
   get_url:
     url: "{{ osm_repo_url }}/{{ maps_branch }}/osm-source/pages/viewer/installer-index.redirect"
     dest: "{{ vector_map_path }}/maplist/index.html"
@@ -180,7 +180,7 @@
       - python3-geojson
       - python3-pil
 
-- name: Copy 6 scripts to /usr/bin, for downloading tiles
+- name: Copy 6 scripts to /usr/bin, for downloading tiles (0755)
   get_url:
     url: "{{ osm_repo_url }}/{{ maps_branch }}/osm-source/pages/viewer/scripts/{{ item }}"
     dest: /usr/bin/
