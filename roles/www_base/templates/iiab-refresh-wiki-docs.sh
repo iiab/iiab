@@ -33,7 +33,7 @@ done
 rsync -av $OUTPUT/ $DESTPATH
 
 # Download FAQ etc
-lynx -reload -source http://wiki.laptop.org/go/IIAB/FAQ > $DESTPATH/FAQ.html
+lynx -reload -source https://wiki.iiab.io/go/FAQ > $DESTPATH/FAQ.html
 lynx -reload -source http://wiki.laptop.org/go/IIAB/Security > $DESTPATH/Security.html
 lynx -reload -source http://wiki.laptop.org/go/IIAB/local_vars.yml > $DESTPATH/local_vars.yml
 lynx -reload -source http://wiki.laptop.org/go/IIAB/local_vars_min.yml > $DESTPATH/local_vars_min.yml
@@ -65,6 +65,7 @@ for f in $DESTPATH/*.html; do
     sed -i -e "s|https://github.com/xsce/xsce/blob/release-6.2/\(.*\)\.md\">|\1.html\">|g" $f
     sed -i -e "s|https://github.com/xsce/xsce/wiki/\(.*\)\">|\1.html\">|g" $f
 
+    sed -i -e "s|https://wiki.iiab.io/go/FAQ|FAQ.html|g" $f
     sed -i -e "s|http://wiki.laptop.org/go/IIAB/FAQ|FAQ.html|g" $f
     sed -i -e "s|/go/IIAB/FAQ|FAQ.html|g" $f
     sed -i -e "s|http://wiki.iiab.io/FAQ|FAQ.html|g" $f
