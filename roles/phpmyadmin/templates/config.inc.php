@@ -26,6 +26,5 @@ $cfg['DefaultLang'] = 'en';
 $cfg['ServerDefault'] = 1;
 $cfg['UploadDir'] = '';
 $cfg['SaveDir'] = '';
-//$cfg['Servers'][$i]['auth_type'] = 'http';
 ?>
 
