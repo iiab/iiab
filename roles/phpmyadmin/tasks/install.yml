@@ -1,11 +1,14 @@
-# - name: "Set 'apache_install: True' and 'apache_enabled: True'"
-#   set_fact:
-#     apache_install: True
-#     apache_enabled: True
-#
-# - name: APACHE - run 'httpd' role
-#   include_role:
-#     name: httpd
+- name: Download {{ phpmyadmin_dl_url }} to {{ downloads_dir }}
+  get_url:
+    url: "{{ phpmyadmin_dl_url }}"    # e.g. https://files.phpmyadmin.net/phpMyAdmin/5.0.4/phpMyAdmin-5.0.4-all-languages.zip
+    dest: "{{ downloads_dir }}"    # /opt/iiab/downloads
+    timeout: "{{ download_timeout }}"    # 200
+  when: internet_available
+
+- name: Does {{ downloads_dir }}/{{ phpmyadmin_name_zip }} exist?
+  stat:
+    path: "{{ downloads_dir }}/{{ phpmyadmin_name_zip }}"    # e.g. /opt/iiab/downloads/phpMyAdmin-5.0.4-all-languages.zip
+  register: phpmyadmin_dl
 
 
 - name: Unarchive {{ phpmyadmin_dl_url }} (7+ MB) to /opt (60+ MB)
@@ -32,12 +35,16 @@
     owner: "{{ apache_user }}"
     group: "{{ apache_user }}"
 
-# - name: Install /etc/{{ apache_conf_dir }}/phpmyadmin.conf from template
-#   template:
-#     src: phpmyadmin.j2
-#     dest: "/etc/{{ apache_conf_dir }}/phpmyadmin.conf"
-#   #when: apache_installed is defined
+# Above 3 stanzas set link/tree/contents ownership to {{ apache_user }}:root
+# OOPS: CHOWN BELOW CHANGED LINK ALONE (TREE/CONTENTS REMAINED root:root)
 
+# - name: Change the owner of the PHP tree to Apache
+#   shell: "chown -R {{ apache_user }} /opt/phpmyadmin"
+#   #file:
+#   #  path: "/opt/{{ phpmyadmin_name_zip }}"
+#   #  owner: "{{ apache_user }}"
+#   #  recurse: yes
+#   #  state: directory
 
 # RECORD phpMyAdmin AS INSTALLED
 
