@@ -1,0 +1,80 @@
+# FIXED SOMETIME PRIOR TO AUGUST 2018: earlier versions of Ansible had not
+# been working with systemd service names that contained the "@" character.
+
+#- name: Enable the OpenVPN tunnel at boot time (debuntu)
+#  shell: systemctl enable openvpn@xscenet.service
+#  when: openvpn_enabled and not stat.exists is defined and is_debuntu
+
+#- name: Enable the OpenVPN tunnel at boot time (debuntu)
+#  shell: update-rc.d openvpn enable
+#  when: openvpn_enabled and not stat.exists is defined and is_debuntu
+
+#- name: Start the OpenVPN tunnel now
+#  shell: systemctl start openvpn@xscenet.service
+#  when: openvpn_enabled and not stat.exists is defined and not installing
+
+# AUGUST 2018: Unexplainably, stanza below had to be placed underneath ANY
+# "lineinfile: ... state: absent" stanza to make openvpn_handle propagate
+# properly to xscenet.net (monitoring ncat's erroneous handle parameter by
+# observing "systemctl status openvpn@xscenet" helped trace the [primary?]
+# bug to roles/openvpn/templates/announcer [far better now if not perfect?])
+# Earlier "./runrole openvpn" had to be run twice to transmit
+# /etc/iiab/openvpn_handle to xscenet.net -- and
+# "systemctl restart openvpn@xscenet" was failing completely (no matter how
+# many times it was run) to transmit /etc/iiab/openvpn_handle to xscenet.net
+
+# 2018-09-02: OpenVPN had been starting tunnels by accident after reboot,
+# with new IIAB installs.  Fix below (https://github.com/iiab/iiab/pull/1079)
+# changes most all instances below from CHILD service "openvpn@xscenet" to
+# PARENT service "openpvn".  See these critical files to understand why:
+#
+#    /etc/default/openvpn               implies AUTOSTART="all"
+#    /etc/init.d/openvpn                has AUTOSTART="all"
+#    /etc/openvpn/xscenet.conf          our VPN connection
+#    /etc/network/if-up.d/openvpn       appears to auto-start xscenet.conf
+#    /lib/systemd/systemd-sysv-install  sets /etc/rc*.d/S|K01openvpn
+#                                       e.g. when "systemctl enable openvpn"
+
+- name: Enable & (Re)Start PARENT 'openvpn' system service, which (re)starts CHILD service 'openvpn@xscenet' (& actual tunnel)
+  systemd:
+    name: openvpn
+    daemon_reload: yes
+    enabled: yes
+    state: restarted    # 2018-09-02: Should we be concerned that "systemctl status openvpn" often shows "active (exited)" ?  If so we might consider "state: started" or "state: reloaded" instead?
+  when: openvpn_enabled
+
+- name: Enable hourly cron job for OpenVPN (starts CHILD service openvpn@xscenet, typically for CentOS only?)
+  lineinfile:
+    path: /etc/crontab
+    # CONSIDER "restart" not just "start" if something stronger is confirmed needed?
+    line: "25 *  *  *  * root (/usr/bin/systemctl start openvpn@xscenet.service) > /dev/null"
+  when: openvpn_enabled and openvpn_cron_enabled
+
+- name: Remove hourly cron job for OpenVPN (typically for CentOS only?)
+  lineinfile:
+    path: /etc/crontab
+    regexp: "openvpn@xscenet"
+    # Potentially DANGEROUS as others use systemctl too:
+    #regexp: ".*/usr/bin/systemctl*"
+    state: absent
+  when: not openvpn_enabled or not openvpn_cron_enabled
+
+- name: Disable & Stop PARENT 'openvpn' system service, which stops CHILD service 'openvpn@xscenet' (& actual tunnel)
+  systemd:
+    name: openvpn
+    enabled: no
+    state: stopped
+  when: not openvpn_enabled
+
+#- name: Stop starting the OpenVPN tunnel at boot time (not debuntu)    
+#  shell: systemctl disable openvpn@xscenet.service
+#  when: not openvpn_enabled and not is_debuntu
+
+#- name: Stop starting the OpenVPN tunnel at boot time (debuntu)
+#  shell: update-rc.d openvpn disable
+#  when: not openvpn_enabled and is_debuntu
+
+#- name: Stop OpenVPN tunnel immediately
+#  shell: systemctl stop openvpn@xscenet.service
+#  ignore_errors: True
+#  when: not openvpn_enabled and not installing
