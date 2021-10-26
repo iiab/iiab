@@ -1,4 +1,4 @@
-# Get Started with Ubuntu on windows System for Linux 2
+# Get Started with Ubuntu on Windows System for Linux 2
 
 1. Open a ```cmd``` prompt. 
 1. The ```wsl``` windows 11 command manages Linux virtual machines
