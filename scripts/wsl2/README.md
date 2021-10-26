@@ -1,3 +1,23 @@
+# How to get started with Ubunto on windows System for Linux 2
+
+1. Open a ```cmd``` prompt. 
+1. The ```wsl``` windows 11 command manages Linux virtual machines
+    1. ```wsl --list --online``` Find out what virtual machines are available for download.
+    2. ```wsl -l -v``` Find out what virtual machines are on this machine.
+    3. ```wsl --install -d Ubuntu```   Install one of the virtual machines available.
+2. Download the most recent Ubuntu distribution.
+3. This with ask for a username and password, and land you in a terminal.
+4. Become root: ```sudo su```
+5. Download the IIAB code that runs on WSL:
+```
+cd /opt
+mkdir iiab
+cd iiab
+git clone https://github.com/georgejhunt/iiab -b wsl
+cd /opt/iiab/iiab/scripts/wsl
+# Run the script which causes wsl Ubuntu to use systemd for startup (required by ansible)
+./ubuntu-wsl2-systemd-script.sh
+```
 # ubuntu-wsl2-systemd-script
 Script to enable systemd support on current Ubuntu WSL2 images from the Windows store. 
 Script is unsupported and will no longer be maintained, but will be up here because it is used by quite some people.
