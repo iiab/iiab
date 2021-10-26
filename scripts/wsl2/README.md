@@ -19,11 +19,12 @@
    ./ubuntu-wsl2-systemd-script.sh
 ```
 6. Copy the vars/local_vars_wsl.yml to /etc/iiab/local_vars.yml
-7. At this point, you can probably run the oneline IIAB installer to completion (will not run network) but will install the Admin Console
+7. At this point, you can probably run the oneline IIAB installer to completion (will not modify network) but will install the Admin Console
 
 ### ubuntu-wsl2-systemd-script
 
-from: https://github.com/damiongans/ubuntu-wsl2-systemd-script
+The followin README fragment is from: https://github.com/damiongans/ubuntu-wsl2-systemd-script
+
 Script to enable systemd support on current Ubuntu WSL2 images from the Windows store. 
 Script is unsupported and will no longer be maintained, but will be up here because it is used by quite some people.
 I am not responsible for broken installations, fights with your roommates and police ringing your door ;-).
