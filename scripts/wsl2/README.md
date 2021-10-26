@@ -6,7 +6,7 @@
     2. ```wsl -l -v``` Find out what virtual machines are on this machine.
     3. ```wsl --install -d Ubuntu```   Install one of the virtual machines available.
 2. Download the most recent Ubuntu distribution.
-3. This with ask for a username and password, and land you in a terminal.
+3. This will ask for a username and password, and land you in a terminal.
 4. Become root: ```sudo su```
 5. Download the IIAB code that runs on WSL:
 ```
