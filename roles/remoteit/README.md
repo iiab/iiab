@@ -1,6 +1,6 @@
 # Installing Remoteit on a Raspberry Pi
 1. Set remoteit_install and remoteit_enabled to True in /etc/local_vars.yml.
-2 Run the role that installs remote.it.`
+2. Run the role that installs remote.it.`
 ```
     ./runroles remoteit
 ```
