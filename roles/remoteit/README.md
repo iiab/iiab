@@ -39,4 +39,4 @@ For "auto-registration" of remote.it, and other more advanced configuration opti
 
 # Known Issues
 
-This needs to be enhanced so remote.it also works when IIAB is installed on Ubuntu, Mint or Debian: [#3006](https://github.com/iiab/iiab/issues/3006)
+This needs to be enhanced rather urgently, so remote.it also works when IIAB is installed on Raspberry Pi OS 11 (Bullseye), Ubuntu, Mint and Debian: [#3006](https://github.com/iiab/iiab/issues/3006)
