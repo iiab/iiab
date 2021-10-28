@@ -4,7 +4,7 @@ Remote.it can be a great way to remotely support an Internet-in-a-Box (IIAB).
 
 For other approaches, please see http://FAQ.IIAB.IO -> "How can I remotely manage my Internet-in-a-Box?"
 
-To install remote.it onto a Raspberry Pi IIAB:
+To install remote.it onto an IIAB:
 
 1. Set `remoteit_install` and `remoteit_enabled` to `True` in your IIAB's [/etc/iiab/local_vars.yml](http://wiki.laptop.org/go/IIAB/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it.3F)
 2. Install it (remote.it) onto your IIAB, by running:
@@ -20,7 +20,7 @@ To install remote.it onto a Raspberry Pi IIAB:
    ```
    *The claim code must be used within 24 hours, per:* https://docs.remote.it/device-package/installation#2.-update-your-package-manager-and-install
 
-   If not used before then, re-run this installation command to get a new claim code:
+   If not used before then, here is an *example (version & architecture can change in the .Deb filename below!)* to re-run this installation command, to get a new claim code:
    ```
    sudo apt reinstall /opt/iiab/downloads/remoteit-4.13.5.armhf.rpi.deb
    ```
