@@ -16,7 +16,7 @@ To install remote.it onto an IIAB:
 
 3. To obtain this IIAB's 8-letter remote.it claim code, allowing you to make a remote connection to this IIAB, run:
    ```
-   grep claim /etc/remoteit/config.json
+   sudo grep claim /etc/remoteit/config.json
    ```
    *The claim code must be used within 24 hours, per:* https://docs.remote.it/device-package/installation#2.-update-your-package-manager-and-install
 
