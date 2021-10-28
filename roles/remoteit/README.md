@@ -20,7 +20,7 @@ To install remote.it onto an IIAB:
    ```
    *The claim code must be used within 24 hours, per:* https://docs.remote.it/device-package/installation#2.-update-your-package-manager-and-install
 
-   If not used before then, here is an *example (version & architecture can change in the .Deb filename below!)* to re-run this installation command, to get a new claim code:
+   If not used before then, here is an *example (version & architecture can change in the .deb filename below!)* to re-run this installation command, to get a new claim code:
    ```
    sudo apt reinstall /opt/iiab/downloads/remoteit-4.13.5.armhf.rpi.deb
    ```
