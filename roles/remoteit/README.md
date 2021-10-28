@@ -12,11 +12,27 @@ To install remote.it onto a Raspberry Pi IIAB:
    cd /opt/iiab/iiab
    sudo ./runrole remoteit
    ```
-   EXPLANATION: The above installs remote.it code, in a way that was originally designed to be interactive, and provide you the registration code needed to make remote connections to this IIAB.
+   <!--EXPLANATION: The above installs remote.it, in a way that was originally designed to be interactive, and provide you the claim code needed to make a remote connection to this IIAB.  The claim code is further explained below.-->
 
-3. To obtain this IIAB's remote.it registration code, run:
+3. To obtain this IIAB's 8-letter remote.it claim code, allowing you to make a remote connection to this IIAB, run:
+   ```
+   grep claim /etc/remoteit/config.json
+   ```
+   *The claim code must be used within 24 hours, per:* https://docs.remote.it/device-package/installation#2.-update-your-package-manager-and-install
+
+   If not used before then, re-run this installation command to get a new claim code:
    ```
    sudo apt reinstall /opt/iiab/downloads/remoteit-4.13.5.armhf.rpi.deb
    ```
-4. Record this registration code in a safe place, similar to a password!
-5. After you've installed the https://remote.it client software onto a separate computer or device (e.g. your own laptop) click on the '+' icon, then enter the remote.it registration number (for the IIAB that you need to connect to).
+4. After you've installed the https://remote.it client software onto a separate computer or device (e.g. your own laptop) click on the '+' icon, then enter the remote.it claim code (for the IIAB that you need to connect to).
+
+   As shown in the screenshot here: https://docs.remote.it/device-package/installation#3.-claim-and-register-the-device
+
+# Advanced
+
+For "auto-registration" of remote.it, and other more advanced configuration options, please review:
+
+- https://docs.remote.it
+- https://support.remote.it
+- https://support.remote.it/hc/en-us/articles/360044424612-1-Create-an-Auto-Registration
+- https://support.remote.it/hc/en-us/articles/360044424672-1-Device-Setup-for-Auto-Bulk-Registration
