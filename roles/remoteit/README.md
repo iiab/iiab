@@ -7,7 +7,7 @@ For other approaches, please see http://FAQ.IIAB.IO -> "How can I remotely manag
 To install remote.it onto an IIAB:
 
 1. Set `remoteit_install` and `remoteit_enabled` to `True` in your IIAB's [/etc/iiab/local_vars.yml](http://wiki.laptop.org/go/IIAB/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it.3F)
-2. Install it (remote.it) onto your IIAB, by running:
+2. Install and enable it (remote.it) on your IIAB, by running:
    ```
    cd /opt/iiab/iiab
    sudo ./runrole remoteit
