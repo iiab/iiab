@@ -36,3 +36,7 @@ For "auto-registration" of remote.it, and other more advanced configuration opti
 - https://support.remote.it
 - https://support.remote.it/hc/en-us/articles/360044424612-1-Create-an-Auto-Registration
 - https://support.remote.it/hc/en-us/articles/360044424672-1-Device-Setup-for-Auto-Bulk-Registration
+
+# Known Issues
+
+This needs to be enhanced so remote.it also works when IIAB is installed on Ubuntu, Mint or Debian: [#3006](https://github.com/iiab/iiab/issues/3006)
