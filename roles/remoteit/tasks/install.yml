@@ -1,33 +1,40 @@
-- name: Fail if we detect unknown architecture
+- name: Fail if architecture remoteit_device_suffix == "unknown"
   fail:
-    msg: "Could not find an apt package for the CPU architecture \"{{ ansible_architecture }}\""
-  when: remoteit_iset_suffix == "unknown"
+    msg: "Could not find a remote.it device apt package for CPU architecture \"{{ ansible_architecture }}\""
+  when: remoteit_device_suffix == "unknown"
 
-- name: Fail if we detect unknown architecture
-  fail:
-    msg: "Could not find a binary for the CPU architecture \"{{ ansible_architecture }}\""
-  when: remoteit_iset_suffix2 == "unknown"
+- name: mkdir {{ downloads_dir }}    # As roles/2-common/tasks/fl.yml has not run yet
+  file:
+    path: "{{ downloads_dir }}"    # /opt/iiab/downloads
+    state: directory
 
-- name: Download {{ remoteit_cli_url }} for the {{ remoteit_iset_suffix2 }} arch of this device to /usr/bin/remoteit (755)
+- name: Download {{ remoteit_device_url }} (device) for arch {{ remoteit_device_suffix }} into {{ downloads_dir }}/
   get_url:
-    url: '{{ remoteit_cli_url }}'
-    dest: /usr/bin/remoteit
-    mode: 0755
+    url: "{{ remoteit_device_url }}"
+    dest: "{{ downloads_dir }}/"
 
-- name: Download {{ remoteit_device_url }} for the {{ remoteit_iset_suffix }} arch of this device package to {{ downloads_dir }}
-  get_url:
-    url: '{{ remoteit_device_url }}'
-    dest: '{{ downloads_dir }}/'
-
-- name: Uninstall the device 'remoteit' deb package
+- name: Uninstall previously installed 'remoteit*' device apt package(s)
   apt:
     name: remoteit*
     state: absent
+  ignore_errors: yes
 
-- name: Install device package {{ downloads_dir }}/{{ remoteit_deb }}
+- name: Install device apt package {{ downloads_dir }}/{{ remoteit_deb }}
   apt:
-    deb: '{{ downloads_dir }}/{{ remoteit_deb }}'
+    deb: "{{ downloads_dir }}/{{ remoteit_deb }}"
     state: present
+
+
+- name: Fail if architecture remoteit_cli_suffix == "unknown"
+  fail:
+    msg: "Could not find a remote.it CLI binary for CPU architecture \"{{ ansible_architecture }}\""
+  when: remoteit_cli_suffix == "unknown"
+
+- name: Download {{ remoteit_cli_url }} (CLI) for arch {{ remoteit_cli_suffix }} to /usr/bin/remoteit (755)
+  get_url:
+    url: "{{ remoteit_cli_url }}"
+    dest: /usr/bin/remoteit
+    mode: 0755
 
 
 # RECORD remoteit AS INSTALLED
