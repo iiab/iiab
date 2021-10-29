@@ -14,7 +14,7 @@ To install remote.it onto an IIAB:
    ```
    <!--EXPLANATION: The above installs remote.it, in a way that was originally designed to be interactive, and provide you the claim code needed to make a remote connection to this IIAB.  The claim code is further explained below.-->
 
-3. To obtain this IIAB's 8-letter remote.it claim code, allowing you to make a remote connection to this IIAB, run:
+3. To obtain this IIAB's 8-character remote.it claim code, allowing you to make a remote connection to this IIAB, run:
    ```
    sudo grep claim /etc/remoteit/config.json
    ```
@@ -40,4 +40,4 @@ For "auto-registration" of remote.it, and other more advanced configuration opti
 # Known Issues
 
 - 2021-10-27: This needs to be enhanced rather urgently, so remote.it also works when IIAB is installed on Raspberry Pi OS 11 (Bullseye), Ubuntu, Mint and Debian: [#3006](https://github.com/iiab/iiab/issues/3006)
-- 2021-10-28: The above OS issues should be resolved by [PR #3007](https://github.com/iiab/iiab/pull/3007), but this needs final testing!
+- 2021-10-29: The above OS issues should be resolved by [PR #3007](https://github.com/iiab/iiab/pull/3007), [PR #3009](https://github.com/iiab/iiab/pull/3009) and [PR #3010](https://github.com/iiab/iiab/pull/3010) &mdash; but this needs final testing!  (Initial testing occurred on [1] 32-bit Raspberry Pi OS Lite on Raspberry Pi 4 and [2] Ubuntu Server 20.04 on x86_64 VM.)
