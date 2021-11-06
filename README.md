@@ -9,7 +9,7 @@ You can build your own tiny, affordable server (an offline digital library) for 
 
 Internet-in-a-Box gives you the DIY tools to:
 1. Download then drag-and-drop to arrange the [very best of the World’s Free Knowledge](https://internet-in-a-box.org/#quality-content).
-2. Choose among [30 powerful educational apps](http://wiki.laptop.org/go/IIAB/FAQ#What_services_.28IIAB_apps.29_are_suggested_during_installation.3F) for your school or learning/teaching community, optionally with a complete LMS (learning management system).
+2. Choose among [30+ powerful educational apps](http://wiki.laptop.org/go/IIAB/FAQ#What_services_.28IIAB_apps.29_are_suggested_during_installation.3F) for your school or learning/teaching community, optionally with a complete LMS (learning management system).
 3. Exchange local/indigenous knowledge with nearby communities, using our [Manage Content](https://github.com/iiab/iiab-admin-console/blob/master/roles/console/files/help/InstContent.rst#manage-content) interface and possible mesh networking.
 
 FYI this [community product](https://en.wikipedia.org/wiki/Internet-in-a-Box) is enabled by professional volunteers working [side-by-side](http://wiki.laptop.org/go/IIAB/FAQ#What_are_the_best_places_for_community_support.3F) with schools, clinics and libraries around the world.  *Thank you for being a part of our http://OFF.NETWORK grassroots technology [movement](https://meta.wikimedia.org/wiki/Internet-in-a-Box)!*
