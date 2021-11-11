@@ -1,13 +1,15 @@
-# Remote support for Internet-in-a-Box
+# Remote support of an Internet-in-a-Box using https://remote.it
 
-A great to remotely support an Internet-in-a-box (IIAB) is to install and config [remote.it offical website](https://remote.it), for other approaches, please see [FAQ](http://wiki.laptop.org/go/IIAB/FAQ#How_can_I_remotely_manage_my_Internet-in-a-Box.3F) under the topic 31 "How can I remotely manage my Internet-in-a-Box?"
+Remote.it can be a great way to remotely support an Internet-in-a-Box (IIAB).  
+
+For other approaches, please see http://FAQ.IIAB.IO -> "How can I remotely manage my Internet-in-a-Box?"
 
 ## Getting started
 
 ### Create a remote.it account
 
-1. Go to [remote.it offical website](https://remote.it) and sign up for an account
-2. Download the desktop verison (optional)
+1. Go to the [remote.it website](https://remote.it) and sign up for an account.
+2. OPTIONAL: Download [remote.it's desktop application](https://remote.it/download/) e.g. for Windows, macOS or Linux.
 
 ### Install remote.it onto an IIAB
 
@@ -40,17 +42,17 @@ A great to remotely support an Internet-in-a-box (IIAB) is to install and config
 
 ### Usage
 
-1. Log into your remote.it account or open the desktop version
-2. Add devices
-3. Create http services to access the devices in your browser
+1. Log into the https://remote.it Web Portal, or open its desktop application.
+2. Add devices (e.g. IIAB devices).
+3. Create http services to access the devices in your browser.
 
-For more information [remote.it Getting started](https://support.remote.it/hc/en-us/categories/360003417511-Getting-Started)
+For more info, see remote.it's [Getting Started pages](https://support.remote.it/hc/en-us/categories/360003417511-Getting-Started).
 
 ## Advanced
 
 For "auto-registration" of remote.it, and other more advanced configuration options, please review:
 
-- <https://docs.remote.it>
+- https://docs.remote.it
 - <https://support.remote.it>
 - <https://support.remote.it/hc/en-us/articles/360044424612-1-Create-an-Auto-Registration>
 - <https://support.remote.it/hc/en-us/articles/360044424672-1-Device-Setup-for-Auto-Bulk-Registration>
