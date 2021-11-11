@@ -14,6 +14,7 @@ For other approaches, please see http://FAQ.IIAB.IO -> "How can I remotely manag
 ### Install remote.it onto an IIAB
 
 1. Set `remoteit_install` and `remoteit_enabled` to `True` in your IIAB's [/etc/iiab/local_vars.yml](http://wiki.laptop.org/go/IIAB/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it.3F)
+
 2. Install and enable it (remote.it) on your IIAB, by running:
 
    ```
@@ -28,7 +29,7 @@ For other approaches, please see http://FAQ.IIAB.IO -> "How can I remotely manag
    sudo grep claim /etc/remoteit/config.json
    ```
 
-   *The claim code must be used within 24 hours, per:* <https://docs.remote.it/device-package/installation#2.-update-your-package-manager-and-install>
+   *The claim code must be used within 24 hours, per:* https://docs.remote.it/device-package/installation#2.-update-your-package-manager-and-install
 
    If not used before then, here is an *example (version & architecture can change in the .deb filename below!)* to re-run this installation command, to get a new claim code:
 
@@ -40,22 +41,25 @@ For other approaches, please see http://FAQ.IIAB.IO -> "How can I remotely manag
 
    As shown in the screenshot here: <https://docs.remote.it/device-package/installation#3.-claim-and-register-the-device>
 
-### Usage
+### Usage Summary
 
 1. Log into the https://remote.it Web Portal, or open its desktop application.
-2. Add devices (e.g. IIAB devices).
-3. Create http services to access the devices in your browser.
+2. Add Devices (e.g. your IIAB).
+3. Understand that each Device will need to contain one of more remote.it Services.
+4. Add a remote.it Service (e.g. HTTP and/or others) to your Device: https://support.remote.it/hc/en-us/articles/360050732092-Add-a-remote-it-Service-to-your-Device
 
-For more info, see remote.it's [Getting Started pages](https://support.remote.it/hc/en-us/categories/360003417511-Getting-Started).
+Summary of remote.it Services: https://support.remote.it/hc/en-us/articles/360060992631-Services
+
+For more info, please see remote.it's [Getting Started pages](https://support.remote.it/hc/en-us/categories/360003417511-Getting-Started).
 
 ## Advanced
 
 For "auto-registration" of remote.it, and other more advanced configuration options, please review:
 
 - https://docs.remote.it
-- <https://support.remote.it>
-- <https://support.remote.it/hc/en-us/articles/360044424612-1-Create-an-Auto-Registration>
-- <https://support.remote.it/hc/en-us/articles/360044424672-1-Device-Setup-for-Auto-Bulk-Registration>
+- https://support.remote.it
+- https://support.remote.it/hc/en-us/articles/360044424612-1-Create-an-Auto-Registration
+- https://support.remote.it/hc/en-us/articles/360044424672-1-Device-Setup-for-Auto-Bulk-Registration
 
 ## Known Issues
 
