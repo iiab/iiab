@@ -8,7 +8,7 @@ For other approaches, please see http://FAQ.IIAB.IO -> "How can I remotely manag
 
 ### Create a remote.it account
 
-1. Go to the [remote.it website](https://remote.it) and sign up for an account.
+1. Go to the [https://remote.it](https://remote.it) website and sign up for an account.
 2. OPTIONAL: Download [remote.it's desktop application](https://remote.it/download/) e.g. for Windows, macOS or Linux.
 
 ### Install remote.it onto an IIAB
@@ -45,8 +45,8 @@ For other approaches, please see http://FAQ.IIAB.IO -> "How can I remotely manag
 
 1. Log into the https://remote.it Web Portal, or open its desktop application.
 2. Add Devices (e.g. your IIAB).
-3. Understand that each Device will need to contain one of more remote.it Services.
-4. Add a remote.it Service (e.g. HTTP and/or others) to your Device: https://support.remote.it/hc/en-us/articles/360050732092-Add-a-remote-it-Service-to-your-Device
+3. Understand that each Device will need to contain one or more remote.it Services.
+   - Add a remote.it Service (e.g. HTTP and/or others) to your Device:<br>https://support.remote.it/hc/en-us/articles/360050732092-Add-a-remote-it-Service-to-your-Device
 
 Summary of remote.it Services: https://support.remote.it/hc/en-us/articles/360060992631-Services
 
