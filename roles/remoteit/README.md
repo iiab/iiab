@@ -4,7 +4,7 @@ Remote.it can be a great way to remotely support an Internet-in-a-Box (IIAB).
 
 For other approaches, please see http://FAQ.IIAB.IO -> "How can I remotely manage my Internet-in-a-Box?"
 
-## Getting started
+## Getting Started
 
 ### Create a remote.it account
 
