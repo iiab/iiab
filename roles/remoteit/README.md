@@ -37,9 +37,9 @@ For other approaches, please see http://FAQ.IIAB.IO -> "How can I remotely manag
    sudo apt reinstall /opt/iiab/downloads/remoteit-4.13.5.armhf.rpi.deb
    ```
 
-4. After you've installed the <https://remote.it> client software onto a separate computer or device (e.g. your own laptop) click on the '+' icon, then enter the remote.it claim code (for the IIAB that you need to connect to).
+4. After you've installed the https://remote.it client software onto a separate computer or device (e.g. your own laptop) click on the '+' icon, then enter the remote.it claim code (for the IIAB that you need to connect to).
 
-   As shown in the screenshot here: <https://docs.remote.it/device-package/installation#3.-claim-and-register-the-device>
+   As shown in the screenshot here: https://docs.remote.it/device-package/installation#3.-claim-and-register-the-device
 
 ### Usage Summary
 
