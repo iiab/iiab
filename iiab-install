@@ -10,8 +10,8 @@ ARGS=""
 CWD=`pwd`
 OS=`grep ^ID= /etc/os-release | cut -d= -f2`
 OS=${OS//\"/}
-MIN_RPI_KERN=4.19.97       # If using Raspbian, 'rpi-update' should no longer be nec -- please use Raspbian 2020-02-13 or higher: https://github.com/iiab/iiab/issues/1993
-MIN_ANSIBLE_VER=2.8.11     # Ansible 2.8.3 and 2.8.6 have serious bugs, preventing their use with IIAB.
+MIN_RPI_KERN=5.4.0        # Do not use 'rpi-update' unless absolutely necessary: https://github.com/iiab/iiab/issues/1993
+MIN_ANSIBLE_VER=2.11.6    # Ansible 2.8.3 and 2.8.6 had serious bugs, preventing their use with IIAB.
 
 if [ ! -f /etc/iiab/local_vars.yml ]; then
 
@@ -38,13 +38,18 @@ fi
 
 # FUTURE: Test if their local_vars.yml is sufficiently version-compatible !
 
+
 echo -e "\n\n./iiab-install $* BEGUN IN $CWD\n"
+
+echo -e "local_facts.fact ROUTINE DIAGNOSTICS...\n"
+
+scripts/local_facts.fact    # Exit & advise, if OS not supported.
 
 if [ ! -f /etc/ansible/facts.d/local_facts.fact ]; then
     mkdir -p /etc/ansible/facts.d
 fi
-cp ./scripts/local_facts.fact /etc/ansible/facts.d/local_facts.fact
-echo "Placed /etc/ansible/facts.d/local_facts.fact into position."
+cp scripts/local_facts.fact /etc/ansible/facts.d/local_facts.fact
+echo -e "\nPlaced /etc/ansible/facts.d/local_facts.fact into position."
 
 if [ ! -f $PLAYBOOK ]; then
     echo "EXITING: IIAB Playbook ""$PLAYBOOK"" not found."
@@ -74,7 +79,7 @@ echo "Found Kernel ""$CURR_KERN"
 if [ "$OS" == "raspbian" ] && version_gt $MIN_RPI_KERN $CURR_KERN ; then
     echo -e "\nEXITING: Kernel ""$MIN_RPI_KERN"" or higher required with Raspbian."
     echo -e "PLEASE RUN 'apt update' then 'apt install raspberrypi-kernel' then reboot."
-    echo -e "THEN IF NEC run 'rpi-update' to install a more recent kernel, then reboot."
+    echo -e "IF ABSOLUTELY NEC run 'rpi-update' for a PRE-RELEASE kernel, then reboot."
     echo -e "IIAB INSTALL INSTRUCTIONS: https://github.com/iiab/iiab/wiki/IIAB-Installation"
     exit 1
 fi
@@ -89,18 +94,16 @@ CURR_ANSIBLE_VER=0
 #if [[ `which ansible` ]]; then            # "which" misses built-in commands like cd, and is RISKY per https://stackoverflow.com/questions/592620/check-if-a-program-exists-from-a-bash-script
 #if [[ `type -P ansible` ]]; then          # "type -P" isn't POSIX compliant; it misses built-in commands like "cd"
 if [[ `command -v ansible` ]]; then        # "command -v" is POSIX compliant; it catches built-in commands like "cd"
-    CURR_ANSIBLE_VER=$(ansible --version | head -1 | cut -f 2- -d " ")
+    CURR_ANSIBLE_VER=$(ansible --version | head -1 | cut -f 2- -d " " | sed 's/.* \([^ ]*\)\].*/\1/')
     # Above works with 'ansible [core 2.11.0rc2]' -- these old ways do not:
     #CURR_ANSIBLE_VER=$(ansible --version | head -1 | awk '{print $2}')
     #CURR_ANSIBLE_VER=$(ansible --version | head -1 | sed -e 's/.* //')
     echo "Found Ansible ""$CURR_ANSIBLE_VER"
 fi
 if version_gt $MIN_ANSIBLE_VER $CURR_ANSIBLE_VER ; then
-    echo -e "\nEXITING: Ansible ""$MIN_ANSIBLE_VER"" or higher required.\n"
+    echo -e "\nEXITING: ansible-core ""$MIN_ANSIBLE_VER"" or higher required.\n"
 
-    echo -e "REMOVE PRIOR VERSIONS using 'apt purge ansible' and/or 'pip uninstall ansible'."
-    echo -e "THEN RUN 'scripts/ansible' to install the latest Ansible from PPA or RPM."
-    echo -e "'ansible --version' and 'apt -a list ansible' can also be very useful.\n"
+    echo -e "PLEASE RUN '/opt/iiab/iiab/scripts/ansible' to install the latest Ansible.\n"
 
     echo -e "IIAB INSTALL INSTRUCTIONS: https://github.com/iiab/iiab/wiki/IIAB-Installation"
     exit 1
@@ -159,7 +162,7 @@ EOF
 fi
 echo -e "\nTRY TO RERUN './iiab-install' IF IT FAILS DUE TO CONNECTIVITY ISSUES ETC!\n"
 
-echo -e "Running local Ansible playbooks...\n...Stage 0 will now run\n...followed by Stages $(($STAGE + 1))-9\n...and then the Network Role.\n"
+echo -e "\e[1mRunning local Ansible playbooks...\n...Stage 0 will now run\n...followed by Stages $(($STAGE + 1))-9\n...and then the Network Role.\e[0m\n"
 
 export ANSIBLE_LOG_PATH="$CWD""/iiab-install.log"
 
