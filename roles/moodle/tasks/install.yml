@@ -43,7 +43,7 @@
       - php{{ php_version }}-zip         # 2021-06-27: Likewise installed in nextcloud/tasks/install.yml, pbx/tasks/freepbx_dependencies.yml, wordpress/tasks/install.yml
     state: present
 
-- name: Download (clone) {{ moodle_repo_url }} to {{ moodle_base }} (~350MB initially, ~371MB later)
+- name: Download (clone) {{ moodle_repo_url }} to {{ moodle_base }} (~355MB initially, ~375MB later)
   git:
     repo: "{{ moodle_repo_url }}"    # https://github.com/moodle/moodle
     dest: "{{ moodle_base }}"        # /opt/iiab/moodle
@@ -106,7 +106,7 @@
     dest: "{{ moodle_base }}"
     mode: 0755
 
-- name: Execute {{ moodle_base }}/moodle_installer IF {{ moodle_base }}/config.php doesn't yet exist -- REQUIRES 'max_input_vars = 5000' (or higher) in /etc/php/{{ php_version }}/cli/php.ini IF PHP 8+ (as set up by www_options/tasks/main.yml) -- WHEREAS LATER Moodle uses /etc/php/{{ php_version }}/fpm/php.ini during regular operation
+- name: Execute {{ moodle_base }}/moodle_installer IF {{ moodle_base }}/config.php doesn't yet exist -- REQUIRES 'max_input_vars = 5000' (or higher) in /etc/php/{{ php_version }}/cli/php.ini IF PHP 8+ (as set up by www_options/tasks/main.yml) -- WHEREAS LATER ON Moodle uses /etc/php/{{ php_version }}/fpm/php.ini during regular operation
   shell: "{{ moodle_base }}/moodle_installer"
   args:
     creates: "{{ moodle_base }}/config.php"
@@ -124,6 +124,13 @@
 #     path: "{{ moodle_data }}"    # /library/moodle
 #     mode: o-rwx
 #     recurse: yes
+
+# 2021-11-19: Resolves Moodle error https://github.com/iiab/iiab/issues/3024
+- name: Set cron job to run /opt/iiab/moodle/admin/cli/cron.php every minute (* * * * *) per https://docs.moodle.org/310/en/Cron
+  cron:
+    name: https://docs.moodle.org/310/en/Cron
+    user: www-data
+    job: "/usr/bin/php /opt/iiab/moodle/admin/cli/cron.php >/dev/null"
 
 # https://docs.moodle.org/311/en/Nginx#XSendfile_aka_X-Accel-Redirect
 # https://github.com/moodle/moodle/blob/master/config-dist.php#L274-L287
