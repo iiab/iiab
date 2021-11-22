@@ -34,10 +34,10 @@ rsync -av $OUTPUT/ $DESTPATH
 
 # Download FAQ etc
 lynx -reload -source https://wiki.iiab.io/go/FAQ > $DESTPATH/FAQ.html
-lynx -reload -source http://wiki.laptop.org/go/IIAB/Security > $DESTPATH/Security.html
-lynx -reload -source http://wiki.laptop.org/go/IIAB/local_vars.yml > $DESTPATH/local_vars.yml
-lynx -reload -source http://wiki.laptop.org/go/IIAB/local_vars_min.yml > $DESTPATH/local_vars_min.yml
-lynx -reload -source http://wiki.laptop.org/go/IIAB/local_vars_big.yml > $DESTPATH/local_vars_big.yml
+#lynx -reload -source https://wiki.laptop.org/go/IIAB/Security > $DESTPATH/Security.html
+#lynx -reload -source https://wiki.laptop.org/go/IIAB/local_vars.yml > $DESTPATH/local_vars.yml
+#lynx -reload -source https://wiki.laptop.org/go/IIAB/local_vars_min.yml > $DESTPATH/local_vars_min.yml
+#lynx -reload -source https://wiki.laptop.org/go/IIAB/local_vars_big.yml > $DESTPATH/local_vars_big.yml
 
 # Download older release notes
 lynx -reload -source https://github.com/XSCE/xsce/wiki/IIAB-6.2-Release-Notes > $DESTPATH/IIAB-6.2-Release-Notes.html
