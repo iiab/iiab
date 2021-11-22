@@ -16,7 +16,7 @@
 
 Linux administrators may want to review `/opt/iiab/jupyterhub/etc/jupyterhub/jupyterhub_config.py` which originates from:
 
-https://github.com/iiab/iiab/blob/master/roles/jupyterhub/templates/jupyterhub_config.py
+https://github.com/iiab/iiab/blob/master/roles/jupyterhub/templates/jupyterhub_config.py.j2
 
 In some rare circumstances, it may be necessary to restart JupyterHub's systemd service:
 
