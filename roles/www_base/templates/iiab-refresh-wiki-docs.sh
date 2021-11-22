@@ -34,7 +34,7 @@ rsync -av $OUTPUT/ $DESTPATH
 
 # Download FAQ etc
 lynx -reload -source https://wiki.iiab.io/go/FAQ > $DESTPATH/FAQ.html
-#lynx -reload -source https://wiki.laptop.org/go/IIAB/Security > $DESTPATH/Security.html
+lynx -reload -source https://wiki.iiab.io/go/Security > $DESTPATH/Security.html
 #lynx -reload -source https://wiki.laptop.org/go/IIAB/local_vars.yml > $DESTPATH/local_vars.yml
 #lynx -reload -source https://wiki.laptop.org/go/IIAB/local_vars_min.yml > $DESTPATH/local_vars_min.yml
 #lynx -reload -source https://wiki.laptop.org/go/IIAB/local_vars_big.yml > $DESTPATH/local_vars_big.yml
