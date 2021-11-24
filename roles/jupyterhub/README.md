@@ -4,7 +4,11 @@ Project Jupyter (/ˈdʒuːpɪtər/ (About this soundlisten)) is a project and co
 
 ## What is Jupyterhub
 
+JupyterHub is an application that manages interactive computing sessions for multiple users. It also connects them with infrastructure those users wish to access. It can provide remote access to Jupyter Notebooks and JupyterLab for many people. Source [Institutional FAQ](https://jupyterhub.readthedocs.io/en/stable/getting-started/institutional-faq.html#i-keep-hearing-about-jupyter-notebook-jupyterlab-and-now-jupyterhub-whats-the-difference)
 
+### Audience
+
+Schools, Universities, and Companies may want to consider JupyterHub to integrate coding with dynamic interactive graphing — A New Way to Think About Programming — allowing students to integrate science experiment results and program output within their own blog-like "Jupyter Notebooks."
 
 
 <!-- ## JupyterHub programming environment with student Notebooks
