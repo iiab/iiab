@@ -1,3 +1,12 @@
+# Project Jupyter
+
+Project Jupyter (/ˈdʒuːpɪtər/ (About this soundlisten)) is a project and community whose goal is to "develop open-source software, open-standards, and services for interactive computing across dozens of programming languages". It was spun off from IPython in 2014 by Fernando Pérez and Brian Granger. Project Jupyter's name is a reference to the three core programming languages supported by Jupyter, which are Julia, Python and R, and also a homage to Galileo's notebooks recording the discovery of the moons of Jupiter. Project Jupyter has developed and supported the interactive computing products Jupyter Notebook, JupyterHub, and JupyterLab. Jupyter is a NumFOCUS fiscally sponsored project. Source [Wikipedia](https://en.wikipedia.org/wiki/Project_Jupyter#JupyterHub)
+
+## What is Jupyterhub
+
+
+
+
 <!-- ## JupyterHub programming environment with student Notebooks
 
 #### Secondary schools may want to consider JupyterHub to integrate coding with dynamic interactive graphing — A New Way to Think About Programming — allowing students to integrate science experiment results and program output within their own blog-like "Jupyter Notebooks."
