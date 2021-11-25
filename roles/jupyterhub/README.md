@@ -8,11 +8,11 @@ JupyterHub is an application that manages interactive computing sessions for mul
 
 ### Audience
 
-Schools, Universities, and Companies may want to consider JupyterHub to integrate coding with dynamic interactive graphing — A New Way to Think About Programming — allowing students to integrate science experiment results and program output within their own blog-like "Jupyter Notebooks."
+Schools, Universities, and Companies may want to consider JupyterHub to integrate coding with dynamic interactive graphing — A New Way to Think About Programming — allowing students to integrate science experiment results and program output within their own blog-like "Jupyter Notebooks." Interne
 
 ## Getting Started
 
-Feel free to consult the official guide [Get Started](https://jupyterhub.readthedocs.io/en/stable/getting-started/) for more informations.
+Feel free to consult the official guide [Get Started](https://jupyterhub.readthedocs.io/en/stable/getting-started/) for more informations if you want to install it on your computer. To setup Jupyterhub in your Internet in a Box please follow those folowing steps:
 
 
 <!-- ## JupyterHub programming environment with student Notebooks
