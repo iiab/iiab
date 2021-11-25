@@ -12,7 +12,11 @@ Schools, Universities, and Companies may want to consider JupyterHub to integrat
 
 ## Getting Started
 
-Feel free to consult the official guide [Get Started](https://jupyterhub.readthedocs.io/en/stable/getting-started/) for more informations if you want to install it on your computer. To setup Jupyterhub in your Internet in a Box please follow those folowing steps:
+Feel free to consult the official guide [Get Started](https://jupyterhub.readthedocs.io/en/stable/getting-started/) for more informations if you want to install it on your computer. Internet in a Box already has Jupyterhub installed and configured
+
+1. Run Internet in a Box
+2. Browse to [jupyterhub](http://box.lan/jupytherhub)
+3. Teachers will have to login as Admin
 
 
 <!-- ## JupyterHub programming environment with student Notebooks
