@@ -16,7 +16,7 @@ Feel free to consult the official guide [Get Started](https://jupyterhub.readthe
 
 1. Run Internet in a Box
 2. Browse to [jupyterhub](http://box.lan/jupytherhub)
-3. Teachers will have to login as Admin
+3. Teachers will have to login as Admin to start the server
 
 <!-- ## JupyterHub programming environment with student Notebooks
 
