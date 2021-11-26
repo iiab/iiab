@@ -18,7 +18,6 @@ Feel free to consult the official guide [Get Started](https://jupyterhub.readthe
 2. Browse to [jupyterhub](http://box.lan/jupytherhub)
 3. Teachers will have to login as Admin
 
-
 <!-- ## JupyterHub programming environment with student Notebooks
 
 #### Secondary schools may want to consider JupyterHub to integrate coding with dynamic interactive graphing — A New Way to Think About Programming — allowing students to integrate science experiment results and program output within their own blog-like "Jupyter Notebooks."
