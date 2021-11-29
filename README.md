@@ -33,7 +33,7 @@ Finally, you can [customize your Internet-in-a-Box home page](http://FAQ.IIAB.IO
 
 ## Community
 
-Internet-in-a-Box (IIAB) greatly welcomes contributions from educators, librarians *and* [IT/UX/QA people](https://github.com/iiab/iiab/wiki/Technical-Contributors-Guide) of all kinds!
+Internet-in-a-Box (IIAB) greatly welcomes contributions from educators, librarians and [IT/UX/QA people](https://github.com/iiab/iiab/wiki/Technical-Contributors-Guide) of all kinds!
 
 If you would like to volunteer, please [make contact](https://internet-in-a-box.org/pages/contributing.html) after looking over "[How can I help?](http://FAQ.IIAB.IO#How_can_I_help.3F)" at: [FAQ.IIAB.IO](http://FAQ.IIAB.IO)
 
