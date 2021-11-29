@@ -3,7 +3,7 @@
 # Higher-level purpose explained at the bottom of:
 # https://github.com/iiab/iiab/blob/master/vars/default_vars.yml
 
-# 2020-10-27: Most of the 10 variables require a command[*] to be run to
+# 2020-10-27: Most of the 11 variables require a command[*] to be run to
 # establish the var's value.  WE DISPLAY ALL ERRORS / DIAGNOSTICS AND CONTINUE.
 #
 # [*] DOESN'T MATTER WHAT COMMAND: so long as it fails with Return Code != 0
@@ -16,6 +16,7 @@ IIAB_BRANCH="none"
 IIAB_COMMIT="none"
 #XO_MODEL="none"
 RPI_MODEL="none"
+DEVICETREE_MODEL="none"
 ANSIBLE_VERSION="none"
 DHCPCD="none"    # The last 3 conditioned on string output not RC.  SEE BELOW.
 NETWORK_MANAGER="none"
@@ -64,6 +65,7 @@ OS_VER="$OS-$VERSION_ID"
     #"centos-7"     | \
     #"raspbian-8"   | \
     #"raspbian-9"   | \
+    #"raspbian-10"  | \
 
 # 2021-09-27: With Debian 12 (Bookworm) pre-releases, please manually add
 # this line to its /etc/os-release before installing IIAB: VERSION_ID="12"
@@ -77,7 +79,6 @@ case $OS_VER in
     "ubuntu-2204"  | \
     "linuxmint-20" | \
     "linuxmint-21" | \
-    "raspbian-10"  | \
     "raspbian-11")
         ;;
     *) echo -e "\n\e[41;1mOS '$OS_VER' IS NOT SUPPORTED. Please read:\e[0m\n\n\e[1mhttps://github.com/iiab/iiab/wiki/IIAB-Platforms\e[0m\n" ; exit 1    # Used by /opt/iiab/iiab/iiab-install
@@ -94,8 +95,14 @@ tmp=$(git rev-parse --verify HEAD) &&
 #tmp=$(cat /proc/device-tree/mfg-data/MN) &&
 #    XO_MODEL=$tmp
 
-tmp=$(cat /proc/device-tree/model) &&
+tmp=$(grep -ai raspberry /proc/device-tree/model) &&
     RPI_MODEL=$tmp
+
+# /proc/device-tree/model e.g. 'Parallels ARM Virtual Machine' identical to...
+# /sys/firmware/devicetree/base/model (also true on RPi hardware!)
+
+tmp=$(cat /proc/device-tree/model) &&
+    DEVICETREE_MODEL=$tmp
 
 tmp=$(ansible --version) &&
     ANSIBLE_VERSION=$(echo "$tmp" | head -1 | cut -f 2- -d " " | sed 's/.* \([^ ]*\)\].*/\1/')
@@ -134,6 +141,7 @@ cat <<EOF
 "iiab_branch"             : "$IIAB_BRANCH",
 "iiab_commit"             : "$IIAB_COMMIT",
 "rpi_model"               : "$RPI_MODEL",
+"devicetree_model"        : "$DEVICETREE_MODEL",
 "ansible_version"         : "$ANSIBLE_VERSION",
 "os"                      : "$OS",
 "os_ver"                  : "$OS_VER"}

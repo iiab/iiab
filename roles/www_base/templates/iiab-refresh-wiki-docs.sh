@@ -34,10 +34,10 @@ rsync -av $OUTPUT/ $DESTPATH
 
 # Download FAQ etc
 lynx -reload -source https://wiki.iiab.io/go/FAQ > $DESTPATH/FAQ.html
-lynx -reload -source http://wiki.laptop.org/go/IIAB/Security > $DESTPATH/Security.html
-lynx -reload -source http://wiki.laptop.org/go/IIAB/local_vars.yml > $DESTPATH/local_vars.yml
-lynx -reload -source http://wiki.laptop.org/go/IIAB/local_vars_min.yml > $DESTPATH/local_vars_min.yml
-lynx -reload -source http://wiki.laptop.org/go/IIAB/local_vars_big.yml > $DESTPATH/local_vars_big.yml
+lynx -reload -source https://wiki.iiab.io/go/Security > $DESTPATH/Security.html
+#lynx -reload -source https://wiki.laptop.org/go/IIAB/local_vars.yml > $DESTPATH/local_vars.yml
+#lynx -reload -source https://wiki.laptop.org/go/IIAB/local_vars_min.yml > $DESTPATH/local_vars_min.yml
+#lynx -reload -source https://wiki.laptop.org/go/IIAB/local_vars_big.yml > $DESTPATH/local_vars_big.yml
 
 # Download older release notes
 lynx -reload -source https://github.com/XSCE/xsce/wiki/IIAB-6.2-Release-Notes > $DESTPATH/IIAB-6.2-Release-Notes.html
@@ -45,7 +45,7 @@ lynx -reload -source https://github.com/XSCE/xsce/blob/release-6.2/ReleaseNotes6
 lynx -reload -source https://github.com/XSCE/xsce/blob/release-6.2/ReleaseNotes6.1.md > $DESTPATH/ReleaseNotes6.1.html
 
 # Download Raspberry Pi guides
-wget -nc https://www.raspberrypi.org/magpi-issues/Beginners_Guide_v1.pdf -O $DOCSPATH/Raspberry_Pi_Beginners_Guide_v1.pdf || true    # Overrides set -e
+wget -nc https://magazines-attachments.raspberrypi.org/books/full_pdfs/000/000/038/original/BeginnersGuide-4thEd-Eng_v2.pdf -O $DOCSPATH/BeginnersGuide-4thEd-Eng_v2.pdf || true    # Overrides set -e
 wget -nc https://archive.org/15/items/other_doc/other_doc.pdf -O $DOCSPATH/Raspberry_Pi_User_Guide_v4.pdf || true
 
 # Copy PDF from Lokole playbook
@@ -54,7 +54,7 @@ cp -p "{{ iiab_dir }}/roles/lokole/Lokole-IIAB_Users_Manual.pdf" $DOCSPATH    # 
 # MAKE LINKS REFER TO LOCAL ITEMS...
 
 # ...on main page (http://box/info)
-sed -i -r "s|https://www.raspberrypi.org/magpi-issues/Beginners_Guide_v1.pdf|docs/Raspberry_Pi_Beginners_Guide_v1.pdf|g" $DESTPATH/index.html
+sed -i -r "s|https://magazines-attachments.raspberrypi.org/books/full_pdfs/000/000/038/original/BeginnersGuide-4thEd-Eng_v2.pdf|docs/BeginnersGuide-4thEd-Eng_v2.pdf|g" $DESTPATH/index.html
 sed -i -r "s|https://.*archive.org/15/items/other_doc/other_doc.pdf|docs/Raspberry_Pi_User_Guide_v4.pdf|g" $DESTPATH/index.html
 sed -i -r "s|https://github.com/iiab/iiab/blob/master/roles/lokole/Lokole-IIAB_Users_Manual.pdf|docs/Lokole-IIAB_Users_Manual.pdf|g" $DESTPATH/index.html
 

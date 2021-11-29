@@ -36,7 +36,7 @@ Feel free to consult the official guide [Get Started](https://jupyterhub.readthe
 
 Linux administrators may want to review `/opt/iiab/jupyterhub/etc/jupyterhub/jupyterhub_config.py` which originates from:
 
-https://github.com/iiab/iiab/blob/master/roles/jupyterhub/templates/jupyterhub_config.py
+https://github.com/iiab/iiab/blob/master/roles/jupyterhub/templates/jupyterhub_config.py.j2
 
 In some rare circumstances, it may be necessary to restart JupyterHub's systemd service:
 
@@ -53,7 +53,7 @@ source /opt/iiab/jupyterhub/bin/activate
 Passwords are hashed using 4096 rounds of the latest Blowfish (bcrypt's $2b$ algorithm) and stored in:
 
 ```
-/opt/iiab/jupyterhub/etc/passwords.dbm.db
+/opt/iiab/jupyterhub/etc/passwords.dbm    # Or passwords.dbm.db in the past.
 ```
 
 ### Users can change their own password
