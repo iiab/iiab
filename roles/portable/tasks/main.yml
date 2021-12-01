@@ -1,9 +1,9 @@
 - block:
-  - name: test that {{ library_img }} && {{ library_size }} are defined
+  - name: test that {{ library_loc }} && {{ library_img }} are defined
     debug:
-      msg: "VARIABLE MUST BE DEFINED: '{{ library_img }} && {{ library_size }}' NEEDS A PROPER VALUE e.g. IN: /etc/iiab/local_vars.yml"
+      msg: "VARIABLE MUST BE DEFINED: '{{ library_loc }} && {{ library_img }}' NEEDS A PROPER VALUE e.g. IN: /etc/iiab/local_vars.yml"
   - meta: end_play
-  when: not library_img is defined or not library_size is defined
+  when: not library_img is defined or not library_loc is defined
 
 - name: Test for {{ library_loc }}/{{ library_img }}
   command: test -f {{ library_loc }}/{{ library_img }}
@@ -14,24 +14,32 @@
   debug:
     var: library_img_present
 
+# doesn't need conditional just looks better skipping if not found
+- name: Unmount /library
+  command: umount /library
+  failed_when: False
+  when: library_img_present.rc == 0
+
+# doesn't need conditional
+- name: Create /library mountpoint
+  file:
+    path: /library
+    state: directory
+  when: not library_img_present.rc == 0 or library_url is defined
+
 - block:
   - name: Create new container image to hold /library of {{ library_size }} in size
     command: dd if=/dev/zero of={{ library_loc }}/{{ library_img }} bs=1 count=0 seek={{ library_size }}
 
   - name: Create ext4 filesystem inside new container
     command: mkfs.ext4 {{ library_loc }}/{{ library_img }}
-
-  - name: Create /library mountpoint
-    file:
-      path: /library
-      state: directory
-  when: not library_img_present.rc == 0
+  when: not library_img_present.rc == 0 and library_url is undefined
   #end block
 
-- name: Unmount /library
-  command: umount /library
-  failed_when: False
-  when: library_img_present.rc == 0
+# rsync over ssh for private collections?
+- name: Retrieve {{ library_url }} to {{ library_loc }}/{{ library_img }}
+  command wget -c {{ library_url }} -O {{ library_loc }}/{{ library_img }}
+  when: library_url is defined
 
 - name: Check ext4 filesystem inside container
   command: e2fsck -y -f {{ library_loc }}/{{ library_img }}
@@ -48,6 +56,7 @@
 - name: Mount {{ library_loc }}/{{ library_img }} at /library
   command: mount -a
 
+# fresh installs are right after this task, no need to run during install but we want /library/* directories if called from runrole
 - name: Create filesystem layout in /library when in runrole
   include_tasks: roles/2-common/tasks/fl.yml
   when: iiab_stage|int == 9
