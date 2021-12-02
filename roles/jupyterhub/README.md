@@ -5,6 +5,8 @@
 * Jupyter Notebooks are widely used in the scientific community:
   * [Institutional FAQ](https://jupyterhub.readthedocs.io/en/stable/getting-started/institutional-faq.html)
   * [Getting Started](https://jupyterhub.readthedocs.io/en/stable/getting-started/)
+  * [JupyterLab changelog](https://github.com/jupyterlab/jupyterlab/releases)
+  * [JupyterHub changelog](https://jupyterhub.readthedocs.io/en/stable/changelog.html#changelog)
 * Students create their own accounts on first use — e.g. at http://box.lan/jupyterhub — just as if they're logging in regularly (unfortunately the login screen doesn't make that clear, but the teacher _does not_ need to be involved!)
   * A student can then sign in with their username and password, to gain access to their files (Jupyter Notebooks).
   * The teacher should set and protect JupyterHub's overall `Admin` password, just in case.  As with student accounts, the login screen doesn't make that clear — so just log in with username `Admin` — using any password that you want to become permanent.
