@@ -5,20 +5,29 @@
   - meta: end_play
   when: not library_img is defined or not library_loc is defined
 
+# doesn't need conditional just looks better skipping, when the mountpoint does not exsist yet on new installs
+- name: Unmount /library -- don't panic if not found
+  command: umount /library
+  failed_when: False
+  when: iiab_stage|int == 9
+
 - block:
   - name: Retrieve {{ library_base_url }} to {{ library_loc }}/{{ library_img }}
     get_url:
       url: "{{ library_base_url }}"
       dest: "{{ library_loc }}/{{ library_img }}"
 
-  - name: Expand {{ library_img }} to {{ library_size }} in size
+  - name: Check ext4 filesystem inside container
+    command: e2fsck -y -f {{ library_loc }}/{{ library_img }}
+
+  - name: Expand {{ library_img }} by {{ library_size }} in size
     command: dd if=/dev/zero of={{ library_loc }}/{{ library_img }} bs=1 count=0 seek={{ library_size }}
 
   - name: Check ext4 filesystem inside container
     command: e2fsck -y -f {{ library_loc }}/{{ library_img }}
 
   - name: Resize filesystem inside container
-    command: resize2fs {{ library_loc }}/{{ library_img }}
+    command: resize2fs -f {{ library_loc }}/{{ library_img }}
   when: library_base_url is defined
 
 - name: Test for {{ library_loc }}/{{ library_img }}
@@ -29,19 +38,6 @@
 - name: Debug library_img_present
   debug:
     var: library_img_present
-
-# doesn't need conditional just looks better skipping if not found
-- name: Unmount /library
-  command: umount /library
-  failed_when: False
-  when: library_img_present.rc == 0
-
-# doesn't need conditional
-- name: Create /library mountpoint
-  file:
-    path: /library
-    state: directory
-  when: not library_img_present.rc == 0 or library_url is defined
 
 - block:
   - name: Create new container image to hold /library of {{ library_size }} in size
@@ -56,6 +52,11 @@
 - name: Retrieve {{ library_url }} to {{ library_loc }}/{{ library_img }}
   command: wget -c {{ library_url }} -O {{ library_loc }}/{{ library_img }}
   when: library_url is defined
+
+- name: Create /library mountpoint
+  file:
+    path: /library
+    state: directory
 
 - name: Check ext4 filesystem inside container
   command: e2fsck -y -f {{ library_loc }}/{{ library_img }}
