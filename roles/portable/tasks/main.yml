@@ -5,6 +5,22 @@
   - meta: end_play
   when: not library_img is defined or not library_loc is defined
 
+- block:
+  - name: Retrieve {{ library_base_url }} to {{ library_loc }}/{{ library_img }}
+    get_url:
+      url: "{{ library_base_url }}"
+      dest: "{{ library_loc }}/{{ library_img }}"
+
+  - name: Expand {{ library_img }} to {{ library_size }} in size
+    command: dd if=/dev/zero of={{ library_loc }}/{{ library_img }} bs=1 count=0 seek={{ library_size }}
+
+  - name: Check ext4 filesystem inside container
+    command: e2fsck -y -f {{ library_loc }}/{{ library_img }}
+
+  - name: Resize filesystem inside container
+    command: resize2fs {{ library_loc }}/{{ library_img }}
+  when: library_base_url is defined
+
 - name: Test for {{ library_loc }}/{{ library_img }}
   command: test -f {{ library_loc }}/{{ library_img }}
   failed_when: False
@@ -57,6 +73,6 @@
   command: mount -a
 
 # fresh installs are right after this task, no need to run during install but we want /library/* directories if called from runrole
-- name: Create filesystem layout in /library when in runrole
-  include_tasks: roles/2-common/tasks/fl.yml
-  when: iiab_stage|int == 9
+#- name: Create filesystem layout in /library when in runrole
+#  include_tasks: roles/2-common/tasks/fl.yml
+#  when: iiab_stage|int == 9
