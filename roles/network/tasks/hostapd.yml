@@ -4,10 +4,10 @@
     enabled: no
     masked: no
 
-- name: Disable hostapd when not using ap0 and wifi gateway present, or no WiFi hardware present
+- name: Disable hostapd when not using ap0 and wifi gateway present, or no WiFi hardware present or support not detected
   set_fact:
     hostapd_enabled: False
-  when: (not wifi_up_down and discovered_wireless_iface == iiab_wan_iface) or discovered_wireless_iface == "none"
+  when: (not wifi_up_down and discovered_wireless_iface == iiab_wan_iface) or discovered_wireless_iface == "none" or not can_be_ap
 
 - name: Detect current Wifi channel
   shell: iw {{ discovered_wireless_iface }} info | grep channel | cut -d' ' -f2
@@ -39,7 +39,7 @@
     - { src: 'hostapd/iiab-clone-wifi.service.j2', dest: '/etc/systemd/system/iiab-clone-wifi.service', mode: '0644' }
     - { src: 'hostapd/iiab-wifi-test.service.j2', dest: '/etc/systemd/system/iiab-wifi-test.service', mode: '0644'}
     - { src: 'hostapd/iiab-test-wifi.j2', dest: '/usr/sbin/iiab-test-wifi', mode: '0755' }
-  when: discovered_wireless_iface != "none"
+  when: can_be_ap
 
 - name: Use custom 'hostapd' systemd service unit file for {{ discovered_wireless_iface }} when not wifi_up_down
   template:
@@ -48,23 +48,25 @@
     owner: root
     group: root
     mode: 0644
-  when: discovered_wireless_iface != "none" and not wifi_up_down
+  when: not wifi_up_down and can_be_ap
 
-- name: Create /usr/bin/iiab-hotspot-on from template
+- name: Create /usr/bin/iiab-hotspot-on from template when hardware supports AP
   template:
     src: network/iiab-hotspot-on
     dest: /usr/bin/iiab-hotspot-on
     owner: root
     group: root
     mode: 0755
+  when: can_be_ap
 
-- name: Create /usr/bin/iiab-hotspot-off from template
+- name: Create /usr/bin/iiab-hotspot-off from template when hardware supports AP
   template:
     src: network/iiab-hotspot-off
     dest: /usr/bin/iiab-hotspot-off
     owner: root
     group: root
     mode: 0755
+  when: can_be_ap
 
 - name: Create dhcpcd hook for hostapd and ap0 when wifi_up_down True
   template:
