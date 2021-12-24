@@ -11,7 +11,7 @@ Using It
 
 If enabled and with the default settings, Kolibri should be accessible at: http://box/kolibri
 
-To log in to Kolibri enter::
+Log in to Kolibri with::
 
   Username: Admin
   Password: changeme
