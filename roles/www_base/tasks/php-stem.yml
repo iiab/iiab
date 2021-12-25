@@ -1,59 +1,119 @@
-# Fixes search @ http://box/modules/es-wikihow (popular with Spanish youth)
-# Source code: http://download.iiab.io/packages/php-stem.src.tar
+# Fixes search @ http://box/modules/es-wikihow (for young Spanish speakers)
+
+# README & Code: https://github.com/iiab/php-stem
+
+# Source Code also here: http://download.iiab.io/packages/php-stem.src.tar
 # June 2018 debugging & compilation thanks to Tim Moody & George Hunt
 # Original bug: https://github.com/iiab/iiab/issues/829
 
-- name: Set fact stem available php 7.2 - includes x86_64 only
-  set_fact:
-    stem_available: True
-  when: ansible_machine == "x86_64" and php_version == 7.2
 
-- name: Set fact stem available php 7.3 - excludes i386
-  set_fact:
-    stem_available: True
-  when: not ansible_machine == "i386" and php_version == 7.3
+- set_fact:
+    php_extensions:    # Dictionary keys (left side) are always strings, e.g. "7.2"
+      7.2: 20170718    # Dictionary values (right side) can be of type int here, as it's auto-cast to string just below.  Strings would also work e.g. 7.2: "20170718"
+      7.3: 20180731
+      7.4: 20190902
+      8.0: 20200930
+      8.1: 20210902
 
-- name: Set fact stem available php 7.4
-  set_fact:
-    stem_available: True
-  when: php_version == 7.4 and (ansible_machine == "aarch64" or ansible_machine == "x86_64")
+- set_fact:
+    php_extension: "{{ php_extensions[php_version] }}"
 
-- name: Unarchive http://download.iiab.io/packages/php{{ php_version }}-stem.rpi.tar to / (rpi)
-  unarchive:
-    src: http://download.iiab.io/packages/php{{ php_version }}-stem.rpi.tar
-    dest: /
-    owner: root
-    group: root
-    #mode: ????
-    remote_src: yes
-  when: (ansible_machine == "armv7l" or ansible_machine == "armv6l") and stem_available is defined
+# Auto-lookup would also work...
+# php -i | grep 'PHP Extension =>' | cut -d' ' -f4
+#
+# Or...
+# ls -d /usr/lib/php/20?????? | cut -d/ -f5
+#
+# (Or in PHP code...)
+# phpinfo()
 
-- name: Unarchive http://download.iiab.io/packages/php{{ php_version }}-stem.aarch64.tar to / (rpi)
-  unarchive:
-    src: http://download.iiab.io/packages/php{{ php_version }}-stem.aarch64.tar
-    dest: /
-    owner: root
-    group: root
-    #mode: ????
-    remote_src: yes
-  when: ansible_machine == "aarch64" and stem_available is defined
 
-- name: Unarchive http://download.iiab.io/packages/php{{ php_version }}-stem.x64.tar to / (x64)
-  unarchive:
-    src: http://download.iiab.io/packages/php{{ php_version }}-stem.x64.tar
-    dest: /
-    owner: root
-    group: root
-    #mode: ????
-    remote_src: yes
-  when: ansible_machine == "x86_64" and stem_available is defined
+- name: Download https://github.com/iiab/php-stem/raw/main/so/stem-armhf-{{ php_version }}.so to /usr/lib/php/{{ php_extension }}/stem.so (armv6l or armv7l)
+  get_url:
+    url: https://github.com/iiab/php-stem/raw/main/so/stem-armhf-{{ php_version }}.so
+    dest: /usr/lib/php/{{ php_extension }}/stem.so
+  when: ansible_machine == "armv6l" or ansible_machine == "armv7l"
+
+- name: Download https://github.com/iiab/php-stem/raw/main/so/stem-aarch64-{{ php_version }}.so to /usr/lib/php/{{ php_extension }}/stem.so (aarch64)
+  get_url:
+    url: https://github.com/iiab/php-stem/raw/main/so/stem-aarch64-{{ php_version }}.so
+    dest: /usr/lib/php/{{ php_extension }}/stem.so
+  when: ansible_machine == "aarch64"
+
+- name: Download https://github.com/iiab/php-stem/raw/main/so/stem-x64-{{ php_version }}.so to /usr/lib/php/{{ php_extension }}/stem.so (x86_64)
+  get_url:
+    url: https://github.com/iiab/php-stem/raw/main/so/stem-x64-{{ php_version }}.so
+    dest: /usr/lib/php/{{ php_extension }}/stem.so
+  when: ansible_machine == "x86_64"
+
+
+- name: Install /etc/php/{{ php_version }}/mods-available/stem.ini
+  shell: |
+    cat > /etc/php/{{ php_version }}/mods-available/stem.ini << EOF
+    ; configuration for php common module
+    ; priority=20
+    extension=stem.so
+    EOF
 
 - name: Symlink /etc/php/{{ php_version }}/fpm/conf.d/20-stem.ini -> /etc/php/{{ php_version }}/mods-available/stem.ini
   file:
-    src: "/etc/php/{{ php_version }}/mods-available/stem.ini"
-    path: "/etc/php/{{ php_version }}/fpm/conf.d/20-stem.ini"
+    src: /etc/php/{{ php_version }}/mods-available/stem.ini
+    path: /etc/php/{{ php_version }}/fpm/conf.d/20-stem.ini
     state: link
-  when: stem_available is defined
+
+
+# - name: Set fact stem available php 7.2 - includes x86_64 only
+#   set_fact:
+#     stem_available: True
+#   when: ansible_machine == "x86_64" and php_version == 7.2
+
+# - name: Set fact stem available php 7.3 - excludes i386
+#   set_fact:
+#     stem_available: True
+#   when: not ansible_machine == "i386" and php_version == 7.3
+
+# - name: Set fact stem available php 7.4
+#   set_fact:
+#     stem_available: True
+#   when: php_version == 7.4 and (ansible_machine == "aarch64" or ansible_machine == "x86_64")
+
+# - name: Unarchive http://download.iiab.io/packages/php{{ php_version }}-stem.rpi.tar to / (rpi)
+#   unarchive:
+#     src: http://download.iiab.io/packages/php{{ php_version }}-stem.rpi.tar
+#     dest: /
+#     owner: root
+#     group: root
+#     #mode: ????
+#     remote_src: yes
+#   when: (ansible_machine == "armv7l" or ansible_machine == "armv6l") and stem_available is defined
+
+# - name: Unarchive http://download.iiab.io/packages/php{{ php_version }}-stem.aarch64.tar to / (rpi)
+#   unarchive:
+#     src: http://download.iiab.io/packages/php{{ php_version }}-stem.aarch64.tar
+#     dest: /
+#     owner: root
+#     group: root
+#     #mode: ????
+#     remote_src: yes
+#   when: ansible_machine == "aarch64" and stem_available is defined
+
+# - name: Unarchive http://download.iiab.io/packages/php{{ php_version }}-stem.x64.tar to / (x64)
+#   unarchive:
+#     src: http://download.iiab.io/packages/php{{ php_version }}-stem.x64.tar
+#     dest: /
+#     owner: root
+#     group: root
+#     #mode: ????
+#     remote_src: yes
+#   when: ansible_machine == "x86_64" and stem_available is defined
+
+# - name: Symlink /etc/php/{{ php_version }}/fpm/conf.d/20-stem.ini -> /etc/php/{{ php_version }}/mods-available/stem.ini
+#   file:
+#     src: "/etc/php/{{ php_version }}/mods-available/stem.ini"
+#     path: "/etc/php/{{ php_version }}/fpm/conf.d/20-stem.ini"
+#     state: link
+#   when: stem_available is defined
+
 
 # Not sure what to do for apache, so do nothing for now
 
