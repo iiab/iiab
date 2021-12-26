@@ -34,7 +34,7 @@ For other approaches, please see http://FAQ.IIAB.IO -> "How can I remotely manag
    If not used before then, here is an *example (version & architecture can change in the .deb filename below!)* to re-run this installation command, to get a new claim code:
 
    ```
-   sudo apt reinstall /opt/iiab/downloads/remoteit-4.13.5.armhf.rpi.deb
+   sudo apt reinstall /opt/iiab/downloads/remoteit-4.13.6.armhf.rpi.deb
    ```
 
 4. After you've installed the https://remote.it client software onto a separate computer or device (e.g. your own laptop) click on the '+' icon, then enter the remote.it claim code (for the IIAB that you need to connect to).
