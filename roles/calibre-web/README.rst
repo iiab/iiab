@@ -21,7 +21,7 @@ https://github.com/janeczku/calibre-web#about
 This Ansible role installs Calibre-Web as part of your Internet-in-a-Box (IIAB)
 as a possible alternative to Calibre.
 
-*WARNING: Calibre-Web depends on Calibre's own /usr/bin/ebook-convert program,
+*WARNING: Calibre-Web depends on Calibre's own* ``/usr/bin/ebook-convert`` *program,
 so we strongly recommend you also install Calibre during your IIAB
 installation!*
 
@@ -153,7 +153,7 @@ Known Issues
   
 * |ss| Imagemagick policy prevents generating thumbnails for PDF's during upload: `#1530 <https://github.com/iiab/iiab/issues/1530>`_ `janeczku/calibre-web#827 <https://github.com/janeczku/calibre-web/issues/827>`_ |se|
 
-* Upload of not supported file formats gives no feedback to the user: `janeczku/calibre-web#828 <https://github.com/janeczku/calibre-web/issues/828>`_
+* |ss| Upload of not supported file formats gives no feedback to the user: `janeczku/calibre-web#828 <https://github.com/janeczku/calibre-web/issues/828>`_ |se| |nbsp|  Fixed by `361a124 <https://github.com/janeczku/calibre-web/commit/361a1243d732116e6f520fabbaae017068b86037>`_ on 2019-02-27.
 
 * *Please assist us in reporting serious issues here:*
   https://github.com/janeczku/calibre-web/issues
