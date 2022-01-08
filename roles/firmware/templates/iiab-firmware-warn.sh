@@ -1,9 +1,9 @@
 #!/bin/bash
 
-if [ -f /tmp/.fw_replaced ]; then
-    echo -e "\n\e[41;1mWiFi Firmware has been replaced, per iiab/iiab#823.\e[0m"
-    echo -e "\e[41;1mReboot is required to activate.\e[0m"
+if [ -f /tmp/.fw_modified ]; then
+    echo -e "\n\e[41;1mWiFi Firmware link(s) modified, per iiab/iiab#2853: PLEASE REBOOT!\e[0m"
     echo
-    echo -e "\e[100;1mIf you want these warnings to stop, run:\e[0m"
-    echo -e "\e[100;1msudo rm /tmp/.fw_replaced\e[0m\n"
+    echo -e "If you want these warnings to stop, run: sudo rm /tmp/.fw_modified\n"
 fi
+
+# \e[1m = bright white    \e[100;1m = bright white, on gray    \n\e[41;1m = bright white, on red

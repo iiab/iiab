@@ -1,44 +1,54 @@
 #!/bin/bash
 
-DATE=$(date +%F-%T)
-
 # 2021-08-18: bash scripts using default_vars.yml &/or local_vars.yml
 # https://github.com/iiab/iiab-factory/blob/master/iiab
-# https://github.com/iiab/iiab/blob/master/roles/firmware/templates/iiab-check-firmware#L13
+# https://github.com/iiab/iiab/blob/master/roles/firmware/templates/iiab-check-firmware#L10-14
 # https://github.com/iiab/iiab/blob/master/roles/network/templates/gateway/iiab-gen-iptables#L48-L52
 # https://github.com/iiab/maps/blob/master/osm-source/pages/viewer/scripts/iiab-install-map-region#L25-L34
 # https://github.com/iiab/iiab/blob/master/roles/openvpn/templates/iiab-support READS AND WRITES, INCL NON-BOOLEAN
 
-if ! grep -q '^rpi3bplus_rpi4_wifi_firmware:\s\+os\b' /etc/iiab/local_vars.yml ; then
-    if ! cmp -s /lib/firmware/brcm/brcmfmac43455-sdio.bin.iiab /lib/firmware/brcm/brcmfmac43455-sdio.bin ; then
-	mv /lib/firmware/brcm/brcmfmac43455-sdio.bin /lib/firmware/brcm/brcmfmac43455-sdio.bin.$DATE
-	ln -sf brcmfmac43455-sdio.bin.iiab /lib/firmware/brcm/brcmfmac43455-sdio.bin
-	echo "Replaced /lib/firmware/brcm/brcmfmac43455-sdio.bin"
-	touch /tmp/.fw_replaced
-    fi
+iiab_var_value() {
+    v1=$(grep "^$1:\s" /opt/iiab/iiab/vars/default_vars.yml | tail -1 | sed "s/^$1:\s\+//; s/#.*//; s/\s*$//; s/^\(['\"]\)\(.*\)\1$/\2/")
+    v2=$(grep "^$1:\s" /etc/iiab/local_vars.yml | tail -1 | sed "s/^$1:\s\+//; s/#.*//; s/\s*$//; s/^\(['\"]\)\(.*\)\1$/\2/")
+    [ "$v2" != "" ] && echo $v2 || echo $v1    # [ "$v2" ] ALSO WORKS
+}
 
-    if ! cmp -s /lib/firmware/brcm/brcmfmac43455-sdio.clm_blob.iiab /lib/firmware/brcm/brcmfmac43455-sdio.clm_blob ; then
-	mv /lib/firmware/brcm/brcmfmac43455-sdio.clm_blob /lib/firmware/brcm/brcmfmac43455-sdio.clm_blob.$DATE
-	ln -sf brcmfmac43455-sdio.clm_blob.iiab /lib/firmware/brcm/brcmfmac43455-sdio.clm_blob
-	echo "Replaced /lib/firmware/brcm/brcmfmac43455-sdio.clm_blob"
-	touch /tmp/.fw_replaced
+link_fw() {
+    if [[ $(readlink /lib/firmware/brcm/$1) != $1.iiab ]] ; then
+	echo
+	mv /lib/firmware/brcm/$1 /lib/firmware/brcm/$1.$(date +%F-%T)
+	ln -s $1.iiab /lib/firmware/brcm/$1
+	echo -e "\e[1mSymlinked /lib/firmware/brcm/$1 -> $1.iiab\e[0m"
+	touch /tmp/.fw_modified
     fi
+}
+
+if [[ $(iiab_var_value rpi3bplus_rpi4_wifi_firmware) != "os" ]] ; then
+    link_fw brcmfmac43455-sdio.bin
+    link_fw brcmfmac43455-sdio.clm_blob
 fi
 
-if ! grep -q '^rpizerow_rpi3_wifi_firmware:\s\+os\b' /etc/iiab/local_vars.yml ; then
-    if ! cmp -s /lib/firmware/brcm/brcmfmac43430-sdio.bin.iiab /lib/firmware/brcm/brcmfmac43430-sdio.bin ; then
-	mv /lib/firmware/brcm/brcmfmac43430-sdio.bin /lib/firmware/brcm/brcmfmac43430-sdio.bin.$DATE
-	ln -sf brcmfmac43430-sdio.bin.iiab /lib/firmware/brcm/brcmfmac43430-sdio.bin
-	echo "Replaced /lib/firmware/brcm/brcmfmac43430-sdio.bin"
-	touch /tmp/.fw_replaced
-    fi
-
-    if ! cmp -s /lib/firmware/brcm/brcmfmac43430-sdio.clm_blob.iiab /lib/firmware/brcm/brcmfmac43430-sdio.clm_blob ; then
-	mv /lib/firmware/brcm/brcmfmac43430-sdio.clm_blob /lib/firmware/brcm/brcmfmac43430-sdio.clm_blob.$DATE
-	ln -sf brcmfmac43430-sdio.clm_blob.iiab /lib/firmware/brcm/brcmfmac43430-sdio.clm_blob
-	echo "Replaced /lib/firmware/brcm/brcmfmac43430-sdio.clm_blob"
-	touch /tmp/.fw_replaced
-    fi
+if [[ $(iiab_var_value rpizerow_rpi3_wifi_firmware) != "os" ]] ; then
+    link_fw brcmfmac43430-sdio.bin
+    link_fw brcmfmac43430-sdio.clm_blob
 fi
 
-bash < /etc/profile.d/iiab-firmware-warn.sh
+if [ -f /tmp/.fw_modified ]; then
+    bash /etc/profile.d/iiab-firmware-warn.sh
+else
+    echo -e "\n\e[1mWiFi Firmware links in /lib/firmware/brcm appear \e[92mCORRECT\e[0m\e[1m, per iiab/iiab#2853.\e[0m"
+    echo
+    echo -e "\e[100;1m(No reboot appears necessary!)\e[0m"
+    echo
+    echo -e "NOTE: If you change rpi3bplus_rpi4_wifi_firmware or rpizerow_rpi3_wifi_firmware"
+    echo -e "settings in /etc/iiab/local_vars.yml, please then run:"
+    echo
+    echo -e "   cd /opt/iiab/iiab"
+    echo -e "   sudo ./iiab-network"
+    echo -e "   sudo poweroff\n"
+    #echo
+    #echo -e "Disconnect your power cord before rebooting, for better WiFi firmware results.\n"
+fi
+
+# \e[1m = bright white    \e[100;1m = bright white, on gray    \n\e[41;1m = bright white, on red
+# \e[42;1m = bright white, on bright green    \e[92m = green on black
