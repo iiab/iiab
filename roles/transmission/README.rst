@@ -38,7 +38,9 @@ Log in to Transmission's web interface http://box:9091 using administrative acco
   Username: Admin
   Password: changeme
 
-If you prefer the command-line, you can instead run `transmission-remote <https://linux.die.net/man/1/transmission-remote>`_ commands.
+Change the above password by editing ``rpc-password`` in ``/etc/transmission-daemon/settings.json`` (your plaintext will be hashed to conceal it, the next time Transmission is started).
+
+Finally if you prefer the command-line, you can instead run `transmission-remote <https://linux.die.net/man/1/transmission-remote>`_ commands.
 
 Configuration
 -------------
