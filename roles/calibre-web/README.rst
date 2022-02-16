@@ -105,7 +105,7 @@ Or, to reinstall all of IIAB::
 Or, if you just want to upgrade Calibre-Web code alone, prior to proceeding
 manually::
 
-  cd /opt/iiab/calibre-web
+  cd /usr/local/calibre-web-py3
   git pull
 
 Known Issues
