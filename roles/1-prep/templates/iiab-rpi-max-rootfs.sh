@@ -20,8 +20,8 @@ if [ -f /.resize-rootfs ]; then
     else
         # ASSUMES SD CARD STYLE PARTITION NAME LIKE <device>p<partition number>
         # e.g. /dev/mmcblk0p2 mounts at /           (typical RasPiOS microSD)
-        # BUT  /dev/sda2      mounts at /media/usb1 (typical RasPiOS USB boot
-        #                                            disk WON'T WORK BELOW!)
+        # BUT  /dev/sda2      mounts at /media/usb1 (RasPiOS USB boot disk...
+        #                              ...WON'T WORK BELOW; recap @ PR #3121)
 
         # Calculate root partition
         root_part=`lsblk -aP -o NAME,MOUNTPOINT | grep 'MOUNTPOINT="/"' | awk -F\" '{ print $2 }'`    # e.g. mmcblk0p2
