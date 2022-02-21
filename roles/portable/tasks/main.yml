@@ -5,63 +5,41 @@
   - meta: end_play
   when: library_img is undefined or library_loc is undefined
 
+- name: Create /library mountpoint
+  file:
+    path: /library
+    state: directory
+
 # doesn't need conditional just looks better skipping, when the mountpoint does not exsist yet on new installs
 - name: Unmount /library -- don't panic if not found
   command: umount /library
   failed_when: False
   when: iiab_stage|int == 9
 
-- block:
-  - name: Retrieve {{ library_base_url }} to {{ library_loc }}/{{ library_img }}
-    command: wget -c {{ library_base_url }} -O {{ library_loc }}/{{ library_img }}
-    when: library_base_url is defined
+- name: Retrieve {{ library_base_url }} to {{ library_loc }}/{{ library_img }}
+  command: wget -c {{ library_base_url }} -O {{ library_loc }}/{{ library_img }}
+  when: library_base_url is defined
 
-  - name: Retrieve {{ library_base_path }} to {{ library_loc }}/{{ library_img }}
-    copy:
-      src: "{{ library_base_path }}"
-      dest: "{{ library_loc }}/{{ library_img }}"
-    when: library_base_path is defined
+- name: Retrieve {{ library_base_path }} to {{ library_loc }}/{{ library_img }}
+  copy:
+    src: "{{ library_base_path }}"
+    dest: "{{ library_loc }}/{{ library_img }}"
+  when: library_base_path is defined
 
-  - name: Check ext4 filesystem inside container
-    command: e2fsck -y -f {{ library_loc }}/{{ library_img }}
+- name: Check ext4 filesystem inside container
+  command: e2fsck -y -f {{ library_loc }}/{{ library_img }}
+  when: library_base_path is defined or library_base_url is defined
 
-  - name: Expand {{ library_img }} by {{ library_size }} in size
-    command: dd if=/dev/zero of={{ library_loc }}/{{ library_img }} bs=1 count=0 seek={{ library_size }}
+- name: Expand {{ library_img }} to {{ library_size }} in size
+  command: dd if=/dev/zero of={{ library_loc }}/{{ library_img }} bs=1 count=0 seek={{ library_size }}
 
-  - name: Check ext4 filesystem inside container
-    command: e2fsck -y -f {{ library_loc }}/{{ library_img }}
+- name: Create ext4 filesystem inside new container
+  command: mkfs.ext4 {{ library_loc }}/{{ library_img }}
+  when: library_base_path is undefined and library_base_url is undefined
 
-  - name: Resize filesystem inside container
-    command: resize2fs -f {{ library_loc }}/{{ library_img }}
-  when: library_base_url is defined or library_base_path is defined
-
-- name: Test for {{ library_loc }}/{{ library_img }}
-  command: test -f {{ library_loc }}/{{ library_img }}
-  failed_when: False
-  register: library_img_present
-
-- name: Debug library_img_present
-  debug:
-    var: library_img_present
-
-- block:
-  - name: Create new container image to hold /library of {{ library_size }} in size
-    command: dd if=/dev/zero of={{ library_loc }}/{{ library_img }} bs=1 count=0 seek={{ library_size }}
-
-  - name: Create ext4 filesystem inside new container
-    command: mkfs.ext4 {{ library_loc }}/{{ library_img }}
-  when: not library_img_present.rc == 0 and library_url is undefined
-  #end block
-
-# rsync over ssh for private collections?
-- name: Retrieve {{ library_url }} to {{ library_loc }}/{{ library_img }}
-  command: wget -c {{ library_url }} -O {{ library_loc }}/{{ library_img }}
-  when: library_url is defined
-
-- name: Create /library mountpoint
-  file:
-    path: /library
-    state: directory
+- name: Resize filesystem inside container
+  command: resize2fs -f {{ library_loc }}/{{ library_img }}
+  when: library_base_path is defined or library_base_url is defined
 
 - name: Check ext4 filesystem inside container
   command: e2fsck -y -f {{ library_loc }}/{{ library_img }}
