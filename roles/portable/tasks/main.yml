@@ -10,8 +10,17 @@
     path: /library
     state: directory
 
+- name: stop services on /library
+  systemd:
+    name: "{{ item }}"
+    state: stopped
+  with_items:
+  - kiwix-serve.service
+  - kalite-serve.service
+  when: iiab_stage|int == 9
+
 # doesn't need conditional just looks better skipping, when the mountpoint does not exsist yet on new installs
-- name: Unmount /library -- don't panic if not found
+- name: Unmount /library
   command: umount /library
   failed_when: False
   when: iiab_stage|int == 9
@@ -21,13 +30,13 @@
   when: library_base_url is defined
 
 - name: Retrieve {{ library_base_path }} to {{ library_loc }}/{{ library_img }}
-  copy:
-    src: "{{ library_base_path }}"
-    dest: "{{ library_loc }}/{{ library_img }}"
+  command: cp {{ library_base_path }} {{ library_loc }}/{{ library_img }}
   when: library_base_path is defined
 
 - name: Check ext4 filesystem inside container
-  command: e2fsck -y -f {{ library_loc }}/{{ library_img }}
+  command: e2fsck -p -f {{ library_loc }}/{{ library_img }}
+  register: fscheck1
+  failed_when: fscheck1.rc not in [ 0, 1, 2 ]
   when: library_base_path is defined or library_base_url is defined
 
 - name: Expand {{ library_img }} to {{ library_size }} in size
@@ -39,10 +48,12 @@
 
 - name: Resize filesystem inside container
   command: resize2fs -f {{ library_loc }}/{{ library_img }}
-  when: library_base_path is defined or library_base_url is defined
+  #when: library_base_path is defined or library_base_url is defined
 
 - name: Check ext4 filesystem inside container
-  command: e2fsck -y -f {{ library_loc }}/{{ library_img }}
+  command: e2fsck -p -f {{ library_loc }}/{{ library_img }}
+  register: fscheck2
+  failed_when: fscheck2.rc not in [ 0, 1, 2 ]
 
 - name: Clear old fstab entries for /library
   command: sed -i "/library/d" /etc/fstab
@@ -55,6 +66,15 @@
 
 - name: Mount {{ library_loc }}/{{ library_img }} at /library
   command: mount -a
+
+- name: stop services on /library
+  systemd:
+    name: "{{ item }}"
+    state: started
+  with_items:
+  - kiwix-serve.service
+  - kalite-serve.service
+  when: iiab_stage|int == 9
 
 # fresh installs are right after this task, no need to run during install but we want /library/* directories if called from runrole
 #- name: Create filesystem layout in /library when in runrole
