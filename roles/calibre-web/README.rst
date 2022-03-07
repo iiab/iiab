@@ -90,13 +90,13 @@ Internet-in-a-Box (IIAB) is online.
 
 But first: back up your content **and** settings, as explained above.
 
-**Also move your /library/calibre-web/config/app.db and
-/library/calibre-web/metadata.db out of the way — if you're sure to want to
-fully reset your Calibre-Web settings (to install defaults) and remove all
+**Also move your /library/calibre-web/config/app.db AND/OR
+/library/calibre-web/metadata.db out of the way — if you're sure you want to
+fully reset your Calibre-Web settings (to install defaults) AND/OR remove all
 e-book metadata!  Then run**::
 
   cd /opt/iiab/iiab
-  ./runrole calibre-web --reinstall
+  ./runrole --reinstall calibre-web
 
 Or, if you just want to upgrade Calibre-Web code alone, prior to proceeding
 manually::
