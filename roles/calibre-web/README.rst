@@ -96,7 +96,7 @@ fully reset your Calibre-Web settings (to install defaults) AND/OR remove all
 e-book metadata!  Then run**::
 
   cd /opt/iiab/iiab
-  ./runrole calibre-web --reinstall
+  ./runrole --reinstall calibre-web
 
 Or, if you just want to upgrade Calibre-Web code alone, prior to proceeding
 manually::
