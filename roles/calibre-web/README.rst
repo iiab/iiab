@@ -90,9 +90,10 @@ Internet-in-a-Box (IIAB) is online.
 
 But first: back up your content **and** settings, as explained above.
 
-**Then move your /library/calibre-web/metadata.db out of the way, if you're
-sure you want to (re)install bare/minimal metadata, and force all Calibre-Web
-settings to the default.  Then run**::
+**Also move your /library/calibre-web/config/app.db and
+/library/calibre-web/metadata.db out of the way — if you're sure to want to
+fully reset your Calibre-Web settings (to install defaults) and remove all
+e-book metadata!  Then run**::
 
   cd /opt/iiab/iiab
   ./runrole calibre-web
