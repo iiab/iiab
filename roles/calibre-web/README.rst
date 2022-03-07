@@ -96,18 +96,18 @@ fully reset your Calibre-Web settings (to install defaults) and remove all
 e-book metadata!  Then run**::
 
   cd /opt/iiab/iiab
-  ./runrole calibre-web
-  
-Or, to reinstall all of IIAB::
-
-  cd /opt/iiab/iiab
-  ./iiab-install --reinstall
+  ./runrole calibre-web --reinstall
 
 Or, if you just want to upgrade Calibre-Web code alone, prior to proceeding
 manually::
 
   cd /usr/local/calibre-web-py3
   git pull
+
+This older way *is no longer recommended*::
+
+  cd /opt/iiab/iiab
+  ./iiab-install --reinstall
 
 Known Issues
 ------------
