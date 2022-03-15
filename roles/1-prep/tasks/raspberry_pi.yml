@@ -39,21 +39,25 @@
   meta: noop
 
 # 2021-07-27 explanation from @jvonau: The 3 BELOW (iw, rfkill, wireless-tools)
-# are provided by RaspiOS.  Ubuntu|Debian on the other hand are hit or miss:
+# are provided by RasPiOS.  Ubuntu|Debian on the other hand are hit or miss:
 # desktops might have some/all 3 preinstalled, while servers tend not to have
 # these present at all, but are needed to be installed if you want to take full
 # advantage of WiFi on Ubuntu and friends -- but it's only enforced on RPi
 # hardware where we know in advance of the likelihood of WiFi being present.
 
-- name: 'Install packages: cloud-guest-utils, dphys-swapfile, fake-hwclock, iw, rfkill, wireless-tools'
+# 2022-03-15: This section is effectively now useless on RasPiOS (but apparently
+# serves a purpose on Ubuntu on RPi, where it installs dphys-swapfile and
+# fake-hwclock).  Still: @jvonau's above explanation of other OS's / other HW
+# suggest this code should possibly move in future, to helps others too?
+
+- name: 'Install packages: dphys-swapfile, fake-hwclock, iw, rfkill, wireless-tools'
   package:
     name:
-      - cloud-guest-utils    # Contains 'growpart' for resizing a partition during boot, which is normally done with the aid of cloud-init
-      - dphys-swapfile       # 2021-07-27: RaspiOS installs this regardless -- autogenerate and use a swap file
-      - fake-hwclock         # 2021-07-27: RaspiOS installs this regardless -- save/restore system clock on machines without working RTC hardware
-      - iw                # 2021-07-27: RaspiOS installs this regardless -- configure Linux wireless devices -- hard dependence for ap0 creation, SEE https://github.com/iiab/iiab/blob/master/roles/network/templates/hostapd/iiab-clone-wifi.service.j2
-      - rfkill            # 2021-07-27: RaspiOS installs this regardless -- enable & disable wireless devices
-      - wireless-tools    # 2021-07-27: RaspiOS installs this regardless -- manipulate Linux Wireless Extensions
+      - dphys-swapfile    # 2021-03-15: For Ubuntu on RPi?  RasPiOS installs this regardless -- autogenerate and use a swap file
+      - fake-hwclock      # 2021-03-15: For Ubuntu on RPi?  RasPiOS installs this regardless -- save/restore system clock on machines without working RTC hardware
+      - iw                # 2021-07-27: RasPiOS installs this regardless -- configure Linux wireless devices -- hard dependence for ap0 creation, SEE https://github.com/iiab/iiab/blob/master/roles/network/templates/hostapd/iiab-clone-wifi.service.j2
+      - rfkill            # 2021-07-27: RasPiOS installs this regardless -- enable & disable wireless devices
+      - wireless-tools    # 2021-07-27: RasPiOS installs this regardless -- manipulate Linux Wireless Extensions
     state: present
 
 
@@ -68,20 +72,3 @@
   systemd:    # Had been...a rare/legacy service that was NOT systemd
     name: dphys-swapfile
     state: restarted
-
-
-- name: Install RPi rootfs resizing (/usr/sbin/iiab-rpi-max-rootfs.sh) and its systemd service (/etc/systemd/system/iiab-rpi-root-resize.service), from templates (root:root by default)
-  template:
-    src: "{{ item.src }}"
-    dest: "{{ item.dest }}"
-    #owner: root
-    #group: root
-    mode: "{{ item.mode }}"
-  with_items:
-    - { src: 'iiab-rpi-max-rootfs.sh', dest: '/usr/sbin/', mode: '0755' }
-    - { src: 'iiab-rpi-root-resize.service', dest: '/etc/systemd/system/', mode: '0644' }
-
-- name: Enable RPi rootfs resizing (systemd service iiab-rpi-root-resize.service)
-  systemd:
-    name: iiab-rpi-root-resize
-    enabled: yes
