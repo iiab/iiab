@@ -1,43 +1,9 @@
-- name: Install packages 'parted' and 'cloud-guest-utils' (so /usr/bin/growpart is available for expanding rootfs partition during boot)
-  package:
-    name:
-      - parted               # 2022-03-15: RasPiOS and Ubuntu install this regardless -- so rarely nec but just in case.
-      - cloud-guest-utils    # 2022-03-15: For growpart command -- though RasPiOS currently doesn't need this, as raspi-config's do_expand_rootfs() instead uses fdisk.  Ubuntu pre-installs cloud-guest-utils, for use with cloud-init.
-    state: present
-
-- name: "Install from templates: /usr/sbin/iiab-expand-rootfs, /etc/systemd/system/iiab-expand-rootfs.service"
-  template:
-    src: "{{ item.src }}"
-    dest: "{{ item.dest }}"
-    mode: "{{ item.mode }}"
-  with_items:
-    - { src: 'iiab-expand-rootfs', dest: '/usr/sbin/', mode: '0755' }
-    - { src: 'iiab-expand-rootfs.service', dest: '/etc/systemd/system/', mode: '0644' }
-
-- name: Enable /etc/systemd/system/iiab-expand-rootfs.service
-  systemd:
-    name: iiab-expand-rootfs
-    enabled: yes
+- include_tasks: install-expand-rootfs.yml
 
 
-##  DISCOVER PLATFORMS ######
-# Put conditional actions for hardware platforms here
+# Conditional hardware actions below:
 
-- name: Look for any wireless devices present
-  shell: "ls -la /sys/class/net/*/phy80211 | awk -F / '{print $5}'"
-  register: has_wifi_device
-  ignore_errors: True
-  changed_when: False
-
-- name: Set has_wireless, if found
-  set_fact:
-    has_wireless: True
-  when: has_wifi_device.stdout is defined and item|trim != ""
-  with_items:
-    - "{{ has_wifi_device.stdout_lines }}"
-
-- include_tasks: wifi.yml
-  when: has_wireless is defined
+- include_tasks: internal-wifi.yml
 
 - include_tasks: raspberry_pi.yml
   when: first_run and rpi_model != "none"

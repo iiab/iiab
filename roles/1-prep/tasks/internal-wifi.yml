@@ -1,0 +1,33 @@
+- name: Look for any wireless devices present
+  shell: "ls -la /sys/class/net/*/phy80211 | cut -d/ -f5"
+  register: has_wifi_device
+  ignore_errors: True
+  changed_when: False
+
+- name: Set internal_wifi, if found
+  set_fact:
+    internal_wifi: True
+  when: has_wifi_device.stdout is defined and item|trim != ""
+  with_items:
+    - "{{ has_wifi_device.stdout_lines }}"
+
+# 2021-07-27 explanation from @jvonau: The 3 BELOW (iw, rfkill, wireless-tools)
+# are provided by RasPiOS.  Ubuntu|Debian on the other hand are hit or miss:
+# desktops might have some/all 3 preinstalled, while servers tend not to have
+# these present at all, but are needed to be installed if you want to take full
+# advantage of WiFi on Ubuntu and friends.
+
+- name: 'Install packages: iw, rfkill, wireless-tools'
+  package:
+    name:
+      - iw                # 2021-07-27: RasPiOS installs this regardless -- configure Linux wireless devices -- hard dependence for ap0 creation, SEE https://github.com/iiab/iiab/blob/master/roles/network/templates/hostapd/iiab-clone-wifi.service.j2
+      - rfkill            # 2021-07-27: RasPiOS installs this regardless -- enable & disable wireless devices
+      - wireless-tools    # 2021-07-27: RasPiOS installs this regardless -- manipulate Linux Wireless Extensions
+    state: present
+  when: internal_wifi is defined
+
+- name: '2021-07-27: SEE ALSO ~4 networking packages LATER installed by https://github.com/iiab/iiab/blob/master/roles/2-common/tasks/packages.yml'
+  meta: noop
+
+- name: '2021-07-27: SEE ALSO 4-5 networking packages LATER installed by https://github.com/iiab/iiab/blob/master/roles/2-common/tasks/network.yml'
+  meta: noop
