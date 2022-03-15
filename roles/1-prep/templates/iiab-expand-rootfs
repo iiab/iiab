@@ -1,0 +1,57 @@
+#!/bin/bash -x
+
+# Expand rootfs partition to its maximum size, if /.expand-rootfs exists.
+# Used by /etc/systemd/system/iiab-expand-rootfs.service on IIAB boot.
+
+# Should work with most Linux OS's, regardless whether Raspberry Pi SD cards
+# or external USB boot disks, etc.  Verifies that rootfs is the last partition.
+
+if [ -f /.expand-rootfs ] || [ -f /.resize-rootfs ]; then
+    echo "$0: Expanding rootfs partition"
+
+    if [ -x /usr/bin/raspi-config ]; then
+        # 2022-02-17: Works in many more situations, e.g. with USB disks (not
+        # just microSD cards).  IF ONLY THIS ALSO WORKED ON Ubuntu/Mint/etc !
+
+        # Uses do_expand_rootfs() from:
+        # https://github.com/RPi-Distro/raspi-config/blob/master/raspi-config
+        raspi-config --expand-rootfs
+    else
+        # 2022-03-15: Borrows from above raspi-config URL's do_expand_rootfs()
+        ROOT_PART="$(findmnt / -o SOURCE -n)"    # e.g. /dev/sda2 or /dev/mmcblk0p2
+        ROOT_DEV="/dev/$(lsblk -no pkname "$ROOT_PART")"    # e.g. /dev/sda or /dev/mmcblk0
+
+        ROOT_PART_NUM="$(echo "$ROOT_PART" | grep -o "[[:digit:]]*$")"    # e.g. 2
+        # SLOW (~10 seconds) but it works!
+        LAST_PART_NUM=$(parted "$ROOT_DEV" -ms unit s p | tail -n 1 | cut -f 1 -d:)
+
+        if [ $ROOT_PART_NUM -ne $LAST_PART_NUM ]; then
+            echo "ERROR: $ROOT_PART partition ($ROOT_PART_NUM) is not the last partition ($LAST_PART_NUM). Don't know how to expand."
+            return 0
+        fi
+
+        # Expand partition
+        growpart $ROOT_DEV $ROOT_PART_NUM
+        resize2fs $ROOT_PART
+
+        # # ASSUMES SD CARD STYLE PARTITION NAME LIKE <device>p<partition number>
+        # # e.g. /dev/mmcblk0p2 mounts at /           (typical RasPiOS microSD)
+        # # BUT  /dev/sda2      mounts at /media/usb1 (RasPiOS USB boot disk...
+        # #                              ...WON'T WORK BELOW; recap @ PR #3121)
+
+        # # Calculate root partition
+        # root_part=`lsblk -aP -o NAME,MOUNTPOINT | grep 'MOUNTPOINT="/"' | awk -F\" '{ print $2 }'`    # e.g. mmcblk0p2
+        # root_dev=${root_part:0:-2}    # e.g. mmcblk0
+        # # bash substring expansion: "negative offset [below, but not above]
+        # # must be separated from the colon by at least one space to avoid
+        # # being confused with the ‘:-’ expansion"
+        # # https://www.gnu.org/software/bash/manual/html_node/Shell-Parameter-Expansion.html
+        # root_part_no=${root_part: -1}    # e.g. 2
+
+        # # Resize partition
+        # growpart /dev/$root_dev $root_part_no
+        # resize2fs /dev/$root_part
+    fi
+
+    rm -f /.expand-rootfs /.resize-rootfs
+fi

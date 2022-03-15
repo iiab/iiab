@@ -1,17 +1,38 @@
+- name: Install package 'cloud-guest-utils' so growpart is available for expanding rootfs partition during boot
+  package:
+    name: cloud-guest-utils    # 2022-03-15: For RasPiOS especially.  Ubuntu has still pre-installed, for use with cloud-init.
+    state: present
+
+- name: "Install from templates: /usr/sbin/iiab-expand-rootfs, /etc/systemd/system/iiab-expand-rootfs.service"
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    mode: "{{ item.mode }}"
+  with_items:
+    - { src: 'iiab-expand-rootfs', dest: '/usr/sbin/', mode: '0755' }
+    - { src: 'iiab-expand-rootfs.service', dest: '/etc/systemd/system/', mode: '0644' }
+
+- name: Enable /etc/systemd/system/iiab-expand-rootfs.service
+  systemd:
+    name: iiab-expand-rootfs
+    enabled: yes
+
+
 ##  DISCOVER PLATFORMS ######
 # Put conditional actions for hardware platforms here
 
 - include_tasks: raspberry_pi.yml
   when: first_run and rpi_model != "none"
 
+
 - name: Check if the identifier for Intel's NUC6 built-in WiFi is present
   shell: "lsusb | grep 8087:0a2b | wc | awk '{print $1}'"
   register: usb_NUC6
   ignore_errors: True
 
-- name: Download {{ iiab_download_url }}/iwlwifi-8000C-13.ucode to /lib/firmware for built-in WiFi on NUC6    # iiab_download_url is http://download.iiab.io/packages
+- name: Download {{ iiab_download_url }}/iwlwifi-8000C-13.ucode to /lib/firmware for built-in WiFi on NUC6
   get_url:
-    url: "{{ iiab_download_url }}/iwlwifi-8000C-13.ucode"
+    url: "{{ iiab_download_url }}/iwlwifi-8000C-13.ucode"    # http://download.iiab.io/packages
     dest: /lib/firmware
     timeout: "{{ download_timeout }}"
   when: usb_NUC6.stdout|int > 0
