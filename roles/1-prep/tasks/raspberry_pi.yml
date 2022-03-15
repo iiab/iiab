@@ -38,14 +38,17 @@
 - name: '2021-07-27: SEE ALSO 4-5 networking packages LATER installed by https://github.com/iiab/iiab/blob/master/roles/2-common/tasks/network.yml'
   meta: noop
 
-- name: 'Install packages: cloud-guest-utils, dphys-swapfile, fake-hwclock'
+# 2022-03-15: This section is effectively now useless on RasPiOS (but apparently
+# serves a purpose on Ubuntu on RPi, where it installs dphys-swapfile and
+# fake-hwclock).  Still: @jvonau's above explanation of other OS's / other HW
+# suggest this code should possibly move in future, to helps others too?
+
+- name: 'Install packages: dphys-swapfile, fake-hwclock'
   package:
     name:
-      - cloud-guest-utils    # Contains 'growpart' for resizing a partition during boot, which is normally done with the aid of cloud-init
-      - dphys-swapfile       # 2021-07-27: RaspiOS installs this regardless -- autogenerate and use a swap file
-      - fake-hwclock         # 2021-07-27: RaspiOS installs this regardless -- save/restore system clock on machines without working RTC hardware
+      - dphys-swapfile    # 2021-03-15: For Ubuntu on RPi?  RasPiOS installs this regardless -- autogenerate and use a swap file
+      - fake-hwclock      # 2021-03-15: For Ubuntu on RPi?  RasPiOS installs this regardless -- save/restore system clock on machines without working RTC hardware
     state: present
-
 
 - name: Increase swap file size (to CONF_SWAPSIZE={{ pi_swap_file_size }} in /etc/dphys-swapfile) as kalite pip download fails
   lineinfile:
@@ -58,20 +61,3 @@
   systemd:    # Had been...a rare/legacy service that was NOT systemd
     name: dphys-swapfile
     state: restarted
-
-
-- name: Install RPi rootfs resizing (/usr/sbin/iiab-rpi-max-rootfs.sh) and its systemd service (/etc/systemd/system/iiab-rpi-root-resize.service), from templates (root:root by default)
-  template:
-    src: "{{ item.src }}"
-    dest: "{{ item.dest }}"
-    #owner: root
-    #group: root
-    mode: "{{ item.mode }}"
-  with_items:
-    - { src: 'iiab-rpi-max-rootfs.sh', dest: '/usr/sbin/', mode: '0755' }
-    - { src: 'iiab-rpi-root-resize.service', dest: '/etc/systemd/system/', mode: '0644' }
-
-- name: Enable RPi rootfs resizing (systemd service iiab-rpi-root-resize.service)
-  systemd:
-    name: iiab-rpi-root-resize
-    enabled: yes
