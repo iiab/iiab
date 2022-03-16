@@ -1,13 +1,14 @@
-- name: Look for any wireless devices present
+- name: "Look for any WiFi devices present: ls -la /sys/class/net/*/phy80211 | cut -d/ -f5"
   shell: ls -la /sys/class/net/*/phy80211 | cut -d/ -f5
-  register: has_wifi_device
+  register: wifi_devices
   ignore_errors: True
   changed_when: False
 
-- name: Set internal_wifi, if found
+- name: "Set internal_wifi: True, if output (from above) shows device(s) here: {{ wifi_devices.stdout_lines }}"
   set_fact:
     internal_wifi: True
-  when: has_wifi_device is defined and has_wifi_device.stdout | trim != ""
+  when: wifi_devices is defined and wifi_devices.stdout_lines | length > 0
+  # when: wifi_devices is defined and wifi_devices.stdout | trim != ""
 
 # 2021-07-27 explanation from @jvonau: The 3 BELOW (iw, rfkill, wireless-tools)
 # are provided by RasPiOS.  Ubuntu|Debian on the other hand are hit or miss:
@@ -15,7 +16,7 @@
 # these present at all, but are needed to be installed if you want to take full
 # advantage of WiFi on Ubuntu and friends.
 
-- name: 'Install packages: iw, rfkill, wireless-tools'
+- name: Install packages {iw, rfkill, wireless-tools} if internal_wifi ({{ internal_wifi }}) is defined
   package:
     name:
       - iw                # 2021-07-27: RasPiOS installs this regardless -- configure Linux wireless devices -- hard dependence for ap0 creation, SEE https://github.com/iiab/iiab/blob/master/roles/network/templates/hostapd/iiab-clone-wifi.service.j2
