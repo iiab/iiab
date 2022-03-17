@@ -3,8 +3,6 @@
 
 # Conditional hardware actions below:
 
-- include_tasks: internal-wifi.yml
-
 - include_tasks: raspberry_pi.yml
   when: first_run and rpi_model != "none"
 
@@ -20,3 +18,19 @@
     dest: /lib/firmware
     timeout: "{{ download_timeout }}"
   when: usb_NUC6.stdout|int > 0
+
+
+- name: "Look for any WiFi devices present: ls -la /sys/class/net/*/phy80211 | cut -d/ -f5"
+  shell: ls -la /sys/class/net/*/phy80211 | cut -d/ -f5
+  register: wifi_devices
+  ignore_errors: True
+  changed_when: False
+
+- name: "Set has_wifi_device: True, if output (from above) shows device(s) here: {{ wifi_devices.stdout_lines }}"
+  set_fact:
+    has_wifi_device: True
+  when: wifi_devices is defined and wifi_devices.stdout_lines | length > 0
+  # when: wifi_devices is defined and wifi_devices.stdout | trim != ""
+
+- debug:
+    var: has_wifi_device
