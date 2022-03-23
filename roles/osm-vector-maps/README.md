@@ -23,6 +23,18 @@
 
 5. **Drag-and-Drop Map Overlays** — try this by dragging and dropping any relevant GeoJSON file onto the IIAB Maps (http://box/maps) in your browser!  For example try this GeoJSON file, to explore the shape of gerrymandered US Congressional districts: https://eric.clst.org/assets/wiki/uploads/Stuff/gz_2010_us_500_11_20m.json
 
-6. Similarly but separately: Students can _Right-Click_ on IIAB Maps (http://box/maps) to **add descriptions and photos** of local points of interest<!-- — and then save and restore them using their local browser-->.  Choose "Add Data Point" after right-clicking, and then later "Export Points" to share with others.  [CAN ANYBODY SUGGEST STUDENT/TEACHER OUTDOOR EXPLORATION / GEOSPATIAL ADVENTURE TIPS THAT WORK WELL WITH STUDENT PHONES?]
 
 #### Please also see the IIAB Maps doc: https://github.com/iiab/iiab/wiki/IIAB-Maps
+
+#### Notes on upgrading from maps 7.2 to maps 7.3
+
+The format of the map-catalog.json has changed. And the programs need to be updated also. This can be accomplished by the following:
+```
+     cd /library/www/
+     rm -rf osm-vector-maps/
+     vim /etc/iiab/iiab_state.yml  (and delete the line osm-vector-maps)
+     git remote add ghunt git@github.com:/georgejhunt/iiab
+     git fetch --all
+     git checkout -b maps7.3 ghunt/maps7.3
+     ./runroles osm-vector-maps
+```
