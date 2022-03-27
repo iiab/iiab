@@ -74,7 +74,7 @@ See also::
 
   /library/calibre-web/metadata_db_prefs_backup.json
 
-See the official docs on Calibre-Web's `Runtime Configuration Options <https://github.com/janeczku/calibre-web/wiki/Configuration>`_.
+Finally, take note of Calibre-Web's `FAQ <https://github.com/janeczku/calibre-web/wiki/FAQ>`_ and official docs on its `Runtime Configuration Options <https://github.com/janeczku/calibre-web/wiki/Configuration>`_ and `Command Line Interface <https://github.com/janeczku/calibre-web/wiki/Command-Line-Interface>`_.
 
 Back Up Everything
 ------------------
@@ -90,23 +90,24 @@ Internet-in-a-Box (IIAB) is online.
 
 But first: back up your content **and** settings, as explained above.
 
-**Then move your /library/calibre-web/metadata.db out of the way, if you're
-sure you want to (re)install bare/minimal metadata, and force all Calibre-Web
-settings to the default.  Then run**::
+**Also move your /library/calibre-web/config/app.db AND/OR
+/library/calibre-web/metadata.db out of the way — if you're sure you want to
+fully reset your Calibre-Web settings (to install defaults) AND/OR remove all
+e-book metadata!  Then run**::
 
   cd /opt/iiab/iiab
-  ./runrole calibre-web
-  
-Or, to reinstall all of IIAB::
-
-  cd /opt/iiab/iiab
-  ./iiab-install --reinstall
+  ./runrole --reinstall calibre-web
 
 Or, if you just want to upgrade Calibre-Web code alone, prior to proceeding
 manually::
 
-  cd /opt/iiab/calibre-web
+  cd /usr/local/calibre-web-py3
   git pull
+
+This older way *is no longer recommended*::
+
+  cd /opt/iiab/iiab
+  ./iiab-install --reinstall    # OR: ./iiab-configure
 
 Known Issues
 ------------

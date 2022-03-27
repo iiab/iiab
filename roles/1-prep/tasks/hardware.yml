@@ -1,17 +1,36 @@
-##  DISCOVER PLATFORMS ######
-# Put conditional actions for hardware platforms here
+- include_tasks: install-expand-rootfs.yml
+
+
+# Conditional hardware actions below:
 
 - include_tasks: raspberry_pi.yml
   when: first_run and rpi_model != "none"
+
 
 - name: Check if the identifier for Intel's NUC6 built-in WiFi is present
   shell: "lsusb | grep 8087:0a2b | wc | awk '{print $1}'"
   register: usb_NUC6
   ignore_errors: True
 
-- name: Download {{ iiab_download_url }}/iwlwifi-8000C-13.ucode to /lib/firmware for built-in WiFi on NUC6    # iiab_download_url is http://download.iiab.io/packages
+- name: Download {{ iiab_download_url }}/iwlwifi-8000C-13.ucode to /lib/firmware for built-in WiFi on NUC6
   get_url:
-    url: "{{ iiab_download_url }}/iwlwifi-8000C-13.ucode"
+    url: "{{ iiab_download_url }}/iwlwifi-8000C-13.ucode"    # http://download.iiab.io/packages
     dest: /lib/firmware
     timeout: "{{ download_timeout }}"
   when: usb_NUC6.stdout|int > 0
+
+
+- name: "Look for any WiFi devices present: ls -la /sys/class/net/*/phy80211 | cut -d/ -f5"
+  shell: ls -la /sys/class/net/*/phy80211 | cut -d/ -f5
+  register: wifi_devices
+  ignore_errors: True
+  changed_when: False
+
+- name: "Set has_wifi_device: True, if output (from above) shows device(s) here: {{ wifi_devices.stdout_lines }}"
+  set_fact:
+    has_wifi_device: True
+  when: wifi_devices is defined and wifi_devices.stdout_lines | length > 0
+  # when: wifi_devices is defined and wifi_devices.stdout | trim != ""
+
+- debug:
+    var: has_wifi_device

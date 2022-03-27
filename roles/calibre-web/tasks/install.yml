@@ -19,7 +19,6 @@
     path: "{{ item }}"
     owner: "{{ calibreweb_user }}"    # root
     group: "{{ apache_user }}"        # www-data on debuntu
-    #mode: '0755'
   with_items:
     - "{{ calibreweb_home }}"         # /library/calibre-web
     - "{{ calibreweb_config }}"       # /library/calibre-web/config
@@ -29,10 +28,10 @@
 - name: Clone i.e. download Calibre-Web ({{ calibreweb_version }}) from https://github.com/janeczku/calibre-web.git to {{ calibreweb_venv_path }} (~94 MB initially, ~115+ MB later)
   git:
     repo: https://github.com/janeczku/calibre-web.git
-    dest: "{{ calibreweb_venv_path }}"    # /usr/local/calibre-web
+    dest: "{{ calibreweb_venv_path }}"
     force: yes
     depth: 1
-    version: "{{ calibreweb_version }}"    # e.g. master, 0.6.5
+    version: "{{ calibreweb_version }}"    # e.g. master, 0.6.17
 
 ## Ansible Pip Bug: Cannot use 'chdir' with 'env' https://github.com/ansible/ansible/issues/37912 (Patch landed)
 #- name: Download calibre-web dependencies into vendor subdirectory.
@@ -66,24 +65,25 @@
     dest: "{{ calibreweb_home }}"     # /library/calibre-web
     owner: "{{ calibreweb_user }}"    # root
     group: "{{ apache_user }}"        # www-data on debuntu
-    #mode: '0644'
     backup: yes
   with_items:
     - roles/calibre-web/files/metadata.db
     - roles/calibre-web/files/metadata_db_prefs_backup.json
   when: not metadatadb.stat.exists
-  #when: calibreweb_provision
 
-- name: Provision/Copy default admin settings to {{ calibreweb_config }}/app.db IF metadata.db did not exist
+- name: Does /library/calibre-web/config/app.db exist?
+  stat:
+    path: /library/calibre-web/config/app.db
+  register: appdb
+
+- name: Provision/Copy default admin settings to {{ calibreweb_config }}/app.db IF it did not exist
   copy:
     src: roles/calibre-web/files/app.db
     dest: "{{ calibreweb_config }}"    # /library/calibre-web/config
     owner: "{{ calibreweb_user }}"     # root
     group: "{{ apache_user }}"         # www-data on debuntu
-    #mode: '0644'
     backup: yes
-  when: not metadatadb.stat.exists
-  #when: calibreweb_provision
+  when: not appdb.stat.exists
 
 
 # RECORD Calibre-Web AS INSTALLED
