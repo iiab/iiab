@@ -46,7 +46,7 @@ For other approaches, please see http://FAQ.IIAB.IO -> "How can I remotely manag
 1. Log into the https://remote.it Web Portal, or open its desktop application.
 2. Add Devices (e.g. your IIAB).
 3. Understand that each Device will need to contain one or more remote.it Services.
-   - Add a remote.it Service (e.g. HTTP and/or others) to your Device:<br>https://support.remote.it/hc/en-us/articles/360050732092-Add-a-remote-it-Service-to-your-Device
+   - Add a remote.it Service (e.g. HTTP, SSH and/or others) to your Device:<br>https://support.remote.it/hc/en-us/articles/360058603991-Configuring-remoteit-Services-on-devices-with-remote-it-Desktop
 
 Summary of remote.it Services: https://support.remote.it/hc/en-us/articles/360060992631-Services
 
