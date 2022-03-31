@@ -20,6 +20,8 @@ For other approaches, please see http://FAQ.IIAB.IO -> "How can I remotely manag
 
 1. Set `remoteit_install` and `remoteit_enabled` to `True` in your IIAB's [/etc/iiab/local_vars.yml](http://wiki.laptop.org/go/IIAB/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it.3F)
 
+   (If possible, do that prior to [installing IIAB](https://download.iiab.io/), then install IIAB using `sudo iiab`, and when that's complete go directly to Step 3. below.)
+
 2. Install and enable remote.it (its [device package](https://docs.remote.it/software/device-package)) on your IIAB, by running:
 
    ```
