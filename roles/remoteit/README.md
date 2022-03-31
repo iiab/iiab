@@ -1,6 +1,6 @@
 # Remote support of an Internet-in-a-Box using https://remote.it
 
-Remote.it can be a great way to remotely support an Internet-in-a-Box (IIAB).
+Remote.it can be a [great way](https://docs.remote.it/introduction/get-started/readme) to remotely support an Internet-in-a-Box (IIAB).
 
 For other approaches, please see http://FAQ.IIAB.IO -> "How can I remotely manage my Internet-in-a-Box?"
 
