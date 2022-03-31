@@ -51,7 +51,7 @@ For other approaches, please see http://FAQ.IIAB.IO -> "How can I remotely manag
 
    SUMMARY: One or more remote.it "Services" need to be set up (registered) to allow remote access to your IIAB device: https://support.remote.it/hc/en-us/articles/360060992631-Services
 
-   EXAMPLES: SSH (port 22) and/or http (port 80): https://support.remote.it/hc/en-us/articles/360058603991-Configuring-remoteit-Services-on-devices-with-remote-it-Desktop
+   EXAMPLES: SSH (port 22) and/or HTTP (port 80): https://support.remote.it/hc/en-us/articles/360058603991-Configuring-remoteit-Services-on-devices-with-remote-it-Desktop
 
 ## Docs
 
