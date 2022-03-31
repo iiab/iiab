@@ -6,7 +6,7 @@ For other approaches, please see http://FAQ.IIAB.IO -> "How can I remotely manag
 
 ## Getting Started
 
-### Create a remote.it account
+### Create a remote.it account + consider its desktop application
 
 1. Browse to [https://remote.it](https://remote.it) (Web Portal) and sign up for an account.
 
@@ -14,7 +14,7 @@ For other approaches, please see http://FAQ.IIAB.IO -> "How can I remotely manag
 
    COMPARISON: "The Desktop and [CLI](https://docs.remote.it/software/cli) can [each] support both peer to peer connections and proxy connections [whereas] the Web Portal and API can only support proxy connections" according to https://docs.remote.it/software/device-package/usage
 
-### Install remote.it onto an IIAB
+### Install remote.it onto an IIAB + register it + authorize services/ports
 
 1. Set `remoteit_install` and `remoteit_enabled` to `True` in your IIAB's [/etc/iiab/local_vars.yml](http://wiki.laptop.org/go/IIAB/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it.3F)
 
@@ -47,9 +47,9 @@ For other approaches, please see http://FAQ.IIAB.IO -> "How can I remotely manag
  
    Either way, click on the '+' icon to enter the remote.it claim code (to register the IIAB device to your account) as shown in this screenshot: https://docs.remote.it/software/device-package/installation#3.-claim-and-register-the-device
 
-5. Set up services/ports (e.g. SSH, HTTP, etc) for your IIAB device, as shown in these screenshots: https://docs.remote.it/software/device-package/installation#4.-set-up-services-on-your-device
+5. Authorize services/ports (e.g. SSH, HTTP, etc) for your IIAB device, as shown in these screenshots: https://docs.remote.it/software/device-package/installation#4.-set-up-services-on-your-device
 
-   SUMMARY: One or more remote.it "Services" need to be set up (registered) to allow remote access to your IIAB device: https://support.remote.it/hc/en-us/articles/360060992631-Services
+   SUMMARY: One or more remote.it "Services" need to be authorized (registered) to allow remote access to your IIAB device: https://support.remote.it/hc/en-us/articles/360060992631-Services
 
    EXAMPLES: SSH (port 22) and/or HTTP (port 80): https://support.remote.it/hc/en-us/articles/360058603991-Configuring-remoteit-Services-on-devices-with-remote-it-Desktop
 
