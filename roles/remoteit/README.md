@@ -10,7 +10,7 @@ For other approaches, please see http://FAQ.IIAB.IO -> "How can I remotely manag
 
 1. Browse to [https://remote.it](https://remote.it) (Web Portal) and sign up for an account.
 
-2. Download [remote.it's desktop application](https://remote.it/download/) e.g. for Windows, macOS or Linux to your own laptop/computer &mdash; if you prefer this over the https://remote.it Web Portal.
+2. Download the [remote.it desktop application](https://remote.it/download/) e.g. for Windows, macOS or Linux to your own laptop/computer &mdash; if you prefer this over the https://remote.it Web Portal.
 
    COMPARISON: "The Desktop and [CLI](https://docs.remote.it/software/cli) can [each] support both peer to peer connections and proxy connections [whereas] the Web Portal and API can only support proxy connections" according to https://docs.remote.it/software/device-package/usage
 
