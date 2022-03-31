@@ -58,8 +58,8 @@ For "auto-registration" of remote.it, and other more advanced configuration opti
 
 - https://docs.remote.it
 - https://support.remote.it
-- https://support.remote.it/hc/en-us/articles/360044424612-1-Create-an-Auto-Registration
-- https://support.remote.it/hc/en-us/articles/360044424672-1-Device-Setup-for-Auto-Bulk-Registration
+<!-- - https://support.remote.it/hc/en-us/articles/360044424612-1-Create-an-Auto-Registration 
+- https://support.remote.it/hc/en-us/articles/360044424672-1-Device-Setup-for-Auto-Bulk-Registration -->
 
 ## Known Issues
 
