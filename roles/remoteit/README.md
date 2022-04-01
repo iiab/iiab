@@ -42,7 +42,7 @@ For other approaches, please see http://FAQ.IIAB.IO -> "How can I remotely manag
 
    <!--EXPLANATION: The above installs remote.it, in a way that was originally designed to be interactive, and provide you the claim code needed to make a remote connection to this IIAB.  The claim code is further explained below.-->
 
-3. To obtain this IIAB's 8-character remote.it claim code (allowing you to make a remote connection to this IIAB) run:
+3. To obtain your IIAB's 8-character remote.it claim code (allowing you to make a remote connection to this IIAB device) run:
 
    ```
    sudo grep claim /etc/remoteit/config.json
@@ -50,7 +50,7 @@ For other approaches, please see http://FAQ.IIAB.IO -> "How can I remotely manag
 
    *The claim code must be used within 24 hours, per:* https://docs.remote.it/device-package/installation#2.-update-your-package-manager-and-install
 
-   _If your claim code has expired, please reinstall the latest remoteit (in Step 2. above!)_
+   _If your claim code has expired, please reinstall the latest remote.it (in Step 2. above!)_
 
    <!-- If necessary, run this command to get a new claim code: *(adjust version & architecture in the .deb filename as appropriate!)*
 
