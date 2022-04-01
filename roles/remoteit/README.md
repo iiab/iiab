@@ -22,7 +22,9 @@ For other approaches, please see http://FAQ.IIAB.IO -> "How can I remotely manag
 
    (If possible, do that prior to [installing IIAB](https://download.iiab.io/), then install IIAB using `sudo iiab`, and when that's complete go directly to Step 3. below.)
 
-2. Install and enable remote.it (its [Device Package](https://docs.remote.it/software/device-package)) on your IIAB, by running:
+2. Make sure your IIAB is connected to the Internet.
+
+   Then install and enable remote.it (its [Device Package](https://docs.remote.it/software/device-package)) on your IIAB, by running:
 
    ```
    cd /opt/iiab/iiab
