@@ -22,14 +22,21 @@ For other approaches, please see http://FAQ.IIAB.IO -> "How can I remotely manag
 
    (If possible, do that prior to [installing IIAB](https://download.iiab.io/), then install IIAB using `sudo iiab`, and when that's complete go directly to Step 3. below.)
 
-2. Install and enable remote.it (its [device package](https://docs.remote.it/software/device-package)) on your IIAB, by running:
+2. Install and enable remote.it (its [Device Package](https://docs.remote.it/software/device-package)) on your IIAB, by running:
 
    ```
    cd /opt/iiab/iiab
    sudo ./runrole remoteit
    ```
 
-   While rarely needed, FYI the above also installs the _optional_ `/usr/bin/remoteit` [command-line interface (CLI)](https://docs.remote.it/software/cli).
+   Or if necessary reinstall the latest, by running:
+
+   ```
+   cd /opt/iiab/iiab
+   sudo ./runrole --reinstall remoteit
+   ```
+
+   (While rarely needed, both above also install the _optional_ `/usr/bin/remoteit` [command-line interface (CLI)](https://docs.remote.it/software/cli), which offers [a few more features](https://support.remote.it/hc/en-us/articles/4412786750861-Install-the-remoteit-agent-on-your-device) than the Device Package.)
 
    <!--EXPLANATION: The above installs remote.it, in a way that was originally designed to be interactive, and provide you the claim code needed to make a remote connection to this IIAB.  The claim code is further explained below.-->
 
