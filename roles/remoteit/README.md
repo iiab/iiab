@@ -48,11 +48,13 @@ For other approaches, please see http://FAQ.IIAB.IO -> "How can I remotely manag
 
    *The claim code must be used within 24 hours, per:* https://docs.remote.it/device-package/installation#2.-update-your-package-manager-and-install
 
-   If necessary, run this command to get a new claim code: *(adjust version & architecture in the .deb filename as appropriate!)*
+   _If your claim code has expired, please reinstall the latest remoteit (in Step 2. above!)_
+
+   <!-- If necessary, run this command to get a new claim code: *(adjust version & architecture in the .deb filename as appropriate!)*
 
    ```
    sudo apt install /opt/iiab/downloads/remoteit-4.14.1.armhf.rpi.deb
-   ```
+   ``` -->
 
 4. Submit the claim code at https://remote.it (log into the Web Portal), or within the remote.it desktop application if you installed that on your own laptop/computer.
  
