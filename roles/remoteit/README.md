@@ -76,6 +76,7 @@ For other approaches, please see http://FAQ.IIAB.IO -> "How can I remotely manag
   - https://docs.remote.it/developer-tools/cli-usage
 - https://support.remote.it
   - https://support.remote.it/hc/en-us/categories/360003417511-Getting-Started
+  - https://support.remote.it/hc/en-us/articles/360051668711-Updating-the-remoteit-or-connectd-packages-using-a-remote-it-SSH-connection
 - https://remote.it/resources/
   - https://remote.it/resources/blog/managing-device-access-with-remote-it/
 <!-- - https://support.remote.it/hc/en-us/articles/360044424612-1-Create-an-Auto-Registration 
