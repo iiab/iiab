@@ -77,6 +77,7 @@ For other approaches, please see http://FAQ.IIAB.IO -> "How can I remotely manag
 - https://support.remote.it
   - https://support.remote.it/hc/en-us/categories/360003417511-Getting-Started
   - https://support.remote.it/hc/en-us/articles/360041590951-Why-does-the-address-time-out-
+  - https://support.remote.it/hc/en-us/articles/4422773654669-Streamlined-installation-for-Linux-and-Raspberry-Pi-platforms
   - https://support.remote.it/hc/en-us/articles/360051668711-Updating-the-remoteit-or-connectd-packages-using-a-remote-it-SSH-connection
 - https://remote.it/resources/
   - https://remote.it/resources/blog/managing-device-access-with-remote-it/
