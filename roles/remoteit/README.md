@@ -80,10 +80,12 @@ For other approaches, please see http://FAQ.IIAB.IO -> "How can I remotely manag
   - https://support.remote.it/hc/en-us/articles/360041590951-Why-does-the-address-time-out-
   - https://support.remote.it/hc/en-us/articles/4422773654669-Streamlined-installation-for-Linux-and-Raspberry-Pi-platforms
   - https://support.remote.it/hc/en-us/articles/360051668711-Updating-the-remoteit-or-connectd-packages-using-a-remote-it-SSH-connection
+  <!-- - https://support.remote.it/hc/en-us/articles/360044424612-1-Create-an-Auto-Registration 
+  - https://support.remote.it/hc/en-us/articles/360044424672-1-Device-Setup-for-Auto-Bulk-Registration -->
 - https://remote.it/resources/
   - https://remote.it/resources/blog/managing-device-access-with-remote-it/
-<!-- - https://support.remote.it/hc/en-us/articles/360044424612-1-Create-an-Auto-Registration 
-- https://support.remote.it/hc/en-us/articles/360044424672-1-Device-Setup-for-Auto-Bulk-Registration -->
+- https://remote.it/legal/
+  - https://remote.it/legal/fair-use-policy/
 
 ## Known Issues
 
