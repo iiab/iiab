@@ -12,7 +12,7 @@ For other approaches, please see http://FAQ.IIAB.IO -> "How can I remotely manag
 
 1. Browse to [https://remote.it](https://remote.it) (Web Portal) and sign up for an account.
 
-2. Download the [remote.it desktop application](https://remote.it/download/) e.g. for Windows, macOS or Linux to your own laptop/computer &mdash; if you prefer this over the https://remote.it Web Portal and its [mobile apps](https://docs.remote.it/introduction/get-started/readme#installation-packages).
+2. Download the [remote.it desktop application](https://remote.it/download/) (e.g. for Windows, macOS or Linux) to your own laptop/computer &mdash; if you prefer this over the https://remote.it Web Portal and its [mobile apps](https://docs.remote.it/introduction/get-started/readme#installation-packages).
 
    COMPARISON: "The Desktop and [CLI](https://docs.remote.it/software/cli) can [each] support both peer to peer connections and proxy connections [whereas] the Web Portal and API can only support proxy connections" according to https://docs.remote.it/software/device-package/usage
 
@@ -22,7 +22,7 @@ For other approaches, please see http://FAQ.IIAB.IO -> "How can I remotely manag
 
 2. If your IIAB software is already installed, run `sudo iiab-remoteit` then skip to Step 5. below.
 
-3. If your IIAB software isn't yet installed, set `remoteit_install` and `remoteit_enabled` to `True` in its [/etc/iiab/local_vars.yml](https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it.3F).
+3. If your IIAB software isn't yet installed, set `remoteit_install` and `remoteit_enabled` to `True` in its [/etc/iiab/local_vars.yml](https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it.3F)
 
    Install [IIAB software](https://download.iiab.io/) e.g. by running `sudo iiab` then follow any on-screen instructions &mdash; until "INTERNET-IN-A-BOX (IIAB) SOFTWARE INSTALL IS COMPLETE" eventually appears on screen.
 
@@ -42,7 +42,7 @@ For other approaches, please see http://FAQ.IIAB.IO -> "How can I remotely manag
    sudo ./runrole --reinstall remoteit
    ``` -->
 
-   (This installs and enables the remote.it [Device Package](https://docs.remote.it/software/device-package) for your CPU and OS.  This approach also installs the _optional_ `/usr/bin/remoteit` [command-line interface (CLI)](https://docs.remote.it/software/cli), which offers [a few more features](https://support.remote.it/hc/en-us/articles/4412786750861-Install-the-remoteit-agent-on-your-device) than the Device Package.)
+   (This installs and enables the remote.it [Device Package](https://docs.remote.it/software/device-package) for your CPU and OS.  This also installs the _optional_ `/usr/bin/remoteit` [command-line interface (CLI)](https://docs.remote.it/software/cli), which offers [a few more features](https://support.remote.it/hc/en-us/articles/4412786750861-Install-the-remoteit-agent-on-your-device) than the Device Package.)
 
 4. To obtain your IIAB's 8-character remote.it claim code (allowing you to make a remote connection to this IIAB device) run:
 
@@ -52,7 +52,7 @@ For other approaches, please see http://FAQ.IIAB.IO -> "How can I remotely manag
 
    *The claim code must be used within 24 hours, per:* https://docs.remote.it/device-package/installation#2.-update-your-package-manager-and-install
 
-   _If your claim code has expired, please run `sudo iiab-remoteit` just as in Step 2._
+   _If your claim code has expired, please run_ `sudo iiab-remoteit` _just as in Step 2._
 
    <!-- If necessary, run this command to get a new claim code: *(adjust version & architecture in the .deb filename as appropriate!)*
 
@@ -60,7 +60,7 @@ For other approaches, please see http://FAQ.IIAB.IO -> "How can I remotely manag
    sudo apt install /opt/iiab/downloads/remoteit-4.14.1.armhf.rpi.deb
    ``` -->
 
-5. Submit the claim code at https://remote.it (log into their Web Portal), or within the remote.it [desktop application](https://remote.it/download/) on your own laptop/computer.
+5. Submit the claim code within the remote.it [desktop application](https://remote.it/download/) on your own laptop/computer.  Or if you prefer, do that by logging into their Web Portal at https://remote.it
  
    Either way, click on the '+' icon to enter the remote.it claim code (to register the IIAB device to your account) as shown in this screenshot: https://docs.remote.it/software/device-package/installation#3.-claim-and-register-the-device
 
@@ -74,7 +74,12 @@ For other approaches, please see http://FAQ.IIAB.IO -> "How can I remotely manag
 
 1. Run `sudo nano /etc/iiab/local_vars.yml` to set `remoteit_enabled: False`
 
-2. Run `cd /opt/iiab/iiab` and then `sudo ./runrole remoteit`
+2. Then run:
+
+   ```
+   cd /opt/iiab/iiab
+   sudo ./runrole remoteit
+   ```
 
 ## Docs
 
