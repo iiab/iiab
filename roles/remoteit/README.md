@@ -18,11 +18,15 @@ For other approaches, please see http://FAQ.IIAB.IO -> "How can I remotely manag
 
 ### Install remote.it onto an IIAB + register it + authorize services/ports
 
-1. Set `remoteit_install` and `remoteit_enabled` to `True` in your IIAB's [/etc/iiab/local_vars.yml](http://wiki.laptop.org/go/IIAB/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it.3F)
+1. Connect your IIAB device to the Internet.
 
-   (If possible, do that prior to [installing IIAB](https://download.iiab.io/), then install IIAB using `sudo iiab`, and when that's complete go directly to Step 3. below.)
+2. If your IIAB software is already installed, run `sudo iiab-remoteit` then skip to Step 5. below.
 
-2. Make sure your IIAB is connected to the Internet.
+3. If your IIAB software isn't yet installed, set `remoteit_install` and `remoteit_enabled` to `True` in its [/etc/iiab/local_vars.yml](https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it.3F).
+
+   Install [IIAB software](https://download.iiab.io/) e.g. by running `sudo iiab` then follow any on-screen instructions &mdash; until "INTERNET-IN-A-BOX (IIAB) SOFTWARE INSTALL IS COMPLETE" eventually appears on screen.
+
+   <!-- , and when that's complete go directly to Step 3. below.
 
    Then install and enable remote.it (its [Device Package](https://docs.remote.it/software/device-package)) on your IIAB, by running:
 
@@ -36,13 +40,11 @@ For other approaches, please see http://FAQ.IIAB.IO -> "How can I remotely manag
    ```
    cd /opt/iiab/iiab
    sudo ./runrole --reinstall remoteit
-   ```
+   ``` -->
 
-   (While rarely needed, both above also install the _optional_ `/usr/bin/remoteit` [command-line interface (CLI)](https://docs.remote.it/software/cli), which offers [a few more features](https://support.remote.it/hc/en-us/articles/4412786750861-Install-the-remoteit-agent-on-your-device) than the Device Package.)
+   (This installs and enables the remote.it [Device Package](https://docs.remote.it/software/device-package) for your CPU and OS.  This approach also installs the _optional_ `/usr/bin/remoteit` [command-line interface (CLI)](https://docs.remote.it/software/cli), which offers [a few more features](https://support.remote.it/hc/en-us/articles/4412786750861-Install-the-remoteit-agent-on-your-device) than the Device Package.)
 
-   <!--EXPLANATION: The above installs remote.it, in a way that was originally designed to be interactive, and provide you the claim code needed to make a remote connection to this IIAB.  The claim code is further explained below.-->
-
-3. To obtain your IIAB's 8-character remote.it claim code (allowing you to make a remote connection to this IIAB device) run:
+4. To obtain your IIAB's 8-character remote.it claim code (allowing you to make a remote connection to this IIAB device) run:
 
    ```
    sudo grep claim /etc/remoteit/config.json
@@ -50,7 +52,7 @@ For other approaches, please see http://FAQ.IIAB.IO -> "How can I remotely manag
 
    *The claim code must be used within 24 hours, per:* https://docs.remote.it/device-package/installation#2.-update-your-package-manager-and-install
 
-   _If your claim code has expired, please reinstall the latest remote.it (in Step 2. above!)_
+   _If your claim code has expired, please run `sudo iiab-remoteit` just as in Step 2._
 
    <!-- If necessary, run this command to get a new claim code: *(adjust version & architecture in the .deb filename as appropriate!)*
 
@@ -58,15 +60,21 @@ For other approaches, please see http://FAQ.IIAB.IO -> "How can I remotely manag
    sudo apt install /opt/iiab/downloads/remoteit-4.14.1.armhf.rpi.deb
    ``` -->
 
-4. Submit the claim code at https://remote.it (log into the Web Portal), or within the remote.it desktop application if you installed that on your own laptop/computer.
+5. Submit the claim code at https://remote.it (log into their Web Portal), or within the remote.it [desktop application](https://remote.it/download/) on your own laptop/computer.
  
    Either way, click on the '+' icon to enter the remote.it claim code (to register the IIAB device to your account) as shown in this screenshot: https://docs.remote.it/software/device-package/installation#3.-claim-and-register-the-device
 
-5. Authorize services/ports (e.g. SSH, HTTP, etc) for your IIAB device, as shown in these screenshots: https://docs.remote.it/software/device-package/installation#4.-set-up-services-on-your-device
+6. Authorize services/ports (e.g. SSH, HTTP, etc) for your IIAB device, as shown in these screenshots: https://docs.remote.it/software/device-package/installation#4.-set-up-services-on-your-device
 
    SUMMARY: One or more remote.it "Services" need to be authorized (registered) to allow remote access to your IIAB device: https://support.remote.it/hc/en-us/articles/360060992631-Services
 
    EXAMPLES: SSH (port 22) and/or HTTP (port 80): https://support.remote.it/hc/en-us/articles/360058603991-Configuring-remoteit-Services-on-devices-with-remote-it-Desktop
+
+### How to I disable remote.it on my IIAB?
+
+1. Run `sudo nano /etc/iiab/local_vars.yml` to set `remoteit_enabled: False`
+
+2. Run `cd /opt/iiab/iiab` and then `sudo ./runrole remoteit`
 
 ## Docs
 
