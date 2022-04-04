@@ -12,20 +12,20 @@ For other approaches, please see http://FAQ.IIAB.IO -> "How can I remotely manag
 
 1. Browse to [https://remote.it](https://remote.it) (Web Portal) and sign up for an account.
 
-2. Download and install the remote.it [desktop application](https://remote.it/download/) (e.g. for Windows, macOS or Linux) on your own laptop/computer.  Their https://remote.it Web Portal and [mobile apps](https://docs.remote.it/introduction/get-started/readme#installation-packages) are also sometimes possible, but less functional.
+2. Download and install the remote.it [desktop application](https://remote.it/download/) (e.g. for Windows, macOS or Linux) on your own laptop/computer.  Their https://remote.it Web Portal and [mobile apps](https://docs.remote.it/introduction/get-started/readme#installation-packages) are also sometimes sufficient, but less functional.
 
    COMPARISON: "The Desktop and [CLI](https://docs.remote.it/software/cli) can [each] support both peer to peer connections and proxy connections [whereas] the Web Portal and API can only support proxy connections" according to https://docs.remote.it/software/device-package/usage
 
 <!-- ### Install remote.it onto an IIAB + register it + authorize services/ports -->
 ### Generate a remote.it claim code for your IIAB + register it + authorize services/ports
 
-Prerequisite: Find an IIAB with `remoteit_installed: True` in `/etc/iiab/iiab_state.yml`.
+Prerequisite: Find an IIAB with `remoteit_installed: True` in `/etc/iiab/iiab_state.yml`
 
 1. Run `sudo iiab-remoteit`
 
    Hit `[Enter]` twice if you want to quickly generate a new claim code for your IIAB.
 
-   The claim code is stored in `/etc/remoteit/config.json` and must be used [within 24 hours](https://docs.remote.it/device-package/installation#2.-update-your-package-manager-and-install).
+   The claim code is put in `/etc/remoteit/config.json` and must be used [within 24 hours](https://docs.remote.it/device-package/installation#2.-update-your-package-manager-and-install).
 
 <!--
 1. Connect your IIAB device to the Internet.
@@ -75,13 +75,13 @@ Prerequisite: Find an IIAB with `remoteit_installed: True` in `/etc/iiab/iiab_st
 
 2. Submit the claim code within the remote.it [desktop application](https://remote.it/download/) on your own laptop/computer.  Or if you prefer, do that by logging into their Web Portal at: https://remote.it
  
-   Either way, click on the '+' icon to enter the remote.it claim code (to register the IIAB device to your account) as shown in this [screenshot](https://docs.remote.it/software/device-package/installation#3.-claim-and-register-the-device).
+   Either way, click on the '+' icon to enter the remote.it claim code (to register the IIAB device to your remote.it account) as shown in this [screenshot](https://docs.remote.it/software/device-package/installation#3.-claim-and-register-the-device).
 
 3. Authorize services/ports (e.g. SSH, HTTP, etc) for your IIAB device, as shown in these [screenshots](https://docs.remote.it/software/device-package/installation#4.-set-up-services-on-your-device).
 
-   SUMMARY: One or more remote.it "Services" need to be authorized (registered) to allow remote access to your IIAB device:<br>https://support.remote.it/hc/en-us/articles/360060992631-Services
+   SUMMARY: One or more [remote.it "Services"](https://support.remote.it/hc/en-us/articles/360060992631-Services) needs to be authorized (registered) to allow remote access to your IIAB device.
 
-   EXAMPLES: SSH (port 22) and/or HTTP (port 80):<br>https://support.remote.it/hc/en-us/articles/360058603991-Configuring-remoteit-Services-on-devices-with-remote-it-Desktop
+   EXAMPLES: Add an SSH Service on port 22 and/or add an http Service on port 80 [screenshot guide](https://support.remote.it/hc/en-us/articles/360058603991-Configuring-remoteit-Services-on-devices-with-remote-it-Desktop).
 
 ### How to I disable remote.it on my IIAB?
 
@@ -123,4 +123,4 @@ Prerequisite: Find an IIAB with `remoteit_installed: True` in `/etc/iiab/iiab_st
 ## Known Issues
 
 - <strike>2021-10-27: This needs to be enhanced rather urgently, so remote.it also works when IIAB is installed on Raspberry Pi OS 11 (Bullseye), Ubuntu, Mint and Debian:</strike> [#3006](https://github.com/iiab/iiab/issues/3006)
-- 2021-10-29: The above OS issues should be resolved by [PR #3007](https://github.com/iiab/iiab/pull/3007), [PR #3009](https://github.com/iiab/iiab/pull/3009) and [PR #3010](https://github.com/iiab/iiab/pull/3010) &mdash; but this needs final testing!  (Initial testing occurred on [1] 32-bit Raspberry Pi OS Lite on Raspberry Pi 4 and [2] Ubuntu Server 20.04 on x86_64 VM.)
+- <strike>2021-10-29: The above OS issues should be resolved by [PR #3007](https://github.com/iiab/iiab/pull/3007), [PR #3009](https://github.com/iiab/iiab/pull/3009) and [PR #3010](https://github.com/iiab/iiab/pull/3010) &mdash; but this needs final testing!  (Initial testing occurred on [1] 32-bit Raspberry Pi OS Lite on Raspberry Pi 4 and [2] Ubuntu Server 20.04 on x86_64 VM.)</strike>

@@ -1,16 +1,20 @@
-- name: Enable & (Re)Start remote.it's daemons {connectd, schannel}
+- name: Enable & Restart remote.it service connectd, which exits after spawning 2 services/daemons below
   systemd:
-    name: "{{ item }}"
+    name: connectd
     daemon_reload: yes
     enabled: yes
-    state: restarted    
-  with_items:
-    - connectd
-    - schannel
+    state: restarted
+  when: remoteit_enabled
+
+- name: Enable remote.it daemon schannel ("Remote tcp command service") -- try to avoid contention with connectd also spawning it above!
+  systemd:
+    name: schannel
+    enabled: yes
+    state: started
   when: remoteit_enabled
 
 
-- name: Disable & Stop remote.it's daemons {connectd, schannel}
+- name: Disable & Stop remote.it services {connectd, schannel}
   systemd:
     name: "{{ item }}"
     enabled: no
@@ -20,8 +24,8 @@
     - schannel
   when: not remoteit_enabled
 
-- name: Identify remoteit service (connector) unit file name, including uuid
-  shell: ls /etc/systemd/system/multi-user.target.wants/ | grep remoteit    # e.g. remoteit@80:00:01:7F:7E:00:56:36.service
+- name: Identify remoteit "Remote tcp connection service" unit file name, including uuid, e.g. remoteit@80:00:01:7F:7E:00:56:36.service
+  shell: ls /etc/systemd/system/multi-user.target.wants/ | grep remoteit
   register: remoteit_service
   ignore_errors: yes
 
