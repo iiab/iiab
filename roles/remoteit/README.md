@@ -19,7 +19,7 @@ For other approaches, please see http://FAQ.IIAB.IO -> "How can I remotely manag
 <!-- ### Install remote.it onto an IIAB + register it + authorize services/ports -->
 ### Generate a remote.it claim code for your IIAB + register it + authorize services/ports
 
-Prerequisite: Find an IIAB with `remoteit_installed: True` in `/etc/iiab/iiab_state.yml`
+Prerequisite: Find any IIAB with `remoteit_installed: True` in `/etc/iiab/iiab_state.yml` (this is the default!)
 
 1. Run `sudo iiab-remoteit`
 
@@ -87,7 +87,7 @@ Prerequisite: Find an IIAB with `remoteit_installed: True` in `/etc/iiab/iiab_st
 
 1. Run `sudo iiab-remoteit-off`
 
-2. If want to completely remove all remote.it software and its settings, also run:
+2. If you want to completely remove all remote.it software and its settings, also run:
 
    ```
    sudo apt purge "remoteit*"
