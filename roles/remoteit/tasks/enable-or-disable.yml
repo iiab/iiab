@@ -1,25 +1,35 @@
-- name: Enable & (Re)Start remote.it's connectd daemon which calls home
+- name: Enable & Restart remote.it "parent" service connectd, which exits after spawning 2 "child" services/daemons below
   systemd:
     name: connectd
     daemon_reload: yes
     enabled: yes
-    state: restarted    
+    state: restarted
+  when: remoteit_enabled
+
+- name: Enable remote.it daemon schannel ("Remote tcp command service") -- try to avoid contention with connectd which auto-spawns it as nec (just above)
+  systemd:
+    name: schannel
+    enabled: yes
+    state: started
   when: remoteit_enabled
 
 
-- name: Disable & Stop remote.it's connectd daemon
+- name: Disable & Stop remote.it services {connectd, schannel}
   systemd:
-    name: connectd
+    name: "{{ item }}"
     enabled: no
     state: stopped
+  with_items:
+    - connectd
+    - schannel
   when: not remoteit_enabled
 
-- name: Identify remoteit service (connector) unit file name, including uuid
-  shell: ls /etc/systemd/system/multi-user.target.wants/ | grep remoteit    # e.g. remoteit@80:00:01:7F:7E:00:56:36.service
+- name: Identify remoteit "Remote tcp connection service" unit file name, including uuid, e.g. remoteit@80:00:01:7F:7E:00:56:36.service
+  shell: ls /etc/systemd/system/multi-user.target.wants/ | grep remoteit
   register: remoteit_service
   ignore_errors: yes
 
-- name: "Disable & Stop remoteit service: {{ remoteit_service.stdout }}"
+- name: "Disable & Stop the actual service: {{ remoteit_service.stdout }}"
   systemd:
     name: "{{ remoteit_service.stdout }}"
     enabled: no
