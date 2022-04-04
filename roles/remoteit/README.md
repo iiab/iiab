@@ -85,16 +85,9 @@ Prerequisite: Find an IIAB with `remoteit_installed: True` in `/etc/iiab/iiab_st
 
 ### How to I disable remote.it on my IIAB?
 
-1. Run `sudo nano /etc/iiab/local_vars.yml` to set `remoteit_enabled: False`
+1. Run `iiab-remoteit-off`
 
-2. Then run:
-
-   ```
-   cd /opt/iiab/iiab
-   sudo ./runrole remoteit
-   ```
-
-3. If want to completely remove the remote.it software and its settings, also run:
+2. If want to completely remove all remote.it software and its settings, also run:
 
    ```
    sudo apt purge "remoteit*"
