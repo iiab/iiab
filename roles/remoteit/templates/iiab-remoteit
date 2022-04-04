@@ -3,21 +3,52 @@
 # Run 'sudo iiab-remoteit' to (re)install & enable remote.it -- GENERAL TIPS:
 # http://FAQ.IIAB.IO -> "How can I remotely manage my Internet-in-a-Box?"
 
-# /usr/bin/remoteit CLI is already be installed by:
+# 'remoteit' Device Package AND /usr/bin/remoteit CLI already installed by:
 # https://github.com/iiab/iiab/blob/master/roles/remoteit/tasks/install.yml
 
-echo -e "\nhttps://remote.it can help you remotely manage this IIAB:"
+# 2022-04-03: SEE ALSO roles/remoteit/templates/iiab-remote.old
+
+echo -e "\nhttps://remote.it can help you remotely manage this IIAB.  Summary:\n"
+
 echo -e "https://github.com/iiab/iiab/blob/master/roles/remoteit/README.md\n"
 
-echo -en "\e[1mInstall remote.it Device Package after purging all prior versions? [Y/n]\e[0m "
+echo -en "\e[1mTo proceed we will delete /etc/remoteit/config.json, Ok? [Y/n]\e[0m "
 read ans < /dev/tty    # Strips outer whitespace, whether we like it or not!
 echo
-[ "$ans" = "n" ] || [ "$ans" = "N" ] && exit 1
+[[ $ans = "n" ]] || [[ $ans = "N" ]] && exit 1
 
-if grep -q '^remoteit_install:' /etc/iiab/local_vars.yml; then
-    sed -i "s/^remoteit_install:.*/remoteit_install: True/" /etc/iiab/local_vars.yml
+echo -e "\nThis IIAB must be online to begin!\n"
+
+echo -en "\e[1mOptionally download + install latest remote.it Device Package? [y/N]\e[0m "
+read ans < /dev/tty    # Strips outer whitespace, whether we like it or not!
+echo
+
+if [[ $ans = "y" ]] || [[ $ans = "Y" ]]; then
+    # 2022-04-02: Full Path Avoids problematic /usr/local/bin/apt on Linux Mint
+    /usr/bin/apt -y purge "remoteit*" || true
+
+    # Why the brutal purge?  Even 'apt -y reinstall remoteit.*.deb' is stronger
+    # than 'install -y' in install_agent.sh, but still sometimes insufficient!
+
+    # apt install & enable "latest" remote.it Device Package for your CPU/OS
+    curl -L https://downloads.remote.it/remoteit/install_agent.sh | sh
 else
-    echo "remoteit_install: True" >> /etc/iiab/local_vars.yml
+    # '|| true' overrides 'bash -e' so script continues if config.json missing
+    mv /etc/remoteit/config.json /etc/remoteit/config.json.$(date +%F_%T_%Z) || true
+
+    echo -e "In just a few seconds, all 3 services should be enabled + started.\n"
+
+    systemctl restart connectd    # Claim Code logic + kickstarts 2 svcs below
+    systemctl enable connectd     # 3 enable lines, like enable-or-disable.yml
+
+    # "Remote tcp command service" started above
+    systemctl enable schannel     # 3 enable lines, like enable-or-disable.yml
+
+    # "Remote tcp connection service" appears a few seconds after connectd is
+    # started above.  It's also auto-enabled by above, so this may be overkill:
+    systemctl enable $(ls /etc/systemd/system/multi-user.target.wants/ | grep remoteit@)    # 3 enable lines, like enable-or-disable.yml
+    # Its systemd service name (e.g. remoteit@80:00:01:7F:7E:00:56:36.service)
+    # changes when a new claim code is generated.
 fi
 
 if grep -q '^remoteit_enabled:' /etc/iiab/local_vars.yml; then
@@ -26,26 +57,11 @@ else
     echo "remoteit_enabled: True" >> /etc/iiab/local_vars.yml
 fi
 
-# 2022-04-02: Full Path Avoids problematic /usr/local/bin/apt on Linux Mint
-/usr/bin/apt -y purge remoteit*
+claim_code=$(grep claim /etc/remoteit/config.json | rev | cut -d\" -f2 | rev)
+echo -e "\nYour new claim code is \e[44;1m${claim_code}\e[0m -- YOUR NEXT STEPS ARE...\n"
 
-# Why the brutal purge?  Even 'apt -y reinstall remoteit.*.deb' is much stronger
-# than 'install -y' in install_agent.sh below, but still insufficient.  Maybe in
-# future years their /usr/bin/remoteit CLI might seed a new claim code when nec?
-
-# apt install & enable "latest" remote.it Device Package for your CPU/OS
-curl -L https://downloads.remote.it/remoteit/install_agent.sh | sh
-
-if grep -q '^remoteit_installed:' /etc/iiab/iiab_state.yml; then
-    sed -i "s/^remoteit_installed:.*/remoteit_installed: True/" /etc/iiab/iiab_state.yml
-else
-    echo "remoteit_installed: True" >> /etc/iiab/iiab_state.yml
-fi
-
-echo -e "\e[44;1mNEXT STEPS...\e[0m\n"
-
-echo -e "\e[1m1) Install the remote.it Desktop Application on your own laptop/computer:"
+echo -e "\e[1m1) Install the remote.it Desktop Application on your own laptop/computer:\e[0m"
 echo -e "   https://remote.it/download/\n"
 
-echo -e "2) Use the above 8-character claim code within 24h as shown here:"
-echo -e "   https://docs.remote.it/software/device-package/installation#3.-claim-and-register-the-device\e[0m\n"
+echo -e "\e[1m2) Use the above 8-character claim code WITHIN 24H as shown here:\e[0m"
+echo -e "   https://docs.remote.it/software/device-package/installation#3.-claim-and-register-the-device\n"
