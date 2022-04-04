@@ -81,11 +81,11 @@ Prerequisite: Find an IIAB with `remoteit_installed: True` in `/etc/iiab/iiab_st
 
    SUMMARY: One or more [remote.it "Services"](https://support.remote.it/hc/en-us/articles/360060992631-Services) needs to be authorized (registered) to allow remote access to your IIAB device.
 
-   EXAMPLES: Add an SSH Service on port 22 and/or add an http Service on port 80 [screenshot guide](https://support.remote.it/hc/en-us/articles/360058603991-Configuring-remoteit-Services-on-devices-with-remote-it-Desktop).
+   EXAMPLES: Add an SSH Service on port 22 and/or add an http Service on port 80 ([screenshot guide](https://support.remote.it/hc/en-us/articles/360058603991-Configuring-remoteit-Services-on-devices-with-remote-it-Desktop)).
 
 ### How to I disable remote.it on my IIAB?
 
-1. Run `iiab-remoteit-off`
+1. Run `sudo iiab-remoteit-off`
 
 2. If want to completely remove all remote.it software and its settings, also run:
 
@@ -115,5 +115,5 @@ Prerequisite: Find an IIAB with `remoteit_installed: True` in `/etc/iiab/iiab_st
 
 ## Known Issues
 
-- <strike>2021-10-27: This needs to be enhanced rather urgently, so remote.it also works when IIAB is installed on Raspberry Pi OS 11 (Bullseye), Ubuntu, Mint and Debian:</strike> [#3006](https://github.com/iiab/iiab/issues/3006)
+- <strike>2021-10-27: This needs to be enhanced rather urgently, so remote.it also works when IIAB is installed on Raspberry Pi OS 11 (Bullseye), Ubuntu, Mint and Debian: [#3006](https://github.com/iiab/iiab/issues/3006)</strike>
 - <strike>2021-10-29: The above OS issues should be resolved by [PR #3007](https://github.com/iiab/iiab/pull/3007), [PR #3009](https://github.com/iiab/iiab/pull/3009) and [PR #3010](https://github.com/iiab/iiab/pull/3010) &mdash; but this needs final testing!  (Initial testing occurred on [1] 32-bit Raspberry Pi OS Lite on Raspberry Pi 4 and [2] Ubuntu Server 20.04 on x86_64 VM.)</strike>
