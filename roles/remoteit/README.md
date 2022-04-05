@@ -19,13 +19,13 @@ For other approaches, please see http://FAQ.IIAB.IO -> "How can I remotely manag
 <!-- ### Install remote.it onto an IIAB + register it + authorize services/ports -->
 ### Generate a remote.it claim code for your IIAB + register it + authorize services/ports
 
-Prerequisite: Find any IIAB with `remoteit_installed: True` in `/etc/iiab/iiab_state.yml` (this is the default!)
+Prerequisite: Find any IIAB with `remoteit_installed: True` in `/etc/iiab/iiab_state.yml` (this is the default!)  It means the remote.it [Device Package](https://docs.remote.it/software/device-package) is installed on your IIAB, most important!  It also means the _strictly optional_ `/usr/bin/remoteit` [command-line interface (CLI)](https://docs.remote.it/software/cli) is installed, offering [a few more features](https://support.remote.it/hc/en-us/articles/4412786750861-Install-the-remoteit-agent-on-your-device) than the Device Package.
 
-1. Run `sudo iiab-remoteit`
+1. Run `sudo iiab-remoteit` to enable remote.it on your IIAB.
 
    Hit `[Enter]` twice if you want to quickly generate a new claim code for your IIAB.
 
-   The claim code is put in `/etc/remoteit/config.json` and must be used [within 24 hours](https://docs.remote.it/device-package/installation#2.-update-your-package-manager-and-install).
+   (The claim code is put in `/etc/remoteit/config.json` and must be used [within 24 hours](https://docs.remote.it/device-package/installation#2.-update-your-package-manager-and-install).)
 
 <!--
 1. Connect your IIAB device to the Internet.
@@ -81,7 +81,7 @@ Prerequisite: Find any IIAB with `remoteit_installed: True` in `/etc/iiab/iiab_s
 
    SUMMARY: One or more [remote.it "Services"](https://support.remote.it/hc/en-us/articles/360060992631-Services) needs to be authorized (registered) to allow remote access to your IIAB device.
 
-   EXAMPLES: Add an SSH Service on port 22 and/or add an http Service on port 80 ([screenshot guide](https://support.remote.it/hc/en-us/articles/360058603991-Configuring-remoteit-Services-on-devices-with-remote-it-Desktop)).
+   EXAMPLES: Add an SSH Service on port 22 and/or add an HTTP Service on port 80 ([screenshot guide](https://support.remote.it/hc/en-us/articles/360058603991-Configuring-remoteit-Services-on-devices-with-remote-it-Desktop)).
 
 ### How to I disable remote.it on my IIAB?
 
@@ -104,6 +104,7 @@ Prerequisite: Find any IIAB with `remoteit_installed: True` in `/etc/iiab/iiab_s
   - https://support.remote.it/hc/en-us/categories/360003417511-Getting-Started
   - https://support.remote.it/hc/en-us/articles/360061228252-Oops-I-cloned-an-SD-card-
   - https://support.remote.it/hc/en-us/articles/360041590951-Why-does-the-address-time-out-
+  - https://support.remote.it/hc/en-us/articles/360047705691-Desktop-Application-Release-Notes
   - https://support.remote.it/hc/en-us/articles/4422773654669-Streamlined-installation-for-Linux-and-Raspberry-Pi-platforms
   - https://support.remote.it/hc/en-us/articles/360051668711-Updating-the-remoteit-or-connectd-packages-using-a-remote-it-SSH-connection
   <!-- - https://support.remote.it/hc/en-us/articles/360044424612-1-Create-an-Auto-Registration 
