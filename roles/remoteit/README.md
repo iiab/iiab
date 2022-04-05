@@ -105,6 +105,7 @@ Prerequisite: Find any IIAB with `remoteit_installed: True` in `/etc/iiab/iiab_s
   - https://support.remote.it/hc/en-us/articles/360061228252-Oops-I-cloned-an-SD-card-
   - https://support.remote.it/hc/en-us/articles/360041590951-Why-does-the-address-time-out-
   - https://support.remote.it/hc/en-us/articles/360047705691-Desktop-Application-Release-Notes
+  - https://support.remote.it/hc/en-us/articles/4492289672973-Two-ways-of-using-remote-it-Connections
   - https://support.remote.it/hc/en-us/articles/4422773654669-Streamlined-installation-for-Linux-and-Raspberry-Pi-platforms
   - https://support.remote.it/hc/en-us/articles/360051668711-Updating-the-remoteit-or-connectd-packages-using-a-remote-it-SSH-connection
   <!-- - https://support.remote.it/hc/en-us/articles/360044424612-1-Create-an-Auto-Registration 
