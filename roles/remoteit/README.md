@@ -19,7 +19,7 @@ For other approaches, please see http://FAQ.IIAB.IO -> "How can I remotely manag
 <!-- ### Install remote.it onto an IIAB + register it + authorize services/ports -->
 ### Generate a remote.it claim code for your IIAB + register it + authorize services/ports
 
-Prerequisite: Find any IIAB with `remoteit_installed: True` in `/etc/iiab/iiab_state.yml` (this is the default!)  It means the remote.it [Device Package](https://docs.remote.it/software/device-package) is installed on your IIAB, most important!  It also means the _strictly optional_ `/usr/bin/remoteit` [command-line interface (CLI)](https://docs.remote.it/software/cli) is installed, offering [a few more features](https://support.remote.it/hc/en-us/articles/4412786750861-Install-the-remoteit-agent-on-your-device) than the Device Package.
+Prerequisite: Find any IIAB with `remoteit_installed: True` in `/etc/iiab/iiab_state.yml` (this is the default!)  It means that the remote.it [Device Package](https://docs.remote.it/software/device-package) is installed on your IIAB, most important.  It also means the _strictly optional_ `/usr/bin/remoteit` [command-line interface (CLI)](https://docs.remote.it/software/cli) is installed, offering [a few more features](https://support.remote.it/hc/en-us/articles/4412786750861-Install-the-remoteit-agent-on-your-device) than the Device Package.
 
 1. Run `sudo iiab-remoteit` to enable remote.it on your IIAB.
 
@@ -87,7 +87,7 @@ Prerequisite: Find any IIAB with `remoteit_installed: True` in `/etc/iiab/iiab_s
 
 1. Run `sudo iiab-remoteit-off`
 
-2. If you want to completely remove all remote.it software and its settings, also run:
+2. If you also want to completely remove all remote.it software and its settings, run:
 
    ```
    sudo apt purge "remoteit*"
