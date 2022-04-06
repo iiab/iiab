@@ -100,6 +100,7 @@ Prerequisite: Find any IIAB with `remoteit_installed: True` in `/etc/iiab/iiab_s
 
 - https://docs.remote.it
   - https://docs.remote.it/developer-tools/cli-usage
+  - https://docs.remote.it/oem-and-bulk-provisioning/registration-into-a-users-account
 - https://support.remote.it
   - https://support.remote.it/hc/en-us/categories/360003417511-Getting-Started
   - https://support.remote.it/hc/en-us/articles/360061228252-Oops-I-cloned-an-SD-card-
