@@ -1,6 +1,20 @@
-- name: Using pre-created REGISTRATION_CODE from desktop or web portal
-  shell: echo {{ remoteit_REGISTRATION_CODE }} > /etc/remoteit/registration
-  when: remoteit_REGISTRATION_CODE is not none
+- name: Copy OPTIONAL remoteit_license_key, e.g. from /etc/iiab/local_vars.yml to /etc/remoteit/registration, if remoteit_enabled and remoteit_license_key is defined
+  # shell: echo {{ remoteit_license_key }} > /etc/remoteit/registration
+  template:
+    src: registration.j2
+    dest: /etc/remoteit/registration
+  when: remoteit_enabled and remoteit_license_key is defined
+
+- name: Redact OPTIONAL remoteit_license_key from /etc/iiab/local_vars.yml, if remoteit_enabled and remoteit_license_key is defined
+  # shell: sed -i '/^remoteit_license_key:/d' {{ iiab_local_vars_file }}
+  lineinfile:
+    path: "{{ iiab_local_vars_file }}"
+    regexp: '^remoteit_license_key:.*'
+    state: absent
+  when: remoteit_enabled and remoteit_license_key is defined
+
+# 2022-04-06 QUESTION: Does connectd (below) delete /etc/remoteit/registration,
+# but only after confirming online that the license key is valid?
 
 - name: Enable & Restart remote.it "parent" service connectd, which exits after spawning 2 "child" services/daemons below
   systemd:
@@ -34,10 +48,6 @@
     systemctl disable $(ls /etc/systemd/system/multi-user.target.wants/ | grep remoteit@*)
   ignore_errors: yes
   when: not remoteit_enabled
-
-- name: Clean up REGISTRATION_CODE from {{ iiab_local_vars_file }} if used
-  shell: sed -i '/remoteit_REGISTRATION_CODE/d' {{ iiab_local_vars_file }}
-  when: remoteit_REGISTRATION_CODE is not none
 
 # - name: Identify remoteit "Remote tcp connection service" unit file name, including uuid, e.g. remoteit@80:00:01:7F:7E:00:56:36.service
 #   shell: ls /etc/systemd/system/multi-user.target.wants/ | grep remoteit@
