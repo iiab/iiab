@@ -101,11 +101,20 @@ Prerequisite: Find any IIAB with `remoteit_installed: True` in `/etc/iiab/iiab_s
 
    When that's complete, skip to Step 5.
 
-4. If your IIAB software is already installed, make sure your IIAB is online, and then run:
+4. If your IIAB software is already installed, make sure your IIAB is online.
+
+   Now register your IIAB to your remote.it account (while enabling remote.it on your IIAB device) by running:
 
    ```
    cd /opt/iiab/iiab
    sudo ./runrole remoteit
+   ```
+
+   If you also want to reinstall the (latest) remote.it Device Package on your IIAB, you can instead run:
+
+   ```
+   cd /opt/iiab/iiab
+   sudo ./runrole --reinstall remoteit
    ```
 
 5. Authorize services/ports (e.g. SSH, HTTP, etc) for your IIAB device, as shown in these [screenshots](https://docs.remote.it/software/device-package/installation#4.-set-up-services-on-your-device).
