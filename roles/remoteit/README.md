@@ -104,6 +104,7 @@ Prerequisite: Find any IIAB with `remoteit_installed: True` in `/etc/iiab/iiab_s
 - https://support.remote.it
   - https://support.remote.it/hc/en-us/categories/360003417511-Getting-Started
   - https://support.remote.it/hc/en-us/articles/360061228252-Oops-I-cloned-an-SD-card-
+  - https://support.remote.it/hc/en-us/articles/4404156674445-Subscriptions-and-Licensing
   - https://support.remote.it/hc/en-us/articles/360041590951-Why-does-the-address-time-out-
   - https://support.remote.it/hc/en-us/articles/360047705691-Desktop-Application-Release-Notes
   - https://support.remote.it/hc/en-us/articles/4492289672973-Two-ways-of-using-remote-it-Connections
