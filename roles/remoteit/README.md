@@ -85,7 +85,7 @@ Prerequisite: Find any IIAB with `remoteit_installed: True` in `/etc/iiab/iiab_s
 
 ### OPTION #2: Paste your remote.it license key to IIAB + enable it + authorize services/ports
 
-1. Copy your remote.it account _license key_ from their Desktop Application (https://remote.it/download/) (or from their https://remote.it Web Portal) as shown in this [screenshot](https://docs.remote.it/oem-and-bulk-provisioning/registration-into-a-users-account#3.-user-receives-the-device-and-registers-his-account).
+1. Copy your remote.it account _license key_ from their Desktop Application (https://remote.it/download/) or from their Web Portal (https://remote.it) &mdash; as shown in this [screenshot](https://docs.remote.it/oem-and-bulk-provisioning/registration-into-a-users-account#3.-user-receives-the-device-and-registers-his-account).
 
    Paste it into your IIAB's [/etc/iiab/local_vars.yml](https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it.3F) as in this example:
 
@@ -94,6 +94,8 @@ Prerequisite: Find any IIAB with `remoteit_installed: True` in `/etc/iiab/iiab_s
    ```
 
 2. Also set `remoteit_enabled: True` in /etc/iiab/local_vars.yml
+
+   (And verify that `remoteit_install: True` is set.)
 
 3. If your [IIAB software](https://download.iiab.io/) is not yet installed, do that e.g. by running `sudo iiab` and following any on-screen instructions &mdash; until "INTERNET-IN-A-BOX (IIAB) SOFTWARE INSTALL IS COMPLETE" eventually appears on screen.
 
