@@ -17,6 +17,8 @@
 
 # 2022-04-03: Unfort still necessary, as their install_agent.sh below uses apt
 # with 'install -y' instead of '-y reinstall' or '-y --reinstall install'
+# FWIW: Some remoteit.*.deb installers also work with '-y --allow-downgrades install'
+# (e.g. *.amd64.deb) but others (e.g. both *.rpi.deb) do not.
 - name: Purge previously installed 'remoteit*' Device Package(s)
   apt:
     name: remoteit*
@@ -28,17 +30,27 @@
 # Speeds things up a bit, deferring online claim code generation if not nec:
 # https://docs.remote.it/oem-and-bulk-provisioning/registration-into-a-users-account
 
-- name: "'mkdir /etc/remoteit' e.g. if your 'remoteit_license_key: 592AA9BB-XXXX-YYYY-ZZZZ-6E27654C3DF6' exists in /etc/iiab/local_vars.yml"
+# - name: "'mkdir /etc/remoteit' e.g. if your 'remoteit_license_key: 592AA9BB-XXXX-YYYY-ZZZZ-6E27654C3DF6' exists in /etc/iiab/local_vars.yml"
+#   file:
+#     state: directory
+#     path: /etc/remoteit
+#   when: remoteit_license_key is defined
+
+# - name: "'touch /etc/remoteit/registration' e.g. if your 'remoteit_license_key: 592AA9BB-XXXX-YYYY-ZZZZ-6E27654C3DF6' exists in /etc/iiab/local_vars.yml"
+#   file:
+#     state: touch
+#     path: /etc/remoteit/registration
+#   when: remoteit_license_key is defined
+
+- name: "'mkdir /etc/remoteit'"
   file:
     state: directory
     path: /etc/remoteit
-  when: remoteit_license_key is defined
 
-- name: "'touch /etc/remoteit/registration' e.g. if your 'remoteit_license_key: 592AA9BB-XXXX-YYYY-ZZZZ-6E27654C3DF6' exists in /etc/iiab/local_vars.yml"
+- name: "'touch /etc/remoteit/registration' to block generation of claim code below, also speeding things up a bit"
   file:
     state: touch
     path: /etc/remoteit/registration
-  when: remoteit_license_key is defined
 
 
 # - name: "Install Device Package: {{ downloads_dir }}/{{ remoteit_deb }}"
@@ -49,8 +61,16 @@
 #   apt:
 #     deb: "{{ remoteit_device_url }}"
 
-- name: Install remote.it Device Package for your CPU/OS, using https://downloads.remote.it/remoteit/install_agent.sh -- this puts a claim code in /etc/remoteit/config.json which is valid for 24h
+# - name: Install remote.it Device Package for your CPU/OS, using https://downloads.remote.it/remoteit/install_agent.sh -- this puts a claim code in /etc/remoteit/config.json which is valid for 24h
+- name: Install remote.it Device Package for your CPU/OS, using https://downloads.remote.it/remoteit/install_agent.sh
   shell: curl -L https://downloads.remote.it/remoteit/install_agent.sh | sh
+
+
+- name: "'rm /etc/remoteit/registration' (empty file used just above)"
+  file:
+    state: absent
+    path: /etc/remoteit/registration
+  ignore_errors: yes    # In case a future version of install_agent.sh deletes it for us
 
 
 - name: Install /usr/bin/iiab-remoteit from template -- so IIAB operators can quickly enable remote.it AND generate a new remote.it claim code (in /etc/remoteit/config.json) -- optionally downloading + installing the very latest Device Package (like the 2 steps above)

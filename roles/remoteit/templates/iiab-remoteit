@@ -9,14 +9,26 @@
 
 # 2022-04-03: SEE ALSO roles/remoteit/templates/iiab-remote.old
 
-echo -e "\nhttps://remote.it can help you remotely manage this IIAB.  Summary:\n"
+echo -e "\nhttps://remote.it can help you remotely manage this IIAB.\n"
+
+echo -e "Let's generate a claim code and enable it.  Documentation:\n"
 
 echo -e "https://github.com/iiab/iiab/blob/master/roles/remoteit/README.md\n"
 
-echo -en "\e[1mTo proceed we will delete /etc/remoteit/config.json, Ok? [Y/n]\e[0m "
-read ans < /dev/tty    # Strips outer whitespace, whether we like it or not!
-echo
-[[ $ans = "n" ]] || [[ $ans = "N" ]] && exit 1
+if [ -f /etc/remoteit/config.json ]; then
+    echo -en "\e[1mTo proceed we will delete /etc/remoteit/config.json, Ok? [Y/n]\e[0m "
+    read ans < /dev/tty    # Strips outer whitespace, whether we like it or not!
+    echo
+    [[ $ans = "n" ]] || [[ $ans = "N" ]] && exit 1
+fi
+
+# Explanation below, on lines 65-72
+if [ -f /etc/remoteit/registration ]; then
+    echo -en "\e[1mTo proceed we will delete /etc/remoteit/registration, Ok? [Y/n]\e[0m "
+    read ans < /dev/tty    # Strips outer whitespace, whether we like it or not!
+    echo
+    [[ $ans = "n" ]] || [[ $ans = "N" ]] && exit 1
+fi
 
 echo -e "\nThis IIAB must be online to begin!\n"
 
@@ -41,8 +53,23 @@ else
 
     systemctl stop connectd      # "Safer" (though it's generally exited already!)
 
-    # '|| true' overrides 'bash -e' so script continues if config.json missing
-    mv /etc/remoteit/config.json /etc/remoteit/config.json.$(date +%F_%T_%Z) || true
+    # If someone manually deleted the dir, this blocks generation of claim code
+    [ ! -d /etc/remoteit ] &&
+        mkdir /etc/remoteit
+
+    [ -f /etc/remoteit/config.json ] &&
+        mv /etc/remoteit/config.json /etc/remoteit/config.json.$(date +%F_%T_%Z)
+    [ -f /etc/remoteit/registration ] &&
+        mv /etc/remoteit/registration /etc/remoteit/registration.$(date +%F_%T_%Z)
+
+    # /etc/remoteit/registration is deleted above, but just FYI if it existed:
+    #
+    # 1) If /etc/remoteit/registration exists and is empty, connectd (below)
+    #    will not create /etc/remoteit/config.json
+    # 2) If /etc/remoteit/registration contains an invalid license key, connectd
+    #    (below) will create /etc/remoteit/config.json WITH a claim code.
+    # 3) If /etc/remoteit/registration contains a valid license key, connectd
+    #    (below) will create /etc/remoteit/config.json WITHOUT a claim code.
 
     systemctl start connectd     # Claim Code logic + kickstarts 2 svcs below
     # /usr/share/remoteit/refresh.sh does the same thing (or close) as per:

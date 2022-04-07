@@ -23,7 +23,7 @@ Prerequisite: Find any IIAB with `remoteit_installed: True` in `/etc/iiab/iiab_s
 
 1. Run `sudo iiab-remoteit` to enable remote.it on your IIAB.
 
-   Hit `[Enter]` twice if you want to quickly generate a new claim code for your IIAB.
+   Hit `[Enter]` (repeatedly if necessary, to accept all defaults) if you want to quickly generate a new claim code for your IIAB.
 
    (The claim code is put in `/etc/remoteit/config.json` and must be used [within 24 hours](https://docs.remote.it/device-package/installation#2.-update-your-package-manager-and-install).)
 
