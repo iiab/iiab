@@ -84,7 +84,7 @@ Prerequisite: Find any IIAB with `remoteit_installed: True` in `/etc/iiab/iiab_s
 
 3. Authorize services/ports (e.g. SSH, HTTP, etc) for your IIAB device, as shown in these [screenshots](https://docs.remote.it/software/device-package/installation#4.-set-up-services-on-your-device).
 
-   SUMMARY: One or more [remote.it "Services"](https://support.remote.it/hc/en-us/articles/360060992631-Services) needs to be authorized (registered) to allow remote access to your IIAB device.
+   SUMMARY: One or more [remote.it "Services"](https://support.remote.it/hc/en-us/articles/360060992631-Services) need to be authorized (registered) to allow remote access to your IIAB device.
 
    EXAMPLES: Add an SSH Service on port 22 and/or add an HTTP Service on port 80 ([screenshot guide](https://support.remote.it/hc/en-us/articles/360058603991-Configuring-remoteit-Services-on-devices-with-remote-it-Desktop)).
 
@@ -128,7 +128,7 @@ Prerequisite: Find any IIAB with `remoteit_installed: True` in `/etc/iiab/iiab_s
 
 5. Authorize services/ports (e.g. SSH, HTTP, etc) for your IIAB device, as shown in these [screenshots](https://docs.remote.it/software/device-package/installation#4.-set-up-services-on-your-device).
 
-   SUMMARY: One or more [remote.it "Services"](https://support.remote.it/hc/en-us/articles/360060992631-Services) needs to be authorized (registered) to allow remote access to your IIAB device.
+   SUMMARY: One or more [remote.it "Services"](https://support.remote.it/hc/en-us/articles/360060992631-Services) need to be authorized (registered) to allow remote access to your IIAB device.
 
    EXAMPLES: Add an SSH Service on port 22 and/or add an HTTP Service on port 80 ([screenshot guide](https://support.remote.it/hc/en-us/articles/360058603991-Configuring-remoteit-Services-on-devices-with-remote-it-Desktop)).
 
