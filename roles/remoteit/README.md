@@ -8,24 +8,29 @@ For other approaches, please see http://FAQ.IIAB.IO -> "How can I remotely manag
 
 ## Getting Started
 
-### Create a remote.it account + install its desktop application
+### Create a remote.it account + consider its desktop application
 
 1. Browse to [https://remote.it](https://remote.it) (Web Portal) and sign up for an account.
 
-2. Download and install the remote.it [desktop application](https://remote.it/download/) (e.g. for Windows, macOS or Linux) on your own laptop/computer.  Their https://remote.it Web Portal and [mobile apps](https://docs.remote.it/introduction/get-started/readme#installation-packages) are also sometimes sufficient, but less functional.
+2. Consider downloading and installing the remote.it [desktop application](https://remote.it/download/) (e.g. for Windows, macOS or Linux) on your own laptop/computer.  Their https://remote.it Web Portal and [mobile apps](https://docs.remote.it/introduction/get-started/readme#installation-packages) are also sometimes sufficient, but less functional.
 
    COMPARISON: "The Desktop and [CLI](https://docs.remote.it/software/cli) can [each] support both peer to peer connections and proxy connections [whereas] the Web Portal and API can only support proxy connections" according to https://docs.remote.it/software/device-package/usage
 
 <!-- ### Install remote.it onto an IIAB + register it + authorize services/ports -->
-### Generate a remote.it claim code for your IIAB + register it + authorize services/ports
+### OPTION #1: Generate a remote.it claim code for your IIAB + register it + authorize services/ports
+<!-- ### OPTION #1: Run `sudo iiab-remoteit` to enable remote.it -->
 
-Prerequisite: Find any IIAB with `remoteit_installed: True` in `/etc/iiab/iiab_state.yml` (this is the default!)  It means that the remote.it [Device Package](https://docs.remote.it/software/device-package) is installed on your IIAB, most important.  It also means the _strictly optional_ `/usr/bin/remoteit` [command-line interface (CLI)](https://docs.remote.it/software/cli) is installed, offering [a few more features](https://support.remote.it/hc/en-us/articles/4412786750861-Install-the-remoteit-agent-on-your-device) than the Device Package.
+Prerequisite: Find any IIAB with `remoteit_installed: True` in `/etc/iiab/iiab_state.yml` (this is the default!)  This means that the remote.it [Device Package](https://docs.remote.it/software/device-package) is already installed on your IIAB, most important.  It also means the _strictly optional_ `/usr/bin/remoteit` [command-line interface (CLI)](https://docs.remote.it/software/cli) is installed, offering [a few more features](https://support.remote.it/hc/en-us/articles/4412786750861-Install-the-remoteit-agent-on-your-device) than the Device Package.
 
 1. Run `sudo iiab-remoteit` to enable remote.it on your IIAB.
 
-   Hit `[Enter]` twice if you want to quickly generate a new claim code for your IIAB.
+   Hit `[Enter]` <!-- (repeatedly if necessary, to accept all defaults) --> if this is a fresh install, to quickly generate a claim code for your IIAB.
 
    (The claim code is put in `/etc/remoteit/config.json` and must be used [within 24 hours](https://docs.remote.it/device-package/installation#2.-update-your-package-manager-and-install).)
+
+   NOTE: If a remote.it license key is found in `/etc/iiab/local_vars.yml` or `/etc/remoteit/registration`, that will be tried first (prior to generating a claim code).
+
+   *If the license key works, you will not get a claim code (as the IIAB device auto-registers to your remote.it account) and you can skip to Step 3.*
 
 <!--
 1. Connect your IIAB device to the Internet.
@@ -78,6 +83,50 @@ Prerequisite: Find any IIAB with `remoteit_installed: True` in `/etc/iiab/iiab_s
    Either way, click on the '+' icon to enter the remote.it claim code (to register the IIAB device to your remote.it account) as shown in this [screenshot](https://docs.remote.it/software/device-package/installation#3.-claim-and-register-the-device).
 
 3. Authorize services/ports (e.g. SSH, HTTP, etc) for your IIAB device, as shown in these [screenshots](https://docs.remote.it/software/device-package/installation#4.-set-up-services-on-your-device).
+
+   SUMMARY: One or more [remote.it "Services"](https://support.remote.it/hc/en-us/articles/360060992631-Services) needs to be authorized (registered) to allow remote access to your IIAB device.
+
+   EXAMPLES: Add an SSH Service on port 22 and/or add an HTTP Service on port 80 ([screenshot guide](https://support.remote.it/hc/en-us/articles/360058603991-Configuring-remoteit-Services-on-devices-with-remote-it-Desktop)).
+
+### OPTION #2: Paste your remote.it license key to IIAB + enable it + authorize services/ports
+
+1. Copy your remote.it account _license key_ from their Desktop Application (https://remote.it/download/) or from their Web Portal (https://remote.it) &mdash; as shown in this [screenshot](https://docs.remote.it/oem-and-bulk-provisioning/registration-into-a-users-account#3.-user-receives-the-device-and-registers-his-account).
+
+   Paste it into your IIAB's [/etc/iiab/local_vars.yml](https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it.3F) as in this example:
+
+   ```
+   remoteit_license_key: 592AA9BB-XXXX-YYYY-ZZZZ-6E27654C3DF6
+   ```
+
+   _FYI to protect your credential, the above line will promptly be redacted (removed) from your /etc/iiab/local_vars.yml — after the key is copied to_ `/etc/remoteit/registration` _in Step 3. or 4. below._
+
+2. Also set `remoteit_enabled: True` in /etc/iiab/local_vars.yml
+
+   (And verify that `remoteit_install: True` is set.)
+
+3. If your [IIAB software](https://download.iiab.io/) is _not_ yet installed, do that e.g. by running `sudo iiab` and following any on-screen instructions &mdash; until "INTERNET-IN-A-BOX (IIAB) SOFTWARE INSTALL IS COMPLETE" eventually appears on screen.
+
+   When that's complete, skip to Step 5.
+
+4. If your IIAB software _is_ already installed, make sure your IIAB is online.
+
+   Now register the IIAB device to your remote.it account, by running `sudo iiab-remoteit` (this also enables remote.it on your IIAB).
+
+   Or, if you prefer the legacy approach, run:
+
+   ```
+   cd /opt/iiab/iiab
+   sudo ./runrole remoteit
+   ```
+
+   The legacy approach can also reinstall the (latest) remote.it Device Package on your IIAB, if you instead run:
+
+   ```
+   cd /opt/iiab/iiab
+   sudo ./runrole --reinstall remoteit
+   ```
+
+5. Authorize services/ports (e.g. SSH, HTTP, etc) for your IIAB device, as shown in these [screenshots](https://docs.remote.it/software/device-package/installation#4.-set-up-services-on-your-device).
 
    SUMMARY: One or more [remote.it "Services"](https://support.remote.it/hc/en-us/articles/360060992631-Services) needs to be authorized (registered) to allow remote access to your IIAB device.
 
