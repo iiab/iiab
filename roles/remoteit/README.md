@@ -30,7 +30,7 @@ Prerequisite: Find any IIAB with `remoteit_installed: True` in `/etc/iiab/iiab_s
 
    NOTE: If a remote.it license key is found in `/etc/iiab/local_vars.yml` or `/etc/remoteit/registration`, that will be tried first (prior to generating a claim code).
 
-   *If the license key works, you will not get a claim code, as the IIAB device auto-registers to your remote.it account (skip to Step 3. below).*
+   *If the license key works, you will not get a claim code (as the IIAB device auto-registers to your remote.it account) and you can skip to Step 3.*
 
 <!--
 1. Connect your IIAB device to the Internet.
