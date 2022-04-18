@@ -36,7 +36,7 @@ Prerequisite: Find any IIAB with `remoteit_installed: True` in `/etc/iiab/iiab_s
 
    - EXCEPTION #2: If you have an existing `/etc/remoteit/config.json` you will be given the option to try that (e.g. if you already registered the IIAB device to your remote.it account).
 
-     *Verify that by jumping to Step 5. in OPTION #2.*
+     *Verify that after `sudo iiab-remoteit` completes, by jumping to Step 5. in OPTION #2.*
 
 <!--
 1. Connect your IIAB device to the Internet.
