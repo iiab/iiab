@@ -38,7 +38,7 @@ if [[ $KEY1 != "" ]]; then
     echo -e "Removed remoteit_license_key line from /etc/iiab/local_vars.yml\n"
 fi
 
-# /etc/remoteit/registration consequences summarized on lines 80-85
+# /etc/remoteit/registration consequences summarized on lines 114-119
 if [ -s /etc/remoteit/registration ]; then    # Non-zero size
     cp -p /etc/remoteit/registration /tmp/etc.remoteit.registration
     echo -e "License key $(cat /etc/remoteit/registration) will be attempted."
@@ -48,9 +48,43 @@ elif [ -f /etc/remoteit/registration ]; then    # Zero size, e.g. due to touch
     echo -e "Empty /etc/remoteit/registration deleted, so claim code can be generated.\n"
 fi
 
-echo -e "\nThis IIAB must be online to begin!\n"
+echo -e "\nThis IIAB must be online to begin!"
 
-echo -en "\e[1mOptionally purge + install latest remote.it Device Package? [y/N]\e[0m "
+if [ -f /etc/remoteit/config.json ]; then
+    echo -en "\n\e[1mFor fresh registration let's remove /etc/remoteit/config.json, Ok? [Y/n]\e[0m "
+    read -n 1 -r ans < /dev/tty    # Prompt for a single character
+    echo; echo
+
+    if [[ $ans = "n" || $ans = "N" ]]; then    # Nearly the same as Lines 142-189
+        echo -e "Let's try to enable remote.it, with your existing /etc/remoteit/config.json...\n"
+
+        systemctl enable connectd
+        systemctl restart connectd
+        systemctl enable schannel
+
+        if grep -q '^remoteit_enabled:' /etc/iiab/local_vars.yml; then
+            sed -i "s/^remoteit_enabled:.*/remoteit_enabled: True/" /etc/iiab/local_vars.yml
+        else
+            echo "remoteit_enabled: True" >> /etc/iiab/local_vars.yml
+        fi
+
+        echo -e "\e[1m\nYou can now check for this IIAB device in your https://remote.it account."
+        echo -e "(IF your pre-existing /etc/remoteit/config.json was working in the past!)\e[0m\n"
+
+        echo -e "\e[1m1) Log in to https://remote.it or its Desktop Application on your own PC:\e[0m"
+        echo -e "   https://remote.it/download/\n"
+
+        echo -e '\e[1m2) In the "Devices" section on the left, check that your IIAB is now present:\e[0m'
+        echo -e "   https://docs.remote.it/software/device-package/installation#3.-claim-and-register-the-device\n"
+        
+        echo -e "\e[1m3) Authorize services/ports (e.g. SSH, HTTP, etc) for your IIAB device:\e[0m"
+        echo -e "   https://docs.remote.it/software/device-package/installation#4.-set-up-services-on-your-device\n"
+
+        exit 0
+    fi
+fi
+
+echo -en "\e[1m\nOptionally purge + install latest remote.it Device Package? [y/N]\e[0m "
 read -n 1 -r ans < /dev/tty    # Prompt for a single character
 echo; echo
 

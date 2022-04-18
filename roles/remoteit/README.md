@@ -24,15 +24,19 @@ Prerequisite: Find any IIAB with `remoteit_installed: True` in `/etc/iiab/iiab_s
 
 1. Run `sudo iiab-remoteit` to enable remote.it on your IIAB:
 
-   - Hit [Enter] <!-- (repeatedly if necessary, to accept all defaults) --> if this is a fresh install, to quickly generate a claim code for your IIAB.
+   - Hit [Enter] (repeatedly if necessary, to accept all defaults) to quickly generate a claim code for your IIAB.
 
      The claim code must be used [within 24 hours](https://docs.remote.it/device-package/installation#2.-update-your-package-manager-and-install) (Step 2., below).
 
      Just FYI a copy is also put in: `/etc/remoteit/config.json`
 
-   - EXCEPTION: If a remote.it license key happens to be found in `/etc/iiab/local_vars.yml` or `/etc/remoteit/registration`, that will be tried first (prior to, and instead of generating a claim code).
+   - EXCEPTION #1: If a remote.it license key happens to be found in `/etc/iiab/local_vars.yml` or `/etc/remoteit/registration`, that will be tried first (prior to, and instead of generating a claim code).
 
      *If the license key works, you will not get a claim code (as the IIAB device auto-registers to your remote.it account) so jump to Step 5. in OPTION #2.*
+
+   - EXCEPTION #2: If you have an existing `/etc/remoteit/config.json` you will be given the option to try that (e.g. if you already registered the IIAB device to your remote.it account).
+
+     *Verify that after `sudo iiab-remoteit` completes, by jumping to Step 5. in OPTION #2.*
 
 <!--
 1. Connect your IIAB device to the Internet.
