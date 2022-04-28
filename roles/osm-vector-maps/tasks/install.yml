@@ -10,17 +10,15 @@
     - "{{ vector_map_path }}/viewer/tiles"
     - "{{ vector_map_path }}/installer"
 
-- name: Download {{ map_catalog_url }}/map-catalog.json to {{ iiab_etc_path }}
-  get_url:
-    url: "{{ map_catalog_url }}/map-catalog.json"    # http://download.iiab.io/content/OSM/vector-tiles
-    dest: "{{ iiab_etc_path }}"    # /etc/iiab
-    timeout: "{{ download_timeout }}"
-
-- name: Download {{ iiab_map_url }}/assets/regions.json to {{ iiab_etc_path }}
-  get_url:
-    url: "{{ iiab_map_url }}/assets/regions.json"    # http://download.iiab.io/content/OSM/vector-tiles/maplist/hidden
-    dest: "{{ iiab_etc_path }}"
-    timeout: "{{ download_timeout }}"
+- name: "Install packages for map installation: python3-geojson, python3-pil, python3-wget, php{{ php_version }}-sqlite3 (can also be installed by www_base/tasks/php-stem.yml)"
+  package:
+    state: present
+    name:
+      - python3-geojson
+      - python3-pil
+      - python3-wget
+      #- php{{ php_version }}-common    # Auto-installed as an apt dependency.  REGARDLESS: php{{ php_version }}-common superset php{{ php_version }}-cli is auto-installed by php{{ php_version }}-fpm in nginx/tasks/install.yml
+      - php{{ php_version }}-sqlite3
 
 # - name: Does 26M cities database {{ vector_map_path }}/viewer/cities1000.sqlite exist?
 #   stat:
@@ -28,12 +26,19 @@
 #   register: cities_installed
 
 # - name: If not, download {{ iiab_map_url }}/regional-resources/cities1000.sqlite to {{ vector_map_path }}/viewer/
-- name: Download 26M {{ iiab_map_url }}/regional-resources/cities1000.sqlite to {{ vector_map_path }}/viewer/
+# At this point, fetches from github.com/'REPO'/maps from maps_branch
+- name: Download 26M {{ osm_repo_url }}/{{ maps_branch }}/2020/cities1000.sqlite to {{ vector_map_path }}/viewer/
   get_url:
-    url: "{{ iiab_map_url }}/regional-resources/cities1000.sqlite"
+    url: "{{ osm_repo_url }}/{{ maps_branch }}/2020/cities1000.sqlite"
     dest: "{{ vector_map_path }}/viewer/"
     timeout: "{{ download_timeout }}"
 # when: not cities_installed.stat.exists
+
+- name: Download {{ osm_repo_url }}/{{ maps_branch }}/2020/map-catalog.json to {{ iiab_etc_path }}
+  get_url:
+    url: "{{ osm_repo_url }}/{{ maps_branch }}/2020/map-catalog.json"
+    dest: "{{ iiab_etc_path }}"    # /etc/iiab
+    timeout: "{{ download_timeout }}"
 
 - name: Symlink {{ doc_root }}/common/assets/map-catalog.json -> /etc/iiab/map-catalog.json
   file:
@@ -47,13 +52,18 @@
     path: "{{ vector_map_path }}/test-page/assets/map-catalog.json"
     state: link
 
-- name: Symlink {{ vector_map_path }}/maplist/assets/regions.json -> /etc/iiab/regions.json
-  file:
-    src: /etc/iiab/regions.json
-    path: "{{ vector_map_path }}/maplist/assets/regions.json"
-    state: link
+#- name: Download {{ osm_repo_url }}/{{ maps_branch }}/resources/regions.json to {{ iiab_etc_path }}
+#  get_url:
+#    url: "{{ osm_repo_url }}/{{ maps_branch }}/resources/regions.json"
+#    dest: "{{ iiab_etc_path }}"
+#    timeout: "{{ download_timeout }}"
 
-# At this point, fetches from github.com/georgejhunt/maps from test branch
+#- name: Symlink {{ vector_map_path }}/maplist/assets/regions.json -> /etc/iiab/regions.json
+#  file:
+#    src: /etc/iiab/regions.json
+#    path: "{{ vector_map_path }}/maplist/assets/regions.json"
+#    state: link
+
 - name: Download OpenLayers test page stuff (JavaScript bundle etc) from {{ osm_repo_url }}/{{ maps_branch }}/osm-source/pages/test-page/build/* to {{ vector_map_path }}/test-page/ -- for test page http://box/osm-vector-maps/installer/
   get_url:
     url: "{{ osm_repo_url }}/{{ maps_branch }}/osm-source/pages/test-page/build/{{ item }}"    # https://raw.githubusercontent.com/iiab/maps / master
@@ -166,10 +176,10 @@
     state: link
     force: yes
 
-- name: Copy fonts (16 files) to {{ doc_root }}/common/fonts/ for the general purpose map viewer (root:root, 0644 by default)
+- name: Copy fonts (16 files) to {{ vector_map_path }}/viewer/assets/ for the general purpose map viewer (root:root, 0644 by default)
   copy:
     src: "{{ item }}"
-    dest: "{{ doc_root }}/common/fonts/"
+    dest: "{{ vector_map_path }}/viewer/assets/"
     # mode: 0644
     # owner: root
     # group: root
@@ -182,16 +192,6 @@
     dest: "{{ vector_map_path }}/maplist/index.html"
     force: yes
     timeout: "{{ download_timeout }}"
-
-- name: "Install packages for map installation: python3-geojson, python3-pil, python3-wget, php{{ php_version }}-sqlite3 (can also be installed by www_base/tasks/php-stem.yml)"
-  package:
-    state: present
-    name:
-      - python3-geojson
-      - python3-pil
-      - python3-wget
-      #- php{{ php_version }}-common    # Auto-installed as an apt dependency.  REGARDLESS: php{{ php_version }}-common superset php{{ php_version }}-cli is auto-installed by php{{ php_version }}-fpm in nginx/tasks/install.yml
-      - php{{ php_version }}-sqlite3
 
 - name: Copy 6 scripts to /usr/bin, for downloading tiles (0755)
   get_url:
