@@ -1,0 +1,137 @@
+- name: Start MariaDB
+  action: service name=mysql state=started
+- name: Create MariaDB Database for Matomo
+  community.mysql.mysql_db:
+    name: "{{ mdb_dbname }}"
+    state: present
+    login_unix_socket: /var/run/mysqld/mysqld.sock
+- name: Add Admin User to MariaDB Database
+  community.mysql.mysql_user:
+    name: "{{ mdb_username }}"
+    password: "{{ mdb_password }}"
+    host: localhost
+    state: present
+    update_password: on_create
+    priv: "{{ mdb_dbname }}.*:ALL"
+    login_unix_socket: /var/run/mysqld/mysqld.sock
+- name: Download and Extract Matomo
+  unarchive:
+    src: https://builds.matomo.org/matomo.zip
+    dest: /var/www/html
+    remote_src: yes
+    creates: /var/www/html/matomo
+- name: Set Matomo Directory Permissions
+  file:
+    path: /var/www/html/matomo
+    recurse: yes
+    owner: www-data
+    group: www-data
+- name: HTTP Get Welcome
+  uri:
+    url: "{{ matomo_url }}index.php?action=welcome"
+    method: GET
+    status_code: 200
+  register: matomo_welcome
+- name: Set a variable for the MATOMO_SESSID cookie
+  set_fact:
+    matomo_session_cookie: "MATOMO_SESSID={{ cookie.value }}"
+  when: cookie.key == "MATOMO_SESSID"
+  loop: "{{ matomo_welcome.cookies | dict2items }}"
+  loop_control:
+    loop_var: cookie
+- name: Get Matomo System Check
+  uri:
+    url: "{{matomo_url}}index.php?action=systemCheck"
+    method: GET
+    headers:
+      Cookie: "{{ matomo_session_cookie }}"
+    return_content: true
+    timeout: 120
+    status_code: 200
+  register: matomo_system_check
+- name: Matomo Database Setup
+  uri:
+    url: "{{ matomo_url }}index.php?action=databaseSetup"
+    method: POST
+    headers:
+      Cookie: "{{ matomo_session_cookie }}"
+    body:
+      username: "{{ mdb_username }}"
+      password: "{{ mdb_password }}"
+      dbname: "{{ mdb_dbname }}"
+      adapter: "PDO\\MYSQL"
+    body_format: form-urlencoded
+    status_code: 302
+  register: matomo_database_setup
+- name: Matomo Table Creation
+  uri:
+    url: "{{ matomo_url }}index.php?action=tablesCreation&module=Installation"
+    method: GET
+    status_code: 200
+  register: matomo_table_creation
+- name: Matomo User Setup
+  uri:
+    url: "{{ matomo_url }}index.php?action=setupSuperUser&module=Installation"
+    method: POST
+    headers:
+      Cookie: "{{ matomo_session_cookie }}"
+    body:
+      login: "{{ mdb_username }}"
+      password: "{{ mdb_password }}"
+      password_bis: "{{ mdb_password }}"
+      e-mail: "nobody@dev.null"
+      subscribe_newsletter_piwikorg: 0
+      subscribe_newsletter_professionalservices: 0
+    body_format: form-urlencoded
+    status_code: 302
+  register: matomo_setup_superuser
+- name: Configure Matomo to track IIAB
+  uri:
+    url: "{{ matomo_url }}index.php?action=firstWebsiteSetup&module=Installation"
+    method: POST
+    headers:
+      Cookie: "{{ matomo_session_cookie }}"
+    body:
+      name: "IIAB"
+      url: "host_url"
+      timezone: "Europe/London"
+      ecommerce: 0
+    body_format: form-urlencoded
+    status_code: 302
+  register: matomo_first_website_setup
+- name: Matomo Tracking Code
+  uri:
+    url: "{{ matomo_url }}index.php?action=trackingCode&module=Installation&site_idSite=1&site_name=http://10.0.0.72"
+    method: GET
+    headers:
+      Cookie: "{{ matomo_session_cookie }}"
+    return_content: true
+    status_code: 200
+  register: matomo_tracking_code
+- name: Finish Matomo Setup
+  uri:
+    url: "{{ matomo_url }}index.php?action=finished&module=Installation"
+    method: POST
+    headers:
+      Cookie: "{{ matomo_session_cookie }}"
+    body:
+      do_not_track: 1
+      anonymise_ip: 1
+      submit: "Continue to Matomo"
+    body_format: form-urlencoded
+    status_code: 302
+- name: Start Collecting Matomo Data
+  cron:
+    name: "MatomoDataIngestionOnReboot"
+    special_time: reboot
+    job: "{{ matomo_cronjob }}"
+    user: root
+    cron_file: "matomo_reboot"
+- name: Run Daily Job Collecting Matomo Data
+  cron:
+    name: "DailyMatomoDataIngestion"
+    minute: "0"
+    hour: "0"
+    job: "{{ matomo_cronjob }}"
+    user: root
+    cron_file: "matomo_daily"
