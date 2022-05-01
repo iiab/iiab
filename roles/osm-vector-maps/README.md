@@ -27,7 +27,7 @@
 
 #### Please also see the IIAB Maps doc: https://github.com/iiab/iiab/wiki/IIAB-Maps
 
-#### How to upgrade IIAB Maps
+#### How to (wipe and) upgrade IIAB Maps
 <!-- Notes on upgrading from a maps 7.2 to maps 7.3 -->
 
 In April 2022, IIAB revised `/etc/iiab/map-catalog.json`, `/library/www/html/common/assets/adm-map-catalog.json`, associated programs, and OSM continent/region `.mbtiles` files.
