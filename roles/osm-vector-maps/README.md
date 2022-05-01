@@ -24,15 +24,12 @@
 
 5. **Drag-and-Drop Map Overlays** — try this by dragging and dropping any relevant GeoJSON file onto the IIAB Maps (http://box/maps) in your browser!  For example try this GeoJSON file, to explore the shape of gerrymandered US Congressional districts: https://eric.clst.org/assets/wiki/uploads/Stuff/gz_2010_us_500_11_20m.json
 
-
-#### Please also see the IIAB Maps doc: https://github.com/iiab/iiab/wiki/IIAB-Maps
-
-#### How to (wipe and) upgrade IIAB Maps
+#### How to (Wipe and) Upgrade IIAB Maps
 <!-- Notes on upgrading from a maps 7.2 to maps 7.3 -->
 
-In April 2022, IIAB revised `/etc/iiab/map-catalog.json`, `/library/www/html/common/assets/adm-map-catalog.json`, associated programs, and OSM continent/region `.mbtiles` files.
+In April 2022, IIAB revised our legacy catalog [/etc/iiab/map-catalog.json](https://github.com/iiab/maps/blob/master/2020/map-catalog.json), our new catalog [/library/www/html/common/assets/adm-map-catalog.json](https://github.com/iiab/iiab-admin-console/blob/master/roles/common/files/map/adm-map-catalog.json), associated programs &mdash; and the dozen core [OSM continent/region .mbtiles files](https://github.com/iiab/iiab/wiki/IIAB-Maps#where-are-iiab-maps-stored) listed in our catalog.
 
-_It's best to start fresh with a new install of IIAB if you want the latest maps!_
+_It's always best to start fresh with a new install of IIAB if you want the latest maps!_
 
 Or, if you absolutely must attempt an upgrade (ENTIRELY AT YOUR OWN RISK) run the following &mdash; to attempt to delete your existing maps &mdash; and then add new IIAB Maps:
 
@@ -41,17 +38,17 @@ Or, if you absolutely must attempt an upgrade (ENTIRELY AT YOUR OWN RISK) run th
  cd /opt/iiab/iiab
  sudo git pull
  sudo ./runrole --reinstall osm-vector-maps
- sudo iiab-install-map-region <CONTINENT>.mbtiles
+ sudo iiab-install-map-region <CONTINENT-or-REGION>.mbtiles
  ```
 
-Where `<CONTINENT>.mbtiles` is one of the major region files (with "2020" in its filename) that you choose from: http://timmoody.com/iiab-files/maps/
+Where `<CONTINENT-or-REGION>.mbtiles` is one of the major region files (with "2020" in its filename) that you choose from IIAB's [map catalog](https://github.com/iiab/iiab/wiki/IIAB-Maps#where-are-iiab-maps-stored).
 
-<!--
-cd /library/www/
-rm -rf osm-vector-maps/
-nano /etc/iiab/iiab_state.yml    # Delete line 'osm_vector_maps_installed: True'
-git remote add ghunt git@github.com:/georgejhunt/iiab
-git fetch --all
-git checkout -b maps7.3 ghunt/maps7.3
-./runroles osm-vector-maps
--->
+   ~cd /library/www/<br>
+   rm -rf osm-vector-maps/<br>
+   nano /etc/iiab/iiab_state.yml    # Delete line 'osm_vector_maps_installed: True'<br>
+   git remote add ghunt git@github.com:/georgejhunt/iiab<br>
+   git fetch --all<br>
+   git checkout -b maps7.3 ghunt/maps7.3<br>
+   ./runroles osm-vector-maps~
+
+#### Please also see the IIAB Maps doc: https://github.com/iiab/iiab/wiki/IIAB-Maps
