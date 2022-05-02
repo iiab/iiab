@@ -29,7 +29,7 @@
 
 In April 2022, IIAB revised our legacy catalog [/etc/iiab/map-catalog.json](https://github.com/iiab/maps/blob/master/2020/map-catalog.json), our new catalog [/library/www/html/common/assets/adm-map-catalog.json](https://github.com/iiab/iiab-admin-console/blob/master/roles/common/files/map/adm-map-catalog.json), associated programs &mdash; and the dozen core [OSM continent/region .mbtiles files](https://github.com/iiab/iiab/wiki/IIAB-Maps#where-are-iiab-maps-stored) listed in our catalog.
 
-_It's always best to start fresh with a new install of IIAB if you want the latest maps!_
+_It's always best to start fresh with a [new install of IIAB](https://download.iiab.io) if you want the latest maps!_
 
 Or, if you absolutely must attempt an upgrade (ENTIRELY AT YOUR OWN RISK) run the following &mdash; to attempt to delete your existing maps &mdash; and then add new IIAB Maps:
 
