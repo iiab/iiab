@@ -41,7 +41,7 @@ Or, if you absolutely must attempt an upgrade (ENTIRELY AT YOUR OWN RISK) run th
  sudo iiab-install-map-region <CONTINENT-or-REGION>.mbtiles
  ```
 
-Where `<CONTINENT-or-REGION>.mbtiles` is one of the major region files (with "2020" in its filename) that you choose from IIAB's [map catalog](https://github.com/iiab/iiab/wiki/IIAB-Maps#where-are-iiab-maps-stored).
+Where `<CONTINENT-or-REGION>.mbtiles` is one of the [major region files](https://github.com/iiab/iiab/wiki/IIAB-Maps#where-are-iiab-maps-stored) (e.g. with "2020" in its filename) that you choose from IIAB's [map catalog](https://github.com/iiab/iiab/wiki/IIAB-Maps#how-do-i-upgrade-an-iiab-map-pack).
 
    ~cd /library/www/<br>
    rm -rf osm-vector-maps/<br>
