@@ -1,83 +1,87 @@
 - name: Install network packages (including many WiFi tools, and also iptables-persistent for firewall)
   include_tasks: install.yml
-  when: network_installed is undefined
+  when: network_install and network_installed is undefined
 
 - name: Select RPi firmware mode
   include_role:
     name: firmware
   when: rpi_model != "none"
 
-- name: detected_network
-  include_tasks: detected_network.yml
+- name: Configuring Network if enabled
+  block:
+  - name: detected_network
+    include_tasks: detected_network.yml
 
-#- name: "Set 'no_net_restart: True' if discovered_wireless_iface == iiab_wan_iface"
-- name: "Set 'no_net_restart: True' if has_wifi_gateway is defined"
-  set_fact:
-    no_net_restart: True    # 2020-09-12:
-    # 0-init/defaults/main.yml - default boolean value of False
-    # network/tasks/main.yml - changes flag based on conditional present
-    # Var is currently used in 9 subsequent files, to suppress restarting of
-    # hostapd, dnsmasq and/or other networking service in computed_services.yml,
-    # debian.yml, detected_network.yml, down-debian.yml, netplan.yml,
-    # NM-debian.yml, restart.yml, rpi_debian.yml, sysd-netd-debian.yml
-  when: has_wifi_gateway is defined
+  #- name: "Set 'no_net_restart: True' if discovered_wireless_iface == iiab_wan_iface"
+  - name: "Set 'no_net_restart: True' if has_wifi_gateway is defined"
+    set_fact:
+      no_net_restart: True    # 2020-09-12:
+      # 0-init/defaults/main.yml - default boolean value of False
+      # network/tasks/main.yml - changes flag based on conditional present
+      # Var is currently used in 9 subsequent files, to suppress restarting of
+      # hostapd, dnsmasq and/or other networking service in computed_services.yml,
+      # debian.yml, detected_network.yml, down-debian.yml, netplan.yml,
+      # NM-debian.yml, restart.yml, rpi_debian.yml, sysd-netd-debian.yml
+    when: has_wifi_gateway is defined
 
-- name: computed_network
-  include_tasks: computed_network.yml
+  - name: computed_network
+    include_tasks: computed_network.yml
 
-# - name: Configure wondershaper
-#   include_tasks: wondershaper.yml
-#   when: wondershaper_install or wondershaper_installed is defined
+  # - name: Configure wondershaper
+  #   include_tasks: wondershaper.yml
+  #   when: wondershaper_install or wondershaper_installed is defined
 
-- name: (Re)Install named
-  include_tasks: named.yml
-  when: named_install and FQDN_changed and iiab_stage|int == 9
+  - name: (Re)Install named
+    include_tasks: named.yml
+    when: named_install and FQDN_changed and iiab_stage|int == 9
 
-- name: (Re)Install dhcpd
-  include_tasks: dhcpd.yml
-  when: dhcpd_install and FQDN_changed and iiab_stage|int == 9
+  - name: (Re)Install dhcpd
+    include_tasks: dhcpd.yml
+    when: dhcpd_install and FQDN_changed and iiab_stage|int == 9
 
-- name: (Re)Install Squid
-  include_tasks: squid.yml
-  when: squid_install and FQDN_changed and iiab_stage|int == 9
+  - name: (Re)Install Squid
+    include_tasks: squid.yml
+    when: squid_install and FQDN_changed and iiab_stage|int == 9
 
-#preprep for backends
-- name: Netplan in use on Ubuntu 18.04+
-  include_tasks: netplan.yml
-  when: is_ubuntu and not is_ubuntu_16
+  #preprep for backends
+  - name: Netplan in use on Ubuntu 18.04+
+    include_tasks: netplan.yml
+    when: is_ubuntu and not is_ubuntu_16
 
-#### Start services
-- name: avahi
-  include_tasks: avahi.yml
-- name: hostapd
-  include_tasks: hostapd.yml
-- name: computed_services
-  include_tasks: computed_services.yml
-- name: enable_services
-  include_tasks: enable_services.yml
-#### End services
+  #### Start services
+  - name: avahi
+    include_tasks: avahi.yml
+  - name: hostapd
+    include_tasks: hostapd.yml
+  - name: computed_services
+    include_tasks: computed_services.yml
+  - name: enable_services
+    include_tasks: enable_services.yml
+  #### End services
 
-#### Start network layout
-#- name: Redhat networking
-#  include_tasks: ifcfg_mods.yml
-#  when: is_redhat
+  #### Start network layout
+  #- name: Redhat networking
+  #  include_tasks: ifcfg_mods.yml
+  #  when: is_redhat
 
-- name: NetworkManager in use
-  include_tasks: NM-debian.yml
-  when: is_debuntu and network_manager_active
+  - name: NetworkManager in use
+    include_tasks: NM-debian.yml
+    when: is_debuntu and network_manager_active
 
-- name: systemd-networkd in use
-  include_tasks: sysd-netd-debian.yml
-  when: is_debuntu and systemd_networkd_active
+  - name: systemd-networkd in use
+    include_tasks: sysd-netd-debian.yml
+    when: is_debuntu and systemd_networkd_active
 
-- name: Raspbian uses dhcpcd only with no N-M or SYS-NETD active
-  include_tasks: rpi_debian.yml
-  when: is_raspbian
+  - name: Raspbian uses dhcpcd only with no N-M or SYS-NETD active
+    include_tasks: rpi_debian.yml
+    when: is_raspbian
 
-- name: Not RPi, Not NetworkManager, Not systemd-networkd in use
-  include_tasks: debian.yml
-  when: (not is_raspbian and not network_manager_active and not systemd_networkd_active and is_debuntu) or is_ubuntu_16
-#### end network layout
+  - name: Not RPi, Not NetworkManager, Not systemd-networkd in use
+    include_tasks: debian.yml
+    when: (not is_raspbian and not network_manager_active and not systemd_networkd_active and is_debuntu) or is_ubuntu_16
+  #### end network layout
 
-- name: Restart services
-  include_tasks: restart.yml
+  - name: Restart services
+    include_tasks: restart.yml
+  # end block
+  when: network_installed is defined and network_enabled
