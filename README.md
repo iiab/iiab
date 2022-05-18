@@ -33,7 +33,9 @@ Finally, you can [customize your Internet-in-a-Box home page](https://wiki.iiab.
 
 ## Community
 
-Internet-in-a-Box (IIAB) greatly welcomes contributions from educators, librarians and [IT/UX/QA people](https://github.com/iiab/iiab/wiki/Technical-Contributors-Guide) of all kinds!
+Global community updates and videos are regularly posted to: **[@internet_in_box](https://twitter.com/internet_in_box)**
+
+_Internet-in-a-Box (IIAB) greatly welcomes contributions from educators, librarians and [IT/UX/QA people](https://github.com/iiab/iiab/wiki/Technical-Contributors-Guide) of all kinds!_
 
 If you would like to volunteer, please [make contact](https://internet-in-a-box.org/contributing.html) after looking over "[How can I help?](https://wiki.iiab.io/go/FAQ#How_can_I_help.3F)" at: [FAQ.IIAB.IO](https://wiki.iiab.io/go/FAQ)
 
