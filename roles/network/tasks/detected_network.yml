@@ -101,15 +101,16 @@
   set_fact:
     num_wifi_interfaces: "{{ count_wifi_interfaces.stdout|int }}"
 
-- name: Check for Access Point capablility with 'iw list'
-  command: iw list | grep -v AP: | grep AP | wc -l
+- name: Run 'iw list' to check for Access Point capability
+  #command: iw list | grep -v AP: | grep AP | wc -l # False positives 'EAP' etc
+  shell: iw list | grep '^[[:space:]]*\* AP$'
   register: look_for_ap
   when: discovered_wireless_iface != "none"
 
-- name: Setting can_be_ap
+- name: Set can_be_ap if 'iw list' output contains suitable '* AP'
   set_fact:
     can_be_ap: True
-  when: look_for_ap.stdout|int != 0
+  when: look_for_ap is defined and not look_for_ap.failed
 
 - name: Detect wifi gateway active
   shell: ip r | grep default | grep {{ discovered_wireless_iface }} | wc -l
