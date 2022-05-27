@@ -5,7 +5,7 @@ Kiwix README
 Kiwix develops ZIM file creation & rendering tools for offline action,
 as summarized at: https://wiki.kiwix.org/wiki/Software
 
-Internet-in-a-Box uses executables like kiwix-manage, kiwix-serve and kiwix-search (in
+Internet-in-a-Box uses `kiwix-tools <https://github.com/kiwix/kiwix-tools>`_ executables like kiwix-manage, kiwix-serve and kiwix-search (in
 ``/opt/iiab/kiwix/bin``) to set up and render ZIM files (such as Wikipedia, and
 other educational materials) typically from https://download.kiwix.org/zim/
 
