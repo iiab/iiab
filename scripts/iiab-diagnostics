@@ -6,10 +6,13 @@
 
 IIAB_RELEASE=`cat /etc/iiab/iiab.env | grep IIAB_RELEASE | cut -d'=' -f2`
 OS_VER=`cat /etc/iiab/iiab.env | grep OS_VER | cut -d'=' -f2`
-#HASH=`cd /opt/iiab/iiab; git log --pretty=format:'%h' -n 1`
-HASH1=`cd /opt/iiab/iiab; git log --pretty=format:'%H' -n 1`
-HASH2=`cd /opt/iiab/iiab-admin-console; git log --pretty=format:'%H' -n 1`
 YMDT=$(date +%F_%T_%Z)
+
+#HASH=`cd /opt/iiab/iiab; git log --pretty=format:'%h' -n 1`
+git config --global --add safe.directory /opt/iiab/iiab    # Nec below, if non-root
+HASH1=`cd /opt/iiab/iiab; git log --pretty=format:'%H' -n 1`
+git config --global --add safe.directory /opt/iiab/iiab-admin-console    # Nec below, if non-root
+HASH2=`cd /opt/iiab/iiab-admin-console; git log --pretty=format:'%H' -n 1`
 
 echo -e "\nGathers IIAB diagnostics into 1 file, to accelerate troubleshooting.  USAGE:"
 echo
@@ -19,7 +22,7 @@ echo -e "   sudo iiab-diagnostics PATH/FILE1 PATH/FILE2 ...      # COMPLETE RESU
 echo
 echo -ne "Can you provide a \e[1mshort public nickname:\e[0m (no spaces!) "
 read nickname < /dev/tty
-if [ "$nickname" = "" ]; then
+if [[ $nickname == "" ]]; then
     nickname="NONAME"
 fi
 
@@ -82,26 +85,32 @@ function cat_dir() {
     fi
 }
 
-function cat_cmd() {                        # $1 = command + params, $2 = explanation
+function cat_cmd() {    # $1 = command + params, $2 = explanation
     echo "     $1  # $2"
     echo "=IIAB==========================================================================" >> $outfile
-    cmd=$(echo "$1" | sed 's/\s.*$//')        # Keep command on left; Drop params on right
-    pth=$(command -v $cmd | sed 's/[^/]*$//')    # Keep only path on left; Drop command on right
-    if [ "$2" = "" ]; then
-	echo "COMMAND: $pth$1" >> $outfile
+    #cmd=$(echo "$1" | sed 's/\s.*$//')           # Keep command on left; Drop params on right (NOT NEC, 'command -v' does this!)
+    #pth=$(command -v $cmd | sed 's/[^/]*$//')    # Keep only path on left; Drop command & params on right
+    pthcmd=$(command -v $1)                                             # Use canonical path on left; Drop params on right
+    spc_params=$(echo "$1" | sed 's/^\s*\S*//;s/\s*$//;s/^\s\s*/ /')    # LTrim + drop original path + command on left; RTrim; Compress whitespace in between
+    #spc_params=$(echo "$1" | sed 's/^[[:blank:]]*[^[:blank:]]*//;s/[[:blank:]]*$//;s/^[[:blank:]][[:blank:]]*/ /')    # Equivalent (POSIX compliant)
+    if [[ $2 == "" ]]; then
+	echo "COMMAND: $pthcmd$spc_params" >> $outfile
     else
-	echo "COMMAND: $pth$1    # $2" >> $outfile
+	echo "COMMAND: $pthcmd$spc_params    # $2" >> $outfile
     fi
     echo >> $outfile
-    if [ "$pth" = "" ]; then
+    if [[ $pthcmd == "" ]]; then
         echo "COMMAND NOT FOUND: $1" >> $outfile
     else
-        $(echo "eval $1") >> $outfile    # eval is nec within backticks, so | (pipes) work: https://stackoverflow.com/a/7184782
+        bash -c "$1" >> $outfile    # Works with | (pipes) and 'ls -l /lib/firmware/brcm/*43455*' etc!
+	#(exec $1 >> $outfile)      # Works with | (pipes) and 'ls -l /lib/firmware/brcm/*43455*' etc!  Subshell needed (parens) as exec then exits entire shell.
+	#eval $1 >> $outfile              # Should be identical to below, i.e. insufficient -- "eval" combine ARGs into a single string.
+        #$(echo "eval $1") >> $outfile    # "eval" works with | (pipes) per https://stackoverflow.com/a/7184782 BUT globbing like 'ls -l /lib/firmware/brcm/*43455*' FAILS to output lines w/ filenames that contain spaces (ugly IFS issues!)
     fi
     echo >> $outfile
 }
 
-function cat_tail() {     # $1 = path/filename; $2 = # of lines, for tail
+function cat_tail() {    # $1 = path/filename; $2 = # of lines, for tail
     echo "     $1"
     echo "=IIAB==========================================================================" >> $outfile
     cat_file_raw "$1" $2    # e.g. last 100 lines, maximum
