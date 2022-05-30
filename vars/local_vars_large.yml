@@ -1,7 +1,7 @@
 # This is local_vars_large.yml -- copy it to /etc/iiab/local_vars.yml then...
 # modify variables below, to override /opt/iiab/iiab/vars/default_vars.yml
 
-# PLZ READ http://wiki.laptop.org/go/IIAB/local_vars.yml AND http://FAQ.IIAB.IO
+# READ "What is local_vars.yml and how do I customize it?" AT http://FAQ.IIAB.IO
 # Orig Idea: branch github.com/xsce/xsce-local for your deployment/community
 
 # IIAB does NOT currently support uninstalling apps!  So: if any IIAB app is
@@ -13,7 +13,7 @@
 
 
 # Ansible's default timeout for "get_url:" downloads (10 seconds) often fails
-download_timeout: 200
+download_timeout: 100
 
 # Real-time clock: set RTC chip family here.  Future auto-detection plausible?
 rtc_id: none    # Or ds3231 ?
@@ -54,17 +54,42 @@ iiab_domain: lan
 # YOU'LL PREVENT OLDER LAPTOPS/PHONES/TABLETS (WHICH REQUIRE 2.4 GHz) FROM
 # CONNECTING TO YOUR IIAB'S INTERNAL HOTSPOT.  See "wifi_up_down: True" below.
 #
-# Raspberry Pi OS requires Wi-Fi country since March 2018.  Please set it here:
+# Raspberry Pi OS requires WiFi country since March 2018.
+#
+# If you're running Raspberry Pi OS, you may have already set the country code
+# in /etc/wpa_supplicant/wpa_supplicant.conf e.g. if you ran raspi-config or used
+# the Wi-Fi widget in the top-right of its graphical desktop.
+#
+# If so, this detected value will be considered authoritative, and will be used
+# to populate /etc/hostapd/hostapd.conf
+#
+# Finally, if IIAB does not detect a country code from your OS, the following
+# fallback variable will be used instead: (to populate /etc/hostapd/hostapd.conf)
 host_country_code: US
 host_ssid: Internet in a Box
 host_wifi_mode: g
 host_channel: 6
-hostapd_secure: False # 2021-03-02 #2696 WiFi EAPOL fails if hotspot passwords,
-hostapd_password: changeme # eg if firmware wifi_hotspot_capacity_rpi_fix: True
-wifi_hotspot_capacity_rpi_fix: True    # Restores the ability of RPi internal
-# WiFi hotspots to service 30-to-32 client devices.  Background explanation:
-# https://github.com/iiab/iiab/issues/823#issuecomment-662285202 and PR #2472.
-wifi_up_down: True    # Creates a 2nd virtual WiFi adapter for upstream WiFi
+hostapd_secure: False    # 2021-03-02 WiFi EAPOL fails if hotspot passwords,
+hostapd_password: changeme    # espec if WiFi firmware patched below?  #2696
+
+# Raspberry Pi 3 B+ and 4 OS's don't allow more than ~4 students to use the
+# internal WiFi hotspot.  Increase this to 19 or 24 student WiFi devices (or
+# 32 on older OS's from 2020) using EXACTLY 1 of the 4 lines below:
+#
+#rpi3bplus_rpi4_wifi_firmware: os    # Use your OS's WiFi firmware e.g. 7.45.241
+rpi3bplus_rpi4_wifi_firmware: 19     # SEE: github.com/iiab/iiab/issues/2853
+#rpi3bplus_rpi4_wifi_firmware: 24    # REQUIRES "wifi_up_down: False" BELOW!
+#rpi3bplus_rpi4_wifi_firmware: 32    # UNRELIABLE (INTERMITTENT) with 2021+ OS's
+#
+# BACKGROUND: https://github.com/iiab/iiab/issues/823#issuecomment-662285202
+#
+# Raspberry Pi Zero W and 3 OS's don't allow more than ~10 students to use the
+# internal WiFi hotspot.  Or try increasing this to 30 student WiFi devices:
+#
+rpizerow_rpi3_wifi_firmware: os     # Use yr OS WiFi firmware e.g. 7.45.98.118
+#rpizerow_rpi3_wifi_firmware: 30    # Or firmware 7.45.98.65 from 2018-09-28
+
+wifi_up_down: True    # AP+STA mode: Uses "ap0" WiFi adapter for upstream WiFi
 # (e.g. to Internet) in addition to downstream WiFi (e.g. classroom hotspot).
 
 # Set True if client machines should have "passthrough" access to WAN/Internet:
@@ -110,10 +135,13 @@ sshd_install: True    # Required by OpenVPN
 sshd_enabled: True
 
 # https://remote.it can help you remotely maintain an IIAB.
+# INSTRUCTIONS: https://github.com/iiab/iiab/tree/master/roles/remoteit
 remoteit_install: True
 remoteit_enabled: False
+# OPTION #1: Run 'sudo iiab-remoteit' later.  OPTION #2: Set this now:
+# remoteit_license_key: 592AA9BB-XXXX-YYYY-ZZZZ-6E27654C3DF6
 
-# SECURITY WARNING: See http://wiki.laptop.org/go/IIAB/Security
+# SECURITY WARNING: https://wiki.iiab.io/go/Security
 openvpn_install: True
 openvpn_enabled: False
 # 2021-08-18 SSOT: Please set it here, no longer in /etc/iiab/openvpn_handle
@@ -188,9 +216,10 @@ nginx_high_php_limits: False
 # REGARDLESS: AFTER INSTALLING IIAB, PLEASE VERIFY THESE 6 SETTINGS...
 # https://github.com/iiab/iiab/blob/master/roles/www_options/tasks/main.yml#L53-L133
 # ...ARE SUITABLE FOR YOUR HARDWARE, as saved in: /etc/php/<VERSION>/*/php.ini
+# ALSO: ADJUST "client_max_body_size 500M;" AS NEC, IN: /etc/nginx/server.conf
 
-# Make this False to disable http://box/common/services/power_off.php button:
-apache_allow_sudo: True
+# Make this True to enable http://box/js-menu/menu-files/services/power_off.php
+apache_allow_sudo: False
 
 # Toggle iiab-refresh-wiki-docs scraping for offline docs (http://box/info)
 nodocs: False
@@ -217,8 +246,8 @@ jupyterhub_install: True
 jupyterhub_enabled: True
 
 # Lokole (email for rural communities) from https://ascoderu.ca
-lokole_install: True
-lokole_enabled: True
+lokole_install: False    # 2022-03-13: Needs work with Python 3.9+
+lokole_enabled: False    # https://github.com/iiab/iiab/issues/3132
 
 # Wikipedia's community editing platform - from MediaWiki.org
 mediawiki_install: True
@@ -379,7 +408,7 @@ calibre_web_path: calibre  #NEEDS WORK: https://github.com/iiab/iiab/issues/529
 
 # A full-featured PBX (for rural telephony, etc) based on Asterisk and FreePBX.
 # REQUIRES PHP 7.4 e.g. Ubuntu 20.04, Debian 11 -- RaspiOS 11 might also work.
-# INSTRUCTIONS: https://github.com/iiab/iiab/tree/master/roles/pbx#pbx-readme
+# INSTRUCTIONS: https://github.com/iiab/iiab/tree/master/roles/pbx#readme
 # If using PBX intensively, investigate nginx_high_php_limits further above.
 pbx_install: False
 pbx_enabled: False

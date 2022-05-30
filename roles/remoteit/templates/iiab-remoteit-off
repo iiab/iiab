@@ -1,0 +1,33 @@
+#!/bin/bash -xe
+
+# Run 'sudo iiab-remoteit-off' to disable remote.it on this IIAB. GENERAL TIPS:
+# http://FAQ.IIAB.IO -> "How can I remotely manage my Internet-in-a-Box?"
+
+# GUIDE: https://github.com/iiab/iiab/blob/master/roles/remoteit/README.md
+
+# FYI 'remoteit' Device Package AND /usr/bin/remoteit CLI are installed by:
+# https://github.com/iiab/iiab/blob/master/roles/remoteit/tasks/install.yml
+
+if grep -q '^remoteit_enabled:' /etc/iiab/local_vars.yml; then
+    sed -i "s/^remoteit_enabled:.*/remoteit_enabled: False/" /etc/iiab/local_vars.yml
+else
+    echo "remoteit_enabled: False" >> /etc/iiab/local_vars.yml
+fi
+
+# 3 sections below should be equivalent to -- and much faster than:
+# https://github.com/iiab/iiab/tree/master/roles/remoteit/tasks/enable-or-disable.yml
+
+# remote.it "parent" service
+systemctl stop connectd
+systemctl disable connectd
+
+# "Remote tcp command service"
+systemctl stop schannel
+systemctl disable schannel
+
+# "Remote tcp connection service" (typically 1-3 of these)
+systemctl stop $(ls /etc/systemd/system/multi-user.target.wants/ | grep remoteit@*) || true
+systemctl disable $(ls /etc/systemd/system/multi-user.target.wants/ | grep remoteit@*) || true
+# These systemd service names e.g. remoteit@80:00:01:7F:7E:00:56:36.service
+# change, e.g. when a new claim code is generated, and more arise when the
+# IIAB device is registered to a remote.it account (#3166), etc.

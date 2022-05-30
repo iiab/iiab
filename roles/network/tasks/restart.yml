@@ -6,6 +6,25 @@
     - wpa_supplicant
   when: wifi_up_down and hostapd_enabled
 
+- name: Create /etc/hostapd/hostapd.conf and backup .iiab from template if needed
+  template:
+    owner: root
+    group: root
+    mode: 0644
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+  with_items:
+    - { src: 'hostapd/hostapd.conf.j2', dest: '/etc/hostapd/hostapd.conf' }
+    - { src: 'hostapd/hostapd.conf.j2', dest: '/etc/hostapd/hostapd.conf.iiab' }
+  when: can_be_ap
+
+- name: Restart hostapd when WiFi is present but not when using WiFi as gateway with wifi_up_down False
+  systemd:
+    name: hostapd
+    state: restarted
+    daemon_reload: yes
+  when: hostapd_enabled and (wifi_up_down or not no_net_restart)
+
 - name: Reload netplan for Wifi gateway on Ubuntu 18+
   shell: netplan apply
   when: wifi_up_down and is_ubuntu and netplan.stdout.find("yaml") != -1

@@ -1,0 +1,189 @@
+#!/bin/bash -e
+
+# 'remoteit' Device Package AND /usr/bin/remoteit CLI already installed by:
+# https://github.com/iiab/iiab/blob/master/roles/remoteit/tasks/install.yml
+
+# http://FAQ.IIAB.IO -> "How can I remotely manage my Internet-in-a-Box?"
+
+iiab_var_value() {
+    v1=$(grep "^$1:\s" /opt/iiab/iiab/vars/default_vars.yml | tail -1 | sed "s/^$1:\s\+//; s/#.*//; s/\s*$//; s/^\(['\"]\)\(.*\)\1$/\2/")
+    v2=$(grep "^$1:\s" /etc/iiab/local_vars.yml | tail -1 | sed "s/^$1:\s\+//; s/#.*//; s/\s*$//; s/^\(['\"]\)\(.*\)\1$/\2/")
+    [[ $v2 != "" ]] && echo $v2 || echo $v1    # [ "$v2" ] ALSO WORKS
+}
+
+echo -e "\nLet's enable https://remote.it to help you remotely manage this IIAB:\n"
+
+echo -e "https://github.com/iiab/iiab/blob/master/roles/remoteit/README.md\n"
+
+# If someone manually deleted the dir, that blocks generation of claim code,
+# and also license key extraction from /etc/iiab/local_vars.yml just below.
+[ ! -d /etc/remoteit ] &&
+    mkdir /etc/remoteit
+
+# Passwords and license keys in /etc/iiab/local_vars.yml are not a healthy
+# precedent :/  (Going forward let's try to keep such fully in their own apps.)
+KEY1=$(iiab_var_value remoteit_license_key)
+if [[ $KEY1 != "" ]]; then
+    if [ -s /etc/remoteit/registration ]; then    # Non-zero size
+        KEY2=$(cat /etc/remoteit/registration)
+        if [[ $KEY1 != $KEY2 ]]; then
+            mv /etc/remoteit/registration /etc/remoteit/registration.$(date +%F_%T_%Z)
+            echo -e "Old /etc/remoteit/registration moved aside.\n"
+        fi
+    fi
+    echo $KEY1 > /etc/remoteit/registration
+    echo -e "Copied remoteit_license_key value to /etc/remoteit/registration"
+
+    sed -i '/^remoteit_license_key:/d' /etc/iiab/local_vars.yml
+    echo -e "Removed remoteit_license_key line from /etc/iiab/local_vars.yml\n"
+fi
+
+# /etc/remoteit/registration consequences summarized on lines 114-119
+if [ -s /etc/remoteit/registration ]; then    # Non-zero size
+    cp -p /etc/remoteit/registration /tmp/etc.remoteit.registration
+    echo -e "License key $(cat /etc/remoteit/registration) will be attempted."
+    echo -e "It's backed up from /etc/remoteit/registration to /tmp, in case of purge.\n"
+elif [ -f /etc/remoteit/registration ]; then    # Zero size, e.g. due to touch
+    rm /etc/remoteit/registration
+    echo -e "Empty /etc/remoteit/registration deleted, so claim code can be generated.\n"
+fi
+
+echo -e "\nThis IIAB must be online to begin!"
+
+if [ -f /etc/remoteit/config.json ]; then
+    echo -en "\n\e[1mFor fresh registration let's remove /etc/remoteit/config.json, Ok? [Y/n]\e[0m "
+    read -n 1 -r ans < /dev/tty    # Prompt for a single character
+    echo; echo
+
+    if [[ $ans = "n" || $ans = "N" ]]; then    # Nearly the same as Lines 142-189
+        echo -e "Let's try to enable remote.it, with your existing /etc/remoteit/config.json...\n"
+
+        systemctl enable connectd
+        systemctl restart connectd
+        systemctl enable schannel
+
+        if grep -q '^remoteit_enabled:' /etc/iiab/local_vars.yml; then
+            sed -i "s/^remoteit_enabled:.*/remoteit_enabled: True/" /etc/iiab/local_vars.yml
+        else
+            echo "remoteit_enabled: True" >> /etc/iiab/local_vars.yml
+        fi
+
+        echo -e "\e[1m\nYou can now check for this IIAB device in your https://remote.it account."
+        echo -e "(e.g. if you already registered it to your remote.it account in the past!)\e[0m\n"
+
+        echo -e "\e[1m1) Log in to https://remote.it or its Desktop Application on your own PC:\e[0m"
+        echo -e "   https://remote.it/download/\n"
+
+        echo -e '\e[1m2) In the "Devices" section on the left, check that your IIAB is now present:\e[0m'
+        echo -e "   https://docs.remote.it/software/device-package/installation#3.-claim-and-register-the-device\n"
+        
+        echo -e "\e[1m3) Authorize services/ports (e.g. SSH, HTTP, etc) for your IIAB device:\e[0m"
+        echo -e "   https://docs.remote.it/software/device-package/installation#4.-set-up-services-on-your-device\n"
+
+        exit 0
+    fi
+fi
+
+echo -en "\e[1m\nOptionally purge + install latest remote.it Device Package? [y/N]\e[0m "
+read -n 1 -r ans < /dev/tty    # Prompt for a single character
+echo; echo
+
+if [[ $ans = "y" || $ans = "Y" ]]; then
+    # Full apt path avoids problematic /usr/local/bin/apt on Linux Mint
+    /usr/bin/apt -y purge "remoteit*" || true
+
+    # Why the brutal purge?  Even 'apt -y reinstall remoteit.*.deb' is stronger
+    # than 'install -y' in install_agent.sh, but still sometimes insufficient!
+    # https://github.com/iiab/iiab/blob/master/roles/remoteit/tasks/install.yml#L18-L21
+
+    if [ -f /tmp/etc.remoteit.registration ]; then
+        # apt purge should rmdir /etc/remoteit but might be sloppy in future?
+        [ ! -d /etc/remoteit ] &&
+            mkdir /etc/remoteit
+
+        cp -p /tmp/etc.remoteit.registration /etc/remoteit/registration
+    fi
+
+    # apt install & enable "latest" remote.it Device Package for your CPU/OS
+    curl -L https://downloads.remote.it/remoteit/install_agent.sh | sh
+else
+    # 2022-04-07: Stop/Delete/Start sequence follows official suggestions here:
+    # https://support.remote.it/hc/en-us/articles/360061228252-Oops-I-cloned-an-SD-card-
+    # https://docs.remote.it/oem-and-bulk-provisioning/registration-into-a-users-account
+    #
+    # FYI if /etc/remoteit/config.json DOESN'T EXIST:
+    #
+    # 1) If /etc/remoteit/registration exists and is EMPTY, bouncing connectd...          DOESN'T CREATE /etc/remoteit/config.json
+    # 2) If /etc/remoteit/registration DOESN'T EXIST, bouncing connectd...                CREATES /etc/remoteit/config.json WITH a claim code + WITHOUT an SSH service.
+    # 3) If /etc/remoteit/registration contains an INVALID license key, bouncing connectd CREATES /etc/remoteit/config.json WITH a claim code + WITHOUT an SSH service.
+    # 4) If /etc/remoteit/registration contains a VALID license key, bouncing connectd... CREATES /etc/remoteit/config.json WITHOUT a claim code + WITH an SSH service.
+    #
+    # FYI if /etc/remoteit/config.json EXISTS, bouncing connectd will update
+    # config.json's internal "timestamp" without changing anything else,
+    # regardless whether /etc/remoteit/registration exists and what it contains,
+    # and regardless whether /etc/remoteit/config.json contains a claim code.
+
+    echo -e "In a few seconds, all 3 {connectd, schannel, remoteit@...} should be enabled!\n"
+
+    systemctl stop connectd    # "Safer" (though it's generally exited already!)
+
+    #if [ ! -f /etc/remoteit/registration ] && [ -f /etc/remoteit/config.json ]; then
+    if [ -f /etc/remoteit/config.json ]; then
+        # echo -en "\n\e[1mMove /etc/remoteit/config.json, so registration can begin? [Y/n]\e[0m "
+        # read ans < /dev/tty    # Strips outer whitespace, whether we like it or not!
+        # echo
+        # [[ $ans = "n" ]] || [[ $ans = "N" ]] && exit 1
+        mv /etc/remoteit/config.json /etc/remoteit/config.json.$(date +%F_%T_%Z)
+        #echo -e "/etc/remoteit/config.json moved aside, so claim code can be generated.\n"
+        #echo -e "/etc/remoteit/config.json moved aside, so device registration can begin.\n"
+        echo -e "/etc/remoteit/config.json moved aside, for fresh device registration.\n"
+    fi
+
+    systemctl start connectd    # Registration logic (use license key or
+    # generate claim code) then kickstart 2 "child" services below.
+    # FYI running /usr/share/remoteit/refresh.sh appears to do the exact same
+    # thing (as bouncing service connectd).
+
+    systemctl enable connectd    # 2 enable lines, like enable-or-disable.yml
+
+    # schannel = "Remote tcp command service" started by connectd above if nec
+    systemctl enable schannel    # 2 enable lines, like enable-or-disable.yml
+
+    # "Remote tcp connection service" appears a few seconds after connectd is
+    # started above.  Auto-enabled when spawned by connectd, SO NOT NEC HERE:
+    # systemctl enable $(ls /etc/systemd/system/multi-user.target.wants/ | grep remoteit@*)
+    # These systemd service names e.g. remoteit@80:00:01:7F:7E:00:56:36.service
+    # change, e.g. when a new claim code is generated, and more arise when the
+    # IIAB device is registered to a remote.it account (#3166), etc.
+fi
+
+if grep -q '^remoteit_enabled:' /etc/iiab/local_vars.yml; then
+    sed -i "s/^remoteit_enabled:.*/remoteit_enabled: True/" /etc/iiab/local_vars.yml
+else
+    echo "remoteit_enabled: True" >> /etc/iiab/local_vars.yml
+fi
+
+if grep -q claim /etc/remoteit/config.json; then
+    claim_code=$(grep claim /etc/remoteit/config.json | rev | cut -d\" -f2 | rev)
+    echo -e "\nYour new claim code is \e[44;1m${claim_code}\e[0m -- YOUR NEXT STEPS ARE...\n"
+
+    echo -e "\e[1m1) Log in to https://remote.it or its Desktop Application on your own PC:\e[0m"
+    echo -e "   https://remote.it/download/\n"
+
+    echo -e "\e[1m2) Use the above 8-character claim code WITHIN 24H as shown here:\e[0m"
+    echo -e "   https://docs.remote.it/software/device-package/installation#3.-claim-and-register-the-device\n"
+
+    echo -e "\e[1m3) Authorize services/ports (e.g. SSH, HTTP, etc) for your IIAB device:\e[0m"
+    echo -e "   https://docs.remote.it/software/device-package/installation#4.-set-up-services-on-your-device\n"
+else
+    echo -e "\nLicense key (if valid!) hopefully worked -- YOUR NEXT STEPS ARE...\n"
+
+    echo -e "\e[1m1) Log in to https://remote.it or its Desktop Application on your own PC:\e[0m"
+    echo -e "   https://remote.it/download/\n"
+
+    echo -e '\e[1m2) In the "Devices" section on the left, check that your IIAB is now present:\e[0m'
+    echo -e "   https://docs.remote.it/software/device-package/installation#3.-claim-and-register-the-device\n"
+
+    echo -e "\e[1m3) Authorize services/ports (e.g. SSH, HTTP, etc) for your IIAB device:\e[0m"
+    echo -e "   https://docs.remote.it/software/device-package/installation#4.-set-up-services-on-your-device\n"
+fi

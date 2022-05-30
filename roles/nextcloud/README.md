@@ -48,6 +48,10 @@ Log in to Nextcloud at http://box/nextcloud, http://box.lan/nextcloud, http://17
     Username: Admin
     Password: changeme
 
+## Known Issues
+
+Do not install the [Nextcloud News](https://apps.nextcloud.com/apps/news) app (an RSS/Atom Feed reader) if your OS is 32-bits: [#3069](https://github.com/iiab/iiab/issues/3069)
+
 ## Future Directions
 
 Going forward, should Internet-in-a-Box consider integrating optimizations (or more!) from these below?
@@ -56,4 +60,4 @@ Going forward, should Internet-in-a-Box consider integrating optimizations (or m
 - https://ownyourbits.com/2017/02/13/nextcloud-ready-raspberry-pi-image/
 - https://github.com/nextcloud/nextcloudpi
 
-Please [contact us](http://internet-in-a-box.org/pages/contributing.html) if you can help!
+Please [contact us](https://internet-in-a-box.org/contributing.html) if you can help!

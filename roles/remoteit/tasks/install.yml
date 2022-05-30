@@ -1,29 +1,100 @@
-- name: Fail if architecture remoteit_device_suffix == "unknown"
-  fail:
-    msg: "Could not find a remote.it device apt package for CPU architecture \"{{ ansible_architecture }}\""
-  when: remoteit_device_suffix == "unknown"
+# - name: Fail if architecture remoteit_device_suffix == "unknown"
+#   fail:
+#     msg: "Could not find a remote.it Device Package (.deb) for CPU architecture \"{{ ansible_architecture }}\""
+#   when: remoteit_device_suffix == "unknown"
 
-- name: mkdir {{ downloads_dir }}    # As roles/2-common/tasks/fl.yml has not run yet
-  file:
-    path: "{{ downloads_dir }}"    # /opt/iiab/downloads
-    state: directory
+# - name: mkdir {{ downloads_dir }}    # As roles/2-common/tasks/fl.yml has not run yet
+#   file:
+#     path: "{{ downloads_dir }}"    # /opt/iiab/downloads
+#     state: directory
 
-- name: Download {{ remoteit_device_url }} (device) for arch {{ remoteit_device_suffix }} into {{ downloads_dir }}/
-  get_url:
-    url: "{{ remoteit_device_url }}"
-    dest: "{{ downloads_dir }}/"
-    force: yes
+# - name: Download {{ remoteit_device_url }} (Device Package) for arch {{ remoteit_device_suffix }} into {{ downloads_dir }}/
+#   get_url:
+#     url: "{{ remoteit_device_url }}"
+#     dest: "{{ downloads_dir }}/"
+#     force: yes
+#     timeout: "{{ download_timeout }}"
 
-- name: Uninstall previously installed 'remoteit*' device apt package(s)
+# 2022-04-03: Unfort still necessary, as their install_agent.sh below uses apt
+# with 'install -y' instead of '-y reinstall' or '-y --reinstall install'
+# FWIW: Some remoteit.*.deb installers also work with '-y --allow-downgrades install'
+# (e.g. *.amd64.deb) but others (e.g. both *.rpi.deb) do not.
+- name: Purge previously installed 'remoteit*' Device Package(s)
   apt:
     name: remoteit*
     state: absent
+    purge: yes
   ignore_errors: yes
 
-- name: Install device apt package {{ downloads_dir }}/{{ remoteit_deb }}
-  apt:
-    deb: "{{ downloads_dir }}/{{ remoteit_deb }}"
-    state: present
+
+# Speeds things up a bit, deferring online claim code generation if not nec:
+# https://docs.remote.it/oem-and-bulk-provisioning/registration-into-a-users-account
+
+# - name: "'mkdir /etc/remoteit' e.g. if your 'remoteit_license_key: 592AA9BB-XXXX-YYYY-ZZZZ-6E27654C3DF6' exists in /etc/iiab/local_vars.yml"
+#   file:
+#     state: directory
+#     path: /etc/remoteit
+#   when: remoteit_license_key is defined
+
+# - name: "'touch /etc/remoteit/registration' e.g. if your 'remoteit_license_key: 592AA9BB-XXXX-YYYY-ZZZZ-6E27654C3DF6' exists in /etc/iiab/local_vars.yml"
+#   file:
+#     state: touch
+#     path: /etc/remoteit/registration
+#   when: remoteit_license_key is defined
+
+- name: "'mkdir /etc/remoteit'"
+  file:
+    state: directory
+    path: /etc/remoteit
+
+- name: "'touch /etc/remoteit/registration' to block generation of claim code below, also speeding things up a bit"
+  file:
+    state: touch
+    path: /etc/remoteit/registration
+
+
+# - name: "Install Device Package: {{ downloads_dir }}/{{ remoteit_deb }}"
+#   apt:
+#     deb: "{{ downloads_dir }}/{{ remoteit_deb }}"
+
+# - name: "Install Device Package: {{ remoteit_device_url }}"
+#   apt:
+#     deb: "{{ remoteit_device_url }}"
+
+# 2022-04-29: https://downloads.remote.it/remoteit/install_agent.sh refuses to
+# install on Mint as "ID_LIKE=ubuntu" in /etc/os-release is lowercase.  So we
+# add a tag with the word 'Ubuntu' containing an uppercase 'U' as a workaround.
+# (This hack can later be removed, if remote.it adjusts install_agent.sh above)
+- name: If Linux Mint, add "IIAB_LIKE=Ubuntu" to /etc/os-release to force install of remote.it
+  # shell: echo "IIAB_LIKE=Ubuntu" >> /etc/os-release
+  lineinfile:
+    path: /etc/os-release
+    line: IIAB_LIKE=Ubuntu
+  when: is_linuxmint
+
+# - name: Install remote.it Device Package for your CPU/OS, using https://downloads.remote.it/remoteit/install_agent.sh -- this puts a claim code in /etc/remoteit/config.json which is valid for 24h
+- name: Install remote.it Device Package for your CPU/OS, using https://downloads.remote.it/remoteit/install_agent.sh
+  shell: curl -L https://downloads.remote.it/remoteit/install_agent.sh | sh
+
+
+- name: "'rm /etc/remoteit/registration' (empty file used just above)"
+  file:
+    state: absent
+    path: /etc/remoteit/registration
+  ignore_errors: yes    # In case a future version of install_agent.sh deletes it for us
+
+
+- name: Install /usr/bin/iiab-remoteit from template -- so IIAB operators can quickly enable remote.it AND generate a new remote.it claim code (in /etc/remoteit/config.json) -- optionally downloading + installing the very latest Device Package (like the 2 steps above)
+  template:
+    src: iiab-remoteit
+    dest: /usr/bin
+    mode: 0755
+
+- name: Install /usr/bin/iiab-remoteit-off from template -- so IIAB operators can quickly turn off AND disable remote.it services on this IIAB
+  template:
+    src: iiab-remoteit-off
+    dest: /usr/bin
+    mode: 0755
 
 
 - name: Fail if architecture remoteit_cli_suffix == "unknown"
@@ -31,15 +102,16 @@
     msg: "Could not find a remote.it CLI binary for CPU architecture \"{{ ansible_architecture }}\""
   when: remoteit_cli_suffix == "unknown"
 
-- name: Download {{ remoteit_cli_url }} (CLI) for arch {{ remoteit_cli_suffix }} to /usr/bin/remoteit (755)
+- name: Download OPTIONAL {{ remoteit_cli_url }} (CLI) to /usr/bin/remoteit (755)
   get_url:
     url: "{{ remoteit_cli_url }}"
     dest: /usr/bin/remoteit
     mode: 0755
     force: yes
+    timeout: "{{ download_timeout }}"
 
 
-# RECORD remoteit AS INSTALLED
+# RECORD remote.it AS INSTALLED
 
 - name: "Set 'remoteit_installed: True'"
   set_fact:

@@ -95,4 +95,4 @@ For further usage information and troubleshooting, refer to the `Lokole user man
 Known Issues
 ------------
 
-For an up-to-date list of open issues, please see the `Lokole project's issue tracker <https://github.com/ascoderu/lokole/issues>`_.  See also `IIAB's issue tracker <https://github.com/iiab/iiab/issues>`_.
+For an up-to-date list of open issues, please see the `Lokole project's issue tracker <https://github.com/ascoderu/lokole/issues>`_.  See also `IIAB's issue tracker <https://github.com/iiab/iiab/search?q=lokole&type=issues>`_.

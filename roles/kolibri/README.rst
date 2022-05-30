@@ -2,7 +2,7 @@
 Kolibri README
 ==============
 
-This Ansible role installs `Kolibri <https://learningequality.org/kolibri/>`_ within `Internet-in-a-Box (IIAB) <http://internet-in-a-box.org/>`_.  Kolibri is an open-source educational platform specially designed to provide offline access to a wide range of quality, openly licensed educational contents in low-resource contexts like rural schools, refugee camps, orphanages, and also in non-formal school programs.
+This Ansible role installs `Kolibri <https://learningequality.org/kolibri/>`_ within `Internet-in-a-Box (IIAB) <https://internet-in-a-box.org/>`_.  Kolibri is an open-source educational platform specially designed to provide offline access to a wide range of quality, openly licensed educational contents in low-resource contexts like rural schools, refugee camps, orphanages, and also in non-formal school programs.
 
 Kolibri's online User Guide is here: `https://kolibri.readthedocs.io <https://kolibri.readthedocs.io/>`_
 
@@ -11,7 +11,7 @@ Using It
 
 If enabled and with the default settings, Kolibri should be accessible at: http://box/kolibri
 
-To login to Kolibri enter::
+Log in to Kolibri with::
 
   Username: Admin
   Password: changeme
@@ -32,7 +32,7 @@ When kolibri_provision is enabled (e.g. in `/etc/iiab/local_vars.yml <http://FAQ
   kolibri_admin_user: Admin
   kolibri_admin_password: changeme
 
-*Feel free to override any of the above, by copying the relevant line from /opt/iiab/iiab/roles/kolibri/defaults/main.yml to /etc/iiab/local_vars.yml (then run 'cd /opt/iiab/iiab' followed by './runrole kolibri' per IIAB's general guidelines at http://FAQ.IIAB.IO).*
+*Feel free to override any of the above, by copying the relevant line from /opt/iiab/iiab/roles/kolibri/defaults/main.yml to /etc/iiab/local_vars.yml (then run* ``cd /opt/iiab/iiab`` *followed by* ``./runrole kolibri`` *per IIAB's general guidelines at http://FAQ.IIAB.IO).*
 
 Cloning Content
 ---------------
@@ -44,7 +44,7 @@ Troubleshooting
 
 This unproxied version of Kolibri can sometimes help: http://box:8009/kolibri/
 
-You can run Kolibri manually with commands like::
+If you're logged in as root (that's the general assumption of this document) you can run Kolibri manually with commands like::
 
   systemctl stop kolibri           # Make sure the systemd service is not running
   export KOLIBRI_HOME=/library/kolibri
@@ -61,8 +61,8 @@ To return to using the systemd unit file::
 Known Issues
 ------------
 
-* Kolibri migrations can take a long time on a Raspberry Pi.  These long-running migrations could cause kolibri service timeouts.  Try running migrations manually using command ``kolibri manage migrate`` after following the troubleshooting instructions above.  Kolibri developers are trying to address this issue.  (See `learningequality/kolibri#4310 <https://github.com/learningequality/kolibri/issues/4310>`_)
+* Active list of Kolibri issues, as of December 2021: `#1545 <https://github.com/iiab/iiab/issues/1545>`_
 
-* Loading channels can take a long time on a Raspberry Pi.  When generating channel contents for Khan Academy, the step indicated as “Generating channel listing.  This could take a few minutes…” could mean ~30 minutes.  The device’s computation power is the bottleneck.  You might get logged out while waiting, but this is harmless and the process will continue.  Sit tight!
+* Kolibri migrations might still take a long time on a Raspberry Pi?  These long-running migrations could cause kolibri service timeouts.  Try running migrations manually using command ``kolibri manage migrate`` after following the troubleshooting instructions above.  See: `learningequality/kolibri#4310 <https://github.com/learningequality/kolibri/issues/4310>`_
 
-* Active list of Kolibri issues, as of September 2019: `#1545 <https://github.com/iiab/iiab/issues/1545>`_
+* Loading channels might still take a long time on a Raspberry Pi?  When generating channel contents for Khan Academy, the step indicated as “Generating channel listing.  This could take a few minutes…” could mean ~30 minutes.  The device’s computation power is the bottleneck.  You might get logged out while waiting, but this is harmless and the process will continue.  Sit tight!

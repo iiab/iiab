@@ -1,3 +1,13 @@
+- name: "Install packages for map installation: python3-geojson, python3-pil, python3-wget, php{{ php_version }}-sqlite3 (can also be installed by www_base/tasks/php-stem.yml)"
+  package:
+    state: present
+    name:
+      - python3-geojson
+      - python3-pil
+      - python3-wget
+      #- php{{ php_version }}-common    # Auto-installed as an apt dependency.  REGARDLESS: php{{ php_version }}-common superset php{{ php_version }}-cli is auto-installed by php{{ php_version }}-fpm in nginx/tasks/install.yml
+      - php{{ php_version }}-sqlite3
+
 - name: Make 5 directories (0755 by default)
   file:
     path: "{{ item }}"
@@ -10,27 +20,17 @@
     - "{{ vector_map_path }}/viewer/tiles"
     - "{{ vector_map_path }}/installer"
 
-- name: Download {{ map_catalog_url }}/map-catalog.json to {{ content_info }}
+- name: Download 26M {{ osm_repo_url }}/{{ maps_branch }}/2020/cities1000.sqlite to {{ vector_map_path }}/viewer/
   get_url:
-    url: "{{ map_catalog_url }}/map-catalog.json"    # http://download.iiab.io/content/OSM/vector-tiles
-    dest: "{{ content_info }}"    # /library/iiab
-
-- name: Download {{ iiab_map_url }}/assets/regions.json to {{ content_info }}
-  get_url:
-    url: "{{ iiab_map_url }}/assets/regions.json"    # http://download.iiab.io/content/OSM/vector-tiles/maplist/hidden
-    dest: "{{ content_info }}"
-
-# - name: Does 26M cities database {{ vector_map_path }}/viewer/cities1000.sqlite exist?
-#   stat:
-#     path: "{{ vector_map_path }}/viewer/cities1000.sqlite"
-#   register: cities_installed
-
-# - name: If not, download {{ iiab_map_url }}/regional-resources/cities1000.sqlite to {{ vector_map_path }}/viewer/
-- name: Download 26M {{ iiab_map_url }}/regional-resources/cities1000.sqlite to {{ vector_map_path }}/viewer/
-  get_url:
-    url: "{{ iiab_map_url }}/regional-resources/cities1000.sqlite"
+    url: "{{ osm_repo_url }}/{{ maps_branch }}/2020/cities1000.sqlite"    # e.g. https://raw.githubusercontent.com/iiab/maps + / + master + ...
     dest: "{{ vector_map_path }}/viewer/"
-# when: not cities_installed.stat.exists
+    timeout: "{{ download_timeout }}"
+
+- name: Download {{ osm_repo_url }}/{{ maps_branch }}/2020/map-catalog.json to {{ iiab_etc_path }}
+  get_url:
+    url: "{{ osm_repo_url }}/{{ maps_branch }}/2020/map-catalog.json"
+    dest: "{{ content_info }}"    # /library/iiab
+    timeout: "{{ download_timeout }}"
 
 - name: Symlink {{ doc_root }}/common/assets/map-catalog.json -> {{ content_info }}/map-catalog.json
   file:
@@ -44,38 +44,26 @@
     path: "{{ vector_map_path }}/test-page/assets/map-catalog.json"
     state: link
 
-- name: Symlink {{ vector_map_path }}/maplist/assets/regions.json -> /etc/iiab/regions.json
-  file:
-    src: "{{ content_info }}/regions.json"
-    path: "{{ vector_map_path }}/maplist/assets/regions.json"
-    state: link
-
 - name: Symlink {{ iiab_etc_path }}/map-catalog.json -> {{ content_info }}/map-catalog.json
   file:
     src: "{{ content_info }}/map-catalog.json"
     path: "{{ iiab_etc_path }}/map-catalog.json"
     state: link
 
-- name: Symlink {{ iiab_etc_path }}/regions.json -> {{ content_info }}/regions.json
-  file:
-    src: "{{ content_info }}/regions.json"
-    path: "{{ iiab_etc_path }}/regions.json"
-    state: link
-
-# At this point, fetches from github.com/georgejhunt/maps from test branch
 - name: Download OpenLayers test page stuff (JavaScript bundle etc) from {{ osm_repo_url }}/{{ maps_branch }}/osm-source/pages/test-page/build/* to {{ vector_map_path }}/test-page/ -- for test page http://box/osm-vector-maps/installer/
   get_url:
-    url: "{{ osm_repo_url }}/{{ maps_branch }}/osm-source/pages/test-page/build/{{ item }}"    # https://raw.githubusercontent.com/iiab/maps / master
+    url: "{{ osm_repo_url }}/{{ maps_branch }}/osm-source/pages/test-page/build/{{ item }}"
     dest: "{{ vector_map_path }}/test-page/"
+    timeout: "{{ download_timeout }}"
   with_items:
     - test-page-bundle.js
     - index.html
 
 - name: Download OpenLayers viewer page stuff (JavaScript bundle etc) from {{ osm_repo_url }}/{{ maps_branch }}/osm-source/pages/viewer/build/* to {{ vector_map_path }}/viewer/
-# At this point, fetches from github.com/iiab/maps from {{ maps_branch }} branch
   get_url:
     url: "{{ osm_repo_url }}/{{ maps_branch }}/osm-source/pages/viewer/build/{{ item }}"
     dest: "{{ vector_map_path }}/viewer/"
+    timeout: "{{ download_timeout }}"
   with_items:
     - index.html
     - viewer-bundle.js
@@ -85,38 +73,44 @@
   get_url:
     url: "{{ osm_repo_url }}/{{ maps_branch }}/osm-source/pages/viewer/{{ item }}"
     dest: "{{ vector_map_path }}/viewer/"
+    timeout: "{{ download_timeout }}"
   with_items:
     - mbtileinfo.php
     - popup.css
     - searchapi.php
     - tileserver.php
 
-- name: Download 34MB {{ map_catalog_url }}/planet_z0-z6_2019.mbtiles to {{ vector_map_path }}/installer/ -- for map installer
-  get_url:
-    url: "{{ map_catalog_url }}/planet_z0-z6_2019.mbtiles"
-    dest: "{{ vector_map_path }}/installer/"
 
-- name: Symlink {{ vector_map_path }}/installer/detail.mbtiles -> {{ vector_map_path }}/installer/planet_z0-z6_2019.mbtiles
+- name: Download 48MB {{ map_installer_url }}/{{ installer_planet }} to {{ vector_map_path }}/installer/ -- for map installer
+  get_url:
+    url: "{{ map_installer_url }}/{{ installer_planet }}"    # e.g. http://download.iiab.io/content/OSM/vector-tiles + / + planet_z0-z6_2020.mbtiles
+    dest: "{{ vector_map_path }}/installer/"
+    timeout: "{{ download_timeout }}"
+
+- name: Symlink {{ vector_map_path }}/installer/detail.mbtiles -> {{ vector_map_path }}/installer/{{ installer_planet }}
   file:
-    src: "{{ vector_map_path }}/installer/planet_z0-z6_2019.mbtiles"
+    src: "{{ vector_map_path }}/installer/{{ installer_planet }}"
     path: "{{ vector_map_path }}/installer/detail.mbtiles"
     state: link
 
-- name: Symlink {{ vector_map_path }}/viewer/tiles/planet_z0-z6_2019.mbtiles -> {{ vector_map_path }}/installer/planet_z0-z6_2019.mbtiles
+- name: Symlink {{ vector_map_path }}/viewer/tiles/{{ installer_planet }} -> {{ vector_map_path }}/installer/{{ installer_planet }}
   file:
-    src: "{{ vector_map_path }}/installer/planet_z0-z6_2019.mbtiles"
-    path: "{{ vector_map_path }}/viewer/tiles/planet_z0-z6_2019.mbtiles"
+    src: "{{ vector_map_path }}/installer/{{ installer_planet }}"
+    path: "{{ vector_map_path }}/viewer/tiles/{{ installer_planet }}"
     state: link
 
-- name: Download abbreviated satellite images from {{ map_catalog_url }}/satellite_z0-z6_v3.mbtiles to {{ vector_map_path }}/viewer/tiles/
+- name: Download 25MB {{ map_installer_url }}/{{ installer_satellite }} to {{ vector_map_path }}/viewer/tiles/ -- basic satellite photos
   get_url:
-    url: "{{ map_catalog_url }}/satellite_z0-z6_v3.mbtiles"
+    url: "{{ map_installer_url }}/{{ installer_satellite }}"    # e.g. satellite_z0-z6_2020.mbtiles
     dest: "{{ vector_map_path }}/viewer/tiles/"
+    timeout: "{{ download_timeout }}"
+
 
 - name: Download {index.html, installer-bundle.js} from {{ osm_repo_url }}/{{ maps_branch }}/osm-source/pages/installer/build/* to {{ vector_map_path }}/installer/ -- for map installer
   get_url:
     url: "{{ osm_repo_url }}/{{ maps_branch }}/osm-source/pages/installer/build/{{ item }}"
     dest: "{{ vector_map_path }}/installer/"
+    timeout: "{{ download_timeout }}"
   with_items:
     - index.html
     - installer-bundle.js
@@ -125,22 +119,23 @@
   get_url:
     url: "{{ osm_repo_url }}/{{ maps_branch }}/osm-source/pages/installer/{{ item }}"
     dest: "{{ vector_map_path }}/installer/"
+    timeout: "{{ download_timeout }}"
   with_items:
     - map.css
     - style-osm.json
     - installer-functions.js
     - tileserver.php
 
-# the following was changed to grab from the iiab/maps repo
 - name: Download 15 common assets from {{ osm_repo_url }}/{{ maps_branch }}/osm-source/pages/viewer/assets/* to {{ vector_map_path }}/viewer/assets/ -- for the general purpose map viewer
   get_url:
     url: "{{ osm_repo_url }}/{{ maps_branch }}/osm-source/pages/viewer/assets/{{ item }}"
     dest: "{{ vector_map_path }}/viewer/assets/"
+    timeout: "{{ download_timeout }}"
   with_items:
     - bboxes.geojson
     - center.png
     - countries.json
-    - fonts.css
+    # - fonts.css
     - ol-layerswitcher.css
     - ol-contextmenu.css
     - pin_drop.png
@@ -167,37 +162,33 @@
     state: link
     force: yes
 
-- name: Copy fonts (16 files) to {{ doc_root }}/common/fonts/ for the general purpose map viewer (root:root, 0644 by default)
+
+- name: Copy noto-sans fonts (15 files) to {{ doc_root }}/common/fonts/ for the general purpose map viewer (root:root, 0644 by default)
   copy:
     src: "{{ item }}"
     dest: "{{ doc_root }}/common/fonts/"
-    # mode: 0644
-    # owner: root
-    # group: root
   with_fileglob:
-    - fonts/*
+    - fonts/noto-sans*
+
+- name: Copy fonts.css to {{ vector_map_path }}/viewer/assets/
+  copy:
+    src: fonts/fonts.css
+    dest: "{{ vector_map_path }}/viewer/assets/"
+
 
 - name: Force Download redirect {{ osm_repo_url }}/{{ maps_branch }}/osm-source/pages/viewer/installer-index.redirect to test page {{ vector_map_path }}/maplist/index.html
   get_url:
     url: "{{ osm_repo_url }}/{{ maps_branch }}/osm-source/pages/viewer/installer-index.redirect"
     dest: "{{ vector_map_path }}/maplist/index.html"
     force: yes
-
-- name: "Install packages for map installation: python3-wget, php{{ php_version }}-sqlite3, python3-geojson, python3-pil"
-  package:
-    state: present
-    name:
-      - python3-wget
-      #- php{{ php_version }}-common    # Auto-installed as an apt dependency.  REGARDLESS: php{{ php_version }}-common superset php{{ php_version }}-cli is auto-installed by php{{ php_version }}-fpm in nginx/tasks/install.yml
-      - php{{ php_version }}-sqlite3
-      - python3-geojson
-      - python3-pil
+    timeout: "{{ download_timeout }}"
 
 - name: Copy 6 scripts to /usr/bin, for downloading tiles (0755)
   get_url:
     url: "{{ osm_repo_url }}/{{ maps_branch }}/osm-source/pages/viewer/scripts/{{ item }}"
     dest: /usr/bin/
     mode: 0755
+    timeout: "{{ download_timeout }}"
   with_items:
     - iiab-install-map-region
     - iiab-extend-sat.py

@@ -1,10 +1,10 @@
 ## Objective
 
-To streamline troubleshooting of remote Internet-in-a-Box (IIAB) installations, we bundle up common machine/software diagnostics, all together in 1 human-readable small file, that can be easily circulated online AND offline.
+To streamline troubleshooting of remote Internet-in-a-Box (IIAB) installations, we bundle up common machine/software diagnostics, all together in 1 human-readable small file, that can be easily circulated online AND offline.  Just FYI Raspberry Pi OS's [/usr/bin/raspinfo](https://github.com/raspberrypi/utils/blob/master/raspinfo/raspinfo) serves a very similar purpose, but we do not include that program's 700-to-800 line output at present.
 
 Passwords (including Wi-Fi passwords) are auto-redacted from this file, to protect your community confidentiality.
 
-The ``pastebinit`` command can then be used to auto-upload this file, creating a short URL that makes it much easier to circulate among [volunteers](http://internet-in-a-box.org/pages/contributing.html).
+Finally, the ``pastebinit`` command can then be used to auto-upload this file, creating a short URL that makes it much easier to circulate among [volunteers](http://internet-in-a-box.org/pages/contributing.html).
 
 But first off, the file is compiled by harvesting 1 + 6 kinds of things:
 
@@ -62,4 +62,4 @@ But first off, the file is compiled by harvesting 1 + 6 kinds of things:
 
 ## Source Code
 
-Please look over the bottom of [iiab-diagnostics](iiab-diagnostics) (lines 110-231 especially) to learn more about which common IIAB files and commands make this rapid troubleshooting possible.
+Please look over the bottom of [iiab-diagnostics](iiab-diagnostics) (lines 119-243 especially) to learn more about which common IIAB files and commands make this rapid troubleshooting possible.
