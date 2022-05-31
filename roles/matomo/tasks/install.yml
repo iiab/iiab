@@ -35,6 +35,10 @@
     method: GET
     status_code: 200
   register: matomo_welcome
+- name: debug welcome
+  debug:
+    var: matomo_welcome
+    verbosity: 2
 - name: Set a variable for the MATOMO_SESSID cookie
   set_fact:
     matomo_session_cookie: "MATOMO_SESSID={{ cookie.value }}"
@@ -52,6 +56,10 @@
     timeout: 120
     status_code: 200
   register: matomo_system_check
+- name: debug syscheck
+  debug:
+    var: matomo_system_check
+    verbosity: 2
 - name: Matomo Database Setup
   uri:
     url: "{{ matomo_url }}index.php?action=databaseSetup"
@@ -73,6 +81,20 @@
     method: GET
     status_code: 200
   register: matomo_table_creation
+- name: Set a variable for the MATOMO_SESSID cookie
+  set_fact:
+    matomo_session_cookie: "MATOMO_SESSID={{ cookie.value }}"
+  when:
+    - matomo_table_creation.cookies is defined
+    - matomo_table_creation.cookies | length > 0
+    - cookie.key == "MATOMO_SESSID"
+  loop: "{{ matomo_table_creation.cookies | dict2items }}"
+  loop_control:
+    loop_var: cookie
+- name: debug tablecreation
+  debug:
+    var: matomo_table_creation
+    verbosity: 2
 - name: Matomo User Setup
   uri:
     url: "{{ matomo_url }}index.php?action=setupSuperUser&module=Installation"
@@ -89,16 +111,6 @@
     body_format: form-urlencoded
     status_code: 302
   register: matomo_setup_superuser
-- name: Set a variable for the MATOMO_SESSID cookie
-  set_fact:
-    matomo_session_cookie: "MATOMO_SESSID={{ cookie.value }}"
-  when:
-    - matomo_table_creation.cookies is defined
-    - matomo_table_creation.cookies | length > 0
-    - cookie.key == "MATOMO_SESSID"
-  loop: "{{ matomo_table_creation.cookies | dict2items }}"
-  loop_control:
-    loop_var: cookie
 - name: Configure Matomo to track IIAB
   uri:
     url: "{{ matomo_url }}index.php?action=firstWebsiteSetup&module=Installation"
