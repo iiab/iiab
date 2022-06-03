@@ -1,16 +1,22 @@
 - block:
-  - name: test that {{ library_loc }} && {{ library_img }} are defined
+  - name: test that {{ library_loc }} && {{ library_name }} && {{ has_ext_disk }} are defined
     debug:
-      msg: "VARIABLE MUST BE DEFINED: '{{ library_loc }} && {{ library_img }}' NEEDS A PROPER VALUE e.g. IN: /etc/iiab/local_vars.yml"
+      msg: "VARIABLE MUST BE DEFINED: '{{ library_loc }} && {{ library_name }}' && {{ has_ext_disk }} NEEDS A PROPER VALUE e.g. IN: /etc/iiab/local_vars.yml"
   - meta: end_play
-  when: library_img is undefined or library_loc is undefined
+  when: library_name is undefined or library_loc is undefined or has_ext_disk is undefined
+
+- name: Assert that has_ext_disk is of type boolean (NOT type string, which can invert logic!)
+  assert:
+    that: "{{ has_ext_disk }} | type_debug == 'bool'"
+    fail_msg: "VARIABLE MUST BE BOOLEAN True/False IN: /etc/iiab/local_vars.yml"
+    quiet: yes
 
 - name: Create /library mountpoint
   file:
     path: /library
     state: directory
 
-- name: stop services on /library
+- name: Stop services hosted on /library
   systemd:
     name: "{{ item }}"
     state: stopped
@@ -25,49 +31,94 @@
   failed_when: False
   when: iiab_stage|int == 9
 
-- name: Retrieve {{ library_base_url }} to {{ library_loc }}/{{ library_img }}
-  command: wget -c {{ library_base_url }} -O {{ library_loc }}/{{ library_img }}
-  when: library_base_url is defined
-
-- name: Retrieve {{ library_base_path }} to {{ library_loc }}/{{ library_img }}
-  command: cp {{ library_base_path }} {{ library_loc }}/{{ library_img }}
-  when: library_base_path is defined
-
-- name: Check ext4 filesystem inside container
-  command: e2fsck -p -f {{ library_loc }}/{{ library_img }}
-  register: fscheck1
-  failed_when: fscheck1.rc not in [ 0, 1, 2 ]
-  when: library_base_path is defined or library_base_url is defined
-
-- name: Expand {{ library_img }} to {{ library_size }} in size
-  command: dd if=/dev/zero of={{ library_loc }}/{{ library_img }} bs=1 count=0 seek={{ library_size }}
-
-- name: Create ext4 filesystem inside new container
-  command: mkfs.ext4 {{ library_loc }}/{{ library_img }}
-  when: library_base_path is undefined and library_base_url is undefined
-
-- name: Resize filesystem inside container
-  command: resize2fs -f {{ library_loc }}/{{ library_img }}
-  #when: library_base_path is defined or library_base_url is defined
-
-- name: Check ext4 filesystem inside container
-  command: e2fsck -p -f {{ library_loc }}/{{ library_img }}
-  register: fscheck2
-  failed_when: fscheck2.rc not in [ 0, 1, 2 ]
-
 - name: Clear old fstab entries for /library
   command: sed -i "/library/d" /etc/fstab
 
-- name: Create new fstab entry
-  lineinfile:
-    path: /etc/fstab
-    state: present
-    line: '{{ library_loc }}/{{ library_img }}	/library	ext4	loop	0 0'
+- name: Create ext4 filesystem inside new partitioned container
+  include_tasks: fresh_container.yml
+  when: library_base_path is undefined and library_base_url is undefined and not has_ext_disk
 
-- name: Mount {{ library_loc }}/{{ library_img }} at /library
+- name: Retrieve {{ library_base_url }} to {{ library_target }}
+  command: wget -c {{ library_base_url }} -O {{ library_target }}
+  when: library_base_url is defined and not has_ext_disk
+
+- name: Retrieve {{ library_base_path }} to {{ library_target }}
+  command: cp {{ library_base_path }} {{ library_target }}
+  when: library_base_path is defined and not has_ext_disk
+
+- name: Prepare pre-canned image
+  block:
+  - name: Setup loop device
+    command: losetup -P -f {{ library_target }}
+
+  - name: Find the loop device
+    shell: losetup -l | grep {{ library_target }} | awk  '{print $1}'
+    register: loop_dev
+
+  - name: Check ext4 filesystem inside container
+    command: e2fsck -p -f {{ loop_dev.stdout }}p1
+    register: fscheck1
+    failed_when: fscheck1.rc not in [ 0, 1, 2 ]
+
+  - name: Expand {{ library_target }} to {{ library_size }} in size
+    command: dd if=/dev/zero of={{ library_target }} bs=1 count=0 seek={{ library_size }}
+
+  - name: Resize canned image
+    command: growpart {{ library_target }} 1
+
+  - name: Resize filesystem inside container
+    command: resize2fs -f {{ loop_dev.stdout }}p1
+
+  - name: Check ext4 filesystem inside container
+    command: e2fsck -p -f {{ loop_dev.stdout }}p1
+    register: fscheck2
+    failed_when: fscheck2.rc not in [ 0, 1, 2 ]
+  when: (library_base_path is defined or library_base_url is defined) and not has_ext_disk
+
+  block:
+  - name: Create new fstab entry
+    lineinfile:
+      path: /etc/fstab
+      state: present
+      line: '{{ library_target }}	/library	ext4	loop,offset=1048576	0 0'
+
+  - name: Release loop device
+    command: losetup -D {{ library_target }}
+  when: not has_ext_disk
+
+- name: Prepare external device
+  block:
+  - name: Create fstab entry for external /library using label
+    lineinfile:
+      path: /etc/fstab
+      state: present
+      line: 'LABEL={{ library_name }}  /library  ext4  defaults,nofail  0  0'
+
+  - name: Use pre-canned image to populate external drive
+    block:
+    - name: Find {{ library_name }} label of external device
+      shell: lsblk -no pkname $(blkid --label {{ library_name }})
+      register: ext_dev
+
+    - name: Write {{ library_base_path }} to {{ ext_dev.stdout }}
+      command: dd if={{ library_base_path }} of={{ ext_dev.stdout }}
+
+    - name: Resize external device partition
+      command: growpart {{ ext_dev.stdout }} 1
+
+    - name: Resize filesystem on first partition
+      command: resize2fs -f {{ ext_dev.stdout }}p1
+    when: library_base_path is defined
+  - name: Check ext4 filesystem on external drive
+    command: e2fsck -p -f {{ ext_dev.stdout }}p1
+    register: fscheck2
+    failed_when: fscheck2.rc not in [ 0, 1, 2 ]
+  when: has_ext_disk
+
+- name: Mounting /library
   command: mount -a
 
-- name: stop services on /library
+- name: Start services hosted on /library
   systemd:
     name: "{{ item }}"
     state: started

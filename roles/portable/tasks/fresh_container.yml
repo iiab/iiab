@@ -1,0 +1,18 @@
+- name: Create {{ library_target }} with {{ library_size }} in size
+  command: dd if=/dev/zero of={{ library_target }} bs=1 count=0 seek={{ library_size }}
+
+- name: parted - mklabel msdos
+  command: parted {{ library_target }} -- mklabel msdos
+
+- name: parted - mkpart primary 1MiB 100%
+  command: parted {{ library_target }} -- mkpart primary 1MiB 100%
+
+- name: Setup loop device
+  command: sudo losetup -P -f {{ library_target }}
+
+- name: Find the loop device
+  shell: losetup -l | grep {{ library_target }} | awk  '{print $1}'
+  register: loop_dev
+
+- name: Create ext4 filesystem on first partition
+  command: mkfs.ext4 {{ loop_dev.stdout }}p1
