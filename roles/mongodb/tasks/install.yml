@@ -55,11 +55,11 @@
   # end block
   when: not (ansible_architecture == "x86_64" or ansible_architecture == "aarch64")
 
-# 32-bit OS's are handled above: this should handle aarch32 including 32-bit Ubuntu
-# from https://ubuntu.com/download/raspberry-pi but Ubuntu 20.04 32-bit might fail
-# untested, and 32-bit Intel might puke as this was orginally deployed for Raspbian.
-# (Haven't seen bootable 32-bit Intel installers for a while now.)
-# 64-bit OS's proceed below.
+# 32-bit OS's are handled above: this should handle aarch32 including 32-bit
+# Ubuntu from https://ubuntu.com/download/raspberry-pi but Ubuntu 20.04 32-bit
+# might fail untested, and 32-bit Intel might puke as this was orginally
+# deployed for Raspbian.  (Haven't seen bootable 32-bit Intel installers for a
+# while now.)  64-bit OS's proceed below.
 
 - block:
   - name: Add mongodb.org signing key (only 64-bit support available)
@@ -111,15 +111,43 @@
         - mongodb-org-server
       state: present
 
-  - name: Establish {{ mongodb_conf }} port {{ mongodb_port }} (mongodb_conf) -- takes effect on next (re)start of the service -- via enable-or-disable.yml or via sugarizer.service auto-starting MongoDB on demand
+  - name: Establish {{ mongodb_conf }} dbPath {{ mongodb_db_path }} -- instead of /var/lib/mongodb default -- takes effect on next (re)start of mongodb.service -- via enable-or-disable.yml or via sugarizer.service auto-starting MongoDB on demand
     lineinfile:
       path: "{{ mongodb_conf }}"
-      regexp: '^\s*port:' # \s = any whitespace char. stackoverflow.com/a/38491899
-      #backrefs: yes
+      regexp: '^\s*dbPath:'    # \s = any whitespace char. stackoverflow.com/a/38491899
+      line: "  dbPath: {{ mongodb_db_path }}"    # /library/dbdata/mongodb
+
+  # GRATUITOUS (port 27017 is already the default)
+  - name: Establish {{ mongodb_conf }} port {{ mongodb_port }} -- takes effect on next (re)start of mongodb.service -- via enable-or-disable.yml or via sugarizer.service auto-starting MongoDB on demand
+    lineinfile:
+      path: "{{ mongodb_conf }}"
+      regexp: '^\s*port:'    # \s = any whitespace char. stackoverflow.com/a/38491899
       line: "  port: {{ mongodb_port }}"    # 27017
 
+  # 2022-06-07 #3236 MongoDB 5.0.9 "Illegal instruction" on RPi 4 also reveals:
+  # (1) dbPath fix in /etc/mongod.conf (~12 lines above) from /var/lib/mongodb
+  #     to /library/dbdata/mongodb
+  # (2) mongod.lock is effectively NO LONGER A LOCK FILE -- but rather a PID
+  #     file (it may be zero bytes, but never goes away) as confirmed with
+  #     MongoDB 4.4.14 on RPi 4 and 5.0.9 Ubuntu 22.04 on x86_64.  And now
+  #     'mongod --repair --dbpath /library/dbdata/mongodb/' IGNORES mongod.lock
+  # (3) mongodb.service should really use a more graceful way to shut down
+  #     than 'killall mongod' (MongoDB 5+ shuts down w/ 15sec quiesce period).
+  # (4) MongoDB 6.0 is likely imminent but in the meantime a 2022-01-12 option
+  #     (stanza below) is MongoDB 5.0.5 compiled for 64-bit RPi 4 and RPi 400:
+  # https://andyfelong.com/downloads/raspbian_mongodb_5.0.5.gz
+  # https://andyfelong.com/2021/08/mongodb-4-4-under-raspberry-pi-os-64-bit-raspbian64/
+
+  - name: OVERWRITING AN APT PACKAGE IS RISKY (IT MIGHT LATER UPDATE + OVERWRITE THIS!) BUT FOR NOW download & unzip 76MB http://download.iiab.io/packages/raspbian_mongodb_5.0.5.gz OVERWRITING 5.0.9+ {mongo, mongod, mongos} in /usr/bin
+    unarchive:
+      remote_src: yes
+      src: "{{ iiab_download_url }}/raspbian_mongodb_5.0.5.gz"
+      dest: /usr/bin
+    when: rpi_model != "none"
+
   # end block
-  when: (ansible_architecture == "aarch64") or (ansible_architecture == "x86_64")
+  when: ansible_architecture == "aarch64" or ansible_architecture == "x86_64"
+
 
 
 # 2. CONFIGURE MongoDB FOR IIAB
