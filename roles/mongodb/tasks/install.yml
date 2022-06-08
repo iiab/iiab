@@ -67,7 +67,7 @@
     args:
       warn: false
 
-  - name: Use mongodb-org's Debian repo for Debian (only amd64 support available)
+  - name: Use mongodb-org's Debian repo for Debian on x86_64 (only amd64 support available)
     apt_repository:
       # 2020-10-28: http://repo.mongodb.org/apt/debian/dists/ supports only
       # {buster 10, stretch 9, jessie 8, wheezy 7}
@@ -76,38 +76,45 @@
       #repo: deb http://repo.mongodb.org/apt/debian {{ ansible_distribution_release }}/mongodb-org/4.4 main
       state: present
       filename: mongodb-org
-    when: is_debian and (ansible_architecture == "x86_64")
+    when: is_debian and ansible_architecture == "x86_64"
 
-  # Debian 10 aarch64 might work below but is blocked in main.yml
-  - name: Use mongodb-org's Ubuntu focal repo for RasPiOS-aarch64
+  - name: Otherwise use mongodb-org's Ubuntu focal repo [ arch=amd64,arm64 ]
     apt_repository:
       repo: deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu focal/mongodb-org/5.0 multiverse
       state: present
       filename: mongodb-org
-    when: is_raspbian and (ansible_architecture == "aarch64")
+    when: not (is_debian and ansible_architecture == "x86_64")
 
-  - name: Use mongodb-org's Ubuntu focal repo for Linux Mint - 64bit only
-    apt_repository:
-      repo: deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu focal/mongodb-org/5.0 multiverse
-      state: present
-      filename: mongodb-org
-    when: is_linuxmint
+  # # Debian 10 aarch64 might work below but is blocked in main.yml
+  # - name: Use mongodb-org's Ubuntu focal repo for RasPiOS-aarch64
+  #   apt_repository:
+  #     repo: deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu focal/mongodb-org/5.0 multiverse
+  #     state: present
+  #     filename: mongodb-org
+  #   when: is_raspbian and (ansible_architecture == "aarch64")
 
-  - name: Use mongodb-org's Ubuntu repo for all non-Mint Ubuntu - 64bit only
-    apt_repository:
-      # 2020-10-27: https://repo.mongodb.org/apt/ubuntu/dists/ supports only
-      # {focal 20.04, bionic 18.04, xenial 16.04, trusty 14.04, precise 12.04}
-      # so other Ubuntu's like groovy 20.10 need to revert to recent LTS repo:
-      repo: deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu focal/mongodb-org/5.0 multiverse
-      #repo: deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu {{ ansible_distribution_release }}/mongodb-org/4.4 multiverse
-      state: present
-      filename: mongodb-org
-    when: is_ubuntu and not is_linuxmint
+  # - name: Use mongodb-org's Ubuntu focal repo for Linux Mint - 64bit only
+  #   apt_repository:
+  #     repo: deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu focal/mongodb-org/5.0 multiverse
+  #     state: present
+  #     filename: mongodb-org
+  #   when: is_linuxmint
+
+  # - name: Use mongodb-org's Ubuntu repo for all non-Mint Ubuntu - 64bit only
+  #   apt_repository:
+  #     # 2020-10-27: https://repo.mongodb.org/apt/ubuntu/dists/ supports only
+  #     # {focal 20.04, bionic 18.04, xenial 16.04, trusty 14.04, precise 12.04}
+  #     # so other Ubuntu's like groovy 20.10 need to revert to recent LTS repo:
+  #     repo: deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu focal/mongodb-org/5.0 multiverse
+  #     #repo: deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu {{ ansible_distribution_release }}/mongodb-org/4.4 multiverse
+  #     state: present
+  #     filename: mongodb-org
+  #   when: is_ubuntu and not is_linuxmint
 
   - name: "Install packages: mongodb-org, mongodb-org-server"
     package:
       name:
-        - mongodb-org
+        - mongodb-org    # Meta-package that's auto-installed anyway (SO PROB UNNEC HERE?)
         - mongodb-org-server
       state: present
 
@@ -124,21 +131,32 @@
       regexp: '^\s*port:'    # \s = any whitespace char. stackoverflow.com/a/38491899
       line: "  port: {{ mongodb_port }}"    # 27017
 
-  # 2022-06-07 #3236 MongoDB 5.0.9 "Illegal instruction" on RPi 4 also reveals:
-  # (1) dbPath fix in /etc/mongod.conf (~12 lines above) from /var/lib/mongodb
-  #     to /library/dbdata/mongodb
-  # (2) mongod.lock is effectively NO LONGER A LOCK FILE -- but rather a PID
+  # 2022-06-07 #3236 MongoDB 5.0.9 "Illegal instruction" on RPi 4...
+  # https://www.mongodb.com/community/forums/t/core-dump-on-mongodb-5-0-on-rpi-4/115291/14
+  # ...as ARM v8-A < ARM v8.2-A ...also reveals:
+  #
+  # (1) For Intel x86_64, MongoDB 5.x requires Sandy Bridge or later.
+  #     For AMD x86_64, MongoDB 5.x requires Bulldozer or later.
+  #     Roughly speaking, this means CPUs with AVX instructions:
+  #     https://github.com/docker-library/mongo/issues/485#issuecomment-891991814
+  # (2) dbPath needed fixing in /etc/mongod.conf (~16 lines above) from
+  #     /var/lib/mongodb to /library/dbdata/mongodb
+  # (3) mongod.lock is effectively NO LONGER A LOCK FILE -- but rather a PID
   #     file (it may be zero bytes, but never goes away) as confirmed with
   #     MongoDB 4.4.14 on RPi 4 and 5.0.9 Ubuntu 22.04 on x86_64.  And now
   #     'mongod --repair --dbpath /library/dbdata/mongodb/' IGNORES mongod.lock
-  # (3) mongodb.service should really use a more graceful way to shut down
-  #     than 'killall mongod' (MongoDB 5+ shuts down w/ 15sec quiesce period).
-  # (4) MongoDB 6.0 is likely imminent but in the meantime a 2022-01-12 option
-  #     (stanza below) is MongoDB 5.0.5 compiled for 64-bit RPi 4 and RPi 400:
+  # (4) mongodb.service needed a more graceful way to shut down than
+  #     'killall mongod' (MongoDB 5+ shuts down w/ 15sec quiesce period).
+  # (5) MongoDB 6.0 is likely imminent; meantime a 2022-01-12 option (~12
+  #     lines below) is MongoDB 5.0.5 compiled for 64-bit RPi 4 and RPi 400:
   # https://andyfelong.com/downloads/raspbian_mongodb_5.0.5.gz
   # https://andyfelong.com/2021/08/mongodb-4-4-under-raspberry-pi-os-64-bit-raspbian64/
 
-  - name: OVERWRITING AN APT PACKAGE IS RISKY (IT MIGHT LATER UPDATE + OVERWRITE THIS!) BUT FOR NOW download & unzip 76MB http://download.iiab.io/packages/raspbian_mongodb_5.0.5.gz OVERWRITING 5.0.9+ {mongo, mongod, mongos} in /usr/bin
+  - name: Run 'apt-mark hold mongodb-org mongodb-org-server' if hardware is Raspberry Pi (any 64-bit OS) so MongoDB 5.0.5 binaries {mongo, mongod, mongos} can be installed without apt interfering in future
+    command: apt-mark hold mongodb-org mongodb-org-server
+    when: rpi_model != "none"
+
+  - name: Unarchive 76MB {{ iiab_download_url }}//packages/raspbian_mongodb_5.0.5.gz OVERWRITING 5.0.9+ {mongo, mongod, mongos} in /usr/bin, if hardware is Raspberry Pi (any 64-bit OS)
     unarchive:
       remote_src: yes
       src: "{{ iiab_download_url }}/raspbian_mongodb_5.0.5.gz"
