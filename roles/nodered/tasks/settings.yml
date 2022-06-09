@@ -1,0 +1,112 @@
+- name: Ensure Linux group '{{ nodered_linux_user }}' exists
+  group:
+    name: "{{ nodered_linux_user }}"
+    state: present
+
+- name: Ensure nodered_linux_user '{{ nodered_linux_user }}' exists and is added to group '{{ nodered_linux_user }}'
+  user:
+    name: "{{ nodered_linux_user }}"
+    group: "{{ nodered_linux_user }}"    # Primary group
+
+- name: Ensure directory /home/{{ nodered_linux_user }}/.node-red/ exists
+  file:
+    path: /home/{{ nodered_linux_user }}/.node-red
+    state: directory
+    owner: "{{ nodered_linux_user }}"
+    group: "{{ nodered_linux_user }}"
+    mode: 0775
+
+
+# - name: Install /home/{{ nodered_linux_user }}/.node-red/settings.js from template, with authentication
+#   template:
+#     backup: yes
+#     src: settings.js.j2
+#     dest: /home/{{ nodered_linux_user }}/.node-red/settings.js
+#     owner: "{{ nodered_linux_user }}"
+#     group: "{{ nodered_linux_user }}"
+#     mode: 0755
+
+# 2022-06-08 some alternative options arising from official installer
+# https://github.com/node-red/linux-installers/blob/master/deb/update-nodejs-and-nodered
+#
+# 1) User {{ nodered_linux_user }} run 'node-red admin init' to create /home/{{ NODERED_LINUX_USER }}/.node-red/settings.js
+# 2) Copy /usr/lib/node_modules/node-red/settings.js to /home/{{ NODERED_LINUX_USER }}/.node-red/settings.js
+# 3) https://github.com/node-red/node-red/blob/master/packages/node_modules/node-red/settings.js
+#
+# Approach 1) (THEIR VERY INTERACTIVE SCRIPT) can't be automated like this:
+#- name: Run 'node-red admin init' as user '{{ nodered_linux_user }}' to create /home/{{ nodered_linux_user }}/.node-red/settings.js
+#  command: runuser -u {{ nodered_linux_user }} node-red admin init
+
+- name: Copy /usr/lib/node_modules/node-red/settings.js to /home/{{ nodered_linux_user }}/.node-red/settings.js
+  copy:
+    remote_src: yes
+    src: /usr/lib/node_modules/node-red/settings.js
+    dest: /home/{{ nodered_linux_user }}/.node-red/settings.js
+    owner: "{{ nodered_linux_user }}"
+    group: "{{ nodered_linux_user }}"
+    #mode: preserve    # Implied (and required) w/ remote_src, since Ansible 2.6
+
+
+- name: Splice username and password into /home/{{ nodered_linux_user }}/.node-red/settings.js
+  blockinfile:
+    path: /home/{{ nodered_linux_user }}/.node-red/settings.js
+    block: |2    # |n MEANS: Set the block's left edge n CHARACTERS TO THE RIGHT of *this line's* indentation -- where n is {1..9} -- instead of setting its left edge to the 1st non-blank line's indentation below
+          adminAuth: {
+              type: "credentials",
+              users: [{
+                  username: "{{ nodered_admin_user }}",
+                  password: "{{ nodered_admin_pwd_hash }}",
+                  permissions: "*"
+              }]
+          },
+    marker: "// {mark} ANSIBLE MANAGED BLOCK"    # Surround block with comment lines: "// BEGIN ANSIBLE MANAGED BLOCK", "// END ANSIBLE MANAGED BLOCK"
+    insertafter: '^module.exports = {$'
+    #insertbefore: '^}$'
+
+# 2022-06-09: IF ABOVE SNIPPET ALREADY EXISTS *UNCOMMENTED* IN settings.js,
+# THESE WOULD BE NEEDED INSTEAD OF blockinfile:
+
+# - name: Splice 'username: "{{ nodered_admin_user }}",' into /home/{{ nodered_linux_user }}/.node-red/settings.js
+#   lineinfile:
+#     path: /home/{{ nodered_linux_user }}/.node-red/settings.js
+#     regexp: 'username:'
+#     line: '            username: "{{ nodered_admin_user }}",'
+
+# - name: Splice 'password: "{{ nodered_admin_pwd_hash }}",' into /home/{{ nodered_linux_user }}/.node-red/settings.js
+#   lineinfile:
+#     path: /home/{{ nodered_linux_user }}/.node-red/settings.js
+#     regexp: 'password:'
+#     line: '            password: "{{ nodered_admin_pwd_hash }}",'
+
+
+# 2022-06-09: httpRoot might be going away?  Increasingly hidden from
+# settings.js which used to say: "property can be used in place of
+# 'httpAdminRoot' and 'httpNodeRoot', to apply the same root to both parts."
+#
+# "httpRoot sets the root url for both admin and node endpoints.
+# It overrides the values set by httpAdminRoot and httpNodeRoot"
+# https://nodered.org/docs/user-guide/runtime/configuration
+#
+# - name: Splice "httpRoot: '/{{ nodered_web_path }}'," into /home/{{ nodered_linux_user }}/.node-red/settings.js
+#   lineinfile:
+#     path: /home/{{ nodered_linux_user }}/.node-red/settings.js
+#     regexp: '^\s*httpRoot:'
+#     line: "    httpRoot: '/{{ nodered_web_path }}',"
+#     insertafter: '^module.exports = {$'
+#     #insertbefore: '^}$'
+
+- name: 'Splice "httpNodeRoot: ''/{{ nodered_web_path }}''," into /home/{{ nodered_linux_user }}/.node-red/settings.js'
+  lineinfile:
+    path: /home/{{ nodered_linux_user }}/.node-red/settings.js
+    regexp: '^\s*httpNodeRoot:'
+    line: "    httpNodeRoot: '/{{ nodered_web_path }}',"
+    insertafter: '^module.exports = {$'
+    #insertbefore: '^}$'
+
+- name: 'Splice "httpAdminRoot: ''/{{ nodered_web_path }}''," into /home/{{ nodered_linux_user }}/.node-red/settings.js'
+  lineinfile:
+    path: /home/{{ nodered_linux_user }}/.node-red/settings.js
+    regexp: '^\s*httpAdminRoot:'
+    line: "    httpAdminRoot: '/{{ nodered_web_path }}',"
+    insertafter: '^module.exports = {$'
+    #insertbefore: '^}$'
