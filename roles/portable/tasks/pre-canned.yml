@@ -1,0 +1,25 @@
+- name: Expand {{ library_target }} to {{ library_size }} in size
+  command: dd if=/dev/zero of={{ library_target }} bs=1 count=0 seek={{ library_size }}
+
+- name: Resize canned image
+  command: growpart {{ library_target }} 1
+
+- name: Setup loop device
+  command: losetup -P -f {{ library_target }}
+
+- name: Find the loop device
+  shell: losetup -l | grep {{ library_target }} | awk  '{print $1}'
+  register: loop_dev
+
+- name: Check ext4 filesystem inside container
+  command: e2fsck -p -f {{ loop_dev.stdout }}p1
+  register: fscheck1
+  failed_when: fscheck1.rc not in [ 0, 1, 2 ]
+
+- name: Resize filesystem inside container
+  command: resize2fs -f {{ loop_dev.stdout }}p1
+
+- name: Check ext4 filesystem inside container
+  command: e2fsck -p -f {{ loop_dev.stdout }}p1
+  register: fscheck2
+  failed_when: fscheck2.rc not in [ 0, 1, 2 ]
