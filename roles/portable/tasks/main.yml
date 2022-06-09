@@ -11,10 +11,13 @@
     fail_msg: "VARIABLE MUST BE BOOLEAN True/False IN: /etc/iiab/local_vars.yml"
     quiet: yes
 
-- name: Create /library mountpoint
+- name: Create /library mountpoints
   file:
-    path: /library
+    path: "{{ item }}"
     state: directory
+  with_items:
+  - /library
+  - /library-ext
 
 - name: Stop services hosted on /library
   systemd:
@@ -27,7 +30,7 @@
 
 # doesn't need conditional just looks better skipping, when the mountpoint does not exsist yet on new installs
 - name: Unmount /library
-  command: umount /library
+  command: umount /library*
   failed_when: False
   when: iiab_stage|int == 9
 
@@ -52,11 +55,11 @@
 
 - name: Add fstab and release loop device
   block:
-  - name: Create new fstab entry
+  - name: Create /library-ext fstab entry
     lineinfile:
       path: /etc/fstab
       state: present
-      line: '{{ library_target }}	/library	ext4	loop,offset=1048576	0 0'
+      line: '{{ library_target }}	/library-ext	ext4	loop,offset=1048576	0 0'
 
   - name: Release loop device
     command: losetup -D {{ library_target }}
@@ -64,18 +67,18 @@
 
 - name: Prepare external device
   block:
-  - name: Create fstab entry for external /library using label
+  - name: Create fstab entry for external /library-ext using label
     lineinfile:
       path: /etc/fstab
       state: present
-      line: 'LABEL={{ library_name }}  /library  ext4  defaults,nofail  0  0'
+      line: 'LABEL={{ library_name }}  /library-ext  ext4  defaults,nofail  0  0'
+
+  - name: Find {{ library_name }} label of external device
+    shell: lsblk -no pkname $(blkid --label {{ library_name }})
+    register: ext_dev
 
   - name: Use pre-canned image to populate external drive
     block:
-    - name: Find {{ library_name }} label of external device
-      shell: lsblk -no pkname $(blkid --label {{ library_name }})
-      register: ext_dev
-
     - name: Write {{ library_base_path }} to {{ ext_dev.stdout }}
       command: dd if={{ library_base_path }} of={{ ext_dev.stdout }}
 
@@ -85,11 +88,26 @@
     - name: Resize filesystem on first partition
       command: resize2fs -f {{ ext_dev.stdout }}p1
     when: library_base_path is defined
+
   - name: Check ext4 filesystem on external drive
     command: e2fsck -p -f {{ ext_dev.stdout }}p1
     register: fscheck2
     failed_when: fscheck2.rc not in [ 0, 1, 2 ]
   when: has_ext_disk
+
+- name: Mounting /library-ext
+  command: mount -a
+
+- name: Create /library-ext/library
+  file:
+    path: /library-ext/library
+    state: directory
+
+- name: Create bindmount /library fstab entry
+  lineinfile:
+    path: /etc/fstab
+    state: present
+    line: /library-ext/library /library none defaults,bind,nofail 0 0
 
 - name: Mounting /library
   command: mount -a
