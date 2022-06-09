@@ -16,7 +16,7 @@
     msg: "Node-RED install cannot proceed, as Node.js is not installed."
   when: nodejs_installed is undefined
 
-# 2020-10-29: not really be nec as Node-RED supports recent Node.js versions
+# 2020-10-29: not really nec as Node-RED supports recent Node.js versions
 #- name: FAIL (STOP THE INSTALL) IF 'nodejs_version != "12.x"'
 #  fail:
 #    msg: "Node-RED install cannot proceed, as it currently requires Node.js 12.x, whereas nodejs_version is set to {{ nodejs_version }}.  Please check the value of nodejs_version in /opt/iiab/iiab/vars/default_vars.yml, /etc/iiab/local_vars.yml, /opt/iiab/iiab/roles/nodejs, etc."
@@ -36,7 +36,6 @@
   package:
     name: nodered
     state: absent
-  when: nodered_install
 
 # 2019-02-13: the 6 RPi stanzas below recreate Raspbian Desktop's Node-RED
 # environment, inspired by:
@@ -44,15 +43,22 @@
 # https://github.com/node-red/raspbian-deb-package/blob/master/resources/update-nodejs-and-nodered
 # https://github.com/iiab/iiab/pull/1497
 
-- name: "Globally 'npm install' 3 Node-RED packages: node-red, node-red-admin, node-red-dashboard"
-  command: npm install -g --unsafe-perm node-red node-red-admin node-red-dashboard
-  #command: npm install -g --unsafe-perm node-red@latest node-red-admin@latest node-red-dashboard@latest
-  # Above "@latest" is recommended by https://nodered.org/docs/hardware/raspberrypi (SHOULD WE CONSIDER?)
-  when: nodered_install
+# https://nodered.org/docs/user-guide/node-red-admin built in since Node-RED
+# 1.1.0 (2020-06-30).  Run it using: node-red admin
+# If you install it separately, run: node-red-admin
+#
+#- name: "Globally 'npm install' 3 Node-RED packages: node-red, node-red-admin, node-red-dashboard"
+- name: "Globally 'npm install' 2 Node-RED packages: node-red, node-red-dashboard"
+  #command: npm install -g --unsafe-perm node-red node-red-admin node-red-dashboard
+  command: npm install -g --unsafe-perm node-red@latest node-red-dashboard@latest
+  # Above "@latest" recommended by https://nodered.org/docs/hardware/raspberrypi back in 2019
 
-- name: "Globally 'npm install' 8 Node-RED learning examples for RPi: node-red-contrib-ibm-watson-iot, node-red-contrib-play-audio, node-red-node-ledborg, node-red-node-ping, node-red-node-pi-sense-hat, node-red-node-random, node-red-node-serialport, node-red-node-smooth"
-  command: npm install -g --unsafe-perm node-red-contrib-ibm-watson-iot node-red-contrib-play-audio node-red-node-ledborg node-red-node-ping node-red-node-pi-sense-hat node-red-node-random node-red-node-serialport node-red-node-smooth
-  when: nodered_install and is_raspbian
+# 2022-06-08: New list copied from $EXTRANODES in https://github.com/node-red/linux-installers/blob/master/deb/update-nodejs-and-nodered
+- name: "Globally 'npm install' 6 Node-RED learning examples IF Raspberry Pi hardware detected: node-red-node-pi-gpio, node-red-node-random, node-red-node-ping, node-red-contrib-play-audio, node-red-node-smooth, node-red-node-serialport"
+  #command: npm install -g --unsafe-perm node-red-contrib-ibm-watson-iot node-red-contrib-play-audio node-red-node-ledborg node-red-node-ping node-red-node-pi-sense-hat node-red-node-random node-red-node-serialport node-red-node-smooth
+  command: npm install -g --unsafe-perm node-red-node-pi-gpio@latest node-red-node-random@latest node-red-node-ping@latest node-red-contrib-play-audio@latest node-red-node-smooth@latest node-red-node-serialport@latest
+  #command: npm i --unsafe-perm --save --no-progress --no-update-notifier --no-audit --no-fund node-red-node-pi-gpio@latest node-red-node-random@latest node-red-node-ping@latest node-red-contrib-play-audio@latest node-red-node-smooth@latest node-red-node-serialport@latest 2>&1
+  when: rpi_model != "none"
 
 ## To protect pre-installed packages within /usr/lib/node_modules in graphical
 ## desktop OS's like Raspbian Desktop & Ubermix, we now only install those that
@@ -89,18 +95,39 @@
 #    creates: /usr/lib/node_modules/node-red-dashboard
 #  when: nodered_install and internet_available
 
-- include_tasks: group.yml
-  when: nodered_install and not is_raspbian
+- include_tasks: settings.yml
+  #when: not is_raspbian
 
-- include_tasks: rpi_desk.yml
-  when: nodered_install and is_raspbian
+- include_tasks: os-integration.yml
+#- include_tasks: rpi_desk.yml
+#  when: is_raspbian
 
-- name: Install /etc/systemd/system/nodered.service systemd unit file from template
-  template:
-    backup: no
-    src: nodered.service.j2
+# 2022-06-08 OFFICIALLY RECOMMENDED /lib/systemd/system/nodered.service IS:
+# https://github.com/node-red/linux-installers/blob/master/resources/nodered.service
+# EXPLAINED AT https://nodered.org/docs/faq/customising-systemd-on-pi
+#
+# AS RECOMMENDED BY OFFICIAL INSTALLER SCRIPT:
+# https://github.com/node-red/linux-installers/blob/master/deb/update-nodejs-and-nodered
+# OFFICIAL INSTRUCTIONS: https://nodered.org/docs/getting-started/local
+#                        https://nodered.org/docs/getting-started/raspberrypi
+#
+# Should /lib be considered instead of /etc ?
+# - name: Install /etc/systemd/system/nodered.service systemd unit file from template
+#   template:
+#     src: nodered.service.j2
+#     dest: /etc/systemd/system/nodered.service
+
+- name: Start by downloading https://github.com/node-red/linux-installers/blob/master/resources/nodered.service to /etc/systemd/system/nodered.service
+  get_url:
+    url: https://raw.githubusercontent.com/node-red/linux-installers/master/resources/nodered.service
     dest: /etc/systemd/system/nodered.service
-    # mode: '0666'
+    timeout: "{{ download_timeout }}"
+
+- name: Replace every '[=/]pi' with '[=/]{{ nodered_linux_user }}' (nodered_linux_user) in /etc/systemd/system/nodered.service
+  replace:
+    path: /etc/systemd/system/nodered.service
+    regexp: '([=/])pi'                       # e.g. nodered_linux_user: nodered
+    replace: '\1{{ nodered_linux_user }}'    # \1 is a back-reference to above '=' or '/' -- like sed, but Ansible uses https://docs.python.org/3/library/re.html
 
 # SEE ALSO THE apache2_module SECTION IN roles/httpd/tasks/main.yml
 #- name: Enable proxy_wstunnel apache2 module
