@@ -52,6 +52,16 @@
       src: mongod.conf.j2
       dest: "{{ mongodb_conf }}"    # /etc/mongod.conf
 
+  - name: 'Create 2 dirs: /var/lib/mongodb, /var/log/mongodb (mongodb:mongodb)'
+    file:
+      state: directory
+      path: "{{ item }}"
+      owner: mongodb
+      group: mongodb
+    with_items:
+      - /var/lib/mongodb
+      - /var/log/mongodb
+
   # end block
   when: not (ansible_architecture == "x86_64" or ansible_architecture == "aarch64")
 
@@ -67,20 +77,20 @@
     args:
       warn: false
 
-  - name: Use mongodb-org's Debian repo for Debian on x86_64 (only amd64 support available)
+  - name: Install mongodb-org's Debian buster source/repo (we only use x86_64 i.e. arm64) for MongoDB version {{ mongodb_64bit_version }}
     apt_repository:
-      # 2020-10-28: http://repo.mongodb.org/apt/debian/dists/ supports only
-      # {buster 10, stretch 9, jessie 8, wheezy 7}
-      # so Debian 11 "Bullseye" (testing branch) can revert to buster for now:
-      repo: deb http://repo.mongodb.org/apt/debian buster/mongodb-org/5.0 main
+      # 2020-10-28 and 2022-06-09: http://repo.mongodb.org/apt/debian/dists/
+      # supports only {Buster 10, Stretch 9, Jessie 8, Wheezy 7}.  So Bullseye
+      # 11 and Bookworm 12 (testing branch) revert to buster for now:
+      repo: deb http://repo.mongodb.org/apt/debian buster/mongodb-org/{{ mongodb_64bit_version }} main
       #repo: deb http://repo.mongodb.org/apt/debian {{ ansible_distribution_release }}/mongodb-org/4.4 main
       state: present
       filename: mongodb-org
     when: is_debian and ansible_architecture == "x86_64"
 
-  - name: Otherwise use mongodb-org's Ubuntu focal repo [ arch=amd64,arm64 ]
+  - name: Otherwise install mongodb-org's Ubuntu focal source/repo [ arch=amd64,arm64 ] for MongoDB version {{ mongodb_64bit_version }}
     apt_repository:
-      repo: deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu focal/mongodb-org/5.0 multiverse
+      repo: deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu focal/mongodb-org/{{ mongodb_64bit_version }} multiverse
       state: present
       filename: mongodb-org
     when: not (is_debian and ansible_architecture == "x86_64")
@@ -128,7 +138,7 @@
   - name: Establish {{ mongodb_conf }} port {{ mongodb_port }} -- takes effect on next (re)start of mongodb.service -- via enable-or-disable.yml or via sugarizer.service auto-starting MongoDB on demand
     lineinfile:
       path: "{{ mongodb_conf }}"
-      regexp: '^\s*port:'    # \s = any whitespace char. stackoverflow.com/a/38491899
+      regexp: '^\s*port:'
       line: "  port: {{ mongodb_port }}"    # 27017
 
   # 2022-06-07 #3236 MongoDB 5.0.9 "Illegal instruction" on RPi 4...
@@ -137,7 +147,7 @@
   #
   # (1) For Intel x86_64, MongoDB 5.x requires Sandy Bridge or later.
   #     For AMD x86_64, MongoDB 5.x requires Bulldozer or later.
-  #     Roughly speaking, this means CPUs with AVX instructions:
+  #     Roughly speaking, this means post-2011 CPUs with AVX instructions:
   #     https://github.com/docker-library/mongo/issues/485#issuecomment-891991814
   # (2) dbPath needed fixing in /etc/mongod.conf (~16 lines above) from
   #     /var/lib/mongodb to /library/dbdata/mongodb
@@ -152,16 +162,16 @@
   # https://andyfelong.com/downloads/raspbian_mongodb_5.0.5.gz
   # https://andyfelong.com/2021/08/mongodb-4-4-under-raspberry-pi-os-64-bit-raspbian64/
 
-  - name: Run 'apt-mark hold mongodb-org mongodb-org-server' if hardware is Raspberry Pi (any 64-bit OS) so MongoDB 5.0.5 binaries {mongo, mongod, mongos} can be installed without apt interfering in future
+  - name: If hardware is Raspberry Pi and mongodb_64bit_version >= 5.0, run 'apt-mark hold mongodb-org mongodb-org-server' -- so MongoDB 5.0.5 binaries {mongo, mongod, mongos} can be installed without apt interfering in future
     command: apt-mark hold mongodb-org mongodb-org-server
-    when: rpi_model != "none"
+    when: rpi_model != "none" and mongodb_64bit_version is version('5.0', '>=')
 
-  - name: Unarchive 76MB {{ iiab_download_url }}//packages/raspbian_mongodb_5.0.5.gz OVERWRITING 5.0.9+ {mongo, mongod, mongos} in /usr/bin, if hardware is Raspberry Pi (any 64-bit OS)
+  - name: If hardware is Raspberry Pi and mongodb_64bit_version >= 5.0, unarchive 76MB {{ iiab_download_url }}//packages/raspbian_mongodb_5.0.5.gz OVERWRITING 5.0.9+ {mongo, mongod, mongos} in /usr/bin
     unarchive:
       remote_src: yes
       src: "{{ iiab_download_url }}/raspbian_mongodb_5.0.5.gz"
       dest: /usr/bin
-    when: rpi_model != "none"
+    when: rpi_model != "none" and mongodb_64bit_version is version('5.0', '>=')
 
   # end block
   when: ansible_architecture == "aarch64" or ansible_architecture == "x86_64"
@@ -169,25 +179,32 @@
 
 # 2. CONFIGURE MongoDB FOR IIAB
 
-- name: 'Create 3 dirs for MongoDB: /var/lib/mongodb, /var/log/mongodb, {{ mongodb_db_path }}'
+# - name: 'Create 3 dirs for MongoDB: /var/lib/mongodb, /var/log/mongodb, {{ mongodb_db_path }}'
+#   file:
+#     state: directory
+#     path: "{{ item }}"
+#     owner: mongodb
+#     group: mongodb
+#   with_items:
+#     #- { path: '/var/run/mongodb' }
+#     - /var/lib/mongodb
+#     - /var/log/mongodb
+#     - "{{ mongodb_db_path }}"    # /library/dbdata/mongodb
+
+- name: 'Create dir {{ mongodb_db_path }} (mongodb:mongodb)'
   file:
     state: directory
-    path: "{{ item }}"
+    path: "{{ mongodb_db_path }}"    # /library/dbdata/mongodb
     owner: mongodb
     group: mongodb
-  with_items:
-    #- { path: '/var/run/mongodb' }
-    - /var/lib/mongodb
-    - /var/log/mongodb
-    - "{{ mongodb_db_path }}"    # /library/dbdata/mongodb
 
 - name: Install mongodb.service, /usr/bin/iiab-mongodb-repair-if-no-lock from templates
   template:
     src: "{{ item.src }}"
     dest: "{{ item.dest }}"
-    owner: root
-    group: root
     mode: "{{ item.mode }}"
+    #owner: root
+    #group: root
   with_items:
     - { src: 'mongodb.service.j2', dest: '/etc/systemd/system/mongodb.service', mode: '0644' }
     - { src: 'iiab-mongodb-repair-if-no-lock.j2', dest: '/usr/bin/iiab-mongodb-repair-if-no-lock', mode: '0755' }
