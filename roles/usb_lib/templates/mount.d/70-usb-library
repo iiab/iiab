@@ -12,7 +12,7 @@
 source {{ iiab_env_file }}
 case $IIAB_USB_LIB_SHOW_ALL in
 'True'|'true'|'TRUE')
-   logger -p user.notice -t "70-usb-library" -- "Displaying root directory on $UM_MOUNTPOINT."
+   logger -p user.notice -t "70-usb-library" -- "Display entire USB drive is True. Checking for rootfs or /library on $UM_MOUNTPOINT."
    # regularize the variable
    IIAB_USB_LIB_SHOW_ALL=True
    ;;
@@ -41,8 +41,20 @@ fi
 if [ -d $UM_MOUNTPOINT/usb ]; then
   SHARE_DIR="$UM_MOUNTPOINT/usb"
 fi
+
 if [ "$IIAB_USB_LIB_SHOW_ALL" == "True" ]; then
-  SHARE_DIR="$UM_MOUNTPOINT"
+  UM_DEV=`findmnt $UM_MOUNTPOINT | grep / | awk '{print $2}'`
+  LIB_DEV=`findmnt /library | grep / | awk '{print $2}' |awk -F '[' '{print $1}'`
+  ROOT_DEV=`findmnt / | grep / | awk '{print $2}'`
+  if [ "$UM_DEV" == "$LIB_DEV" ]; then
+    logger -p user.notice -t "70-usb-library" -- "skipping $UM_MOUNTPOINT containing /library"
+    #echo "lib on dev"
+  elif [ "$UM_DEV" == "$ROOT_DEV" ]; then
+    logger -p user.notice -t "70-usb-library" -- "skipping $UM_MOUNTPOINT containing rootfs"
+    #echo "rootfs on dev"
+  else
+    SHARE_DIR="$UM_MOUNTPOINT"
+  fi
 fi
 
 if [ ! -z "$SHARE_DIR" ]; then
@@ -50,7 +62,7 @@ if [ ! -z "$SHARE_DIR" ]; then
 else
   logger -p user.notice -t "70-usb-library" -- "did not find /share, /Share, /Piratebox/Share, /USB, or /usb on USB"
 fi
-  
+
 
 if [ "$SHARE_DIR" != "" ];then
   CONTENT_LINK_USB=`basename $UM_MOUNTPOINT | awk '{print toupper($0)}'`
