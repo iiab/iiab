@@ -19,39 +19,53 @@
     quiet: yes
 
 
-# 3 stanzas moved up from install.yml, so Debian-or-any-OS-where-MongoDB-fails
-# still finish their "LARGE-sized" IIAB install: (WITH LOUD RED WARNINGS!)
+- block:
 
-- name: "Set 'mongodb_install: True'"
-  set_fact:
-    mongodb_install: True
+  # 3 stanzas moved up from install.yml, so Debian-or-any-OS-where-MongoDB-fails
+  # still finish their "LARGE-sized" IIAB install: (WITH LOUD RED WARNINGS!)
 
-- name: 'CAUTION: IF ''mongodb.service'' IS STOPPED FOR ANY REASON, IT WILL IMMEDIATELY CAUSE SUGARIZER TO FAIL ("502 Bad Gateway") !'
-  debug:
-    msg: "/etc/systemd/system/sugarizer.service Line 4 'Requires=mongodb.service' tries to auto-start MongoDB every time Sugarizer starts.  IIAB (roles/mongodb/tasks/enable-or-disable.yml) tries its best to keep Ansible var 'mongodb_enabled' in sync with its systemd equivalent, i.e. the output of 'systemctl is-enabled mongodb' (as of 2020-10-29 both are typically disabled, unless other apps/services/operators choose to use MongoDB)."
+  - name: "Set 'mongodb_install: True'"
+    set_fact:
+      mongodb_install: True
 
-- name: MONGODB - run 'mongodb' role (attempt to install MongoDB)
-  include_role:
-    name: mongodb
+  - name: 'CAUTION: IF ''mongodb.service'' IS STOPPED FOR ANY REASON, IT WILL IMMEDIATELY CAUSE SUGARIZER TO FAIL ("502 Bad Gateway") !'
+    debug:
+      msg: "/etc/systemd/system/sugarizer.service Line 4 'Requires=mongodb.service' tries to auto-start MongoDB every time Sugarizer starts.  IIAB (roles/mongodb/tasks/enable-or-disable.yml) tries its best to keep Ansible var 'mongodb_enabled' in sync with its systemd equivalent, i.e. the output of 'systemctl is-enabled mongodb' (as of 2020-10-29 both are typically disabled, unless other apps/services/operators choose to use MongoDB)."
+
+  - name: MONGODB - run 'mongodb' role (attempt to install MongoDB)
+    include_role:
+      name: mongodb
 
 
-- name: EXIT 'sugarizer' ROLE & CONTINUE, IF 'mongodb_installed is undefined'
-  fail:    # FORCE IT RED THIS ONCE!
-    msg: MongoDB INSTALLATION FAILED, perhaps because your OS is Debian 10 on aarch64?  Nevertheless IIAB will continue (consider this a warning!)
-  when: mongodb_installed is undefined
-  ignore_errors: yes
+  # - name: EXIT 'sugarizer' ROLE & CONTINUE, IF 'mongodb_installed is undefined'
+  #   fail:    # FORCE IT RED THIS ONCE!
+  #     msg: MongoDB INSTALLATION FAILED, perhaps because MongoDB doesn't yet support Ubuntu 22.04 with libssl3?  Nevertheless IIAB will continue (consider this a warning!)
+  #   when: mongodb_installed is undefined
+  #   ignore_errors: yes    # RESCUE (BELOW) NOW HANDLES THIS
 
-# ELSE...
+  - name: Verify that mongodb_installed is defined
+    fail:
+      msg: MongoDB INSTALLATION FAILED, perhaps because MongoDB doesn't yet support Ubuntu 22.04 with libssl3? #3190
+    when: mongodb_installed is undefined
 
-- name: Install/Enable/Disable/Record Sugarizer (main2.yml) IF 'mongodb_installed is defined'
-  include_tasks: main2.yml
-  when: mongodb_installed is defined
+  # ELSE...
 
-# THE block: APPROACH BELOW WORKS JUST LIKE main2.yml ABOVE.
-# BUT IT VISUALLY POLLUTES: MANY BLUE "skipping:" MESSAGES IN ANSIBLE'S OUTPUT.
+  - name: Install/Enable/Disable/Record Sugarizer (main2.yml) IF 'mongodb_installed is defined'
+    include_tasks: main2.yml
+    when: mongodb_installed is defined
 
-# - block:    # ENTIRE BLOCK CONDITIONED ON 'when: mongodb_installed is defined'
-#
-#   [MOVED TO main2.yml]
-#
-#   when: mongodb_installed is defined    # CONDITION FOR ENTIRE ABOVE block:
+  # THE block: APPROACH BELOW WORKS JUST LIKE main2.yml ABOVE.
+  # BUT IT VISUALLY POLLUTES: MANY BLUE "skipping:" MESSAGES IN ANSIBLE'S OUTPUT.
+
+  # - block:    # ENTIRE BLOCK CONDITIONED ON 'when: mongodb_installed is defined'
+  #
+  #   [MOVED TO main2.yml]
+  #
+  #   when: mongodb_installed is defined    # CONDITION FOR ENTIRE ABOVE block:
+
+  rescue:
+
+  - name: 'SEE ERROR ABOVE (skip_role_on_error: {{ skip_role_on_error }})'
+    fail:
+      msg: ""
+    when: not skip_role_on_error
