@@ -26,39 +26,33 @@
     var: postgresql_installed
 
 
-- name: Install PostgreSQL if 'postgresql_installed' not defined, e.g. in {{ iiab_state_file }}    # /etc/iiab/iiab_state.yml
-  include_tasks: install.yml
-  when: postgresql_installed is undefined
+- block:
 
+  - name: Install PostgreSQL if 'postgresql_installed' not defined, e.g. in {{ iiab_state_file }}    # /etc/iiab/iiab_state.yml
+    include_tasks: install.yml
+    when: postgresql_installed is undefined
 
-- name: Enable & Start 'postgresql-iiab' systemd service, if postgresql_enabled
-  systemd:
-    name: postgresql-iiab
-    daemon_reload: yes
-    enabled: yes
-    state: started
-  when: postgresql_enabled
+  - include_tasks: enable-or-disable.yml
 
-- name: Disable & Stop 'postgresql-iiab' systemd service, if not postgresql_enabled
-  systemd:
-    name: postgresql-iiab
-    enabled: no
-    state: stopped
-  when: not postgresql_enabled
+  - name: Add 'postgresql' variable values to {{ iiab_ini_file }}
+    ini_file:
+      path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+      section: postgresql
+      option: "{{ item.option }}"
+      value: "{{ item.value | string }}"
+    with_items:
+      - option: name
+        value: PostgreSQL
+      - option: description
+        value: '"PostgreSQL is a powerful, open source object-relational database system."'
+      - option: postgresql_install
+        value: "{{ postgresql_install }}"
+      - option: postgresql_enabled
+        value: "{{ postgresql_enabled }}"
 
+  rescue:
 
-- name: Add 'postgresql' variable values to {{ iiab_ini_file }}
-  ini_file:
-    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
-    section: postgresql
-    option: "{{ item.option }}"
-    value: "{{ item.value | string }}"
-  with_items:
-    - option: name
-      value: PostgreSQL
-    - option: description
-      value: '"PostgreSQL is a powerful, open source object-relational database system."'
-    - option: postgresql_install
-      value: "{{ postgresql_install }}"
-    - option: postgresql_enabled
-      value: "{{ postgresql_enabled }}"
+  - name: 'SEE ERROR ABOVE (skip_role_on_error: {{ skip_role_on_error }})'
+    fail:
+      msg: ""
+    when: not skip_role_on_error

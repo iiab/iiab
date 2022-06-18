@@ -19,46 +19,37 @@
     quiet: yes
 
 
-- name: Install Gitea {{ gitea_version }} if 'gitea_installed' not defined, e.g. in {{ iiab_state_file }}    # /etc/iiab/iiab_state.yml
-  include_tasks: install.yml
-  when: gitea_installed is undefined
+- block:
 
+  - name: Install Gitea {{ gitea_version }} if 'gitea_installed' not defined, e.g. in {{ iiab_state_file }}    # /etc/iiab/iiab_state.yml
+    include_tasks: install.yml
+    when: gitea_installed is undefined
 
-- name: Enable & Restart 'gitea' systemd service, if gitea_enabled
-  systemd:
-    name: gitea
-    daemon_reload: yes
-    enabled: yes
-    state: restarted
-  when: gitea_enabled
+  - include_tasks: enable-or-disable.yml
 
-- name: Disable & Stop 'gitea' systemd service, if not gitea_enabled
-  systemd:
-    name: gitea
-    enabled: no
-    state: stopped
-  when: not gitea_enabled
+  - name: Add 'gitea' to list of services at {{ iiab_ini_file }}
+    ini_file:
+      path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+      section: gitea
+      option: "{{ item.option }}"
+      value: "{{ item.value | string }}"
+    with_items:
+      - option: name
+        value: Gitea
+      - option: description
+        value: '"Gitea is like GitHub for more offline communities: Git with a cup of tea"'
+      - option: gitea_install
+        value: "{{ gitea_install }}"
+      - option: gitea_enabled
+        value: "{{ gitea_enabled }}"
+      - option: gitea_run_directory
+        value: "{{ gitea_run_directory }}"
+      - option: gitea_url
+        value: "{{ gitea_url }}"
 
-- name: Enable/Disable/Restart NGINX
-  include_tasks: nginx.yml
+  rescue:
 
-
-- name: Add 'gitea' to list of services at {{ iiab_ini_file }}
-  ini_file:
-    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
-    section: gitea
-    option: "{{ item.option }}"
-    value: "{{ item.value | string }}"
-  with_items:
-    - option: name
-      value: Gitea
-    - option: description
-      value: '"Gitea is like GitHub for more offline communities: Git with a cup of tea"'
-    - option: gitea_install
-      value: "{{ gitea_install }}"
-    - option: gitea_enabled
-      value: "{{ gitea_enabled }}"
-    - option: gitea_run_directory
-      value: "{{ gitea_run_directory }}"
-    - option: gitea_url
-      value: "{{ gitea_url }}"
+  - name: 'SEE ERROR ABOVE (skip_role_on_error: {{ skip_role_on_error }})'
+    fail:
+      msg: ""
+    when: not skip_role_on_error
