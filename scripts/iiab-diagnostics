@@ -88,18 +88,19 @@ function cat_dir() {
 function cat_cmd() {    # $1 = command + params, $2 = explanation
     echo "     $1  # $2"
     echo "=IIAB==========================================================================" >> $outfile
-    #cmd=$(echo "$1" | sed 's/\s.*$//')           # Keep command on left; Drop params on right (NOT NEC, 'command -v' does this!)
-    #pth=$(command -v $cmd | sed 's/[^/]*$//')    # Keep only path on left; Drop command & params on right
-    pthcmd=$(command -v $1)                                             # Use canonical path on left; Drop params on right
-    spc_params=$(echo "$1" | sed 's/^\s*\S*//;s/\s*$//;s/^\s\s*/ /')    # LTrim + drop original path + command on left; RTrim; Compress whitespace in between
+    cmd=$(echo "$1" | sed 's/^\s*\(\S*\)\s.*/\1/')    # Keep command on left; Drop params on right (NEC b/c 'command -v' interprets every word on the line!)
+    #pth=$(command -v $cmd | sed 's/[^/]*$//')        # Keep only path on left; Drop command & params on right
+    path_cmd=$(command -v $cmd)                                 # Use canonical path on left; Drop params on right
+    spc_params=$(echo "$1" | sed 's/^\s*\S*\s*/ /;s/\s*$//')    # Drop command on left; Keep a single space + params on right; RTrim
+    #spc_params=$(echo "$1" | sed 's/^\s*\S*//;s/\s*$//;s/^\s\s*/ /')    # LTrim + drop original path + command on left; RTrim; Compress whitespace in between
     #spc_params=$(echo "$1" | sed 's/^[[:blank:]]*[^[:blank:]]*//;s/[[:blank:]]*$//;s/^[[:blank:]][[:blank:]]*/ /')    # Equivalent (POSIX compliant)
     if [[ $2 == "" ]]; then
-	echo "COMMAND: $pthcmd$spc_params" >> $outfile
+	echo "COMMAND: $path_cmd$spc_params" >> $outfile
     else
-	echo "COMMAND: $pthcmd$spc_params    # $2" >> $outfile
+	echo "COMMAND: $path_cmd$spc_params    # $2" >> $outfile
     fi
     echo >> $outfile
-    if [[ $pthcmd == "" ]]; then
+    if [[ $path_cmd == "" ]]; then
         echo "COMMAND NOT FOUND: $1" >> $outfile
     else
         bash -c "$1" >> $outfile    # Works with | (pipes) and 'ls -l /lib/firmware/brcm/*43455*' etc!
@@ -254,7 +255,8 @@ echo -e "   $outfile\e[0m"
 #else
 echo
 echo -ne "\e[42;1mPublish it to a web pastebin? [Y/n]\e[0m "
-read ans < /dev/tty
+read -n 1 -r ans < /dev/tty
+echo
 #fi
 
 echo -e "\e[1m"
