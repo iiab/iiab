@@ -88,10 +88,10 @@ function cat_dir() {
 function cat_cmd() {    # $1 = command + params, $2 = explanation
     echo "     $1  # $2"
     echo "=IIAB==========================================================================" >> $outfile
-    cmd=$(echo "$1" | sed 's/^\s*\(\S*\)\s.*/\1/')    # Keep command on left; Drop params on right (NEC b/c 'command -v' interprets every word on the line!)
-    #pth=$(command -v $cmd | sed 's/[^/]*$//')        # Keep only path on left; Drop command & params on right
-    path_cmd=$(command -v $cmd)                                 # Use canonical path on left; Drop params on right
-    spc_params=$(echo "$1" | sed 's/^\s*\S*\s*/ /;s/\s*$//')    # Drop command on left; Keep a single space + params on right; RTrim
+    cmd=$(echo "$1" | sed 's/^\s*\(\S\S*\)\b.*$/\1/')    # Keep command on left; Drop params on right (NEC b/c 'command -v' interprets every word on the line!)
+    #pth=$(command -v $cmd | sed 's/[^/]*$//')           # Keep only path on left; Drop command & params on right
+    path_cmd=$(command -v $cmd)                                   # Use canonical path on left (would drop params on right, but over-interpret each word as a cmd!)
+    spc_params=$(echo "$1" | sed 's/^\s*\S\S*\s*/ /;s/\s*$//')    # Drop command on left; Keep a single space + params on right; RTrim
     #spc_params=$(echo "$1" | sed 's/^\s*\S*//;s/\s*$//;s/^\s\s*/ /')    # LTrim + drop original path + command on left; RTrim; Compress whitespace in between
     #spc_params=$(echo "$1" | sed 's/^[[:blank:]]*[^[:blank:]]*//;s/[[:blank:]]*$//;s/^[[:blank:]][[:blank:]]*/ /')    # Equivalent (POSIX compliant)
     if [[ $2 == "" ]]; then
@@ -234,9 +234,9 @@ echo -e "\n\n\n\n5. FIREWALL RULES\n" >> $outfile
 #cat_file /usr/bin/iiab-gen-iptables
 cat_cmd 'sudo iptables-save' 'Firewall rules'
 
-echo -e "\n  6. Log Files: (last 100 lines of each)\n"
-echo -e "\n\n\n\n6. LOG FILES (LAST 100 LINES OF EACH)\n" >> $outfile
-cat_cmd 'grep -B2 "SEE ERROR ABOVE" /opt/iiab/iiab/*.log'
+echo -e "\n  6. Log Files: (e.g. last 100 lines of each)\n"
+echo -e "\n\n\n\n6. LOG FILES (e.g. LAST 100 LINES OF EACH)\n" >> $outfile
+cat_cmd 'grep -B2 "SEE ERROR ABOVE" /opt/iiab/iiab/*.log' 'for skip_role_on_error'
 cat_tail /opt/iiab/iiab/iiab-install.log 100
 cat_tail /opt/iiab/iiab/iiab-configure.log 100
 cat_tail /opt/iiab/iiab/iiab-debug.log 100
@@ -261,7 +261,8 @@ echo
 #fi
 
 echo -e "\e[1m"
-if [ "$ans" == "" ] || [ "$ans" == "y" ] || [ "$ans" == "Y" ]; then
+#if [ "$ans" == "" ] || [ "$ans" == "y" ] || [ "$ans" == "Y" ]; then
+if ! [[ $ans =~ ^[nN]$ ]]; then
     echo -ne "PUBLISHING TO URL... "
     #pastebinit -b dpaste.com < $outfile
     pastebinit -b sprunge.us < $outfile    # Run 'pastebinit -l' to list other possible pastebin site URLs
