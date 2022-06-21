@@ -6,7 +6,7 @@
 PLAYBOOK=iiab-stages.yml
 INVENTORY=ansible_hosts
 IIAB_STATE_FILE=/etc/iiab/iiab_state.yml
-ARGS=""
+ARGS="--extra-vars {\"skip_role_on_error\":False"    # bash forces {...} to '{...}' for Ansible
 CWD=`pwd`
 OS=`grep ^ID= /etc/os-release | cut -d= -f2`
 OS=${OS//\"/}
@@ -127,7 +127,8 @@ if [ -f /etc/iiab/iiab.env ]; then
 
     if [ "$1" == "--reinstall" ]; then
         STAGE=0
-        ARGS="$ARGS"" --extra-vars reinstall=True"
+        #ARGS="$ARGS"" --extra-vars reinstall=True"
+        ARGS="$ARGS,\"reinstall\":True"    # Needs boolean not string so use JSON list
         sed -i 's/^STAGE=.*/STAGE=0/' /etc/iiab/iiab.env
         echo "Wrote STAGE=0 (counter) to /etc/iiab/iiab.env"
     elif [ "$STAGE" -ge 2 ] && [ "$1" == "--debug" ]; then
@@ -168,6 +169,8 @@ export ANSIBLE_LOG_PATH="$CWD""/iiab-install.log"
 
 ansible -m setup -i $INVENTORY localhost --connection=local | grep python
 ansible -m setup -i $INVENTORY localhost --connection=local >> /dev/null    # So vars are recorded in /opt/iiab/iiab/iiab-install.log
-ansible-playbook -i $INVENTORY $PLAYBOOK ${ARGS} --connection=local
+ARGS="$ARGS}"
+echo -e "\nNOW RUN: ansible-playbook -i $INVENTORY $PLAYBOOK $ARGS --connection=local\n"
+ansible-playbook -i $INVENTORY $PLAYBOOK $ARGS --connection=local
 
 echo -e "./iiab-install $* COMPLETED IN $CWD\n\n"
