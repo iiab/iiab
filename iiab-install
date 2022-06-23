@@ -1,17 +1,57 @@
 #!/bin/bash -e
 # Running from a git repo
 # Add cmdline options for passing to ansible
-# Todo add proper shift to gobble up --debug --reinstall
 
 PLAYBOOK=iiab-stages.yml
 INVENTORY=ansible_hosts
 IIAB_STATE_FILE=/etc/iiab/iiab_state.yml
-ARGS="--extra-vars {\"skip_role_on_error\":False"    # bash forces {...} to '{...}' for Ansible
+ARGS="--extra-vars {"    # Needs boolean not string so use JSON list.  bash forces {...} to '{...}' for Ansible
+
 CWD=`pwd`
 OS=`grep ^ID= /etc/os-release | cut -d= -f2`
-OS=${OS//\"/}
+OS=${OS//\"/}    # Remove all '"'
 MIN_RPI_KERN=5.4.0        # Do not use 'rpi-update' unless absolutely necessary: https://github.com/iiab/iiab/issues/1993
-MIN_ANSIBLE_VER=2.11.6    # Ansible 2.8.3 and 2.8.6 had serious bugs, preventing their use with IIAB.
+MIN_ANSIBLE_VER=2.12.7    # Ansible 2.8.3 and 2.8.6 had serious bugs, preventing their use with IIAB.
+
+REINSTALL=false
+DEBUG=false
+SKIP_ROLE_ON_ERROR=false
+
+usage() {
+    echo -e "\n\e[1mUse './iiab-install' for regular installs, or to continue an install."
+    echo -e "Use './iiab-install --risky' to force 'skip_role_on_error: True'"
+    echo -e "Use './iiab-install --reinstall' to force running all Stages 0-9, followed by the Network Role."
+    echo -e "Use './iiab-install --debug' to run Stage 0, followed by Stages 3-9, followed by the Network Role."
+    echo -e "Use './iiab-configure' to run Stage 0, followed by Stages 4-9."
+    echo -e "Use './runrole' to run Stage 0, followed by a single Stage or Role."
+    echo -e "Use './iiab-network' to run Stage 0, followed by the Network Role.\e[0m\n"
+}
+
+# https://stackoverflow.com/questions/192249/how-do-i-parse-command-line-arguments-in-bash/14203146#14203146
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --reinstall)
+            REINSTALL=true
+            shift
+            ;;
+        --debug)
+            DEBUG=true
+            shift
+            ;;
+        -r|--risky)
+            SKIP_ROLE_ON_ERROR=true
+            shift
+            ;;
+        *)
+            usage
+            exit 1
+            ;;
+    esac
+done
+
+ARGS="$ARGS\"skip_role_on_error\":$SKIP_ROLE_ON_ERROR"    # Needs boolean not
+# string so use JSON list.  Ansible permits these boolean values: (refresher)
+# https://github.com/iiab/iiab/blob/master/roles/0-init/tasks/validate_vars.yml#L19-L43
 
 if [ ! -f /etc/iiab/local_vars.yml ]; then
 
@@ -27,11 +67,11 @@ if [ ! -f /etc/iiab/local_vars.yml ]; then
 
     echo -e "\nEXITING: /opt/iiab/iiab/iiab-install REQUIRES /etc/iiab/local_vars.yml\n" >&2
 
-    echo -e "(1) Please read http://wiki.laptop.org/go/IIAB/local_vars.yml to learn more" >&2
-    echo -e "(2) MIN/MEDIUM/BIG samples are included in /opt/iiab/iiab/vars" >&2
+    echo -e "(1) See http://FAQ.IIAB.IO -> What is local_vars.yml and how do I customize it?" >&2
+    echo -e "(2) SMALL/MEDIUM/LARGE samples are included in /opt/iiab/iiab/vars" >&2
     echo -e "(3) NO TIME FOR DETAILS?  RUN INTERNET-IN-A-BOX'S FRIENDLY 1-LINE INSTALLER:\n" >&2
 
-    echo -e '    http://download.iiab.io\n' >&2
+    echo -e '    https://download.iiab.io\n' >&2
 
     exit 1
 fi
@@ -54,16 +94,6 @@ echo -e "\nPlaced /etc/ansible/facts.d/local_facts.fact into position."
 if [ ! -f $PLAYBOOK ]; then
     echo "EXITING: IIAB Playbook ""$PLAYBOOK"" not found."
     echo "Please run './iiab-install' from /opt/iiab/iiab (top level of git repo)."
-    exit 1
-fi
-
-if [ "$1" != "--debug" ] && [ "$1" != "--reinstall" ] && [ "$1" != "" ]; then
-    echo "Use './iiab-install' for regular installs, or to continue an install."
-    echo "Use './iiab-install --reinstall' to force running all Stages 0-9, followed by the Network Role."
-    echo "Use './iiab-install --debug' to run Stage 0, followed by Stages 3-9, followed by the Network Role."
-    echo "Use './iiab-configure' to run Stage 0, followed by Stages 4-9."
-    echo "Use './runrole' to run Stage 0, followed by a single Stage or Role."
-    echo "Use './iiab-network' to run Stage 0, followed by the Network Role."
     exit 1
 fi
 
@@ -125,28 +155,23 @@ if [ -f /etc/iiab/iiab.env ]; then
         fi
     fi
 
-    if [ "$1" == "--reinstall" ]; then
+    if $($REINSTALL); then
         STAGE=0
         #ARGS="$ARGS"" --extra-vars reinstall=True"
         ARGS="$ARGS,\"reinstall\":True"    # Needs boolean not string so use JSON list
         sed -i 's/^STAGE=.*/STAGE=0/' /etc/iiab/iiab.env
         echo "Wrote STAGE=0 (counter) to /etc/iiab/iiab.env"
-    elif [ "$STAGE" -ge 2 ] && [ "$1" == "--debug" ]; then
+    elif [ "$STAGE" -ge 2 ] && $($DEBUG); then
         STAGE=2
         sed -i 's/^STAGE=.*/STAGE=2/' /etc/iiab/iiab.env
         echo "Wrote STAGE=2 (counter) to /etc/iiab/iiab.env"
     elif [ "$STAGE" -eq 9 ]; then
-        echo -e "\nEXITING: STAGE (counter) in /etc/iiab/iiab.env shows Stage 9 Is Already Done."
-        echo -e "Use './iiab-install --reinstall' to force running all Stages 0-9, followed by the Network Role."
-        echo -e "Use './iiab-install --debug' to run Stage 0, followed by Stages 3-9, followed by the Network Role."
-        echo -e "Use './iiab-configure' to run Stage 0, followed by Stages 4-9."
-        echo -e "Use './runrole' to run Stage 0, followed by a single Stage or Role."
-        echo -e "Use './iiab-network' to run Stage 0, followed by the Network Role.\n\n"
-
+        echo -e "\n\e[1mEXITING: STAGE (counter) in /etc/iiab/iiab.env shows Stage 9 Is Already Done."
+        usage
         exit 0    # Allows rerunning http://download.iiab.io/install.txt
     fi
 fi
-if [ "$STAGE" -lt 2 ] && [ "$1" == "--debug" ]; then
+if [ "$STAGE" -lt 2 ] && $($DEBUG); then
     echo -e "\n'--debug' *ignored* as STAGE (counter) < 2."
 fi
 
