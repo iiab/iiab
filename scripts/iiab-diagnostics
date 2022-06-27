@@ -10,10 +10,16 @@ YMDT=$(date +%F_%T_%Z)
 
 git config --global --add safe.directory /opt/iiab/iiab    # Nec below, if non-root
 HASH1=$(cd /opt/iiab/iiab; git log --pretty=format:'%H' -n 1)    # --pretty=format:'%h' (8 chars)
-TAG1=$(cd /opt/iiab/iiab; git describe --tags --abbrev=0)
+BRANCH1=$(cd /opt/iiab/iiab; git branch --show-current)
+REMOTE_URL1=$(cd /opt/iiab/iiab; git config remote.$(git config branch.$BRANCH1.remote).url)
+PR_COUNT1=$(cd /opt/iiab/iiab; git log "$(git describe --tags --abbrev=0)..HEAD" --oneline --grep='Merge pull request' | wc -l)
+TAG_COMMITS1=$(cd /opt/iiab/iiab; git describe --tags | sed 's/-[^-]*$//' | sed 's/-\([[:digit:]][[:digit:]]*\)$/ (\1 commits)/')
 git config --global --add safe.directory /opt/iiab/iiab-admin-console    # Nec below, if non-root
 HASH2=$(cd /opt/iiab/iiab-admin-console; git log --pretty=format:'%H' -n 1)
-TAG2=$(cd /opt/iiab/iiab-admin-console; git describe --tags --abbrev=0)
+BRANCH2=$(cd /opt/iiab/iiab-admin-console; git branch --show-current)
+REMOTE_URL2=$(cd /opt/iiab/iiab-admin-console; git config remote.$(git config branch.$BRANCH2.remote).url)
+PR_COUNT2=$(cd /opt/iiab/iiab-admin-console; git log "$(git describe --tags --abbrev=0)..HEAD" --oneline --grep='Merge pull request' | wc -l)
+TAG_COMMITS2=$(cd /opt/iiab/iiab-admin-console; git describe --tags | sed 's/-[^-]*$//' | sed 's/-\([[:digit:]][[:digit:]]*\)$/ (\1 commits)/')
 
 echo -e "\nGathers IIAB diagnostics into 1 file, to accelerate troubleshooting.  USAGE:"
 echo
@@ -124,12 +130,17 @@ echo -e "\nCompiling diagnostics..."
 echo -e "\n  0. Filename Header + Git Hashes + Raspberry Pi Model + OS"
 echo "This is: $outfile" >> $outfile
 echo >> $outfile
-echo -e "\n\n\n\n0. GIT HASHES/TAGS + RASPBERRY PI MODEL + OS" >> $outfile
+echo -e "\n\n\n\n0. GIT INFO + RASPBERRY PI MODEL + OS" >> $outfile
 echo >> $outfile
-echo "iiab commit:               $HASH1" >> $outfile
-echo "     recent git tag:       $TAG1" >> $outfile
-echo "iiab-admin-console commit: $HASH2" >> $outfile
-echo "     recent git tag:       $TAG2" >> $outfile
+echo "iiab commit:                       $HASH1" >> $outfile
+echo "     remote:                       $REMOTE_URL1" >> $outfile
+echo "     branch:                       $BRANCH1" >> $outfile
+printf "%4s merged PR's since recent tag: $TAG_COMMITS1\n" $PR_COUNT1 >> $outfile
+echo >> $outfile
+echo "iiab-admin-console commit:         $HASH2" >> $outfile
+echo "     remote:                       $REMOTE_URL2" >> $outfile
+echo "     branch:                       $BRANCH2" >> $outfile
+printf "%4s merged PR's since recent tag: $TAG_COMMITS2\n" $PR_COUNT2 >> $outfile
 echo >> $outfile
 cat_file /etc/iiab/pr-list-pulled
 cat_file /proc/device-tree/model    # Should be identical to /sys/firmware/devicetree/base/model
