@@ -19,38 +19,44 @@
     quiet: yes
 
 
-- name: Install Nextcloud if 'nextcloud_installed' not defined, e.g. in {{ iiab_state_file }}    # /etc/iiab/iiab_state.yml
-  include_tasks: install.yml
-  when: nextcloud_installed is undefined
+- block:
 
+  - name: Install Nextcloud if 'nextcloud_installed' not defined, e.g. in {{ iiab_state_file }}    # /etc/iiab/iiab_state.yml
+    include_tasks: install.yml
+    when: nextcloud_installed is undefined
 
-- name: Enable/Disable/Restart NGINX
-  include_tasks: nginx.yml
-  when: nginx_enabled
+  - name: Enable/Disable/Restart NGINX
+    include_tasks: nginx.yml
 
+  - name: Add 'nextcloud' variable values to {{ iiab_ini_file }}
+    ini_file:
+      path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+      section: Nextcloud
+      option: "{{ item.option }}"
+      value: "{{ item.value | string }}"
+    with_items:
+      - option: name
+        value: Nextcloud
+      - option: description
+        value: '"Nextcloud is a local server-based facility for sharing files, photos, contacts, calendars, etc."'
+      - option: nextcloud_install
+        value: "{{ nextcloud_install }}"
+      - option: nextcloud_enabled
+        value: "{{ nextcloud_enabled }}"
+      - option: nextcloud_dl_url
+        value: "{{ nextcloud_dl_url }}"
+      - option: nextcloud_url
+        value: "{{ nextcloud_url }}"
+      - option: nextcloud_base_dir
+        value: "{{ nextcloud_base_dir }}"
+      - option: nextcloud_root_dir
+        value: "{{ nextcloud_root_dir }}"
+      - option: nextcloud_data_dir
+        value: "{{ nextcloud_data_dir }}"
 
-- name: Add 'nextcloud' variable values to {{ iiab_ini_file }}
-  ini_file:
-    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
-    section: Nextcloud
-    option: "{{ item.option }}"
-    value: "{{ item.value | string }}"
-  with_items:
-    - option: name
-      value: Nextcloud
-    - option: description
-      value: '"Nextcloud is a local server-based facility for sharing files, photos, contacts, calendars, etc."'
-    - option: nextcloud_install
-      value: "{{ nextcloud_install }}"
-    - option: nextcloud_enabled
-      value: "{{ nextcloud_enabled }}"
-    - option: nextcloud_dl_url
-      value: "{{ nextcloud_dl_url }}"
-    - option: nextcloud_url
-      value: "{{ nextcloud_url }}"
-    - option: nextcloud_base_dir
-      value: "{{ nextcloud_base_dir }}"
-    - option: nextcloud_root_dir
-      value: "{{ nextcloud_root_dir }}"
-    - option: nextcloud_data_dir
-      value: "{{ nextcloud_data_dir }}"
+  rescue:
+
+  - name: 'SEE ERROR ABOVE (skip_role_on_error: {{ skip_role_on_error }})'
+    fail:
+      msg: ""
+    when: not skip_role_on_error

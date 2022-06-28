@@ -6,10 +6,13 @@
 
 IIAB_RELEASE=`cat /etc/iiab/iiab.env | grep IIAB_RELEASE | cut -d'=' -f2`
 OS_VER=`cat /etc/iiab/iiab.env | grep OS_VER | cut -d'=' -f2`
-#HASH=`cd /opt/iiab/iiab; git log --pretty=format:'%h' -n 1`
-HASH1=`cd /opt/iiab/iiab; git log --pretty=format:'%H' -n 1`
-HASH2=`cd /opt/iiab/iiab-admin-console; git log --pretty=format:'%H' -n 1`
 YMDT=$(date +%F_%T_%Z)
+
+#HASH=`cd /opt/iiab/iiab; git log --pretty=format:'%h' -n 1`
+git config --global --add safe.directory /opt/iiab/iiab    # Nec below, if non-root
+HASH1=`cd /opt/iiab/iiab; git log --pretty=format:'%H' -n 1`
+git config --global --add safe.directory /opt/iiab/iiab-admin-console    # Nec below, if non-root
+HASH2=`cd /opt/iiab/iiab-admin-console; git log --pretty=format:'%H' -n 1`
 
 echo -e "\nGathers IIAB diagnostics into 1 file, to accelerate troubleshooting.  USAGE:"
 echo
@@ -19,7 +22,7 @@ echo -e "   sudo iiab-diagnostics PATH/FILE1 PATH/FILE2 ...      # COMPLETE RESU
 echo
 echo -ne "Can you provide a \e[1mshort public nickname:\e[0m (no spaces!) "
 read nickname < /dev/tty
-if [ "$nickname" = "" ]; then
+if [[ $nickname == "" ]]; then
     nickname="NONAME"
 fi
 
@@ -38,12 +41,12 @@ function cat_file_raw() {    # $1 = path/filename; $2 = # of lines, for tail
             echo "FILE EXISTS BUT IS EMPTY!" >> $outfile
         elif [ $# -eq 1 ]; then
             echo >> $outfile
-            # Redact most passwords from /etc/iiab/local_vars.yml, /etc/hostapd/hostapd.conf, /etc/wpa_supplicant/wpa_supplicant.conf, /etc/netplan/*, /etc/network/interfaces, /etc/network/interfaces.d/* ETC -- not much to worry about in /etc/iiab/iiab.ini (' = ')
-            cat "$1" | sed 's/^\(\s*[[:alnum:]#_-]*\(psk\|passphrase\|password\):\).*/\1 [REDACTED]/; s/^\(\s*[[:alnum:]#_-]*\(psk\|passphrase\|password\)[= \t]\).*/\1[REDACTED]/' | iconv -t UTF-8//IGNORE >> $outfile
+            # Redact (mask) most passwords from /etc/iiab/local_vars.yml, /etc/hostapd/hostapd.conf, /etc/wpa_supplicant/wpa_supplicant.conf, /etc/netplan/*, /etc/network/interfaces, /etc/network/interfaces.d/*, /etc/NetworkManager/system-connections/* ETC -- not much to worry about in /etc/iiab/iiab.ini (' = ')
+            cat "$1" | sed 's/^\(\s*[[:alnum:]#_-]*\(psk\|passphrase\|password\|wep-key[0-3]\):\).*/\1 [REDACTED]/; s/^\(\s*[[:alnum:]#_-]*\(psk\|passphrase\|password\|wep-key[0-3]\)[= \t]\).*/\1[REDACTED]/' | iconv -t UTF-8//IGNORE >> $outfile
         else    # e.g. last 100 lines, maximum
             echo "                        ...ITS LAST $2 LINES FOLLOW..." >> $outfile
             echo >> $outfile
-            tail -$2 "$1" | sed 's/^\(\s*[[:alnum:]#_-]*\(psk\|passphrase\|password\):\).*/\1 [REDACTED]/; s/^\(\s*[[:alnum:]#_-]*\(psk\|passphrase\|password\)[= \t]\).*/\1[REDACTED]/' | iconv -t UTF-8//IGNORE >> $outfile
+            tail -$2 "$1" | sed 's/^\(\s*[[:alnum:]#_-]*\(psk\|passphrase\|password\|wep-key[0-3]\):\).*/\1 [REDACTED]/; s/^\(\s*[[:alnum:]#_-]*\(psk\|passphrase\|password\|wep-key[0-3]\)[= \t]\).*/\1[REDACTED]/' | iconv -t UTF-8//IGNORE >> $outfile
         fi
         echo >> $outfile
     elif [ -h "$1" ]; then
@@ -82,26 +85,33 @@ function cat_dir() {
     fi
 }
 
-function cat_cmd() {                        # $1 = command + params, $2 = explanation
+function cat_cmd() {    # $1 = command + params, $2 = explanation
     echo "     $1  # $2"
     echo "=IIAB==========================================================================" >> $outfile
-    cmd=$(echo "$1" | sed 's/\s.*$//')        # Keep command on left; Drop params on right
-    pth=$(command -v $cmd | sed 's/[^/]*$//')    # Keep only path on left; Drop command on right
-    if [ "$2" = "" ]; then
-	echo "COMMAND: $pth$1" >> $outfile
+    cmd=$(echo "$1" | sed 's/^\s*\(\S\S*\)\b.*$/\1/')    # Keep command on left; Drop params on right (NEC b/c 'command -v' interprets every word on the line!)
+    #pth=$(command -v $cmd | sed 's/[^/]*$//')           # Keep only path on left; Drop command & params on right
+    path_cmd=$(command -v $cmd)                                   # Use canonical path on left (would drop params on right, but over-interpret each word as a cmd!)
+    spc_params=$(echo "$1" | sed 's/^\s*\S\S*\s*/ /;s/\s*$//')    # Drop command on left; Keep a single space + params on right; RTrim
+    #spc_params=$(echo "$1" | sed 's/^\s*\S*//;s/\s*$//;s/^\s\s*/ /')    # LTrim + drop original path + command on left; RTrim; Compress whitespace in between
+    #spc_params=$(echo "$1" | sed 's/^[[:blank:]]*[^[:blank:]]*//;s/[[:blank:]]*$//;s/^[[:blank:]][[:blank:]]*/ /')    # Equivalent (POSIX compliant)
+    if [[ $2 == "" ]]; then
+	echo "COMMAND: $path_cmd$spc_params" >> $outfile
     else
-	echo "COMMAND: $pth$1    # $2" >> $outfile
+	echo "COMMAND: $path_cmd$spc_params    # $2" >> $outfile
     fi
     echo >> $outfile
-    if [ "$pth" = "" ]; then
+    if [[ $path_cmd == "" ]]; then
         echo "COMMAND NOT FOUND: $1" >> $outfile
     else
-        $(echo "eval $1") >> $outfile    # eval is nec within backticks, so | (pipes) work: https://stackoverflow.com/a/7184782
+        bash -c "$1" >> $outfile    # Works with | (pipes) and 'ls -l /lib/firmware/brcm/*43455*' etc!
+	#(exec $1 >> $outfile)      # Works with | (pipes) and 'ls -l /lib/firmware/brcm/*43455*' etc!  Subshell needed (parens) as exec then exits entire shell.
+	#eval $1 >> $outfile              # Should be identical to below, i.e. insufficient -- "eval" combine ARGs into a single string.
+        #$(echo "eval $1") >> $outfile    # "eval" works with | (pipes) per https://stackoverflow.com/a/7184782 BUT globbing like 'ls -l /lib/firmware/brcm/*43455*' FAILS to output lines w/ filenames that contain spaces (ugly IFS issues!)
     fi
     echo >> $outfile
 }
 
-function cat_tail() {     # $1 = path/filename; $2 = # of lines, for tail
+function cat_tail() {    # $1 = path/filename; $2 = # of lines, for tail
     echo "     $1"
     echo "=IIAB==========================================================================" >> $outfile
     cat_file_raw "$1" $2    # e.g. last 100 lines, maximum
@@ -178,7 +188,7 @@ echo -e "\n  3. Content of Directories: (1-level deep)\n"
 echo -e "\n\n\n\n3. CONTENT OF DIRECTORIES (1-LEVEL DEEP)\n" >> $outfile
 cat_dir /etc/network/interfaces.d
 cat_dir /etc/systemd/network
-cat_dir /etc/NetworkManager/system-connections
+cat_dir /etc/NetworkManager/system-connections    # Redacts most passwords above
 cat_dir /etc/netplan    # Redacts most passwords above
 #cat_dir /etc/sysconfig/network-scripts/if-cfg*    # No longer common
 #cat_dir /etc/network    # Above file /etc/network/interfaces suffices
@@ -189,6 +199,7 @@ cat_cmd 'uname -a' 'Linux kernel'
 cat_cmd 'free' 'RAM memory'
 cat_cmd 'lscpu' 'CPU details'
 cat_cmd 'df -h' 'Disk usage'
+cat_cmd 'df -ah' 'Disk usage detail'
 cat_cmd 'lsblk' 'Partition mount points'
 cat_cmd 'blkid' 'Mount point details'
 cat_cmd 'ip addr' 'Network interfaces'
@@ -213,8 +224,9 @@ cat_cmd 'dmesg | grep brcm' 'Diagnostic messages: RPi Wi-Fi firmware'
 cat_cmd 'lspci -nn' 'Devices on PCI buses'
 cat_cmd 'ls -l /lib/firmware/brcm/*43430*' 'RPi Zero W & 3 WiFi firmware'
 cat_cmd 'ls -l /lib/firmware/brcm/*43455*' 'RPi 3 B+ & 4 WiFi firmware'
-cat_cmd '/opt/iiab/kiwix/bin/kiwix-serve --version' 'kiwix-tools'
 cat_cmd 'env' 'Environment variables'
+cat_cmd '/opt/iiab/kiwix/bin/kiwix-serve --version' 'kiwix-tools'
+cat_cmd 'journalctl -t IIAB-CMDSRV' 'Admin Console CMDSRV log'
 #cat_cmd 'ansible localhost -m setup 2>/dev/null' 'All Ansible facts'    # For cleaner scraping of Ansible vars, consider "./runrole all-vars /tmp/all-ansible-vars" 27-31 lines above?
 
 echo -e "\n  5. Firewall Rules:\n"
@@ -222,8 +234,9 @@ echo -e "\n\n\n\n5. FIREWALL RULES\n" >> $outfile
 #cat_file /usr/bin/iiab-gen-iptables
 cat_cmd 'sudo iptables-save' 'Firewall rules'
 
-echo -e "\n  6. Log Files: (last 100 lines of each)\n"
-echo -e "\n\n\n\n6. LOG FILES (LAST 100 LINES OF EACH)\n" >> $outfile
+echo -e "\n  6. Log Files: (e.g. last 100 lines of each)\n"
+echo -e "\n\n\n\n6. LOG FILES (e.g. LAST 100 LINES OF EACH)\n" >> $outfile
+cat_cmd 'grep -B2 "SEE ERROR ABOVE" /opt/iiab/iiab/*.log' 'for skip_role_on_error'
 cat_tail /opt/iiab/iiab/iiab-install.log 100
 cat_tail /opt/iiab/iiab/iiab-configure.log 100
 cat_tail /opt/iiab/iiab/iiab-debug.log 100
@@ -243,11 +256,13 @@ echo -e "   $outfile\e[0m"
 #else
 echo
 echo -ne "\e[42;1mPublish it to a web pastebin? [Y/n]\e[0m "
-read ans < /dev/tty
+read -n 1 -r ans < /dev/tty
+echo
 #fi
 
 echo -e "\e[1m"
-if [ "$ans" == "" ] || [ "$ans" == "y" ] || [ "$ans" == "Y" ]; then
+#if [ "$ans" == "" ] || [ "$ans" == "y" ] || [ "$ans" == "Y" ]; then
+if ! [[ $ans =~ ^[nN]$ ]]; then
     echo -ne "PUBLISHING TO URL... "
     #pastebinit -b dpaste.com < $outfile
     pastebinit -b sprunge.us < $outfile    # Run 'pastebinit -l' to list other possible pastebin site URLs

@@ -21,16 +21,21 @@
     src: network/dhcpcd.conf.j2
 
 - name: New Raspbian requires country code -- check for it
-  shell: grep country /etc/wpa_supplicant/wpa_supplicant.conf
+  shell: grep country /etc/wpa_supplicant/wpa_supplicant.conf | awk -F = '{print $2}'
   register: country_code
   ignore_errors: True
+
+- name: Set country code for hostapd to value found in /etc/wpa_supplicant/wpa_supplicant.conf
+  set_fact:
+    host_country_code: "{{ country_code.stdout }}"
+  when: country_code is defined and country_code.stdout | length > 0
 
 - name: Put country code ({{ host_country_code }}) in /etc/wpa_supplicant/wpa_supplicant.conf if nec
   lineinfile: 
     path: /etc/wpa_supplicant/wpa_supplicant.conf
     regexp: "^country.*"
     line: country={{ host_country_code }}
-  when: country_code is defined and country_code.stdout == ""
+  when: country_code is defined and country_code.stdout | length == 0
 
 - name: Enable the WiFi with rfkill
   shell: rfkill unblock 0
@@ -60,9 +65,7 @@
   systemd:
     name: iiab-clone-wifi
     state: started
-  when: discovered_wireless_iface != "none"
-  # Whereas sysd-netd-debian.yml uses...
-  # when: wifi_up_down and discovered_wireless_iface != "none"
+  when: wifi_up_down and discovered_wireless_iface != "none"
 
 - name: Restart the networking service if appropriate
   systemd:
@@ -70,12 +73,6 @@
     enabled: yes
     state: restarted
   when: iiab_wired_lan_iface is defined
-
-- name: Restart hostapd when WiFi is present but not when using WiFi as gateway with wifi_up_down False
-  systemd:
-    name: hostapd
-    state: restarted
-  when: hostapd_enabled and (wifi_up_down or not no_net_restart)
 
 #- name: Stop wpa_supplicant on Raspbian
 #  shell: killall wpa_supplicant

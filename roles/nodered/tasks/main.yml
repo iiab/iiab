@@ -19,42 +19,33 @@
     quiet: yes
 
 
-- name: Install Node-RED if nodered_installed is not defined, e.g. in {{ iiab_state_file }}    # /etc/iiab/iiab_state.yml
-  include_tasks: install.yml
-  when: nodered_installed is undefined
+- block:
 
+  - name: Install Node-RED if nodered_installed is not defined, e.g. in {{ iiab_state_file }}    # /etc/iiab/iiab_state.yml
+    include_tasks: install.yml
+    when: nodered_installed is undefined
 
-- name: Enable & (Re)start 'nodered' systemd service, if nodered_enabled
-  systemd:
-    name: nodered
-    daemon_reload: yes
-    enabled: yes
-    state: restarted
-  when: nodered_enabled
+  - include_tasks: enable-or-disable.yml
 
-- name: Disable & Stop 'nodered' systemd service, if not nodered_enabled
-  systemd:
-    name: nodered
-    enabled: no
-    state: stopped
-  when: not nodered_enabled
+  - name: Add 'nodered' variable values to {{ iiab_ini_file }}
+    ini_file:
+      path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+      section: nodered
+      option: "{{ item.option }}"
+      value: "{{ item.value | string }}"
+    with_items:
+      - option: name
+        value: Node-RED
+      - option: description
+        value: '"Node-RED is a flow-based development tool for visual programming developed originally by IBM for wiring together hardware devices, APIs and online services as part of the Internet of Things.  Node-RED provides a web browser-based flow editor, which can be used to create JavaScript functions."'
+      - option: nodered_install
+        value: "{{ nodered_install }}"
+      - option: nodered_enabled
+        value: "{{ nodered_enabled }}"
 
-- name: Enable/Disable/Restart NGINX
-  include_tasks: nginx.yml
+  rescue:
 
-
-- name: Add 'nodered' variable values to {{ iiab_ini_file }}
-  ini_file:
-    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
-    section: nodered
-    option: "{{ item.option }}"
-    value: "{{ item.value | string }}"
-  with_items:
-    - option: name
-      value: Node-RED
-    - option: description
-      value: '"Node-RED is a flow-based development tool for visual programming developed originally by IBM for wiring together hardware devices, APIs and online services as part of the Internet of Things.  Node-RED provides a web browser-based flow editor, which can be used to create JavaScript functions."'
-    - option: nodered_install
-      value: "{{ nodered_install }}"
-    - option: nodered_enabled
-      value: "{{ nodered_enabled }}"
+  - name: 'SEE ERROR ABOVE (skip_role_on_error: {{ skip_role_on_error }})'
+    fail:
+      msg: ""
+    when: not skip_role_on_error

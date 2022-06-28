@@ -38,29 +38,40 @@
 #    state: present
 #  when: php_version is version('8.0', '<')
 
-- name: Download {{ wordpress_download_base_url }}/{{ wordpress_src }} to {{ downloads_dir }}
-  get_url:
-    url: "{{ wordpress_download_base_url }}/{{ wordpress_src }}"
-    dest: "{{ downloads_dir }}"
-    timeout: "{{ download_timeout }}"
-  register: wp_download_output
-
-- name: Symlink {{ downloads_dir }}/wordpress.tar.gz -> {{ wp_download_output.dest }}
+- name: Delete {{ downloads_dir }}/wordpress.tar.gz if it exists
   file:
-    src: "{{ wp_download_output.dest }}"
-    path: "{{ downloads_dir }}/wordpress.tar.gz"    # /opt/iiab/downloads
-    state: link
-  when: wp_download_output.dest is defined
+    path: "{{ downloads_dir }}/wordpress.tar.gz"
+    state: absent
 
-- name: Does {{ downloads_dir }}/wordpress.tar.gz link exist?
+- name: Download {{ wordpress_download_base_url }}/{{ wordpress_src }} to {{ downloads_dir }}/wordpress.tar.gz
+  command: wget {{ wordpress_download_base_url }}/{{ wordpress_src }} -O {{ downloads_dir }}/wordpress.tar.gz
+  # 2022-05-04: Ansible approach below (get_url) fails with HTTP Error 429
+  # (Too Many Requests) b/c Ansible's User-Agent string?  Affecting 1 user in
+  # England and another user in Scotland, but not affecting many other
+  # countries/ISP's apparently?  WordPress must have recently changed their
+  # hosting arrangements for https://wordpress.org/latest.tar.gz
+  # get_url:
+  #   url: "{{ wordpress_download_base_url }}/{{ wordpress_src }}"
+  #   dest: "{{ downloads_dir }}"
+  #   timeout: "{{ download_timeout }}"
+#   register: wp_download_output
+
+# - name: Symlink {{ downloads_dir }}/wordpress.tar.gz -> {{ wp_download_output.dest }}
+#   file:
+#     src: "{{ wp_download_output.dest }}"
+#     path: "{{ downloads_dir }}/wordpress.tar.gz"    # /opt/iiab/downloads
+#     state: link
+#   when: wp_download_output.dest is defined
+
+- name: Does {{ downloads_dir }}/wordpress.tar.gz exist?
   stat:
     path: "{{ downloads_dir }}/wordpress.tar.gz"    # /opt/iiab/downloads
-  register: wp_link
+  register: wp_tar_gz
 
 - name: FAIL (force Ansible to exit) IF {{ downloads_dir }}/wordpress.tar.gz doesn't exist
   fail:
     msg: "{{ downloads_dir }}/wordpress.tar.gz is REQUIRED in order to install WordPress."
-  when: not wp_link.stat.exists
+  when: not wp_tar_gz.stat.exists
 
 - name: "Unpack {{ downloads_dir }}/wordpress.tar.gz to permanent location {{ wp_install_path }}/wordpress - owner: root, group: {{ apache_user }}, mode: '0664', keep_newer: yes"
   unarchive:

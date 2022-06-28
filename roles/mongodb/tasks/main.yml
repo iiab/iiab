@@ -35,37 +35,45 @@
 - debug:
     var: is_raspbian
 
-# might be able to lift this once we know using bionic would work
-- name: EXIT 'mongodb' ROLE & CONTINUE, IF 'is_debian_10 and aarch64 and not is_raspbian' i.e. TRUE DEBIAN with arch64
-  fail:    # FORCE IT RED THIS ONCE!
-    msg: ATTEMPTED MongoDB INSTALLATION WITH (TRUE) DEBIAN aarch64, which is not supported upstream.  Nevertheless IIAB will continue (consider this a warning!)
-  when: (ansible_architecture == "aarch64") and is_debian_10 and not is_raspbian
-  ignore_errors: yes
+# # might be able to lift this once we know using bionic would work
+# - name: EXIT 'mongodb' ROLE & CONTINUE, IF 'is_debian_10 and aarch64 and not is_raspbian' i.e. TRUE DEBIAN with arch64
+#   fail:    # FORCE IT RED THIS ONCE!
+#     msg: ATTEMPTED MongoDB INSTALLATION WITH (TRUE) DEBIAN aarch64, which is not supported upstream.  Nevertheless IIAB will continue (consider this a warning!)
+#   when: (ansible_architecture == "aarch64") and is_debian_10 and not is_raspbian
+#   ignore_errors: yes
 
 # ELSE...
 
-- name: Install MongoDB if 'mongodb_installed' not defined, e.g. in {{ iiab_state_file }}    # /etc/iiab/iiab_state.yml
-  include_tasks: install.yml
-  when: mongodb_installed is undefined and not (ansible_architecture == "aarch64" and is_debian_10 and not is_raspbian)
 
+- block:
 
-- name: Enable or Disable MongoDB, if mongodb_installed is defined (sugarizer.service auto-starts MongoDB as nec, so doesn't need this or care what happens here!)
-  include_tasks: enable-or-disable.yml
-  when: mongodb_installed is defined
+  - name: Install MongoDB if 'mongodb_installed' not defined, e.g. in {{ iiab_state_file }}    # /etc/iiab/iiab_state.yml
+    include_tasks: install.yml
+    when: mongodb_installed is undefined
+    # when: mongodb_installed is undefined and not (ansible_architecture == "aarch64" and is_debian_10 and not is_raspbian)
 
+  - name: Enable or Disable MongoDB (FYI sugarizer.service auto-starts MongoDB as nec, so doesn't need this or care what happens here!)
+    include_tasks: enable-or-disable.yml
 
-- name: Add 'mongodb' variable values to {{ iiab_ini_file }}
-  ini_file:
-    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
-    section: mongodb
-    option: "{{ item.option }}"
-    value: "{{ item.value | string }}"
-  with_items:
-    - option: name
-      value: MongoDB
-    - option: description
-      value: '"MongoDB is an open-source document database that provides high performance, high availability, and automatic scaling."'
-    - option: mongodb_install
-      value: "{{ mongodb_install }}"
-    - option: mongodb_enabled
-      value: "{{ mongodb_enabled }}"
+  - name: Add 'mongodb' variable values to {{ iiab_ini_file }}
+    ini_file:
+      path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+      section: mongodb
+      option: "{{ item.option }}"
+      value: "{{ item.value | string }}"
+    with_items:
+      - option: name
+        value: MongoDB
+      - option: description
+        value: '"MongoDB is an open-source document database that provides high performance, high availability, and automatic scaling."'
+      - option: mongodb_install
+        value: "{{ mongodb_install }}"
+      - option: mongodb_enabled
+        value: "{{ mongodb_enabled }}"
+
+  rescue:
+
+  - name: 'SEE ERROR ABOVE (skip_role_on_error: {{ skip_role_on_error }})'
+    fail:
+      msg: ""
+    when: not skip_role_on_error

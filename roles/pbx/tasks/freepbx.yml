@@ -1,5 +1,5 @@
-# 2021-08-16 README.adoc, with screenshots:
-# https://github.com/iiab/iiab/tree/master/roles/pbx#pbx-readme
+# 2022-05-25 README.adoc, with screenshots:
+# https://github.com/iiab/iiab/tree/master/roles/pbx#readme
 
 
 # 2021-08-04: Non-native systemd service 'asterisk.service' (redirects via
@@ -66,47 +66,62 @@
   include_tasks: apache.yml
   when: pbx_use_apache
 
-- name: FreePBX - Download {{ freepbx_url }}/{{ freepbx_src_file }} to {{ downloads_dir }}
-  get_url:
-    url: "{{ freepbx_url }}/{{ freepbx_src_file }}"
-    dest: "{{ downloads_dir }}"    # e.g. /opt/iiab/downloads/freepbx-16.0-latest.tgz
-    timeout: "{{ download_timeout }}"
 
-- name: FreePBX - Check for {{ downloads_dir }}/{{ freepbx_src_file }}
-  stat:
-    path: "{{ downloads_dir }}/{{ freepbx_src_file }}"
-  register: freepbx_src
+# - name: FreePBX - Download {{ freepbx_url }}/{{ freepbx_src_file }} to {{ downloads_dir }}
+#   get_url:
+#     url: "{{ freepbx_url }}/{{ freepbx_src_file }}"
+#     dest: "{{ downloads_dir }}"    # e.g. /opt/iiab/downloads/freepbx-16.0-latest.tgz
+#     timeout: "{{ download_timeout }}"
 
-- name: FreePBX - FAIL (force Ansible to exit) IF {{ downloads_dir }}/{{ freepbx_src_file }} doesn't exist
-  fail:
-    msg: "{{ downloads_dir }}/{{ freepbx_src_file }} is REQUIRED to install FreePBX."
-  when: not freepbx_src.stat.exists
+# - name: FreePBX - Check for {{ downloads_dir }}/{{ freepbx_src_file }}
+#   stat:
+#     path: "{{ downloads_dir }}/{{ freepbx_src_file }}"
+#   register: freepbx_src
 
-- name: FreePBX - Create source dir {{ freepbx_src_dir }}
-  file:
-    path: "{{ freepbx_src_dir }}"    # /opt/iiab/freepbx
-    state: directory
+# - name: FreePBX - FAIL (force Ansible to exit) IF {{ downloads_dir }}/{{ freepbx_src_file }} doesn't exist
+#   fail:
+#     msg: "{{ downloads_dir }}/{{ freepbx_src_file }} is REQUIRED to install FreePBX."
+#   when: not freepbx_src.stat.exists
 
-- name: FreePBX - Extract to source dir (root:root)
-  unarchive:
-    src: "{{ downloads_dir }}/{{ freepbx_src_file }}"
-    dest: "{{ freepbx_src_dir }}"
-    owner: root
-    group: root
-    extra_opts: [--strip-components=1]
-    creates: "{{ freepbx_src_dir }}/install"
+# - name: FreePBX - Create source dir {{ freepbx_src_dir }}
+#   file:
+#     path: "{{ freepbx_src_dir }}"    # /opt/iiab/freepbx
+#     state: directory
 
-- name: "FreePBX - 2021-11-06: TEMPORARILY force FreePBX 16 to work with Asterisk 19 - patch /opt/iiab/freepbx/install.php"
-  replace:
-    path: /opt/iiab/freepbx/install.php
-    regexp: 'version_compare\(\$astversion, "19", "ge"\)\) \{$'
-    replace: 'version_compare($astversion, "20", "ge")) {'
+# - name: FreePBX - Extract to source dir (root:root)
+#   unarchive:
+#     src: "{{ downloads_dir }}/{{ freepbx_src_file }}"
+#     dest: "{{ freepbx_src_dir }}"
+#     owner: root
+#     group: root
+#     extra_opts: [--strip-components=1]
+#     creates: "{{ freepbx_src_dir }}/install"
 
-- name: "FreePBX - 2021-11-06: TEMPORARILY force FreePBX 16 to work with Asterisk 19 - patch /opt/iiab/freepbx/installlib/installcommand.class.php"
-  replace:
-    path: /opt/iiab/freepbx/installlib/installcommand.class.php
-    regexp: 'version_compare\(\$matches\[1\], "19", "ge"\)\) \{$'
-    replace: 'version_compare($matches[1], "20", "ge")) {'
+- name: FreePBX - git clone {{ freepbx_git_url }} -b {{ freepbx_git_branch }} --depth 1 {{ freepbx_src_dir }} (force)
+  git:
+    repo: "{{ freepbx_git_url }}"          # https://github.com/FreePBX/framework
+    dest: "{{ freepbx_src_dir }}"          # /opt/iiab/freepbx
+    version: "{{ freepbx_git_branch }}"    # e.g. release/16.0
+    depth: 1
+    force: yes
+
+
+# No longer needed since approx 2022-01-31 / 2022-02-14, as confirmed by:
+# https://github.com/FreePBX/framework/blob/release/16.0/install.php#L27
+# https://github.com/FreePBX/framework/blob/release/16.0/installlib/installcommand.class.php#L300
+# https://community.freepbx.org/t/asterisk-19-working-with-freepbx16/80965/14
+#
+# - name: "FreePBX - 2021-11-06: TEMPORARILY force FreePBX 16 to work with Asterisk 19 - patch /opt/iiab/freepbx/install.php"
+#   replace:
+#     path: /opt/iiab/freepbx/install.php
+#     regexp: 'version_compare\(\$astversion, "19", "ge"\)\) \{$'
+#     replace: 'version_compare($astversion, "20", "ge")) {'
+#
+# - name: "FreePBX - 2021-11-06: TEMPORARILY force FreePBX 16 to work with Asterisk 19 - patch /opt/iiab/freepbx/installlib/installcommand.class.php"
+#   replace:
+#     path: /opt/iiab/freepbx/installlib/installcommand.class.php
+#     regexp: 'version_compare\(\$matches\[1\], "19", "ge"\)\) \{$'
+#     replace: 'version_compare($matches[1], "20", "ge")) {'
 
 # 2021-08-04: FreePBX 16 no longer needs this FreePBX 15 patch
 # - name: FreePBX - Patch FreePBX source - IIAB Bug 1685
@@ -136,7 +151,6 @@
     # login_user: root
     # login_password: "{{ mysql_root_password }}"
     host: "{{ (asterisk_db_host == 'localhost') | ternary('localhost', ansible_default_ipv4.address) }}"
-    state: present
 
 - name: FreePBX - Add MySQL db ({{ asterisk_db_dbname }})
   mysql_db:
@@ -146,7 +160,6 @@
     login_host: "{{ asterisk_db_host }}"
     login_user: "{{ asterisk_db_user }}"
     login_password: "{{ asterisk_db_password }}"
-    state: present
 
 - name: FreePBX - Add CDR MySQL db ({{ asterisk_db_cdrdbname }})
   mysql_db:
@@ -156,7 +169,6 @@
     login_host: "{{ asterisk_db_host }}"
     login_user: "{{ asterisk_db_user }}"
     login_password: "{{ asterisk_db_password }}"
-    state: present
 
 
 # 2021-08-16: DOES NGINX NEED THE NEXT 2 STANZAS?  (If not, should 'when: pbx_use_apache' be added?)
@@ -175,17 +187,17 @@
 
 - name: "FreePBX - Populate /etc/asterisk/freepbx_chown.conf to prevent 'fwconsole chown' takeover of /var/lib/php/sessions"    # And possibly later /etc/freepbx.conf, /var/log/asterisk/freepbx.log, /var/spool/asterisk/cache
   blockinfile:
-    content: |
+    path: /etc/asterisk/freepbx_chown.conf
+    block: |
       [blacklist]
       directory = /var/lib/php/sessions
     marker: "; {mark} ANSIBLE MANAGED BLOCK"
-    dest: /etc/asterisk/freepbx_chown.conf
     owner: asterisk
     group: asterisk
     create: yes
 
 
-- name: FreePBX - git clone https://github.com/mariadb-corporation/mariadb-connector-odbc to /usr/src/mariadb-connector-odbc
+- name: FreePBX - git clone https://github.com/mariadb-corporation/mariadb-connector-odbc --depth 1 /usr/src/mariadb-connector-odbc (force)
   git:
     repo: https://github.com/mariadb-corporation/mariadb-connector-odbc
     dest: /usr/src/mariadb-connector-odbc
@@ -213,7 +225,7 @@
     dest: /etc/asterisk/cdr_mysql.conf
 
 
-- name: FreePBX - 2-step install - won't run if {{ freepbx_install_dir }} already exists - CAN TAKE 3-12 MIN OR LONGER!
+- name: FreePBX - 2-step install - won't run if {{ freepbx_install_dir }} already exists - FAST W/ GITHUB (OR freepbx-16.0-latest.tgz CAN TAKE 3-12 MIN OR LONGER!)
   command: "{{ item }}"
   args:
     chdir: "{{ freepbx_src_dir }}"
@@ -222,6 +234,21 @@
     - ./start_asterisk start
     - ./install -n --webroot {{ freepbx_install_dir }} --dbuser {{ asterisk_db_user }} --dbpass {{ asterisk_db_password }}
     # - ./install -n --webroot {{ freepbx_install_dir }} --dbuser {{ asterisk_db_user }} --dbpass {{ asterisk_db_password }} --dbname {{ asterisk_db_dbname }} --cdrdbname {{ asterisk_db_cdrdbname }}
+
+
+# 2022-05-25 BACKGROUND: https://github.com/iiab/iiab/pull/3229#issuecomment-1138061460
+- name: FreePBX - Revert the above just-installed FreePBX 'framework' module by a few weeks-or-so from GitHub's bleeding edge, to a more official version (which can help to install the ~15 modules below!)
+  command: fwconsole ma downloadinstall framework
+
+# ERROR IF RUN BELOW: "Unable to connect to remote asterisk"
+- name: FreePBX - Run 'fwconsole reload' - as an additional precaution, per Ron Raikes @ https://community.freepbx.org/t/asterisk-19-1-0-and-freepbx-install/81029/15
+  command: fwconsole reload
+
+# DEFAULT MODULE LIST AUG 2021: https://github.com/iiab/iiab/pull/2916#issuecomment-894601522
+# YIELDS 2 MORE AS OF MAY 2022: https://github.com/iiab/iiab/pull/3229#issuecomment-1138566339
+- name: FreePBX - Download + Install 15 additional FreePBX default modules (of about 70 total) as if we were installing freepbx-16.0-latest.tgz - THIS CAN TAKE SEVERAL MIN!
+  command: fwconsole ma downloadinstall callrecording cdr conferences core customappsreg dashboard featurecodeadmin infoservices logfiles music pm2 recordings sipsettings soundlang voicemail
+
 
 - name: FreePBX - Run 'fwconsole stop', 'killall -9 safe_asterisk' to stop both main Asterisk processes - this avoids "Unable to run Pre-Asterisk hooks, because Asterisk is already running" in 'journalctl -u freepbx' logs
   command: "{{ item }}"
@@ -259,9 +286,10 @@
     src: freepbx.service
     dest: /etc/systemd/system/
 
-# Default module list https://github.com/iiab/iiab/pull/2916#issuecomment-894601522
-- name: FreePBX - Run 'fwconsole ma upgradeall' on installed FreePBX modules, e.g. 16 default modules (of about 70 total) - CAN TAKE 1 MIN OR LONGER!
-  command: fwconsole ma upgradeall
+
+# 2022-05-25: Replaced by 'fwconsole ma downloadinstall' commands above
+# - name: FreePBX - Run 'fwconsole ma upgradeall' on installed FreePBX modules, e.g. 16 default modules (of about 70 total) - CAN TAKE 1 MIN OR LONGER!
+#   command: fwconsole ma upgradeall
 
 # - name: FreePBX - Add "$amp_conf['CHECKREFERER'] = false;" to /etc/freepbx.conf #2931 - if pbx_use_nginx"
 #   lineinfile:
