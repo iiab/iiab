@@ -1,0 +1,66 @@
+#!/bin/bash
+
+# Intentionally very concise summary of IIAB details.
+# Can evolve for int'l community needs, alongside the much longer:
+# https://github.com/iiab/iiab/blob/master/scripts/iiab-diagnostics.README.md
+
+git config --global --add safe.directory /opt/iiab/iiab    # Nec below, if non-root
+cd /opt/iiab/iiab
+SHORT_HASH1=$(git log --pretty=format:'%h' -n 1)    # --pretty=format:'%H' (all 40 chars)
+TAG1=$(git describe --tags --abbrev=0)
+COMMITS1=$(git log "$TAG1..HEAD" --oneline | wc -l)
+PR_COUNT1=$(git log "$TAG1..HEAD" --oneline --grep='Merge pull request' | wc -l)
+COMMIT_MSG1=$(git log --format=%B -1 | head -1)
+BRANCH1=$(git branch --show-current)
+REMOTE_URL1=$(git config remote.$(git config branch.$BRANCH1.remote).url)
+
+git config --global --add safe.directory /opt/iiab/iiab-admin-console    # Nec below, if non-root
+cd /opt/iiab/iiab-admin-console
+SHORT_HASH2=$(git log --pretty=format:'%h' -n 1)    # --pretty=format:'%H' (all 40 chars)
+TAG2=$(git describe --tags --abbrev=0)
+COMMITS2=$(git log "$TAG2..HEAD" --oneline | wc -l)
+PR_COUNT2=$(git log "$TAG2..HEAD" --oneline --grep='Merge pull request' | wc -l)
+COMMIT_MSG2=$(git log --format=%B -1 | head -1)
+BRANCH2=$(git branch --show-current)
+REMOTE_URL2=$(git config remote.$(git config branch.$BRANCH2.remote).url)
+
+echo "$(grep install_date /etc/iiab/iiab.ini)   Current TZ: $(date +%Z)"
+echo
+echo -e "iiab: $SHORT_HASH1, $PR_COUNT1 PR's / $COMMITS1 commits since tag $TAG1"
+echo -e "    \e[1m\"$COMMIT_MSG1\"\e[0m"
+echo "    $REMOTE_URL1   branch: $BRANCH1"
+if [ -f /etc/iiab/pr-list-pulled ]; then
+    echo
+    cat /etc/iiab/pr-list-pulled
+fi
+echo
+echo -e "iiab-admin-console: $SHORT_HASH2, $PR_COUNT2 PR's / $COMMITS2 commits since tag $TAG2"
+echo -e "    \e[1m\"$COMMIT_MSG2\"\e[0m"
+echo "    $REMOTE_URL2   branch: $BRANCH2"
+echo
+if [ -f /etc/rpi-issue ]; then
+    cat /etc/rpi-issue
+    echo "/etc/debian-version: $(cat /etc/debian_version)"
+else
+    echo "$(cat /etc/issue.net)   $(cat /etc/debian_version)"
+fi
+echo "display-manager? $(systemctl is-active display-manager.service)   Arch1: $(dpkg --print-architecture)   Arch2: $(dpkg --print-foreign-architectures)"
+uname -rvp
+echo "$(lscpu | grep '^Model name:' | sed 's/^Model name:\s*//')   $(lscpu | grep '^CPU(s):' | tr -s ' ')   "$(free -m | tail -2 | tr -s ' ' | cut -d' ' -f1-2)
+if [ -f /proc/device-tree/model ]; then
+    cat /proc/device-tree/model ; echo    # MORE RPi DETAIL: tail -4 /proc/cpuinfo
+fi
+if [ -f /sys/class/thermal/thermal_zone0/temp ]; then
+    echo "Temp(s): "$(cat /sys/class/thermal/thermal_zone*/temp)    # Prettier if avail: vcgencmd measure_temp
+fi
+#if command -v landscape-sysinfo > /dev/null; then    # Slow, Ubuntu Server only
+#    landscape-sysinfo --sysinfo-plugins=Disk,Temperature,Load    # Like: uptime -p
+#fi
+echo
+echo "$(df -h /)                ZIMs: $(ls /library/zims/content/ | wc -l) OER2Go: $(ls /library/www/html/modules/ | wc -l)"
+echo
+echo $(ip -o link show | awk -F': ' '{print $2}')    # Better order than: ls -rt /sys/class/net
+grep "^openvpn_enabled:" /etc/iiab/local_vars.yml
+grep "^openvpn_handle:" /etc/iiab/local_vars.yml
+hostname -I
+echo
