@@ -4,15 +4,22 @@
 # PLEASE SEE /opt/iiab/iiab/scripts/iiab-diagnostics.README.md OR ONLINE HERE:
 # https://github.com/iiab/iiab/blob/master/scripts/iiab-diagnostics.README.md
 
-IIAB_RELEASE=`cat /etc/iiab/iiab.env | grep IIAB_RELEASE | cut -d'=' -f2`
-OS_VER=`cat /etc/iiab/iiab.env | grep OS_VER | cut -d'=' -f2`
+IIAB_RELEASE=$(cat /etc/iiab/iiab.env | grep IIAB_RELEASE | cut -d'=' -f2)
+OS_VER=$(cat /etc/iiab/iiab.env | grep OS_VER | cut -d'=' -f2)
 YMDT=$(date +%F_%T_%Z)
 
-#HASH=`cd /opt/iiab/iiab; git log --pretty=format:'%h' -n 1`
 git config --global --add safe.directory /opt/iiab/iiab    # Nec below, if non-root
-HASH1=`cd /opt/iiab/iiab; git log --pretty=format:'%H' -n 1`
+HASH1=$(cd /opt/iiab/iiab; git log --pretty=format:'%H' -n 1)    # --pretty=format:'%h' (8 chars)
+BRANCH1=$(cd /opt/iiab/iiab; git branch --show-current)
+REMOTE_URL1=$(cd /opt/iiab/iiab; git config remote.$(git config branch.$BRANCH1.remote).url)
+PR_COUNT1=$(cd /opt/iiab/iiab; git log "$(git describe --tags --abbrev=0)..HEAD" --oneline --grep='Merge pull request' | wc -l)
+TAG_COMMITS1=$(cd /opt/iiab/iiab; git describe --tags | sed 's/-[^-]*$//' | sed 's/-\([[:digit:]][[:digit:]]*\)$/ (\1 commits)/')
 git config --global --add safe.directory /opt/iiab/iiab-admin-console    # Nec below, if non-root
-HASH2=`cd /opt/iiab/iiab-admin-console; git log --pretty=format:'%H' -n 1`
+HASH2=$(cd /opt/iiab/iiab-admin-console; git log --pretty=format:'%H' -n 1)
+BRANCH2=$(cd /opt/iiab/iiab-admin-console; git branch --show-current)
+REMOTE_URL2=$(cd /opt/iiab/iiab-admin-console; git config remote.$(git config branch.$BRANCH2.remote).url)
+PR_COUNT2=$(cd /opt/iiab/iiab-admin-console; git log "$(git describe --tags --abbrev=0)..HEAD" --oneline --grep='Merge pull request' | wc -l)
+TAG_COMMITS2=$(cd /opt/iiab/iiab-admin-console; git describe --tags | sed 's/-[^-]*$//' | sed 's/-\([[:digit:]][[:digit:]]*\)$/ (\1 commits)/')
 
 echo -e "\nGathers IIAB diagnostics into 1 file, to accelerate troubleshooting.  USAGE:"
 echo
@@ -123,10 +130,17 @@ echo -e "\nCompiling diagnostics..."
 echo -e "\n  0. Filename Header + Git Hashes + Raspberry Pi Model + OS"
 echo "This is: $outfile" >> $outfile
 echo >> $outfile
-echo -e "\n\n\n\n0. GIT HASHES + RASPBERRY PI MODEL + OS" >> $outfile
+echo -e "\n\n\n\n0. GIT INFO + RASPBERRY PI MODEL + OS" >> $outfile
 echo >> $outfile
 echo "iiab commit:               $HASH1" >> $outfile
+echo "     remote:               $REMOTE_URL1" >> $outfile
+echo "     branch:               $BRANCH1" >> $outfile
+printf "%4s merged PR's since recent tag: $TAG_COMMITS1\n" $PR_COUNT1 >> $outfile
+echo >> $outfile
 echo "iiab-admin-console commit: $HASH2" >> $outfile
+echo "     remote:               $REMOTE_URL2" >> $outfile
+echo "     branch:               $BRANCH2" >> $outfile
+printf "%4s merged PR's since recent tag: $TAG_COMMITS2\n" $PR_COUNT2 >> $outfile
 echo >> $outfile
 cat_file /etc/iiab/pr-list-pulled
 cat_file /proc/device-tree/model    # Should be identical to /sys/firmware/devicetree/base/model
@@ -149,6 +163,7 @@ cat_cmd 'dpkg --print-architecture' 'RaspiOS-on-PC shows: i386'
 cat_cmd 'dpkg --print-foreign-architectures' 'RaspiOS-on-PC shows: amd64'
 cat_cmd 'systemctl is-active display-manager.service' 'Graphical Desktop?'
 cat_cmd 'grep "^openvpn_" /etc/iiab/local_vars.yml'
+cat_cmd 'iiab-apps-to-be-installed' 'IIAB Apps to be installed'
 
 echo -e '\n\n  1. Files Specially Requested: (from "iiab-diagnostics PATH/FILE1 PATH/FILE2")\n'
 echo -e '\n\n\n\n1. FILES SPECIALLY REQUESTED (FROM "iiab-diagnostics PATH/FILE1 PATH/FILE2")\n' >> $outfile

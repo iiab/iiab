@@ -1,10 +1,16 @@
 ## Objective
 
-To streamline troubleshooting of remote Internet-in-a-Box (IIAB) installations, we bundle up common machine/software diagnostics, all together in 1 human-readable small file, that can be easily circulated online AND offline.  Just FYI Raspberry Pi OS's [/usr/bin/raspinfo](https://github.com/raspberrypi/utils/blob/master/raspinfo/raspinfo) serves a very similar purpose, but we do not include that program's 700-to-800 line output at present.
+To streamline troubleshooting of remote Internet-in-a-Box (IIAB) installations, we bundle up common machine/software diagnostics, all together in 1 human-readable file of about 2000 lines, that can be easily circulated online AND offline.
 
-Passwords (including Wi-Fi passwords) are auto-redacted from this file, to protect your community confidentiality.
+Just FYI Raspberry Pi OS's [/usr/bin/raspinfo](https://github.com/raspberrypi/utils/blob/master/raspinfo/raspinfo) serves a very similar purpose, but we do not include that program's 700-to-800 line output at present.
 
-Finally, the ``pastebinit`` command can then be used to auto-upload this file, creating a short URL that makes it much easier to circulate among [volunteers](http://internet-in-a-box.org/pages/contributing.html).
+For a more concise "instant" summary of any IIAB machine (about 20-25 lines) try this command instead: [/usr/bin/iiab-summary](iiab-summary)
+
+## What `iiab-diagnostics` does
+
+Passwords (including Wi-Fi passwords) are auto-redacted as the output file is generated, to protect your community confidentiality.
+
+Finally, the ``pastebinit`` command can be used to auto-upload the output file (human-readable, approx 2000 lines) creating a short URL that makes it much easier to circulate among [volunteers](https://internet-in-a-box.org/contributing.html).
 
 But first off, the file is compiled by harvesting 1 + 6 kinds of things:
 
@@ -62,4 +68,4 @@ But first off, the file is compiled by harvesting 1 + 6 kinds of things:
 
 ## Source Code
 
-Please look over the bottom of [iiab-diagnostics](iiab-diagnostics) (lines 120-246 especially) to learn more about which common IIAB files and commands make this rapid troubleshooting possible.
+Please look over the bottom of [iiab-diagnostics](iiab-diagnostics) (lines 127-261 especially) to learn more about which common IIAB files and commands make this rapid troubleshooting possible.
