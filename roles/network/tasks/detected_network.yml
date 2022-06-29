@@ -1,3 +1,47 @@
+- name: Do we have a gateway? If 'ip route' specifies a default route, Ansible parses details here...
+  debug:
+    var: ansible_default_ipv4
+
+- name: "If above ansible_default_ipv4.gateway is defined, set WAN candidate 'discovered_wan_iface: {{ ansible_default_ipv4.alias }}' -- using ansible_default_ipv4.alias"
+  set_fact:
+    discovered_wan_iface: "{{ ansible_default_ipv4.alias }}"
+  when: ansible_default_ipv4.gateway is defined
+
+- name: "Verify gateway active: ping -c4 {{ ansible_default_ipv4.gateway }} -- using ansible_default_ipv4.gateway"
+  shell: ping -c4 "{{ ansible_default_ipv4.gateway }}" | grep icmp_seq=4 | wc -l
+  register: gw_active_test
+  when: discovered_wan_iface != "none"
+
+- name: "If gateway responded, set 'gw_active: True' and 'iiab_wan_iface: {{ discovered_wan_iface }}' -- using discovered_wan_iface"
+  set_fact:
+    iiab_wan_iface: "{{ discovered_wan_iface }}"
+    gw_active: True
+  when: discovered_wan_iface != "none" and gw_active_test.stdout == "1"
+
+
+# Similar to roles/www_options/tasks/main.yml prereq for iiab-refresh-wiki-docs
+- name: 'Test for Internet access, using: {{ iiab_download_url }}/heart-beat.txt'
+  get_url:
+    url: "{{ iiab_download_url }}/heart-beat.txt"
+    dest: /tmp/heart-beat.txt
+    #timeout: "{{ download_timeout }}"
+    # @jvonau recommends: 100sec is too much (keep 10sec default)
+  ignore_errors: True
+  #async: 10
+  #poll: 2
+  register: internet_access_test
+
+- name: "Set 'internet_available: True' if above download succeeded AND not disregard_network"
+  set_fact:
+    internet_available: True    # Initialized to 'False' in 0-init/defaults/main.yml
+  when: not internet_access_test.failed and not disregard_network
+
+- name: Remove downloaded Internet test file /tmp/heart-beat.txt
+  file:
+    path: /tmp/heart-beat.txt
+    state: absent
+
+
 # so this works
 - name: Interface count
   shell: ls /sys/class/net | grep -v {{ virtual_network_devices }} | wc | awk '{print $1}'
@@ -239,6 +283,10 @@
     option: "{{ item.option }}"
     value: "{{ item.value | string }}"
   with_items:
+    - option: gw_active
+      value: "{{ gw_active }}"
+    - option: internet_available
+      value: "{{ internet_available }}"
     - option: has_ifcfg_gw
       value: "{{ has_ifcfg_gw }}"
     - option: prior_gateway_device

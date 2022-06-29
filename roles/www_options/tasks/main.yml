@@ -154,9 +154,26 @@
   when: not apache_allow_sudo
 
 
+# internet_available var moved to roles/network/tasks/detected_network.yml
+- name: 'Test for Internet access, using: {{ iiab_download_url }}/heart-beat.txt'
+  get_url:
+    url: "{{ iiab_download_url }}/heart-beat.txt"
+    dest: /tmp/heart-beat.txt
+    #timeout: "{{ download_timeout }}"
+    # @jvonau recommends: 100sec is too much (keep 10sec default)
+  ignore_errors: True
+  #async: 10
+  #poll: 2
+  register: internet_access_test
+
+- name: Remove downloaded Internet test file /tmp/heart-beat.txt
+  file:
+    path: /tmp/heart-beat.txt
+    state: absent
+
 - name: Run /usr/bin/iiab-refresh-wiki-docs (scraper script) to create http://box/info offline documentation.  (This script was installed in Stage 3 = roles/3-base-server/tasks/main.yml, which ran roles/www_base/tasks/main.yml)
   command: /usr/bin/iiab-refresh-wiki-docs
-  when: internet_available and not nodocs
+  when: not internet_access_test.failed and not nodocs
 
 
 - name: (Re)Start '{{ apache_service }}' systemd service, if installed & enabled
