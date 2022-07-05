@@ -9,7 +9,7 @@ Roughly follows this guide: https://www.digitalocean.com/community/tutorials/how
 Using It
 --------
 
-Prior to installing IIAB, make sure your `/etc/iiab/local_vars.yml <http://wiki.laptop.org/go/IIAB/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it.3F>`_ contains::
+Prior to installing IIAB, make sure your `/etc/iiab/local_vars.yml <https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it%3F>`_ contains::
 
   mosquitto_install: True
   mosquitto_enabled: True

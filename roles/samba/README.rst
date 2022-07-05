@@ -22,4 +22,4 @@ Security
 
 Please review the default `/etc/samba/smb.conf <templates/smb.conf.j2>`_ file, and revise it appropriately.
 
-Please also review your overall `IIAB Security <http://wiki.laptop.org/go/IIAB/Security>`_.
+Please also review your overall `IIAB Security <https://wiki.iiab.io/go/Security>`_.

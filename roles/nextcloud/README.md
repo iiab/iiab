@@ -1,6 +1,6 @@
 # Nextcloud README
 
-Students and teachers can store their documents, calendars, contacts and photos locally within [Nextcloud](https://nextcloud.com), which is much like having a (local) version of Dropbox or Google Drive on your very own [Internet-in-a-Box](http://internet-in-a-box.org).
+Students and teachers can store their documents, calendars, contacts and photos locally within [Nextcloud](https://nextcloud.com), which is much like having a (local) version of Dropbox or Google Drive on your very own [Internet-in-a-Box](https://internet-in-a-box.org).
 
 This Ansible playbook was derived from an earlier ownCloud playbook thanks to [Josh Dennis](https://github.com/floydianslips) in 2016/2017.
 
