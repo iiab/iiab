@@ -23,7 +23,7 @@ No password is required.
 Configurable Parameters
 -----------------------
 
-If changes are necessary, please edit `/etc/iiab/local_vars.yml <http://wiki.laptop.org/go/IIAB/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it.3F>`_ (adding any variables that you need) prior to installation if possible:
+If changes are necessary, please edit `/etc/iiab/local_vars.yml <https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it%3F>`_ (adding any variables that you need) prior to installation if possible:
 
 - ``minetest_install:`` set Minetest up to install; default is False
 - ``minetest_enabled:`` set Minetest up to be enabled; default is False

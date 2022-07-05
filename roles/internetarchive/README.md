@@ -8,7 +8,7 @@ Access to our library of millions of books, journals, audio and video recordings
 
 This Ansible role installs the Internet Archive's dweb-mirror project on
 Internet-in-a-Box (IIAB).  Use this to build up a dynamic offline library
-arising from the materials you can explore at http://dweb.archive.org
+arising from the materials you can explore at https://dweb.archive.org
 
 The Offline Internet Archive server:
 
@@ -248,7 +248,7 @@ and just checks the content is up to date.
 
 ## Managing collections on Internet Archive
 
-You can create and manage your own collections on the [Internet Archive site](http://www.archive.org).  
+You can create and manage your own collections on the [Internet Archive site](https://www.archive.org).  
 Other people can then crawl those collections. 
 
 First get in touch with Mitra Ardron at `mitra@archive.org`, as processes may have changed since this is written.
