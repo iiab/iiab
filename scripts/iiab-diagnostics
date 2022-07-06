@@ -127,45 +127,26 @@ function cat_tail() {    # $1 = path/filename; $2 = # of lines, for tail
 # START BUILDING UP THE FILE THAT'LL CONTAIN THE DIAGNOSTICS!
 echo -e "\nCompiling diagnostics..."
 
-echo -e "\n  0. Filename Header + Git Hashes + Raspberry Pi Model + OS"
+echo -e "\n  0. HW + SW Quick Summary"
 echo "This is: $outfile" >> $outfile
 echo >> $outfile
-echo -e "\n\n\n\n0. GIT INFO + RASPBERRY PI MODEL + OS" >> $outfile
+echo -e "\n\n\n\n0. HW + SW Quick Summary" >> $outfile
 echo >> $outfile
-echo "iiab commit:               $HASH1" >> $outfile
-echo "     remote:               $REMOTE_URL1" >> $outfile
-echo "     branch:               $BRANCH1" >> $outfile
-printf "%4s merged PR's since recent tag: $TAG_COMMITS1\n" $PR_COUNT1 >> $outfile
-echo >> $outfile
-echo "iiab-admin-console commit: $HASH2" >> $outfile
-echo "     remote:               $REMOTE_URL2" >> $outfile
-echo "     branch:               $BRANCH2" >> $outfile
-printf "%4s merged PR's since recent tag: $TAG_COMMITS2\n" $PR_COUNT2 >> $outfile
-echo >> $outfile
-cat_file /etc/iiab/pr-list-pulled
-cat_file /proc/device-tree/model    # Should be identical to /sys/firmware/devicetree/base/model
-cat_file /etc/rpi-issue
-echo "-IIAB-EXPLANATION-OF-THE-ABOVE-------------------------------------------------" >> $outfile
-echo >> $outfile
+/opt/iiab/iiab/scripts/iiab-summary >> $outfile
 if [ -f /etc/rpi-issue ]; then
     echo "stage2 = Raspberry Pi OS Lite" >> $outfile
     echo "stage4 = Raspberry Pi OS with desktop" >> $outfile
     echo "stage5 = Raspberry Pi OS with desktop + recommended software" >> $outfile
-    echo >> $outfile
     echo "SEE https://github.com/RPi-Distro/pi-gen#stage-anatomy" >> $outfile
-else
-    echo "(This is NOT Raspberry Pi OS!)" >> $outfile
+    echo >> $outfile
 fi
-echo >> $outfile
-cat_file /etc/issue.net
-cat_file /etc/debian_version
-cat_cmd 'dpkg --print-architecture' 'RaspiOS-on-PC shows: i386'
-cat_cmd 'dpkg --print-foreign-architectures' 'RaspiOS-on-PC shows: amd64'
-cat_cmd 'systemctl is-active display-manager.service' 'Graphical Desktop?'
-cat_cmd 'grep "^openvpn_" /etc/iiab/local_vars.yml'
-cat_cmd 'iiab-apps-to-be-installed' 'IIAB Apps to be installed'
+if [ -s /tmp/iiab-apps-to-be-installed ]; then
+    echo "iiab-apps-to-be-installed :" >> $outfile
+    cat /tmp/iiab-apps-to-be-installed >> $outfile
+    echo >> $outfile
+fi
 
-echo -e '\n\n  1. Files Specially Requested: (from "iiab-diagnostics PATH/FILE1 PATH/FILE2")\n'
+echo -e '\n  1. Files Specially Requested: (from "iiab-diagnostics PATH/FILE1 PATH/FILE2")\n'
 echo -e '\n\n\n\n1. FILES SPECIALLY REQUESTED (FROM "iiab-diagnostics PATH/FILE1 PATH/FILE2")\n' >> $outfile
 for f in "$@"; do
     cat_file $f
@@ -277,7 +258,7 @@ echo
 
 echo -e "\e[1m"
 #if [ "$ans" == "" ] || [ "$ans" == "y" ] || [ "$ans" == "Y" ]; then
-if ! [[ $ans =~ ^[nN]$ ]]; then
+if ! [[ $ans =~ ^[nNqQ]$ ]]; then
     echo -ne "PUBLISHING TO URL... "
     #pastebinit -b dpaste.com < $outfile
     pastebinit -b sprunge.us < $outfile    # Run 'pastebinit -l' to list other possible pastebin site URLs
