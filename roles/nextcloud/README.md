@@ -43,7 +43,7 @@ Useful PHP recommendations for these settings (while largely tailored to WordPre
 
 ## Using It
 
-Log in to Nextcloud at http://box/nextcloud, http://box.lan/nextcloud, http://{{ lan_ip }}/nextcloud (or similar) using:
+Log in to Nextcloud at http://box/nextcloud, http://box.lan/nextcloud, http://10.10.10.10/nextcloud (or similar) using:
 
     Username: Admin
     Password: changeme
