@@ -3,7 +3,7 @@
 # Higher-level purpose explained at the bottom of:
 # https://github.com/iiab/iiab/blob/master/vars/default_vars.yml
 
-# 2020-10-27: Most of the 11 variables require a command[*] to be run to
+# 2020-10-27: Most of the 13 variables require a command[*] to be run to
 # establish the var's value.  WE DISPLAY ALL ERRORS / DIAGNOSTICS AND CONTINUE.
 #
 # [*] DOESN'T MATTER WHAT COMMAND: so long as it fails with Return Code != 0
@@ -12,9 +12,10 @@
 STAGE=0
 OS="none"
 VERSION_ID="none"    # This var's combined with the above, before being output
+IIAB_REMOTE_URL="none"
 IIAB_BRANCH="none"
 IIAB_COMMIT="none"
-#XO_MODEL="none"
+IIAB_RECENT_TAG="none"
 RPI_MODEL="none"
 DEVICETREE_MODEL="none"
 ANSIBLE_VERSION="none"
@@ -86,15 +87,23 @@ case $OS_VER in
         ;;
 esac
 
-# These next 2 help indicate what version of IIAB
+# These next 4 help indicate what version of IIAB
 tmp=$(git rev-parse --abbrev-ref HEAD) &&
     IIAB_BRANCH=$tmp
+
+tmp=$(git config branch.$IIAB_BRANCH.remote) && {
+    if [[ $tmp =~ ^"https://" ]]; then
+        IIAB_REMOTE_URL=$tmp
+    else
+        IIAB_REMOTE_URL=$(git config remote.$tmp.url)
+    fi
+}
 
 tmp=$(git rev-parse --verify HEAD) &&
     IIAB_COMMIT=$tmp
 
-#tmp=$(cat /proc/device-tree/mfg-data/MN) &&
-#    XO_MODEL=$tmp
+tmp=$(git describe --tags --abbrev=0) &&
+    IIAB_RECENT_TAG=$tmp
 
 grep -iq raspberry /proc/device-tree/model &&
     RPI_MODEL=$(grep -ai raspberry /proc/device-tree/model | tr -d '\0')
@@ -141,13 +150,13 @@ cat <<EOF
 "dhcpcd"                  : "$DHCPCD",
 "network_manager"         : "$NETWORK_MANAGER",
 "systemd_networkd"        : "$SYSTEMD_NETWORKD",
+"iiab_remote_url"         : "$IIAB_REMOTE_URL",
 "iiab_branch"             : "$IIAB_BRANCH",
 "iiab_commit"             : "$IIAB_COMMIT",
+"iiab_recent_tag"         : "$IIAB_RECENT_TAG",
 "rpi_model"               : "$RPI_MODEL",
 "devicetree_model"        : "$DEVICETREE_MODEL",
 "ansible_version"         : "$ANSIBLE_VERSION",
 "os"                      : "$OS",
 "os_ver"                  : "$OS_VER"}
 EOF
-
-#"xo_model"                : "$XO_MODEL",

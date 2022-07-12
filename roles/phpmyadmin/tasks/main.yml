@@ -19,29 +19,36 @@
     quiet: yes
 
 
-- name: "INCOMPLETE WITHOUT APACHE AS OF 2021-07-06: Install phpMyAdmin if 'phpmyadmin_installed' not defined, e.g. in {{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
-  include_tasks: install.yml
-  when: phpmyadmin_installed is undefined
+- block:
 
+  - name: "INCOMPLETE WITHOUT APACHE AS OF 2021-07-06: Install phpMyAdmin if 'phpmyadmin_installed' not defined, e.g. in {{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
+    include_tasks: install.yml
+    when: phpmyadmin_installed is undefined
 
-- name: INCOMPLETE WITHOUT APACHE AS OF 2021-07-06
-  include_tasks: enable-or-disable.yml
+  - name: INCOMPLETE WITHOUT APACHE AS OF 2021-07-06
+    include_tasks: enable-or-disable.yml
 
+  - name: Add 'phpmyadmin' variable values to {{ iiab_ini_file }}
+    ini_file:
+      path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+      section: phpmyadmin
+      option: "{{ item.option }}"
+      value: "{{ item.value | string }}"
+    with_items:
+      - option: name
+        value: phpMyAdmin
+      - option: description
+        value: '"phpMyAdmin is an interface with a MySQL database written in PHP, and available to administer the database engine locally or across the network."'
+      - option: phpmyadmin_install
+        value: "{{ phpmyadmin_install }}"
+      - option: phpmyadmin_enabled
+        value: "{{ phpmyadmin_enabled }}"
+      - option: path
+        value: /opt/phpmyadmin
 
-- name: Add 'phpmyadmin' variable values to {{ iiab_ini_file }}
-  ini_file:
-    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
-    section: phpmyadmin
-    option: "{{ item.option }}"
-    value: "{{ item.value | string }}"
-  with_items:
-    - option: name
-      value: phpMyAdmin
-    - option: description
-      value: '"phpMyAdmin is an interface with a MySQL database written in PHP, and available to administer the database engine locally or across the network."'
-    - option: phpmyadmin_install
-      value: "{{ phpmyadmin_install }}"
-    - option: phpmyadmin_enabled
-      value: "{{ phpmyadmin_enabled }}"
-    - option: path
-      value: /opt/phpmyadmin
+  rescue:
+
+  - name: 'SEE ERROR ABOVE (skip_role_on_error: {{ skip_role_on_error }})'
+    fail:
+      msg: ""
+    when: not skip_role_on_error

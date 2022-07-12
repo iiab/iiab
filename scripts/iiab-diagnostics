@@ -4,15 +4,22 @@
 # PLEASE SEE /opt/iiab/iiab/scripts/iiab-diagnostics.README.md OR ONLINE HERE:
 # https://github.com/iiab/iiab/blob/master/scripts/iiab-diagnostics.README.md
 
-IIAB_RELEASE=`cat /etc/iiab/iiab.env | grep IIAB_RELEASE | cut -d'=' -f2`
-OS_VER=`cat /etc/iiab/iiab.env | grep OS_VER | cut -d'=' -f2`
+IIAB_RELEASE=$(cat /etc/iiab/iiab.env | grep IIAB_RELEASE | cut -d'=' -f2)
+OS_VER=$(cat /etc/iiab/iiab.env | grep OS_VER | cut -d'=' -f2)
 YMDT=$(date +%F_%T_%Z)
 
-#HASH=`cd /opt/iiab/iiab; git log --pretty=format:'%h' -n 1`
 git config --global --add safe.directory /opt/iiab/iiab    # Nec below, if non-root
-HASH1=`cd /opt/iiab/iiab; git log --pretty=format:'%H' -n 1`
+HASH1=$(cd /opt/iiab/iiab; git log --pretty=format:'%H' -n 1)    # --pretty=format:'%h' (8 chars)
+BRANCH1=$(cd /opt/iiab/iiab; git branch --show-current)
+REMOTE_URL1=$(cd /opt/iiab/iiab; git config remote.$(git config branch.$BRANCH1.remote).url)
+PR_COUNT1=$(cd /opt/iiab/iiab; git log "$(git describe --tags --abbrev=0)..HEAD" --oneline --grep='Merge pull request' | wc -l)
+TAG_COMMITS1=$(cd /opt/iiab/iiab; git describe --tags | sed 's/-[^-]*$//' | sed 's/-\([[:digit:]][[:digit:]]*\)$/ (\1 commits)/')
 git config --global --add safe.directory /opt/iiab/iiab-admin-console    # Nec below, if non-root
-HASH2=`cd /opt/iiab/iiab-admin-console; git log --pretty=format:'%H' -n 1`
+HASH2=$(cd /opt/iiab/iiab-admin-console; git log --pretty=format:'%H' -n 1)
+BRANCH2=$(cd /opt/iiab/iiab-admin-console; git branch --show-current)
+REMOTE_URL2=$(cd /opt/iiab/iiab-admin-console; git config remote.$(git config branch.$BRANCH2.remote).url)
+PR_COUNT2=$(cd /opt/iiab/iiab-admin-console; git log "$(git describe --tags --abbrev=0)..HEAD" --oneline --grep='Merge pull request' | wc -l)
+TAG_COMMITS2=$(cd /opt/iiab/iiab-admin-console; git describe --tags | sed 's/-[^-]*$//' | sed 's/-\([[:digit:]][[:digit:]]*\)$/ (\1 commits)/')
 
 echo -e "\nGathers IIAB diagnostics into 1 file, to accelerate troubleshooting.  USAGE:"
 echo
@@ -88,18 +95,19 @@ function cat_dir() {
 function cat_cmd() {    # $1 = command + params, $2 = explanation
     echo "     $1  # $2"
     echo "=IIAB==========================================================================" >> $outfile
-    #cmd=$(echo "$1" | sed 's/\s.*$//')           # Keep command on left; Drop params on right (NOT NEC, 'command -v' does this!)
-    #pth=$(command -v $cmd | sed 's/[^/]*$//')    # Keep only path on left; Drop command & params on right
-    pthcmd=$(command -v $1)                                             # Use canonical path on left; Drop params on right
-    spc_params=$(echo "$1" | sed 's/^\s*\S*//;s/\s*$//;s/^\s\s*/ /')    # LTrim + drop original path + command on left; RTrim; Compress whitespace in between
+    cmd=$(echo "$1" | sed 's/^\s*\(\S\S*\)\b.*$/\1/')    # Keep command on left; Drop params on right (NEC b/c 'command -v' interprets every word on the line!)
+    #pth=$(command -v $cmd | sed 's/[^/]*$//')           # Keep only path on left; Drop command & params on right
+    path_cmd=$(command -v $cmd)                                   # Use canonical path on left (would drop params on right, but over-interpret each word as a cmd!)
+    spc_params=$(echo "$1" | sed 's/^\s*\S\S*\s*/ /;s/\s*$//')    # Drop command on left; Keep a single space + params on right; RTrim
+    #spc_params=$(echo "$1" | sed 's/^\s*\S*//;s/\s*$//;s/^\s\s*/ /')    # LTrim + drop original path + command on left; RTrim; Compress whitespace in between
     #spc_params=$(echo "$1" | sed 's/^[[:blank:]]*[^[:blank:]]*//;s/[[:blank:]]*$//;s/^[[:blank:]][[:blank:]]*/ /')    # Equivalent (POSIX compliant)
     if [[ $2 == "" ]]; then
-	echo "COMMAND: $pthcmd$spc_params" >> $outfile
+	echo "COMMAND: $path_cmd$spc_params" >> $outfile
     else
-	echo "COMMAND: $pthcmd$spc_params    # $2" >> $outfile
+	echo "COMMAND: $path_cmd$spc_params    # $2" >> $outfile
     fi
     echo >> $outfile
-    if [[ $pthcmd == "" ]]; then
+    if [[ $path_cmd == "" ]]; then
         echo "COMMAND NOT FOUND: $1" >> $outfile
     else
         bash -c "$1" >> $outfile    # Works with | (pipes) and 'ls -l /lib/firmware/brcm/*43455*' etc!
@@ -119,38 +127,27 @@ function cat_tail() {    # $1 = path/filename; $2 = # of lines, for tail
 # START BUILDING UP THE FILE THAT'LL CONTAIN THE DIAGNOSTICS!
 echo -e "\nCompiling diagnostics..."
 
-echo -e "\n  0. Filename Header + Git Hashes + Raspberry Pi Model + OS"
+echo -e "\n  0. HW + SW Quick Summary"
 echo "This is: $outfile" >> $outfile
 echo >> $outfile
-echo -e "\n\n\n\n0. GIT HASHES + RASPBERRY PI MODEL + OS" >> $outfile
+echo -e "\n\n\n0. HW + SW Quick Summary" >> $outfile
 echo >> $outfile
-echo "iiab commit:               $HASH1" >> $outfile
-echo "iiab-admin-console commit: $HASH2" >> $outfile
-echo >> $outfile
-cat_file /etc/iiab/pr-list-pulled
-cat_file /proc/device-tree/model    # Should be identical to /sys/firmware/devicetree/base/model
-cat_file /etc/rpi-issue
-echo "-IIAB-EXPLANATION-OF-THE-ABOVE-------------------------------------------------" >> $outfile
-echo >> $outfile
+/opt/iiab/iiab/scripts/iiab-summary >> $outfile
 if [ -f /etc/rpi-issue ]; then
     echo "stage2 = Raspberry Pi OS Lite" >> $outfile
     echo "stage4 = Raspberry Pi OS with desktop" >> $outfile
     echo "stage5 = Raspberry Pi OS with desktop + recommended software" >> $outfile
-    echo >> $outfile
     echo "SEE https://github.com/RPi-Distro/pi-gen#stage-anatomy" >> $outfile
-else
-    echo "(This is NOT Raspberry Pi OS!)" >> $outfile
+    echo >> $outfile
 fi
-echo >> $outfile
-cat_file /etc/issue.net
-cat_file /etc/debian_version
-cat_cmd 'dpkg --print-architecture' 'RaspiOS-on-PC shows: i386'
-cat_cmd 'dpkg --print-foreign-architectures' 'RaspiOS-on-PC shows: amd64'
-cat_cmd 'systemctl is-active display-manager.service' 'Graphical Desktop?'
-cat_cmd 'grep "^openvpn_" /etc/iiab/local_vars.yml'
+if [ -s /tmp/iiab-apps-to-be-installed ]; then
+    echo "iiab-apps-to-be-installed :" >> $outfile
+    cat /tmp/iiab-apps-to-be-installed >> $outfile
+    echo >> $outfile
+fi
 
-echo -e '\n\n  1. Files Specially Requested: (from "iiab-diagnostics PATH/FILE1 PATH/FILE2")\n'
-echo -e '\n\n\n\n1. FILES SPECIALLY REQUESTED (FROM "iiab-diagnostics PATH/FILE1 PATH/FILE2")\n' >> $outfile
+echo -e '\n  1. Files Specially Requested: (from "iiab-diagnostics PATH/FILE1 PATH/FILE2")\n'
+echo -e '\n\n\n1. FILES SPECIALLY REQUESTED (FROM "iiab-diagnostics PATH/FILE1 PATH/FILE2")\n' >> $outfile
 for f in "$@"; do
     cat_file $f
 done
@@ -160,7 +157,7 @@ if [ $# -eq 0 ]; then
 else
     echo -e "\n  2. Regular Files:\n"
 fi
-echo -e "\n\n\n\n2. REGULAR FILES\n" >> $outfile
+echo -e "\n\n\n2. REGULAR FILES\n" >> $outfile
 #cat_file /dev/sda                    # Device "file" test
 #cat_file /nonsense                   # Non-existence test
 #cat_file /opt/iiab/iiab              # Directory test
@@ -184,7 +181,7 @@ cat_file /library/www/html/home/menu.json
 #cat_file /tmp/all-ansible-vars
 
 echo -e "\n  3. Content of Directories: (1-level deep)\n"
-echo -e "\n\n\n\n3. CONTENT OF DIRECTORIES (1-LEVEL DEEP)\n" >> $outfile
+echo -e "\n\n\n3. CONTENT OF DIRECTORIES (1-LEVEL DEEP)\n" >> $outfile
 cat_dir /etc/network/interfaces.d
 cat_dir /etc/systemd/network
 cat_dir /etc/NetworkManager/system-connections    # Redacts most passwords above
@@ -193,7 +190,7 @@ cat_dir /etc/netplan    # Redacts most passwords above
 #cat_dir /etc/network    # Above file /etc/network/interfaces suffices
 
 echo -e "\n  4. Output of Commands:\n"
-echo -e "\n\n\n\n\n4. OUTPUT OF COMMANDS\n" >> $outfile
+echo -e "\n\n\n\n4. OUTPUT OF COMMANDS\n" >> $outfile
 cat_cmd 'uname -a' 'Linux kernel'
 cat_cmd 'free' 'RAM memory'
 cat_cmd 'lscpu' 'CPU details'
@@ -229,12 +226,13 @@ cat_cmd 'journalctl -t IIAB-CMDSRV' 'Admin Console CMDSRV log'
 #cat_cmd 'ansible localhost -m setup 2>/dev/null' 'All Ansible facts'    # For cleaner scraping of Ansible vars, consider "./runrole all-vars /tmp/all-ansible-vars" 27-31 lines above?
 
 echo -e "\n  5. Firewall Rules:\n"
-echo -e "\n\n\n\n5. FIREWALL RULES\n" >> $outfile
+echo -e "\n\n\n5. FIREWALL RULES\n" >> $outfile
 #cat_file /usr/bin/iiab-gen-iptables
 cat_cmd 'sudo iptables-save' 'Firewall rules'
 
-echo -e "\n  6. Log Files: (last 100 lines of each)\n"
-echo -e "\n\n\n\n6. LOG FILES (LAST 100 LINES OF EACH)\n" >> $outfile
+echo -e "\n  6. Log Files: (e.g. last 100 lines of each)\n"
+echo -e "\n\n\n6. LOG FILES (e.g. LAST 100 LINES OF EACH)\n" >> $outfile
+cat_cmd 'grep -B2 "SEE ERROR ABOVE" /opt/iiab/iiab/*.log' 'for skip_role_on_error'
 cat_tail /opt/iiab/iiab/iiab-install.log 100
 cat_tail /opt/iiab/iiab/iiab-configure.log 100
 cat_tail /opt/iiab/iiab/iiab-debug.log 100
@@ -254,11 +252,13 @@ echo -e "   $outfile\e[0m"
 #else
 echo
 echo -ne "\e[42;1mPublish it to a web pastebin? [Y/n]\e[0m "
-read ans < /dev/tty
+read -n 1 -r ans < /dev/tty
+echo
 #fi
 
 echo -e "\e[1m"
-if [ "$ans" == "" ] || [ "$ans" == "y" ] || [ "$ans" == "Y" ]; then
+#if [ "$ans" == "" ] || [ "$ans" == "y" ] || [ "$ans" == "Y" ]; then
+if ! [[ $ans =~ ^[nNqQ]$ ]]; then
     echo -ne "PUBLISHING TO URL... "
     #pastebinit -b dpaste.com < $outfile
     pastebinit -b sprunge.us < $outfile    # Run 'pastebinit -l' to list other possible pastebin site URLs

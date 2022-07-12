@@ -1,3 +1,8 @@
+- name: "Set 'iiab_fqdn: {{ iiab_hostname }}.{{ iiab_domain }}'"
+  set_fact:
+    iiab_fqdn: "{{ iiab_hostname }}.{{ iiab_domain }}"
+    FQDN_changed: False
+
 - name: Does /etc/cloud/cloud.cfg exist e.g. is this Ubuntu Server 18+ ?
   stat:
     path: /etc/cloud/cloud.cfg
@@ -17,16 +22,10 @@
   # 2021-08-31: Periods in /etc/hostname fail with some WiFi routers (#2904)
   # command: hostnamectl set-hostname "{{ iiab_hostname }}.{{ iiab_domain }}"
 
-#- name: Install /etc/sysconfig/network from template (redhat)
-#  template:
-#    src: roles/network/templates/network/sysconfig.network.j2
-#    dest: /etc/sysconfig/network
-#    owner: root
-#    group: root
-#    mode: 0644
-#  when: is_redhat
-
-# roles/network/tasks/hosts.yml [no longer in use] ALSO did this:
+# 2022-07-11: Should the first entry match just hostname and domain move to
+# after localhost?  See PR's #1 & #8 -- with discussion on #3302 -- and also:
+# 1. /etc/hosts    -- #1815 solved by PR #1847
+# 2. /etc/hostname -- #2904 solved by PR #2973
 - name: 'Put FQDN & hostnames in /etc/hosts: "127.0.0.1 {{ iiab_hostname }}.{{ iiab_domain }} localhost.localdomain localhost {{ iiab_hostname }} box box.lan"'
   lineinfile:
     path: /etc/hosts
@@ -35,6 +34,14 @@
     #owner: root
     #group: root
     #mode: 0644
+
+# 2021-07-30: FQDN_changed isn't used as in the past -- its remaining use is
+# for {named, dhcpd, squid} in roles/network/tasks/main.yml -- possibly it
+# should be reconsidered?  See PR #2876: roles/network might become optional?
+- name: "Also set 'FQDN_changed: True' -- if iiab_fqdn != ansible_fqdn ({{ ansible_fqdn }})"
+  set_fact:
+    FQDN_changed: True
+  when: iiab_fqdn != ansible_fqdn
 
 #- name: Re-configuring httpd - not initial install
 #  include_tasks: roles/httpd/tasks/main.yml

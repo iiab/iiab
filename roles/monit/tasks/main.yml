@@ -19,43 +19,52 @@
     quiet: yes
 
 
-# 2019-07-06: The 'monit' package was suddenly removed from Debian 10.0.0
-# "Buster" during the very final days prior to release, as confirmed by the
-# sudden disappearance of these 2 pages:
-#
-#   https://packages.debian.org/buster/monit
-#   https://packages.debian.org/source/buster/monit
-#
-# And yet Raspbian Buster (is_raspbian_10, which confusingly IIAB declares to
-# be is_debian_10 in vars/raspbian-10.yml for now!) still provides 'monit' via
-# apt -- so eliminating "Debian 10+" requires this funky conditional:
+- block:
 
-# 2020-09-21: The 'monit' package appears to be returning to Debian 11, per:
-#
-#   https://packages.debian.org/bullseye/monit
-#   https://packages.debian.org/source/bullseye/monit
-#
-# SEE iiab/iiab#1849 re: "Debian 10 Buster no longer includes Monit" etc.
+  # 2019-07-06: The 'monit' package was suddenly removed from Debian 10.0.0
+  # "Buster" during the very final days prior to release, as confirmed by the
+  # sudden disappearance of these 2 pages:
+  #
+  #   https://packages.debian.org/buster/monit
+  #   https://packages.debian.org/source/buster/monit
+  #
+  # And yet Raspbian Buster (is_raspbian_10, which confusingly IIAB declares to
+  # be is_debian_10 in vars/raspbian-10.yml for now!) still provides 'monit' via
+  # apt -- so eliminating "Debian 10+" requires this funky conditional:
 
-- name: Install Monit if 'monit_installed' not defined, e.g. in {{ iiab_state_file }} AND not Debian 10    # /etc/iiab/iiab_state.yml
-  include_tasks: install.yml
-  when: monit_installed is undefined and not (is_debian_10 and not is_raspbian)
-  #when: monit_installed is undefined and not ((is_debian and not is_raspbian) and (not is_debian_8) and (not is_debian_9))
+  # 2020-09-21: The 'monit' package appears to be returning to Debian 11, per:
+  #
+  #   https://packages.debian.org/bullseye/monit
+  #   https://packages.debian.org/source/bullseye/monit
+  #
+  # SEE iiab/iiab#1849 re: "Debian 10 Buster no longer includes Monit" etc.
+
+  - name: Install Monit if 'monit_installed' not defined, e.g. in {{ iiab_state_file }} AND not Debian 10    # /etc/iiab/iiab_state.yml
+    include_tasks: install.yml
+    when: monit_installed is undefined and not (is_debian_10 and not is_raspbian)
+    #when: monit_installed is undefined and not ((is_debian and not is_raspbian) and (not is_debian_8) and (not is_debian_9))
 
 
-- include_tasks: enable-or-disable.yml
+  - include_tasks: enable-or-disable.yml
 
 
-- name: Add 'monit' variable values to {{ iiab_ini_file }}
-  ini_file:
-    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
-    section: monit
-    option: "{{ item.option }}"
-    value: "{{ item.value | string }}"
-  with_items:
-    - option: name
-      value: Monit
-    - option: description
-      value: '"Monit is a background service monitor which can correct problems, send email, restart services."'
-    - option: enabled
-      value: "{{ monit_enabled }}"
+  - name: Add 'monit' variable values to {{ iiab_ini_file }}
+    ini_file:
+      path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+      section: monit
+      option: "{{ item.option }}"
+      value: "{{ item.value | string }}"
+    with_items:
+      - option: name
+        value: Monit
+      - option: description
+        value: '"Monit is a background service monitor which can correct problems, send email, restart services."'
+      - option: enabled
+        value: "{{ monit_enabled }}"
+
+  rescue:
+
+  - name: 'SEE ERROR ABOVE (skip_role_on_error: {{ skip_role_on_error }})'
+    fail:
+      msg: ""
+    when: not skip_role_on_error

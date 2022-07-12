@@ -19,27 +19,34 @@
     quiet: yes
 
 
-- name: Install AWStats if 'awstats_installed' not defined, e.g. in {{ iiab_state_file }}    # /etc/iiab/iiab_state.yml
-  include_tasks: install.yml
-  when: awstats_installed is undefined
+- block:
 
+  - name: Install AWStats if 'awstats_installed' not defined, e.g. in {{ iiab_state_file }}    # /etc/iiab/iiab_state.yml
+    include_tasks: install.yml
+    when: awstats_installed is undefined
 
-- name: Enable/Disable/Restart NGINX
-  include_tasks: nginx.yml
+  - name: Enable/Disable/Restart NGINX
+    include_tasks: nginx.yml
 
+  - name: Add 'awstats' variable values to {{ iiab_ini_file }}
+    ini_file:
+      path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+      section: awstats
+      option: "{{ item.option }}"
+      value: "{{ item.value | string }}"
+    with_items:
+      - option: name
+        value: AWStats
+      - option: description
+        value: '"AWStats (originally known as Advanced Web Statistics) is a package written in Perl which generates static or dynamic html summaries based upon web server logs."'
+      - option: awstats_install
+        value: "{{ awstats_install }}"
+      - option: awstats_enabled
+        value: "{{ awstats_enabled }}"
 
-- name: Add 'awstats' variable values to {{ iiab_ini_file }}
-  ini_file:
-    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
-    section: awstats
-    option: "{{ item.option }}"
-    value: "{{ item.value | string }}"
-  with_items:
-    - option: name
-      value: AWStats
-    - option: description
-      value: '"AWStats (originally known as Advanced Web Statistics) is a package written in Perl which generates static or dynamic html summaries based upon web server logs."'
-    - option: awstats_install
-      value: "{{ awstats_install }}"
-    - option: awstats_enabled
-      value: "{{ awstats_enabled }}"
+  rescue:
+
+  - name: 'SEE ERROR ABOVE (skip_role_on_error: {{ skip_role_on_error }})'
+    fail:
+      msg: ""
+    when: not skip_role_on_error

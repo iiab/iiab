@@ -1,6 +1,9 @@
 # 2022-03-16: 'apt show <pkg> | grep Size' revealed download sizes, on 64-bit RasPiOS with desktop.
 
-- name: Install package networkd-dispatcher (OS's other than RaspiOS)
+- name: Install dnsmasq -- configure LATER in 'network', after Stage 9
+  include_tasks: roles/network/tasks/dnsmasq.yml
+
+- name: Install package networkd-dispatcher (OS's other than RasPiOS)
   package:
     name: networkd-dispatcher    # 15kB download: Dispatcher service for systemd-networkd connection status changes
     state: present
@@ -16,19 +19,19 @@
 # total download size) and they can help IIAB field operators with BOTH
 # (1) internal WiFi AND (2) USB WiFi devices inserted anytime/later.
 
-- name: 'Install 11 network packages: avahi-daemon, hostapd, iproute2, iptables-persistent, iw, libnss-mdns, netmask, net-tools, rfkill, wpasupplicant, wpasupplicant -- later used by https://github.com/iiab/iiab/tree/master/roles/network'
+- name: 'Install 11 network packages: avahi-daemon, hostapd, iproute2, iptables-persistent, iw, libnss-mdns, netmask, net-tools, rfkill, wireless-tools, wpasupplicant -- later used by https://github.com/iiab/iiab/tree/master/roles/network'
   package:
     name:
-      - avahi-daemon           #   97kB download: RaspiOS (and package libnss-mnds, below) install this regardless -- holdover from the XO days and used to advertise ssh/admin-console being available via avahi-daemon -- used with https://github.com/iiab/iiab/blob/master/roles/network/tasks/avahi.yml
+      - avahi-daemon           #   97kB download: RasPiOS (and package libnss-mnds, below) install this regardless -- holdover from the XO days and used to advertise ssh/admin-console being available via avahi-daemon -- used with https://github.com/iiab/iiab/blob/master/roles/network/tasks/avahi.yml
       #- avahi-discover        #   46kB download: 2021-07-27: Commented out long ago
       - hostapd                #  764kB download: IEEE 802.11 AP and IEEE 802.1X/WPA/WPA2/EAP Authenticator -- has its service masked out of the box, and only used when IIAB's network roles detects the presence of WiFi and an AP is desired
       #- inetutils-syslogd     #  240kB download: 2021-07-27: Error logging facility -- holdover from the XO days, journalctl has replaced this in newer distros
-      - iproute2               #  902kB download: RaspiOS installs this regardless -- the new networking and traffic control tools, meant to replace net-tools
+      - iproute2               #  902kB download: RasPiOS installs this regardless -- the new networking and traffic control tools, meant to replace net-tools
       - iptables-persistent    #   12kB download: Boot-time loader for netfilter rules, iptables (firewall) plugin -- however Netfilter / nftables is ever moving forward so keep an eye on it!
       - iw                     #   97kB download: RasPiOS installs this regardless -- configure Linux wireless devices -- hard dependence for ap0 creation, SEE https://github.com/iiab/iiab/blob/master/roles/network/templates/hostapd/iiab-clone-wifi.service.j2
-      - libnss-mdns            #   27kB download: RaspiOS (and package avahi-daemon, above) install this regardless -- client-side library -- provides name resolution via mDNS (Multicast DNS) using Zeroconf/Bonjour e.g. Avahi
+      - libnss-mdns            #   27kB download: RasPiOS (and package avahi-daemon, above) install this regardless -- client-side library -- provides name resolution via mDNS (Multicast DNS) using Zeroconf/Bonjour e.g. Avahi
       - netmask                #   25kB download: Handy utility -- helps determine network masks
-      - net-tools              #  248kB download: RaspiOS installs this regardless -- @jvonau suggests possibly deleting this...unless oldtimers really want these older commands in iiab-diagnostics output?
+      - net-tools              #  248kB download: RasPiOS installs this regardless -- @jvonau suggests possibly deleting this...unless oldtimers really want these older commands in iiab-diagnostics output?
       - rfkill                 #   87kB download: RasPiOS installs this regardless -- enable & disable wireless devices
       - wireless-tools         #  112kB download: RasPiOS installs this regardless -- manipulate Linux Wireless Extensions
       - wpasupplicant          # 1188kB download: RasPiOS installs this regardless -- client library for connections to a WiFi AP
@@ -44,7 +47,7 @@
 
 
 # Ongoing rework (e.g. PR #2652) arising from ansible.posix collection changes:
-- name: "Use 'sysctl' to set 'kernel.core_uses_pid: 1' + 4 network settings in /etc/sysctl.conf -- e.g. disabling IPv6 (this might be overkill, as IPv6 should really only be disabled on the LAN side, i.e. br0)"
+- name: "4 network settings in /etc/sysctl.conf -- e.g. disabling IPv6 (this might be overkill, as IPv6 should really only be disabled on the LAN side, i.e. br0)"
   sysctl:    # Places these settings in /etc/sysctl.conf, to survive reboot
     name: "{{ item.name }}"
     value: "{{ item.value }}"
@@ -52,10 +55,34 @@
     - { name: 'net.ipv4.ip_forward', value: '1' }  # Masquerading LAN->Internet
     - { name: 'net.ipv4.conf.default.rp_filter', value: '1' }
     - { name: 'net.ipv4.conf.default.accept_source_route', value: '0' }
-    #- { name: 'kernel.sysrq', value: '1' }             # OS values differ, Ok?
-    - { name: 'kernel.core_uses_pid', value: '1' }
     #- { name: 'net.ipv4.tcp_syncookies', value: '1' }  # Very standard in 2020
-    #- { name: 'kernel.shmmax', value: '268435456' }    # OS values differ, Ok?
     - { name: 'net.ipv6.conf.all.disable_ipv6', value: '1' }    # IPv6 disabled
     #- { name: 'net.ipv6.conf.default.disable_ipv6', value: '1' }    # AUTO-SET
     #- { name: 'net.ipv6.conf.lo.disable_ipv6', value: '1' }         # BY ABOVE
+
+
+# UNMAINTAINED
+- name: Install named / BIND
+  include_tasks: roles/network/tasks/named.yml
+  when: named_install is defined and named_install
+
+# UNMAINTAINED
+- name: Install dhcpd
+  include_tasks: roles/network/tasks/dhcpd.yml
+  when: dhcpd_install is defined and dhcpd_install
+
+# LESS MAINTAINED
+- name: Install Squid
+  include_tasks: roles/network/tasks/squid.yml
+  when: squid_install and squid_installed is undefined
+
+
+- name: "Set 'network_installed: True'"
+  set_fact:
+    network_installed: True
+
+- name: "Add 'network_installed: True' to {{ iiab_state_file }}"
+  lineinfile:
+    path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
+    regexp: '^network_installed'
+    line: 'network_installed: True'
