@@ -1,12 +1,13 @@
-- name: Disable the Access Point 'hostapd' service
-  systemd:
-    name: hostapd
-    enabled: no
-
 - name: Disable hostapd when not using ap0 and wifi gateway present, or no WiFi hardware present or support not detected
   set_fact:
     hostapd_enabled: False
   when: (not wifi_up_down and discovered_wireless_iface == iiab_wan_iface) or discovered_wireless_iface == "none" or not can_be_ap
+
+- name: Disable the Access Point 'hostapd' service
+  systemd:
+    name: hostapd
+    enabled: no
+  when: not hostapd_enabled
 
 - name: Detect current Wifi channel
   shell: iw {{ discovered_wireless_iface }} info | grep channel | cut -d' ' -f2
@@ -21,10 +22,12 @@
 - name: Generate new random mac address for ap0
   shell: tr -dc A-F0-9 < /dev/urandom | head -c 10 | sed -r 's/(..)/\1:/g;s/:$//;s/^/02:/'
   register: ap0_mac
+  when: can_be_ap
 
 - name: Setting ap0 mac address for use in hostapd service file
   set_fact:
     ap0_mac_addr: "{{ ap0_mac.stdout }}"
+  when: can_be_ap
 
 - name: "Use custom 'hostapd' systemd service unit file using ap0 -- install from template: /etc/systemd/system/hostapd.service, /etc/systemd/system/iiab-clone-wifi.service, /etc/systemd/system/iiab-wifi-test.service, /usr/sbin/iiab-test-wifi"
   template:
