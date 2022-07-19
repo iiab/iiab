@@ -1,20 +1,29 @@
-#!/bin/bash
-if ! [ -f /etc/iiab/install-flags/iiab-network-complete ]; then
-    zenity --question --width=200 --text="You need to provision the network. Ensure you have your upstream internet active first. You might be prompted for your password. Should you not want to provision the network at this time just click NO"
-    rc=$?
-    if [ $rc == "1" ]; then
-        exit 0
-    fi
-    x-terminal-emulator -e /usr/local/bin/iiab-network
-    rc=$?
-    if [ $rc == "1" ]; then
-        zenity --question --width=200 --text="Network exited with error, please review /opt/iiab/iiab/iiab-network.log"
+#!/bin/sh
+if [ -f /etc/iiab/install-flags/iiab-network-complete ]; then
+    exit
+fi
+
+zenity --question --width=350 --text="IIAB needs to configure networking:\n\n► Internet must be live before you begin.\n►You might be prompted for your password.\n\nContinue?"
+case $? in
+    -1|5)
         exit 1
-    fi
-    zenity --question --width=200 --text="A REBOOT is recommended, would you like to REBOOT now?"
-    rc=$?
-    if [ $rc == "1" ]; then
+        ;;
+
+    1)
         exit 0
-    fi
-    x-terminal-emulator -e /usr/sbin/reboot
+        ;;
+
+    0)
+        x-terminal-emulator -e /usr/local/bin/iiab-network
+        ;;
+esac
+
+if [ "$?" = "1" ]; then
+    zenity --warning --width=350 --text="iiab-network exited with error.\n\nPlease review /opt/iiab/iiab/iiab-network.log"
+    exit 1
+fi
+
+zenity --question --width=350 --text="iiab-network complete.\n\nWould you like to REBOOT now? (Recommended)"
+if [ "$?" = "0" ]; then
+    x-terminal-emulator -e "sudo reboot"
 fi
