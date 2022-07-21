@@ -45,6 +45,14 @@
 #     dest: /etc/network/if-pre-up.d/iptables
 #     mode: '0755'
 
+-- name: Unmask the Access Point 'hostapd' service
+   systemd:
+     name: hostapd
+     enabled: no
+     masked: no
+
+- name: avahi
+  include_tasks: avahi.yml
 
 # Ongoing rework (e.g. PR #2652) arising from ansible.posix collection changes:
 - name: "4 network settings in /etc/sysctl.conf -- e.g. disabling IPv6 (this might be overkill, as IPv6 should really only be disabled on the LAN side, i.e. br0)"
@@ -61,12 +69,12 @@
     #- { name: 'net.ipv6.conf.lo.disable_ipv6', value: '1' }         # BY ABOVE
 
 
-# UNMAINTAINED
+# UNUSED
 #- name: Install named / BIND
 #  include_tasks: roles/network/tasks/named.yml
 #  when: named_install is defined and named_install
 
-# UNMAINTAINED
+# UNUSED
 #- name: Install dhcpd
 #  include_tasks: roles/network/tasks/dhcpd.yml
 #  when: dhcpd_install is defined and dhcpd_install
@@ -76,6 +84,54 @@
   include_tasks: roles/network/tasks/squid.yml
   when: squid_install and squid_installed is undefined
 
+  #preprep for backends
+- name: Netplan in use on Ubuntu 18.04+
+  include_tasks: netplan.yml
+  when: is_ubuntu
+
+# all installs
+- name: Install /usr/bin/iiab-internet-on|off from template (root:root by default)
+  template:
+    src: "{{ item }}"
+    dest: /usr/bin/
+    # owner: root
+    # group: root
+    mode: 0755
+  with_items:
+    - gateway/iiab-internet-on
+    - gateway/iiab-internet-off
+
+# mate desktop detection based on 'register: nd_dir' in enable_services
+- name: Check if /usr/share/mate/autostart/ exists
+  stat:
+    path: /usr/share/mate/autostart/
+  register: mate_dir
+
+# contents work with mate as of 'switch to using dash via sh'
+# 'text' is up for debate other structural changes I do not recommend JV
+# if need be cut a second version for RasPiOS
+
+- name: Link /usr/local/sbin/netwarn to {{ iiab_dir }}/scripts/netwarn
+  file:
+    src: "{{ iiab_dir }}/scripts/netwarn.sh"
+    dest: /usr/local/sbin/netwarn
+    state: link
+  when: mate_dir.stat.exists and mate_dir.stat.isdir
+
+- name: Link /usr/share/mate/autostart/netwarn-iiab-network.desktop to {{ iiab_dir }}/scripts/netwarn-iiab-network.desktop
+  file:
+    src: "{{ iiab_dir }}/scripts/netwarn-iiab-network.desktop"
+    dest: /usr/share/mate/autostart/netwarn-iiab-network.desktop
+    state: link
+  when: mate_dir.stat.exists and mate_dir.stat.isdir
+
+# RpiOS detection based on register: lx in pwd-warnings.yml
+- name: Is /etc/xdg/lxsession/LXDE-pi a directory?
+  stat:
+    path: /etc/xdg/lxsession/LXDE-pi
+  register: lx
+
+# clairify usage
 
 - name: "Set 'network_installed: True'"
   set_fact:
