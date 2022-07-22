@@ -4,11 +4,14 @@
 CWD=`pwd`
 export ANSIBLE_LOG_PATH="$CWD/iiab-network.log"
 
-if [ ! -f iiab-network.yml ]; then
-    echo "iiab-network.yml not found in current directory."
-    echo "Please rerun this command from the top level of the git repo."
-    echo "Exiting."
+exit_error() {
+    echo -e "\nEXITING: "$@ | tee -a /opt/iiab/iiab/iiab-network.log
     exit 1
+}
+
+if [ ! -f iiab-network.yml ]; then
+    exit_error "iiab-network.yml not found in current directory." \
+               "Please rerun this command from the top level of the git repo."
 fi
 
 OS="unknown"   # will be overridden below, if /etc/iiab/iiab.env is legit
@@ -19,26 +22,21 @@ if [ -f /etc/iiab/iiab.env ]; then
     if grep -q STAGE= /etc/iiab/iiab.env ; then
         echo -e "\nExtracted STAGE=$STAGE (counter) from /etc/iiab/iiab.env"
         if ! [ "$STAGE" -eq "$STAGE" ] 2> /dev/null; then
-            echo -e "\nEXITING: STAGE (counter) value == ""$STAGE"" is non-integer"
-            exit 1
+            exit_error "STAGE (counter) value == ""$STAGE"" is non-integer"
         elif [ "$STAGE" -lt 0 ] || [ "$STAGE" -gt 9 ]; then
-            echo -e "\nEXITING: STAGE (counter) value == ""$STAGE"" is out-of-range"
-            exit 1
+            exit_error "STAGE (counter) value == ""$STAGE"" is out-of-range"
         elif [ "$STAGE" -lt 3 ]; then
-            echo -e "\nEXITING: STAGE (counter) value == ""$STAGE"
-            echo -e "\nIIAB Stage 3 not complete."
-            echo -e "\nPlease run: ./iiab-install"
-            exit 1
+            exit_error "STAGE (counter) value == ""$STAGE" \
+                       "\nIIAB Stage 3 not complete." \
+                       "\nPlease run: ./iiab-install"
         fi
     else
-        echo -e "\nEXITING: STAGE (counter) not found"
-        echo -e "\nIIAB not installed."
-        echo -e "\nPlease run: ./iiab-install"
-        exit 1
+        exit_error "STAGE (counter) not found" \
+                   "\nIIAB not installed." \
+                   "\nPlease run: ./iiab-install"
     fi
 else
-    echo -e "\nEXITING: /etc/iiab/iiab.env not found"
-    exit 1
+    exit_error "/etc/iiab/iiab.env not found"
 fi
 
 echo "Ansible will now run iiab-network.yml -- log file is iiab-network.log"

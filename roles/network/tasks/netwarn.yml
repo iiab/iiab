@@ -1,0 +1,40 @@
+- name: Does /etc/xdg/lxsession/LXDE-pi/autostart exist?
+  stat:
+    path: /etc/xdg/lxsession/LXDE-pi/autostart
+  register: lxde_pi_autostart_present
+
+- name: If so, add /usr/local/sbin/netwarn to /etc/xdg/lxsession/LXDE-pi/autostart
+  lineinfile:
+    path: /etc/xdg/lxsession/LXDE-pi/autostart
+    regexp: '^/usr/local/sbin/netwarn$'
+    line: '/usr/local/sbin/netwarn'
+  when: lxde_pi_autostart_present.stat.exists
+
+
+# mate desktop detection based on 'register: nd_dir' in enable_services
+- name: Does /usr/share/mate/autostart/ exist?
+  stat:
+    path: /usr/share/mate/autostart/
+  register: mate_dir
+
+# contents work with mate as of 'switch to using dash via sh'
+# 'text' is up for debate other structural changes I do not recommend JV
+
+- name: 'Install from template: /usr/share/mate/autostart/netwarn-iiab-network.desktop'
+  template:
+    src: roles/network/templates/netwarn/netwarn-iiab-network.desktop    # Invoked by 1-prep (so full path needed)
+    dest: /usr/share/mate/autostart/
+  when: mate_dir.stat.exists and mate_dir.stat.isdir
+
+
+# 2022-07-21: Is autostart pop-up logic for Mint & stock Ubuntu much the same?
+
+# (Let's insert those here if so, and refine the 'when:' line below.)
+
+
+- name: 'If a supported graphical OS is detected, install from template: /usr/local/sbin/netwarn'
+  template:
+    src: roles/network/templates/netwarn/netwarn    # Invoked by 1-prep (so full path needed)
+    dest: /usr/local/sbin/
+    mode: 0755
+  when: lxde_pi_autostart_present or (mate_dir.stat.exists and mate_dir.stat.isdir)

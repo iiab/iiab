@@ -21,52 +21,46 @@
 - name: computed_network
   include_tasks: computed_network.yml
 
+# 2022-07-22: @jvonau asks for this to be (1) BELOW computed_network.yml
+# (what goes into iiab-hotspot-on|off depends on can_be_ap and wifi_up_down)
+# AND (2) ABOVE install.yml for some reason?  REQUIREMENT: Admin Console reads
+# iiab_network_mode from /etc/iiab/iiab.ini + uses /usr/bin/iiab-hotspot-on|off
+- name: Install /usr/bin/iiab-hotspot-on|off from template (root:root by default)
+  template:
+    src: "{{ item }}"
+    dest: /usr/bin/
+    mode: 0755
+  with_items:
+    - hostapd/iiab-hotspot-on
+    - hostapd/iiab-hotspot-off
+
 - name: Install network packages (including many WiFi tools, and also iptables-persistent for firewall)
   include_tasks: install.yml
   when: network_install and network_installed is undefined
 
-- name: Create /usr/bin/iiab-hotspot-on from template
-  template:
-    src: hostapd/iiab-hotspot-on
-    dest: /usr/bin/iiab-hotspot-on
-    owner: root
-    group: root
-    mode: 0755
-
-- name: Create /usr/bin/iiab-hotspot-off from template
-  template:
-    src: hostapd/iiab-hotspot-off
-    dest: /usr/bin/iiab-hotspot-off
-    owner: root
-    group: root
-    mode: 0755
 
 - name: Configuring Network if enabled
   block:
-  # - name: Configure wondershaper
-  #   include_tasks: wondershaper.yml
-  #   when: wondershaper_install or wondershaper_installed is defined
 
-#  - name: (Re)Install named
-#    include_tasks: named.yml
-#    when: named_install and FQDN_changed and iiab_stage|int == 9
+  # DEPRECATED
+  #- name: Configure wondershaper
+  #  include_tasks: wondershaper.yml
+  #  when: wondershaper_install or wondershaper_installed is defined
+  #
+  #- name: (Re)Install named
+  #  include_tasks: named.yml
+  #  when: named_install and FQDN_changed and iiab_stage|int == 9
+  #
+  #- name: (Re)Install dhcpd
+  #  include_tasks: dhcpd.yml
+  #  when: dhcpd_install and FQDN_changed and iiab_stage|int == 9
 
-#  - name: (Re)Install dhcpd
-#    include_tasks: dhcpd.yml
-#    when: dhcpd_install and FQDN_changed and iiab_stage|int == 9
-
-#  - name: (Re)Install Squid
-#    include_tasks: squid.yml
-#    when: squid_install and FQDN_changed and iiab_stage|int == 9
-
-  #preprep for backends
-  - name: Netplan in use on Ubuntu 18.04+
-    include_tasks: netplan.yml
-    when: is_ubuntu and not is_ubuntu_16
+  # 2022-07-22: Is './runrole --reinstall network' the new way to make this run?
+  #- name: (Re)Install Squid
+  #  include_tasks: squid.yml
+  #  when: squid_install and FQDN_changed and iiab_stage|int == 9
 
   #### Start services
-  - name: avahi
-    include_tasks: avahi.yml
   - name: hostapd
     include_tasks: hostapd.yml
   - name: computed_services
@@ -99,5 +93,13 @@
 
   - name: Restart services
     include_tasks: restart.yml
+
   # end block
   when: network_installed is defined and network_enabled
+
+
+- name: Create {{ iiab_etc_path }}/install-flags/iiab-network-complete on second pass of network role.
+  file:
+    path: "{{ iiab_etc_path }}/install-flags/iiab-network-complete"
+    state: touch
+  when: iiab_stage|int == 9
