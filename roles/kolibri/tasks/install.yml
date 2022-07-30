@@ -35,8 +35,35 @@
   apt:
     deb: "{{ kolibri_deb_url }}"    # https://learningequality.org/r/kolibri-deb-latest
   environment:
-    KOLIBRI_HOME: "{{ kolibri_home }}"    # these don't do a thing for now but
+    KOLIBRI_HOME: "{{ kolibri_home }}"    # These don't do a thing for now but
     KOLIBRI_USER: "{{ kolibri_user }}"    # both can't hurt & Might Help Later
+  when: kolibri_deb_url is defined
+
+- block:    # ELSE...
+
+  # https://kolibri.readthedocs.io/en/latest/install/ubuntu-debian.html says:
+  # "When you use the PPA installation method, upgrades to newer versions
+  # will be automatic, provided there is internet access available."
+
+  - name: Add Kolibri PPA repo 'ppa:learningequality/kolibri' (if is_ubuntu)
+    apt_repository:
+      repo: ppa:learningequality/kolibri
+    when: is_ubuntu
+
+  - name: Add Kolibri PPA repo 'ppa:learningequality/kolibri' with codename 'focal' (if is_debian)
+    apt_repository:
+      repo: ppa:learningequality/kolibri
+      codename: focal    # UPDATE THIS TO 'jammy' AFTER "RasPiOS Bookworm" (based on Debian 12) IS RELEASED! (ETA Q3 2023)
+    when: is_debian
+
+  - name: apt install kolibri (populates {{ kolibri_home }}, migrates database)    # i.e. /library/kolibri
+    apt:
+      name: kolibri
+    environment:
+      KOLIBRI_HOME: "{{ kolibri_home }}"    # These don't do a thing for now but
+      KOLIBRI_USER: "{{ kolibri_user }}"    # both can't hurt & Might Help Later
+
+  when: kolibri_deb_url is undefined
 
 - name: 'Install from template: /etc/systemd/system/kolibri.service'
   template:
@@ -52,20 +79,20 @@
 
 # 2019-10-01: Should no longer be nec, thanks to /etc/kolibri/daemon.conf
 #             containing KOLIBRI_HOME="/library/kolibri" (above)
-#- name: Run Kolibri migrations to begin populating {{ kolibri_home }}    # i.e. /library/kolibri
-#  shell: export KOLIBRI_HOME="{{ kolibri_home }}" && "{{ kolibri_exec_path }}" manage migrate
-#  ignore_errors: yes
-#  become: yes
-#  become_user: "{{ kolibri_user }}"
-#  when: kolibri_provision
+# - name: Run Kolibri migrations to begin populating {{ kolibri_home }}    # i.e. /library/kolibri
+#   shell: export KOLIBRI_HOME="{{ kolibri_home }}" && "{{ kolibri_exec_path }}" manage migrate
+#   ignore_errors: yes
+#   become: yes
+#   become_user: "{{ kolibri_user }}"
+#   when: kolibri_provision
 
 # 2020-01-05: Deprecated per https://github.com/iiab/iiab/issues/2103
-#- name: Set Kolibri default language ({{ kolibri_language }})
-#  shell: export KOLIBRI_HOME="{{ kolibri_home }}" && "{{ kolibri_exec_path }}" language setdefault "{{ kolibri_language }}"
-#  ignore_errors: yes
-#  become: yes
-#  become_user: "{{ kolibri_user }}"
-#  when: kolibri_provision
+# - name: Set Kolibri default language ({{ kolibri_language }})
+#   shell: export KOLIBRI_HOME="{{ kolibri_home }}" && "{{ kolibri_exec_path }}" language setdefault "{{ kolibri_language }}"
+#   ignore_errors: yes
+#   become: yes
+#   become_user: "{{ kolibri_user }}"
+#   when: kolibri_provision
 
 - name: 'Provision Kolibri, while setting: facility name, admin acnt / password, preset type, and language'
   shell: >
@@ -91,9 +118,9 @@
 # 2019-10-07: Moved to roles/httpd/tasks/main.yml
 # 2019-09-29: roles/kiwix/tasks/kiwix_install.yml installs 4 Apache modules
 # for similar purposes (not all nec?)  Only 1 (proxy_http) is needed here.
-#- name: Enable Apache module proxy_http for http://box{{ kolibri_url }}    # i.e. http://box/kolibri
-#  apache2_module:
-#    name: proxy_http
+# - name: Enable Apache module proxy_http for http://box{{ kolibri_url }}    # i.e. http://box/kolibri
+#   apache2_module:
+#     name: proxy_http
 
 
 # RECORD Kolibri AS INSTALLED
