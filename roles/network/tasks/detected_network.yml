@@ -108,12 +108,19 @@
   set_fact:
     num_wifi_interfaces: "{{ count_wifi_interfaces.stdout|int }}"
 
-- name: Run 'iw list' to check for Access Point capability -- if discovered_wireless_iface != "none"
-  # shell: iw list | grep -v AP: | grep AP | wc -l  # False positives 'EAP' etc
-  shell: iw list | grep '^[[:space:]]*\* AP$'    # If grep doesn't find the regex, it returns 1 (hence 'ignore_errors: yes' below)
-  register: look_for_ap
-  when: discovered_wireless_iface != "none"    # Line not nec (but can't hurt?)
-  ignore_errors: yes    # 'failed_when: False' hides red errors, but is too strong (renders useless the look_for_ap.failed test below!)
+- block:
+  - name: Run 'iw list' to check for Access Point capability -- if discovered_wireless_iface ({{ discovered_wireless_iface }}) != "none"
+    # shell: iw list | grep -v AP: | grep AP | wc -l    # False positives 'EAP' etc
+    shell: iw list | grep '^[[:space:]]*\* AP$'    # If grep doesn't find the regex, it returns 1 (hence 'ignore_errors: yes' 9 lines below)
+    register: look_for_ap
+    when: discovered_wireless_iface != "none"    # Line not nec (but can't hurt?)
+    # failed_when: False    # Hides red errors and is too strong (renders useless the look_for_ap.failed test below!)
+
+  rescue:    # Force another red error msg (to explain) then proceed
+    - name: WiFi chipset/firmware NOT CAPABLE of AP Mode (details above)
+      fail:
+        msg: WiFi chipset/firmware NOT CAPABLE of AP Mode (details above)
+      ignore_errors: yes
 
 - name: "Set 'can_be_ap: True' if 'iw list' output contains suitable '* AP'"
   set_fact:
@@ -125,7 +132,7 @@
   register: wifi_gateway_found
   when: discovered_wireless_iface != "none"
 
-- name: Set has_wifi_gateway if WiFi has default gateway detected for {{ discovered_wireless_iface }}
+- name: "Set 'has_wifi_gateway: True' if WiFi has default gateway detected for discovered_wireless_iface ({{ discovered_wireless_iface }}) -- otherwise leave it undefined"
   set_fact:
     has_wifi_gateway: True
   when: discovered_wireless_iface != "none" and (wifi_gateway_found.stdout|int > 0)
@@ -184,7 +191,7 @@
   with_items:
     - "{{ lan_list_result.stdout_lines }}"
 
-- name: Set iiab_wireless_lan_iface to {{ discovered_wireless_iface }} if not none
+- name: Set iiab_wireless_lan_iface to discovered_wireless_iface ({{ discovered_wireless_iface }}) if not none
   set_fact:
     iiab_wireless_lan_iface: "{{ discovered_wireless_iface }}"
   when: discovered_wireless_iface != "none" and not wifi_up_down
