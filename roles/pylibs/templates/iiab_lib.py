@@ -85,8 +85,9 @@ def read_library_xml(lib_xml_file, kiwix_exclude_attr=["favicon"]): # duplicated
                     attributes[attr] = child.attrib[attr] # copy if not id or in exclusion list
             zims_installed[zim_id] = attributes
             path_to_id_map[child.attrib['path']] = zim_id
-    except IOError:
+    except: # though I try how can I carry on
         zims_installed = {}
+        path_to_id_map = {}
     return zims_installed, path_to_id_map
 
 def rem_libr_xml(zim_id, kiwix_library_xml):

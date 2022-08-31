@@ -1,0 +1,34 @@
+#!/bin/bash
+
+# CONFUSING BUT FYI: Commands below run *strictly sequentially* when this
+# script (/usr/local/sbin/netwarn) is invoked by autostart during OS boot.
+# This allows return codes to be meaningful, at each successive step.
+# (As of July 2022, this is tested to work well with Ubuntu Mate and "Raspberry
+# Pi OS with desktop" on Raspberry Pi 4!)
+#
+# IN CONTRAST: return codes below are NOT MEANINGFUL when this script is
+# invoked from a regularly graphical desktop session -- so make sure to test
+# during an actual OS boot-up, with autostart!
+
+if [ -f /etc/iiab/install-flags/iiab-network-complete ]; then
+    exit
+fi
+
+zenity --question --width=360 --text="IIAB needs to configure networking:\n\n► Internet must be live before you begin.\n►You might be prompted for your password.\n\nContinue?  (This can take 2-3 minutes)"
+rc=$?
+if [[ $rc != "0" ]]; then
+    exit $rc
+fi
+
+# mate-terminal always returns 255 w/ autostart, so intercept/record return code
+x-terminal-emulator -e "bash -c '/usr/local/bin/iiab-network; echo \"\$?\" > /tmp/iiab-network.rc'"
+rc=$(cat /tmp/iiab-network.rc)
+if [[ $rc != "0" ]]; then
+    zenity --warning --width=360 --text="iiab-network exited with error: $rc\n\nPlease review /opt/iiab/iiab/iiab-network.log"
+    exit $rc
+fi
+
+zenity --question --width=360 --text="iiab-network complete.\n\nWould you like to REBOOT now?  (Recommended)"
+if [[ $? == "0" ]]; then
+    x-terminal-emulator -e "sudo reboot"
+fi

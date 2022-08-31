@@ -17,9 +17,9 @@ For an up-to-date list of supported languages, refer to the `Lokole translations
 Using It
 --------
 
-If your IIAB was `installed <http://wiki.laptop.org/go/IIAB/FAQ#Is_a_quick_installation_possible.3F>`_ with the Lokole web app[*] it can be accessed at http://box/lokole
+If your IIAB was `installed <https://wiki.iiab.io/go/FAQ#Is_a_quick_installation_possible%3F>`_ with the Lokole web app[*] it can be accessed at http://box/lokole
 
-[*] If you're not sure, verify that your IIAB's `/etc/iiab/local_vars.yml <http://wiki.laptop.org/go/IIAB/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it.3F>`_ contains ``lokole_install: True`` and ``lokole_enabled: True``
+[*] If you're not sure, verify that your IIAB's `/etc/iiab/local_vars.yml <https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it%3F>`_ contains ``lokole_install: True`` and ``lokole_enabled: True``
 
 By default in an offline community, ``lokole_sim_type: LocalOnly`` is set (e.g. instead of ``lokole_sim_type: Ethernet``) and email addresses will look like:
 
@@ -85,7 +85,7 @@ The Lokole software can be configured to access the Internet via USB modem, SIM 
 
 If configured to work with a USB modem or other form of Internet connection, Lokole will sync with the cloud server (operated by `Ascoderu <https://ascoderu.ca/>`_) on a nightly basis to deliver and receive emails globally.  *However, arranging this is extremely complicated.*  You would need a compatible form of connection and an Internet expert familiar with modem protocols, MX records, etc.  Ask that person to read the `Lokole software README <https://github.com/ascoderu/lokole/blob/master/README.rst>`_ in its entirety, to help you understand whether this is realistic for your organization.
 
-Lokole and Internet-in-a-Box would welcome a business plan (whether volunteer-based, grant-based or for-profit) from someone willing to operationalize this — making it relatively hassle-free for schools, clinics, libraries and orphanages around the world — that generally do not have access to technical experts.  Please `contact us <http://wiki.laptop.org/go/IIAB/FAQ#What_are_the_best_places_for_community_support.3F>`_ if you have the capacity to help make such a social enterprise happen.
+Lokole and Internet-in-a-Box would welcome a business plan (whether volunteer-based, grant-based or for-profit) from someone willing to operationalize this — making it relatively hassle-free for schools, clinics, libraries and orphanages around the world — that generally do not have access to technical experts.  Please `contact us <https://wiki.iiab.io/go/FAQ#What_are_the_best_places_for_community_support%3F>`_ if you have the capacity to help make such a social enterprise happen.
 
 Troubleshooting
 ---------------

@@ -2,7 +2,7 @@
 
 [CUPS](https://en.wikipedia.org/wiki/CUPS) (also known as the "Common UNIX Printing System") is the standards-based, open source printing system for Linux and macOS.
 
-It allows your [Internet-in-a-Box (IIAB)](http://internet-in-a-box.org) to act as a print server.
+It allows your [Internet-in-a-Box (IIAB)](https://internet-in-a-box.org) to act as a print server.
 
 This can be useful if a printer is attached to your IIAB &mdash; so student/teacher print jobs from client computers and phones can be processed &mdash; and then sent to the appropriate printer.
 

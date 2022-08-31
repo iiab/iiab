@@ -74,4 +74,4 @@ _WARNING: If on login users see "500 : Internal Server Error", you may need to r
 
 While PAWS is a little bit off topic, if you have an interest in Wikipedia, please do see this 23m 42s video ["Intro to PAWS/Jupyter notebooks for Python beginners"](https://www.youtube.com/watch?v=AUZkioRI-aA&list=PLeoTcBlDanyNQXBqI1rVXUqUTSSiuSIXN&index=8) by Chico Venancio, from 2021-06-01.
 
-He explains PAWS as a "powerful Python execution environment http://paws.wmcloud.org [allowing] ordinary folks to write interactive scripts to work with Wikimedia content."
+He explains PAWS as a "powerful Python execution environment https://paws.wmcloud.org = https://wikitech.wikimedia.org/wiki/PAWS [allowing] ordinary folks to write interactive scripts to work with Wikimedia content."

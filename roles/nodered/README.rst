@@ -20,7 +20,7 @@ Username: ``Admin``
 
 Password: ``changeme``
 
-To change this password, please see: `roles/nodered/defaults/main.yml <defaults/main.yml#L12-L27>`_
+To change this password, please see: `roles/nodered/defaults/main.yml <defaults/main.yml#L12-L28>`_
 
 You can monitor the Node-RED service with command::
 

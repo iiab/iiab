@@ -1,6 +1,6 @@
 # Nextcloud README
 
-Students and teachers can store their documents, calendars, contacts and photos locally within [Nextcloud](https://nextcloud.com), which is much like having a (local) version of Dropbox or Google Drive on your very own [Internet-in-a-Box](http://internet-in-a-box.org).
+Students and teachers can store their documents, calendars, contacts and photos locally within [Nextcloud](https://nextcloud.com), which is much like having a (local) version of Dropbox or Google Drive on your very own [Internet-in-a-Box](https://internet-in-a-box.org).
 
 This Ansible playbook was derived from an earlier ownCloud playbook thanks to [Josh Dennis](https://github.com/floydianslips) in 2016/2017.
 
@@ -43,7 +43,7 @@ Useful PHP recommendations for these settings (while largely tailored to WordPre
 
 ## Using It
 
-Log in to Nextcloud at http://box/nextcloud, http://box.lan/nextcloud, http://172.18.96.1/nextcloud (or similar) using:
+Log in to Nextcloud at http://box/nextcloud, http://box.lan/nextcloud, http://10.10.10.10/nextcloud (or similar) using:
 
     Username: Admin
     Password: changeme

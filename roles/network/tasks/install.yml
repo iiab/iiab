@@ -1,0 +1,117 @@
+# 2022-03-16: 'apt show <pkg> | grep Size' revealed download sizes, on 64-bit RasPiOS with desktop.
+
+- name: Install dnsmasq -- configure LATER in 'network', after Stage 9
+  include_tasks: roles/network/tasks/dnsmasq.yml    # Invoked by 1-prep (so full path needed)
+
+- name: Install package networkd-dispatcher (OS's other than RasPiOS and Linux Mint)
+  package:
+    name: networkd-dispatcher    # 15kB download: Dispatcher service for systemd-networkd connection status changes
+    state: present
+  when: not is_raspbian or not is_linuxmint
+
+# 2021-07-27 from @jvonau: 3 apt packages BELOW (iw, rfkill, wireless-tools)
+# are provided by RasPiOS.  Ubuntu|Debian on the other hand are hit or miss:
+# desktops might have some/all 3 preinstalled, while servers tend not to have
+# these present at all, but need to be installed if you want to take full
+# advantage of WiFi on Ubuntu and friends.
+#
+# 2022-03-16 update: Let's make these 3 mandatory as they're only 300kB (grand
+# total download size) and they can help IIAB field operators with BOTH
+# (1) internal WiFi AND (2) USB WiFi devices inserted anytime/later.
+
+- name: 'Install 11 network packages: avahi-daemon, hostapd, iproute2, iptables-persistent, iw, libnss-mdns, netmask, net-tools, rfkill, wireless-tools, wpasupplicant -- later used by https://github.com/iiab/iiab/tree/master/roles/network'
+  package:
+    name:
+      - avahi-daemon           #   97kB download: RasPiOS (and package libnss-mnds, below) install this regardless -- holdover from the XO days and used to advertise ssh/admin-console being available via avahi-daemon -- used with https://github.com/iiab/iiab/blob/master/roles/network/tasks/avahi.yml
+      #- avahi-discover        #   46kB download: 2021-07-27: Commented out long ago
+      - hostapd                #  764kB download: IEEE 802.11 AP and IEEE 802.1X/WPA/WPA2/EAP Authenticator -- has its service masked out of the box, and only used when IIAB's network roles detects the presence of WiFi and an AP is desired
+      #- inetutils-syslogd     #  240kB download: 2021-07-27: Error logging facility -- holdover from the XO days, journalctl has replaced this in newer distros
+      - iproute2               #  902kB download: RasPiOS installs this regardless -- the new networking and traffic control tools, meant to replace net-tools
+      - iptables-persistent    #   12kB download: Boot-time loader for netfilter rules, iptables (firewall) plugin -- however Netfilter / nftables is ever moving forward so keep an eye on it!
+      - iw                     #   97kB download: RasPiOS installs this regardless -- configure Linux wireless devices -- hard dependence for ap0 creation, SEE https://github.com/iiab/iiab/blob/master/roles/network/templates/hostapd/iiab-clone-wifi.service.j2
+      - libnss-mdns            #   27kB download: RasPiOS (and package avahi-daemon, above) install this regardless -- client-side library -- provides name resolution via mDNS (Multicast DNS) using Zeroconf/Bonjour e.g. Avahi
+      - netmask                #   25kB download: Handy utility -- helps determine network masks
+      - net-tools              #  248kB download: RasPiOS installs this regardless -- @jvonau suggests possibly deleting this...unless oldtimers really want these older commands in iiab-diagnostics output?
+      - rfkill                 #   87kB download: RasPiOS installs this regardless -- enable & disable wireless devices
+      - wireless-tools         #  112kB download: RasPiOS installs this regardless -- manipulate Linux Wireless Extensions
+      - wpasupplicant          # 1188kB download: RasPiOS installs this regardless -- client library for connections to a WiFi AP
+    state: present
+
+# 2021-08-17: Debian ignores this, according to 2013 post:
+# https://serverfault.com/questions/511099/debian-ignores-etc-network-if-pre-up-d-iptables
+# - name: Install /etc/network/if-pre-up.d/iptables from template (0755)
+#   template:
+#     src: iptables
+#     dest: /etc/network/if-pre-up.d/iptables
+#     mode: '0755'
+
+- name: Unmask the Access Point 'hostapd' service
+  systemd:
+    name: hostapd
+    enabled: no
+    masked: no
+
+- name: Install Avahi (mDNS, Zeroconf/Bonjour)
+  include_tasks: roles/network/tasks/avahi.yml    # Invoked by 1-prep (so full path needed)
+
+# Ongoing rework (e.g. PR #2652) arising from ansible.posix collection changes:
+- name: "4 network settings in /etc/sysctl.conf -- e.g. disabling IPv6 (this might be overkill, as IPv6 should really only be disabled on the LAN side, i.e. br0)"
+  sysctl:    # Places these settings in /etc/sysctl.conf, to survive reboot
+    name: "{{ item.name }}"
+    value: "{{ item.value }}"
+  with_items:
+    - { name: 'net.ipv4.ip_forward', value: '1' }  # Masquerading LAN->Internet
+    - { name: 'net.ipv4.conf.default.rp_filter', value: '1' }
+    - { name: 'net.ipv4.conf.default.accept_source_route', value: '0' }
+    #- { name: 'net.ipv4.tcp_syncookies', value: '1' }  # Very standard in 2020
+    - { name: 'net.ipv6.conf.all.disable_ipv6', value: '1' }    # IPv6 disabled
+    #- { name: 'net.ipv6.conf.default.disable_ipv6', value: '1' }    # AUTO-SET
+    #- { name: 'net.ipv6.conf.lo.disable_ipv6', value: '1' }         # BY ABOVE
+
+
+# UNUSED
+#- name: Install named / BIND
+#  include_tasks: roles/network/tasks/named.yml
+#  when: named_install is defined and named_install
+
+# UNUSED
+#- name: Install dhcpd
+#  include_tasks: roles/network/tasks/dhcpd.yml
+#  when: dhcpd_install is defined and dhcpd_install
+
+# LESS MAINTAINED
+- name: Install Squid
+  include_tasks: roles/network/tasks/squid.yml    # Invoked by 1-prep (so full path needed)
+  when: squid_install and squid_installed is undefined
+
+  #preprep for backends
+- name: Netplan in use on Ubuntu 18.04+
+  include_tasks: roles/network/tasks/netplan.yml    # Invoked by 1-prep (so full path needed)
+  when: is_ubuntu
+
+# all installs
+
+- name: Install /usr/bin/iiab-internet-on|off from template (root:root by default)
+  template:
+    src: "{{ item }}"
+    dest: /usr/bin/
+    mode: 0755
+  with_items:
+    - roles/network/templates/gateway/iiab-internet-on     # Invoked by 1-prep (so full path needed)
+    - roles/network/templates/gateway/iiab-internet-off    # Invoked by 1-prep (so full path needed)
+
+- name: 'Install /usr/local/sbin/netwarn for pop-ups on boot, if iiab-network should be run'
+  include_tasks: roles/network/tasks/netwarn.yml    # Invoked by 1-prep (so full path needed)
+
+
+# RECORD Network AS INSTALLED
+
+- name: "Set 'network_installed: True'"
+  set_fact:
+    network_installed: True
+
+- name: "Add 'network_installed: True' to {{ iiab_state_file }}"
+  lineinfile:
+    path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
+    regexp: '^network_installed'
+    line: 'network_installed: True'
