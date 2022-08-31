@@ -2,13 +2,13 @@
 AzuraCast README
 ================
 
-Install `AzuraCast <https://azuracast.com/>`_ to your Internet-in-a-Box (IIAB) if you want "radio station" functionality.  You and your community can then schedule podcasts, music, and even do live streaming of audio content (video streaming might also be possible in future!)
+Install `AzuraCast <https://azuracast.com/>`_ with your `Internet-in-a-Box (IIAB) <https://internet-in-a-box.org/>`_ if you want a simple, self-hosted "web radio station" with a modern web UI/UX.  You and your community can then schedule newscasts, podcasts, music, and even do live streaming of audio content (video streaming might also be possible in future!)
 
 As soon as you install AzuraCast with IIAB, it can stream MP3 files (and similar files) using `LiquidSoap <https://docs.azuracast.com/en/developers/liquidsoap>`_ to help you schedule or randomize playback of MP3 songs (and similar).
 
 Please see AzuraCast's `screenshots <https://www.google.com/search?q=azuracast+screenshot&tbm=isch>`_ and `docs <./README.rst#azuracast-docs>`_.
 
-Optionally, live-streaming can also be made to work, e.g. if you install `Mixxx or BUTT <https://docs.azuracast.com/en/user-guide/streaming-software>`_ on your own.  If so, you have many options to configure streaming with `Icecast <https://icecast.org/>`_, `Shoutcast <https://www.shoutcast.com/>`_, etc.
+Optionally, live-streaming can also be made to work, e.g. if you install `Mixxx or BUTT <https://docs.azuracast.com/en/user-guide/streaming-software>`_ on your own.  (If so, you have many options to configure streaming with `Icecast <https://icecast.org/>`_, `Shoutcast <https://www.shoutcast.com/>`_, etc.)
 
 Requirements
 ------------
