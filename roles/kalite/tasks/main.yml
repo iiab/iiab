@@ -19,43 +19,37 @@
     quiet: yes
 
 
-- name: Install KA Lite if 'kalite_installed' not defined, e.g. in {{ iiab_state_file }}    # /etc/iiab/iiab_state.yml
-  include_tasks: install.yml
-  when: kalite_installed is undefined
+- block:
 
+  - name: Install KA Lite if 'kalite_installed' not defined, e.g. in {{ iiab_state_file }}    # /etc/iiab/iiab_state.yml
+    include_tasks: install.yml
+    when: kalite_installed is undefined
 
-- name: Enable & (Re)Start 'kalite-serve' service, if kalite_enabled
-  systemd:
-    daemon_reload: yes
-    name: kalite-serve
-    enabled: yes
-    state: restarted
-  when: kalite_enabled
+  - include_tasks: enable-or-disable.yml
 
-- name: Disable & Stop 'kalite-serve' service, if not kalite_enabled
-  systemd:
-    name: kalite-serve
-    enabled: no
-    state: stopped
-  when: not kalite_enabled
+  - name: Add 'kalite' variable values to {{ iiab_ini_file }}
+    ini_file:
+      path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+      section: kalite
+      option: "{{ item.option }}"
+      value: "{{ item.value | string }}"
+    with_items:
+      - option: name
+        value: "KA Lite"
+      - option: description
+        value: '"KA Lite downloads Khan Academy videos for offline use, with exercises and accounts if students want to track their own progress."'
+      - option: kalite_install
+        value: "{{ kalite_install }}"
+      - option: kalite_enabled
+        value: "{{ kalite_enabled }}"
+      - option: path
+        value: "{{ kalite_root }}"
+      - option: port
+        value: "{{ kalite_server_port }}"
 
+  rescue:
 
-- name: Add 'kalite' variable values to {{ iiab_ini_file }}
-  ini_file:
-    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
-    section: kalite
-    option: "{{ item.option }}"
-    value: "{{ item.value | string }}"
-  with_items:
-    - option: name
-      value: "KA Lite"
-    - option: description
-      value: '"KA Lite downloads Khan Academy videos for offline use, with exercises and accounts if students want to track their own progress."'
-    - option: kalite_install
-      value: "{{ kalite_install }}"
-    - option: kalite_enabled
-      value: "{{ kalite_enabled }}"
-    - option: path
-      value: "{{ kalite_root }}"
-    - option: port
-      value: "{{ kalite_server_port }}"
+  - name: 'SEE ERROR ABOVE (skip_role_on_error: {{ skip_role_on_error }})'
+    fail:
+      msg: ""
+    when: not skip_role_on_error

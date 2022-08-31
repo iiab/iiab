@@ -1,3 +1,40 @@
+# 2022-06-07: IS MongoDB's OFFICIAL /lib/systemd/system/mongod.service USEFUL?
+
+# [Unit]
+# Description=MongoDB Database Server
+# Documentation=https://docs.mongodb.org/manual
+# After=network-online.target
+# Wants=network-online.target
+
+# [Service]
+# User=mongodb
+# Group=mongodb
+# EnvironmentFile=-/etc/default/mongod
+# ExecStart=/usr/bin/mongod --config /etc/mongod.conf
+# PIDFile=/var/run/mongodb/mongod.pid
+# # file size
+# LimitFSIZE=infinity
+# # cpu time
+# LimitCPU=infinity
+# # virtual memory size
+# LimitAS=infinity
+# # open files
+# LimitNOFILE=64000
+# # processes/threads
+# LimitNPROC=64000
+# # locked memory
+# LimitMEMLOCK=infinity
+# # total threads (user+kernel)
+# TasksMax=infinity
+# TasksAccounting=false
+
+# # Recommended limits for mongod as specified in
+# # https://docs.mongodb.com/manual/reference/ulimit/#recommended-ulimit-settings
+
+# [Install]
+# WantedBy=multi-user.target
+
+
 [Unit]
 Description=High-performance, schema-free document-oriented database
 After=syslog.target network.target
@@ -6,15 +43,22 @@ After=syslog.target network.target
 Type=simple
 User=mongodb
 Group=mongodb
-# FAILS (after power failures, etc) as --repair cannot run when lock file exists: (https://github.com/iiab/iiab/issues/942)
+{% if not (ansible_architecture == "x86_64" or ansible_architecture == "aarch64") %}
+# USED TO FAIL (after power failures, etc) as --repair cannot run when lock file exists: (https://github.com/iiab/iiab/issues/942)
 #ExecStartPre=/usr/bin/mongod --repair --dbpath /library/dbdata/mongodb
 # FAILS as systemd cannot run bash here:
 #ExecStartPre=if [ ! -f /library/dbdata/mongodb/mongod.lock ]; then /usr/bin/mongod --repair --dbpath {{ mongodb_db_path }}; fi
+# 2022-06-07: MIGHT STILL BE USEFUL for MongoDB 3.x (i.e. on 32-bit RasPiOS)
 ExecStartPre=/usr/bin/iiab-mongodb-repair-if-no-lock
+{% endif %}
 ExecStart=/usr/bin/mongod -f {{ mongodb_conf }}
-ExecStop=/usr/bin/killall mongod
-# killall's SIGTERM (15) seems fine, to induce a graceful stop.  This would work too:
-#ExecStop=mongod --dbpath {{ mongodb_db_path }} --shutdown
+#ExecStop=/usr/bin/killall mongod
+# killall's SIGTERM (15) above no longer induces a graceful stop w/ MongoDB 5+
+# https://www.mongodb.com/docs/manual/reference/method/db.shutdownServer/
+# https://www.mongodb.com/docs/v5.0/reference/command/shutdown/
+# https://www.mongodb.com/docs/v6.0/reference/command/shutdown/
+ExecStop=/usr/bin/mongod -f {{ mongodb_conf }} --shutdown
+#ExecStop=/usr/bin/mongod --dbpath {{ mongodb_db_path }} --shutdown
 
 [Install]
 WantedBy=multi-user.target

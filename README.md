@@ -21,7 +21,7 @@ Install Internet-in-a-Box (IIAB) from [download.iiab.io](https://download.iiab.i
 Please see [FAQ.IIAB.IO](https://wiki.iiab.io/go/FAQ) which has 40+ questions and answers to help you along the way, as you put together the <!--digital--> "local learning hotspot" most suitable for your own teaching/learning community.  Here are 2 ways to install IIAB:
 
 - Our [1-line installer](https://download.iiab.io/) gets you the very latest, typically within about an hour, on [different Linux distributions](https://github.com/iiab/iiab/wiki/IIAB-Platforms#operating-systems).
-- [Prefab disk images](https://github.com/iiab/iiab/wiki/Raspberry-Pi-Images:-Summary) ([.img files](https://archive.org/search.php?query=iiab%20.img&sort=-publicdate)) are sometimes a few months out of date, but can be flashed directly onto a microSD card, for insertion into Raspberry Pi.
+- [Prefab disk images](https://github.com/iiab/iiab/wiki/Raspberry-Pi-Images:-Summary#iiab-images-for-raspberry-pi) ([.img files](https://archive.org/search.php?query=iiab%20.img&sort=-publicdate)) are sometimes a few months out of date, but can be flashed directly onto a microSD card, for insertion into Raspberry Pi.
 
 Our [HOW-TO videos](https://www.youtube.com/channel/UC0cBGCxr_WPBPa3IqPVEe3g) can be very helpful and the [Installation](https://github.com/iiab/iiab/wiki/IIAB-Installation) wiki page has more intricate details e.g. if you're trying to install Internet-in-a-Box (IIAB) onto a [another Linux](https://github.com/iiab/iiab/wiki/IIAB-Platforms) that has not yet been tried.
 
@@ -33,9 +33,11 @@ Finally, you can [customize your Internet-in-a-Box home page](https://wiki.iiab.
 
 ## Community
 
-Internet-in-a-Box (IIAB) greatly welcomes contributions from educators, librarians and [IT/UX/QA people](https://github.com/iiab/iiab/wiki/Technical-Contributors-Guide) of all kinds!
+Global community updates and videos are regularly posted to: **[@internet_in_box](https://twitter.com/internet_in_box)**
 
-If you would like to volunteer, please [make contact](https://internet-in-a-box.org/pages/contributing.html) after looking over "[How can I help?](https://wiki.iiab.io/go/FAQ#How_can_I_help.3F)" at: [FAQ.IIAB.IO](https://wiki.iiab.io/go/FAQ)
+_Internet-in-a-Box (IIAB) greatly welcomes contributions from educators, librarians and [IT/UX/QA people](https://github.com/iiab/iiab/wiki/Technical-Contributors-Guide) of all kinds!_
+
+If you would like to volunteer, please [make contact](https://internet-in-a-box.org/contributing.html) after looking over "[How can I help?](https://wiki.iiab.io/go/FAQ#How_can_I_help.3F)" at: [FAQ.IIAB.IO](https://wiki.iiab.io/go/FAQ)
 
 <!-- To learn about our software architecture, check out our [Contributors Guide](https://github.com/iiab/iiab/wiki/IIAB-Contributors-Guide).-->
 
@@ -52,4 +54,4 @@ Install our latest pre-release using the 1-line installer at: [**download.iiab.i
 
 You can also consider <!--latest Internet-in-a-Box (IIAB)--> earlier official releases at: [github.com/iiab/iiab/releases](https://github.com/iiab/iiab/releases)
 
-For much older versions, see: [github.com/xsce](http://github.com/xsce), [schoolserver.org](http://schoolserver.org)
+For much older versions, see: [github.com/xsce](https://github.com/xsce), [schoolserver.org](http://schoolserver.org)

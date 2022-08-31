@@ -33,21 +33,33 @@
     global: yes
     state: latest
 
-- name: "pip install 7 packages into virtual environment: {{ jupyterhub_venv }} (~229 MB)"
+- name: "pip install 3 packages into virtual environment: {{ jupyterhub_venv }} (~304 MB total, after 2 Ansible calls)"
   pip:
     name:
       - pip
       - wheel
-      - ipywidgets
       - jupyterhub
+    virtualenv: "{{ jupyterhub_venv }}"    # /opt/iiab/jupyterhub
+    virtualenv_site_packages: no
+    virtualenv_command: python3 -m venv "{{ jupyterhub_venv }}"    # 2021-07-29: This works on RasPiOS 10, Debian 11, Ubuntu 20.04 and Mint 20 -- however if you absolutely must use the older Debian 10 -- you can work around errors "can't find Rust compiler" and "This package requires Rust >=1.41.0" if you (1) revert this line to 'virtualenv_command: virtualenv' AND (2) uncomment the line just below
+    #virtualenv_python: python3    # 2021-07-29: Was needed when above line was 'virtualenv_command: virtualenv' (generally for Python 2)
+    extra_args: "--no-cache-dir"    # 2021-11-30, 2022-07-07: The "--pre" flag had earlier been needed, for beta-like pre-releases of JupyterHub 2.0.0
+
+# 2022-07-07: Attempting to "pip install" all 7 together (3 above + 4 below)
+# fails on OS's like 64-bit RasPiOS (but interestingly works on Ubuntu 22.04!)
+# https://github.com/iiab/iiab/issues/3283
+
+- name: Break up jupyterhub/jupyterlab pip installs into 2 parts (3 packages above + 4 packages here) due to mutual dependency deadlock on some OS's
+  pip:
+    name:
       - jupyterlab
       - jupyterhub_firstuseauthenticator
       - jupyterhub-systemdspawner
-    virtualenv: "{{ jupyterhub_venv }}"    # /opt/iiab/jupyterhub
+      - ipywidgets
+    virtualenv: "{{ jupyterhub_venv }}"
     virtualenv_site_packages: no
-    virtualenv_command: python3 -m venv "{{ jupyterhub_venv }}"    # 2021-07-29: This works on RaspiOS 10, Debian 11, Ubuntu 20.04 and Mint 20 -- however if you absolutely must use the older Debian 10 -- you can work around errors "can't find Rust compiler" and "This package requires Rust >=1.41.0" if you (1) revert this line to 'virtualenv_command: virtualenv' AND (2) uncomment the line just below
-    #virtualenv_python: python3    # 2021-07-29: Was needed when above line was 'virtualenv_command: virtualenv' (generally for Python 2)
-    extra_args: "--no-cache-dir --pre"    # 2021-11-30: The "--pre" flag should likely be removed after JupyterHub 2.0.0 is released.
+    virtualenv_command: python3 -m venv "{{ jupyterhub_venv }}"    
+    extra_args: "--no-cache-dir"
 
 - name: "Install from template: {{ jupyterhub_venv }}/etc/jupyterhub/jupyterhub_config.py"
   template:
@@ -59,20 +71,21 @@
     src: jupyterhub.service.j2
     dest: /etc/systemd/system/jupyterhub.service
 
-- name: Install {{ jupyterhub_venv }}/bin/getsite.py from template, to fetch site_packages path, e.g. {{ jupyterhub_venv }}/lib/python{{ python_ver }}/site-packages
-  template:
-    src: getsite.py.j2
-    dest: "{{ jupyterhub_venv }}/bin/getsite.py"
-    mode: 0755
-
-- name: Install patch_FUA.sh from template -- to (1) fix async password-changing page, and (2) force usernames to lowercase -- patching $SITE_PACKAGES/firstuseauthenticator/firstuseauthenticator.py
-  template:
-    src: patch_FUA.sh.j2
-    dest: "{{ jupyterhub_venv }}/bin/patch_FUA.sh"
-    mode: 0755
-
-- name: "Run the above two, via: {{ jupyterhub_venv }}/bin/patch_FUA.sh"
-  command: "{{ jupyterhub_venv }}/bin/patch_FUA.sh"
+# 2022-07-07: No longer needed, thx to upstream fixes
+# - name: Install {{ jupyterhub_venv }}/bin/getsite.py from template, to fetch site_packages path, e.g. {{ jupyterhub_venv }}/lib/python{{ python_ver }}/site-packages
+#   template:
+#     src: getsite.py.j2
+#     dest: "{{ jupyterhub_venv }}/bin/getsite.py"
+#     mode: 0755
+#
+# - name: Install patch_FUA.sh from template -- to (1) fix async password-changing page, and (2) force usernames to lowercase -- patching $SITE_PACKAGES/firstuseauthenticator/firstuseauthenticator.py
+#   template:
+#     src: patch_FUA.sh.j2
+#     dest: "{{ jupyterhub_venv }}/bin/patch_FUA.sh"
+#     mode: 0755
+#
+# - name: "Run the above two, via: {{ jupyterhub_venv }}/bin/patch_FUA.sh"
+#   command: "{{ jupyterhub_venv }}/bin/patch_FUA.sh"
 
 - name: Install patch_http-warning.sh from template, to turn off the warning about http insecurity, in {{ jupyterhub_venv }}/share/jupyterhub/templates/login.html
   template:

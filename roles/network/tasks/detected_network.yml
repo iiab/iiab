@@ -1,3 +1,13 @@
+# Similar code block in roles/vnstat/tasks/install.yml
+- name: Do we have a gateway? If 'ip route' specifies a default route, Ansible parses details here...
+  debug:
+    var: ansible_default_ipv4
+
+- name: "If above ansible_default_ipv4.gateway is defined, set WAN candidate 'discovered_wan_iface: {{ ansible_default_ipv4.alias }}' -- using ansible_default_ipv4.alias"
+  set_fact:
+    discovered_wan_iface: "{{ ansible_default_ipv4.alias }}"
+  when: ansible_default_ipv4.gateway is defined
+
 # so this works
 - name: Interface count
   shell: ls /sys/class/net | grep -v {{ virtual_network_devices }} | wc | awk '{print $1}'
@@ -26,25 +36,22 @@
     device_gw: "{{ discovered_wan_iface }}"
   when: ansible_default_ipv4.gateway is defined
 
-- name: Figure out netplan file name
-  shell: ls /etc/netplan
-  register: netplan
-  ignore_errors: True # pre 17.10 doesn't use netplan
-  when: is_ubuntu
+# 2022-07-22: Moved to netplan.yml AND restart.yml (REMOVE DUPLICATE CODE LATER?!)
+# - name: Figure out netplan file name
+#   shell: ls /etc/netplan
+#   register: netplan
+#   ignore_errors: True # pre 17.10 doesn't use netplan
+#   when: is_ubuntu
 
 - name: Setting dhcpcd_test results
   set_fact:
     dhcpcd_result: "{{ ansible_local.local_facts.dhcpcd }}"
 
-- name: Setting systemd_networkd results
+# 2022-07-22: Copied to netplan.yml (REMOVE DUPLICATE CODE LATER?!)
+- name: "Set 'systemd_networkd_active: True' if local_facts.systemd_networkd confirms"
   set_fact:
     systemd_networkd_active: True
-  when: 'ansible_local.local_facts.systemd_networkd == "enabled"'
-
-- name: Setting systemd_networkd-2 results
-  set_fact:
-    systemd_networkd_active: True
-  when: 'ansible_local.local_facts.systemd_networkd == "enabled-runtime"'
+  when: ansible_local.local_facts.systemd_networkd == "enabled" or ansible_local.local_facts.systemd_networkd == "enabled-runtime"
 
 - name: Setting network_manager results
   set_fact:
@@ -101,12 +108,31 @@
   set_fact:
     num_wifi_interfaces: "{{ count_wifi_interfaces.stdout|int }}"
 
+- block:
+  - name: Run 'iw list' to check for Access Point capability -- if discovered_wireless_iface ({{ discovered_wireless_iface }}) != "none"
+    # shell: iw list | grep -v AP: | grep AP | wc -l    # False positives 'EAP' etc
+    shell: iw list | grep '^[[:space:]]*\* AP$'    # If grep doesn't find the regex, it returns 1 (hence 'ignore_errors: yes' 9 lines below)
+    register: look_for_ap
+    when: discovered_wireless_iface != "none"    # Line not nec (but can't hurt?)
+    # failed_when: False    # Hides red errors and is too strong (renders useless the look_for_ap.failed test below!)
+
+  rescue:    # Force another red error msg (to explain) then proceed
+  - name: WiFi chipset/firmware NOT CAPABLE of AP Mode (details above)
+    fail:
+      msg: WiFi chipset/firmware NOT CAPABLE of AP Mode (details above)
+    ignore_errors: yes
+
+- name: "Set 'can_be_ap: True' if 'iw list' output contains suitable '* AP'"
+  set_fact:
+    can_be_ap: True
+  when: look_for_ap.failed is defined and not look_for_ap.failed
+
 - name: Detect wifi gateway active
   shell: ip r | grep default | grep {{ discovered_wireless_iface }} | wc -l
   register: wifi_gateway_found
   when: discovered_wireless_iface != "none"
 
-- name: Set has_wifi_gateway if WiFi has default gateway detected for {{ discovered_wireless_iface }}
+- name: "Set 'has_wifi_gateway: True' if WiFi has default gateway detected for discovered_wireless_iface ({{ discovered_wireless_iface }}) -- otherwise leave it undefined"
   set_fact:
     has_wifi_gateway: True
   when: discovered_wireless_iface != "none" and (wifi_gateway_found.stdout|int > 0)
@@ -115,6 +141,11 @@
   shell: ip r | grep default | grep -v {{ discovered_wan_iface }} | awk '{print $5}'
   register: second_gateway_found
   changed_when: False
+
+- name: If multiple secondary gateways are detected, fail intentionally and explain
+  fail:
+    msg: "IIAB currently DOES NOT SUPPORT multiple secondary gateways: {{ second_gateway_found.stdout }}"
+  when: second_gateway_found.stdout_lines is defined and second_gateway_found.stdout_lines | length > 1
 
 - name: Set exclude_devices if default gateway has been detected for {{ second_gateway_found.stdout }}
   set_fact:
@@ -165,7 +196,7 @@
   with_items:
     - "{{ lan_list_result.stdout_lines }}"
 
-- name: Set iiab_wireless_lan_iface to {{ discovered_wireless_iface }} if not none
+- name: Set iiab_wireless_lan_iface to discovered_wireless_iface ({{ discovered_wireless_iface }}) if not none
   set_fact:
     iiab_wireless_lan_iface: "{{ discovered_wireless_iface }}"
   when: discovered_wireless_iface != "none" and not wifi_up_down
@@ -260,6 +291,8 @@
       value: "{{ iiab_lan_iface }}"
     - option: iiab_wan_iface
       value: "{{ iiab_wan_iface }}"
+    - option: can_be_ap
+      value: "{{ can_be_ap }}"
 
 # well if there ever was a point to tell the user things are FUBAR this is it.
 # limit 2 network adapters wifi wired

@@ -21,33 +21,34 @@
 - name: Enable IIAB pages via NGINX (e.g. on port 80) if nginx_install
   include_tasks: roles/nginx/tasks/homepage.yml
   when: nginx_installed is defined
-  #when: nginx_install
 
-- name: Make home page autostart on localhost (the server's console) if session manager is LXDE (rpi)
-  stat:
-      path: /etc/xdg/lxsession/LXDE-pi/autostart
-  register: lxde_present
 
-- name: Check for Chromium name change
+# 2022-07-22: SIMILAR TO roles/iiab-admin/tasks/pwd-warnings.yml FOR passwords
+#                    AND roles/network/tasks/netwarn.yml      FOR iiab-network
+
+- name: Does /etc/xdg/lxsession/LXDE-pi/autostart exist? (if so, auto-launch browser on boot, displaying http://box/home IIAB home page)
   stat:
-      path: /usr/bin/chromium
+    path: /etc/xdg/lxsession/LXDE-pi/autostart
+  register: lxde_pi_autostart_present
+
+- name: Does /usr/bin/chromium exist? (check for browser filename change)
+  stat:
+    path: /usr/bin/chromium
   register: chromium_present
 
-- name: Add chromium-browser to /etc/xdg/lxsession/LXDE-pi/autostart if session manager is LXDE
+- name: Add chromium-browser to /etc/xdg/lxsession/LXDE-pi/autostart
   lineinfile:
-      path:   /etc/xdg/lxsession/LXDE-pi/autostart
-      regexp: '^/usr/bin/chromium-browser'
-      line:   '/usr/bin/chromium-browser --disable-restore-session-state http://box/home' 
-  when:
-      lxde_present.stat.exists and not chromium_present.stat.exists
+    path: /etc/xdg/lxsession/LXDE-pi/autostart
+    regexp: '^/usr/bin/chromium-browser'
+    line: '/usr/bin/chromium-browser --disable-restore-session-state http://box/home'
+  when: lxde_pi_autostart_present.stat.exists and not chromium_present.stat.exists
 
-- name: Add chromium to /etc/xdg/lxsession/LXDE-pi/autostart if session manager is LXDE
+- name: Add chromium to /etc/xdg/lxsession/LXDE-pi/autostart
   lineinfile:
-      path:   /etc/xdg/lxsession/LXDE-pi/autostart
-      regexp: '^/usr/bin/chromium'
-      line:   '/usr/bin/chromium --disable-restore-session-state http://box/home' 
-  when:
-      lxde_present.stat.exists and chromium_present.stat.exists
+    path: /etc/xdg/lxsession/LXDE-pi/autostart
+    regexp: '^/usr/bin/chromium'
+    line: '/usr/bin/chromium --disable-restore-session-state http://box/home'
+  when: lxde_pi_autostart_present.stat.exists and chromium_present.stat.exists
 
 
 - debug:
@@ -156,9 +157,26 @@
   when: not apache_allow_sudo
 
 
+# 2022-06-30: internet_available var removed
+- name: 'Test for Internet access, using: {{ iiab_download_url }}/heart-beat.txt'
+  get_url:
+    url: "{{ iiab_download_url }}/heart-beat.txt"
+    dest: /tmp/heart-beat.txt
+    #timeout: "{{ download_timeout }}"
+    # @jvonau recommends: 100sec is too much (keep 10sec default)
+  ignore_errors: True
+  #async: 10
+  #poll: 2
+  register: internet_access_test
+
+- name: Remove downloaded Internet test file /tmp/heart-beat.txt
+  file:
+    path: /tmp/heart-beat.txt
+    state: absent
+
 - name: Run /usr/bin/iiab-refresh-wiki-docs (scraper script) to create http://box/info offline documentation.  (This script was installed in Stage 3 = roles/3-base-server/tasks/main.yml, which ran roles/www_base/tasks/main.yml)
   command: /usr/bin/iiab-refresh-wiki-docs
-  when: internet_available and not nodocs
+  when: not internet_access_test.failed and not nodocs
 
 
 - name: (Re)Start '{{ apache_service }}' systemd service, if installed & enabled

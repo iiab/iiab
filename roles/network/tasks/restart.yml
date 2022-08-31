@@ -1,3 +1,11 @@
+# 2022-07-22: Moved from detected_network.yml to netplan.yml AND restart.yml (REMOVE DUPLICATE CODE LATER?!)
+# - name: Figure out netplan file name
+#   shell: ls /etc/netplan
+#   register: netplan
+#   #ignore_errors: True # pre 17.10 doesn't use netplan
+#   when: is_ubuntu
+
+
 - name: Restart wpa_supplicant service
   systemd:
     name: "{{ item }}"
@@ -6,15 +14,38 @@
     - wpa_supplicant
   when: wifi_up_down and hostapd_enabled
 
-- name: Reload netplan for Wifi gateway on Ubuntu 18+
-  shell: netplan apply
-  when: wifi_up_down and is_ubuntu and netplan.stdout.find("yaml") != -1
+- name: Create /etc/hostapd/hostapd.conf and backup .iiab from template if needed
+  template:
+    owner: root
+    group: root
+    mode: 0644
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+  with_items:
+    - { src: 'hostapd/hostapd.conf.j2', dest: '/etc/hostapd/hostapd.conf' }
+    - { src: 'hostapd/hostapd.conf.j2', dest: '/etc/hostapd/hostapd.conf.iiab' }
+  when: can_be_ap
 
-- name: Start named service
+- name: Restart hostapd when WiFi is present but not when using WiFi as gateway with wifi_up_down False
   systemd:
-    name: "{{ dns_service }}"
+    name: hostapd
     state: restarted
-  when: named_enabled and named_install
+    daemon_reload: yes
+  when: hostapd_enabled and (wifi_up_down or not no_net_restart)
+
+# 2022-07-22: @jvonau suggests commenting this out as: "we really don't touch
+# any of the config files... netplan.yml renames one file if it's a container
+# build like on MATE, could possibly skip netplan.yml in future or toss that in
+# the mix now and see what shakes up" [ok, but keep netplan.yml as is for now]
+# - name: Reload netplan for Wifi gateway on Ubuntu 18+
+#   shell: netplan apply
+#   when: wifi_up_down and is_ubuntu and netplan.stdout.find("yaml") != -1
+
+#- name: Start named service
+#  systemd:
+#    name: "{{ dns_service }}"
+#    state: restarted
+#  when: named_enabled and named_install
 
 - name: Stop Squid service
   systemd:
@@ -79,11 +110,13 @@
 #both interfaces.d and systemd-networkd should have br0 available and Appliance lacks br0
 #keep an eye on legacy wifi installs where br0 is present but not 'online' with an ip address
 #due to hostapd didn't go to a carrier state. All others should get dnsmasq restarted
-- name: User choice of dnsmasq or dhcpd - restarting {{ dhcp_service2 }}
+#- name: User choice of dnsmasq or dhcpd - restarting {{ dhcp_service2 }}
+- name: Restarting dnsmasq
   systemd:
-    name: "{{ dhcp_service2 }}"
+    name: dnsmasq
     state: restarted
-  when: (not no_net_restart or (is_ubuntu and wifi_up_down)) or (iiab_stage|int == 9)
+  when: dnsmasq_enabled and ((not no_net_restart or (is_ubuntu and wifi_up_down)) or (iiab_stage|int == 9))
+#  when: (not no_net_restart or (is_ubuntu and wifi_up_down)) or (iiab_stage|int == 9)
   #when: (not no_net_restart or (is_ubuntu_20 and wifi_up_down)) or (iiab_stage|int == 9)
   #when: (not no_net_restart or (is_ubuntu_20 and wifi_up_down))
   #when: (iiab_network_mode != "Appliance")    # Sufficient b/c br0 exists thanks to /etc/network/interfaces.d/iiab

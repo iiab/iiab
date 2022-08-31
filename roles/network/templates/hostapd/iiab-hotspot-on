@@ -1,0 +1,47 @@
+#!/bin/bash
+{% if not can_be_ap %}
+echo -e "\nUH-OH: Your Wi-Fi firmware doesn't support AP mode, according to 'iw list'\n"
+echo -e "If you add Wi-Fi hardware, run 'cd /opt/iiab/iiab' then 'sudo ./iiab-network'\n"
+echo -e "For details, see: https://github.com/iiab/iiab/pull/3179\n"
+exit 1
+{% else %}
+sed -i -e "s/^HOSTAPD_ENABLED.*/HOSTAPD_ENABLED=True/" {{ iiab_env_file }}
+{% if wifi_up_down %}
+systemctl enable iiab-clone-wifi.service
+systemctl enable hostapd
+systemctl enable iiab-wifi-test.service
+echo -e "\nPlease reboot to activate hostapd feature.\n"
+exit 0
+{% else %}
+{% if is_raspbian %}
+# just do what we have always done in hotspot-on
+cp -f /etc/hostapd/hostapd.conf.iiab /etc/hostapd/hostapd.conf
+sed -i -e "s/^#denyinterfaces/denyinterfaces/" /etc/dhcpcd.conf
+# shut down wlan0 in case connected to network
+ip link set wlan0 down
+systemctl enable hostapd
+#systemctl daemon-reload
+systemctl daemon-reload
+systemctl restart dhcpcd
+systemctl start hostapd
+systemctl start dnsmasq
+
+# Temporary promiscuous-mode workaround for RPi's WiFi "10SEC disease"
+# Disable "promiscuous" on wlan0 when AP (i.e. no WiFi gateway)
+# SEE ALSO iiab-hotspot-off + /usr/libexec/iiab-startup.sh
+# https://github.com/iiab/iiab/issues/638#issuecomment-355455454
+#if grep -qi raspbian /etc/*release; then
+#    ip link set dev wlan0 promisc off
+#fi
+{% else %}
+#ubuntu
+if [ -f /etc/NetworkManager/conf.d/wifi-manage.conf ]; then
+    sed -i -e "s|managed=1|managed=0|" /etc/NetworkManager/conf.d/wifi-manage.conf
+fi
+systemctl enable hostapd
+echo -e "\nPlease reboot to activate hostapd feature.\n"
+exit 0
+{% endif %}
+#wifi_up_down
+{% endif %}
+{% endif %}

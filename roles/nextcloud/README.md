@@ -1,6 +1,6 @@
 # Nextcloud README
 
-Students and teachers can store their documents, calendars, contacts and photos locally within [Nextcloud](https://nextcloud.com), which is much like having a (local) version of Dropbox or Google Drive on your very own [Internet-in-a-Box](http://internet-in-a-box.org).
+Students and teachers can store their documents, calendars, contacts and photos locally within [Nextcloud](https://nextcloud.com), which is much like having a (local) version of Dropbox or Google Drive on your very own [Internet-in-a-Box](https://internet-in-a-box.org).
 
 This Ansible playbook was derived from an earlier ownCloud playbook thanks to [Josh Dennis](https://github.com/floydianslips) in 2016/2017.
 
@@ -43,10 +43,14 @@ Useful PHP recommendations for these settings (while largely tailored to WordPre
 
 ## Using It
 
-Log in to Nextcloud at http://box/nextcloud, http://box.lan/nextcloud, http://172.18.96.1/nextcloud (or similar) using:
+Log in to Nextcloud at http://box/nextcloud, http://box.lan/nextcloud, http://10.10.10.10/nextcloud (or similar) using:
 
     Username: Admin
     Password: changeme
+
+## Known Issues
+
+Do not install the [Nextcloud News](https://apps.nextcloud.com/apps/news) app (an RSS/Atom Feed reader) if your OS is 32-bits: [#3069](https://github.com/iiab/iiab/issues/3069)
 
 ## Future Directions
 
@@ -56,4 +60,4 @@ Going forward, should Internet-in-a-Box consider integrating optimizations (or m
 - https://ownyourbits.com/2017/02/13/nextcloud-ready-raspberry-pi-image/
 - https://github.com/nextcloud/nextcloudpi
 
-Please [contact us](http://internet-in-a-box.org/pages/contributing.html) if you can help!
+Please [contact us](https://internet-in-a-box.org/contributing.html) if you can help!

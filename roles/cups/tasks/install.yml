@@ -49,7 +49,7 @@
   blockinfile:
     path: /etc/cups/cupsd.conf
     insertafter: '^<Location /admin>$'
-    block: |2    # Indent with 2 spaces, and surround block with 2 comment lines: "# BEGIN ANSIBLE MANAGED BLOCK", "# END ANSIBLE MANAGED BLOCK"
+    block: |2    # |n MEANS: Set the block's left edge n CHARACTERS TO THE RIGHT of *this line's* indentation -- where n is {1..9} -- instead of setting its left edge to the 1st non-blank line's indentation below.  Also surround block with comment lines: "# BEGIN ANSIBLE MANAGED BLOCK", "# END ANSIBLE MANAGED BLOCK"
         AuthType Default
         Require user @SYSTEM
 
@@ -76,14 +76,14 @@
     name: cups
     state: started
 
-# - name: "Authorize Nearby IP Addresses: Run 'cupsctl --remote-admin --share-printers --user-cancel-any' to enable http://192.168.0.x:631 AND http://172.18.96.1:631 (if cups_enabled) -- REPEATED USE OF 'cupsctl' COMMANDS CAN *DAMAGE* /etc/cups/cupsd.conf BY ADDING DUPLICATE LINES (AND WORSE!) -- SO PLEASE ALSO MANUALLY RUN 'sudo cupsctl' AND 'sudo cupsd -t' TO VERIFY /etc/cups/cupsd.conf"
+# - name: "Authorize Nearby IP Addresses: Run 'cupsctl --remote-admin --share-printers --user-cancel-any' to enable http://192.168.0.x:631 AND http://{{ lan_ip }}:631 (if cups_enabled) -- REPEATED USE OF 'cupsctl' COMMANDS CAN *DAMAGE* /etc/cups/cupsd.conf BY ADDING DUPLICATE LINES (AND WORSE!) -- SO PLEASE ALSO MANUALLY RUN 'sudo cupsctl' AND 'sudo cupsd -t' TO VERIFY /etc/cups/cupsd.conf"
 #   command: cupsctl --remote-admin --share-printers --user-cancel-any
 
 # 2021-07-11: BOTH FLAGS *CANNOT* BE USED TOGETHER -- CHOOSE ONE OR THE OTHER:
 # (1) '--remote-admin' AS ABOVE, OR (2) '--remote-any' AS BELOW.
 # (RUN 'cupsctl' WITHOUT PARAMETERS TO CONFIRM THIS!)
 
-- name: "Authorize All IP Addresses: Run 'cupsctl --remote-any --share-printers --user-cancel-any' to enable http://192.168.0.x:631 AND http://172.18.96.1:631 AND http://10.8.0.y:631 (if cups_enabled) -- REPEATED USE OF 'cupsctl' COMMANDS CAN *DAMAGE* /etc/cups/cupsd.conf BY ADDING DUPLICATE LINES (AND WORSE!) -- SO PLEASE ALSO MANUALLY RUN 'sudo cupsctl' AND 'sudo cupsd -t' TO VERIFY /etc/cups/cupsd.conf"
+- name: "Authorize All IP Addresses: Run 'cupsctl --remote-any --share-printers --user-cancel-any' to enable http://192.168.0.x:631 AND http://{{ lan_ip }}:631 AND http://10.8.0.y:631 (if cups_enabled) -- REPEATED USE OF 'cupsctl' COMMANDS CAN *DAMAGE* /etc/cups/cupsd.conf BY ADDING DUPLICATE LINES (AND WORSE!) -- SO PLEASE ALSO MANUALLY RUN 'sudo cupsctl' AND 'sudo cupsd -t' TO VERIFY /etc/cups/cupsd.conf"
   command: cupsctl --remote-any --share-printers --user-cancel-any
 
 # 2021-07-11: In theory 'cupsctl' stanzas could be put in enable-or-disable.yml
@@ -96,7 +96,7 @@
 #   command: cupsctl --no-remote-admin --no-remote-any --no-share-printers --no-user-cancel-any --no-debug-logging
 #   when: not cups_enabled
 
-# - name: "2021-07-14: EXPERIMENTALLY ADD DIRECTIVES TO /etc/cups/cupsd.conf followed by 'systemctl restart cups'.  As should no longer be nec thanks to NEW cups/templates/cups.conf for /etc/nginx/conf.d/cups.conf (followed by 'systemctl restart nginx').  Which FIXED URL'S LIKE: http://box/print, http://box.lan/print, http://192.168.0.x/print, http://172.18.96.1/print and http://10.8.0.x/print (WITH OR WITHOUT THE TRAILING SLASH!)  RECAP: (1) So be it that these 2 URL'S STILL DON'T WORK: http://box:631, http://box.lan:631 (due to CUPS' internal web server's overly stringent hostname checks, i.e. '400 Bad Request' and 'Request from \"localhost\" using invalid Host: field \"box[.lan]:631\".' in /var/log/cups/error_log) -- (2) While these 2 URL'S STILL DO WORK: http://localhost:631, http://127.0.0.1:631 -- (3) Whereas these 3 URL'S MAY WORK, DEPENDING ON 'cupsctl' COMMAND(S) ABOVE: http://192.168.0.x:631, http://172.18.96.1:631, http://10.8.0.x:631"
+# - name: "2021-07-14: EXPERIMENTALLY ADD DIRECTIVES TO /etc/cups/cupsd.conf followed by 'systemctl restart cups'.  As should no longer be nec thanks to NEW cups/templates/cups.conf for /etc/nginx/conf.d/cups.conf (followed by 'systemctl restart nginx').  Which FIXED URL'S LIKE: http://box/print, http://box.lan/print, http://192.168.0.x/print, http://{{ lan_ip }}/print and http://10.8.0.x/print (WITH OR WITHOUT THE TRAILING SLASH!)  RECAP: (1) So be it that these 2 URL'S STILL DON'T WORK: http://box:631, http://box.lan:631 (due to CUPS' internal web server's overly stringent hostname checks, i.e. '400 Bad Request' and 'Request from \"localhost\" using invalid Host: field \"box[.lan]:631\".' in /var/log/cups/error_log) -- (2) While these 2 URL'S STILL DO WORK: http://localhost:631, http://127.0.0.1:631 -- (3) Whereas these 3 URL'S MAY WORK, DEPENDING ON 'cupsctl' COMMAND(S) ABOVE: http://192.168.0.x:631, http://{{ lan_ip }}:631, http://10.8.0.x:631"
 #   lineinfile:
 #     path: /etc/cups/cupsd.conf
 #     line: "{{ item }}"
@@ -105,7 +105,7 @@
 #     - "HostNameLookups On"    # More False Leads: https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=530027
 #     - "ServerAlias *"
 #     - "#ServerName {{ iiab_hostname }}.{{ iiab_domain }}"    # box.lan
-#     - "#Listen {{ lan_ip }}:631"    # 172.18.96.1
+#     - "#Listen {{ lan_ip }}:631"    # e.g. 10.10.10.10
 #     - "#Listen 127.0.0.1:631"
 #     - "#Listen 0.0.0.0:631"
 #     - "#Listen *:631"

@@ -1,0 +1,44 @@
+#!/bin/bash
+
+# Lists IIAB Apps set to install BUT not yet installed (according to /etc/iiab/iiab_state.yml)
+
+iiab_var_value() {
+    v1=$(grep "^$1:\s" /opt/iiab/iiab/vars/default_vars.yml | tail -1 | sed "s/^$1:\s\+//; s/#.*//; s/\s*$//; s/^\(['\"]\)\(.*\)\1$/\2/")
+    v2=$(grep "^$1:\s" /etc/iiab/local_vars.yml | tail -1 | sed "s/^$1:\s\+//; s/#.*//; s/\s*$//; s/^\(['\"]\)\(.*\)\1$/\2/")
+    [[ $v2 != "" ]] && echo $v2 || echo $v1    # [ "$v2" ] ALSO WORKS
+}
+
+# https://askubuntu.com/questions/1250974/user-root-cant-write-to-file-in-tmp-owned-by-someone-else-in-20-04-but-can-in
+# https://unix.stackexchange.com/questions/503111/group-permissions-for-root-not-working-in-tmp
+[[ $(id -un) == "root" ]] &&
+    rm -f /tmp/iiab-apps-list /tmp/iiab-apps-to-be-installed
+
+# 2022-06-18: 40 apps (list not quite complete)
+#grep -l _installed: /opt/iiab/iiab/roles/*/tasks/install.yml | cut -d/ -f6 > /tmp/iiab-apps-list
+
+# 2022-06-18: 46 apps (list incorrect) -- adds these 6: iiab_admin, minetest, network (HAS NO _installed VAR), pylibs, www_base, www_options
+#grep -l _installed: /opt/iiab/iiab/roles/*/tasks/* | cut -d/ -f6 | sort | uniq > /tmp/iiab-apps-list
+
+# 2022-06-18: 50 apps (list long but ok!) -- adds these 10: dansguardian, dhcpd, iiab_admin, minetest, named, pylibs, squid, wondershaper, www_base, www_options
+grep -hro '[A-Za-z_][A-Za-z_]*_installed: True' --exclude-dir=0-DEPRECATED-ROLES /opt/iiab/iiab/roles | sed 's/_installed: True$//' | sort | uniq > /tmp/iiab-apps-list
+
+# Non-root CANNOT rm files from /tmp, but CAN write to them (unlike root!!)
+# This ALSO creates the file (useful when "Apps2B" == 0, for iiab-summary etc)
+truncate -s 0 /tmp/iiab-apps-to-be-installed
+
+# So other (non-root) users CAN later write to these, even if they CAN'T chmod!
+chmod 777 /tmp/iiab-apps-list /tmp/iiab-apps-to-be-installed 2>/dev/null
+
+while read app; do
+    if [[ $app == "calibre-web" ]]; then
+        app=calibreweb
+    elif [[ $app == "osm-vector-maps" ]]; then
+        app=osm_vector_maps
+    fi
+
+    # echo ${app}_install: $(iiab_var_value ${app}_install)
+
+    if [[ $(iiab_var_value ${app}_install) =~ ^[Tt]rue$ ]] && ! grep -q "${app}_installed: True" /etc/iiab/iiab_state.yml; then
+        echo $app | tee -a /tmp/iiab-apps-to-be-installed
+    fi
+done < /tmp/iiab-apps-list

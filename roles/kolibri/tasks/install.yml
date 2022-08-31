@@ -35,8 +35,57 @@
   apt:
     deb: "{{ kolibri_deb_url }}"    # https://learningequality.org/r/kolibri-deb-latest
   environment:
-    KOLIBRI_HOME: "{{ kolibri_home }}"    # these don't do a thing for now but
+    KOLIBRI_HOME: "{{ kolibri_home }}"    # These don't do a thing for now but
     KOLIBRI_USER: "{{ kolibri_user }}"    # both can't hurt & Might Help Later
+  when: kolibri_deb_url is defined
+
+- block:    # ELSE...
+
+  # https://kolibri.readthedocs.io/en/latest/install/ubuntu-debian.html says:
+  # "When you use the PPA installation method, upgrades to newer versions
+  # will be automatic, provided there is internet access available."
+
+  - name: Add Kolibri PPA repo 'ppa:learningequality/kolibri' (if is_ubuntu and not is_linuxmint)
+    apt_repository:
+      repo: ppa:learningequality/kolibri
+    when: is_ubuntu and not is_linuxmint
+
+  # 2022-08-19: 'add-apt-repository ppa:learningequality/kolibri' works at CLI on
+  # Mint 21 (creating /etc/apt/sources.list.d/learningequality-kolibri-jammy.list)
+  # BUT equivalent Ansible command (STANZA ABOVE) failed with error...
+  # "Failed to update apt cache: E:The repository 'http://ppa.launchpad.net/learningequality/kolibri/ubuntu vanessa Release' does not have a Release file."
+  # ...so for now we special case Mint, similar to Debian (BOTH STANZAS BELOW!)
+
+  # 2022-08-19: https://github.com/learningequality/kolibri/issues/9647 also asks
+  # about the warning below, arising no matter if codename is 'focal' or 'jammy'
+  # with Kolibri 0.15.6 on Mint 21 -- if you run '/usr/bin/kolibri --version':
+  #
+  # /usr/lib/python3/dist-packages/pkg_resources/__init__.py:116: PkgResourcesDeprecationWarning: 0.1.43ubuntu1 is an invalid version and will not be supported in a future release
+  # warnings.warn(
+
+  # 2022-08-19: 'apt-key list' & 'apt-key del 3194 DD81' are useful if you also
+  # want to clear out Kolibri's key from the DEPRECATED /etc/apt/trusted.gpg
+
+  - name: Add Kolibri PPA repo 'ppa:learningequality/kolibri' with codename 'jammy' (if is_linuxmint_21)
+    apt_repository:
+      repo: ppa:learningequality/kolibri
+      codename: jammy    # CONSOLIDATE THIS STANZA WITH UBUNTU ABOVE IN FUTURE?
+    when: is_linuxmint_21
+
+  - name: Add Kolibri PPA repo 'ppa:learningequality/kolibri' with codename 'focal' (if is_debian or is_linuxmint_20)
+    apt_repository:
+      repo: ppa:learningequality/kolibri
+      codename: focal    # UPDATE THIS TO 'jammy' AFTER "RasPiOS Bookworm" (based on Debian 12) IS RELEASED! (ETA Q3 2023)
+    when: is_debian or is_linuxmint_20
+
+  - name: apt install kolibri (populates {{ kolibri_home }}, migrates database)    # i.e. /library/kolibri
+    apt:
+      name: kolibri
+    environment:
+      KOLIBRI_HOME: "{{ kolibri_home }}"    # These don't do a thing for now but
+      KOLIBRI_USER: "{{ kolibri_user }}"    # both can't hurt & Might Help Later
+
+  when: kolibri_deb_url is undefined
 
 - name: 'Install from template: /etc/systemd/system/kolibri.service'
   template:
@@ -52,20 +101,20 @@
 
 # 2019-10-01: Should no longer be nec, thanks to /etc/kolibri/daemon.conf
 #             containing KOLIBRI_HOME="/library/kolibri" (above)
-#- name: Run Kolibri migrations to begin populating {{ kolibri_home }}    # i.e. /library/kolibri
-#  shell: export KOLIBRI_HOME="{{ kolibri_home }}" && "{{ kolibri_exec_path }}" manage migrate
-#  ignore_errors: yes
-#  become: yes
-#  become_user: "{{ kolibri_user }}"
-#  when: kolibri_provision
+# - name: Run Kolibri migrations to begin populating {{ kolibri_home }}    # i.e. /library/kolibri
+#   shell: export KOLIBRI_HOME="{{ kolibri_home }}" && "{{ kolibri_exec_path }}" manage migrate
+#   ignore_errors: yes
+#   become: yes
+#   become_user: "{{ kolibri_user }}"
+#   when: kolibri_provision
 
 # 2020-01-05: Deprecated per https://github.com/iiab/iiab/issues/2103
-#- name: Set Kolibri default language ({{ kolibri_language }})
-#  shell: export KOLIBRI_HOME="{{ kolibri_home }}" && "{{ kolibri_exec_path }}" language setdefault "{{ kolibri_language }}"
-#  ignore_errors: yes
-#  become: yes
-#  become_user: "{{ kolibri_user }}"
-#  when: kolibri_provision
+# - name: Set Kolibri default language ({{ kolibri_language }})
+#   shell: export KOLIBRI_HOME="{{ kolibri_home }}" && "{{ kolibri_exec_path }}" language setdefault "{{ kolibri_language }}"
+#   ignore_errors: yes
+#   become: yes
+#   become_user: "{{ kolibri_user }}"
+#   when: kolibri_provision
 
 - name: 'Provision Kolibri, while setting: facility name, admin acnt / password, preset type, and language'
   shell: >
@@ -91,9 +140,9 @@
 # 2019-10-07: Moved to roles/httpd/tasks/main.yml
 # 2019-09-29: roles/kiwix/tasks/kiwix_install.yml installs 4 Apache modules
 # for similar purposes (not all nec?)  Only 1 (proxy_http) is needed here.
-#- name: Enable Apache module proxy_http for http://box{{ kolibri_url }}    # i.e. http://box/kolibri
-#  apache2_module:
-#    name: proxy_http
+# - name: Enable Apache module proxy_http for http://box{{ kolibri_url }}    # i.e. http://box/kolibri
+#   apache2_module:
+#     name: proxy_http
 
 
 # RECORD Kolibri AS INSTALLED
