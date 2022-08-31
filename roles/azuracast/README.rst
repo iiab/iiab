@@ -15,7 +15,7 @@ Requirements
 
 AzuraCast recommends `2-to-4 GB RAM minimum <https://docs.azuracast.com/en/getting-started/requirements#system-requirements>`_.
 
-As of 2022-08-31, AzuraCast should run on Ubuntu 22.04 and 64-bit Raspberry Pi OS: `#1772 <https://github.com/iiab/iiab/issues/1772>`_, `AzuraCast/AzuraCast#332 <https://github.com/AzuraCast/AzuraCast/issues/332>`_, `PR #2946 <https://github.com/iiab/iiab/pull/2946>`_
+As of 2022-08-31, AzuraCast should run on Ubuntu 22.04 and **64-bit** Raspberry Pi OS: `#1772 <https://github.com/iiab/iiab/issues/1772>`_, `AzuraCast/AzuraCast#332 <https://github.com/AzuraCast/AzuraCast/issues/332>`_, `PR #2946 <https://github.com/iiab/iiab/pull/2946>`_
 
 Other Linux distributions may also work, at your own risk, especially if Docker runs smoothly.
 
