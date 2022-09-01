@@ -44,11 +44,30 @@
   # https://kolibri.readthedocs.io/en/latest/install/ubuntu-debian.html says:
   # "When you use the PPA installation method, upgrades to newer versions
   # will be automatic, provided there is internet access available."
+  #
+  # IN REALITY: apt upgrading Kolibri is risky, as 3 pink/blue screens prompt
+  # PPL WHO DON'T KNOW TO TYPE IN things like Linux username 'kolibri' :/ #3356
 
-  - name: Add Kolibri PPA repo 'ppa:learningequality/kolibri' (if is_ubuntu and not is_linuxmint)
+  # 2022-08-31: keyring /etc/apt/trusted.gpg DEPRECATED as detailed on #3343
+  - name: Download Kolibri's apt key to /usr/share/keyrings/learningequality-kolibri.gpg
+    shell: |
+      gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys DC5BAA93F9E4AE4F0411F97C74F88ADB3194DD81
+      gpg --yes --output /usr/share/keyrings/learningequality-kolibri.gpg --export DC5BAA93F9E4AE4F0411F97C74F88ADB3194DD81
+
+  - name: Add signed Kolibri PPA 'jammy' (if Ubuntu 22.04 or 22.10 or Mint 21 or Debian 12)
     apt_repository:
-      repo: ppa:learningequality/kolibri
-    when: is_ubuntu and not is_linuxmint
+      repo: "deb [signed-by=/usr/share/keyrings/learningequality-kolibri.gpg] http://ppa.launchpad.net/learningequality/kolibri/ubuntu jammy main"
+    when: is_ubuntu_2204 or is_ubuntu_2210 or is_debian_12    # MINT 21 COVERED BY is_ubuntu_2204
+
+  - name: Add signed Kolibri PPA 'focal' (if other/older OS's)
+    apt_repository:
+      repo: "deb [signed-by=/usr/share/keyrings/learningequality-kolibri.gpg] http://ppa.launchpad.net/learningequality/kolibri/ubuntu focal main"
+    when: not (is_ubuntu_2204 or is_ubuntu_2210 or is_debian_12)
+
+  # - name: Add Kolibri PPA repo 'ppa:learningequality/kolibri' (if is_ubuntu and not is_linuxmint)
+  #   apt_repository:
+  #     repo: ppa:learningequality/kolibri
+  #   when: is_ubuntu and not is_linuxmint
 
   # 2022-08-19: 'add-apt-repository ppa:learningequality/kolibri' works at CLI on
   # Mint 21 (creating /etc/apt/sources.list.d/learningequality-kolibri-jammy.list)
@@ -66,17 +85,17 @@
   # 2022-08-19: 'apt-key list' & 'apt-key del 3194 DD81' are useful if you also
   # want to clear out Kolibri's key from the DEPRECATED /etc/apt/trusted.gpg
 
-  - name: Add Kolibri PPA repo 'ppa:learningequality/kolibri' with codename 'jammy' (if is_linuxmint_21)
-    apt_repository:
-      repo: ppa:learningequality/kolibri
-      codename: jammy    # CONSOLIDATE THIS SPECIAL CASE STANZA WITH UBUNTU ABOVE IN FUTURE?
-    when: is_linuxmint_21
+  # - name: Add Kolibri PPA repo 'ppa:learningequality/kolibri' with codename 'jammy' (if is_linuxmint_21)
+  #   apt_repository:
+  #     repo: ppa:learningequality/kolibri
+  #     codename: jammy    # CONSOLIDATE THIS SPECIAL CASE STANZA WITH UBUNTU ABOVE IN FUTURE?
+  #   when: is_linuxmint_21
 
-  - name: Add Kolibri PPA repo 'ppa:learningequality/kolibri' with codename 'focal' (if is_debian or is_linuxmint_20)
-    apt_repository:
-      repo: ppa:learningequality/kolibri
-      codename: focal    # UPDATE THIS TO 'jammy' AFTER "RasPiOS Bookworm" (based on Debian 12) IS RELEASED! (ETA Q3 2023)
-    when: is_debian or is_linuxmint_20
+  # - name: Add Kolibri PPA repo 'ppa:learningequality/kolibri' with codename 'focal' (if is_debian or is_linuxmint_20)
+  #   apt_repository:
+  #     repo: ppa:learningequality/kolibri
+  #     codename: focal    # UPDATE THIS TO 'jammy' AFTER "RasPiOS Bookworm" (based on Debian 12) IS RELEASED! (ETA Q3 2023)
+  #   when: is_debian or is_linuxmint_20
 
   - name: apt install kolibri (populates {{ kolibri_home }}, migrates database)    # i.e. /library/kolibri
     apt:
