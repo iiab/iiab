@@ -30,7 +30,7 @@ Using It
 * That console site will prompt you to complete AzuraCast's initial setup: user accounts, managing stations, radio streams, etc.
 * Finally, check out some `how-to videos <https://www.youtube.com/watch?v=b1Rxlu5P804>`_ to learn to manage your own radio station!
 
-NOTE: When creating a station using AzuraCast's console, its default streaming ports for ``station`` and ``autodj`` need to be in the `port range 12000-12100 <https://github.com/iiab/iiab/wiki/IIAB-Networking#list-of-ports--services>`_ (port 12443 may also be required!)
+NOTE: When creating a station using AzuraCast's console, its default streaming ports for ``station`` and ``autodj`` need to be in the `port range 10000-10499 <https://github.com/iiab/iiab/wiki/IIAB-Networking#list-of-ports--services>`_ (ports 12080 and 12443 may also be required!)
 
 AzuraCast Docs
 --------------
