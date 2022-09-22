@@ -1,0 +1,46 @@
+#!/bin/bash -e
+# Running from a git repo
+
+if [ ! -f /etc/iiab/local_vars.yml ]; then
+    echo -e "\nEXITING: IIAB is not already installed so can't upgrade\n" >&2
+    exit 1
+fi
+
+echo -e "\nWARNING: Upgrades are not guaranteed to be compatible with previous installs\n" >&2
+echo -e "\Please make sure you know what you are doing.\n" >&2
+echo -e "\Press CTL-C to STOP or <enter> to continue.\n" >&2
+read ans < /dev/tty
+
+# check that latest version supports current OS
+# N.B. install via adm cons assumes is on supported OS
+
+cd /opt/iiab
+rm -rf iiab-latest
+git clone https://github.com/iiab/iiab --depth 1 iiab-latest
+cd iiab-latest
+scripts/local_facts.fact; rc=$?
+
+if [ $rc -eq 0 ]; then # OS is supported
+  cd /opt/iiab
+  if [ ! -d iiab-installed ]; then
+    mv iiab iiab-installed
+  else
+    rm -rf iiab # in case run more than once
+  fi
+
+  mv iiab-latest iiab
+  cd iiab
+  cp scripts/local_facts.fact /etc/ansible/facts.d/local_facts.fact
+  echo -e "\nIIAB has been Upgraded\n"
+else
+  echo -e "\nYour OS is not supported by the latest IIAB\n"
+  echo -e "Unable to Upgrade IIAB\n"
+fi
+
+echo -e "\Press CTL-C to STOP or <enter> to upgrade Admin Console.\n" >&2
+read ans < /dev/tty
+
+cd /opt/iiab/iiab-admin-console
+git pull
+./install
+echo -e "IIAB Admin Console has been Upgraded\n\n"
