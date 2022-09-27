@@ -92,7 +92,6 @@
       # this was recently added to https://repo.mongodb.org/apt/debian/dists/
       repo: deb https://repo.mongodb.org/apt/debian bullseye/mongodb-org/{{ mongodb_64bit_version }} main
       #repo: deb https://repo.mongodb.org/apt/debian {{ ansible_distribution_release }}/mongodb-org/4.4 main
-      state: present
       filename: mongodb-org
     when: is_debian and ansible_architecture == "x86_64"
 
@@ -100,22 +99,47 @@
   - name: Otherwise install mongodb-org's Ubuntu focal source/repo [ arch=amd64,arm64 ] for MongoDB version {{ mongodb_64bit_version }}
     apt_repository:
       repo: deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu focal/mongodb-org/{{ mongodb_64bit_version }} multiverse
-      state: present
       filename: mongodb-org
     when: not (is_debian and ansible_architecture == "x86_64")
+
+  # 2022-09-27: Workaround to install MongoDB on Ubuntu 22.04+, which include
+  # libssl3 instead of libssl1.1 -- https://github.com/iiab/iiab/issues/3190
+  # https://www.mongodb.com/community/forums/t/installing-mongodb-over-ubuntu-22-04/159931
+  # https://askubuntu.com/questions/1403619/mongodb-install-fails-on-ubuntu-22-04-depends-on-libssl1-1-but-it-is-not-insta/1403683#1403683
+  # echo "deb http://security.ubuntu.com/ubuntu focal-security main" | sudo tee /etc/apt/sources.list.d/focal-security.list
+  # sudo apt-get update
+  # sudo apt-get install libssl1.1
+  # rm /etc/apt/sources.list.d/focal-security.list
+
+  - name: Install source/repo "deb http://security.ubuntu.com/ubuntu focal-security main" at /etc/apt/sources.list.d/security_ubuntu_com_ubuntu.list if Ubuntu 22.04+
+    apt_repository:
+      repo: deb http://security.ubuntu.com/ubuntu focal-security main
+      #filename: focal-security    # If filename focal-security.list is preferred
+    when: is_ubuntu and os_ver is version('ubuntu-2204', '>=')
+
+  - name: Install libssl1.1 if Ubuntu 22.04+ (required by MongoDB below)
+    package:
+      name: libssl1.1
+      state: present
+    when: is_ubuntu and os_ver is version('ubuntu-2204', '>=')
+
+  - name: Remove source/repo "deb http://security.ubuntu.com/ubuntu focal-security main" at /etc/apt/sources.list.d/security_ubuntu_com_ubuntu.list if Ubuntu 22.04+
+    apt_repository:
+      repo: deb http://security.ubuntu.com/ubuntu focal-security main
+      state: absent
+      #filename: focal-security    # 100% IGNORED during repo deletion
+    when: is_ubuntu and os_ver is version('ubuntu-2204', '>=')
 
   # # Debian 10 aarch64 might work below but is blocked in main.yml
   # - name: Use mongodb-org's Ubuntu focal repo for RasPiOS-aarch64
   #   apt_repository:
   #     repo: deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu focal/mongodb-org/5.0 multiverse
-  #     state: present
   #     filename: mongodb-org
   #   when: is_raspbian and ansible_architecture == "aarch64"
 
   # - name: Use mongodb-org's Ubuntu focal repo for Linux Mint - 64bit only
   #   apt_repository:
   #     repo: deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu focal/mongodb-org/5.0 multiverse
-  #     state: present
   #     filename: mongodb-org
   #   when: is_linuxmint
 
@@ -126,7 +150,6 @@
   #     # so other Ubuntu's like groovy 20.10 need to revert to recent LTS repo:
   #     repo: deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu focal/mongodb-org/5.0 multiverse
   #     #repo: deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu {{ ansible_distribution_release }}/mongodb-org/4.4 multiverse
-  #     state: present
   #     filename: mongodb-org
   #   when: is_ubuntu and not is_linuxmint
 
