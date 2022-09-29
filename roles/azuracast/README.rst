@@ -22,6 +22,8 @@ As of 2022-08-31, AzuraCast should run on Ubuntu 22.04 and **64-bit** Raspberry 
 
 Other Linux distributions may also work, at your own risk, especially if Docker runs smoothly.
 
+NOTE: AzuraCast was designed to be installed *just once* on a fresh OS.  So ``./runrole --reinstall azuracast`` is not supported in general.  However, if you accidentally damage your AzuraCast software, IIAB has posted `technical tips <./tasks/install.yml>`_ *(use at your own risk!)* in case of emergency.
+
 Using It
 --------
 
