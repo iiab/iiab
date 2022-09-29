@@ -37,5 +37,9 @@ AzuraCast Docs
 
 - https://docs.azuracast.com
 - https://docs.azuracast.com/en/getting-started/installation/post-installation-steps
-- https://docs.azuracast.com/en/getting-started/updates
+- https://docs.azuracast.com/en/getting-started/settings
+- https://docs.azuracast.com/en/getting-started/updates (can *DAMAGE* AzuraCast as of 2022-09-28)
 - https://docs.azuracast.com/en/user-guide/streaming-software
+- https://docs.azuracast.com/en/user-guide/troubleshooting
+- https://docs.azuracast.com/en/user-guide/logs
+- https://docs.azuracast.com/en/administration/docker
