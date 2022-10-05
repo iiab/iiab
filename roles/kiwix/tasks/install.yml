@@ -6,25 +6,34 @@
   when: kiwix_arch == "unsupported"
 
 
-# 1. PUT IN PLACE: /opt/iiab/downloads/kiwix-tools_linux-*.tar.gz, essential dirs, and test.zim if nec (library.xml is created later, by enable-or-disable.yml)
+# 1. PUT IN PLACE: /opt/iiab/downloads/kiwix-tools_linux-*.tar.gz, move /opt/iiab/kiwix/bin aside if nec, create essential dirs, and test.zim if nec (library.xml is created later, by enable-or-disable.yml)
 
 # 2022-10-04: get_url might be removed in future (unarchive below can handle
 # everything!)  Conversely: (1) unarchive doesn't support timeout (2) one day
 # /opt/iiab/downloads might have practical value beyond hoarding (unlikely!)
-- name: Download {{ kiwix_base_url }}{{ kiwix_tar_gz }} to /opt/iiab/downloads
+- name: Download {{ kiwix_base_url }}{{ kiwix_tar_gz }} into /opt/iiab/downloads (ACTUAL filename should include kiwix-tools version, or nightly build date)
   get_url:
     url: "{{ kiwix_base_url }}{{ kiwix_tar_gz }}"    # e.g. https://download.kiwix.org/release/kiwix-tools/ + kiwix-tools_linux-x86_64.tar.gz
     dest: "{{ downloads_dir }}"    # /opt/iiab/downloads
-    #force: yes    # Implied b/c dest is a dir! (to recover from incomplete downloads, etc)
+    #force: yes    # Already implied b/c dest is a dir! (to recover from incomplete downloads, etc)
     timeout: "{{ download_timeout }}"
-  register: kiwix_dl    # Kiwix URL redirects to a longer filename, including the actual kiwix-tools version (placed in kiwix_dl.dest with its path, for unarchive ~28 lines below)
+  register: kiwix_dl    # PATH /opt/iiab/downloads + ACTUAL filename put in kiwix_dl.dest, for unarchive ~28 lines below
+
+- name: Does {{ kiwix_path }}/bin already exist? (as a directory, symlink or file)
+  stat:
+    path: "{{ kiwix_path }}/bin"    # /opt/iiab/kiwix
+  register: kiwix_bin
+
+- name: If so, move {{ kiwix_path }}/bin to {{ kiwix_path }}/bin.DATE_TIME_TZ
+  shell: "mv {{ kiwix_path }}/bin {{ kiwix_path }}/bin.$(date +%F_%T_%Z)"
+  when: kiwix_bin.stat.exists
 
 - name: "Create dirs, including parent dirs: {{ kiwix_path }}/bin (executables), {{ iiab_zim_path }}/content (ZIM files), {{ iiab_zim_path }}/index (legacy indexes) (by default 0755)"
   file:
     path: "{{ item }}"
     state: directory
   with_items:
-    - "{{ kiwix_path }}/bin"           # /opt/iiab/kiwix
+    - "{{ kiwix_path }}/bin"
     - "{{ iiab_zim_path }}/content"    # /library/zims
     - "{{ iiab_zim_path }}/index"
 
@@ -47,7 +56,7 @@
 - name: Unarchive {{ kiwix_dl.dest }} to {{ kiwix_path }}/bin -- untar with '--strip-components=1' to chop tarball's top-level dir from path
   unarchive:
     src: "{{ kiwix_dl.dest }}"    # See ~28 lines above, e.g. /opt/iiab/downloads/kiwix-tools_linux-x86_64-3.3.0-1.tar.gz
-    dest: "{{ kiwix_path }}/bin"    # /opt/iiab/kiwix/bin
+    dest: "{{ kiwix_path }}/bin"
     extra_opts: --strip-components=1
 
 
