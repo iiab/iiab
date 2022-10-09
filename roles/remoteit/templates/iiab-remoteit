@@ -55,12 +55,12 @@ if [ -f /etc/remoteit/config.json ]; then
     read -n 1 -r ans < /dev/tty    # Prompt for a single character
     echo; echo
 
-    if [[ $ans = "n" || $ans = "N" ]]; then    # Nearly the same as Lines 142-189
+    if [[ $ans =~ ^[nN]$ ]]; then    # Nearly the same as Lines 140-185
         echo -e "Let's try to enable remote.it, with your existing /etc/remoteit/config.json...\n"
 
-        systemctl enable connectd
-        systemctl restart connectd
-        systemctl enable schannel
+        /usr/share/remoteit/refresh.sh    # Just like connectd systemd service
+        # prior to 4.15.2 (its new remoteit-refresh.service is insufficient, as
+        # it's not installed initially, by their curl script install_agent.sh)
 
         if grep -q '^remoteit_enabled:' /etc/iiab/local_vars.yml; then
             sed -i "s/^remoteit_enabled:.*/remoteit_enabled: True/" /etc/iiab/local_vars.yml
@@ -88,7 +88,7 @@ echo -en "\e[1m\nOptionally purge + install latest remote.it Device Package? [y/
 read -n 1 -r ans < /dev/tty    # Prompt for a single character
 echo; echo
 
-if [[ $ans = "y" || $ans = "Y" ]]; then
+if [[ $ans =~ ^[yY]$ ]]; then
     # Full apt path avoids problematic /usr/local/bin/apt on Linux Mint
     /usr/bin/apt -y purge "remoteit*" || true
 
@@ -123,9 +123,7 @@ else
     # regardless whether /etc/remoteit/registration exists and what it contains,
     # and regardless whether /etc/remoteit/config.json contains a claim code.
 
-    echo -e "In a few seconds, all 3 {connectd, schannel, remoteit@...} should be enabled!\n"
-
-    systemctl stop connectd    # "Safer" (though it's generally exited already!)
+    echo -e "In a few seconds, both services {schannel, remoteit@...} should be enabled!\n"
 
     #if [ ! -f /etc/remoteit/registration ] && [ -f /etc/remoteit/config.json ]; then
     if [ -f /etc/remoteit/config.json ]; then
@@ -139,20 +137,18 @@ else
         echo -e "/etc/remoteit/config.json moved aside, for fresh device registration.\n"
     fi
 
-    systemctl start connectd    # Registration logic (use license key or
-    # generate claim code) then kickstart 2 "child" services below.
-    # FYI running /usr/share/remoteit/refresh.sh appears to do the exact same
-    # thing (as bouncing service connectd).
+    /usr/share/remoteit/refresh.sh    # Registration logic (use license key or
+    # generate claim code) then kickstart 2 "child" services below.  In the
+    # past, we bounced the connectd service which did the same, and we enabled
+    # services {connectd, schannel} like enable-or-disable.yml used to do too.
 
-    systemctl enable connectd    # 2 enable lines, like enable-or-disable.yml
+    # schannel.service - Remote tcp command service
+    # remoteit@80:00:01:7F:7E:00:56:36.service - Remote tcp connection service
 
-    # schannel = "Remote tcp command service" started by connectd above if nec
-    systemctl enable schannel    # 2 enable lines, like enable-or-disable.yml
-
-    # "Remote tcp connection service" appears a few seconds after connectd is
-    # started above.  Auto-enabled when spawned by connectd, SO NOT NEC HERE:
+    # Both above appear a few seconds after refresh.sh is run, MANUAL NOT NEC:
     # systemctl enable $(ls /etc/systemd/system/multi-user.target.wants/ | grep remoteit@*)
-    # These systemd service names e.g. remoteit@80:00:01:7F:7E:00:56:36.service
+
+    # FYI systemd service names like remoteit@80:00:01:7F:7E:00:56:36.service
     # change, e.g. when a new claim code is generated, and more arise when the
     # IIAB device is registered to a remote.it account (#3166), etc.
 fi

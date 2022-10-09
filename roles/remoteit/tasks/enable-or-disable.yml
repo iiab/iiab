@@ -17,33 +17,48 @@
   when: remoteit_license_key is defined
 
 
-# 2022-04-07 FYI: connectd (below) never deletes /etc/remoteit/registration
+- name: Does empty file /etc/remoteit/registration exist?
+  stat:
+    path: /etc/remoteit/registration
+  register: remoteit_reg
 
-- name: Enable & Restart remote.it "parent" service connectd, which exits after spawning 2 "child" services/daemons below
-  systemd:
-    name: connectd
-    daemon_reload: yes
-    enabled: yes
-    state: restarted
+- name: Remove empty file /etc/remoteit/registration if remoteit_enabled, so claim code can be generated
+  file:
+    path: /etc/remoteit/registration
+    state: absent
+  when: remoteit_enabled and remoteit_reg.stat.exists and remoteit_reg.stat.size == 0
+
+
+# 2022-10-09: refresh.sh is equivalent to their old connectd "parent" systemd
+# service, that they removed from 4.15.2 device packages on 2022-09-07.
+# (Either way, the job below never deletes /etc/remoteit/registration)
+
+- name: 'Run /usr/share/remoteit/refresh.sh to put a claim code in /etc/remoteit/config.json (if you don''t already have a license key in /etc/remoteit/registration) -- FYI this spawns 2 "child" services/daemons: schannel & e.g. remoteit@80:00:01:7F:7E:00:56:36.service'
+  command: /usr/share/remoteit/refresh.sh
   when: remoteit_enabled
 
-- name: Enable remote.it daemon schannel ("Remote tcp command service") -- try to avoid contention with connectd which auto-spawns it as nec (just above)
+# - name: Enable & Restart remote.it "parent" service connectd, which exits after spawning 2 "child" services/daemons below
+#   systemd:
+#     name: connectd
+#     daemon_reload: yes
+#     enabled: yes
+#     state: restarted
+#   when: remoteit_enabled
+
+# 2022-10-09: refresh.sh (above) now takes care of this too
+# - name: Enable remote.it daemon schannel ("Remote tcp command service") -- try to avoid contention with connectd which auto-spawns it as nec (just above)
+#   systemd:
+#     name: schannel
+#     enabled: yes
+#     state: started
+#   when: remoteit_enabled
+
+
+- name: Disable & Stop remote.it service schannel
   systemd:
     name: schannel
-    enabled: yes
-    state: started
-  when: remoteit_enabled
-
-
-- name: Disable & Stop remote.it services {connectd, schannel}
-  systemd:
-    name: "{{ item }}"
     enabled: no
     state: stopped
-  with_items:
-    - connectd
-    - schannel
-  ignore_errors: yes
   when: not remoteit_enabled
 
 - name: Stop & Disable "Remote tcp connection services" remoteit@* found in /etc/systemd/system/multi-user.target.wants/ e.g. remoteit@80:00:01:7F:7E:00:56:36.service
