@@ -102,9 +102,11 @@
       filename: mongodb-org
     when: not (is_debian and ansible_architecture == "x86_64")
 
-  # 2022-09-27: Workaround to install MongoDB on Ubuntu 22.04+, which include
-  # libssl3 instead of libssl1.1 -- https://github.com/iiab/iiab/issues/3190
-  # https://www.mongodb.com/community/forums/t/installing-mongodb-over-ubuntu-22-04/159931
+  # 2022-10-19: Force-install MongoDB on Ubuntu 22.04+, Mint 21 & Debian 12;
+  # as each includes libssl3 not libssl1.1 (#3190).  LATER REMOVE ALL 5 STANZAS
+  # BELOW, IF/WHEN MongoDB ONE DAY FINALLY SUPPORTS libssl3 ?  (MongoDB 6.2 fix
+  # may be backported to 6.0, according to 2022-09-29 "official" gossip here...)
+  # https://www.mongodb.com/community/forums/t/installing-mongodb-over-ubuntu-22-04/159931/58
   # https://askubuntu.com/questions/1403619/mongodb-install-fails-on-ubuntu-22-04-depends-on-libssl1-1-but-it-is-not-insta/1403683#1403683
   # echo "deb http://security.ubuntu.com/ubuntu focal-security main" | sudo tee /etc/apt/sources.list.d/focal-security.list
   # sudo apt-get update
@@ -117,11 +119,24 @@
       #filename: focal-security    # If filename focal-security.list is preferred
     when: is_ubuntu and os_ver is version('ubuntu-2204', '>=') or is_linuxmint_21
 
-  - name: Install libssl1.1 if Ubuntu 22.04+  or Mint 21 (required by MongoDB below)
+  - name: Install source/repo "deb http://security.debian.org/debian-security bullseye-security main" at /etc/apt/sources.list.d/security_debian_org_debian_security.list if Debian 12
+    apt_repository:
+      repo: deb http://security.debian.org/debian-security bullseye-security main
+      #repo: deb https://deb.debian.org/debian-security bullseye-security main    # New way, likely equivalent
+    when: is_debian_12
+
+  - name: Install libssl1.1 if Ubuntu 22.04+ or Mint 21 or Debian 12 (required by MongoDB below)
     package:
       name: libssl1.1
       state: present
-    when: is_ubuntu and os_ver is version('ubuntu-2204', '>=') or is_linuxmint_21
+    when: is_ubuntu and os_ver is version('ubuntu-2204', '>=') or is_linuxmint_21 or is_debian_12
+
+  - name: Remove source/repo "deb http://security.debian.org/debian-security bullseye-security main" at /etc/apt/sources.list.d/security_debian_org_debian_security.list if Debian 12
+    apt_repository:
+      repo: deb http://security.debian.org/debian-security bullseye-security main
+      #repo: deb https://deb.debian.org/debian-security bullseye-security main    # New way, likely equivalent
+      state: absent
+    when: is_debian_12
 
   - name: Remove source/repo "deb http://security.ubuntu.com/ubuntu focal-security main" at /etc/apt/sources.list.d/security_ubuntu_com_ubuntu.list if Ubuntu 22.04+ or Mint 21
     apt_repository:
