@@ -38,6 +38,7 @@ Useful PHP recommendations for these settings (while largely tailored to WordPre
 
 (4) If you're running Nextcloud 22+ in production, carefully check that Nextcloud's latest formal prereqs (required AND recommended) are included per your community's needs.  In places like these:
 
+- https://docs.nextcloud.com/server/latest/admin_manual/installation/source_installation.html#prerequisites-for-manual-installation
 - https://docs.nextcloud.com/server/22/admin_manual/installation/source_installation.html#prerequisites-for-manual-installation
 - https://github.com/iiab/iiab/blob/master/roles/nextcloud/tasks/install.yml
 
