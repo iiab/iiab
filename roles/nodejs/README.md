@@ -1,23 +1,36 @@
 Please see IIAB's recommended Node.js version number [around line 439 of /opt/iiab/iiab/vars/default_vars.yml](https://github.com/iiab/iiab/blob/master/vars/default_vars.yml#L434-L439)
 
-If nodesource.com doesn't yet support your OS
+If Nodesource.com doesn't yet support your OS
 ---------------------------------------------
 
-If nodesource.com [does not yet support your Linux OS (they often support Debian pre-releases, but generally not other OS pre-releases)](https://github.com/nodesource/distributions#deb) and IIAB's asked to install Node.js, it will do the equivalent of:
+Nodesource.com often supports Debian long before each Debian release, whereas for other OS's, Nodesource.com support usually arrives a few days or weeks after the OS release.
 
-- `sudo apt install nodejs npm`
-- `sudo echo 'nodejs_installed: True' >> /etc/iiab/iiab_state.yml`
-
-AT YOUR OWN RISK, you can later run `cd /opt/iiab/iiab` then `sudo ./runrole --reinstall nodejs` if you really want to **wipe** your OS's own versions of Node.js and npm, and attempt the Nodesource approach instead.
-
-See also late-breaking details on Nodesource support for your individual OS:
+For late-breaking details on Nodesource.com support for your particular Linux OS, keep an eye on:
 
 - https://github.com/nodesource/distributions#deb
 - https://deb.nodesource.com/node_18.x/dists/
   - https://deb.nodesource.com/node_18.x/pool/main/n/nodejs/
+  - https://nodejs.org/dist/latest-v18.x/
 - https://deb.nodesource.com/node_19.x/dists/
   - https://deb.nodesource.com/node_19.x/pool/main/n/nodejs/
+  - https://nodejs.org/dist/latest-v19.x/
 - _ETC!_
+
+If Nodesource.com does not yet support your Linux OS and IIAB's asked to install Node.js &mdash; IIAB will then [fall back](https://github.com/iiab/iiab/blob/15a689e30b4eea325e4bb8d35e19990dd8062fbc/roles/nodejs/tasks/install.yml#L103-L107) to: (running the equivalent of)
+
+```
+sudo apt install nodejs npm
+sudo echo 'nodejs_installed: True' >> /etc/iiab/iiab_state.yml
+```
+
+(The above installs your OS's own versions of Node.js and npm.)
+
+Separately, if you later want to try **wiping** nodejs and npm (AT YOUR OWN RISK!) to attempt the Nodesource approach instead, run:
+
+```
+cd /opt/iiab/iiab
+sudo ./runrole --reinstall nodejs
+```
 
 Raspberry Pi Zero W Warning
 ---------------------------
