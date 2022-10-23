@@ -1,4 +1,4 @@
-# 1. TEST IF Node.js ALEADY INSTALLED & WARN AS NEC
+# 1. TEST IF Node.js ALEADY INSTALLED & IF SO WARN IT'LL BE REPLACED
 
 # 2019-02-03: BELOW TESTS IF 'nodejs' VERSION IS ALREADY INSTALLED:
 # IF SO & THIS DOESN'T MATCH nodejs_version AS SET IN defaults_vars.yml
@@ -10,19 +10,21 @@
 - name: Try to run 'node -v' to get Node.js version
   # 'node -v' doesn't work with older versions e.g. Ubuntu 16.04's Node.js 4.2.6
   # 'nodejs -v' doesn't work with newer versions e.g. Node.js 16.x
-  # Both below convert v10.15.1 to 10.x, but this is safer: (removes non-digits)
-  shell: node -v | sed 's/[^0-9]*//' | sed 's/[^0-9].*/.x/'
+  # Each below convert v10.15.1 to 10.x, but this is safest:
+  shell: node -v | sed 's/^[^0-9]*\([0-9][0-9]*\).*$/\1.x/'
+  # Capturing Groups & Backreferences -> GNU BRE: (Basic Regular Expression)
+  # https://www.regular-expressions.info/refcapture.html
+  # https://www.regular-expressions.info/gnu.html#bre
+  #shell: node -v | sed 's/[^0-9]*//; s/[^0-9].*/.x/'
+  #shell: node -v | sed 's/[^[:digit:]]*//; s/[^[:digit:]].*/.x/'
   #shell: node -v | sed 's/^[vV]//' | sed 's/\..*/.x/'
   register: nodejs_version_installed
 
-#- debug:
-#    var: nodejs_version_installed
-
 # When nodejs is NOT installed:
-# nodejs_version_installed.rc == 0    # Crazy with stderr below, "due to pipes"
+# nodejs_version_installed.rc == 0    # COUNTERINTUITIVE BUT 'echo $?' CONFIRMS (pipe zeros out error) -- thankfully STDERR msg from left side of pipe preserved below.
 # nodejs_version_installed.stdout == ""
 # nodejs_version_installed.stderr == "/bin/sh: 1: nodejs: not found"
-# BOTH ABOVE (incl non-null stderr) are USED BELOW to confirm install is nec!
+# BOTH ABOVE (incl non-null stderr) [were] USED BELOW to confirm install is nec!
 
 #- name: "ENFORCE PRECONDITION: Stop installing (intentionally fail) IF an installed 'nodejs' version isn't {{ nodejs_version }}"
 #  fail:
@@ -39,24 +41,27 @@
 #  file:
 #    state: absent
 #    path: /etc/apt/sources.list.d/nodesource.list
+#  when: nodejs_version_installed is defined and nodejs_version_installed.stdout != nodejs_version
 #  when: nodejs_version_installed is defined and nodejs_version_installed.stdout != nodejs_version and nodejs_version_installed.stdout != ""
 
-# BRUTAL but ensures consistency across OS's / distros like Raspbian Desktop & Ubermix that often include an older version of Node.js
-# Forces < 16.x or > 16.x to be uninstalled
-- name: ASK apt/yum/dnf TO REMOVE PRE-EXISTING Node.js "{{ nodejs_version_installed.stdout }}" (IF IT'S NOT {{ nodejs_version }})
+- name: LOUD WARNING if Node.js will be replaced -- BRUTAL but helps OS's / distros with older Node.js
+  #debug:    # GREEN
+  fail:      # FORCE IT RED THIS ONCE!
+    msg: "WARNING: YOUR Node.js {{ nodejs_version_installed.stdout }} WILL BE WIPED AND REPLACED"
+  when: nodejs_version_installed.stderr == ""    # and nodejs_version_installed.stdout == nodejs_version
+  ignore_errors: yes
+
+# 2022-10-22: Above 2 stanzas could be removed (tho informational value remains)
+
+- name: ASK apt TO REMOVE ANY PRE-EXISTING Node.js AND npm
   package:
-    name: nodejs
+    name:
+      - nodejs
+      - npm
     state: absent
-  when: nodejs_version_installed is defined and nodejs_version_installed.stdout != nodejs_version
-  #when: nodejs_version_installed is defined and nodejs_version_installed.stdout != nodejs_version and nodejs_version_installed.stdout != ""
-
-- name: Warn if Node.js {{ nodejs_version}} already installed & might be updated
-  debug:
-    msg: "WARN: YOUR Node.js {{ nodejs_version }} MIGHT NOW BE UPDATED USING nodesource.com"
-  when: nodejs_version_installed is defined and nodejs_version_installed.stdout == nodejs_version
 
 
-# 2. INSTALL Node.js USING nodesource.com
+# 2. INSTALL Node.js AND npm USING nodesource.com (OR OS's apt IF THAT FAILS!)
 
 # 2019-02-12: Should not be nec, as stanza below it should overwrite
 # /etc/apt/sources.list.d/nodesource.list regardless!
@@ -67,35 +72,41 @@
 #    state: absent
 #  when: internet_available and is_debuntu
 
-# MANUAL INSTALL OPTION "IMMEDIATELY" AFTER ANY OS RELEASE: (e.g. Ubuntu 22.04)
+# MANUAL NODESOURCE INSTALL *WORKS* EVEN PRIOR TO OFFICIAL DISTRO SUPPORT AT:
+# https://github.com/nodesource/distributions#deb
+# https://deb.nodesource.com/node_18.x/dists/
+#
+# 1) e.g. Ubuntu 22.04:
 # wget https://deb.nodesource.com/node_18.x/pool/main/n/nodejs/nodejs_18.0.0-deb-1nodesource1_amd64.deb
-# apt install ./nodejs_18.0.0-deb-1nodesource1_amd64.deb
+# apt install ./nodejs_18.0.0-deb-1nodesource1_amd64.deb    # SMARTER + CLEANER THAN: dpkg -i nodejs_18...
+# echo 'nodejs_installed: True' >> /etc/iiab/iiab_state.yml
+#
+# 2) e.g. Ubuntu 22.10:
+# wget https://deb.nodesource.com/node_18.x/pool/main/n/nodejs/nodejs_18.11.0-deb-1nodesource1_amd64.deb
+# apt install ./nodejs_18.11.0-deb-1nodesource1_amd64.deb    # SMARTER + CLEANER THAN: dpkg -i nodejs_18...
 # echo 'nodejs_installed: True' >> /etc/iiab/iiab_state.yml
 
-- name: Run 'curl -sL https://deb.nodesource.com/setup_{{ nodejs_version }} | bash -' to overwrite /etc/apt/sources.list.d/nodesource.list
-  shell: curl -sL https://deb.nodesource.com/setup_{{ nodejs_version }} | bash -
+- name: Try 'curl -fsSL https://deb.nodesource.com/setup_{{ nodejs_version }} | bash -' to overwrite /etc/apt/sources.list.d/nodesource.list
+  shell: curl -fsSL https://deb.nodesource.com/setup_{{ nodejs_version }} | bash -
+  register: curl_nodesource
+  ignore_errors: yes
   #args:
   #  warn: no
   #  creates: /etc/apt/sources.list.d/nodesource.list
-  #when: internet_available    # 2021-08-04: Better to fail & notify implementer!
-  #when: internet_available and (is_debian_8 or is_debian_9 or is_ubuntu_16 or is_ubuntu_17)
-  # NOT NEC TO TEST FOR is_raspbian_8 OR is_raspbian_9 AS /opt/iiab/iiab/vars/<OS>.yml
-  # DEFINES THESE AS SUBSETS OF is_debian_8 OR is_debian_9 (FOR NOW!)
 
-# 2019-03-29: Above works on Debian 10 Buster pre-releases, but fails on Ubuntu
-# 19.04 Beta.  Comment it out for now, and manually run: "apt install npm" then
-# "npm install -g npm@latest" (all *SHOULD* be magically fixed by 2019-04-18 ?)
-
-# Forces update
-- name: Install latest Node.js {{ nodejs_version }} which includes /usr/bin/npm
+- name: Install latest Node.js -- includes /usr/bin/npm if nodesource installed above
   package:
     #name: nodejs={{ nodejs_version }}
     name: nodejs
-    state: latest
-    #state: present
-  #when: internet_available    # 2021-08-04: Better to fail & notify implementer!
-  #when: internet_available and (is_debian_8 or is_debian_9 or is_ubuntu_16 or is_ubuntu_17)
+    state: latest    # Equivalent to 'state: present' ?
 
+- name: Also install latest npm (OS's) if nodesource failed to install above -- i.e. if OS not yet supported by https://github.com/nodesource/distributions#deb and https://deb.nodesource.com/node_{{ nodejs_version }}/dists/
+  package:
+    name: npm
+    state: latest    # Equivalent to 'state: present' ?
+  when: curl_nodesource.failed
+
+# NEED BLEEDING EDGE? Then Also Run: npm install -g npm@latest
 
 # 2018-07-14: BOTH STEPS ABOVE TAKE TIME, but Raspbian (apt offers npm
 # 1.4.21) & Debian 9 (apt offers no npm!) STILL NEED the above
@@ -110,10 +121,10 @@
 # which appears suffic "SO FAR"?  18.04's nodejs 8.10.0 is more reassuring!
 #
 # CRAZY IDEA: most versions of npm can upgrade themselves to the latest
-# (6.2.0 for now) using command "npm install -g npm", if that helps us in
-# future, e.g. TK's memory issue etc?  If so, be CAREFUL this puts npm
-# in /usr/local/bin on Ubuntu 18.04 -- unlike Ubuntu 16.04 and Raspbian
-# where it upgrades /usr/bin/npm in place:
+# (6.2.0 for now) using "npm install -g npm" or "npm install -g npm@latest",
+# if that helps us in future, e.g. TK's memory issue etc?  If so, be CAREFUL
+# this puts npm in /usr/local/bin on Ubuntu 18.04 -- unlike Ubuntu 16.04 and
+# Raspbian where it upgrades /usr/bin/npm in place:
 # https://askubuntu.com/questions/1036278/npm-is-incorrect-version-on-latest-ubuntu-18-04-installation
 
 # 2019-02-03: OLD WAY (PRIOR TO 2019) BELOW.  Since then, @m-anish helped
