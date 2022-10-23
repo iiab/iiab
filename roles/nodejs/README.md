@@ -10,11 +10,14 @@ If nodesource.com [does not yet support your Linux OS (they often support Debian
 
 AT YOUR OWN RISK, you can later run `cd /opt/iiab/iiab` then `sudo ./runrole --reinstall nodejs` if you really want to **wipe** your OS's own versions of Node.js and npm, and attempt the Nodesource approach instead.
 
-See also late-breaking details about your individual OS:
+See also late-breaking details on Nodesource support for your individual OS:
 
 - https://github.com/nodesource/distributions#deb
 - https://deb.nodesource.com/node_18.x/dists/
-- https://github.com/iiab/iiab/wiki/IIAB-Platforms
+  - https://deb.nodesource.com/node_18.x/pool/main/n/nodejs/
+- https://deb.nodesource.com/node_19.x/dists/
+  - https://deb.nodesource.com/node_19.x/pool/main/n/nodejs/
+- _ETC!_
 
 Raspberry Pi Zero W Warning
 ---------------------------
