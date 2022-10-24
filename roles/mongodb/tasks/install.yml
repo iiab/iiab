@@ -83,7 +83,11 @@
     args:
       warn: false
 
-  - name: Install mongodb-org's Debian bullseye source/repo (we only use x86_64 i.e. arm64) for MongoDB version {{ mongodb_64bit_version }}
+  # 2022-10-23: MongoDB only allows auto-install of Debian's x86_64, AND IN ANY
+  # CASE all their MongoDB 6.0's are ONLY COMPILED FOR ARM v8.2-A i.e. FAIL ON
+  # ARM v8-A RPi 4, LIKE THEIR MongoDB 5.0 tested 2022-06-07 ~120 lines below.
+  # -> CAN THIS ENTIRE STANZA BE *DELETED* -- ALWAYS USING UBUNTU REPO BELOW ?
+  - name: Install mongodb-org's Debian bullseye source/repo [ arch=amd64 ] for MongoDB version {{ mongodb_64bit_version }}
     apt_repository:
       # 2020-10-28 and 2022-06-09: https://repo.mongodb.org/apt/debian/dists/
       # supports only {Buster 10, Stretch 9, Jessie 8, Wheezy 7}.  So Bullseye
@@ -92,18 +96,18 @@
       # this was recently added to https://repo.mongodb.org/apt/debian/dists/
       repo: deb https://repo.mongodb.org/apt/debian bullseye/mongodb-org/{{ mongodb_64bit_version }} main
       #repo: deb https://repo.mongodb.org/apt/debian {{ ansible_distribution_release }}/mongodb-org/4.4 main
-      filename: mongodb-org
+      #filename: mongodb-org
     when: is_debian and ansible_architecture == "x86_64"
 
-  # 2022-09-27: Soon to change from 'focal' to 'jammy'
+  # 2022-10-23: RasPiOS Bullseye *MAY* FAIL when 'focal' changed to 'jammy' ?
   - name: Otherwise install mongodb-org's Ubuntu focal source/repo [ arch=amd64,arm64 ] for MongoDB version {{ mongodb_64bit_version }}
     apt_repository:
       repo: deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu focal/mongodb-org/{{ mongodb_64bit_version }} multiverse
-      filename: mongodb-org
+      #filename: mongodb-org
     when: not (is_debian and ansible_architecture == "x86_64")
 
-  # 2022-10-19: Force-install MongoDB on Ubuntu 22.04+, Mint 21 & Debian 12;
-  # as each includes libssl3 not libssl1.1 (#3190).  LATER REMOVE ALL 5 STANZAS
+  # 2022-10-23: Force-install MongoDB on Ubuntu 22.04+, Mint 21 & Debian 12;
+  # as each includes libssl3 not libssl1.1 (#3190).  LATER REMOVE ALL 7 STANZAS
   # BELOW, IF/WHEN MongoDB ONE DAY FINALLY SUPPORTS libssl3 ?  (MongoDB 6.2 fix
   # may be backported to 6.0, according to 2022-09-29 "official" gossip here...)
   # https://www.mongodb.com/community/forums/t/installing-mongodb-over-ubuntu-22-04/159931/58
@@ -113,11 +117,16 @@
   # sudo apt-get install libssl1.1
   # rm /etc/apt/sources.list.d/focal-security.list
 
-  - name: Install source/repo "deb http://security.ubuntu.com/ubuntu focal-security main" at /etc/apt/sources.list.d/security_ubuntu_com_ubuntu.list if Ubuntu 22.04+ or Mint 21
+  - name: Install source/repo "deb http://security.ubuntu.com/ubuntu focal-security main" at /etc/apt/sources.list.d/security_ubuntu_com_ubuntu.list if Ubuntu 22.04+ x86_64 or Mint 21
     apt_repository:
       repo: deb http://security.ubuntu.com/ubuntu focal-security main
       #filename: focal-security    # If filename focal-security.list is preferred
-    when: is_ubuntu and os_ver is version('ubuntu-2204', '>=') or is_linuxmint_21
+    when: is_ubuntu and os_ver is version('ubuntu-2204', '>=') and ansible_architecture == "x86_64" or is_linuxmint_21
+
+  - name: Install source/repo "deb http://ports.ubuntu.com/ubuntu-ports focal-security main" at /etc/apt/sources.list.d/ports_ubuntu_com_ubuntu_ports.list if ubuntu 22.04+ aarch64
+    apt_repository:
+      repo: deb http://ports.ubuntu.com/ubuntu-ports focal-security main
+    when: is_ubuntu and os_ver is version('ubuntu-2204', '>=') and ansible_architecture == "aarch64"
 
   - name: Install source/repo "deb http://security.debian.org/debian-security bullseye-security main" at /etc/apt/sources.list.d/security_debian_org_debian_security.list if Debian 12
     apt_repository:
@@ -138,12 +147,18 @@
       state: absent
     when: is_debian_12
 
-  - name: Remove source/repo "deb http://security.ubuntu.com/ubuntu focal-security main" at /etc/apt/sources.list.d/security_ubuntu_com_ubuntu.list if Ubuntu 22.04+ or Mint 21
+  - name: Remove source/repo "deb http://ports.ubuntu.com/ubuntu-ports focal-security main" at /etc/apt/sources.list.d/ports_ubuntu_com_ubuntu_ports.list if ubuntu 22.04+ aarch64
+    apt_repository:
+      repo: deb http://ports.ubuntu.com/ubuntu-ports focal-security main
+      state: absent
+    when: is_ubuntu and os_ver is version('ubuntu-2204', '>=') and ansible_architecture == "aarch64"
+
+  - name: Remove source/repo "deb http://security.ubuntu.com/ubuntu focal-security main" at /etc/apt/sources.list.d/security_ubuntu_com_ubuntu.list if Ubuntu 22.04+ x86_64 or Mint 21
     apt_repository:
       repo: deb http://security.ubuntu.com/ubuntu focal-security main
       state: absent
       #filename: focal-security    # 100% IGNORED during repo deletion
-    when: is_ubuntu and os_ver is version('ubuntu-2204', '>=') or is_linuxmint_21
+    when: is_ubuntu and os_ver is version('ubuntu-2204', '>=') and ansible_architecture == "x86_64" or is_linuxmint_21
 
   # # Debian 10 aarch64 might work below but is blocked in main.yml
   # - name: Use mongodb-org's Ubuntu focal repo for RasPiOS-aarch64
@@ -177,7 +192,7 @@
 
   - name: Establish {{ mongodb_conf }} dbPath {{ mongodb_db_path }} -- instead of /var/lib/mongodb default -- takes effect on next (re)start of mongodb.service -- via enable-or-disable.yml or via sugarizer.service auto-starting MongoDB on demand
     lineinfile:
-      path: "{{ mongodb_conf }}"
+      path: "{{ mongodb_conf }}"    # /etc/mongod.conf
       regexp: '^\s*dbPath:'    # \s = any whitespace char. stackoverflow.com/a/38491899
       line: "  dbPath: {{ mongodb_db_path }}"    # /library/dbdata/mongodb
 
