@@ -128,6 +128,10 @@ fi
 ###echo "deb [signed-by=/usr/share/keyrings/iiab-ansible-keyring.gpg] http://ppa.launchpad.net/ansible/ansible/ubuntu $CODENAME main" \
 ###     > /etc/apt/sources.list.d/iiab-ansible.list
 
+# 2022-11-09: ansible-core 2.12.10 PPA works on 32-bit RasPiOS, until upstream wheels -> cryptography is fixed (PR #3421)
+echo "deb [signed-by=/usr/share/keyrings/iiab-ansible-keyring.gpg] http://ppa.launchpad.net/ansible/ansible/ubuntu focal main" \
+     > /etc/apt/sources.list.d/iiab-ansible.list
+
 # In future we might instead consider 'add-apt-repository ppa:ansible/ansible'
 # or 'apt-add-repository ppa:ansible/bionic/ansible' etc, e.g. for streamlined
 # removal using 'apt-add-repository -r' -- however that currently requires
@@ -146,6 +150,9 @@ fi
 #apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 93C4A3FD7BB9C367
 ###cp /opt/iiab/iiab/scripts/iiab-ansible-keyring.gpg /usr/share/keyrings/iiab-ansible-keyring.gpg
 #chmod 644 /usr/share/keyrings/iiab-ansible-keyring.gpg
+
+# 2022-11-09: ansible-core 2.12.10 PPA works on 32-bit RasPiOS, until upstream wheels -> cryptography is fixed (PR #3421)
+cp /opt/iiab/iiab/scripts/iiab-ansible-keyring.gpg /usr/share/keyrings/iiab-ansible-keyring.gpg
 
 ###echo -e 'PPA source "deb [signed-by=/usr/share/keyrings/iiab-ansible-keyring.gpg] http://ppa.launchpad.net/ansible/ansible/ubuntu '$CODENAME' main"'
 ###echo -e "successfully saved to /etc/apt/sources.list.d/iiab-ansible.list\n"
@@ -172,13 +179,18 @@ $APT_PATH/apt -y install python3-pip
 
 #$APT_PATH/apt -y --allow-downgrades install ansible-core
 
-# 2021-10-30: Using pip is messy, leaving behind cached files, so turn off pip
-# cache system-wide before installing:
-# https://stackoverflow.com/questions/9510474/removing-pips-cache/61762308#61762308
-# https://github.com/iiab/iiab/pull/3022
-pip3 config --global set global.no-cache-dir false
-echo -e "\n\n'pip3 install --upgrade ansible-core' will now run:\n"
-pip3 install --upgrade ansible-core    # ansible-core 2.12 (released 2021-11-08) requires Python >= 3.8
+if uname -m | grep -q 64; then
+    # 2021-10-30: Using pip is messy, leaving behind cached files, so turn off pip
+    # cache system-wide before installing:
+    # https://stackoverflow.com/questions/9510474/removing-pips-cache/61762308#61762308
+    # https://github.com/iiab/iiab/pull/3022
+    pip3 config --global set global.no-cache-dir false
+    echo -e "\n\n'pip3 install --upgrade ansible-core' will now run:\n"
+    pip3 install --upgrade ansible-core    # ansible-core 2.12 (released 2021-11-08) requires Python >= 3.8
+else
+    echo "2022-11-09: ansible-core 2.12.10 PPA works on 32-bit RasPiOS, using /etc/apt/sources.list.d/iiab-ansible.list, until upstream wheels -> cryptography is fixed (PR #3421)"
+    $APT_PATH/apt -y --allow-downgrades install ansible-core
+fi
 
 # (Re)running collection installs appears safe, with --force-with-deps to force
 # upgrade of collection and dependencies it pulls in.  Note Ansible may support
