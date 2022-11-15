@@ -5,7 +5,7 @@ Minetest README
 `Minetest <https://www.minetest.net/>`_ is a `Minecraft <https://en.wikipedia.org/wiki/Minecraft>`_-inspired creative/explorational building blocks game, written from scratch and licensed
 under the LGPL (version 2.1 or later).  It supports both survival and creative modes along with multiplayer support, dynamic lighting, and an "infinite" map generator.
 
-The Minetest multiplayer server can be installed as part of Internet-in-a-Box (IIAB) on Raspberry Pi (Raspbian), Ubuntu 18.04 and Debian 9 Stretch.
+The Minetest multiplayer server can be installed as part of Internet-in-a-Box (IIAB) on Raspberry Pi OS, Ubuntu, or Debian.
 
 Please note that the initial configuration is for creative mode, and a number of mods are installed (see the list in `tasks/main.yml <tasks/main.yml>`_).
 
