@@ -2,6 +2,8 @@
 Minetest README
 ===============
 
+11/16/2022 THIS NEEDS REVISING
+
 `Minetest <https://www.minetest.net/>`_ is a `Minecraft <https://en.wikipedia.org/wiki/Minecraft>`_-inspired creative/explorational building blocks game, written from scratch and licensed
 under the LGPL (version 2.1 or later).  It supports both survival and creative modes along with multiplayer support, dynamic lighting, and an "infinite" map generator.
 
