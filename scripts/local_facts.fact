@@ -13,14 +13,15 @@ STAGE=0
 OS="none"
 VERSION_ID="none"    # Temp var, for: OS_VER="$OS-$VERSION_ID"
 OS_VER="none"
-PYTHON_VER="none"
-IIAB_REMOTE_URL="none"
 IIAB_BRANCH="none"
-IIAB_COMMIT="none"
+IIAB_REMOTE_URL="none"
 IIAB_RECENT_TAG="none"
+IIAB_COMMIT="none"
 RPI_MODEL="none"
 DEVICETREE_MODEL="none"
 ANSIBLE_VERSION="none"
+PYTHON_VERSION="none"
+PHP_VERSION="none"
 DHCPCD="none"    # The last 3 conditioned on string output not RC.  SEE BELOW.
 NETWORK_MANAGER="none"
 SYSTEMD_NETWORKD="none"
@@ -90,6 +91,7 @@ case $OS_VER in
         ;;
 esac
 
+
 # These next 4 help indicate what version of IIAB
 tmp=$(git rev-parse --abbrev-ref HEAD) &&
     IIAB_BRANCH=$tmp
@@ -102,11 +104,12 @@ tmp=$(git config branch.$IIAB_BRANCH.remote) && {
     fi
 }
 
+tmp=$(git describe --tags --abbrev=0) &&
+    IIAB_RECENT_TAG=$tmp
+
 tmp=$(git rev-parse --verify HEAD) &&
     IIAB_COMMIT=$tmp
 
-tmp=$(git describe --tags --abbrev=0) &&
-    IIAB_RECENT_TAG=$tmp
 
 grep -iq raspberry /proc/device-tree/model &&
     RPI_MODEL=$(grep -ai raspberry /proc/device-tree/model | tr -d '\0')
@@ -119,6 +122,7 @@ grep -iq raspberry /proc/device-tree/model &&
 tmp=$(tr -d '\0' < /proc/device-tree/model) &&
     DEVICETREE_MODEL=$tmp
 
+
 tmp=$(ansible --version) &&
     ANSIBLE_VERSION=$(echo "$tmp" | head -1 | cut -f 2- -d " " | sed 's/.* \([^ ]*\)\].*/\1/')
     # Above works with 'ansible [core 2.11.0rc2]' -- these old ways do not:
@@ -126,11 +130,17 @@ tmp=$(ansible --version) &&
     #ANSIBLE_VERSION=$(echo "$tmp" | head -1 | sed -e 's/.* //')
 
 if tmp=$(python3 -c 'from sys import version_info; print("%s.%s" % (version_info.major, version_info.minor));'); then
-    PYTHON_VER=$tmp
+    PYTHON_VERSION=$tmp
 else
     echo -e "\e[1m\nPython 3 is REQUIRED for Internet-in-a-Box.  You might want to run:\n\nsudo apt install python3\n\e[0m"
     exit 1
 fi
+
+tmp=$(apt list php) &&
+    PHP_VERSION=$(echo $tmp | grep -Po '[0-9]+\.[0-9]+' | head -1)
+# Extracts the first (topmost, leftmost) MAJOR.MINOR, even if not yet installed
+# Safer than: echo $tmp | grep php | head -1 | sed 's/.*://; s/[^0-9.].*//')
+# https://stackoverflow.com/questions/16675179/how-to-use-sed-to-extract-substring/16675391#16675391
 
 
 # THE LAST 3 BELOW ARE DIFFERENT as "systemctl is-enabled" unhelpfully returns
@@ -157,17 +167,18 @@ tmp=$(systemctl is-enabled systemd-networkd)
 # https://en.wikipedia.org/wiki/Here_document
 cat <<EOF
 {"stage"                  : "$STAGE",
-"dhcpcd"                  : "$DHCPCD",
-"network_manager"         : "$NETWORK_MANAGER",
-"systemd_networkd"        : "$SYSTEMD_NETWORKD",
-"iiab_remote_url"         : "$IIAB_REMOTE_URL",
+"os"                      : "$OS",
+"os_ver"                  : "$OS_VER",
 "iiab_branch"             : "$IIAB_BRANCH",
-"iiab_commit"             : "$IIAB_COMMIT",
+"iiab_remote_url"         : "$IIAB_REMOTE_URL",
 "iiab_recent_tag"         : "$IIAB_RECENT_TAG",
+"iiab_commit"             : "$IIAB_COMMIT",
 "rpi_model"               : "$RPI_MODEL",
 "devicetree_model"        : "$DEVICETREE_MODEL",
 "ansible_version"         : "$ANSIBLE_VERSION",
-"os"                      : "$OS",
-"os_ver"                  : "$OS_VER",
-"python_ver"              : "$PYTHON_VER"}
+"python_version"          : "$PYTHON_VERSION",
+"php_version"             : "$PHP_VERSION",
+"dhcpcd"                  : "$DHCPCD",
+"network_manager"         : "$NETWORK_MANAGER",
+"systemd_networkd"        : "$SYSTEMD_NETWORKD"}
 EOF
