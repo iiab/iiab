@@ -17,18 +17,34 @@
   when: kiwix_enabled
 
 
-# TO DO: BOTH CRON ENTRIES BELOW *SHOULD* BE DELETED "when: not kiwix_enabled"
-
 # In the past kiwix-serve did not stay running, so we'd been doing this hourly.
 # @mgautierfr & others suggest kiwix-serve might be auto-restarted w/o cron in
 # future, whenever service fails, if this really catches all cases??
 # https://github.com/iiab/iiab/issues/484#issuecomment-342151726
-- name: Make a crontab entry to restart kiwix-serve at 4AM (debuntu)
-  lineinfile:
-         # mn hr dy mo day-of-week[Sunday=0] username command-to-be-executed
-    line: "0  4  *  *  * root /usr/bin/systemctl restart kiwix-serve.service"
-    dest: /etc/crontab
+
+- name: Set cron to restart kiwix-serve 4AM daily, if kiwix_enabled
+  cron:
+    name: kiwix-serve daily restart
+    minute: "0"
+    hour: "4"
+    job: /usr/bin/systemctl restart kiwix-serve.service
+    user: root
+    cron_file: kiwix-serve_daily    # i.e. /etc/cron.d/kiwix-serve_daily instead of /var/spool/cron/crontabs/root
   when: kiwix_enabled
+
+- name: Remove 4AM daily cron, if not kiwix_enabled
+  cron:
+    name: kiwix-serve daily restart
+    cron_file: kiwix-serve_daily
+    state: absent
+  when: not kiwix_enabled
+
+# - name: Make a crontab entry to restart kiwix-serve at 4AM (debuntu)
+#   lineinfile:
+#          # mn hr dy mo day-of-week[Sunday=0] username command-to-be-executed
+#     line: "0  4  *  *  * root /usr/bin/systemctl restart kiwix-serve.service"
+#     dest: /etc/crontab
+#   when: kiwix_enabled
 
 # - name: Make a crontab entry to restart kiwix-serve at 4AM (redhat)
 # # *  *  *  *  * user-name  command to be executed
