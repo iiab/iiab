@@ -24,19 +24,29 @@
 # nec, then (3) if neither exist, "UTC" is declated (correctly!)  Potential
 # drawback: timedatectl is not easily usable within chroot environments.
 
-- name: Extract Time Zone from symlink /etc/localtime &/or text file /etc/timezone (or lack thereof!)
-  command: timedatectl show -p Timezone --value
-  register: tz_cli
+#- name: Extract Time Zone from symlink /etc/localtime &/or text file /etc/timezone (or lack thereof!)
+#  command: timedatectl show -p Timezone --value
+#  register: tz_cli
 
-- name: Store 'date.timezone = {{ tz_cli.stdout }}' (from above) in /etc/php/{{ php_version }}/fpm/php.ini and /etc/php/{{ php_version }}/cli/php.ini
-  ini_file:
-    path: "{{ item }}"
-    section: Date
-    option: date.timezone
-    value: "{{ tz_cli.stdout }}"    # e.g. America/New_York or UTC
+#- name: Store 'date.timezone = {{ tz_cli.stdout }}' (from above) in /etc/php/{{ php_version }}/fpm/php.ini and /etc/php/{{ php_version }}/cli/php.ini
+#  ini_file:
+#    path: "{{ item }}"
+#    section: Date
+#    option: date.timezone
+#    value: "{{ tz_cli.stdout }}"    # e.g. America/New_York or UTC
+#  with_items:
+#    - /etc/php/{{ php_version }}/fpm/php.ini
+#    - /etc/php/{{ php_version }}/cli/php.ini
+
+# 2022-12-30 even better way that does not block apt or risk being overwritten by apt
+- name: Install timezone templates for php-cli and php-fpm
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
   with_items:
-    - /etc/php/{{ php_version }}/fpm/php.ini
-    - /etc/php/{{ php_version }}/cli/php.ini
+    - { src: 'local_timezone.j2', dest: '/etc/php/{{ php_version }}/cli/conf.d/99-timezone.ini' }
+    - { src: 'local_timezone.j2', dest: '/etc/php/{{ php_version }}/fpm/conf.d/99-timezone.ini' }
+  when: not (ansible_local.local_facts.local_timezone == "none")
 
 
 # WARNING: 'nginx_high_php_limits: True' (especially!) might cause excess use of
