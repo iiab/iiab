@@ -1,4 +1,4 @@
-# 2022-12-29: This file (set-php-limits.yml) is ALSO invoked on demand, by:
+# 2022-12-29: This file (php-settings.yml) is ALSO invoked on demand, by:
 #
 # roles/matomo/tasks/install.yml
 # roles/moodle/tasks/install.yml
@@ -6,11 +6,37 @@
 # roles/pbx/tasks/freepbx.yml
 # roles/wordpress/tasks/install.yml
 
-# Ansible's ini_file would normally be best, to tweak .ini files:
-# https://docs.ansible.com/ansible/latest/collections/community/general/ini_file_module.html
+
+# 2022-12-30: FYI ansible_date_time.tz provides TZ ABBREVIATIONS (equivalent
+# to 'date +%Z' output) which leads to serious ambiguity -- and not just (A)
+# seasonal EST/EDT ambiguities, or (B) floods of geographic synonyms for the
+# very same time zone!  More Seriously: (C) both commands above output "IST"
+# for both Israel Standard Time (+0200) AND India Standard Time (+0530).  Etc!
 #
-# But in this case, explanatory comments (inserted by lineinfile below) offer
-# important context to implementers modifying both php.ini files after the fact.
+# While Ansible provides 2 other vars that (slightly) help disambiguate
+# (ansible_date_time.tz_dst and ansible_date_time.tz_offset), there's a far
+# better way -- which is to read the System TZ directly from Linux:
+#
+# timedatectl show -p Timezone --value
+#
+# This takes care of essentially everything (e.g. output "America/New_York")
+# by checking (1) symlink /etc/localtime then (2) text file /etc/timezone if
+# nec, then (3) if neither exist, "UTC" is declated (correctly!)  Potential
+# drawback: timedatectl is not easily usable within chroot environments.
+
+- name: Extract Time Zone from symlink /etc/localtime &/or text file /etc/timezone (or lack thereof!)
+  command: timedatectl show -p "Timezone" --value
+  register: tz_cli
+
+- name: Store 'date.timezone = {{ tz_cli.stdout }}' (from above) in /etc/php/{{ php_version }}/fpm/php.ini and /etc/php/{{ php_version }}/cli/php.ini
+  ini_file:
+    path: "{{ item }}"
+    section: Date
+    option: date.timezone
+    value: "{{ tz_cli.stdout }}"    # e.g. America/New_York or UTC
+  with_items:
+    - /etc/php/{{ php_version }}/fpm/php.ini
+    - /etc/php/{{ php_version }}/cli/php.ini
 
 
 # WARNING: 'nginx_high_php_limits: True' (especially!) might cause excess use of
@@ -84,14 +110,21 @@
   when: nginx_high_php_limits or moodle_install
 
 
+# To tweak .ini files, Ansible's ini_file is normally better than lineinfile:
+# https://docs.ansible.com/ansible/latest/collections/community/general/ini_file_module.html
+#
+# But for the 6 * 4 above, explanatory comments (inserted by lineinfile) offer
+# important context to implementers modifying both php.ini files after the fact.
+
+
 - name: Restart 'php{{ php_version }}-fpm' systemd service
   systemd:
     name: php{{ php_version }}-fpm
     state: restarted
 
-- name: "Set 'set_php_limits_done: True' so set-php-limits.yml runs just once (per Ansible run)"
+- name: "Set 'php_settings_done: True' so php-settings.yml runs just once (per Ansible run)"
   set_fact:
-    set_php_limits_done: True
+    php_settings_done: True
 
 
 # - debug:
