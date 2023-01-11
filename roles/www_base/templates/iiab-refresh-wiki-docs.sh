@@ -17,7 +17,7 @@ DESTPATH={{ doc_root }}/info     # /library/www/html/info
 DOCSPATH=$DESTPATH/docs          # /library/www/html/info/docs
 ADMINCONSOLEPATH=$DESTPATH/admin-console    # /library/www/html/info/admin-console
 # Note 1: sed (below) shortens URLs to 'admin-console'
-# Note 2: Depends on "autoindex on;" in roles/nginx/templates/server.conf.j2
+# Note 2: Depends on "fancyindex on;" in roles/nginx/templates/iiab.conf.j2
 
 rm -rf $INPUT
 rm -rf $OUTPUT
@@ -36,10 +36,10 @@ rsync -av $OUTPUT/ $DESTPATH
 
 if [ -d /opt/iiab/iiab-admin-console/docs ]; then
     cp /opt/iiab/iiab-admin-console/docs/* $ADMINCONSOLEPATH
-    for f in `ls $ADMINCONSOLEPATH`; do
+    for f in `ls $ADMINCONSOLEPATH/*.md`; do
 	FTRIMMED=${f%.md}
-	pandoc -s $ADMINCONSOLEPATH/$f -o $ADMINCONSOLEPATH/$FTRIMMED.html
-	rm $ADMINCONSOLEPATH/$f
+	pandoc -s $f -o $FTRIMMED.html
+	rm $f
     done
 fi
 
