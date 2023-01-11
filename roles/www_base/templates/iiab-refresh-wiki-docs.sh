@@ -34,12 +34,14 @@ for f in `ls $INPUT`; do
 done
 rsync -av $OUTPUT/ $DESTPATH
 
-cp -r /opt/iiab/iiab-admin-console/docs/* $ADMINCONSOLEPATH
-for f in `ls $ADMINCONSOLEPATH`; do
-    FTRIMMED=${f%.md}
-    pandoc -s $ADMINCONSOLEPATH/$f -o $ADMINCONSOLEPATH/$FTRIMMED.html
-    rm $ADMINCONSOLEPATH/$f
-done
+if [ -d /opt/iiab/iiab-admin-console/docs ]; then
+    cp -r /opt/iiab/iiab-admin-console/docs/* $ADMINCONSOLEPATH
+    for f in `ls $ADMINCONSOLEPATH`; do
+	FTRIMMED=${f%.md}
+	pandoc -s $ADMINCONSOLEPATH/$f -o $ADMINCONSOLEPATH/$FTRIMMED.html
+	rm $ADMINCONSOLEPATH/$f
+    done
+fi
 
 # Download FAQ etc
 lynx -reload -source https://wiki.iiab.io/go/FAQ > $DESTPATH/FAQ.html
