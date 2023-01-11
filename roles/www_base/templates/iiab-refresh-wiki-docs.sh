@@ -69,9 +69,10 @@ sed -i "s|https://magazines-attachments.raspberrypi.org/books/full_pdfs/000/000/
 sed -i "s|https://.*archive.org/15/items/other_doc/other_doc.pdf|docs/Raspberry_Pi_User_Guide_v4.pdf|g" $DESTPATH/index.html
 sed -i "s|https://github.com/iiab/iiab/blob/master/roles/lokole/Lokole-IIAB_Users_Manual.pdf|docs/Lokole-IIAB_Users_Manual.pdf|g" $DESTPATH/index.html
 
-# ...and within main subpages
-for f in $DESTPATH/*.html; do
-    sed -i -r "s|https://github.com/iiab/iiab/wiki/([-.A-Za-z0-9]*)|\1.html|g" $f
+# ...and within subpages
+for f in $(find $DESTPATH -name "*.html"); do    # Recursive (even if not yet nec, as of 2023-01-11)
+#for f in $DESTPATH/*.html; do                   # Non-recursive (omits subdirs)
+    sed -i -r "s|https://github.com/iiab/iiab/wiki/([-.~A-Za-z0-9]*)|\1.html|g" $f
 
     sed -i "s|https://github.com/iiab/iiab-admin-console/tree/master/docs|admin-console|g" $f
 
