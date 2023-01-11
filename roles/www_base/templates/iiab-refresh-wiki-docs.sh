@@ -35,7 +35,7 @@ done
 rsync -av $OUTPUT/ $DESTPATH
 
 if [ -d /opt/iiab/iiab-admin-console/docs ]; then
-    cp -r /opt/iiab/iiab-admin-console/docs/* $ADMINCONSOLEPATH
+    cp /opt/iiab/iiab-admin-console/docs/* $ADMINCONSOLEPATH
     for f in `ls $ADMINCONSOLEPATH`; do
 	FTRIMMED=${f%.md}
 	pandoc -s $ADMINCONSOLEPATH/$f -o $ADMINCONSOLEPATH/$FTRIMMED.html
