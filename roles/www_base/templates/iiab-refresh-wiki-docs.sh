@@ -27,7 +27,7 @@ mkdir -p $DOCSPATH
 mkdir -p $ADMINCONSOLEPATH
 
 git clone https://github.com/iiab/iiab.wiki.git $INPUT
-for f in `ls $INPUT`; do
+for f in `ls $INPUT`; do    # Unlike below, $f does NOT include path
     FTRIMMED=${f%.md}
     if [ $FTRIMMED = "Home" ]; then FTRIMMED=index; fi
     pandoc -s $INPUT/$f -o $OUTPUT/$FTRIMMED.html
@@ -35,8 +35,8 @@ done
 rsync -av $OUTPUT/ $DESTPATH
 
 if [ -d /opt/iiab/iiab-admin-console/docs ]; then
-    cp /opt/iiab/iiab-admin-console/docs/* $ADMINCONSOLEPATH
-    for f in `ls $ADMINCONSOLEPATH/*.md`; do
+    cp /opt/iiab/iiab-admin-console/docs/*.md $ADMINCONSOLEPATH
+    for f in `ls $ADMINCONSOLEPATH/*.md`; do    # Unlike above, $f INCLUDES path
 	FTRIMMED=${f%.md}
 	pandoc -s $f -o $FTRIMMED.html
 	rm $f
