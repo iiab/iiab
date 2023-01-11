@@ -15,7 +15,7 @@ INPUT=/tmp/iiab-wiki
 OUTPUT=/tmp/iiab-wiki.out
 DESTPATH={{ doc_root }}/info     # /library/www/html/info
 DOCSPATH=$DESTPATH/docs          # /library/www/html/info/docs
-ADMINCONSOLEPATH=$DESTPATH/admin-console    # /library/www/html/info/admin-console
+ADMINDOCSPATH=$DESTPATH/admin-console    # /library/www/html/info/admin-console
 # Note 1: sed (below) shortens URLs to 'admin-console'
 # Note 2: Depends on "fancyindex on;" in roles/nginx/templates/iiab.conf.j2
 
@@ -24,7 +24,7 @@ rm -rf $OUTPUT
 mkdir -p $INPUT
 mkdir -p $OUTPUT
 mkdir -p $DOCSPATH
-mkdir -p $ADMINCONSOLEPATH
+mkdir -p $ADMINDOCSPATH
 
 git clone https://github.com/iiab/iiab.wiki.git $INPUT
 for f in `ls $INPUT`; do    # Unlike further below, $f does NOT include path
@@ -35,8 +35,8 @@ done
 rsync -av $OUTPUT/ $DESTPATH
 
 if [ -d /opt/iiab/iiab-admin-console/docs ]; then
-    cp /opt/iiab/iiab-admin-console/docs/*.md $ADMINCONSOLEPATH
-    for f in $ADMINCONSOLEPATH/*.md; do    # Unlike above, $f INCLUDES path
+    cp /opt/iiab/iiab-admin-console/docs/*.md $ADMINDOCSPATH
+    for f in $ADMINDOCSPATH/*.md; do    # Unlike above, $f INCLUDES path
 	FTRIMMED=${f%.md}
 	pandoc -s $f -o $FTRIMMED.html
 	rm $f
