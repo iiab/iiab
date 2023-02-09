@@ -76,13 +76,13 @@ _WARNING: If on login users see "500 : Internal Server Error", you may need to r
 To see JupyterHub's (typically very long!) log, run:
 
 ```
-journalctl -u jupyterhub.service
+journalctl -u jupyterhub
 ```
 
 Sometimes other logs might also be available, e.g.:
 
 ```
-journalctl -u jupyter-admin-singleuser.service
+journalctl -u jupyter-admin-singleuser
 ```
 
 ### PAWS/Jupyter Notebooks for Python Beginners
