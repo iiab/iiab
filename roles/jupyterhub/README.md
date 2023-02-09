@@ -45,7 +45,7 @@ Users can change their password by logging in, and then visiting URL: http://box
 
 NOTE: This is the only way to change the password for user `Admin`, because **File > Hub Control Panel > Admin** (below) does not permit deletion of this account.
 
-### Hub Control Panel > Admin page, to manage other accounts
+### File > Hub Control Panel > Admin, to manage accounts
 
 The `Admin` user (and any users given `Admin` privilege) can reset user passwords by deleting the user from JupyterHub's **Admin** page (below).  This logs the user out, but does not remove any of their data or home directories.  The user can then set a new password in the usual way — simply by logging in.  Example:
 
