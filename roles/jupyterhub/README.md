@@ -71,6 +71,20 @@ The `Admin` user (and any users given `Admin` privilege) can reset user password
 
 _WARNING: If on login users see "500 : Internal Server Error", you may need to remove ALL files of the form_ `/run/jupyter-johndoe-singleuser`
 
+### Logging
+
+To see JupyterHub's (typically very long!) log, run:
+
+```
+journalctl -u jupyterhub.service
+```
+
+Sometimes other logs might also be available, e.g.:
+
+```
+journalctl -u jupyter-admin-singleuser.service
+```
+
 ### PAWS/Jupyter Notebooks for Python Beginners
 
 While PAWS is a little bit off topic, if you have an interest in Wikipedia, please do see this 23m 42s video ["Intro to PAWS/Jupyter notebooks for Python beginners"](https://www.youtube.com/watch?v=AUZkioRI-aA&list=PLeoTcBlDanyNQXBqI1rVXUqUTSSiuSIXN&index=8) by Chico Venancio, from 2021-06-01.
