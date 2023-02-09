@@ -43,9 +43,9 @@ Passwords are hashed using 4096 rounds of the latest Blowfish (bcrypt's $2b$ alg
 
 Users can change their password by logging in, and then visiting URL: http://box.lan/jupyterhub/auth/change-password
 
-NOTE: This is the only way to change the password for user 'Admin', because Control Panel > Admin (below) does not permit deletion of this account.
+NOTE: This is the only way to change the password for user `Admin`, because **File > Hub Control Panel > Admin** (below) does not permit deletion of this account.
 
-### Control Panel > Admin page, to manage other accounts
+### Hub Control Panel > Admin page, to manage other accounts
 
 The `Admin` user (and any users given `Admin` privilege) can reset user passwords by deleting the user from JupyterHub's **Admin** page (below).  This logs the user out, but does not remove any of their data or home directories.  The user can then set a new password in the usual way — simply by logging in.  Example:
 
