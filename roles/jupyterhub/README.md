@@ -9,10 +9,11 @@
   * [JupyterHub changelog](https://jupyterhub.readthedocs.io/en/stable/changelog.html#changelog)
 * Students create their own accounts on first use — e.g. at http://box.lan/jupyterhub — just as if they're logging in regularly (unfortunately the login screen doesn't make that clear, but the teacher _does not_ need to be involved!)
   * A student can then sign in with their username and password, to gain access to their files (Jupyter Notebooks).
-  * The teacher should set and protect JupyterHub's overall `Admin` password, just in case.  As with student accounts, the login screen doesn't make that clear — so just log in with username `Admin` — using any password that you want to become permanent.
+  * The teacher should set and protect JupyterHub's overall `Admin` password, just in case.  As with student accounts, the login screen unfortunately doesn't make that clear — so just log in with username `Admin` — using any password that you want to become permanent.
 * Individual student folders are created in `/var/lib/private/` on the Internet-in-a-Box (IIAB) server:
   * A student will only be able to see their own work — they do not have privileges outside of their own folder.
   * Students may upload Jupyter Notebooks to the IIAB server, and download the current state of their work via a normal browser.
+  * Linux administrators can read more about JupyterHub's [Local Users](https://github.com/jupyterhub/systemdspawner#local-users) and [c.SystemdSpawner.dynamic_users = True](https://github.com/jupyterhub/systemdspawner#dynamic_users)
 
 ### Settings
 
@@ -26,10 +27,11 @@ In some rare circumstances, it may be necessary to restart JupyterHub's systemd 
 sudo systemctl restart jupyterhub
 ```
 
-FYI `/opt/iiab/jupyterhub` is a Python 3 virtual environment, that can be activated with the usual formula:
+FYI `/opt/iiab/jupyterhub` is a Python 3 virtual environment, that can be activated (and deactivated) with the usual:
 
 ```
 source /opt/iiab/jupyterhub/bin/activate
+(jupyterhub) root@box:~# deactivate
 ```
 
 Passwords are hashed using 4096 rounds of the latest Blowfish (bcrypt's $2b$ algorithm) and stored in:
@@ -42,19 +44,19 @@ Passwords are hashed using 4096 rounds of the latest Blowfish (bcrypt's $2b$ alg
 
 Users can change their password by logging in, and then visiting URL: http://box.lan/jupyterhub/auth/change-password
 
-NOTE: This is the only way to change the password for user 'Admin', because Control Panel > Admin (below) does not permit deletion of this account.
+NOTE: This is the only way to change the password for user `Admin`, because **File > Hub Control Panel > Admin** (below) does not permit deletion of this account.
 
-### Control Panel > Admin page, to manage other accounts
+### File > Hub Control Panel > Admin, to manage accounts
 
 The `Admin` user (and any users given `Admin` privilege) can reset user passwords by deleting the user from JupyterHub's **Admin** page (below).  This logs the user out, but does not remove any of their data or home directories.  The user can then set a new password in the usual way — simply by logging in.  Example:
 
-1. As a user with `Admin` privilege, click **Control Panel** in the top right of your JupyterHub:
+1. As a user with `Admin` privilege, click **File > Hub Control Panel** in your JupyterHub:
 
-   ![Control panel button in notebook, top right](control-panel-button1.png)
+   ![image](https://user-images.githubusercontent.com/2458907/217602766-ab6a9d3c-9f92-496e-a0e8-6c18a084e960.png)
 
-2. In the Control Panel, open the **Admin** link in the top left:
+2. At the top of the Control Panel, click **Admin**:
 
-   ![Admin button in control panel, top left](admin-access-button1.png)
+   ![image](https://user-images.githubusercontent.com/2458907/217602473-f4f9fd40-b4c1-45e1-88c5-54c6d4b604ff.png)
 
    This opens up the JupyterHub Admin page, where you can add / delete users, start / stop peoples’ servers and see who is online.
 
@@ -69,6 +71,20 @@ The `Admin` user (and any users given `Admin` privilege) can reset user password
 5. Ask the user to log in, but with a new password of their choosing.  This will be their password going forward.
 
 _WARNING: If on login users see "500 : Internal Server Error", you may need to remove ALL files of the form_ `/run/jupyter-johndoe-singleuser`
+
+### Logging
+
+To see JupyterHub's (typically very long!) log, run:
+
+```
+journalctl -u jupyterhub
+```
+
+Sometimes other logs might also be available, e.g.:
+
+```
+journalctl -u jupyter-admin-singleuser
+```
 
 ### PAWS/Jupyter Notebooks for Python Beginners
 
