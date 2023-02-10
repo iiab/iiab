@@ -13,6 +13,7 @@
 * Individual student folders are created in `/var/lib/private/` on the Internet-in-a-Box (IIAB) server:
   * A student will only be able to see their own work — they do not have privileges outside of their own folder.
   * Students may upload Jupyter Notebooks to the IIAB server, and download the current state of their work via a normal browser.
+  * Linux administrators can read more about JupyterHub's [Local Users](https://github.com/jupyterhub/systemdspawner#local-users) and [c.SystemdSpawner.dynamic_users = True](https://github.com/jupyterhub/systemdspawner#dynamic_users)
 
 ### Settings
 
