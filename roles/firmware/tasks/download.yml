@@ -1,23 +1,39 @@
-- name: Back up 4 OS-provided WiFi firmware files (or symlinks) to /lib/firmware/brcm/*.orig
-  copy:
-    src: /lib/firmware/brcm/{{ item }}
-    dest: /lib/firmware/brcm/{{ item }}.orig
+# 2023-02-25: MONITOR FIRMWARE UPDATES in 3 places especially...
+#
+# 1. apt changelog firmware-brcm80211
+#    https://github.com/RPi-Distro/firmware-nonfree -> debian/config/brcm80211 (brcm, cypress)
+#    https://archive.raspberrypi.org/debian/dists/bullseye/main/binary-arm64/Packages (1.1MB text file, look inside for summary of latest firmware-brcm80211)
+#    https://archive.raspberrypi.org/debian/pool/main/f/firmware-nonfree/ -> firmware-brcm80211_* e.g.:
+#    https://archive.raspberrypi.org/debian/pool/main/f/firmware-nonfree/firmware-brcm80211_20190114-1+rpt11_all.deb from 2021-01-25
+#    https://archive.raspberrypi.org/debian/pool/main/f/firmware-nonfree/firmware-brcm80211_20210315-3+rpt4_all.deb from 2021-12-06
+#    https://archive.raspberrypi.org/debian/pool/main/f/firmware-nonfree/firmware-brcm80211_20221012-1~bpo11+1+rpt1_all.deb from 2022-11-17
+# 2. apt changelog linux-firmware-raspi
+#    https://packages.ubuntu.com/search?keywords=linux-firmware-raspi
+# 3. https://github.com/moodlebox/moodlebox/blob/main/roles/accesspoint/tasks/main.yml
+
+#- name: Back up 4 OS-provided WiFi firmware files (incl symlink contents) to /lib/firmware/cypress/*.orig
+- name: Back up 4 OS-provided WiFi firmware files (replicate any symlinks) to /lib/firmware/cypress/*.orig -- /usr/bin/iiab-check-firmware will later do similar (e.g. as firmware install completes) -- moving 2-or-4 of these to <ORIGINAL FILENAME>.YYYY-MM-DD-HH:MM:SS ("doubly timestamping" to preserve BOTH last-modif & moving date)
+  # copy:
+  #   src: /lib/firmware/cypress/{{ item }}
+  #   dest: /lib/firmware/cypress/{{ item }}.orig
+  #   #local_follow: False    # FAILS TO PRESERVE LINKS (ansible/ansible#74777) e.g. /lib/firmware/cypress/cyfmac43455-sdio.bin -> /etc/alternatives/cyfmac43455-sdio.bin -> ...
+  command: cp -a /lib/firmware/cypress/{{ item }} /lib/firmware/cypress/{{ item }}.orig    # "cp -P" == "cp --no-dereference" sufficient to replicate these symlinks and files ("cp -d" & "cp -a" are incrementally stronger, and so probably can't hurt)
   with_items:
-    - brcmfmac43430-sdio.bin
-    - brcmfmac43430-sdio.clm_blob
-    - brcmfmac43455-sdio.bin
-    - brcmfmac43455-sdio.clm_blob
-  ignore_errors: yes
+    - cyfmac43430-sdio.bin
+    - cyfmac43430-sdio.clm_blob
+    - cyfmac43455-sdio.bin
+    - cyfmac43455-sdio.clm_blob
+  #ignore_errors: yes    # 2023-02-25: Let's INTENTIONALLY surface any errors, e.g. if any future RasPiOS or Ubuntu-on-Rpi lack some of the above 4 files/links?
 
 - name: Download higher-capacity firmwares (for RPi internal WiFi, per https://github.com/iiab/iiab/issues/823#issuecomment-662285202 and https://github.com/iiab/iiab/issues/2853)
   get_url:
     url: "{{ iiab_download_url }}/{{ item }}"
-    dest: /lib/firmware/brcm/
+    dest: /lib/firmware/cypress/
     timeout: "{{ download_timeout }}"
   with_items:
-    - brcmfmac43455-sdio.bin_2021-11-30_minimal                # 19 -- from https://github.com/RPi-Distro/firmware-nonfree/blob/feeeda21e930c2e182484e8e1269b61cca2a8451/debian/config/brcm80211/cypress/cyfmac43455-sdio-minimal.bin
+    - brcmfmac43455-sdio.bin_2021-11-30_minimal                # 19 -- SAME AS RASPIOS & UBUNTU'S https://github.com/RPi-Distro/firmware-nonfree/blob/feeeda21e930c2e182484e8e1269b61cca2a8451/debian/config/brcm80211/cypress/cyfmac43455-sdio-minimal.bin
     - brcmfmac43455-sdio.bin_2021-10-05_3rd-trial-minimal      # 24 -- from https://github.com/iiab/iiab/issues/2853#issuecomment-934293015
-    - brcmfmac43455-sdio.clm_blob_2021-11-17_rpi               # Works w/ both above -- from https://github.com/RPi-Distro/firmware-nonfree/blob/dc406650e840705957f8403efeacf71d2d7543b3/debian/config/brcm80211/cypress/cyfmac43455-sdio.clm_blob
+    - brcmfmac43455-sdio.clm_blob_2021-11-17_rpi               # Works w/ both above -- SAME AS RASPIOS & UBUNTU'S https://github.com/RPi-Distro/firmware-nonfree/blob/dc406650e840705957f8403efeacf71d2d7543b3/debian/config/brcm80211/cypress/cyfmac43455-sdio.clm_blob
     - brcmfmac43455-sdio.bin_2015-03-01_7.45.18.0_ub19.10.1    # 32 -- from https://github.com/iiab/iiab/issues/823#issuecomment-662285202
     - brcmfmac43455-sdio.clm_blob_2018-02-26_rpi
     - brcmfmac43430-sdio.bin_2018-09-11_7.45.98.65             # 30 -- from https://github.com/iiab/iiab/issues/823#issuecomment-662285202
