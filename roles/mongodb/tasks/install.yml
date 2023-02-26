@@ -16,9 +16,9 @@
 # CLARIF: mongodb_stretch_3_0_14_core.zip IS IN FACT 3.0.14 (core) BUT...
 #         mongodb_stretch_3_0_14_tools.zip IS REALLY 3.0.15 (tools)
 
-# 2023-02-24: ALL 54 LINES BELOW (e.g. for 32-bit RasPiOS) MAY NEED TO BE
-# REMOVED SOON, due to Sugarizer Server 1.5.0's new MongoDB 3.2+ REQUIREMENT:
-# https://github.com/iiab/iiab/pull/3478#issuecomment-1444395170
+- debug:
+    msg: '9-STANZA BLOCK BELOW, RUNS *IF* 32-BIT -- i.e. not (ansible_architecture == "aarch64" or ansible_architecture == "x86_64") -- WILL LIKELY BE REMOVED SOON IN 2023, as MongoDB 3.0.1 is insufficient for Sugarizer Server 1.5.0''s new MongoDB 3.2+ REQUIREMENT: https://github.com/iiab/iiab/pull/3478#issuecomment-1444395170'
+
 - block:
   - name: Create dir /tmp/mongodb-3.0.1x (aarch32)
     file:
@@ -72,13 +72,20 @@
       - /var/log/mongodb
 
   # end block
-  when: not (ansible_architecture == "x86_64" or ansible_architecture == "aarch64")
+  when: not (ansible_architecture == "x86_64" or ansible_architecture == "aarch64")    # ansible_machine is a bit safer than ansible_architecture (see kiwix/defaults/main.yml)
+
+- debug:
+    msg: 9-STANZA BLOCK ABOVE, RAN *IF* 32-BIT -- i.e. not (ansible_architecture == "aarch64" or ansible_architecture == "x86_64")
 
 # 32-bit OS's [WERE] handled above: this should handle aarch32 including 32-bit
 # Ubuntu from https://ubuntu.com/download/raspberry-pi but Ubuntu 20.04+ and
 # 22.04+ 32-bit might fail untested, and 32-bit Intel might puke as this was
 # orginally deployed for Raspbian.  (Haven't seen bootable 32-bit Intel
 # installers for a while now.)  64-bit OS's proceed below.
+
+
+- debug:
+    msg: 15-STANZA BLOCK BELOW, RUNS *IF* 64-BIT -- i.e. ansible_architecture == "aarch64" or ansible_architecture == "x86_64"
 
 - block:
   - name: Add mongodb.org signing key (only 64-bit available) for MongoDB version {{ mongodb_version }}
@@ -130,6 +137,7 @@
     #when: is_ubuntu and os_ver is version('ubuntu-2204', '>=') or is_linuxmint and os_ver is version('linuxmint-12', '>=') or is_debian and os_ver is version('debian-12', '>=')
     #when: not (is_debian and ansible_architecture == "x86_64")
 
+
   # 2022-10-23: Force-install MongoDB on Ubuntu 22.04+, Mint 21 & Debian 12;
   # as each includes libssl3 not libssl1.1 (#3190).  LATER REMOVE ALL 7 STANZAS
   # BELOW, IF/WHEN MongoDB ONE DAY FINALLY SUPPORTS libssl3 ?  (MongoDB 6.2 fix
@@ -141,10 +149,51 @@
   # sudo apt-get install libssl1.1
   # rm /etc/apt/sources.list.d/focal-security.list
 
-  # 2023-01-19: Retrofitting libssl1.1 onto Ubuntu 22.04+ and Debian 12 is no
-  # longer nec (certainly on x86_64, and hopefully sufficiently across the
-  # board?) as MongoDB can finally use libssl3 instead, since 2022-11-15:
+  # 2023-02-25: RETROFITTING libssl1.1 STILL NEC on Ubuntu 22.04+ and Debian 12+
+  # *IF* MongoDB < 6.0 (e.g. RPi, where MongoDB 6.0 is a complete non-starter!)
+  #
+  # Whereas libssl1.1 is thankfully NO LONGER NEC on x86_64, where MongoDB can
+  # finally use libssl3 instead, since 2022-11-15:
   # https://www.mongodb.com/community/forums/t/installing-mongodb-over-ubuntu-22-04/159931/90
+
+  - debug:
+      msg: 5-STANZA BLOCK FOLLOWS, TO FORCE INSTALL libssl1.1 -- runs *IF* mandated mongodb_version ({{ mongodb_version }}) < 6.0 (i.e. for aarch64/arm64) on Ubuntu 22.04+ or Debian 12+ -- whereas Linux Mint should never need libssl1.1
+
+  - block:
+
+    - name: Install OLD source/repo "deb http://ports.ubuntu.com/ubuntu-ports focal-security main" at /etc/apt/sources.list.d/ports_ubuntu_com_ubuntu_ports.list if Ubuntu
+      apt_repository:
+        repo: deb http://ports.ubuntu.com/ubuntu-ports focal-security main
+      when: is_ubuntu
+
+    - name: Install OLD source/repo "deb http://security.debian.org/debian-security bullseye-security main" at /etc/apt/sources.list.d/security_debian_org_debian_security.list if Debian
+      apt_repository:
+        repo: deb http://security.debian.org/debian-security bullseye-security main
+        #repo: deb https://deb.debian.org/debian-security bullseye-security main    # New way, likely equivalent
+      when: is_debian
+
+    - name: Force install libssl1.1
+      package:
+        name: libssl1.1
+        state: present
+
+    - name: Remove OLD source/repo "deb http://security.debian.org/debian-security bullseye-security main" at /etc/apt/sources.list.d/security_debian_org_debian_security.list if Debian
+      apt_repository:
+        repo: deb http://security.debian.org/debian-security bullseye-security main
+        #repo: deb https://deb.debian.org/debian-security bullseye-security main    # New way, likely equivalent
+        state: absent
+      when: is_debian
+
+    - name: Remove OLD source/repo "deb http://ports.ubuntu.com/ubuntu-ports focal-security main" at /etc/apt/sources.list.d/ports_ubuntu_com_ubuntu_ports.list if Ubuntu
+      apt_repository:
+        repo: deb http://ports.ubuntu.com/ubuntu-ports focal-security main
+        state: absent
+      when: is_ubuntu
+
+    when: mongodb_version is version('6.0', '<') and (is_ubuntu and os_ver is version('ubuntu-2204', '>=') or is_debian_12 and os_ver is version('debian-12', '>='))
+
+  - debug:
+      msg: 5-STANZA BLOCK ABOVE, RAN *IF* FORCED INSTALL OF libssl1.1 WAS NEEDED
 
   # - name: Install source/repo "deb http://security.ubuntu.com/ubuntu focal-security main" at /etc/apt/sources.list.d/security_ubuntu_com_ubuntu.list if Ubuntu 22.04+ x86_64 or Mint 21
   #   apt_repository:
@@ -189,6 +238,7 @@
   #     #filename: focal-security    # 100% IGNORED during repo deletion
   # when: is_ubuntu and os_ver is version('ubuntu-2204', '>=') and ansible_architecture == "x86_64" or is_linuxmint_21
 
+
   # # Debian 10 aarch64 might work below but is blocked in main.yml
   # - name: Use mongodb-org's Ubuntu focal repo for RasPiOS-aarch64
   #   apt_repository:
@@ -212,6 +262,7 @@
   #     filename: mongodb-org
   #   when: is_ubuntu and not is_linuxmint
 
+
   - name: "Install packages: mongodb-org, mongodb-org-server"
     package:
       name:
@@ -231,6 +282,7 @@
       path: "{{ mongodb_conf }}"
       regexp: '^\s*port:'
       line: "  port: {{ mongodb_port }}"    # 27017
+
 
   # 2022-06-07 #3236 MongoDB 5.0.9 "Illegal instruction" on RPi 4...
   # https://www.mongodb.com/community/forums/t/core-dump-on-mongodb-5-0-on-rpi-4/115291/14
@@ -266,6 +318,9 @@
 
   # end block
   when: ansible_architecture == "aarch64" or ansible_architecture == "x86_64"
+
+- debug:
+    msg: 15-STANZA BLOCK ABOVE, RAN *IF* 64-BIT -- i.e. ansible_architecture == "aarch64" or ansible_architecture == "x86_64"    # ansible_machine is a bit safer than ansible_architecture (see kiwix/defaults/main.yml)
 
 
 # 2. CONFIGURE MongoDB FOR IIAB
