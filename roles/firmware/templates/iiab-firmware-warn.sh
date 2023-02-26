@@ -1,7 +1,7 @@
 #!/bin/bash
 
 if [ -f /tmp/.fw_modified ]; then
-    echo -e "\n\e[41;1mWiFi Firmware link(s) modified, per iiab/iiab#2853: PLEASE REBOOT!\e[0m"
+    echo -e "\n\e[41;1mWiFi Firmware link(s) modified, per iiab/iiab#3482: PLEASE REBOOT!\e[0m"
     echo
     echo -e "If you want this warning to stop, reboot to remove /tmp/.fw_modified\n"
 fi
