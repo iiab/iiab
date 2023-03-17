@@ -179,23 +179,21 @@ $APT_PATH/apt -y install python3-pip
 
 #$APT_PATH/apt -y --allow-downgrades install ansible-core
 
-if uname -m | grep -q 64; then
-    # 2021-10-30: Using pip is messy, leaving behind cached files, so turn off pip
-    # cache system-wide before installing:
-    # https://stackoverflow.com/questions/9510474/removing-pips-cache/61762308#61762308
-    # https://github.com/iiab/iiab/pull/3022
-    pip3 config --global set global.no-cache-dir false
-    echo -e "\n\n'pip3 install --upgrade ansible-core' will now run:\n"
-    pip3 install --break-system-packages --upgrade ansible-core    # ansible-core 2.12 (released 2021-11-08) requires Python >= 3.8
-else
-#    echo "2022-11-09: ansible-core 2.12.10+ PPA works on 32-bit RasPiOS, using /etc/apt/sources.list.d/iiab-ansible.list, until upstream wheels -> cryptography is fixed (PR #3421)"
-#    $APT_PATH/apt -y --allow-downgrades install ansible-core
-    pip3 config --global set global.no-cache-dir false
-    echo -e "\n\n'pip3 install cryptography==37.0.4' will now run:\n"
-    pip3 install --break-system-packages cryptography==37.0.4 # latest compatible with ansible-core available via piwheels.org
-    echo -e "\n\n'pip3 install --upgrade ansible-core' will now run:\n"
-    pip3 install --break-system-packages --upgrade ansible-core # ansible-core 2.12 (released 2021-11-08) requires Python >= 3.8
+# 2021-10-30: Using pip is messy, leaving behind cached files, so turn off pip
+# cache system-wide before installing:
+# https://stackoverflow.com/questions/9510474/removing-pips-cache/61762308#61762308
+# https://github.com/iiab/iiab/pull/3022
+pip3 config --global set global.no-cache-dir false
+
+if ! uname -m | grep -q 64; then
+    # echo "2022-11-09: ansible-core 2.12.10+ PPA works on 32-bit RasPiOS, using /etc/apt/sources.list.d/iiab-ansible.list, until upstream wheels -> cryptography is fixed (PR #3421)"
+    # $APT_PATH/apt -y --allow-downgrades install ansible-core
+    echo -e "\n\n'pip3 install cryptography==39.0.2' will now run:\n"
+    pip3 install --break-system-packages cryptography==39.0.2 || pip3 install cryptography==39.0.2    # PR #3459 https://www.piwheels.org/project/cryptography/ -- WAS 37.0.4 which as of 2023-01-06 was the "latest compatible with ansible-core available via piwheels.org"
 fi
+
+echo -e "\n\n'pip3 install --upgrade ansible-core' will now run:\n"                                   # REMINDER: ansible-core 2.12 (released 2021-11-08) requires Python >= 3.8
+pip3 install --break-system-packages --upgrade ansible-core || pip3 install --upgrade ansible-core    # PR #3493: Revert to old syntax if pip < 23.0.1, as flag --break-system-packages (for Python 3.11+ / PEP 668) is brand new: https://github.com/pypa/pip/pull/11780
 
 # (Re)running collection installs appears safe, with --force-with-deps to force
 # upgrade of collection and dependencies it pulls in.  Note Ansible may support
