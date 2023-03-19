@@ -160,10 +160,10 @@ fi
 ###echo -e 'ENSURE ANSIBLE UPDATES CLEANLY: (then re-run this script to be sure!)\n'
 ###grep '^deb .*ansible' /etc/apt/sources.list /etc/apt/sources.list.d/*.list | grep -v '^/etc/apt/sources.list.d/iiab-ansible.list:' || true    # Override bash -e (instead of aborting at 1st error)
 
-echo -e "\napt update; apt install python3-pip    # Also installs 'python3-setuptools' and 'python3' etc"
+#echo -e "\napt update; apt install python3-pip    # Also installs 'python3-setuptools' and 'python3' etc"
 #echo -e "https://github.com/iiab/iiab/blob/master/scripts/ansible.md\n"
-$APT_PATH/apt update
-$APT_PATH/apt -y install python3-pip
+#$APT_PATH/apt update
+#$APT_PATH/apt -y install python3-pip
 
 # 2021-07-29:
 # 'python3-packaging' dropped for now
@@ -183,17 +183,30 @@ $APT_PATH/apt -y install python3-pip
 # cache system-wide before installing:
 # https://stackoverflow.com/questions/9510474/removing-pips-cache/61762308#61762308
 # https://github.com/iiab/iiab/pull/3022
-pip3 config --global set global.no-cache-dir false
+#pip3 config --global set global.no-cache-dir false
 
-if ! uname -m | grep -q 64; then
+#if ! uname -m | grep -q 64; then
     # echo "2022-11-09: ansible-core 2.12.10+ PPA works on 32-bit RasPiOS, using /etc/apt/sources.list.d/iiab-ansible.list, until upstream wheels -> cryptography is fixed (PR #3421)"
     # $APT_PATH/apt -y --allow-downgrades install ansible-core
-    echo -e "\n\n'pip3 install cryptography==39.0.2' will now run:\n"
-    pip3 install --break-system-packages cryptography==39.0.2 || pip3 install cryptography==39.0.2    # PR #3459 https://www.piwheels.org/project/cryptography/ -- WAS 37.0.4 which as of 2023-01-06 was the "latest compatible with ansible-core available via piwheels.org"
-fi
+#    echo -e "\n\n'pip3 install cryptography==39.0.2' will now run:\n"
+#    pip3 install --break-system-packages cryptography==39.0.2 || pip3 install cryptography==39.0.2    # PR #3459 https://www.piwheels.org/project/cryptography/ -- WAS 37.0.4 which as of 2023-01-06 was the "latest compatible with ansible-core available via piwheels.org"
+#fi
 
-echo -e "\n\n'pip3 install --upgrade ansible-core' will now run:\n"                                   # REMINDER: ansible-core 2.12 (released 2021-11-08) requires Python >= 3.8
-pip3 install --break-system-packages --upgrade ansible-core || pip3 install --upgrade ansible-core    # PR #3493: Revert to old syntax if pip < 23.0.1, as flag --break-system-packages (for Python 3.11+ / PEP 668) is brand new in Feb 2023: https://github.com/pypa/pip/pull/11780
+#echo -e "\n\n'pip3 install --upgrade ansible-core' will now run:\n"                                   # REMINDER: ansible-core 2.12 (released 2021-11-08) requires Python >= 3.8
+#pip3 install --break-system-packages --upgrade ansible-core || pip3 install --upgrade ansible-core    # PR #3493: Revert to old syntax if pip < 23.0.1, as flag --break-system-packages (for Python 3.11+ / PEP 668) is brand new in Feb 2023: https://github.com/pypa/pip/pull/11780
+
+echo -e "\napt update; apt install python3-venv"
+$APT_PATH/apt update
+$APT_PATH/apt -y install python3-venv
+
+echo -e "\nCreate virtual environment for Ansible"
+python3 -m venv /usr/local/ansible
+/usr/local/ansible/bin/python3 -m pip install --upgrade ansible-core
+echo -e "\nCreate symlinks /usr/local/bin/ansible* -> /usr/local/ansible/bin/ansible*"
+cd /usr/local/ansible/bin
+for bin in $(ls ansible*); do
+    ln -sf /usr/local/ansible/bin/$bin /usr/local/bin/$bin
+done
 
 # (Re)running collection installs appears safe, with --force-with-deps to force
 # upgrade of collection and dependencies it pulls in.  Note Ansible may support
@@ -216,6 +229,7 @@ ansible-galaxy collection install --force-with-deps \
 
 echo -e "\n\nSUCCESS!  PLEASE VERIFY ANSIBLE WITH COMMANDS LIKE:\n"
 echo -e "    ansible --version"
+echo -e "    /usr/local/ansible/bin/pip3 show ansible-core"
 echo -e "    pip3 show ansible-core"
 echo -e '    apt -a list "ansible*"'
 echo -e "    ansible-galaxy collection list\n"
