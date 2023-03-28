@@ -8,7 +8,7 @@ This can be useful if a printer is attached to your IIAB &mdash; so student/teac
 
 ## Using it
 
-Make sure your IIAB was installed with these 2 lines in [/etc/iiab/local_vars.yml](http://faq.iiab.io/#What_is_local_vars.yml_and_how_do_I_customize_it.3F) :
+Make sure your IIAB was installed with these 2 lines in [/etc/iiab/local_vars.yml](http://faq.iiab.io/#What_is_local_vars.yml_and_how_do_I_customize_it%3F) :
 
 ```
 cups_install: True

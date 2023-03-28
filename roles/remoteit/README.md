@@ -43,7 +43,7 @@ Prerequisite: Find any IIAB with `remoteit_installed: True` in `/etc/iiab/iiab_s
 
 2. If your IIAB software is already installed, run `sudo iiab-remoteit` then skip to Step 5. below.
 
-3. If your IIAB software isn't yet installed, set `remoteit_install` and `remoteit_enabled` to `True` in its [/etc/iiab/local_vars.yml](https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it.3F)
+3. If your IIAB software isn't yet installed, set `remoteit_install` and `remoteit_enabled` to `True` in its [/etc/iiab/local_vars.yml](https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it%3F)
 
    Install [IIAB software](https://download.iiab.io/) e.g. by running `sudo iiab` then follow any on-screen instructions &mdash; until "INTERNET-IN-A-BOX (IIAB) SOFTWARE INSTALL IS COMPLETE" eventually appears on screen.
 -->
@@ -98,7 +98,7 @@ Prerequisite: Find any IIAB with `remoteit_installed: True` in `/etc/iiab/iiab_s
 
 1. Copy your remote.it account _license key_ from their Desktop Application (https://remote.it/download/) or from their Web Portal (https://remote.it) &mdash; as shown in this [screenshot](https://docs.remote.it/oem-and-bulk-provisioning/registration-into-a-users-account#3.-user-receives-the-device-and-registers-his-account).
 
-   Paste it into your IIAB's [/etc/iiab/local_vars.yml](https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it.3F) as in this example:
+   Paste it into your IIAB's [/etc/iiab/local_vars.yml](https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it%3F) as in this example:
 
    ```
    remoteit_license_key: 592AA9BB-XXXX-YYYY-ZZZZ-6E27654C3DF6

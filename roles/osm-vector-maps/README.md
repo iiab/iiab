@@ -18,8 +18,8 @@
    3. Multiple Hi-Res Satellite Photo Regions can be downloaded/installed (one "square" region at a time, thankfully duplicate disk space is avoided when such "squares" overlap!)
 
 4. Some variables have newer meanings:
-   1. `osm_vector_maps_install` in [/etc/iiab/local_vars.yml](https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it.3F) means install the map program and 7 basic levels of zoom (48MB for OSM + 25 MB for satellite photos).
-   2. `osm_vector_maps_enabled` in [/etc/iiab/local_vars.yml](https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it.3F) is once again standardized, solving #2484 install delays.
+   1. `osm_vector_maps_install` in [/etc/iiab/local_vars.yml](https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it%3F) means install the map program and 7 basic levels of zoom (48MB for OSM + 25 MB for satellite photos).
+   2. `osm_vector_maps_enabled` in [/etc/iiab/local_vars.yml](https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it%3F) is once again standardized, solving #2484 install delays.
    3. `osm_vector_maps_installed` in `/etc/iiab/iiab_state.yml` means a functioning world map with 7 levels of zoom (z0-z6) has been installed — i.e. a preview of IIAB's mapping system that helps you select Maps Pack(s) and Hi-Res Satellite Photo Region(s) to download and install on your IIAB.  (SEE 1. ABOVE)
 
 5. **Drag-and-Drop Map Overlays** — try this by dragging and dropping any relevant GeoJSON file onto the IIAB Maps (http://box/maps) in your browser!  For example try this GeoJSON file, to explore the shape of gerrymandered US Congressional districts: https://eric.clst.org/assets/wiki/uploads/Stuff/gz_2010_us_500_11_20m.json

@@ -14,7 +14,7 @@ The Nextcloud suite is divided into three main categories:
 
 ## Install It
 
-(1) Set these 2 variable in [/etc/iiab/local_vars.yml](http://FAQ.IIAB.IO#What_is_local_vars.yml_and_how_do_I_customize_it.3F) prior to installing Internet-in-a-Box:
+(1) Set these 2 variable in [/etc/iiab/local_vars.yml](http://FAQ.IIAB.IO#What_is_local_vars.yml_and_how_do_I_customize_it%3F) prior to installing Internet-in-a-Box:
 
     nextcloud_install: True
     nextcloud_enabled: True
