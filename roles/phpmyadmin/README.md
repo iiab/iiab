@@ -8,7 +8,7 @@
 2. phpMyAdmin, because it is a browser-based HTML PHP application, is limited in what it can do, and what it can access — until the "root" user creates users and access privileges, as mentioned above. (HTML servers always run with very low privileges)
 
 #### Installing phpMyAdmin
-1. First, a user will need to set `phpmyadmin_install: True` and `phpmyadmin_enabled: True` in [/etc/iiab/local_vars.yml](http://wiki.laptop.org/go/IIAB/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it.3F)
+1. First, a user will need to set `phpmyadmin_install: True` and `phpmyadmin_enabled: True` in [/etc/iiab/local_vars.yml](http://wiki.laptop.org/go/IIAB/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it%3F)
 2. Then install IIAB.  Or if IIAB is already installed, run:
    ```
    cd /opt/iiab/iiab

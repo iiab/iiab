@@ -4,12 +4,30 @@
 # https://github.com/learningequality/pi-gen/blob/master/stage2/04-hostapd/offline.yml
 # https://github.com/learningequality/pi-gen/blob/master/stage2/04-hostapd/online.yml
 
+# Install Kolibri » Debian/Ubuntu
+# https://kolibri.readthedocs.io/en/latest/install/ubuntu-debian.html
+
+# Advanced management
+# https://kolibri.readthedocs.io/en/latest/manage/advanced.html
+
+# Working with Kolibri from the command line
+# https://kolibri.readthedocs.io/en/latest/manage/command_line.html
+
+# Customize Kolibri settings with the [ /library/kolibri/options.ini ] file
+# https://kolibri.readthedocs.io/en/latest/manage/options_ini.html
+
+# Test Kolibri server performance
+# https://kolibri.readthedocs.io/en/latest/manage/performance.html
+
+# Provisioning many servers
+# https://kolibri.readthedocs.io/en/latest/install/provision.html
+
+
 - name: Create Linux user {{ kolibri_user }} and add it to groups {{ apache_user }}, disk
   user:
     name: "{{ kolibri_user }}"
-    groups:
-      - "{{ apache_user }}"
-      - disk
+    groups: "{{ apache_user }}"    # 2023-03-29: Not really necessary (Kolibri is demonstrated to work without group 'www-data').  But it likely doesn't hurt.
+      #- disk    # 2023-03-29: Tested to be unnec with USB sticks (with 64-bit RasPiOS).  FWIW group 'disk' is "Mostly equivalent to root access" according to https://wiki.debian.org/SystemGroups
     state: present
     shell: /bin/false
     system: yes
@@ -39,83 +57,86 @@
     dest: /etc/kolibri/daemon.conf
 
 
-- name: apt install latest Kolibri .deb from {{ kolibri_deb_url }} (populates {{ kolibri_home }}, migrates database)    # i.e. /library/kolibri
+# https://kolibri.readthedocs.io/en/latest/install/ubuntu-debian.html claims:
+# "When you use the PPA installation method, upgrades to newer versions
+# will be automatic, provided there is internet access available."
+#
+# IN REALITY: apt upgrading Kolibri is messy, as up-to-5 debconf screens prompt
+# PPL WHO DON'T KNOW with the wrong default username, instead of 'kolibri' :/
+# https://github.com/learningequality/kolibri-installer-debian/pull/117
+
+# 2022-08-31: keyring /etc/apt/trusted.gpg DEPRECATED as detailed on #3343
+- name: Download Kolibri's apt key to /usr/share/keyrings/learningequality-kolibri.gpg
+  shell: |
+    gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys DC5BAA93F9E4AE4F0411F97C74F88ADB3194DD81
+    gpg --yes --output /usr/share/keyrings/learningequality-kolibri.gpg --export DC5BAA93F9E4AE4F0411F97C74F88ADB3194DD81
+
+- name: Add signed Kolibri PPA 'jammy' (if Ubuntu 22.04+ or Mint 21 or Debian 12)
+  apt_repository:
+    repo: "deb [signed-by=/usr/share/keyrings/learningequality-kolibri.gpg] http://ppa.launchpad.net/learningequality/kolibri/ubuntu jammy main"
+  when: is_ubuntu and os_ver is version('ubuntu-2204', '>=') or is_linuxmint_21 or is_debian_12
+  #when: is_ubuntu_2204 or is_ubuntu_2210 or is_debian_12    # MINT 21 COVERED BY is_ubuntu_2204
+
+- name: Add signed Kolibri PPA 'focal' (if other/older OS's)
+  apt_repository:
+    repo: "deb [signed-by=/usr/share/keyrings/learningequality-kolibri.gpg] http://ppa.launchpad.net/learningequality/kolibri/ubuntu focal main"
+  when: not (is_ubuntu and os_ver is version('ubuntu-2204', '>=') or is_linuxmint_21 or is_debian_12)
+  #when: not (is_ubuntu_2204 or is_ubuntu_2210 or is_debian_12)
+
+# - name: Add Kolibri PPA repo 'ppa:learningequality/kolibri' (if is_ubuntu and not is_linuxmint)
+#   apt_repository:
+#     repo: ppa:learningequality/kolibri
+#   when: is_ubuntu and not is_linuxmint
+
+# 2022-08-19: 'add-apt-repository ppa:learningequality/kolibri' works at CLI on
+# Mint 21 (creating /etc/apt/sources.list.d/learningequality-kolibri-jammy.list)
+# BUT equivalent Ansible command (STANZA ABOVE) failed with error...
+# "Failed to update apt cache: E:The repository 'http://ppa.launchpad.net/learningequality/kolibri/ubuntu vanessa Release' does not have a Release file."
+# ...so for now we special case Mint, similar to Debian (BOTH STANZAS BELOW!)
+
+# 2022-08-19: https://github.com/learningequality/kolibri/issues/9647 also asks
+# about the warning below, arising no matter if codename is 'focal' or 'jammy'
+# with Kolibri 0.15.6 on Mint 21 -- if you run '/usr/bin/kolibri --version':
+#
+# /usr/lib/python3/dist-packages/pkg_resources/__init__.py:116: PkgResourcesDeprecationWarning: 0.1.43ubuntu1 is an invalid version and will not be supported in a future release
+# warnings.warn(
+
+# 2022-08-19: 'apt-key list' & 'apt-key del 3194 DD81' are useful if you also
+# want to clear out Kolibri's key from the DEPRECATED /etc/apt/trusted.gpg
+
+# - name: Add Kolibri PPA repo 'ppa:learningequality/kolibri' with codename 'jammy' (if is_linuxmint_21)
+#   apt_repository:
+#     repo: ppa:learningequality/kolibri
+#     codename: jammy    # CONSOLIDATE THIS SPECIAL CASE STANZA WITH UBUNTU ABOVE IN FUTURE?
+#   when: is_linuxmint_21
+
+# - name: Add Kolibri PPA repo 'ppa:learningequality/kolibri' with codename 'focal' (if is_debian or is_linuxmint_20)
+#   apt_repository:
+#     repo: ppa:learningequality/kolibri
+#     codename: focal    # UPDATE THIS TO 'jammy' AFTER "RasPiOS Bookworm" (based on Debian 12) IS RELEASED! (ETA Q3 2023)
+#   when: is_debian or is_linuxmint_20
+
+- name: apt install kolibri (using apt source specified above, if kolibri_deb_url ISN'T defined)
+  apt:
+    name: kolibri
+  when: kolibri_deb_url is undefined
+  # environment:
+  #   KOLIBRI_HOME: "{{ kolibri_home }}"    # 2023-03-27: These don't do a thing
+  #   KOLIBRI_USER: "{{ kolibri_user }}"    # for now.
+
+- name: apt install {{ kolibri_deb_url }} (if kolibri_deb_url IS defined)
   apt:
     deb: "{{ kolibri_deb_url }}"    # e.g. https://learningequality.org/r/kolibri-deb-latest
-  environment:
-    KOLIBRI_HOME: "{{ kolibri_home }}"    # These don't do a thing for now but
-    KOLIBRI_USER: "{{ kolibri_user }}"    # both can't hurt & Might Help Later
   when: kolibri_deb_url is defined
+  # environment:
+  #   KOLIBRI_HOME: "{{ kolibri_home }}"    # 2023-03-27: These don't do a thing
+  #   KOLIBRI_USER: "{{ kolibri_user }}"    # for now.
 
-- block:    # ELSE...
 
-  # https://kolibri.readthedocs.io/en/latest/install/ubuntu-debian.html says:
-  # "When you use the PPA installation method, upgrades to newer versions
-  # will be automatic, provided there is internet access available."
-  #
-  # IN REALITY: apt upgrading Kolibri is risky, as 3 pink/blue screens prompt
-  # PPL WHO DON'T KNOW TO TYPE IN things like Linux username 'kolibri' :/ #3356
-
-  # 2022-08-31: keyring /etc/apt/trusted.gpg DEPRECATED as detailed on #3343
-  - name: Download Kolibri's apt key to /usr/share/keyrings/learningequality-kolibri.gpg
-    shell: |
-      gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys DC5BAA93F9E4AE4F0411F97C74F88ADB3194DD81
-      gpg --yes --output /usr/share/keyrings/learningequality-kolibri.gpg --export DC5BAA93F9E4AE4F0411F97C74F88ADB3194DD81
-
-  - name: Add signed Kolibri PPA 'jammy' (if Ubuntu 22.04+ or Mint 21 or Debian 12)
-    apt_repository:
-      repo: "deb [signed-by=/usr/share/keyrings/learningequality-kolibri.gpg] http://ppa.launchpad.net/learningequality/kolibri/ubuntu jammy main"
-    when: is_ubuntu and os_ver is version('ubuntu-2204', '>=') or is_linuxmint_21 or is_debian_12
-    #when: is_ubuntu_2204 or is_ubuntu_2210 or is_debian_12    # MINT 21 COVERED BY is_ubuntu_2204
-
-  - name: Add signed Kolibri PPA 'focal' (if other/older OS's)
-    apt_repository:
-      repo: "deb [signed-by=/usr/share/keyrings/learningequality-kolibri.gpg] http://ppa.launchpad.net/learningequality/kolibri/ubuntu focal main"
-    when: not (is_ubuntu and os_ver is version('ubuntu-2204', '>=') or is_linuxmint_21 or is_debian_12)
-    #when: not (is_ubuntu_2204 or is_ubuntu_2210 or is_debian_12)
-
-  # - name: Add Kolibri PPA repo 'ppa:learningequality/kolibri' (if is_ubuntu and not is_linuxmint)
-  #   apt_repository:
-  #     repo: ppa:learningequality/kolibri
-  #   when: is_ubuntu and not is_linuxmint
-
-  # 2022-08-19: 'add-apt-repository ppa:learningequality/kolibri' works at CLI on
-  # Mint 21 (creating /etc/apt/sources.list.d/learningequality-kolibri-jammy.list)
-  # BUT equivalent Ansible command (STANZA ABOVE) failed with error...
-  # "Failed to update apt cache: E:The repository 'http://ppa.launchpad.net/learningequality/kolibri/ubuntu vanessa Release' does not have a Release file."
-  # ...so for now we special case Mint, similar to Debian (BOTH STANZAS BELOW!)
-
-  # 2022-08-19: https://github.com/learningequality/kolibri/issues/9647 also asks
-  # about the warning below, arising no matter if codename is 'focal' or 'jammy'
-  # with Kolibri 0.15.6 on Mint 21 -- if you run '/usr/bin/kolibri --version':
-  #
-  # /usr/lib/python3/dist-packages/pkg_resources/__init__.py:116: PkgResourcesDeprecationWarning: 0.1.43ubuntu1 is an invalid version and will not be supported in a future release
-  # warnings.warn(
-
-  # 2022-08-19: 'apt-key list' & 'apt-key del 3194 DD81' are useful if you also
-  # want to clear out Kolibri's key from the DEPRECATED /etc/apt/trusted.gpg
-
-  # - name: Add Kolibri PPA repo 'ppa:learningequality/kolibri' with codename 'jammy' (if is_linuxmint_21)
-  #   apt_repository:
-  #     repo: ppa:learningequality/kolibri
-  #     codename: jammy    # CONSOLIDATE THIS SPECIAL CASE STANZA WITH UBUNTU ABOVE IN FUTURE?
-  #   when: is_linuxmint_21
-
-  # - name: Add Kolibri PPA repo 'ppa:learningequality/kolibri' with codename 'focal' (if is_debian or is_linuxmint_20)
-  #   apt_repository:
-  #     repo: ppa:learningequality/kolibri
-  #     codename: focal    # UPDATE THIS TO 'jammy' AFTER "RasPiOS Bookworm" (based on Debian 12) IS RELEASED! (ETA Q3 2023)
-  #   when: is_debian or is_linuxmint_20
-
-  - name: apt install kolibri (populates {{ kolibri_home }}, migrates database)    # i.e. /library/kolibri
-    apt:
-      name: kolibri
-    environment:
-      KOLIBRI_HOME: "{{ kolibri_home }}"    # These don't do a thing for now but
-      KOLIBRI_USER: "{{ kolibri_user }}"    # both can't hurt & Might Help Later
-
-  when: kolibri_deb_url is undefined
-
+- name: Run 'rm -rf /root/.kolibri' to remove "unavoidable" pollution created above
+  file:
+    state: absent
+    path: /root/.kolibri
 
 - name: 'Install from template: /etc/systemd/system/kolibri.service'
   template:
@@ -124,8 +145,8 @@
 
 - name: Stop 'kolibri' systemd service, for Kolibri provisioning (after daemon_reload)
   systemd:
-    name: kolibri
     daemon_reload: yes
+    name: kolibri
     state: stopped
 
 
@@ -146,9 +167,13 @@
 #   become_user: "{{ kolibri_user }}"
 #   when: kolibri_provision
 
+# Run "kolibri manage help provisiondevice" to see CLI options, e.g.:
+#   --facility_settings FACILITY_SETTINGS
+#                         JSON file containing facility settings
+#   --device_settings DEVICE_SETTINGS
+#                         JSON file containing device settings
 - name: 'Provision Kolibri, while setting: facility name, admin acnt / password, preset type, and language'
   shell: >
-    export KOLIBRI_HOME="{{ kolibri_home }}" &&
     "{{ kolibri_exec_path }}" manage provisiondevice --facility "{{ kolibri_facility }}"
     --superusername "{{ kolibri_admin_user }}" --superuserpassword "{{ kolibri_admin_password }}"
     --preset "{{ kolibri_preset }}" --language_id "{{ kolibri_language }}"
@@ -157,18 +182,22 @@
   become: yes
   become_user: "{{ kolibri_user }}"
   when: kolibri_provision
+  environment:
+    KOLIBRI_HOME: "{{ kolibri_home }}"     # 2023-03-27: Required!
+    #KOLIBRI_USER: "{{ kolibri_user }}"    # 2023-03-27: Not nec due to /etc/kolibri/username ?
+
 
 # 2023-03-25: Likely overkill (let's strongly consider removing this stanza?)
 # Certainly, setting owner (recursively) is advised when moving /library/kolibri :
 # https://kolibri.readthedocs.io/en/latest/install/ubuntu-debian.html#changing-the-owner-of-kolibri-system-service
-- name: chown -R {{ kolibri_user }}:{{ apache_user }} {{ kolibri_home }} for good measure?
-  file:
-    path: "{{ kolibri_home }}"     # /library/kolibri
-    owner: "{{ kolibri_user }}"    # kolibri
-    group: "{{ apache_user }}"     # www-data (on Debian/Ubuntu/Raspbian)
-    recurse: yes
-  when: kolibri_provision
-
+# 2023-03-27: Commented out on a provisional basis (Spring Cleaning)
+# - name: chown -R {{ kolibri_user }}:{{ apache_user }} {{ kolibri_home }} for good measure?
+#   file:
+#     path: "{{ kolibri_home }}"     # /library/kolibri
+#     owner: "{{ kolibri_user }}"    # kolibri
+#     group: "{{ apache_user }}"     # www-data (on Debian/Ubuntu/Raspbian)
+#     recurse: yes
+#   when: kolibri_provision
 
 # 2019-10-07: Moved to roles/httpd/tasks/main.yml
 # 2019-09-29: roles/kiwix/tasks/kiwix_install.yml installs 4 Apache modules
