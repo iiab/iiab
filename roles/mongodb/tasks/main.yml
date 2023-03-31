@@ -35,18 +35,21 @@
 - debug:
     var: is_raspbian
 - debug:
-    var: dpkg_arch
-- debug:
     var: mongodb_version
+
+- name: Run command 'dpkg --print-architecture' to identify OS architecture (CPU arch as revealed by ansible_archicture ~= ansible_machine is NOT enough!)
+  command: dpkg --print-architecture
+  register: dpkg_arch
+- debug:
+    msg: "'dpkg --print-architecture' output: {{ dpkg_arch.stdout }}"
 
 - block:
 
-  - name: EXIT 'mongodb' ROLE & CONTINUE, when 32bit RasPiOS is in use or 'unsupported'
+  - name: EXIT 'mongodb' ROLE, if 'dpkg --print-architecture' shows "armhf" or mongodb_version == "unsupported" or ansible_machine not found
     fail:    # FORCE IT RED THIS ONCE!
-      msg: ATTEMPTED MongoDB INSTALLATION WITH 32bit RasPiOS, which is not supported upstream.  Nevertheless IIAB will continue (consider this a warning!)
-    when: (mongodb_version == "unsupported") or (dpkg_arch == "armhf")
+      msg: MongoDB 3.2+ (as needed by Sugarizer Server 1.5.0) is NO LONGER SUPPORTED on 32-bit Raspberry Pi OS.
+    when: dpkg_arch.stdout == "armhf" or mongodb_version == "unsupported" or mongodb_version == "unknown"
 
-# ELSE...
   - name: Install MongoDB if 'mongodb_installed' not defined, e.g. in {{ iiab_state_file }}    # /etc/iiab/iiab_state.yml
     include_tasks: install.yml
     when: mongodb_installed is undefined
