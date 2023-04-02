@@ -3,13 +3,13 @@
 
 - name: EITHER - Create symlink /etc/{{ apache_service }}/sites-enabled/freepbx.conf to enable Apache's http://box:{{ pbx_http_port }}/freepbx - if pbx_use_apache and pbx_enabled    # http://box:83/freepbx
   command: a2ensite freepbx.conf
-  when: pbx_use_apache and pbx_enabled
+  when: pbx_apache_installed is defined and pbx_enabled
 
 - name: OR ELSE - Delete symlink /etc/{{ apache_service }}/sites-enabled/freepbx.conf to disable Apache's http://box:{{ pbx_http_port }}/freepbx - if not (pbx_use_apache and pbx_enabled)
   file:    # As 'a2dissite freepbx.conf' might not be installed
     path: /etc/{{ apache_service }}/sites-enabled/freepbx.conf    # apache2
     state: absent
-  when: pbx_use_apache and not pbx_enabled
+  when: pbx_apache_installed and not pbx_enabled
 
 
 - name: "ENACT ABOVE SETTING FOR APACHE - 'pbx_use_apache: False' might arise later, so best ALWAYS run..."
@@ -21,8 +21,7 @@
     name: "{{ apache_service }}"    # apache2
     state: restarted
     enabled: yes
-  when: pbx_use_apache and pbx_enabled
-  ignore_errors: yes    # In case Apache not installed
+  when: pbx_apache_installed and pbx_enabled
 
 - name: OR ELSE - Stop & Disable '{{ apache_service }}' systemd service - if not (pbx_use_apache and pbx_enabled)
   systemd:
@@ -30,8 +29,7 @@
     name: "{{ apache_service }}"
     state: stopped
     enabled: no
-  when: pbx_use_apache and not pbx_enabled
-  ignore_errors: yes    # In case Apache not installed
+  when: pbx_apache_installed and not pbx_enabled
 
 - name: Open-or-Close Asterix ports (including Apache port {{ pbx_http_port }}) in iptables firewall, depending on pbx_enabled [{{ pbx_enabled }}] in local_vars.yml - in support of './runrole pbx'
   command: /usr/bin/iiab-gen-iptables
