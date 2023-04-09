@@ -164,7 +164,7 @@
 - debug:
     msg: 5-STANZA BLOCK FOLLOWS, TO FORCE INSTALL libssl1.1 -- runs *IF* mandated mongodb_version ({{ mongodb_version }}) < 6.0 (i.e. for aarch64/arm64) on Ubuntu 22.04+ or Debian 12+ -- whereas Linux Mint should never need libssl1.1
 
-- block:
+#- block:
 
 #  - name: Install OLD source/repo "deb http://ports.ubuntu.com/ubuntu-ports focal-security main" at /etc/apt/sources.list.d/ports_ubuntu_com_ubuntu_ports.list if Ubuntu
 #    apt_repository:
@@ -182,15 +182,10 @@
 #      name: libssl1.1
 #      state: present
 
-  - name: Force install libssl1.1 on aarch64
-    ansible.builtin.apt:
-      deb: http://archive.raspberrypi.org/debian/pool/main/o/openssl/libssl1.1_1.1.1n-0+deb11u4+rpt1_arm64.deb
-    when: ansible_architecture == "aarch64"
-
-  - name: Force install libssl1.1 on x86_64
-    ansible.builtin.apt:
-      deb: http://security.ubuntu.com/ubuntu/pool/main/o/openssl/libssl1.1_1.1.1f-1ubuntu2.17_amd64.deb
-    when: ansible_architecture == "x86_64"
+- name: Force install libssl1.1 on aarch64
+  ansible.builtin.apt:
+    deb: http://archive.raspberrypi.org/debian/pool/main/o/openssl/libssl1.1_1.1.1n-0+deb11u4+rpt1_arm64.deb
+  when: mongodb_version is version('6.0', '<')
 
 #  - name: Remove OLD source/repo "deb http://security.debian.org/debian-security bullseye-security main" at /etc/apt/sources.list.d/security_debian_org_debian_security.list if Debian
 #    apt_repository:
@@ -205,7 +200,8 @@
 #      state: absent
 #    when: is_ubuntu
 
-  when: mongodb_version is version('6.0', '<') and (is_ubuntu and os_ver is version('ubuntu-2204', '>=') or is_debian and os_ver is version('debian-12', '>='))
+#  when: mongodb_version is version('6.0', '<') and (is_ubuntu and os_ver is version('ubuntu-2204', '>=') or is_debian and os_ver is version('debian-12', '>='))
+
 
 - debug:
     msg: 5-STANZA BLOCK ABOVE, RAN *IF* FORCED INSTALL OF libssl1.1 WAS NEEDED
@@ -322,14 +318,14 @@
 
 - name: If hardware is Raspberry Pi and mongodb_version >= 5.0, run 'apt-mark hold mongodb-org mongodb-org-server' -- so MongoDB 5.0.5 binaries {mongo, mongod, mongos} can be installed without apt interfering in future
   command: apt-mark hold mongodb-org mongodb-org-server
-  when: rpi_model != "none" and mongodb_version is version('5.0', '>=')
+  when: mongodb_version is version('6.0', '<')
 
 - name: If hardware is Raspberry Pi and mongodb_version >= 5.0, unarchive 76MB {{ iiab_download_url }}//packages/raspbian_mongodb_5.0.5.gz OVERWRITING 5.0.9+ {mongo, mongod, mongos} in /usr/bin
   unarchive:
     remote_src: yes
     src: "{{ iiab_download_url }}/raspbian_mongodb_5.0.5.gz"
     dest: /usr/bin
-  when: rpi_model != "none" and mongodb_version is version('5.0', '>=')
+  when: mongodb_version is version('6.0', '<')
 
 #   # end block
 #   when: ansible_architecture == "aarch64" or ansible_architecture == "x86_64"
