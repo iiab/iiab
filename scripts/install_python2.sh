@@ -9,8 +9,8 @@ apt -y install mime-support #transitional package
 cd /tmp
 case $ARCH in
     "arm64")
-        wget http://ftp.debian.org/debian/pool/main/o/openssl/libssl1.1_1.1.1n-0+deb11u4_arm64.deb
-        apt install ./libssl1.1_1.1.1n-0+deb11u4_arm64.deb
+        wget http://archive.raspberrypi.org/debian/pool/main/o/openssl/libssl1.1_1.1.1n-0+deb11u4+rpt1_arm64.deb
+        apt install ./libssl1.1_1.1.1n-0+deb11u4+rpt1_arm64.deb
 
         wget http://ftp.debian.org/debian/pool/main/libf/libffi/libffi7_3.3-6_arm64.deb
         apt install ./libffi7_3.3-6_arm64.deb
