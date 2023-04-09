@@ -64,7 +64,7 @@ case $ARCH in
         wget http://raspbian.raspberrypi.org/raspbian/pool/main/p/python2.7/python2.7-minimal_2.7.18-13.2_armhf.deb
         apt install ./python2.7-minimal_2.7.18-13.2_armhf.deb
 
-        wget http://raspbian.raspberrypi.org/raspbian/pool/main/p/python2.7/python2.7-minimal_2.7.18-13.2_armhf.deb
+        wget http://raspbian.raspberrypi.org/raspbian/pool/main/p/python2.7/python2.7_2.7.18-13.2_armhf.deb
         apt install ./python2.7_2.7.18-13.2_armhf.deb
         ;;
 esac
