@@ -44,6 +44,7 @@ case $ARCH in
         #;;
 
     "arm64"|"amd64")
+        apt -y install libffi8
         cat << EOF >> /etc/apt/sources.list.d/python2.list
 deb [trusted=yes] http://ports.ubuntu.com/ jammy main universe
 deb [trusted=yes] http://ports.ubuntu.com/ jammy-updates main universe
