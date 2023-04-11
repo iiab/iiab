@@ -74,13 +74,7 @@ EOF
         #rm *.deb
 
 # armhf compile flags differ between RasPiOS and Ubuntu
-# libssl1.1 would be available via bullseye if/when needed
-        if [ -f /etc/rpi-issue ]; then
-            cat << EOF >> /etc/apt/sources.list.d/python2.list
-deb http://raspbian.raspberrypi.org/raspbian/ bullseye main
-deb http://archive.raspberrypi.org/debian/ bullseye main
-EOF
-        else
+        if ! [ -f /etc/rpi-issue ]; then
             apt -y install libffi8 libssl3
             cat << EOF >> /etc/apt/sources.list.d/python2.list
 deb http://ports.ubuntu.com/ jammy main universe
@@ -92,5 +86,5 @@ esac
 
 apt update
 apt -y install python2
-rm /etc/apt/sources.list.d/python2.list
+rm /etc/apt/sources.list.d/python2.list || true
 apt update
