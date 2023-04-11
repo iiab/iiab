@@ -5,7 +5,7 @@ ARCH=$(dpkg --print-architecture)
 apt -y install virtualenv
 apt -y install mime-support #transitional package
 
-# libpython2.7-stdlib from ubuntu-22.04 used in amd64 is compiled against libssl3 and libffi8
+# libpython2.7-stdlib from ubuntu-22.04 used in amd64|arm64|armhf is compiled against libssl3 and libffi8
 # `apt info libpython2.7-stdlib`
 cd /tmp
 case $ARCH in
@@ -45,7 +45,7 @@ case $ARCH in
 
 # trusted is used for Debian and RasPiOS as the keys would be missing for Ubuntu
     "arm64"|"amd64")
-        apt -y install libffi8
+        apt -y install libffi8 libssl3
         cat << EOF >> /etc/apt/sources.list.d/python2.list
 deb [trusted=yes] http://ports.ubuntu.com/ jammy main universe
 deb [trusted=yes] http://ports.ubuntu.com/ jammy-updates main universe
@@ -69,12 +69,15 @@ EOF
         #apt install ./python2.7_2.7.18-13.2_armhf.deb
         #rm *.deb
 
+# armhf compile flags differ between RasPiOS and Ubuntu
+# libssl1.1 would be available via bullseye if/when needed
         if [ -f /etc/rpi-issue ]; then
             cat << EOF >> /etc/apt/sources.list.d/python2.list
 deb http://raspbian.raspberrypi.org/raspbian/ bullseye main
 deb http://archive.raspberrypi.org/debian/ bullseye main
 EOF
         else
+            apt -y install libffi8 libssl3
             cat << EOF >> /etc/apt/sources.list.d/python2.list
 deb http://ports.ubuntu.com/ jammy main universe
 deb http://ports.ubuntu.com/ jammy-updates main universe
