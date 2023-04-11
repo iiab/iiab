@@ -3,7 +3,7 @@
 ARCH=$(dpkg --print-architecture)
 
 apt -y install virtualenv
-apt -y install mime-support #transitional package
+apt -y install media-types
 
 # libpython2.7-stdlib from ubuntu-22.04 used in amd64|arm64|armhf is compiled against libssl3 and libffi8
 # `apt info libpython2.7-stdlib`
