@@ -1,8 +1,12 @@
 #!/bin/bash
+# https://packages.debian.org/search?keywords=libpython2.7-stdlib&searchon=names&suite=all&section=all
 # https://packages.debian.org/bullseye/libpython2.7-stdlib
+# https://packages.ubuntu.com/search?keywords=libpython2.7-stdlib&searchon=names&suite=all&section=all
+# https://packages.ubuntu.com/jammy-updates/libpython2.7-stdlib
 ARCH=$(dpkg --print-architecture)
 
 apt -y install virtualenv
+# https://github.com/iiab/iiab/pull/3535#issuecomment-1503626474
 apt -y install media-types
 
 # libpython2.7-stdlib from ubuntu-22.04 used in amd64|arm64|armhf is compiled against libssl3 and libffi8
