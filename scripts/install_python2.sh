@@ -49,27 +49,33 @@ case $ARCH in
 deb [trusted=yes] http://ports.ubuntu.com/ jammy main universe
 deb [trusted=yes] http://ports.ubuntu.com/ jammy-updates main universe
 EOF
-        apt update
-        apt -y install python2
-        rm /etc/apt/sources.list.d/python2.list
-        apt update
         ;;
 
+# assume armhf is from raspbian
     "armhf")
-        wget http://raspbian.raspberrypi.org/raspbian/pool/main/libf/libffi/libffi7_3.3-6_armhf.deb
-        apt install ./libffi7_3.3-6_armhf.deb
+        #wget http://raspbian.raspberrypi.org/raspbian/pool/main/libf/libffi/libffi7_3.3-6_armhf.deb
+        #apt install ./libffi7_3.3-6_armhf.deb
 
-        wget http://raspbian.raspberrypi.org/raspbian/pool/main/p/python2.7/libpython2.7-minimal_2.7.18-13.2_armhf.deb
-        apt install ./libpython2.7-minimal_2.7.18-13.2_armhf.deb
+        #wget http://raspbian.raspberrypi.org/raspbian/pool/main/p/python2.7/libpython2.7-minimal_2.7.18-13.2_armhf.deb
+        #apt install ./libpython2.7-minimal_2.7.18-13.2_armhf.deb
 
-        wget http://raspbian.raspberrypi.org/raspbian/pool/main/p/python2.7/libpython2.7-stdlib_2.7.18-13.2_armhf.deb
-        apt install ./libpython2.7-stdlib_2.7.18-13.2_armhf.deb
+        #wget http://raspbian.raspberrypi.org/raspbian/pool/main/p/python2.7/libpython2.7-stdlib_2.7.18-13.2_armhf.deb
+        #apt install ./libpython2.7-stdlib_2.7.18-13.2_armhf.deb
 
-        wget http://raspbian.raspberrypi.org/raspbian/pool/main/p/python2.7/python2.7-minimal_2.7.18-13.2_armhf.deb
-        apt install ./python2.7-minimal_2.7.18-13.2_armhf.deb
+        #wget http://raspbian.raspberrypi.org/raspbian/pool/main/p/python2.7/python2.7-minimal_2.7.18-13.2_armhf.deb
+        #apt install ./python2.7-minimal_2.7.18-13.2_armhf.deb
 
-        wget http://raspbian.raspberrypi.org/raspbian/pool/main/p/python2.7/python2.7_2.7.18-13.2_armhf.deb
-        apt install ./python2.7_2.7.18-13.2_armhf.deb
-        rm *.deb
+        #wget http://raspbian.raspberrypi.org/raspbian/pool/main/p/python2.7/python2.7_2.7.18-13.2_armhf.deb
+        #apt install ./python2.7_2.7.18-13.2_armhf.deb
+        #rm *.deb
+        cat << EOF >> /etc/apt/sources.list.d/python2.list
+deb http://raspbian.raspberrypi.org/raspbian/ bullseye main
+deb http://archive.raspberrypi.org/debian/ bullseye main
+EOF
         ;;
 esac
+
+apt update
+apt -y install python2
+rm /etc/apt/sources.list.d/python2.list
+apt update
