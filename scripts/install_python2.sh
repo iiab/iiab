@@ -43,6 +43,7 @@ case $ARCH in
         #apt install ./python2.7_2.7.18-8_arm64.deb
         #;;
 
+# trusted is used for Debian and RasPiOS as the keys would be missing for Ubuntu
     "arm64"|"amd64")
         apt -y install libffi8
         cat << EOF >> /etc/apt/sources.list.d/python2.list
@@ -51,7 +52,6 @@ deb [trusted=yes] http://ports.ubuntu.com/ jammy-updates main universe
 EOF
         ;;
 
-# assume armhf is from raspbian
     "armhf")
         #wget http://raspbian.raspberrypi.org/raspbian/pool/main/libf/libffi/libffi7_3.3-6_armhf.deb
         #apt install ./libffi7_3.3-6_armhf.deb
@@ -68,10 +68,18 @@ EOF
         #wget http://raspbian.raspberrypi.org/raspbian/pool/main/p/python2.7/python2.7_2.7.18-13.2_armhf.deb
         #apt install ./python2.7_2.7.18-13.2_armhf.deb
         #rm *.deb
-        cat << EOF >> /etc/apt/sources.list.d/python2.list
+
+        if [ -f /etc/rpi-issue ]; then
+            cat << EOF >> /etc/apt/sources.list.d/python2.list
 deb http://raspbian.raspberrypi.org/raspbian/ bullseye main
 deb http://archive.raspberrypi.org/debian/ bullseye main
 EOF
+        else
+            cat << EOF >> /etc/apt/sources.list.d/python2.list
+deb http://ports.ubuntu.com/ jammy main universe
+deb http://ports.ubuntu.com/ jammy-updates main universe
+EOF
+        fi
         ;;
 esac
 
