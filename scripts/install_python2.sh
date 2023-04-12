@@ -8,7 +8,7 @@ ARCH=$(dpkg --print-architecture)
 
 apt -y install virtualenv
 # https://github.com/iiab/iiab/pull/3535#issuecomment-1503626474
-apt -y install media-types libffi8 libssl3
+#apt -y install media-types libffi8 libssl3
 
 # libpython2.7-stdlib from ubuntu-22.04 used in amd64|arm64|armhf is compiled against libssl3 and libffi8
 # `apt info libpython2.7-stdlib`
