@@ -76,9 +76,10 @@ deb http://ports.ubuntu.com/ jammy main universe
 deb http://ports.ubuntu.com/ jammy-updates main universe
 EOF
         fi
-        apt update
-        apt -y install python2
-        rm /etc/apt/sources.list.d/python2.list || true
-        apt update
         ;;
 esac
+
+apt update
+apt -y install python2
+rm /etc/apt/sources.list.d/python2.list || true
+apt update
