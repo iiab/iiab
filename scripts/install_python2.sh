@@ -3,6 +3,7 @@
 # https://packages.debian.org/bullseye/libpython2.7-stdlib
 # https://packages.ubuntu.com/search?keywords=libpython2.7-stdlib&searchon=names&suite=all&section=all
 # https://packages.ubuntu.com/jammy-updates/libpython2.7-stdlib
+export DEBIAN_FRONTEND=noninteractive
 ARCH=$(dpkg --print-architecture)
 
 apt -y install virtualenv
