@@ -26,7 +26,7 @@ case $ARCH in
         #wget http://mirrors.kernel.org/ubuntu/pool/universe/p/python2.7/python2.7_2.7.18-13ubuntu2_amd64.deb
         #apt install ./python2.7_2.7.18-13ubuntu2_amd64.deb
         #rm *.deb
-        ;;
+        #;;
 
     #"arm64")
         #wget http://ftp.debian.org/debian/pool/main/p/python2.7/libpython2.7-minimal_2.7.18-8_arm64.deb
