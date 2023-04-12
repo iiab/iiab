@@ -27,7 +27,7 @@ case $ARCH in
         #apt install ./python2.7_2.7.18-13ubuntu2_amd64.deb
         #rm *.deb
         # works on U23.04 x86_64 VM
-        cat << EOF >> /etc/apt/sources.list.d/python2.list
+        cat << EOF > /etc/apt/sources.list.d/python2.list
 deb [trusted=yes] http://archive.ubuntu.com/ubuntu jammy main universe
 deb [trusted=yes] http://archive.ubuntu.com/ubuntu jammy-updates main universe
 EOF
@@ -47,7 +47,7 @@ EOF
         #apt install ./python2.7_2.7.18-8_arm64.deb
         #rm *.deb
         # gave 404 errors on U23.04 x86_64 VM need to circle back to U23.04 arm64 and confirm
-        cat << EOF >> /etc/apt/sources.list.d/python2.list
+        cat << EOF > /etc/apt/sources.list.d/python2.list
 deb [trusted=yes] http://ports.ubuntu.com/ jammy main universe
 deb [trusted=yes] http://ports.ubuntu.com/ jammy-updates main universe
 EOF
@@ -55,7 +55,7 @@ EOF
 
 # trusted is used for Debian and RasPiOS as the keys would be missing for Ubuntu
 #    "arm64"|"amd64")
-#        cat << EOF >> /etc/apt/sources.list.d/python2.list
+#        cat << EOF > /etc/apt/sources.list.d/python2.list
 # keys for Debian future work maybe
 #deb [signed-by=/usr/share/keyrings/ubuntu-keyring-2018-archive.gpg] http://ports.ubuntu.com/ jammy main universe
 #deb [signed-by=/usr/share/keyrings/ubuntu-keyring-2018-archive.gpg] http://ports.ubuntu.com/ jammy-updates main universe
@@ -81,7 +81,7 @@ EOF
 
 # armhf compile flags differ between RasPiOS and Ubuntu
         if ! [ -f /etc/rpi-issue ]; then
-            cat << EOF >> /etc/apt/sources.list.d/python2.list
+            cat << EOF > /etc/apt/sources.list.d/python2.list
 # these might change
 deb http://ports.ubuntu.com/ jammy main universe
 deb http://ports.ubuntu.com/ jammy-updates main universe
