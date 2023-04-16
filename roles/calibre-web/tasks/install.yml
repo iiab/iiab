@@ -1,19 +1,19 @@
-- name: "Install packages: imagemagick, python3-venv"
+- name: "Install packages: imagemagick, python3-venv, python3-netifaces"
   package:
     name:
       - imagemagick
       - python3-venv
+      - python3-netifaces
     state: present
 
 # https://github.com/iiab/iiab/pull/3496#issuecomment-1475094542
-- name: "Install packages: python3-dev, gcc to compile 'netifaces'"
-  package:
-    name:
-      - python3-dev # header files
-      - gcc         # compiler
-    state: present
-  when: python_version is version('3.10', '>=')
-
+#- name: "Install packages: python3-dev, gcc to compile 'netifaces'"
+#  package:
+#    name:
+#      - python3-dev # header files
+#      - gcc         # compiler
+#    state: present
+#  when: python_version is version('3.10', '>=')
 - name: Allow ImageMagick to read PDFs, per /etc/ImageMagick-6/policy.xml, to create book cover thumbnails
   lineinfile:
     path: /etc/ImageMagick-6/policy.xml
@@ -21,6 +21,11 @@
     backrefs: yes
     line: '  <policy domain="coder" rights="read" pattern="PDF" />'
     state: present
+
+- name: Remove previous virtual environment {{ calibreweb_venv_path }}
+  file:
+    path: "{{ calibreweb_venv_path }}"
+    state: absent
 
 - name: "Create 3 Calibre-Web folders to store data and config files: {{ calibreweb_home }}, {{ calibreweb_venv_path }}, {{ calibreweb_config }} (all set to {{ calibreweb_user }}:{{ apache_user }}) (default to 0755)"
   file:
@@ -56,7 +61,8 @@
     requirements: "{{ calibreweb_venv_path }}/requirements.txt"
     virtualenv: "{{ calibreweb_venv_path }}"    # /usr/local/calibre-web-py3
     virtualenv_site_packages: no
-    virtualenv_command: python3 -m venv {{ calibreweb_venv_path }}
+    virtualenv_command: python3 -m venv --system-site-packages {{ calibreweb_venv_path }}
+
 # VIRTUALENV EXAMPLE COMMANDS:
 # cd /usr/local/calibre-web-py3
 # source bin/activate
@@ -101,15 +107,6 @@
     group: "{{ apache_user }}"         # www-data on debuntu
     backup: yes
   when: not appdb.stat.exists
-
-# https://github.com/iiab/iiab/pull/3496#issuecomment-1475094542
-#- name: "Uninstall packages: python3-dev, gcc used to compile 'netifaces'"
-#  package:
-#    name:
-#      - python3-dev # header files
-#      - gcc         # compiler
-#    state: absent
-#  when: python_version is version('3.10', '>=')
 
 
 # RECORD Calibre-Web AS INSTALLED
