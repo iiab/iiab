@@ -26,11 +26,16 @@ fi
 # https://bugs.launchpad.net/ubuntu/+source/linux-firmware/+bug/1862760
 # https://bugs.launchpad.net/netplan/+bug/1951586
 # WiFi country code progress on arm64 OS's discussed on #3078
-if [ -f /run/netplan/wpa-$IFACE.conf ] && ! $(grep country /run/netplan/wpa-$IFACE.conf); then
+if [ -f /run/netplan/wpa-$IFACE.conf ] && $(grep country /run/netplan/wpa-$IFACE.conf); then
+    REG_DOM=$(grep country /run/netplan/wpa-$IFACE.conf | awk -F = '{ print $2 }')
+    sed -i -e "s/^country.*/country=$REG_DOM/" /etc/hostapd/hostapd.conf.iiab
+    cp /etc/hostapd/hostapd.conf.iiab /etc/hostapd/hostapd.conf
+else
     NETPLAN=1
     SSID=`grep ssid /run/netplan/wpa-$IFACE.conf | awk -F = '{print $2}' | sed -r s/\"// | sed -r s/\"//`
     echo "cover netplan lack of country="
-    sed -i 's|ctrl_interface=/run/wpa_supplicant|&\ncountry=US|' /run/netplan/wpa-$IFACE.conf
+    sed -i 's|ctrl_interface=/run/wpa_supplicant|&\ncountry={{ host_country_code }}|' /run/netplan/wpa-$IFACE.conf
+
 fi
 # IIAB hint for NetworkManager
 # could scrape /etc/NetworkManager/system-connections/ looking for ssid
