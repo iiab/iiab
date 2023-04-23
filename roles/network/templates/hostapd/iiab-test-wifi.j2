@@ -9,11 +9,13 @@ SSID="NA"
 
 # covers systemd-networkd
 if [ -f /etc/wpa_supplicant/wpa_supplicant-$IFACE.conf ]; then
+    echo "systemd-network"
     SSID=`grep ssid /etc/wpa_supplicant/wpa_supplicant-$IFACE.conf | awk -F = '{print $2}' | sed -r s/\"// | sed -r s/\"//`
 fi
 
-# covers raspbian
+# covers stock raspbian
 if [ -f /etc/wpa_supplicant/wpa_supplicant.conf ]; then
+    echo "RasPiOS"
     RASPBIAN=1
     if /usr/sbin/rfkill list wifi | grep -q "Soft blocked: yes" ; then
         echo "unblocking WiFi"
@@ -28,10 +30,11 @@ fi
 # covers netplan systemd use on server with bug workarounds
 if [ -f /run/netplan/wpa-$IFACE.conf ]; then
     NETPLAN=1
+    echo "Netplan systemd"
     SSID=`grep ssid /run/netplan/wpa-$IFACE.conf | awk -F = '{print $2}' | sed -r s/\"// | sed -r s/\"//`
     REG_DOM=$(grep country /run/netplan/wpa-$IFACE.conf | awk -F = '{ print $2 }')
     if [ -z "$REG_DOM" ]; then
-        echo "cover netplan wifi client lack of country="
+        echo "cover netplan wifi client lack of country= setting to {{ host_country_code }}"
         sed -i "s|ctrl_interface=/run/wpa_supplicant|&\ncountry={{ host_country_code }}|" /run/netplan/wpa-$IFACE.conf
     else
         echo "set hostapd wifi country to $REG_DOM"
@@ -52,12 +55,14 @@ if [ -f /etc/iiab/iiab.env ]; then
 fi
 
 # NetworkManager
-if [[ $SSID == "NA" ]]; then
+if [ $SSID == "NA" ] && [ ! -z $(pgrep NetworkManager) ]; then
+    echo "NetworkManager"
+    sleep 15
     SSID=$(iw $IFACE info | grep ssid | awk '{print $2}' )
 fi
 echo "ssid is $SSID"
 
-if [[ $SSID == "" ]]; then
+if [ $SSID == "" ]; then
     echo "Couldn't find ssid $SSID to use exiting"
     if [ $NETPLAN -eq 1 ]; then
        echo "Netplan1"
@@ -76,14 +81,23 @@ for result in $FREQ; do
         echo "channel $result is 5Ghz - ignoring"
     fi
 done
+
 echo "Using $FREQ2 for $SSID"
-if [[ $FREQ2 == "" ]]; then
+
+if [ $NETPLAN -eq 1 ]; then
+    echo "Netplan2"
+    # This is more of a netplan workaround should go away.
+    /bin/systemctl restart netplan-wpa-$IFACE.service
+fi
+
+if [ $FREQ2 == "" ]; then
     echo "Couldn't find frequency to use exiting"
     if [ $NETPLAN -eq 1 ]; then
-        echo "Netplan2"
+        echo "Netplan3"
     fi
     exit 0
 fi
+
 # ubuntu on boot exits at this point timing - issue with wpa_cli and scanning
 CHAN=$(($FREQ2 - 2407 ))
 CHAN=$(($CHAN / 5 ))
@@ -94,14 +108,7 @@ if [ $CHAN -ne $HOSTAPD ]; then
     echo "Editing Hostapd for channel $CHAN"
     cp /etc/hostapd/hostapd.conf.iiab /etc/hostapd/hostapd.conf
     sed -i -e "s/^channel.*/channel=$CHAN/" /etc/hostapd/hostapd.conf
+    /bin/systemctl --no-block restart hostapd
 fi
-systemctl stop wpa_supplicant
-systemctl stop hostapd
-systemctl start hostapd
-systemctl start wpa_supplicant
-if [ $NETPLAN -eq 1 ]; then
-    echo "Netplan3"
-    # This is more of a netplan workaround should go away.
-    systemctl restart netplan-wpa-$IFACE.service
-fi
+
 exit 0
