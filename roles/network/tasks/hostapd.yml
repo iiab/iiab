@@ -9,6 +9,17 @@
     enabled: no
   when: not hostapd_enabled
 
+- name: Detect WiFi country code in use
+  shell: iw reg get | grep country | grep -v UNSET | awk '{print $2}' | sed "s|:||"
+  register: REG_DOM
+  ignore_errors: True
+  when: wifi_up_down and can_be_ap and has_wifi_gateway is defined
+
+- name: Set Wifi Region country code for hostapd when present
+  set_fact:
+    host_country_code: "{{ REG_DOM.stdout }}"
+  when: REG_DOM.stdout is defined and REG_DOM.stdout | length > 0
+
 - name: Detect current Wifi channel
   shell: iw {{ discovered_wireless_iface }} info | grep channel | cut -d' ' -f2
   register: current_client_channel
@@ -88,3 +99,32 @@
     regexp: '^HOSTAPD_ENABLED=*'
     line: 'HOSTAPD_ENABLED={{ hostapd_enabled }}'
     state: present
+
+- name: Record host_country_code_applied and host_channel in network of {{ iiab_ini_file }}
+  ini_file:
+    dest: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+    section: network
+    option: "{{ item.option }}"
+    value: "{{ item.value | string }}"
+  with_items:
+    - option: hostapd_enabled
+      value: "{{ hostapd_enabled }}"
+    - option: host_ssid
+      value: "{{ host_ssid }}"
+    - option: host_wifi_mode
+      value: "{{ host_wifi_mode }}"
+    - option: host_country_code_applied
+      value: "{{ host_country_code }}"
+    - option: host_channel
+      value: "{{ host_channel }}"
+
+- name: Add 'network' variable 'current_client_channel' value if defined, to {{ iiab_ini_file }}
+  ini_file:
+    dest: "{{ iiab_ini_file }}"
+    section: network
+    option: "{{ item.option }}"
+    value: "{{ item.value | string }}"
+  with_items:
+    - option: client_wifi_channel
+      value: "{{ current_client_channel.stdout }}"
+  when: current_client_channel.stdout is defined
