@@ -18,6 +18,7 @@ SSID=""
 # when we get here br0 should be available and dbus wpa_supplicant was started if enabled. Some
 # of the backends that use wpa_supplicant should be active based on the Before= After= lines in
 # the iiab-wifi-test.service unit file.
+# https://github.com/iiab/iiab/pull/3542#issuecomment-1519647266
 
 echo "iiab-test-wifi called"
 echo "running pid $$"
@@ -44,6 +45,7 @@ if [ -f /run/netplan/wpa-$IFACE.conf ]; then
     SSID=$(grep ssid /run/netplan/wpa-$IFACE.conf | awk -F = '{print $2}' | sed -r s/\"// | sed -r s/\"//)
     REG_DOM=$(grep country /run/netplan/wpa-$IFACE.conf | awk -F = '{ print $2 }')
     if [ -z "$REG_DOM" ]; then
+        NETPLAN=2
         echo "cover netplan wifi client lack of country= setting to {{ host_country_code }}"
         sed -i "s|ctrl_interface=/run/wpa_supplicant|&\ncountry={{ host_country_code }}|" /run/netplan/wpa-$IFACE.conf
     else
@@ -65,11 +67,32 @@ echo "ssid is $SSID"
 
 if [ -z "$SSID" ]; then
     echo "Couldn't find ssid $SSID to use exiting"
-    if [ $NETPLAN -eq 1 ]; then
+    if [ $NETPLAN -gt 0 ]; then
        echo "Netplan1"
     fi
     exit 0
 fi
+
+if [ $NETPLAN -gt 0 ]; then
+    echo "Netplan2 sleep 10"
+    sleep 10
+    wifi_processes=$(ps -A | grep wpa_supplicant | wc -l)
+    if [ $wifi_processes -eq 1 ]; then
+        # This is more of a netplan workaround should go away.
+        echo "Problem - Now Starting netplan wifi"
+        NETPLAN=2
+    else
+        echo "Not Restarting netplan wifi sleep 20"
+        sleep 20
+    fi
+    # This one handles the changing of the country code from above
+    if [ $NETPLAN -eq 2 ]; then
+        echo "Restarting netplan-wpa-$IFACE sleep 20"
+        /bin/systemctl --no-block restart netplan-wpa-$IFACE.service
+        sleep 20
+    fi
+fi
+sleep 10
 wpa_cli -i $IFACE scan > /dev/null
 sleep 2
 FREQ=$(wpa_cli -i $IFACE scan_results | grep "$SSID" | awk '{print $2}')
@@ -85,21 +108,14 @@ done
 
 echo "Using $FREQ2 for $SSID"
 
-if [ $NETPLAN -eq 1 ]; then
-    echo "Netplan2"
-    # This is more of a netplan workaround should go away.
-    /bin/systemctl restart netplan-wpa-$IFACE.service
-fi
-
 if [ -z "$FREQ2" ]; then
     echo "Couldn't find frequency to use exiting"
-    if [ $NETPLAN -eq 1 ]; then
+    if [ $NETPLAN -gt 0 ]; then
         echo "Netplan3"
     fi
     exit 0
 fi
 
-# ubuntu on boot exits at this point timing - issue with wpa_cli and scanning
 CHAN=$((FREQ2 - 2407))
 CHAN=$((CHAN / 5))
 echo "channel is $CHAN for $SSID"
