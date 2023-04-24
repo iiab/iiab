@@ -1,6 +1,5 @@
 #!/bin/sh
 IFACE={{ discovered_wireless_iface }}
-RASPBIAN=0
 NETPLAN=0
 SSID=""
 # when we get here br0 should be available and dbus wpa_supplicant was started if enabled. Some
@@ -17,7 +16,7 @@ if [ -f /etc/wpa_supplicant/wpa_supplicant-$IFACE.conf ]; then
 fi
 
 # covers stock raspbian
-if [ -f /etc/wpa_supplicant/wpa_supplicant.conf ] && [ ! -z $(pgrep dhcpcd) ]; then
+if [ -f /etc/wpa_supplicant/wpa_supplicant.conf ] && [ -n "$(pgrep dhcpcd)" ]; then
     echo "RasPiOS"
     SSID=$(grep ssid /etc/wpa_supplicant/wpa_supplicant.conf | awk -F = '{print $2}' | sed -r s/\"// | sed -r s/\"//)
 fi
@@ -44,14 +43,14 @@ if [ -f /run/netplan/wpa-$IFACE.conf ]; then
 fi
 
 # NetworkManager
-if [ -z $SSID ] && [ ! -z $(pgrep NetworkManager) ]; then
+if [ -z "$SSID" ] && [ -n "$(pgrep NetworkManager)" ]; then
     echo "NetworkManager"
     sleep 15
     SSID=$(iw $IFACE info | grep ssid | awk '{print $2}' )
 fi
 echo "ssid is $SSID"
 
-if [ -z $SSID ]; then
+if [ -z "$SSID" ]; then
     echo "Couldn't find ssid $SSID to use exiting"
     if [ $NETPLAN -eq 1 ]; then
        echo "Netplan1"
@@ -60,10 +59,10 @@ if [ -z $SSID ]; then
 fi
 wpa_cli -i $IFACE scan > /dev/null
 sleep 2
-FREQ=$(wpa_cli -i $IFACE scan_results | grep $SSID | awk '{print $2}')
+FREQ=$(wpa_cli -i $IFACE scan_results | grep "$SSID" | awk '{print $2}')
 for result in $FREQ; do
     echo "frequency is $result for $SSID"
-    if [ $result -lt 2485 ] && [ $result -gt 2407 ]; then
+    if [ "$result" -lt 2485 ] && [ "$result" -gt 2407 ]; then
         FREQ2=$result
         break
     else
@@ -79,7 +78,7 @@ if [ $NETPLAN -eq 1 ]; then
     /bin/systemctl restart netplan-wpa-$IFACE.service
 fi
 
-if [ -z $FREQ2 ]; then
+if [ -z "$FREQ2" ]; then
     echo "Couldn't find frequency to use exiting"
     if [ $NETPLAN -eq 1 ]; then
         echo "Netplan3"
@@ -88,12 +87,12 @@ if [ -z $FREQ2 ]; then
 fi
 
 # ubuntu on boot exits at this point timing - issue with wpa_cli and scanning
-CHAN=$(($FREQ2 - 2407 ))
-CHAN=$(($CHAN / 5 ))
+CHAN=$((FREQ2 - 2407 ))
+CHAN=$((CHAN / 5 ))
 echo "channel is $CHAN for $SSID"
 HOSTAPD=$(grep channel /etc/hostapd/hostapd.conf | awk -F = '{print $2}')
 echo "Hostapd set for $HOSTAPD"
-if [ $CHAN -ne $HOSTAPD ]; then
+if [ "$CHAN" -ne "$HOSTAPD" ]; then
     echo "Editing Hostapd for channel $CHAN"
     cp /etc/hostapd/hostapd.conf.iiab /etc/hostapd/hostapd.conf
     sed -i -e "s/^channel.*/channel=$CHAN/" /etc/hostapd/hostapd.conf
