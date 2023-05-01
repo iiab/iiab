@@ -1,21 +1,36 @@
-# Similar code block in roles/network/tasks/detected_network.yml
-- name: "Setting iiab_wan_iface to '{{ ansible_default_ipv4.alias }}' -- using ansible_default_ipv4.alias if detected"
-  set_fact:
-    iiab_wan_iface: "{{ ansible_default_ipv4.alias }}"
-  when: ansible_default_ipv4.gateway is defined
-
-
 - name: Install 'vnstat' package
   package:
     name: vnstat
     state: present
 
-- name: Install /etc/vnstat.conf from template
-  template:
-    src: vnstat.conf.j2
-    dest: /etc/vnstat.conf
-    mode: '0744'
 
+# Similar code block in roles/network/tasks/detected_network.yml (line ~35) and roles/network/tasks/computed_network.yml (lines ~74 and ~110)
+- name: "Setting iiab_wan_iface to '{{ ansible_default_ipv4.alias }}' -- using ansible_default_ipv4.alias if detected"
+  set_fact:
+    iiab_wan_iface: "{{ ansible_default_ipv4.alias }}"
+  when: ansible_default_ipv4.gateway is defined
+
+# 2023-05-01: Probably no longer nec, as line 'Interface ""' in /etc/vnstat.conf automatically selects the default interface
+- name: Insert 'Interface "{{ iiab_wan_iface }}"' into /etc/vnstat.conf
+  lineinfile:
+    path: /etc/vnstat.conf
+    regexp: '^Interface '
+    line: 'Interface "{{ iiab_wan_iface }}"'
+
+# - name: Install /etc/vnstat.conf from template
+#   template:
+#     src: vnstat.conf.j2
+#     dest: /etc/vnstat.conf
+#     mode: '0744'
+
+
+# 2023-05-01: https://github.com/vergoh/vnstat/issues/134#issuecomment-663836557
+- name: 'Precautionary Start & Enable of vnstat.service, to mitigate intermittent #3539 (''Failed to open database "/var/lib/vnstat/vnstat.db" in read-only mode'') during WAN db creation just below'
+  systemd:
+    name: vnstat
+    daemon_reload: true
+    state: started
+    enabled: true
 
 - name: Create database for WAN to collect vnStat data
   shell: /usr/bin/vnstat -i {{ iiab_wan_iface }}
