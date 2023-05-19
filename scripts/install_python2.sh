@@ -16,7 +16,12 @@
 export DEBIAN_FRONTEND=noninteractive
 ARCH=$(dpkg --print-architecture)
 
-apt -y install virtualenv
+# Older version http://launchpadlibrarian.net/651276954/virtualenv_20.19.0+ds-1_all.deb
+# unfortunately drags in newer 20.23+ version of python3-virtualenv, preventing Python 2.
+# So let's try pip: (which installs to /usr/local/bin)
+apt -y install python3-pip
+pip install virtualenv==20.21.1 --break-system-packages
+#apt -y install virtualenv
 # https://github.com/iiab/iiab/pull/3535#issuecomment-1503626474
 #apt -y install media-types libffi8 libssl3
 
