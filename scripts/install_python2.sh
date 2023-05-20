@@ -15,6 +15,7 @@
 
 export DEBIAN_FRONTEND=noninteractive
 ARCH=$(dpkg --print-architecture)
+
 # 2023-05-19: #3573 -> PR #3582: Ubuntu 23.10's virtualenv 20.23 no longer
 # supports Python 2.  Older versions from Ubuntu 22.04 (#3583) & 23.04 like...
 # http://launchpadlibrarian.net/651276954/virtualenv_20.19.0+ds-1_all.deb
