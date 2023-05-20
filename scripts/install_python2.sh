@@ -16,7 +16,6 @@
 export DEBIAN_FRONTEND=noninteractive
 ARCH=$(dpkg --print-architecture)
 
-apt -y install virtualenv
 # https://github.com/iiab/iiab/pull/3535#issuecomment-1503626474
 #apt -y install media-types libffi8 libssl3
 
@@ -53,6 +52,9 @@ EOF
 esac
 
 apt update
+# version will need to be changed if a newer version is released for U22.04
+apt -y install virtualenv=20.13.0+ds-2
+apt-mark hold virtualenv
 apt -y install python2
 rm /etc/apt/sources.list.d/python2.list || true
 apt update
