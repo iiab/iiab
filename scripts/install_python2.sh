@@ -17,13 +17,20 @@ export DEBIAN_FRONTEND=noninteractive
 ARCH=$(dpkg --print-architecture)
 
 # 2023-05-19: #3573 -> PR #3582: Ubuntu 23.10's virtualenv 20.23 no longer
-# supports Python 2.  Older versions from Ubuntu 22.04 (#3583) & 23.04 like...
+# supports Python 2.  Root cause is virtualenv 20.22.0 (2023-04-19) which
+# removed Python 2 support: https://virtualenv.pypa.io/en/latest/changelog.html
+# Unfortunately older versions from Ubuntu 22.04 (#3583) & 23.04 like...
 # http://launchpadlibrarian.net/651276954/virtualenv_20.19.0+ds-1_all.deb
-# ...unfortunately drag in newer 20.23+ version of python3-virtualenv, leaving
+# ...can drag in newer 20.23+ version of python3-virtualenv, leaving
 # us with /usr/bin/virtualenv 20.23 once again, i.e. preventing Python 2.
 # Whereas pip (which installs /usr/local/bin/virtualvenv) at least works:
-#apt -y install python3-pip
-#pip install virtualenv==20.21.1 --break-system-packages
+#
+#iif grep -qi ubuntu /etc/os-release; then    # Ubuntu 23.10+ (and Mint 22+ ?) needs this.  Ubuntu 23.04 tolerates it.
+#    apt -y install python3-pip
+#    pip install virtualenv==20.21.1 --break-system-packages
+#else
+#    apt -y install virtualenv    # Debian 12 & RasPiOS 12 are A-Ok with built-in virtualenv 20.17.1 (<= 20.21.1)
+#fi
 #
 #apt -y install virtualenv
 # https://github.com/iiab/iiab/pull/3535#issuecomment-1503626474
@@ -62,7 +69,7 @@ EOF
 esac
 
 apt update
-if grep -qi ubuntu /etc/os-release; then   # Ubuntu 23.10+ (and Mint 22+ ?) need this.  Ubuntu 23.04 tolerates it.
+if grep -qi ubuntu /etc/os-release; then    # Ubuntu 23.10+ (and Mint 22+ ?) needs this.  Ubuntu 23.04 tolerates it.
     # 2023-05-20: 4 lines below borrow from Ubuntu 22.04: (Is this really less
     # fragile than the pip approach ~40 lines above, in preparing for 24.04 ?)
     apt -y install python3-platformdirs=2.5.1-1
