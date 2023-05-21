@@ -62,14 +62,18 @@ EOF
 esac
 
 apt update
-# 2023-05-20: 4 lines below borrow from Ubuntu 22.04: (Is this really less
-# fragile than the pip approach ~40 lines above, in preparing for 24.04 ?)
-apt -y install python3-platformdirs=2.5.1-1
-apt-mark hold python3-platformdirs
-apt -y install python3-virtualenv=20.13.0+ds-2
-apt-mark hold virtualenv
-# 2023-05-21 PR #3587: Above 4 lines should really install a more recent
-# version of virtualenv, probably from 'lunar' (Ubuntu 23.04) ?
+if grep -qi ubuntu /etc/os-release; then   # Ubuntu 23.10+ (and Mint 22+ ?) need this.  Ubuntu 23.04 tolerates it.
+    # 2023-05-20: 4 lines below borrow from Ubuntu 22.04: (Is this really less
+    # fragile than the pip approach ~40 lines above, in preparing for 24.04 ?)
+    apt -y install python3-platformdirs=2.5.1-1
+    apt-mark hold python3-platformdirs
+    apt -y install python3-virtualenv=20.13.0+ds-2
+    apt-mark hold virtualenv
+    # 2023-05-21 PR #3587: Above 4 lines should really install a more recent
+    # version of virtualenv, probably from 'lunar' (Ubuntu 23.04) ?
+else
+    apt -y install virtualenv    # Debian 12 & RasPiOS 12 are A-Ok with built-in virtualenv 20.17.1 (<= 20.21.1)
+fi
 apt -y install python2
 rm /etc/apt/sources.list.d/python2.list || true
 apt update
