@@ -42,6 +42,21 @@
     name: pbx
   when: pbx_install
 
+- name: Read 'disk_space_a_priori' from /etc/iiab/iiab.ini
+  set_fact:
+    df1: "{{ lookup('ansible.builtin.ini', 'disk_space_a_priori', section='summary', file=iiab_ini_file) }}"
+
+- name: Record currently available disk space, to compare with original 'disk_space_a_priori'
+  shell: df -PB1 $(findmnt / -o SOURCE -n) | awk 'NR==2 {print $4}'
+  register: df2
+
+- name: Add ESTIMATED 'iiab_software_disk_usage = {{ df1|int - df2.stdout|int }}' to {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+    section: summary
+    option: iiab_software_disk_usage
+    value: "{{ df1|int - df2.stdout|int }}"
+
 - name: Recording STAGE 9 HAS COMPLETED ====================
   lineinfile:
     path: "{{ iiab_env_file }}"
