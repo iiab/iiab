@@ -1,6 +1,12 @@
 # Role "www_base" runs here, probably in 3-BASE-SERVER.
 # Role "www_options" runs later, likely in 4-SERVER-OPTIONS.
 
+
+- name: Record (initial) available disk space
+  shell: df -PB1 $(findmnt / -o SOURCE -n) | awk 'NR==2 {print $4}'
+  register: df1
+
+
 # 2021-06-27: Antifragile roles can become less brittle by fully declaring
 # their own dependencies (i.e. for modularity, separation-of-concerns,
 # encapsulation, compartmentalization, scope sanity, etc).
@@ -53,6 +59,17 @@
 
 
 # RECORD www_base AS INSTALLED
+
+- name: Record (final) available disk space
+  shell: df -PB1 $(findmnt / -o SOURCE -n) | awk 'NR==2 {print $4}'
+  register: df2
+
+- name: Add 'www_base_disk_usage = {{ df1.stdout|int - df2.stdout|int }}' to {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+    section: www_base
+    option: www_base_disk_usage
+    value: "{{ df1.stdout|int - df2.stdout|int }}"
 
 - name: "Set 'www_base_installed: True'"
   set_fact:

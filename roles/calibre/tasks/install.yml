@@ -1,3 +1,8 @@
+- name: Record (initial) available disk space
+  shell: df -PB1 $(findmnt / -o SOURCE -n) | awk 'NR==2 {print $4}'
+  register: df1
+
+
 # 1. APT INSTALL CALIBRE 4.12+ or 5.12+ (calibre, calibredb, calibre-server etc) ON ALL OS'S
 
 - name: "Install OS's latest packages: calibre, calibre-bin"
@@ -78,6 +83,17 @@
 
 
 # 5. RECORD Calibre AS INSTALLED
+
+- name: Record (final) available disk space
+  shell: df -PB1 $(findmnt / -o SOURCE -n) | awk 'NR==2 {print $4}'
+  register: df2
+
+- name: Add 'calibre_disk_usage = {{ df1.stdout|int - df2.stdout|int }}' to {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+    section: calibre
+    option: calibre_disk_usage
+    value: "{{ df1.stdout|int - df2.stdout|int }}"
 
 - name: "Set 'calibre_installed: True'"
   set_fact:

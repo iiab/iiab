@@ -6,6 +6,11 @@
   when: kiwix_arch == "unsupported"
 
 
+- name: Record (initial) available disk space
+  shell: df -PB1 $(findmnt / -o SOURCE -n) | awk 'NR==2 {print $4}'
+  register: df1
+
+
 # 1. PUT IN PLACE: /opt/iiab/downloads/kiwix-tools_linux-*.tar.gz, move /opt/iiab/kiwix/bin aside if nec, create essential dirs, and test.zim if nec (library.xml is created later, by enable-or-disable.yml)
 
 # 2022-10-04: get_url might be removed in future (unarchive below can handle
@@ -117,6 +122,17 @@
 
 
 # 5. RECORD Kiwix AS INSTALLED
+
+- name: Record (final) available disk space
+  shell: df -PB1 $(findmnt / -o SOURCE -n) | awk 'NR==2 {print $4}'
+  register: df2
+
+- name: Add 'kiwix_disk_usage = {{ df1.stdout|int - df2.stdout|int }}' to {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+    section: kiwix
+    option: kiwix_disk_usage
+    value: "{{ df1.stdout|int - df2.stdout|int }}"
 
 - name: "Set 'kiwix_installed: True'"
   set_fact:
