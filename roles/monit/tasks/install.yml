@@ -1,3 +1,8 @@
+- name: Record (initial) available disk space
+  shell: df -PB1 $(findmnt / -o SOURCE -n) | awk 'NR==2 {print $4}'
+  register: df1
+
+
 - name: Install 'monit' package
   package:
     name: monit
@@ -34,6 +39,17 @@
 
 
 # RECORD Monit AS INSTALLED
+
+- name: Record (final) available disk space
+  shell: df -PB1 $(findmnt / -o SOURCE -n) | awk 'NR==2 {print $4}'
+  register: df2
+
+- name: Add 'monit_disk_usage = {{ df1.stdout|int - df2.stdout|int }}' to {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+    section: monit
+    option: monit_disk_usage
+    value: "{{ df1.stdout|int - df2.stdout|int }}"
 
 - name: "Set 'monit_installed: True'"
   set_fact:

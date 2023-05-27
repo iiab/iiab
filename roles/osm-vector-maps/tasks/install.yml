@@ -1,3 +1,8 @@
+- name: Record (initial) available disk space
+  shell: df -PB1 $(findmnt / -o SOURCE -n) | awk 'NR==2 {print $4}'
+  register: df1
+
+
 - name: "Install packages for map installation: python3-geojson, python3-pil, python3-wget, php{{ php_version }}-sqlite3 (can also be installed by www_base/tasks/php-stem.yml)"
   package:
     state: present
@@ -195,6 +200,17 @@
 
 
 # RECORD OSM Vector Maps AS INSTALLED
+
+- name: Record (final) available disk space
+  shell: df -PB1 $(findmnt / -o SOURCE -n) | awk 'NR==2 {print $4}'
+  register: df2
+
+- name: Add 'osm_vector_maps_disk_usage = {{ df1.stdout|int - df2.stdout|int }}' to {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+    section: osm-vector-maps
+    option: osm_vector_maps_disk_usage
+    value: "{{ df1.stdout|int - df2.stdout|int }}"
 
 - name: "Set 'osm_vector_maps_installed: True'"
   set_fact:

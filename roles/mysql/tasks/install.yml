@@ -1,3 +1,8 @@
+- name: Record (initial) available disk space
+  shell: df -PB1 $(findmnt / -o SOURCE -n) | awk 'NR==2 {print $4}'
+  register: df1
+
+
 - name: 'Install MySQL packages: mariadb-server, mariadb-client, php{{ php_version }}-mysql, python3-pymysql'
   package:
     name:
@@ -60,6 +65,17 @@
 
 
 # RECORD MySQL AS INSTALLED
+
+- name: Record (final) available disk space
+  shell: df -PB1 $(findmnt / -o SOURCE -n) | awk 'NR==2 {print $4}'
+  register: df2
+
+- name: Add 'mysql_disk_usage = {{ df1.stdout|int - df2.stdout|int }}' to {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+    section: mysql
+    option: mysql_disk_usage
+    value: "{{ df1.stdout|int - df2.stdout|int }}"
 
 - name: "Set 'mysql_installed: True'"
   set_fact:

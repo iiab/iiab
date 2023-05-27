@@ -9,6 +9,12 @@
 #
 # 2) Use Ansible handler to reload ssh?
 
+
+- name: Record (initial) available disk space
+  shell: df -PB1 $(findmnt / -o SOURCE -n) | awk 'NR==2 {print $4}'
+  register: df1
+
+
 - name: "Install ssh daemon using package: {{ sshd_package }}"
   package:
     name: "{{ sshd_package }}"
@@ -40,6 +46,17 @@
 
 
 # RECORD sshd AS INSTALLED
+
+- name: Record (final) available disk space
+  shell: df -PB1 $(findmnt / -o SOURCE -n) | awk 'NR==2 {print $4}'
+  register: df2
+
+- name: Add 'sshd_disk_usage = {{ df1.stdout|int - df2.stdout|int }}' to {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+    section: sshd
+    option: sshd_disk_usage
+    value: "{{ df1.stdout|int - df2.stdout|int }}"
 
 - name: "Set 'sshd_installed: True'"
   set_fact:

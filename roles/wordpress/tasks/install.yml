@@ -12,6 +12,15 @@
 # can arise without warning when WordPress is online, since WordPress ~4.8
 
 
+- name: Record (initial) available disk space
+  shell: df -PB1 $(findmnt / -o SOURCE -n) | awk 'NR==2 {print $4}'
+  register: df1
+
+
+- name: Provision MySQL DB
+  include_tasks: setup.yml
+
+
 # 2021-06-29: PHP modules, covering "RECOMMENDED" and "OPTIONAL" sections here:
 # https://make.wordpress.org/hosting/handbook/server-environment/
 - name: Install libsodium23 + 8 PHP packages (run 'php -m' or 'php -i' to verify)
@@ -130,6 +139,17 @@
 
 
 # RECORD WordPress AS INSTALLED
+
+- name: Record (final) available disk space
+  shell: df -PB1 $(findmnt / -o SOURCE -n) | awk 'NR==2 {print $4}'
+  register: df2
+
+- name: Add 'wordpress_disk_usage = {{ df1.stdout|int - df2.stdout|int }}' to {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+    section: wordpress
+    option: wordpress_disk_usage
+    value: "{{ df1.stdout|int - df2.stdout|int }}"
 
 - name: "Set 'wordpress_installed: True'"
   set_fact:

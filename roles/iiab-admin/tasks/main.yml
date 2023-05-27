@@ -2,6 +2,11 @@
 # https://github.com/iiab/iiab/blob/master/roles/iiab-admin/README.rst
 
 
+- name: Record (initial) available disk space
+  shell: df -PB1 $(findmnt / -o SOURCE -n) | awk 'NR==2 {print $4}'
+  register: df1
+
+
 - name: "Install text-mode packages, useful during remote access: lynx, screen"
   package:
     name:
@@ -34,6 +39,17 @@
 
 
 # RECORD iiab-admin AS INSTALLED
+
+- name: Record (final) available disk space
+  shell: df -PB1 $(findmnt / -o SOURCE -n) | awk 'NR==2 {print $4}'
+  register: df2
+
+- name: Add 'iiab_admin_disk_usage = {{ df1.stdout|int - df2.stdout|int }}' to {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+    section: iiab-admin
+    option: iiab_admin_disk_usage
+    value: "{{ df1.stdout|int - df2.stdout|int }}"
 
 - name: "Set 'iiab_admin_installed: True'"
   set_fact:
