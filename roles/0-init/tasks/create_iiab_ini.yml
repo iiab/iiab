@@ -1,7 +1,11 @@
-# workaround for fact that auto create does not work on iiab_ini_file (/etc/iiab/iiab.ini)
+- name: Record disk_space_a_priori (permanently, into {{ iiab_ini_file }}) to later estimate iiab_software_disk_usage
+  shell: df -PB1 $(findmnt / -o SOURCE -n) | awk 'NR==2 {print $4}'
+  register: df1
+
+# workaround for fact that auto create does not work on iiab_ini_file
 - name: Create {{ iiab_ini_file }}
   file:
-    path: "{{ iiab_ini_file }}"
+    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
     state: touch
 
 - name: Run command 'dpkg --print-architecture' to identify OS architecture (CPU arch as revealed by ansible_architecture ~= ansible_machine is NOT enough!)
@@ -12,10 +16,11 @@
   command: dpkg --print-foreign-architectures
   register: dpkg_foreign_arch
 
-- name: Add 'location' variable values to {{ iiab_ini_file }}
+
+- name: Add 'summary' variable values to {{ iiab_ini_file }}
   ini_file:
     path: "{{ iiab_ini_file }}"
-    section: initial-location
+    section: summary
     option: "{{ item.option }}"
     value: "{{ item.value | string }}"
   with_items:
@@ -23,11 +28,13 @@
       value: "{{ iiab_base }}"
     - option: iiab_dir
       value: "{{ iiab_dir }}"
+    - option: disk_space_a_priori
+      value: "{{ df1.stdout }}"
 
-- name: Add 'version' variable values to {{ iiab_ini_file }}
+- name: Add 'initial-versions' variable values to {{ iiab_ini_file }}
   ini_file:
     path: "{{ iiab_ini_file }}"
-    section: initial-version
+    section: initial-versions
     option: "{{ item.option }}"
     value: "{{ item.value | string }}"
   with_items:
