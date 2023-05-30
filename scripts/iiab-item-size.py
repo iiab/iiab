@@ -95,7 +95,7 @@ def element_unknown(name):
 def build_otput(name, type_element, function):
     data = function(name)
     if data['size']== 0:
-    	print(name, "element",type_element,"not found")
+        print(name, ": the size of this",type_element,"element is unknown")
 
     return {
         "name": name
@@ -103,22 +103,77 @@ def build_otput(name, type_element, function):
         ,"size": data['size']
     }
 
+
+intended_use_dict = {
+    "azuracast":{
+        "name":"name"
+        ,"type":"azuracast"
+        ,"function":element_unknown
+    }
+    ,"calibre":{
+        "name":"name"
+        ,"type":"calibre"
+        ,"function":element_unknown
+    }
+    ,"external":{
+        "name":"name"
+        ,"type":"external"
+        ,"function":element_unknown
+    }
+    ,"html":{
+        "name":"moddir"
+        ,"type":"module"
+        ,"function":get_oer2go_size_from_file
+    }
+    ,"info":{
+        "name":"name"
+        ,"type":"info"
+        ,"function":element_unknown
+    }
+    ,"internetarchive":{
+        "name":"name"
+        ,"type":"internetarchive"
+        ,"function":element_unknown
+    }
+    ,"kalite":{
+        "name":"name"
+        ,"type":"kalite"
+        ,"function":element_unknown
+    }
+    ,"kolibri":{
+        "name":"name"
+        ,"type":"kolibri"
+        ,"function":element_unknown
+    }
+    ,"map":{
+        "name":"name"
+        ,"type":"map"
+        ,"function":get_map_size_from_file
+    }
+    ,"webroot":{
+        "name":"name"
+        ,"type":"webroot"
+        ,"function":element_unknown
+    }
+    ,"zim":{
+        "name":"zim_name"
+        ,"type":"zim"
+        ,"function":get_zims_size
+    }
+}
+
+
 def get_size(name_input):
     if name_input in all_menu_defs:
         info = all_menu_defs[name_input]
         intended_use = info["intended_use"]
 
-        if intended_use == "html":
-            name_element = info["moddir"]
-            return build_otput(name_element, "module", get_oer2go_size_from_file)
-
-        elif intended_use == "zim":
-            name_element = info["zim_name"]
-            return build_otput(name_element, "zim", get_zims_size)
-       
-        elif intended_use == "webroot":
-            name_element = info["name"]
-            return build_otput(name_element, "map", get_map_size_from_file)
+        try:
+            data_intend = intended_use_dict[intended_use]
+            name_element = info[data_intend["name"]]
+            return build_otput(name_element, data_intend["type"], data_intend["function"])
+        except:
+            pass
                     
     return build_otput(name_input, "unknown", element_unknown)
 
