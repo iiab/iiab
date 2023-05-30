@@ -1,5 +1,6 @@
 #!/usr/bin/python3
-# Creates json files for presets
+# Auto-calculate IIAB + EduPack disk space needs, in advance [& design review]
+# https://github.com/iiab/iiab/pull/3594
 
 import os, sys, syslog
 from datetime import date
@@ -180,4 +181,3 @@ def get_size(name_input):
 # Now start the application
 if __name__ == "__main__":
     main()
-
