@@ -125,14 +125,14 @@ As of June 2023, these docs appear to be the most up-to-date:
 Logging
 -------
 
-To turn on logging and/or record the Process ID (PID), follow these instructions: https://pawelrychlicki.pl/Home/Details/59/transmission-daemon-doesnt-create-a-log-file-nor-a-pid-file-ubuntu-server-1804
+Increase logging by changing transmission-daemon's ``--log-level=error`` to ``--log-level=debug`` in ``/lib/systemd/system/transmission-daemon.service``
 
-This gives permissions to user ``debian-transmission`` — if you use these 3 lines in ``/lib/systemd/system/transmission-daemon.service`` :
+(Options are: ``critical``, ``error``, ``warn``, ``info``, ``debug`` or ``trace``)
 
-::
+Then run::
 
-  RuntimeDirectory=transmission-daemon
-  LogsDirectory=transmission-daemon
-  ExecStart=/usr/bin/transmission-daemon -f --log-error --log-debug --logfile /var/log/transmission-daemon/transmission.log --pid-file /run/transmission-daemon/transmission.pid
+  systemctl daemon-reload
+  systemctl restart transmission-daemon
+  journalctl -eu transmission-daemon
 
 Noting that one should not normally edit files in ``/lib`` or ``/usr/lib`` — systemd has a command for customizing unit files: ``systemctl edit --full transmission-daemon.service``
