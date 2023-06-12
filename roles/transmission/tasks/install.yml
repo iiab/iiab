@@ -10,6 +10,47 @@
       - transmission-cli
     state: present
 
+
+- block:
+
+  - name: "TRY TO COMPILE & INSTALL very latest Transmission, installing ~5 binaries in /usr/local/bin to take precedence over above binaries in /usr/bin (attempt surgery on systemd unit file from apt install above!)"
+    meta: noop
+
+  # https://github.com/transmission/transmission/blob/main/docs/Building-Transmission.md#on-unix
+  - name: apt install build-essential cmake libcurl4-openssl-dev libssl-dev    # git python3
+    package:
+      name:
+        - build-essential
+        - cmake
+        - libcurl4-openssl-dev
+        - libssl-dev
+      state: present
+
+  # https://github.com/transmission/transmission/blob/main/docs/Building-Transmission.md#building-transmission-from-git-first-time
+  - name: Git clone latest to /opt/iiab/transmission
+    git:
+      repo: https://github.com/transmission/transmission
+      dest: /opt/iiab/transmission
+      #version: 4.0.x    # Otherwise default branch 'main'
+      depth: 1
+      force: yes
+
+  - name: Compile & Install (CAN TAKE 10+ MINUTES, OR MUCH MORE ON A RASPBERRY PI!)
+    shell: |
+      cd /opt/iiab/transmission
+      git submodule update --init --recursive
+      mkdir build
+      cd build
+      cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo ..
+      make
+      make install
+
+  - name: Attempt surgery on /lib/systemd/system/transmission-daemon.service changing /usr/bin/transmission* to /usr/local/bin/transmission*
+    command: sed -i 's#/usr/bin/transmission#/usr/local/bin/transmission#' /lib/systemd/system/transmission-daemon.service    # daemon_reload handled by enable-or-disable.yml
+
+  when: transmission_compile_latest
+
+
 - name: Create download dir {{ transmission_download_dir }}, owned by {{ transmission_user }}:{{ transmission_group }}
   file:
     state: directory
@@ -23,7 +64,10 @@
     state: stopped
   ignore_errors: yes
 
-- name: Back up prior /etc/transmission-daemon/settings.json (original file from apt, or new symlink contents) to /etc/transmission-daemon/settings.json.old*
+# 'transmission-daemon -d' (--dump-settings) CAN GENERATE A NEW settings.json
+# ...then customize ~8 var lines to create a new templates/settings.json.j2
+
+- name: Back up prior /etc/transmission-daemon/settings.json (file originally from apt, or new symlink contents) to /etc/transmission-daemon/settings.json.old*
   copy:
     src: /etc/transmission-daemon/settings.json
     dest: /etc/transmission-daemon/settings.json.old
@@ -52,7 +96,7 @@
 - name: "Reverse Transmission's fragile OOTB symlink -- instead we establish /etc/transmission-daemon/settings.json -> /var/lib/transmission-daemon/.config/transmission-daemon/settings.json -- REASON: /etc/transmission-daemon/settings.json was intermittently being IGNORED, as Transmission sometimes breaks its own symlink from /var/lib/transmission-daemon/.config/transmission-daemon/settings.json (by turning it into a file instead)"
   file:
     path: /etc/transmission-daemon/settings.json
-    src: /var/lib/transmission-daemon/.config/transmission-daemon/settings.json
+    src: /var/lib/transmission-daemon/.config/transmission-daemon/settings.json    # Symlink /var/lib/transmission-daemon/home/settings.json also points to this
     state: link
     force: yes
 

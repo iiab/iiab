@@ -111,10 +111,13 @@ Docs
 As of June 2023, these docs appear to be the most up-to-date:
 
 - https://github.com/transmission/transmission/tree/main/docs
+   - https://github.com/transmission/transmission/blob/main/docs/Building-Transmission.md
    - https://github.com/transmission/transmission/blob/main/docs/Configuration-Files.md
+   - https://github.com/transmission/transmission/blob/main/docs/Editing-Configuration-Files.md
    - https://github.com/transmission/transmission/blob/main/docs/Headless-Usage.md
-- https://wiki.archlinux.org/title/transmission (updated regularly)
 - https://cli-ck.io/transmission-cli-user-guide/ (2016 but still useful)
+   - https://github.com/transmission/transmission#command-line-interface-notes ("``transmission-cli`` is deprecated and exists primarily to support older hardware dependent upon it. In almost all instances, ``transmission-remote`` should be used instead.")
+- https://wiki.archlinux.org/title/transmission (updated regularly)
 - https://trac.transmissionbt.com/wiki (2006-2019)
 
 Logging
