@@ -111,23 +111,28 @@ Docs
 As of June 2023, these docs appear to be the most up-to-date:
 
 - https://github.com/transmission/transmission/tree/main/docs
+   - https://github.com/transmission/transmission/blob/main/docs/Building-Transmission.md
    - https://github.com/transmission/transmission/blob/main/docs/Configuration-Files.md
+   - https://github.com/transmission/transmission/blob/main/docs/Editing-Configuration-Files.md
    - https://github.com/transmission/transmission/blob/main/docs/Headless-Usage.md
-- https://wiki.archlinux.org/title/transmission (updated regularly)
+   - https://github.com/transmission/transmission/blob/main/docs/rpc-spec.md
+      - https://transmission-rpc.readthedocs.io
 - https://cli-ck.io/transmission-cli-user-guide/ (2016 but still useful)
+   - https://github.com/transmission/transmission#command-line-interface-notes ("``transmission-cli`` is deprecated and exists primarily to support older hardware dependent upon it. In almost all instances, ``transmission-remote`` should be used instead.")
+- https://wiki.archlinux.org/title/transmission (updated regularly)
 - https://trac.transmissionbt.com/wiki (2006-2019)
 
 Logging
 -------
 
-To turn on logging and/or record the Process ID (PID), follow these instructions: https://pawelrychlicki.pl/Home/Details/59/transmission-daemon-doesnt-create-a-log-file-nor-a-pid-file-ubuntu-server-1804
+Increase logging by changing transmission-daemon's ``--log-level=error`` to ``--log-level=debug`` in ``/lib/systemd/system/transmission-daemon.service``
 
-This gives permissions to user ``debian-transmission`` — if you use these 3 lines in ``/lib/systemd/system/transmission-daemon.service`` :
+(Options are: ``critical``, ``error``, ``warn``, ``info``, ``debug`` or ``trace``)
 
-::
+Then run::
 
-  RuntimeDirectory=transmission-daemon
-  LogsDirectory=transmission-daemon
-  ExecStart=/usr/bin/transmission-daemon -f --log-error --log-debug --logfile /var/log/transmission-daemon/transmission.log --pid-file /run/transmission-daemon/transmission.pid
+  systemctl daemon-reload
+  systemctl restart transmission-daemon
+  journalctl -eu transmission-daemon
 
 Noting that one should not normally edit files in ``/lib`` or ``/usr/lib`` — systemd has a command for customizing unit files: ``systemctl edit --full transmission-daemon.service``
