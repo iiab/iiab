@@ -232,15 +232,30 @@
     dest: /etc/asterisk/cdr_mysql.conf
 
 
-- name: FreePBX - 2-step install - won't run if {{ freepbx_install_dir }} already exists - FAST W/ GITHUB (OR freepbx-16.0-latest.tgz CAN TAKE 3-12 MIN OR LONGER!)
-  command: "{{ item }}"
+# 2023-05-21: Asterisk is in fact normally OFF at this point (shouldn't matter!)
+# - name: FreePBX - Spawn 'nohup ./start_asterisk start' in {{ freepbx_src_dir }}
+#   command: nohup ./start_asterisk start
+#   args:
+#     chdir: "{{ freepbx_src_dir }}"
+
+# 2023-06-21: Interim use of 'nohup' didn't quite solve ansible 2.15.x
+# regression ansible/ansible#80863, which led to PR's #3588 and #3604.
+- name: FreePBX - INTERIM USE OF 'systemctl start asterisk' TIL ANSIBLE FIXES 2.15.x REGRESSION ansible/ansible#80863 -- AS EVEN 'nohup ./start_asterisk start' DOESN'T WORK WITH 2.15.0 AND 2.15.1
+  systemd:
+    name: asterisk
+    state: started
+    #enabled: yes
+
+# 2023-06-21: Commands to try, to see if Asterisk has started & stabilized?
+# pidof asterisk
+# /usr/sbin/asterisk -rx 'core show version'
+# journalctl -eu asterisk
+
+- name: FreePBX - WAIT 5 SECONDS TO SIMULATE './start_asterisk start' (REQUIRED DUE TO ABOVE ANSIBLE BUG) THEN... install FreePBX to {{ freepbx_install_dir }} - FAST W/ GITHUB (OR freepbx-16.0-latest.tgz CAN TAKE 3-12 MIN OR LONGER!)
+  shell: sleep 5 && ./install -n --webroot {{ freepbx_install_dir }} --dbuser {{ asterisk_db_user }} --dbpass {{ asterisk_db_password }}
   args:
     chdir: "{{ freepbx_src_dir }}"
-    creates: "{{ freepbx_install_dir }}"    # /var/www/html/freepbx
-  with_items:
-    - ./start_asterisk start
-    - ./install -n --webroot {{ freepbx_install_dir }} --dbuser {{ asterisk_db_user }} --dbpass {{ asterisk_db_password }}
-    # - ./install -n --webroot {{ freepbx_install_dir }} --dbuser {{ asterisk_db_user }} --dbpass {{ asterisk_db_password }} --dbname {{ asterisk_db_dbname }} --cdrdbname {{ asterisk_db_cdrdbname }}
+    #creates: "{{ freepbx_install_dir }}"    # /var/www/html/freepbx
 
 
 # 2022-05-25 BACKGROUND: https://github.com/iiab/iiab/pull/3229#issuecomment-1138061460
