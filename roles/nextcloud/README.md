@@ -60,8 +60,8 @@ Do not install the [Nextcloud News](https://apps.nextcloud.com/apps/news) app (a
 
 Going forward, should Internet-in-a-Box consider integrating optimizations (or more!) from these below?
 
-- https://ownyourbits.com/nextcloudpi/
-- https://ownyourbits.com/2017/02/13/nextcloud-ready-raspberry-pi-image/
+- ~https://ownyourbits.com/nextcloudpi/~
+- ~https://ownyourbits.com/2017/02/13/nextcloud-ready-raspberry-pi-image/~
 - https://github.com/nextcloud/nextcloudpi
 
 Please [contact us](https://internet-in-a-box.org/contributing.html) if you can help!
