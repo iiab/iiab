@@ -36,7 +36,7 @@ To further refine Nextcloud access controls based on IPv4 addresses, you can edi
 
 FYI IIAB will also update `/etc/php/[ACTUAL PHP VERSION]/cli/php.in` (as Moodle requires).
 
-Useful PHP recommendations for these settings (while largely tailored to WordPress, and aimed at very low-end hardware) can be found here: [/opt/iiab/iiab/roles/www_options/tasks/main.yml#L53-L133](../www_options/tasks/php-settings.yml#L55-L110)
+Useful PHP recommendations for these settings (while largely tailored to WordPress, and aimed at very low-end hardware) can be found here: [/opt/iiab/iiab/roles/www_options/tasks/php-settings.yml#L55-L110](../www_options/tasks/php-settings.yml#L55-L110)
 
 (4) If you're running [Nextcloud 22+](https://github.com/nextcloud/server/wiki/Maintenance-and-Release-Schedule) in production, carefully check that Nextcloud's latest formal prereqs (required AND recommended) are included per your community's needs.  In places like these:
 
