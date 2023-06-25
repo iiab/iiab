@@ -18,7 +18,7 @@ FYI this [community product](https://en.wikipedia.org/wiki/Internet-in-a-Box) is
 
 Install Internet-in-a-Box (IIAB) from: [**download.iiab.io**](https://download.iiab.io/)
 
-Please see [FAQ.IIAB.IO](https://wiki.iiab.io/go/FAQ) which has 40+ questions and answers to help you along the way, as you put together the <!--digital--> "local learning hotspot" most suitable for your own teaching/learning community.  Here are 2 ways to install IIAB:
+Please see [FAQ.IIAB.IO](https://wiki.iiab.io/go/FAQ) which has 40+ questions and answers to help you along the way (e.g. ["Is a quick installation possible?"](https://wiki.iiab.io/go/FAQ#Is_a_quick_installation_possible3F)) as you put together the <!--digital--> "local learning hotspot" most suitable for your own teaching/learning community.  Here are 2 ways to install IIAB:
 
 - Our [1-line installer](https://download.iiab.io/) gets you the very latest, typically within about an hour, on [different Linux distributions](https://github.com/iiab/iiab/wiki/IIAB-Platforms#operating-systems).
 - [Prefab disk images](https://github.com/iiab/iiab/wiki/Raspberry-Pi-Images-~-Summary#iiab-images-for-raspberry-pi) ([.img files](https://archive.org/search.php?query=iiab%20.img&sort=-publicdate)) are sometimes a few months out of date, but can be flashed directly onto a microSD card, for insertion into Raspberry Pi.
