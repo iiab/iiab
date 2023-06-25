@@ -35,7 +35,7 @@ sudo ./runrole --reinstall nodejs
 Raspberry Pi Zero W Warning
 ---------------------------
 
-UPDATE: The Zero 2 W released 2021-10-28 is 64-bit (ARMv7) so may or may not have such serious problems...
+UPDATE: The Zero 2 W released 2021-10-28 is 64-bit (ARMv7) so may not have such serious problems...
 
 On the original Raspberry Pi Zero W (ARMv6) however: Node.js applications like Internet Archive, JupyterHub, Node-RED, PBX (Asterisk/FreePBX) and Sugarizer won't work — if you installed Node.js while on Raspberry Pi 3, 3 B+ (ARMv7) or Raspberry Pi 4 (ARMv8).
 
