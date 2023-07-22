@@ -60,7 +60,7 @@ Errors and warnings can be seen if you run::
 
   journalctl -u calibre-web
 
-Log verbosity level can be `adjusted <https://github.com/janeczku/calibre-web/wiki/Configuration#logfile-configuration>`_ within Calibre-Web's web **Configuration > Basic Configuration > Logfile Configuration**.
+Log verbosity level can be `adjusted <https://github.com/janeczku/calibre-web/wiki/Configuration#logfile-configuration>`_ within Calibre-Web's **Configuration > Basic Configuration > Logfile Configuration** (details below).
 
 Configuration
 -------------
