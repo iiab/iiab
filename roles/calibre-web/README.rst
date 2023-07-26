@@ -21,11 +21,11 @@ https://github.com/janeczku/calibre-web#about
 This Ansible role installs Calibre-Web, as a modern alternative to Calibre, for
 your Internet-in-a-Box (IIAB).
 
-*NOTE: Calibre-Web takes advantage of Calibre's own
+*NOTE: Calibre-Web takes advantage of Calibre's own*
 `/usr/bin/ebook-convert <https://manual.calibre-ebook.com/generated/en/ebook-convert.html>`_
-program if that's installed — so consider installing Calibre during your IIAB
-installation — if you tolerate the weighty ~1 GB (of graphical OS libraries)
-that Calibre mandates!*
+*program if that's installed — so consider also installing Calibre during your
+IIAB installation — if you tolerate the weighty ~1 GB (of graphical OS
+libraries) that Calibre mandates!*
 
 Please note Calibre-Web's Ansible playbook is
 ``/opt/iiab/iiab/roles/calibre-web`` whereas its Ansible variables
