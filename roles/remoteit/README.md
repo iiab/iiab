@@ -2,7 +2,7 @@
 
 Remote.it can be a [great way](https://docs.remote.it/introduction/get-started/readme) to remotely support an Internet-in-a-Box (IIAB).
 
-As of [June 2023](https://remote.it/pricing/), 5 IIAB devices can be managed for free (their personal / non-commercial plan) and larger numbers for $10+/month.
+As of [July 2023](https://remote.it/pricing/), 5 IIAB devices can be managed for free (their personal / non-commercial plan) and larger numbers for $10+/month.
 
 For other approaches, please see [FAQ.IIAB.IO](https://wiki.iiab.io/go/FAQ) -> "How can I remotely manage my Internet-in-a-Box?"
 
@@ -14,13 +14,13 @@ For other approaches, please see [FAQ.IIAB.IO](https://wiki.iiab.io/go/FAQ) -> "
 
 2. Consider downloading and installing the remote.it [desktop application](https://remote.it/download/) (e.g. for Windows, macOS or Linux) on your own laptop/computer.  Their https://remote.it Web Portal and [mobile apps](https://docs.remote.it/introduction/get-started/readme#installation-packages) are also sometimes sufficient, but less functional.
 
-   COMPARISON: "The Desktop and [CLI](https://docs.remote.it/software/cli) can [each] support both peer to peer connections and proxy connections [whereas] the Web Portal and API can only support proxy connections" according to https://docs.remote.it/software/device-package/usage
+   2023-07-26 WARNING: IIAB no longer installs the `/usr/bin/remoteit` [command-line interface (CLI)](https://docs.remote.it/software/cli), as it can [no longer coexist](https://github.com/iiab/iiab/blob/remoteit-remove-cli/roles/remoteit/tasks/install.yml#L116-L132) with the core `remoteit` Device Package.  Whereas in the past the remote.it CLI had offered [a few more features](https://support.remote.it/hc/en-us/articles/4412786750861-Install-the-remoteit-agent-on-your-device): "The Desktop and [CLI](https://docs.remote.it/software/cli) can [each] support both peer to peer connections and proxy connections [whereas] the Web Portal and API can only support proxy connections" according to https://docs.remote.it/software/device-package/usage
 
 <!-- ### Install remote.it onto an IIAB + register it + authorize services/ports -->
 ### OPTION #1: Generate a remote.it claim code for your IIAB + register it + authorize services/ports
 <!-- ### OPTION #1: Run `sudo iiab-remoteit` to enable remote.it -->
 
-Prerequisite: Find any IIAB with `remoteit_installed: True` in `/etc/iiab/iiab_state.yml` (this is the default!)  This means that the remote.it [Device Package](https://docs.remote.it/software/device-package) is already installed on your IIAB, most important.  It also means the _strictly optional_ `/usr/bin/remoteit` [command-line interface (CLI)](https://docs.remote.it/software/cli) is installed, offering [a few more features](https://support.remote.it/hc/en-us/articles/4412786750861-Install-the-remoteit-agent-on-your-device) than the Device Package.
+Prerequisite: Find any IIAB with `remoteit_installed: True` in `/etc/iiab/iiab_state.yml` (this is the default!)  This means that the remote.it [Device Package](https://docs.remote.it/software/device-package) is already installed on your IIAB, most important.
 
 1. Run `sudo iiab-remoteit` to enable remote.it on your IIAB:
 
@@ -158,7 +158,7 @@ Prerequisite: Find any IIAB with `remoteit_installed: True` in `/etc/iiab/iiab_s
 <!-- "auto-registration" of remote.it, and other more advanced configuration options, see: -->
 
 - https://docs.remote.it
-  - https://docs.remote.it/developer-tools/cli-usage
+  - ~https://docs.remote.it/developer-tools/cli-usage~
   - https://docs.remote.it/oem-and-bulk-provisioning/registration-into-a-users-account
 - https://support.remote.it
   - https://support.remote.it/hc/en-us/categories/360003417511-Getting-Started
