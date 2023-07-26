@@ -18,16 +18,18 @@ e-books using an existing Calibre database.  Teachers can upload e-books,
 adjust e-book metadata, and create custom e-book collections ("bookshelves"):
 https://github.com/janeczku/calibre-web#about
 
-This Ansible role installs Calibre-Web as part of your Internet-in-a-Box (IIAB)
-as a possible alternative to Calibre.
+This Ansible role installs Calibre-Web, as a modern alternative to Calibre, for
+your Internet-in-a-Box (IIAB).
 
-*WARNING: Calibre-Web depends on Calibre's own* ``/usr/bin/ebook-convert`` *program,
-so we strongly recommend you also install Calibre during your IIAB
-installation!*
+*NOTE: Calibre-Web takes advantage of Calibre's own
+`/usr/bin/ebook-convert <https://manual.calibre-ebook.com/generated/en/ebook-convert.html>`_
+program if that's installed — so consider installing Calibre during your IIAB
+installation — if you tolerate the weighty ~1 GB (of graphical OS libraries)
+that Calibre mandates!*
 
-Please note Calibre-Web's Ansible playbook is ``/opt/iiab/iiab/roles/calibre-web``
-whereas its Ansible variables ``calibreweb_*`` do **not** include the dash,
-per Ansible recommendations.
+Please note Calibre-Web's Ansible playbook is
+``/opt/iiab/iiab/roles/calibre-web`` whereas its Ansible variables
+``calibreweb_*`` do **not** include the dash, per Ansible recommendations.
 
 Using It
 --------
