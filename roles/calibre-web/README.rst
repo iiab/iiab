@@ -14,9 +14,9 @@ Calibre-Web README
 ==================
 
 Calibre-Web provides a clean interface for browsing, reading and downloading
-e-books using an existing Calibre database.  Teachers can upload e-books,
-adjust e-book metadata, and create custom e-book collections ("bookshelves"):
-https://github.com/janeczku/calibre-web#about
+e-books using a `Calibre <https://calibre-ebook.com/whats-new>`_ database.
+Teachers can upload e-books, adjust e-book metadata, and create custom e-book
+collections ("bookshelves"): https://github.com/janeczku/calibre-web#about
 
 This Ansible role installs Calibre-Web, as a modern alternative to Calibre, for
 your Internet-in-a-Box (IIAB).
@@ -62,19 +62,25 @@ Errors and warnings can be seen if you run::
 
   journalctl -u calibre-web
 
-Log verbosity level can be `adjusted <https://github.com/janeczku/calibre-web/wiki/Configuration#logfile-configuration>`_ within Calibre-Web's **Configuration > Basic Configuration > Logfile Configuration** (details below).
+Log verbosity level can be
+`adjusted <https://github.com/janeczku/calibre-web/wiki/Configuration#logfile-configuration>`_
+within Calibre-Web's **Configuration > Basic Configuration > Logfile
+Configuration** (details below).
 
 Configuration
 -------------
 
-To configure Calibre-Web, log in as user 'Admin' then click 'Admin' on top.
-Check 'Configuration' options near the bottom of the page.
+To configure Calibre-Web browse to http://box/books then click **Guest** to log
+in as user **Admin** (default passwords above!)
 
-Critical settings are stored in::
+Then click the leftmost **Admin** button to administer — considering all 3
+**Configuration** buttons further below.
+
+These critical settings are stored in::
 
   /library/calibre-web/config/app.db
 
-Your e-book metadata is stored in a Calibre-style database::
+Whereas your e-book metadata is stored in a Calibre-style database::
 
   /library/calibre-web/metadata.db
 
