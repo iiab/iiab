@@ -41,11 +41,11 @@ collections — to help students build the best local library!
   importing/organizing tools like
   `/usr/bin/calibredb <https://manual.calibre-ebook.com/generated/en/calibredb.html>`_.
 
-* WARNING: Calibre-Web's Ansible playbook is
-  ``/opt/iiab/iiab/roles/calibre-web`` whereas its Ansible variables (in
-  `/etc/iiab/local_vars.yml
+* WARNING: Calibre-Web's Ansible role (playbook) is
+  ``/opt/iiab/iiab/roles/calibre-web`` which contains a hyphen, whereas its
+  Ansible variables (in `/etc/iiab/local_vars.yml
   <https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it%3F>`_)
-  ``calibreweb_*`` do **not** include the dash.
+  ``calibreweb_*`` do **not** contain a hyphen!
 
 Using It
 --------
