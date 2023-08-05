@@ -43,9 +43,9 @@ collections — to help students build the best local library!
 
 * WARNING: Calibre-Web's Ansible role (playbook) is
   ``/opt/iiab/iiab/roles/calibre-web`` which contains a hyphen, whereas its
-  Ansible variables (in `/etc/iiab/local_vars.yml
+  Ansible variables ``calibreweb_*`` (in `/etc/iiab/local_vars.yml
   <https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it%3F>`_)
-  ``calibreweb_*`` do **not** contain a hyphen!
+  do **not** contain a hyphen!
 
 Using It
 --------
@@ -134,7 +134,7 @@ manually::
   cd /usr/local/calibre-web-py3
   git pull
 
-This older way *is no longer recommended*::
+This older way is *no longer recommended*::
 
   cd /opt/iiab/iiab
   ./iiab-install --reinstall    # OR: ./iiab-configure
