@@ -13,26 +13,39 @@
 Calibre-Web README
 ==================
 
-Calibre-Web provides a clean interface for browsing, reading and downloading
-e-books using a `Calibre database <https://manual.calibre-ebook.com/db_api.html>`_.
-Teachers can upload e-books, adjust e-book metadata, and create custom e-book
-collections ("bookshelves"): 
+This Ansible role installs
+`Calibre-Web <https://github.com/janeczku/calibre-web#readme>`_ as a modern
+client-server alternative to Calibre, for your
+`Internet-in-a-Box (IIAB) <https://internet-in-a-box.org>`_.
 
-https://github.com/janeczku/calibre-web#about
+Calibre-Web provides a clean web interface for students to browse, read and
+download e-books using a
+`Calibre-compatible database <https://manual.calibre-ebook.com/db_api.html>`_.
 
-This Ansible role installs Calibre-Web, as a modern alternative to
-`Calibre <https://calibre-ebook.com/whats-new>`_,
-for your Internet-in-a-Box (IIAB).
+Teachers upload e-books, adjust e-book metadata, and create custom "bookshelf"
+collections — to help students build the best local library!
 
-*NOTE: Calibre-Web takes advantage of Calibre's own*
-`/usr/bin/ebook-convert <https://manual.calibre-ebook.com/generated/en/ebook-convert.html>`_
-*program if that's installed — so consider also installing Calibre during your
-IIAB installation — if you tolerate the weighty ~1 GB (of graphical OS
-libraries) that Calibre mandates!*
+.. image:: https://www.yankodesign.com/images/design_news/2019/05/221758/luo_beetle_library_8.jpg
 
-Please note Calibre-Web's Ansible playbook is
-``/opt/iiab/iiab/roles/calibre-web`` whereas its Ansible variables
-``calibreweb_*`` do **not** include the dash.
+🍒 GURU TIPS 🍒
+
+* Calibre-Web takes advantage of Calibre's own `/usr/bin/ebook-convert
+  <https://manual.calibre-ebook.com/generated/en/ebook-convert.html>`_ program
+  if that's installed — so consider also installing
+  `Calibre <https://calibre-ebook.com/whats-new>`_ during your IIAB
+  installation — *if you tolerate the weighty ~1 GB (of graphical OS libraries)
+  that Calibre mandates!*
+
+* If you choose to also install Calibre (e.g. by running
+  ``sudo apt install calibre``) then you'll get useful e-book
+  importing/organizing tools like
+  `/usr/bin/calibredb <https://manual.calibre-ebook.com/generated/en/calibredb.html>`_.
+
+* WARNING: Calibre-Web's Ansible playbook is
+  ``/opt/iiab/iiab/roles/calibre-web`` whereas its Ansible variables (in
+  `/etc/iiab/local_vars.yml
+  <https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it%3F>`_)
+  ``calibreweb_*`` do **not** include the dash.
 
 Using It
 --------
