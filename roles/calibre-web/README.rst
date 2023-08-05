@@ -14,12 +14,15 @@ Calibre-Web README
 ==================
 
 Calibre-Web provides a clean interface for browsing, reading and downloading
-e-books using a `Calibre <https://calibre-ebook.com/whats-new>`_ database.
+e-books using a `Calibre database <https://manual.calibre-ebook.com/db_api.html>`_.
 Teachers can upload e-books, adjust e-book metadata, and create custom e-book
-collections ("bookshelves"): https://github.com/janeczku/calibre-web#about
+collections ("bookshelves"): 
 
-This Ansible role installs Calibre-Web, as a modern alternative to Calibre, for
-your Internet-in-a-Box (IIAB).
+https://github.com/janeczku/calibre-web#about
+
+This Ansible role installs Calibre-Web, as a modern alternative to
+`Calibre <https://calibre-ebook.com/whats-new>`_,
+for your Internet-in-a-Box (IIAB).
 
 *NOTE: Calibre-Web takes advantage of Calibre's own*
 `/usr/bin/ebook-convert <https://manual.calibre-ebook.com/generated/en/ebook-convert.html>`_
@@ -29,7 +32,7 @@ libraries) that Calibre mandates!*
 
 Please note Calibre-Web's Ansible playbook is
 ``/opt/iiab/iiab/roles/calibre-web`` whereas its Ansible variables
-``calibreweb_*`` do **not** include the dash, per Ansible recommendations.
+``calibreweb_*`` do **not** include the dash.
 
 Using It
 --------
