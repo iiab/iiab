@@ -103,12 +103,11 @@ Finally, take note of Calibre-Web's `FAQ <https://github.com/janeczku/calibre-we
 Backend
 -------
 
-You can manage the backend Calibre-Web server with these systemd commands::
+You can manage the backend Calibre-Web server with systemd commands like::
 
-  systemctl enable calibre-web
-  systemctl restart calibre-web
   systemctl status calibre-web
   systemctl stop calibre-web
+  systemctl restart calibre-web
 
 Run all commands `as root <https://unix.stackexchange.com/questions/3063/how-do-i-run-a-command-as-the-system-administrator-root>`_.
 
