@@ -110,6 +110,8 @@ You can manage the backend Calibre-Web server with these systemd commands::
   systemctl status calibre-web
   systemctl stop calibre-web
 
+Run all commands `as root <https://unix.stackexchange.com/questions/3063/how-do-i-run-a-command-as-the-system-administrator-root>`_.
+
 Errors and warnings can be seen if you run::
 
   journalctl -u calibre-web
@@ -136,7 +138,7 @@ But first: back up your content **and** settings, as explained above.
 **Also move your /library/calibre-web/config/app.db AND/OR
 /library/calibre-web/metadata.db out of the way — if you're sure you want to
 fully reset your Calibre-Web settings (to install defaults) AND/OR remove all
-e-book metadata!  Then run**::
+e-book metadata!  Then run, as root**::
 
   cd /opt/iiab/iiab
   ./runrole --reinstall calibre-web
