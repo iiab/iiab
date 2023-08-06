@@ -41,16 +41,25 @@ collections — to help students build the best local library!
   importing/organizing tools like
   `/usr/bin/calibredb <https://manual.calibre-ebook.com/generated/en/calibredb.html>`_.
 
-* WARNING: Calibre-Web's Ansible role (playbook) is
-  ``/opt/iiab/iiab/roles/calibre-web`` which contains a hyphen, whereas its
-  Ansible variables ``calibreweb_*`` (in `/etc/iiab/local_vars.yml
-  <https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it%3F>`_)
-  do **not** contain a hyphen!
+Install It
+----------
+
+Install Calibre-Web by setting these 2 variables in `/etc/iiab/local_vars.yml <https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it%3F>`_::
+
+  calibreweb_install: True
+  calibreweb_enabled: True
+
+Then install IIAB (`download.iiab.io <https://download.iiab.io>`_).  Or if IIAB's already installed, run::
+
+  cd /opt/iiab/iiab
+  sudo ./runrole calibre-web
+
+NOTE: Calibre-Web's Ansible role (playbook) in `/opt/iiab/iiab/roles <https://github.com/iiab/iiab/tree/master/roles>`_ is ``calibre-web`` which contains a hyphen — *whereas its Ansible variables* ``calibreweb_*`` *do NOT contain a hyphen!*
 
 Using It
 --------
 
-After installation, try out Calibre-Web at http://box/books (or box.lan/books).
+Try Calibre-Web on your own IIAB by browsing to http://box/books (or box.lan/books).
 
 Typically students access it without a password (to read and download books)
 whereas teachers add books using an administrative account, as follows::
