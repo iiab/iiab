@@ -44,38 +44,48 @@ collections — to help students build the best local community library!
 Install It
 ----------
 
-Install Calibre-Web by setting these 2 variables in `/etc/iiab/local_vars.yml <https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it%3F>`_::
+Install Calibre-Web by setting these 2 variables in
+`/etc/iiab/local_vars.yml <https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it%3F>`_::
 
   calibreweb_install: True
   calibreweb_enabled: True
 
-Then install IIAB (`download.iiab.io <https://download.iiab.io>`_).  Or if IIAB's already installed, run::
+Then install IIAB (`download.iiab.io <https://download.iiab.io>`_).  Or if
+IIAB's already installed, run::
 
   cd /opt/iiab/iiab
   sudo ./runrole calibre-web
 
-NOTE: Calibre-Web's Ansible role (playbook) in `/opt/iiab/iiab/roles <https://github.com/iiab/iiab/tree/master/roles>`_ is ``calibre-web`` which contains a hyphen — *whereas its Ansible variables* ``calibreweb_*`` *do NOT contain a hyphen!*
+NOTE: Calibre-Web's Ansible role (playbook) in
+`/opt/iiab/iiab/roles <https://github.com/iiab/iiab/tree/master/roles>`_ is
+``calibre-web`` which contains a hyphen — *whereas its Ansible variables*
+``calibreweb_*`` *do NOT contain a hyphen!*
 
 Using It
 --------
 
-Try Calibre-Web on your own IIAB by browsing to http://box/books (or http://box.lan/books).
+Try Calibre-Web on your own IIAB by browsing to http://box/books (or
+http://box.lan/books).
 
 *Students* access it without a password (to read and download books).
 
-*Teachers* add and arrange books using an administrative account, by clicking **Guest** then logging in with::
+*Teachers* add and arrange books using an administrative account, by clicking
+**Guest** then logging in with::
 
   Username: Admin
   Password: changeme
 
 🍒 GURU TIPS 🍒
 
-* If Calibre-Web's configuration file (app.db) goes missing, the administrative account will revert to::
+* If Calibre-Web's configuration file (app.db) goes missing, the administrative
+  account will revert to::
 
     Username: admin
     Password: admin123
 
-* If you lose your password, you can change it with the ``-s [username]:[newpassword]`` command-line option: https://github.com/janeczku/calibre-web/wiki/FAQ#what-do-i-do-if-i-lose-my-admin-password
+* If you lose your password, you can change it with the
+  ``-s [username]:[newpassword]`` command-line option:
+  https://github.com/janeczku/calibre-web/wiki/FAQ#what-do-i-do-if-i-lose-my-admin-password
 
 Configuration
 -------------
@@ -98,7 +108,12 @@ See also::
 
   /library/calibre-web/metadata_db_prefs_backup.json
 
-Finally, take note of Calibre-Web's `FAQ <https://github.com/janeczku/calibre-web/wiki/FAQ>`_ and official docs on its `Runtime Configuration Options <https://github.com/janeczku/calibre-web/wiki/Configuration>`_ and `Command Line Interface <https://github.com/janeczku/calibre-web/wiki/Command-Line-Interface>`_.
+Finally, take note of Calibre-Web's
+`FAQ <https://github.com/janeczku/calibre-web/wiki/FAQ>`_ and official docs on
+its
+`Runtime Configuration Options <https://github.com/janeczku/calibre-web/wiki/Configuration>`_
+and
+`Command Line Interface <https://github.com/janeczku/calibre-web/wiki/Command-Line-Interface>`_.
 
 Backend
 -------
@@ -109,7 +124,8 @@ You can manage the backend Calibre-Web server with systemd commands like::
   systemctl stop calibre-web
   systemctl restart calibre-web
 
-Run all commands `as root <https://unix.stackexchange.com/questions/3063/how-do-i-run-a-command-as-the-system-administrator-root>`_.
+Run all commands
+`as root <https://unix.stackexchange.com/questions/3063/how-do-i-run-a-command-as-the-system-administrator-root>`_.
 
 Errors and warnings can be seen if you run::
 
