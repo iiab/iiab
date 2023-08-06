@@ -59,19 +59,23 @@ NOTE: Calibre-Web's Ansible role (playbook) in `/opt/iiab/iiab/roles <https://gi
 Using It
 --------
 
-Try Calibre-Web on your own IIAB by browsing to http://box/books (or box.lan/books).
+Try Calibre-Web on your own IIAB by browsing to http://box/books (or http://box.lan/books).
 
-Typically students access it without a password (to read and download books)
-whereas teachers add books using an administrative account, as follows::
+*Students* access it without a password (to read and download books).
+
+*Teachers* add and arrange books using an administrative account, by clicking **Guest** then logging in with::
 
   Username: Admin
   Password: changeme
 
-If the default configuration is not found, the Calibre-Web server creates a
-new settings file with calibre-web's own default administrative account::
+🍒 GURU TIPS 🍒
 
-  Username: admin
-  Password: admin123
+* If Calibre-Web's configuration file (app.db) goes missing, the administrative account will revert to::
+
+    Username: admin
+    Password: admin123
+
+* If you lose your password, you can change it with the ``-s [username]:[newpassword]`` command-line option: https://github.com/janeczku/calibre-web/wiki/FAQ#what-do-i-do-if-i-lose-my-admin-password
 
 Backend
 -------
