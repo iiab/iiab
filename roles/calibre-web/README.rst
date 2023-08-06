@@ -23,7 +23,7 @@ download e-books using a
 `Calibre-compatible database <https://manual.calibre-ebook.com/db_api.html>`_.
 
 Teachers upload e-books, adjust e-book metadata, and create custom "bookshelf"
-collections — to help students build the best local library!
+collections — to help students build the best local community library!
 
 .. image:: https://www.yankodesign.com/images/design_news/2019/05/221758/luo_beetle_library_8.jpg
 
@@ -77,25 +77,6 @@ Try Calibre-Web on your own IIAB by browsing to http://box/books (or http://box.
 
 * If you lose your password, you can change it with the ``-s [username]:[newpassword]`` command-line option: https://github.com/janeczku/calibre-web/wiki/FAQ#what-do-i-do-if-i-lose-my-admin-password
 
-Backend
--------
-
-You can manage the backend Calibre-Web server with these systemd commands::
-
-  systemctl enable calibre-web
-  systemctl restart calibre-web
-  systemctl status calibre-web
-  systemctl stop calibre-web
-
-Errors and warnings can be seen if you run::
-
-  journalctl -u calibre-web
-
-Log verbosity level can be
-`adjusted <https://github.com/janeczku/calibre-web/wiki/Configuration#logfile-configuration>`_
-within Calibre-Web's **Configuration > Basic Configuration > Logfile
-Configuration** (details below).
-
 Configuration
 -------------
 
@@ -118,6 +99,25 @@ See also::
   /library/calibre-web/metadata_db_prefs_backup.json
 
 Finally, take note of Calibre-Web's `FAQ <https://github.com/janeczku/calibre-web/wiki/FAQ>`_ and official docs on its `Runtime Configuration Options <https://github.com/janeczku/calibre-web/wiki/Configuration>`_ and `Command Line Interface <https://github.com/janeczku/calibre-web/wiki/Command-Line-Interface>`_.
+
+Backend
+-------
+
+You can manage the backend Calibre-Web server with these systemd commands::
+
+  systemctl enable calibre-web
+  systemctl restart calibre-web
+  systemctl status calibre-web
+  systemctl stop calibre-web
+
+Errors and warnings can be seen if you run::
+
+  journalctl -u calibre-web
+
+Log verbosity level can be
+`adjusted <https://github.com/janeczku/calibre-web/wiki/Configuration#logfile-configuration>`_
+within Calibre-Web's **Configuration > Basic Configuration > Logfile
+Configuration** (details below).
 
 Back Up Everything
 ------------------
