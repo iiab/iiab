@@ -140,15 +140,15 @@ Back Up Everything
 ------------------
 
 Please back up the entire folder ``/library/calibre-web`` before upgrading —
-as it contains your Calibre-Web content **and** settings!
+as it contains your Calibre-Web content **and** configuration settings!
 
 Upgrading
 ---------
 
-Reinstalling Calibre-Web automatically upgrades to the latest version if your
+"Reinstalling" Calibre-Web automatically installs the latest version — if your
 Internet-in-a-Box (IIAB) is online.
 
-But first: back up your content **and** settings, as explained above.
+But first: back up your content **and** configuration settings, as explained above.
 
 **Also move your /library/calibre-web/config/app.db AND/OR
 /library/calibre-web/metadata.db out of the way — if you're sure you want to
