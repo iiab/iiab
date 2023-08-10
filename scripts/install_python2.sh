@@ -66,6 +66,16 @@ deb http://ports.ubuntu.com/ jammy-updates main universe
 EOF
         fi
         ;;
+
+    "i386")
+        # Building on scripts/ansible fix PR #3615
+        if grep -q '^ID=debian$' /etc/os-release; then
+            cat << EOF > /etc/apt/sources.list.d/python2.list
+deb http://deb.debian.org/debian bullseye main contrib non-free
+deb http://deb.debian.org/debian bullseye-updates main contrib non-free
+EOF
+        fi
+        ;;
 esac
 
 apt update
