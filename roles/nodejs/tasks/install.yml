@@ -95,27 +95,39 @@
 # apt install ./nodejs_18.11.0-deb-1nodesource1_amd64.deb    # SMARTER + CLEANER THAN: dpkg -i nodejs_18...
 # echo 'nodejs_installed: True' >> /etc/iiab/iiab_state.yml
 
-- name: Try 'curl -fsSL https://deb.nodesource.com/setup_{{ nodejs_version }} | bash -' to overwrite /etc/apt/sources.list.d/nodesource.list
-  shell: curl -fsSL https://deb.nodesource.com/setup_{{ nodejs_version }} | bash -
+- name: Try NEW (since August 2023) approach setting up /etc/apt/keyrings/nodesource.gpg and /etc/apt/sources.list.d/nodesource.list -- per https://github.com/nodesource/distributions#installation-instructions
+  shell: |
+    mkdir -p /etc/apt/keyrings
+    rm -f /etc/apt/keyrings/nodesource.gpg
+    curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg
+    echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_{{ nodejs_version }} nodistro main" > /etc/apt/sources.list.d/nodesource.list
   register: curl_nodesource
   ignore_errors: yes
-  #args:
-  #  warn: no
-  #  creates: /etc/apt/sources.list.d/nodesource.list
 
-- name: Remove /etc/apt/sources.list.d/nodesource.list if install failed above
+# 2023-09-06: OBSOLETE as nodesource.com no longer supports https://deb.nodesource.com/node_{{ nodejs_version }}/dists/
+# - name: Try 'curl -fsSL https://deb.nodesource.com/setup_{{ nodejs_version }} | bash -' to overwrite /etc/apt/sources.list.d/nodesource.list
+#   shell: curl -fsSL https://deb.nodesource.com/setup_{{ nodejs_version }} | bash -
+#   register: curl_nodesource
+#   ignore_errors: yes
+#   #args:
+#   #  warn: no
+#   #  creates: /etc/apt/sources.list.d/nodesource.list
+
+- name: Remove /etc/apt/sources.list.d/nodesource.list if above failed
   file:
     path: /etc/apt/sources.list.d/nodesource.list
     state: absent
   when: curl_nodesource.failed
 
-- name: Install latest Node.js -- includes /usr/bin/npm if nodesource installed above
-  package:
+- name: Install Node.js -- also includes /usr/bin/npm if nodesource.list installed above
+  apt:
     #name: nodejs={{ nodejs_version }}
     name: nodejs
     state: latest    # Equivalent to 'state: present' ?
+    update_cache: yes
 
-- name: Also install latest npm (OS's) if nodesource failed to install above -- i.e. if OS not yet supported by https://github.com/nodesource/distributions#deb and https://deb.nodesource.com/node_{{ nodejs_version }}/dists/
+# Also run 'npm install -g npm' later, if you truly want the LATEST!
+- name: Also install latest npm (OS's) if nodesource failed to install above -- i.e. if OS not yet supported by https://github.com/nodesource/distributions
   package:
     name: npm
     state: latest    # Equivalent to 'state: present' ?
