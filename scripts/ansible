@@ -49,6 +49,7 @@ GOOD_VER=2.15.3       # Orig for 'yum install [rpm]' & XO laptops (pip install)
 # https://launchpad.net/~ansible
 # https://launchpad.net/~ansible-gha
 # https://launchpad.net/~ansible/+archive/ubuntu/ansible
+# https://launchpad.net/~ansible/+archive/ubuntu/ansible/+packages
 # https://launchpad.net/~ansible/+archive/ubuntu/ansible-2.10 (OLD)
 # http://ppa.launchpad.net/ansible/ansible/ubuntu/pool/main/a/ansible/ (OLD)
 # http://ppa.launchpad.net/ansible/ansible/ubuntu/pool/main/a/ansible-core/
@@ -89,10 +90,10 @@ echo -e "RECOMMENDED PREREQUISITES:"
 echo -e "(1) Verify you're online"
 echo -e "(2) Remove all prior versions of Ansible using..."
 echo -e "    'apt purge ansible-core'  and/or  'pip3 uninstall ansible-core'  and/or"
-echo -e "    'apt purge ansible-base'  and/or  'pip3 uninstall ansible-base'  and/or"
+#echo -e "    'apt purge ansible-base'  and/or  'pip3 uninstall ansible-base'  and/or"
 echo -e "    'apt purge ansible'       and/or  'pip3 uninstall ansible'"
-echo -e "(3) Remove all lines containing 'ansible' from..."
-echo -e "    /etc/apt/sources.list and /etc/apt/sources.list.d/*\n"
+#echo -e "(3) Remove all lines containing 'ansible' from..."
+#echo -e "    /etc/apt/sources.list and /etc/apt/sources.list.d/*\n"
 
 echo -e "IIAB INSTALL INSTRUCTIONS: (OLDER, MANUAL APPROACH)"
 echo -e "https://github.com/iiab/iiab/wiki/IIAB-Installation#do-everything-from-scratch\n"
@@ -200,7 +201,16 @@ echo -e "\napt update; apt install python3-venv"
 $APT_PATH/apt update
 $APT_PATH/apt -y install python3-venv
 
-if [[ $(dpkg --print-architecture) == i386 ]]; then
+# 2023-09-08 PR #3634: 'apt install ansible-core' is overweight, but works on
+# "32-bit" RasPiOS 12 (@EMG70 set 'arm_64bit=0' in /boot/config.txt per #3516
+# to force boot its 32-bit kernel; its 64-bit kernel should work too!)
+# IN SHORT: This ugly hack appears sufficient for all "32-bit" Bookworm+ OS's
+# (similar to 32-bit Debian 12 on AMD/Intel a month ago, i.e. PR #3617).
+# 2023-09-10 PR #3637: Even safer test than querying for Debian 12+ -- verify
+# that apt package ansible-core is truly available:
+if ! dpkg --print-architecture | grep -q 64 && apt-cache show ansible-core > /dev/null; then
+#if ! dpkg --print-architecture | grep -q 64 && ! grep -q ^11 /etc/debian_version; then
+#if [[ $(dpkg --print-architecture) == i386 ]]; then
     # 2023-08-10: Quick+Dirty (BRUTE FORCE) on legacy 32-bit i386 avoids #3547
     # rust/wheels/cryptography compiling mess!  DEBIAN 12+ OR SIMILAR REQUIRED!
     $APT_PATH/apt -y install ansible-core    # Bookworm ~= ansible-core 2.14.3
@@ -208,6 +218,12 @@ else
     # 2023-03-22: OS's like Ubuntu 23.04 and Debian 12 (e.g. with Python 3.11+) ask
     # that virtual environments (venv) be used to safely isolate pip installs:
     # https://peps.python.org/pep-0668
+
+    # 2023-09-08: NEW WAY ANSIBLE RECOMMENDS?  https://docs.ansible.com/ansible/latest/installation_guide/intro_installation.html
+    # $APT_PATH/apt -y install pipx    # Typically adds 50+ packages!
+    # pipx install ansible-core
+    # pipx ensurepath    # Adds /root/.local/bin to $PATH -- next time you open a shell -- e.g. for /root/.local/bin/ansible -> /root/.local/pipx/venvs/ansible-core/bin/ansible
+
     echo -e "\nCreate virtual environment for Ansible"
     python3 -m venv /usr/local/ansible
 
