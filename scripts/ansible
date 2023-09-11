@@ -208,9 +208,10 @@ $APT_PATH/apt -y install python3-venv
 # (similar to 32-bit Debian 12 on AMD/Intel a month ago, i.e. PR #3617).
 # 2023-09-10 PR #3637: Even safer test than querying for Debian 12+ -- verify
 # that apt package ansible-core is truly available:
-if ! dpkg --print-architecture | grep -q 64 && apt-cache show ansible-core > /dev/null; then
+#if ! dpkg --print-architecture | grep -q 64 && apt-cache show ansible-core > /dev/null; then
 #if ! dpkg --print-architecture | grep -q 64 && ! grep -q ^11 /etc/debian_version; then
-#if [[ $(dpkg --print-architecture) == i386 ]]; then
+# 2023-09-10 PR #3632: Revert above #3634 and #3637 trying /etc/pip.conf w/ cryptography 41.0.3
+if [[ $(dpkg --print-architecture) == "i386" ]] && apt-cache show ansible-core > /dev/null; then
     # 2023-08-10: Quick+Dirty (BRUTE FORCE) on legacy 32-bit i386 avoids #3547
     # rust/wheels/cryptography compiling mess!  DEBIAN 12+ OR SIMILAR REQUIRED!
     $APT_PATH/apt -y install ansible-core    # Bookworm ~= ansible-core 2.14.3
@@ -227,6 +228,17 @@ else
     echo -e "\nCreate virtual environment for Ansible"
     python3 -m venv /usr/local/ansible
 
+    # 2023-09-10: Work around #3526 "32-bit" RasPiOS 12 pre-release issue...
+    # 'Package issue: cryptography 41.0.3 leads to cffi 1.15.1 failure on
+    # "32-bit" Raspberry Pi OS [REASON: /etc/pip.conf missing on some Bookworm
+    # pre-releases' == https://github.com/piwheels/packages/issues/390
+    if ! [ -f /etc/pip.conf ] && [ -f /etc/rpi-issue ]; then
+        cat > /etc/pip.conf << EOF
+[global]
+extra-index-url=https://www.piwheels.org/simple
+EOF
+    fi
+
     # "if not ubuntu" (covers RasPiOS & Debian) would also work, but is overbroad:
     # if ! grep -qi ubuntu /etc/os-release; then
     #
@@ -235,14 +247,17 @@ else
     # 2023-03-24 #3547 similar to #3459 re: cryptography, piwheels, rust.
     # Release problems chart: https://www.piwheels.org/project/cryptography/
     # if ! dpkg --print-architecture | grep -q 64; then     # 32-bit in general!
-    if [[ $(dpkg --print-architecture) == armhf ]]; then    # 32-bit ARM
-	/usr/local/ansible/bin/python3 -m pip install cryptography==40.0.1
-	# else
-	#     # 2023-08-10: 'apt install rustc pkg-config libssl-dev' was not enough!
-	#     # So we use apt to install cryptography 38.0.4 for Debian 12.1 -- where
-	#     # `dpkg --print-architecture` was i386 and `uname -m` was i686:
-	#     $APT_PATH/apt -y install python3-cryptography
-    fi
+    # 2023-09-07: Commenting out cryptography 40.0.1 below, as @EMG70 evaluates
+    #             new upstream piwheels fix (e.g. cryptography 41.0.3 for now)
+    #             on pre-release 32-bit RasPiOS 12... (#3526)
+    # if [[ $(dpkg --print-architecture) == armhf ]]; then    # 32-bit ARM
+    #     /usr/local/ansible/bin/python3 -m pip install cryptography==40.0.1
+    #     # else
+    #     # 2023-08-10: 'apt install rustc pkg-config libssl-dev' was not enough!
+    #     # So we use apt to install cryptography 38.0.4 for Debian 12.1 -- where
+    #     # `dpkg --print-architecture` was i386 and `uname -m` was i686:
+    #     #     $APT_PATH/apt -y install python3-cryptography
+    # fi
 
     # 2023-05-22: 2.14.6 was better than 2.15.0 for FreePBX (#3588, ansible/ansible#80863)
     /usr/local/ansible/bin/python3 -m pip install --upgrade ansible-core
