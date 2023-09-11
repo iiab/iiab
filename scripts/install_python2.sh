@@ -38,7 +38,8 @@ ARCH=$(dpkg --print-architecture)
 
 # libpython2.7-stdlib from ubuntu-22.04 used in amd64|arm64|armhf is compiled against libssl3 and libffi8
 # `apt info libpython2.7-stdlib`
-cd /tmp
+#cd /tmp
+
 case $ARCH in
     "amd64")
         # works on U23.04 x86_64 VM
@@ -58,12 +59,16 @@ EOF
 
     "armhf")
         # armhf compile flags differ between RasPiOS and Ubuntu
-        if ! [ -f /etc/rpi-issue ]; then
-            # these might change
+        if [ -f /etc/rpi-issue ] && ! grep -q 11 /etc/issue; then    # RasPiOS 12+ / Bookworm+
             cat << EOF > /etc/apt/sources.list.d/python2.list
-deb http://ports.ubuntu.com/ jammy main universe
-deb http://ports.ubuntu.com/ jammy-updates main universe
+deb [trusted=yes] http://ports.ubuntu.com/ jammy main universe
+deb [trusted=yes] http://ports.ubuntu.com/ jammy-updates main universe
 EOF
+#         elif ! [ -f /etc/rpi-issue ]; then    # Ubuntu/Debian on armhf not supported
+#             cat << EOF > /etc/apt/sources.list.d/python2.list
+# deb http://ports.ubuntu.com/ jammy main universe
+# deb http://ports.ubuntu.com/ jammy-updates main universe
+# EOF
         fi
         ;;
 
