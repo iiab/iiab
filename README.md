@@ -2,8 +2,8 @@
 
 # Internet-in-a-Box (IIAB)
 
-[Internet-in-a-Box (IIAB)](https://internet-in-a-box.org) is a "learning hotspot" that brings the Internet's crown jewels
-(Wikipedia in any language, thousands of Khan Academy videos, zoomable OpenStreetMap, electronic books, WordPress journaling, Toys from Trash electronics projects, ETC) to those without Internet.
+[Internet-in-a-Box (IIAB)](https://internet-in-a-box.org) is a “learning hotspot” that brings the Internet's crown jewels
+(Wikipedia in any language, thousands of Khan Academy videos, zoomable OpenStreetMap, electronic books, WordPress journaling, “Toys from Trash” electronics projects, ETC) to those without Internet.
 
 You can build your own tiny, affordable server (an offline digital library) for your school, your medical clinic, your prison, your region and/or your very own family — accessible with any nearby smartphone, tablet or laptop.
 
@@ -18,7 +18,7 @@ FYI this [community product](https://en.wikipedia.org/wiki/Internet-in-a-Box) is
 
 Install Internet-in-a-Box (IIAB) from: [**download.iiab.io**](https://download.iiab.io/)
 
-Please see [FAQ.IIAB.IO](https://wiki.iiab.io/go/FAQ) which has 40+ questions and answers to help you along the way (e.g. ["Is a quick installation possible?"](https://wiki.iiab.io/go/FAQ#Is_a_quick_installation_possible%3F)) as you put together the <!--digital--> "local learning hotspot" most suitable for your own teaching/learning community.  Here are 2 ways to install IIAB:
+Please see [FAQ.IIAB.IO](https://wiki.iiab.io/go/FAQ) which has 40+ questions and answers to help you along the way (e.g. [“Is a quick installation possible?”](https://wiki.iiab.io/go/FAQ#Is_a_quick_installation_possible%3F)) as you put together the <!--digital--> “local learning hotspot” most suitable for your own teaching/learning community.  Here are 2 ways to install IIAB:
 
 - Our [1-line installer](https://download.iiab.io/) gets you the very latest, typically within about an hour, on [different Linux distributions](https://github.com/iiab/iiab/wiki/IIAB-Platforms#operating-systems).
 - [Prefab disk images](https://github.com/iiab/iiab/wiki/Raspberry-Pi-Images-~-Summary#iiab-images-for-raspberry-pi) ([.img files](https://archive.org/search.php?query=iiab%20.img&sort=-publicdate)) are sometimes a few months out of date, but can be flashed directly onto a microSD card, for insertion into Raspberry Pi.
@@ -37,14 +37,14 @@ Global community updates and videos are regularly posted to: **[@internet_in_box
 
 _Internet-in-a-Box (IIAB) greatly welcomes contributions from educators, librarians and [IT/UX/QA people](https://github.com/iiab/iiab/wiki/Technical-Contributors-Guide) of all kinds!_
 
-If you would like to volunteer, please [make contact](https://internet-in-a-box.org/contributing.html) after looking over ["How can I help?"](https://wiki.iiab.io/go/FAQ#How_can_I_help%3F) at: [FAQ.IIAB.IO](https://wiki.iiab.io/go/FAQ)
+If you would like to volunteer, please [make contact](https://internet-in-a-box.org/contributing.html) after looking over [“How can I help?”](https://wiki.iiab.io/go/FAQ#How_can_I_help%3F) at: [FAQ.IIAB.IO](https://wiki.iiab.io/go/FAQ)
 
 <!-- To learn about our software architecture, check out our [Contributors Guide](https://github.com/iiab/iiab/wiki/IIAB-Contributors-Guide).-->
 
-To learn more about our open community architecture for "offline" learning, check out ["What technical documentation exists?"](https://wiki.iiab.io/go/FAQ#What_technical_documentation_exists%3F)
+To learn more about our open community architecture for “offline” learning, check out [“What technical documentation exists?”](https://wiki.iiab.io/go/FAQ#What_technical_documentation_exists%3F)
 FYI we use [Ansible](https://wiki.iiab.io/go/FAQ#What_is_Ansible_and_what_version_should_I_use%3F) <!--as the underlying technology--> to install, deploy, configure and manage the various software components.
 
-*Thank you for helping us enable offline access to the Internet's free/open knowledge jewels, as well as "Sneakernet-of-Alexandria" distribution of local/indigenous content, when mass media channels do not serve grassroots voices.*
+*Thank you for helping us enable offline access to the Internet's free/open knowledge jewels, as well as “Sneakernet-of-Alexandria” distribution of local/indigenous content, when mass media channels do not serve grassroots voices.*
 
 ## Versions
 
