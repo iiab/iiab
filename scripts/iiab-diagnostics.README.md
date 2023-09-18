@@ -64,8 +64,6 @@ But first off, the file is compiled by harvesting 1 + 6 kinds of things:
 
    Include a description of the symptoms, and how to reproduce the problem.
 
-4. If you don't understand Step 3, email everything to bugs@iiab.io instead.
-
 ## Source Code
 
 Please look over the bottom of [iiab-diagnostics](iiab-diagnostics) (lines 127-249 especially) to learn more about which common IIAB files and commands make this rapid troubleshooting possible.
