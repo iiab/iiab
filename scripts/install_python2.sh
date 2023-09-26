@@ -90,7 +90,7 @@ if grep -qi ubuntu /etc/os-release; then    # Ubuntu 23.10+ (and Mint 22+ ?) nee
     apt -y install python3-platformdirs=2.5.1-1
     apt-mark hold python3-platformdirs
     apt -y install python3-virtualenv=20.13.0+ds-2
-    apt-mark hold virtualenv
+    apt-mark hold python3-virtualenv    # 2023-09-26: 'apt-mark hold virtualenv' was definitely insufficient on Ubuntu 23.10
     # 2023-05-21 PR #3587: Above 4 lines should really install a more recent
     # version of virtualenv, probably from 'lunar' (Ubuntu 23.04) ?
 else
