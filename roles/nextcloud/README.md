@@ -25,7 +25,7 @@ The Nextcloud suite is divided into three main categories:
 
 To further refine Nextcloud access controls based on IPv4 addresses, you can edit `/etc/apache2/sites-available/nextcloud.conf` _after_ it's created by this template: [/opt/iiab/iiab/roles/nextcloud/templates/nextcloud.conf.j2](https://github.com/iiab/iiab/blob/master/roles/nextcloud/templates/nextcloud.conf.j2)</strike>
 
-(3) Be aware of `nginx_high_php_limits: True` in your /etc/iiab/local_vars.yml, which allocates important RAM/resources to PHP ([PR #3624](https://github.com/iiab/iiab/pull/3624)).  Of course, enabling this might cause excess use of RAM/disk or other resources if not calibrated to your hardware and network!  So _after_ install is complete, verify and evaluate these 6 settings in `/etc/php/[ACTUAL PHP VERSION]/fpm/php.ini` :
+(3) Be aware of `nginx_high_php_limits: True` in your /etc/iiab/local_vars.yml, which allocates important RAM/resources to PHP ([PR #3624](https://github.com/iiab/iiab/pull/3624)).  Verify that your Internet-in-a-Box server has enough RAM and disk!  And _after_ Nextcloud is installed, verify and evaluate these 6 settings in `/etc/php/[ACTUAL PHP VERSION]/fpm/php.ini` to be sure:
 
 - upload_max_filesize
 - post_max_size
