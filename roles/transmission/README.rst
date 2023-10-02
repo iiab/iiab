@@ -15,20 +15,23 @@ Transmission README
 
 Transmission is a set of lightweight BitTorrent clients (in GUI, CLI and daemon form).  All these incarnations feature a very simple and intuitive interface, on top on an efficient, cross-platform backend: https://transmissionbt.com
 
-Transmission is intended to download KA Lite content to Internet-in-a-Box (IIAB) from places like https://pantry.learningequality.org/downloads/ka-lite/0.17/content/ — and also to seed content, assisting others.
+Transmission is intended to download content like KA Lite to Internet-in-a-Box (IIAB), from places like https://pantry.learningequality.org/downloads/ka-lite/0.17/content/ — and also to seed content, assisting others.
 
 For example, once KA Lite videos and thumbnails are confirmed downloaded, copy them (carefully!) from ``/library/transmission`` into ``/library/ka-lite/content`` as outlined by "KA Lite Administration: What tips & tricks exist?" at http://FAQ.IIAB.IO
 
 Caution
 -------
 
-Usage of Transmission consumes significant Internet data and system resources.
-Caveat emptor!  (That's Latin for "Buyer Beware")
+In order to make the latest features available to you as October 2023, Internet-in-a-Box compiles the very latest `Transmission 4.0.4+ <https://github.com/transmission/transmission/commits/main>`_, which painfully can take most of an hour.
+
+We hope that `Transmission 4.1 <https://github.com/transmission/transmission/milestone/13>`_ install options improve soon for 2024 (`#5585 <https://github.com/transmission/transmission/discussions/5585>`_) eliminating this install-time slowness!
+
+Transmission can consume significant Internet data and system resources.  Caveat emptor!  (That's Latin for "Buyer Beware")
 
 Using It
 --------
 
-Install Transmission by setting 'transmission_install' and 'transmission_enabled' to True in `/etc/iiab/local_vars.yml <https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it%3F>`_ — carefully choosing language(s) for KA Lite videos you want to download — and then install IIAB.  Or, if IIAB is already installed, run as root::
+Install Transmission by setting ``transmission_install: True`` and ``transmission_enabled: True`` in `/etc/iiab/local_vars.yml <https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it%3F>`_ — carefully choosing language(s) for KA Lite videos you want to download — and then install IIAB.  Or, if IIAB is already installed, run as root::
 
   cd /opt/iiab/iiab
   ./runrole transmission
