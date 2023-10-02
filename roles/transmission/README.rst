@@ -19,14 +19,16 @@ Transmission is intended to download content like KA Lite to Internet-in-a-Box (
 
 For example, once KA Lite videos and thumbnails are confirmed downloaded, copy them (carefully!) from ``/library/transmission`` into ``/library/ka-lite/content`` as outlined by "KA Lite Administration: What tips & tricks exist?" at http://FAQ.IIAB.IO
 
-Caution
--------
+2023 Caution
+------------
 
-In order to make the latest features available to you as October 2023, Internet-in-a-Box compiles the very latest `Transmission 4.0.4+ <https://github.com/transmission/transmission/commits/main>`_, which painfully can take most of an hour.
+In order to make the latest features available to you as of Q4 2023, Internet-in-a-Box compiles the very latest `Transmission 4.0.4+ <https://github.com/transmission/transmission/commits/main>`_ as you install it, which unfortunately can take most of an hour.
 
-We hope that `Transmission 4.1 <https://github.com/transmission/transmission/milestone/13>`_ install options improve soon for 2024 (`#5585 <https://github.com/transmission/transmission/discussions/5585>`_) eliminating this install-time slowness!
+Thankfully `Transmission 4.1+ <https://github.com/transmission/transmission/milestones>`_ should install quickly starting sometime soon in 2024 (`#5585 <https://github.com/transmission/transmission/discussions/5585>`_) eliminating this install-time slowness!
 
-Transmission can consume significant Internet data and system resources.  Caveat emptor!  (That's Latin for "Buyer Beware")
+Finally, if you want to quickly install a very old version of Transmission (e.g. version 3.0 from May 2020) then set ``transmission_compile_latest: False`` in `/etc/iiab/local_vars.yml <https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it%3F>`_ prior to installing.
+
+.. Transmission can consume significant Internet data and system resources.  Caveat emptor!  (That's Latin for "Buyer Beware")
 
 Using It
 --------
