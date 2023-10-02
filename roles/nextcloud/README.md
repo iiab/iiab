@@ -25,7 +25,7 @@ The Nextcloud suite is divided into three main categories:
 
 To further refine Nextcloud access controls based on IPv4 addresses, you can edit `/etc/apache2/sites-available/nextcloud.conf` _after_ it's created by this template: [/opt/iiab/iiab/roles/nextcloud/templates/nextcloud.conf.j2](https://github.com/iiab/iiab/blob/master/roles/nextcloud/templates/nextcloud.conf.j2)</strike>
 
-(3) Strongly consider also setting `nginx_high_php_limits: True` in your /etc/iiab/local_vars.yml, to allocate important RAM/resources to PHP.  Of course, enabling this might cause excess use of RAM/disk or other resources if not calibrated to your hardware and network!  So _after_ install is complete, verify and evaluate these 6 settings in `/etc/php/[ACTUAL PHP VERSION]/fpm/php.ini` :
+(3) Be aware of `nginx_high_php_limits: True` in your /etc/iiab/local_vars.yml, which allocates important RAM/resources to PHP ([PR #3624](https://github.com/iiab/iiab/pull/3624)).  Of course, enabling this might cause excess use of RAM/disk or other resources if not calibrated to your hardware and network!  So _after_ install is complete, verify and evaluate these 6 settings in `/etc/php/[ACTUAL PHP VERSION]/fpm/php.ini` :
 
 - upload_max_filesize
 - post_max_size
@@ -38,11 +38,11 @@ FYI IIAB will also update `/etc/php/[ACTUAL PHP VERSION]/cli/php.in` (as Moodle 
 
 Useful PHP recommendations for these settings (while largely tailored to WordPress, and aimed at very low-end hardware) can be found here: [/opt/iiab/iiab/roles/www_options/tasks/php-settings.yml#L55-L110](../www_options/tasks/php-settings.yml#L55-L110)
 
-(4) If you're running [Nextcloud 22+](https://github.com/nextcloud/server/wiki/Maintenance-and-Release-Schedule) in production, carefully check that Nextcloud's latest formal prereqs (required AND recommended) are included per your community's needs.  In places like these:
+(4) Verify system requirements and recommendations for the [latest version Nextcloud](https://github.com/nextcloud/server/wiki/Maintenance-and-Release-Schedule):
 
 - https://docs.nextcloud.com/server/latest/admin_manual/installation/system_requirements.html
 - https://docs.nextcloud.com/server/latest/admin_manual/installation/source_installation.html#prerequisites-for-manual-installation
-- https://docs.nextcloud.com/server/22/admin_manual/installation/source_installation.html#prerequisites-for-manual-installation
+- https://docs.nextcloud.com/server/27/admin_manual/installation/source_installation.html#prerequisites-for-manual-installation
 - https://github.com/iiab/iiab/blob/master/roles/nextcloud/tasks/install.yml
 
 ## Using It
