@@ -136,6 +136,8 @@ Log verbosity level can be
 within Calibre-Web's **Configuration > Basic Configuration > Logfile
 Configuration**.
 
+Finally, http://box/live/stats (Calibre-Web's About page) can be a very useful list of ~42 Calibre-Web dependencies (mostly Python packages, and the version number of each that's installed).
+
 Back Up Everything
 ------------------
 
