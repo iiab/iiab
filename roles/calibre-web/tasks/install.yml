@@ -27,10 +27,16 @@
     line: '  <policy domain="coder" rights="read" pattern="PDF" />'
     state: present
 
-- name: Remove previous virtual environment {{ calibreweb_venv_path }}
+- name: "Remove previous virtual environment {{ calibreweb_venv_path }} -- if 'calibreweb_venv_wipe: True'"
   file:
     path: "{{ calibreweb_venv_path }}"
     state: absent
+  when: calibreweb_venv_wipe
+
+- name: Does {{ calibreweb_venv_path }} exist?
+  stat:
+    path: "{{ calibreweb_venv_path }}"    # /usr/local/calibre-web-py3
+  register: calibreweb_venv
 
 - name: "Create 3 Calibre-Web folders to store data and config files: {{ calibreweb_home }}, {{ calibreweb_venv_path }}, {{ calibreweb_config }} (all set to {{ calibreweb_user }}:{{ apache_user }}) (default to 0755)"
   file:
@@ -41,7 +47,7 @@
   with_items:
     - "{{ calibreweb_home }}"         # /library/calibre-web
     - "{{ calibreweb_config }}"       # /library/calibre-web/config
-    - "{{ calibreweb_venv_path }}"    # /usr/local/calibre-web-py3
+    - "{{ calibreweb_venv_path }}"
 
 # FYI since May 2021, Calibre-Web (major releases) can be installed with pip:
 # https://pypi.org/project/calibreweb/
@@ -50,13 +56,14 @@
 # https://github.com/janeczku/calibre-web/pull/927
 # https://github.com/janeczku/calibre-web/pull/1459
 
-- name: Clone i.e. download Calibre-Web ({{ calibreweb_version }}) from {{ calibreweb_repo_url }} to {{ calibreweb_venv_path }} (~94 MB initially, ~115+ MB later)
+- name: "Clone i.e. download Calibre-Web ({{ calibreweb_version }}) from {{ calibreweb_repo_url }} to {{ calibreweb_venv_path }} (~94 MB initially, ~115+ MB later) -- if {{ calibreweb_venv_path }} created just above"
   git:
     repo: "{{ calibreweb_repo_url }}"    # e.g. https://github.com/janeczku/calibre-web
     dest: "{{ calibreweb_venv_path }}"
     force: yes
     #depth: 1    # 2023-11-04: Full clone for now, to help @deldesir & wider community testing
     version: "{{ calibreweb_version }}"    # e.g. master, 0.6.21
+  when: not calibreweb_venv.stat.exists
 
 - name: If Calibre-Web is being enhanced with audio/video "books" too, install additional prereqs (CAN TAKE 3+ MINUTES, WIP)
   shell: |
