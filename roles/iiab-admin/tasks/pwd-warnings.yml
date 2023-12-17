@@ -2,34 +2,36 @@
 #                    AND roles/network/tasks/netwarn.yml  FOR iiab-network
 
 
-- name: Install /etc/profile.d/sshpwd-profile-iiab.sh from template, to issue warnings (during shell/ssh logins) if iiab-admin password is the default
+- name: Install /etc/profile.d/iiab-pwdwarn-profile.sh from template, to issue warnings (during shell/ssh logins) if iiab-admin password is the default
   template:
-    src: sshpwd-profile-iiab.sh.j2
-    dest: /etc/profile.d/sshpwd-profile-iiab.sh
+    src: iiab-pwdwarn-profile.sh.j2
+    dest: /etc/profile.d/iiab-pwdwarn-profile.sh
     mode: '0644'
 
-- name: Is /etc/xdg/lxsession/LXDE-pi a directory?
+- name: Does /home/{{ iiab_admin_user }}/.config/wayfire.ini exist?
   stat:
-    path: /etc/xdg/lxsession/LXDE-pi
-  register: lx
+    path: /home/{{ iiab_admin_user }}/.config/wayfire.ini
+  register: wayfire_ini
 
-- name: "If so, install from template: /etc/xdg/lxsession/LXDE-pi/sshpwd-lxde-iiab.sh"
+- name: "If so, install from template: /usr/local/sbin/iiab-pwdwarn-wayfire"
   template:
-    src: sshpwd-lxde-iiab.sh.j2
-    dest: /etc/xdg/lxsession/LXDE-pi/sshpwd-lxde-iiab.sh
+    src: iiab-pwdwarn-wayfire.j2
+    dest: /usr/local/sbin/iiab-pwdwarn-wayfire
     mode: '0755'
-  when: lx.stat.isdir is defined and lx.stat.isdir    # and is_raspbian
+  when: wayfire_ini.stat.exists
 
-# 2019-03-07: This popup (/etc/xdg/lxsession/LXDE-pi/sshpwd-lxde-iiab.sh) does
+# 2019-03-07: This pop-up (/etc/xdg/lxsession/LXDE-pi/sshpwd-lxde-iiab.sh) did
 # not actually appear when triggered by /etc/xdg/autostart/pprompt-iiab.desktop
 # (or pprompt.desktop as Raspbian has working since 2018-11-13!)  Too bad as it
-# would be really nice to standardize this popup across Ubermix & all distros..
+# would be really nice to standardize pop-ups across Ubermix & all distros...
 # Is this a permissions/security issue presumably?  Official autostart spec is:
 # https://specifications.freedesktop.org/autostart-spec/autostart-spec-latest.html
 # Raspbian's 2016-2018 evolution here: https://github.com/iiab/iiab/issues/1537
 
-- name: ...and put a line in /etc/xdg/lxsession/LXDE-pi/autostart to trigger popups
-  lineinfile:
-    path: /etc/xdg/lxsession/LXDE-pi/autostart
-    line: "@/etc/xdg/lxsession/LXDE-pi/sshpwd-lxde-iiab.sh"
-  when: lx.stat.isdir is defined and lx.stat.isdir    # and is_raspbian
+- name: ...and put a line in /home/{{ iiab_admin_user }}/.config/wayfire.ini to trigger pop-ups
+  ini_file:
+    path: /home/{{ iiab_admin_user }}/.config/wayfire.ini    # iiab-admin
+    section: autostart
+    option: iiab-pwdwarn-wayfire
+    value: /usr/local/sbin/iiab-pwdwarn-wayfire
+  when: wayfire_ini.stat.exists
