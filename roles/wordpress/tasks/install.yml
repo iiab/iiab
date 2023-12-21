@@ -11,6 +11,31 @@
 # and security enhancements using timestamps under /library/wordpress, as these
 # can arise without warning when WordPress is online, since WordPress ~4.8
 
+
+- name: "Set 'mysql_install: True' and 'mysql_enabled: True'"
+  set_fact:
+    mysql_install: True
+    mysql_enabled: True
+
+- name: MYSQL - run 'mysql' role (attempt to install & enable MySQL / MariaDB)
+  include_role:
+    name: mysql
+
+- name: FAIL (STOP THE INSTALL) IF 'mysql_installed is undefined'
+  fail:
+    msg: "WordPress install cannot proceed, as MySQL / MariaDB is not installed."
+  when: mysql_installed is undefined
+
+
+- name: Record (initial) disk space used
+  shell: df -B1 --output=used / | tail -1
+  register: df1
+
+
+- name: Provision MySQL DB
+  include_tasks: setup.yml
+
+
 # 2021-06-29: PHP modules, covering "RECOMMENDED" and "OPTIONAL" sections here:
 # https://make.wordpress.org/hosting/handbook/server-environment/
 - name: Install libsodium23 + 8 PHP packages (run 'php -m' or 'php -i' to verify)
@@ -38,29 +63,45 @@
 #    state: present
 #  when: php_version is version('8.0', '<')
 
-- name: Download {{ wordpress_download_base_url }}/{{ wordpress_src }} to {{ downloads_dir }}
-  get_url:
-    url: "{{ wordpress_download_base_url }}/{{ wordpress_src }}"
-    dest: "{{ downloads_dir }}"
-    timeout: "{{ download_timeout }}"
-  register: wp_download_output
+- name: "Run roles/www_options/tasks/php-settings.yml with 'nginx_high_php_limits: False' by default"
+  include_tasks: roles/www_options/tasks/php-settings.yml
+  when: php_settings_done is undefined
 
-- name: Symlink {{ downloads_dir }}/wordpress.tar.gz -> {{ wp_download_output.dest }}
+
+- name: Delete {{ downloads_dir }}/wordpress.tar.gz if it exists
   file:
-    src: "{{ wp_download_output.dest }}"
-    path: "{{ downloads_dir }}/wordpress.tar.gz"    # /opt/iiab/downloads
-    state: link
-  when: wp_download_output.dest is defined
+    path: "{{ downloads_dir }}/wordpress.tar.gz"
+    state: absent
 
-- name: Does {{ downloads_dir }}/wordpress.tar.gz link exist?
+- name: Download {{ wordpress_download_base_url }}/{{ wordpress_src }} to {{ downloads_dir }}/wordpress.tar.gz
+  command: wget {{ wordpress_download_base_url }}/{{ wordpress_src }} -O {{ downloads_dir }}/wordpress.tar.gz
+  # 2022-05-04: Ansible approach below (get_url) fails with HTTP Error 429
+  # (Too Many Requests) b/c Ansible's User-Agent string?  Affecting 1 user in
+  # England and another user in Scotland, but not affecting many other
+  # countries/ISP's apparently?  WordPress must have recently changed their
+  # hosting arrangements for https://wordpress.org/latest.tar.gz
+  # get_url:
+  #   url: "{{ wordpress_download_base_url }}/{{ wordpress_src }}"
+  #   dest: "{{ downloads_dir }}"
+  #   timeout: "{{ download_timeout }}"
+#   register: wp_download_output
+
+# - name: Symlink {{ downloads_dir }}/wordpress.tar.gz -> {{ wp_download_output.dest }}
+#   file:
+#     src: "{{ wp_download_output.dest }}"
+#     path: "{{ downloads_dir }}/wordpress.tar.gz"    # /opt/iiab/downloads
+#     state: link
+#   when: wp_download_output.dest is defined
+
+- name: Does {{ downloads_dir }}/wordpress.tar.gz exist?
   stat:
     path: "{{ downloads_dir }}/wordpress.tar.gz"    # /opt/iiab/downloads
-  register: wp_link
+  register: wp_tar_gz
 
 - name: FAIL (force Ansible to exit) IF {{ downloads_dir }}/wordpress.tar.gz doesn't exist
   fail:
     msg: "{{ downloads_dir }}/wordpress.tar.gz is REQUIRED in order to install WordPress."
-  when: not wp_link.stat.exists
+  when: not wp_tar_gz.stat.exists
 
 - name: "Unpack {{ downloads_dir }}/wordpress.tar.gz to permanent location {{ wp_install_path }}/wordpress - owner: root, group: {{ apache_user }}, mode: '0664', keep_newer: yes"
   unarchive:
@@ -113,6 +154,17 @@
 
 
 # RECORD WordPress AS INSTALLED
+
+- name: Record (final) disk space used
+  shell: df -B1 --output=used / | tail -1
+  register: df2
+
+- name: Add 'wordpress_disk_usage = {{ df2.stdout|int - df1.stdout|int }}' to {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+    section: wordpress
+    option: wordpress_disk_usage
+    value: "{{ df2.stdout|int - df1.stdout|int }}"
 
 - name: "Set 'wordpress_installed: True'"
   set_fact:

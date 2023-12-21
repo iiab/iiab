@@ -23,9 +23,21 @@
     name: iiab-admin
   #when: iiab_admin_install    # Flag might be created in future?
 
-- name: Install dnsmasq -- configure LATER in 'network', after Stage 9
-  include_tasks: roles/network/tasks/dnsmasq.yml
-  #when: dnsmasq_install    # Flag might be used in future?
+- name: Copy iiab-apps-to-be-installed from {{ iiab_dir }}/scripts to /usr/bin/
+  copy:
+    src: "{{ iiab_dir }}/scripts/iiab-apps-to-be-installed"    # /opt/iiab/iiab
+    dest: /usr/bin/
+    mode: '0755'
+
+- name: Copy iiab-network from {{ iiab_dir }}/scripts to /usr/local/bin/
+  copy:
+    src: "{{ iiab_dir }}/scripts/iiab-network"
+    dest: /usr/local/bin/
+    mode: '0755'
+
+- name: Install ~12 network/wifi/related packages + Squid if necessary + configure /etc/sysctl.conf -- full configuration LATER in 'network', after Stage 9
+  include_tasks: roles/network/tasks/install.yml
+  when: network_install and network_installed is undefined
 
 - include_tasks: uuid.yml
 - include_tasks: ubermix.yml
@@ -62,7 +74,10 @@
 #  when: not is_debuntu and selinux_disabled is defined and selinux_disabled.changed
 
 
-- name: Recording STAGE 1 HAS COMPLETED ============================
+- name: Install {{ iiab_env_file }} from template -- FYI this file can be run as a script if absolutely nec -- e.g. 'source /etc/iiab/iiab.env && echo $WWWROOT'
   template:
     src: roles/1-prep/templates/iiab.env.j2
-    dest: "{{ iiab_env_file }}"    # Can also be run as a script if absolutely nec, e.g. 'source /etc/iiab/iiab.env && echo $WWWROOT'
+    dest: "{{ iiab_env_file }}"
+
+- name: Recording STAGE 1 HAS COMPLETED ============================
+  meta: noop

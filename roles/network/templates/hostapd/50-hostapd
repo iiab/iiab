@@ -1,4 +1,14 @@
 if [ "$interface" = "br0" ] && [ $if_up = "true" ]; then
+    WPA=$(grep country /etc/wpa_supplicant/wpa_supplicant.conf | awk -F = '{print $2}')
+    AP=$(grep country_code /etc/hostapd/hostapd.conf | awk -F = '{print $2}')
+    if ! [ "$WPA" = "$AP" ]; then
+        sed -i -e "s/^country_code.*/country_code=$WPA /" /etc/hostapd/hostapd.conf
+        echo "50-iiab set country_code $WPA"
+        syslog info "50-iiab set country_code $WPA"
+        echo "THIS MACHINE SHOULD BE REBOOTED"
+        syslog info "THIS MACHINE SHOULD BE REBOOTED 50-iiab country_code"
+#        systemctl restart hostapd
+    fi
     syslog info "50-iiab IF_UP br0 restarting dnsmasq - kicking ap0"
     ip link set ap0 up
     systemctl --no-block restart dnsmasq
@@ -10,8 +20,9 @@ if [ "$interface" = "wlan0" ]; then
         syslog info "50-iiab CARRIER change wlan0"
         # wpa_supplicant wants MHz for frequency= while hostapd wants channel..... whatever
         # FREQ=`iw wlan0 info|grep channel|cut -d' ' -f9`
-        FREQ=`iw wlan0 info|grep channel|cut -d' ' -f2`
+        FREQ=$(iw wlan0 info|grep channel|cut -d' ' -f2)
         FREQ2=""
+
         for result in $FREQ; do
             echo "frequency is $result for carrier"
             if [ $result -lt 13 ]; then
@@ -22,14 +33,14 @@ if [ "$interface" = "wlan0" ]; then
         done
         echo "Using $FREQ2 for carrier"
         syslog info "50-iiab set channel $FREQ2"
-        HOSTAPD=`grep channel /etc/hostapd/hostapd.conf | awk -F = '{print $2}'`
+        HOSTAPD=$(grep channel /etc/hostapd/hostapd.conf | awk -F = '{print $2}')
         echo "Hostapd set for $HOSTAPD"
         if [ $FREQ2 -ne $HOSTAPD ] && [ ! -z $FREQ2 ]; then
             echo "Editing Hostapd for channel $FREQ2"
             cp /etc/hostapd/hostapd.conf.iiab /etc/hostapd/hostapd.conf
             sed -i -e "s/^channel.*/channel=$FREQ /" /etc/hostapd/hostapd.conf
             echo "THIS MACHINE SHOULD BE REBOOTED"
-            syslog info "THIS MACHINE SHOULD BE REBOOTED"
+            syslog info "THIS MACHINE SHOULD BE REBOOTED 50-iiab channel"
 #            systemctl restart hostapd
         fi
     fi

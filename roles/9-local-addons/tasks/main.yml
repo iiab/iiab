@@ -3,16 +3,34 @@
 - name: ...IS BEGINNING ====================================
   meta: noop
 
-# Is porting to Python 3 complete, and if so does this belong elsewhere?
+- name: AZURACAST
+  include_role:
+    name: azuracast
+  when: azuracast_install
+
+# Porting to Python 3 is complete: does this belong elsewhere?
 - name: CAPTIVE PORTAL
   include_role:
     name: captiveportal
   when: captiveportal_install
 
+# WARNING: Since March 2023, 32-bit RasPiOS can act as 64-bit on RPi 4 and
+# RPi 400 (unlike RPi 3!)  SEE: https://github.com/iiab/iiab/pull/3516
+- name: Run command 'dpkg --print-architecture' to identify OS architecture (CPU arch as revealed by ansible_architecture ~= ansible_machine is NO LONGER enough!)
+  command: dpkg --print-architecture
+  register: dpkg_arch
+  when: internetarchive_install
+
+- name: Explain bypassing of Internet Archive install if 32-bit OS
+  fail:    # FORCE IT RED THIS ONCE!
+    msg: "BYPASSING INTERNET ARCHIVE PER https://github.com/iiab/iiab/issues/3641 -- 'dpkg --print-architecture' output for your OS: {{ dpkg_arch.stdout }}"
+  when: internetarchive_install and not dpkg_arch.stdout is search("64")
+  ignore_errors: True
+
 - name: INTERNETARCHIVE
   include_role:
     name: internetarchive
-  when: internetarchive_install
+  when: internetarchive_install and dpkg_arch.stdout is search("64")
 
 - name: MINETEST
   include_role:
@@ -37,11 +55,45 @@
     name: pbx
   when: pbx_install
 
-- name: "2021-06-27 TEMPORARY CODE TO INSTALL 'php-pear' UNTIL ADMIN CONSOLE DECLARES ITS OWN DEPENDENCY FOR: https://github.com/iiab/iiab-admin-console/blob/master/roles/cmdsrv/tasks/main.yml#L19"
-  package:
-    name: php-pear    # WARNING: this also drags in 'php{{ php_version }}-xml' (also installed by MediaWiki, Nextcloud, roles/pbx's FreePBX, WordPress) AND 'php{{ php_version }}-cgi' (also installed by roles/pbx's FreePBX)
-    state: present
+
+- name: '2023-11-05 / TEMPORARY UNTIL ADMIN CONSOLE DECLARES ITS DEPENDENCY: Install MySQL (MariaDB) if admin_console_install (for setup-feedback and record_feedback.php)'
+  set_fact:
+    mysql_install: True
+    mysql_enabled: True
   when: admin_console_install
+
+- name: '2023-11-05 / TEMPORARY UNTIL ADMIN CONSOLE DECLARES ITS DEPENDENCY: Install MySQL (MariaDB) if admin_console_install (for setup-feedback and record_feedback.php)'
+  include_role:
+    name: mysql
+  when: admin_console_install
+
+- name: '2023-11-05 / TEMPORARY UNTIL ADMIN CONSOLE DECLARES ITS DEPENDENCY: Install MySQL (MariaDB) if admin_console_install (for setup-feedback and record_feedback.php)'
+  fail:
+    msg: "Admin Console install cannot proceed, as MySQL / MariaDB is not installed."
+  when: admin_console_install and mysql_installed is undefined
+
+
+# 2023-11-05: Moved from Stage 8, as it acts on mysql_installed (that might be set just above!)
+- name: MUNIN
+  include_role:
+    name: munin
+  when: munin_install
+
+
+- name: Read 'disk_used_a_priori' from /etc/iiab/iiab.ini
+  set_fact:
+    df1: "{{ lookup('ansible.builtin.ini', 'disk_used_a_priori', section='summary', file=iiab_ini_file) }}"
+
+- name: Record currently used disk space, to compare with original 'disk_used_a_priori'
+  shell: df -B1 --output=used / | tail -1
+  register: df2
+
+- name: Add ESTIMATED 'iiab_software_disk_usage = {{ df2.stdout|int - df1|int }}' to {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+    section: summary
+    option: iiab_software_disk_usage
+    value: "{{ df2.stdout|int - df1|int }}"
 
 - name: Recording STAGE 9 HAS COMPLETED ====================
   lineinfile:

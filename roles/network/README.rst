@@ -2,13 +2,15 @@
 Network README
 ==============
 
-This is run by `Ansible <http://wiki.laptop.org/go/IIAB/FAQ#What_is_Ansible_and_what_version_should_I_use.3F>`_ after it has installed the core (`Stages 0-to-9 <https://github.com/iiab/iiab/wiki/IIAB-Contributors-Guide#ansible>`_) of `Internet-in-a-Box (IIAB) <https://internet-in-a-box.org>`_ and its apps/services.
+This is run by `Ansible <https://wiki.iiab.io/go/FAQ#What_is_Ansible_and_what_version_should_I_use%3F>`_ after it has installed the core (`Stages 0-to-9 <https://github.com/iiab/iiab/wiki/IIAB-Contributors-Guide#ansible>`_) of `Internet-in-a-Box (IIAB) <https://internet-in-a-box.org>`_ and its apps/services.
 
 Specifically, this 'network' role is run...
 
 - ...automatically during IIAB installation, after `/opt/iiab/iiab/iiab-install <../../iiab-install>`_ has run `Stages 0-to-9 <..>`_ (thanks to `iiab-stages.yml <../../iiab-stages.yml>`_).
 - ...automatically by IIAB's **Admin Console** (http://box/admin) if you click **Configure** -> **Install Configured Options** — this is similar to the above, but only runs Stage 0, then Stage 4-to-9, and then finally this 'network' role/stage (thanks to `iiab-from-console.yml <../../iiab-from-console.yml>`_).
-- ...or manually, if you run ``cd /opt/iiab/iiab`` then `sudo ./iiab-network <../../iiab-network>`_ (which is much the same as running ``sudo ./runrole network``).
+- ...or manually, if you run `sudo iiab-network <../../scripts/iiab-network>`_
+   - A stronger version is also available if necessary: ``cd /opt/iiab/iiab`` then ``sudo ./runrole --reinstall network``
+   - If your IIAB was installed prior to August 2022, instead run: ``cd /opt/iiab/iiab`` then `sudo ./iiab-network <../../iiab-network>`_ (which is much the same as running ``sudo ./runrole network``).
 
 Many IIAB networking questions can be answered in these 2 documents:
 

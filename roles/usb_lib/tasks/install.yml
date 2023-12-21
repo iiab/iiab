@@ -1,8 +1,17 @@
+# usbmount 0.0.24 and/or 0.0.25 (2022-02-08) should be investigated:
+# https://github.com/iiab/iiab/issues/3409
+
 # Official usbmount 0.0.22 (2011-08-08) documentation:
 # https://github.com/rbrito/usbmount/releases
 # https://github.com/hfuchs/usbmount/blob/master/README (2010-08-11)
 # https://github.com/rbrito/usbmount/blob/master/README.md (2018-08-10)
 # https://github.com/rbrito/usbmount/blob/master/usbmount.conf (2010-04-25)
+
+
+- name: Record (initial) disk space used
+  shell: df -B1 --output=used / | tail -1
+  register: df1
+
 
 - name: Does systemd-udevd.service exist
   stat:
@@ -34,18 +43,18 @@
     state: restarted
   when: udev_unit.stat.exists is defined and udev_unit.stat.exists
 
-#http://raspbian.raspberrypi.org/raspbian/pool/main/u/usbmount/usbmount_0.0.22_all.deb
-- name: Install {{ iiab_download_url }}/usbmount_0.0.22_all.deb, missing from Debian
+# http://raspbian.raspberrypi.org/raspbian/pool/main/u/usbmount/usbmount_0.0.22_all.deb
+- name: Install {{ iiab_download_url }}/usbmount_0.0.22_all.deb, no longer supported by {RasPiOS, Debian, Ubuntu}
   apt:
     deb: "{{ iiab_download_url }}/usbmount_0.0.22_all.deb"
-  when: is_debian
+  # when: is_debian
 
 # check status of usbmount on mintlinux - should be ok Ubuntu variant
-- name: Install usbmount from OS repo for Ubuntu variants
-  package:
-    name: usbmount
-    state: present
-  when: is_ubuntu
+# - name: Install usbmount from OS repo for Ubuntu variants
+#   package:
+#     name: usbmount
+#     state: present
+#   when: is_ubuntu
 
 - name: Add dir {{ doc_root }}/local_content, where USB drive links can appear (0775)
   file:
@@ -69,7 +78,7 @@
 
 # 2021-03-21: If usbmount is repackaged by apt as a result of Linux kernel 5.4+
 # supporting exFAT, the stanza below (might) in future no longer be needed...
-# SEE ALSO: https://github.com/iiab/iiab/blob/master/roles/2-common/tasks/packages.yml#L22-L23
+# SEE ALSO: https://github.com/iiab/iiab/blob/586bfc5cb1abf6b4333a21d3fa89695f115432dc/roles/2-common/tasks/packages.yml#L11-L12
 - name: Add ' exfat fuseblk ntfs' to FILESYSTEMS var in /etc/usbmount/usbmount.conf
   lineinfile:
     regexp: '^FILESYSTEMS=.*'
@@ -83,6 +92,17 @@
 
 
 # RECORD 'USB_LIB' AS INSTALLED
+
+- name: Record (final) disk space used
+  shell: df -B1 --output=used / | tail -1
+  register: df2
+
+- name: Add 'usb_lib_disk_usage = {{ df2.stdout|int - df1.stdout|int }}' to {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+    section: usb_lib
+    option: usb_lib_disk_usage
+    value: "{{ df2.stdout|int - df1.stdout|int }}"
 
 - name: "Set 'usb_lib_installed: True'"
   set_fact:

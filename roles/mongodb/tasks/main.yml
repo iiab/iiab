@@ -29,43 +29,57 @@
 - debug:
     var: rpi_model    # 0-init sets it from ansible_local.local_facts.rpi_model
 - debug:
-    var: ansible_local.local_facts.os_ver   # Like OS_VER in /etc/iiab/iiab.env
+    var: os_ver    # Equivalent to ansible_local.local_facts.os_ver and OS_VER in /etc/iiab/iiab.env
 - debug:
     var: is_debian
 - debug:
     var: is_raspbian
+- debug:
+    var: mongodb_version
 
-# might be able to lift this once we know using bionic would work
-- name: EXIT 'mongodb' ROLE & CONTINUE, IF 'is_debian_10 and aarch64 and not is_raspbian' i.e. TRUE DEBIAN with arch64
-  fail:    # FORCE IT RED THIS ONCE!
-    msg: ATTEMPTED MongoDB INSTALLATION WITH (TRUE) DEBIAN aarch64, which is not supported upstream.  Nevertheless IIAB will continue (consider this a warning!)
-  when: (ansible_architecture == "aarch64") and is_debian_10 and not is_raspbian
-  ignore_errors: yes
+# WARNING: Since March 2023, 32-bit RasPiOS can act as 64-bit on RPi 4 and
+# RPi 400 (unlike RPi 3!)  SEE: https://github.com/iiab/iiab/pull/3422 and #3516
+- name: Run command 'dpkg --print-architecture' to identify OS architecture (CPU arch as revealed by ansible_architecture ~= ansible_machine is NO LONGER enough!)
+  command: dpkg --print-architecture
+  register: dpkg_arch
+- debug:
+    msg: "'dpkg --print-architecture' output: {{ dpkg_arch.stdout }}"
 
-# ELSE...
+- block:
 
-- name: Install MongoDB if 'mongodb_installed' not defined, e.g. in {{ iiab_state_file }}    # /etc/iiab/iiab_state.yml
-  include_tasks: install.yml
-  when: mongodb_installed is undefined and not (ansible_architecture == "aarch64" and is_debian_10 and not is_raspbian)
+  - name: EXIT 'mongodb' ROLE, if 'dpkg --print-architecture' appears to be 32-bit (i.e. does not contain "64") or mongodb_version == "unsupported" or ansible_machine not found
+    fail:    # FORCE IT RED THIS ONCE!
+      msg: MongoDB 3.2+ (as needed by Sugarizer Server 1.5.0) is NO LONGER SUPPORTED on 32-bit Raspberry Pi OS.
+    when: not dpkg_arch.stdout is search("64") or mongodb_version == "unsupported" or mongodb_version == "unknown"
+    #when: dpkg_arch.stdout == "armhf" or mongodb_version == "unsupported" or mongodb_version == "unknown"
 
+  - name: Install MongoDB if 'mongodb_installed' not defined, e.g. in {{ iiab_state_file }}    # /etc/iiab/iiab_state.yml
+    include_tasks: install.yml
+    when: mongodb_installed is undefined
+    # when: mongodb_installed is undefined and not (ansible_architecture == "aarch64" and is_debian_10 and not is_raspbian)
 
-- name: Enable or Disable MongoDB, if mongodb_installed is defined (sugarizer.service auto-starts MongoDB as nec, so doesn't need this or care what happens here!)
-  include_tasks: enable-or-disable.yml
-  when: mongodb_installed is defined
+  - name: Enable or Disable MongoDB (FYI sugarizer.service auto-starts MongoDB as nec, so doesn't need this or care what happens here!)
+    include_tasks: enable-or-disable.yml
 
+  - name: Add 'mongodb' variable values to {{ iiab_ini_file }}
+    ini_file:
+      path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+      section: mongodb
+      option: "{{ item.option }}"
+      value: "{{ item.value | string }}"
+    with_items:
+      - option: name
+        value: MongoDB
+      - option: description
+        value: '"MongoDB is an open-source document database that provides high performance, high availability, and automatic scaling."'
+      - option: mongodb_install
+        value: "{{ mongodb_install }}"
+      - option: mongodb_enabled
+        value: "{{ mongodb_enabled }}"
 
-- name: Add 'mongodb' variable values to {{ iiab_ini_file }}
-  ini_file:
-    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
-    section: mongodb
-    option: "{{ item.option }}"
-    value: "{{ item.value | string }}"
-  with_items:
-    - option: name
-      value: MongoDB
-    - option: description
-      value: '"MongoDB is an open-source document database that provides high performance, high availability, and automatic scaling."'
-    - option: mongodb_install
-      value: "{{ mongodb_install }}"
-    - option: mongodb_enabled
-      value: "{{ mongodb_enabled }}"
+  rescue:
+
+  - name: 'SEE ERROR ABOVE (skip_role_on_error: {{ skip_role_on_error }})'
+    fail:
+      msg: ""
+    when: not skip_role_on_error

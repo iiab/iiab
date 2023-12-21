@@ -1,3 +1,8 @@
+- name: Record (initial) disk space used
+  shell: df -B1 --output=used / | tail -1
+  register: df1
+
+
 # 1. Prepare to install Gitea: create user and directory structure
 
 - name: Shut down existing Gitea instance (if we're reinstalling)
@@ -43,10 +48,10 @@
     msg: "Could not find a binary for the CPU architecture \"{{ ansible_architecture }}\""
   when: gitea_iset_suffix == "unknown"
 
-- name: Download Gitea binary {{ gitea_download_url }} to {{ gitea_install_path }} (0775, ~102 MB)
+- name: Download Gitea binary {{ gitea_download_url }} to {{ gitea_install_path }} (0775, ~134 MB, SLOW DOWNLOAD CAN TAKE ~15 MIN)
   get_url:
     url: "{{ gitea_download_url }}"
-    dest: "{{ gitea_install_path }}"    # e.g. /library/gitea/bin/gitea-1.15
+    dest: "{{ gitea_install_path }}"    # e.g. /library/gitea/bin/gitea-1.21
     mode: 0775
     timeout: "{{ download_timeout }}"
 
@@ -56,16 +61,16 @@
     dest: "{{ gitea_checksum_path }}"
     timeout: "{{ download_timeout }}"
 
-- name: Verify Gitea binary with GPG signature
+- name: Verify Gitea binary with GPG signature ("BAD signature" FALSE ALARMS continue as of 2023-07-16, despite their claims at https://docs.gitea.com/installation/install-from-binary#verify-gpg-signature)
   shell: |
-    gpg --keyserver pgp.mit.edu --recv {{ gitea_gpg_key }}
+    gpg --keyserver keys.openpgp.org --recv {{ gitea_gpg_key }}
     gpg --verify {{ gitea_checksum_path }} {{ gitea_install_path }}
   ignore_errors: yes
 
 - name: Symlink {{ gitea_link_path }} -> {{ gitea_install_path }}
   file:
     src: "{{ gitea_install_path }}"
-    path: "{{ gitea_link_path }}"
+    path: "{{ gitea_link_path }}"    # /library/gitea/gitea
     owner: gitea
     group: gitea
     state: link
@@ -104,6 +109,17 @@
 
 
 # 5. RECORD Gitea AS INSTALLED
+
+- name: Record (final) disk space used
+  shell: df -B1 --output=used / | tail -1
+  register: df2
+
+- name: Add 'gitea_disk_usage = {{ df2.stdout|int - df1.stdout|int }}' to {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+    section: gitea
+    option: gitea_disk_usage
+    value: "{{ df2.stdout|int - df1.stdout|int }}"
 
 - name: "Set 'gitea_installed: True'"
   set_fact:

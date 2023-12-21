@@ -1,0 +1,51 @@
+#!/bin/bash -e
+
+# Run 'sudo iiab-remoteit' to (re)install & enable remote.it -- GENERAL TIPS:
+# http://FAQ.IIAB.IO -> "How can I remotely manage my Internet-in-a-Box?"
+
+# /usr/bin/remoteit CLI is already be installed by:
+# https://github.com/iiab/iiab/blob/master/roles/remoteit/tasks/install.yml
+
+echo -e "\nhttps://remote.it can help you remotely manage this IIAB:"
+echo -e "https://github.com/iiab/iiab/blob/master/roles/remoteit/README.md\n"
+
+echo -en "\e[1mInstall remote.it Device Package after purging all prior versions? [Y/n]\e[0m "
+read ans < /dev/tty    # Strips outer whitespace, whether we like it or not!
+echo
+[ "$ans" = "n" ] || [ "$ans" = "N" ] && exit 1
+
+if grep -q '^remoteit_install:' /etc/iiab/local_vars.yml; then
+    sed -i "s/^remoteit_install:.*/remoteit_install: True/" /etc/iiab/local_vars.yml
+else
+    echo "remoteit_install: True" >> /etc/iiab/local_vars.yml
+fi
+
+if grep -q '^remoteit_enabled:' /etc/iiab/local_vars.yml; then
+    sed -i "s/^remoteit_enabled:.*/remoteit_enabled: True/" /etc/iiab/local_vars.yml
+else
+    echo "remoteit_enabled: True" >> /etc/iiab/local_vars.yml
+fi
+
+# 2022-04-02: Full Path Avoids problematic /usr/local/bin/apt on Linux Mint
+/usr/bin/apt -y purge remoteit*
+
+# Why the brutal purge?  Even 'apt -y reinstall remoteit.*.deb' is much stronger
+# than 'install -y' in install_agent.sh below, but still insufficient.  Maybe in
+# future years their /usr/bin/remoteit CLI might seed a new claim code when nec?
+
+# apt install & enable "latest" remote.it Device Package for your CPU/OS
+curl -L https://downloads.remote.it/remoteit/install_agent.sh | sh
+
+if grep -q '^remoteit_installed:' /etc/iiab/iiab_state.yml; then
+    sed -i "s/^remoteit_installed:.*/remoteit_installed: True/" /etc/iiab/iiab_state.yml
+else
+    echo "remoteit_installed: True" >> /etc/iiab/iiab_state.yml
+fi
+
+echo -e "\e[44;1mNEXT STEPS...\e[0m\n"
+
+echo -e "\e[1m1) Install the remote.it Desktop Application on your own laptop/computer:"
+echo -e "   https://remote.it/download/\n"
+
+echo -e "2) Use the above 8-character claim code within 24h as shown here:"
+echo -e "   https://docs.remote.it/software/device-package/installation#3.-claim-and-register-the-device\e[0m\n"

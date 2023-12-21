@@ -9,7 +9,7 @@ Node-RED is a flow-based development tool for visual programming developed origi
 Using It
 --------
 
-Prior to installing IIAB, make sure your `/etc/iiab/local_vars.yml <http://wiki.laptop.org/go/IIAB/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it.3F>`_ contains::
+Prior to installing IIAB, make sure your `/etc/iiab/local_vars.yml <http://wiki.laptop.org/go/IIAB/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it%3F>`_ contains::
 
   nodered_install: True
   nodered_enabled: True
@@ -20,7 +20,7 @@ Username: ``Admin``
 
 Password: ``changeme``
 
-To change this password, please see: `roles/nodered/defaults/main.yml <defaults/main.yml#L12-L27>`_
+To change this password, please see: `roles/nodered/defaults/main.yml <defaults/main.yml#L12-L28>`_
 
 You can monitor the Node-RED service with command::
 

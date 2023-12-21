@@ -1,5 +1,5 @@
-# 2021-08-16 README.adoc, with screenshots:
-# https://github.com/iiab/iiab/tree/master/roles/pbx#pbx-readme
+# 2022-05-25 README.adoc, with screenshots:
+# https://github.com/iiab/iiab/tree/master/roles/pbx#readme
 
 
 # 2021-08-05: Asterisk's own install_prereq (below) handles essentially all of these
@@ -40,8 +40,6 @@
   unarchive:
     src: "{{ downloads_dir }}/{{ asterisk_src_file }}"
     dest: "{{ asterisk_src_dir }}"
-    # owner: root
-    # group: root
     extra_opts: [--strip-components=1]
     creates: "{{ asterisk_src_dir }}/Makefile"
 
@@ -55,7 +53,14 @@
 #     name: aptitude
 #     state: latest
 
-- name: Asterisk - Run 'install_prereq install' for dependencies - CAN TAKE 5 MIN OR LONGER!
+# https://github.com/iiab/iiab/issues/3489
+- name: "Asterisk - Apply patch to {{ asterisk_src_dir }}/contrib/scripts/install_prereq for Raspberry Pi (#3489) if 'asterisk_rpi_patch: True'"
+  ansible.posix.patch:
+    src: install_prereq.diff
+    dest: "{{ asterisk_src_dir }}/contrib/scripts/install_prereq"
+  when: asterisk_rpi_patch
+
+- name: Asterisk - Run 'install_prereq install' for dependencies - CAN TAKE 2-5 MIN OR LONGER!
   shell: export DEBIAN_FRONTEND=noninteractive && ./contrib/scripts/install_prereq install
   args:
     chdir: "{{ asterisk_src_dir }}"
@@ -78,8 +83,8 @@
     creates: menuselect.makeopts
 
 - name: Asterisk - Do a bit of menuselect configuration
-  command: menuselect/menuselect --enable app_macro --enable format_mp3 menuselect.makeopts
-  # 2021-08-06: Let's standardize (ABOVE) if 6 others (BELOW) aren't needed?
+  command: menuselect/menuselect --enable format_mp3 menuselect.makeopts
+  # 2021-08-06 & 2023-11-19: Let's standardize (ABOVE) if 7 others (BELOW) aren't needed?
   # command: >
   #   menuselect/menuselect --enable app_macro --enable format_mp3
   #   --enable CORE-SOUNDS-EN-WAV --enable CORE-SOUNDS-EN-G722
@@ -88,13 +93,13 @@
   args:
     chdir: "{{ asterisk_src_dir }}"
 
-- name: Asterisk - Run 'make' - CAN TAKE 8-30 MIN OR LONGER!
+- name: Asterisk - Run 'make' - CAN TAKE 4-30 MIN OR LONGER!
   command: make
   args:
     chdir: "{{ asterisk_src_dir }}"
     creates: defaults.h
 
-- name: Asterisk - Run 'make install' - CAN TAKE 2 MIN OR LONGER!
+- name: Asterisk - Run 'make install' - CAN TAKE 1-2 MIN W/ SLOW DISKS?
   command: make install
   args:
     chdir: "{{ asterisk_src_dir }}"
@@ -181,3 +186,14 @@
     path: /etc/asterisk/asterisk.conf
     regexp: 'rungroup ='
     line: 'rungroup = asterisk'
+
+
+- name: "Set 'asterisk_installed: True'"
+  set_fact:
+    asterisk_installed: True
+
+- name: "Add 'asterisk_installed: True' to {{ iiab_state_file }}"
+  lineinfile:
+    path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
+    regexp: '^asterisk_installed'
+    line: 'asterisk_installed: True'

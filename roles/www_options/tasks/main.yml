@@ -2,135 +2,72 @@
 # Role "www_options" runs here, probably in 4-SERVER-OPTIONS.
 
 
+- name: Record (initial) disk space used
+  shell: df -B1 --output=used / | tail -1
+  register: df1
+
+
 # HOMEPAGE
 
 - name: Create dir {{ doc_root }}{{ iiab_home_url }} just in case variable iiab_home_url was customized.  (Standard path {{doc_root}}/home was created earlier.)
   file:
     state: directory
-    path: "{{ doc_root }}{{ iiab_home_url }}"    # /library/www/html/home
+    path: "{{ doc_root }}{{ iiab_home_url }}"    # e.g. /library/www/html/home
     owner: "{{ apache_user }}"
     group: "{{ apache_user }}"
     mode: '0755'
 
 # Used to be run by httpd/tasks/install.yml
-- name: "IN CASE NGINX IS DISABLED: Enable IIAB pages via Apache (e.g. on port 80) if apache_install"
-  include_tasks: roles/httpd/tasks/homepage.yml
-  when: apache_installed is defined
+#- name: "IN CASE NGINX IS DISABLED: Enable IIAB pages via Apache (e.g. on port 80) if apache_install"
+#  include_tasks: roles/httpd/tasks/homepage.yml
+#  when: apache_installed is defined
 
 # Used to be run by nginx/tasks/install.yml
 - name: Enable IIAB pages via NGINX (e.g. on port 80) if nginx_install
   include_tasks: roles/nginx/tasks/homepage.yml
   when: nginx_installed is defined
-  #when: nginx_install
 
-- name: Make home page autostart on localhost (the server's console) if session manager is LXDE (rpi)
+
+# 2022-07-22: SIMILAR TO roles/iiab-admin/tasks/pwd-warnings.yml FOR passwords
+#                    AND roles/network/tasks/netwarn.yml      FOR iiab-network
+
+- name: Does /home/{{ iiab_admin_user }}/.config/wayfire.ini exist?
   stat:
-      path: /etc/xdg/lxsession/LXDE-pi/autostart
-  register: lxde_present
+    path: /home/{{ iiab_admin_user }}/.config/wayfire.ini
+  register: wayfire_ini
 
-- name: Check for Chromium name change
+- name: Does /usr/bin/chromium-browser exist?
   stat:
-      path: /usr/bin/chromium
-  register: chromium_present
+    path: /usr/bin/chromium-browser
+  register: chromium_browser
 
-- name: Add chromium-browser to /etc/xdg/lxsession/LXDE-pi/autostart if session manager is LXDE
-  lineinfile:
-      path:   /etc/xdg/lxsession/LXDE-pi/autostart
-      regexp: '^/usr/bin/chromium-browser'
-      line:   '/usr/bin/chromium-browser --disable-restore-session-state http://box/home' 
-  when:
-      lxde_present.stat.exists and not chromium_present.stat.exists
+# - name: Does /usr/bin/chromium exist? (check for browser filename change)
+#   stat:
+#     path: /usr/bin/chromium
+#   register: chromium_present
 
-- name: Add chromium to /etc/xdg/lxsession/LXDE-pi/autostart if session manager is LXDE
-  lineinfile:
-      path:   /etc/xdg/lxsession/LXDE-pi/autostart
-      regexp: '^/usr/bin/chromium'
-      line:   '/usr/bin/chromium --disable-restore-session-state http://box/home' 
-  when:
-      lxde_present.stat.exists and chromium_present.stat.exists
+- name: If both above exist, add '/usr/bin/chromium-browser --disable-restore-session-state http://box/home' to /home/{{ iiab_admin_user }}/.config/wayfire.ini
+  ini_file:
+    path: /home/{{ iiab_admin_user }}/.config/wayfire.ini    # iiab-admin
+    section: autostart
+    option: chromium-browser
+    value: '/usr/bin/chromium-browser --disable-restore-session-state http://box/home'
+  when: wayfire_ini.stat.exists and chromium_browser.stat.exists
+
+# - name: Add chromium to /etc/xdg/lxsession/LXDE-pi/autostart
+#   lineinfile:
+#     path: /etc/xdg/lxsession/LXDE-pi/autostart
+#     regexp: '^/usr/bin/chromium'
+#     line: '/usr/bin/chromium --disable-restore-session-state http://box/home'
+#   when: lxde_pi_autostart_present.stat.exists and chromium_present.stat.exists
 
 
-- debug:
-    msg: 'THE 5 ANSIBLE STANZAS BELOW ONLY RUN... when: moodle_install or nextcloud_install or pbx_install or wordpress_install'
-
-- block:    # 5-STANZA BLOCK BEGINS
-
-  # roles/nginx has installed pkg 'php{{ php_version }}-fpm' in 3-base-server
-
-  - name: "Enact 'nginx_high_php_limits: False' in /etc/php/{{ php_version }}/fpm/php.ini for lightweight use of WordPress/Nextcloud/PBX (allow file size up to 100MB, 100s timeouts, with 2 PHP system defaults: memory_limit = 128M, max_input_vars = 1000)"
-    lineinfile:
-      path: /etc/php/{{ php_version }}/fpm/php.ini    # COMPARE /etc/php/{{ php_version }}/cli/php.ini AND /etc/php/{{ php_version }}/apache2/php.ini
-      regexp: "{{ item.regexp }}"
-      line: "{{ item.line }}"
-    with_items:
-      - { regexp: '^upload_max_filesize', line: 'upload_max_filesize = 100M    ; default is 2M' }
-      - { regexp: '^post_max_size', line: 'post_max_size = 100M    ; default is 8M' }
-      - { regexp: '^max_execution_time', line: 'max_execution_time = 100    ; default is 30' }
-      - { regexp: '^max_input_time', line: 'max_input_time = 100    ; default is 60' }
-      - { regexp: '^memory_limit', line: 'memory_limit = 128M    ; default is 128M / Nextcloud requests 512M' }
-      - { regexp: '^max_input_vars', line: 'max_input_vars = 1000    ; default is 1000 / Moodle 3.11+ requires 5000+ with PHP 8+' }
-    when: not nginx_high_php_limits and not moodle_install    # REMINDER: THIS ENTIRE 5-STANZA BLOCK IS ONLY INVOKED... when: moodle_install or nextcloud_install or pbx_install or wordpress_install
-
-  - name: "Enact 'nginx_high_php_limits: False' in /etc/php/{{ php_version }}/cli/php.ini for lightweight use of WordPress/Nextcloud/PBX (allow file size up to 100MB, 100s timeouts, with 2 PHP system defaults: memory_limit = 128M, max_input_vars = 1000)"
-    lineinfile:
-      path: /etc/php/{{ php_version }}/cli/php.ini    # COMPARE /etc/php/{{ php_version }}/fpm/php.ini AND /etc/php/{{ php_version }}/apache2/php.ini
-      regexp: "{{ item.regexp }}"
-      line: "{{ item.line }}"
-    with_items:
-      - { regexp: '^upload_max_filesize', line: 'upload_max_filesize = 100M    ; default is 2M' }
-      - { regexp: '^post_max_size', line: 'post_max_size = 100M    ; default is 8M' }
-      - { regexp: '^max_execution_time', line: 'max_execution_time = 100    ; default is 30' }
-      - { regexp: '^max_input_time', line: 'max_input_time = 100    ; default is 60' }
-      - { regexp: '^memory_limit', line: 'memory_limit = 128M    ; default is 128M / Nextcloud requests 512M' }
-      - { regexp: '^max_input_vars', line: 'max_input_vars = 1000    ; default is 1000 / Moodle 3.11+ requires 5000+ with PHP 8+' }
-    when: not nginx_high_php_limits and not moodle_install    # REMINDER: THIS ENTIRE 5-STANZA BLOCK IS ONLY INVOKED... when: moodle_install or nextcloud_install or pbx_install or wordpress_install
-
-  # WARNING: This might cause excess use of RAM/disk or other resources!
-  # The first 5 values below were chosen by @ericnitschke and @kananigit on
-  # 2018-09-19: https://github.com/iiab/iiab/issues/1147
-
-  # 2020-03-08: IIAB DOES NOT SUPPORT UNINSTALLING APPS, so additional
-  # clauses (to reset/restore PHP's defaults) are not necessary at this time.
-
-  # 2021-06-28: WITH PHP 8, MOODLE'S CLI INSTALLER UNFORTUNATELY *REQUIRES*
-  # editing /etc/php/{{ php_version }}/cli/php.ini (below) -- though during
-  # regular operation it uses:     .../fpm/php.ini
-  # And in the past it used:       .../apache2/php.ini
-
-  - name: "Enact 'nginx_high_php_limits: True' in /etc/php/{{ php_version }}/fpm/php.ini for schools that use WordPress/Moodle/Nextcloud/PBX intensively (allow file size up to 10000MB, 300s timeouts, memory_limit = 512M for Nextcloud, max_input_vars = 5000 for Moodle)"
-    lineinfile:
-      path: /etc/php/{{ php_version }}/fpm/php.ini    # COMPARE /etc/php/{{ php_version }}/cli/php.ini AND /etc/php/{{ php_version }}/apache2/php.ini
-      regexp: "{{ item.regexp }}"
-      line: "{{ item.line }}"
-    with_items:
-      - { regexp: '^upload_max_filesize', line: 'upload_max_filesize = 10000M    ; default is 2M' }
-      - { regexp: '^post_max_size', line: 'post_max_size = 10000M    ; default is 8M' }
-      - { regexp: '^max_execution_time', line: 'max_execution_time = 300    ; default is 30' }
-      - { regexp: '^max_input_time', line: 'max_input_time = 300    ; default is 60' }
-      - { regexp: '^memory_limit', line: 'memory_limit = 512M    ; default is 128M / Nextcloud requests 512M' }
-      - { regexp: '^max_input_vars', line: 'max_input_vars = 5000    ; default is 1000 / Moodle 3.11+ requires 5000+ with PHP 8+' }
-    when: nginx_high_php_limits or moodle_install    # REMINDER: THIS ENTIRE 5-STANZA BLOCK IS ONLY INVOKED... when: moodle_install or nextcloud_install or pbx_install or wordpress_install
-
-  - name: "Enact 'nginx_high_php_limits: True' in /etc/php/{{ php_version }}/cli/php.ini for schools that use WordPress/Moodle/Nextcloud/PBX intensively (allow file size up to 10000MB, 300s timeouts, memory_limit = 512M for Nextcloud, max_input_vars = 5000 for Moodle)"
-    lineinfile:
-      path: /etc/php/{{ php_version }}/cli/php.ini    # COMPARE /etc/php/{{ php_version }}/fpm/php.ini AND /etc/php/{{ php_version }}/apache2/php.ini
-      regexp: "{{ item.regexp }}"
-      line: "{{ item.line }}"
-    with_items:
-      - { regexp: '^upload_max_filesize', line: 'upload_max_filesize = 10000M    ; default is 2M' }
-      - { regexp: '^post_max_size', line: 'post_max_size = 10000M    ; default is 8M' }
-      - { regexp: '^max_execution_time', line: 'max_execution_time = 300    ; default is 30' }
-      - { regexp: '^max_input_time', line: 'max_input_time = 300    ; default is 60' }
-      - { regexp: '^memory_limit', line: 'memory_limit = 512M    ; default is 128M / Nextcloud requests 512M' }
-      - { regexp: '^max_input_vars', line: 'max_input_vars = 5000    ; default is 1000 / Moodle 3.11+ requires 5000+ with PHP 8+' }
-    when: nginx_high_php_limits or moodle_install    # REMINDER: THIS ENTIRE 5-STANZA BLOCK IS ONLY INVOKED... when: moodle_install or nextcloud_install or pbx_install or wordpress_install
-
-  - name: Restart 'php{{ php_version }}-fpm' systemd service
-    systemd:
-      name: php{{ php_version }}-fpm
-      state: restarted
-
-  when: moodle_install or nextcloud_install or pbx_install or wordpress_install    # 5-STANZA BLOCK ENDS.  COMPARE apache_allow_sudo conditionals below.
+# 2022-12-29: php-settings.yml is ALSO attempted (on demand) by every
+# <ROLE>/tasks/install.yml that needs it (Matomo, Moodle, Nextcloud, PBX,
+# WordPress) so './runrole <ROLE>' and similar are fully self-sufficient!
+- name: "Run php-settings.yml -- allows post-install toggling of nginx_high_php_limits in /etc/iiab/local_vars.yml -- if you run './runrole www_options'"
+  include_tasks: php-settings.yml
+  when: nginx_high_php_limits or matomo_install or moodle_install or nextcloud_install or pbx_install or wordpress_install
 
 
 # 'Is a "Rapid Power Off" button possible for low-electricity environments?'
@@ -156,9 +93,26 @@
   when: not apache_allow_sudo
 
 
+# 2022-06-30: internet_available var removed
+- name: 'Test for Internet access, using: {{ iiab_download_url }}/heart-beat.txt'
+  get_url:
+    url: "{{ iiab_download_url }}/heart-beat.txt"
+    dest: /tmp/heart-beat.txt
+    #timeout: "{{ download_timeout }}"
+    # @jvonau recommends: 100sec is too much (keep 10sec default)
+  ignore_errors: True
+  #async: 10
+  #poll: 2
+  register: internet_access_test
+
+- name: Remove downloaded Internet test file /tmp/heart-beat.txt
+  file:
+    path: /tmp/heart-beat.txt
+    state: absent
+
 - name: Run /usr/bin/iiab-refresh-wiki-docs (scraper script) to create http://box/info offline documentation.  (This script was installed in Stage 3 = roles/3-base-server/tasks/main.yml, which ran roles/www_base/tasks/main.yml)
   command: /usr/bin/iiab-refresh-wiki-docs
-  when: internet_available and not nodocs
+  when: not internet_access_test.failed and not nodocs
 
 
 - name: (Re)Start '{{ apache_service }}' systemd service, if installed & enabled
@@ -175,6 +129,17 @@
 
 
 # RECORD www_options AS INSTALLED
+
+- name: Record (final) disk space used
+  shell: df -B1 --output=used / | tail -1
+  register: df2
+
+- name: Add 'www_options_disk_usage = {{ df2.stdout|int - df1.stdout|int }}' to {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+    section: www_options
+    option: www_options_disk_usage
+    value: "{{ df2.stdout|int - df1.stdout|int }}"
 
 - name: "Set 'www_options_installed: True'"
   set_fact:

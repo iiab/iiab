@@ -1,6 +1,12 @@
 # Role "www_base" runs here, probably in 3-BASE-SERVER.
 # Role "www_options" runs later, likely in 4-SERVER-OPTIONS.
 
+
+- name: Record (initial) disk space used
+  shell: df -B1 --output=used / | tail -1
+  register: df1
+
+
 # 2021-06-27: Antifragile roles can become less brittle by fully declaring
 # their own dependencies (i.e. for modularity, separation-of-concerns,
 # encapsulation, compartmentalization, scope sanity, etc).
@@ -28,7 +34,7 @@
 - name: Install php-stem.yml if php_version == 7.4 and (ansible_machine == "armv6l" or ansible_machine == "armv7l" or ansible_machine == "aarch64" or ansible_machine == "x86_64")
   include_tasks: php-stem.yml
   when: php_version == 7.4 and (ansible_machine == "armv6l" or ansible_machine == "armv7l" or ansible_machine == "aarch64" or ansible_machine == "x86_64")
-   # or php_version == 8.0 or php_version == 8.1 (IIAB MIGHT SUPPORT THESE LATER IN 2022)
+   # or php_version == 8.0 or php_version == 8.1 or php_version == 8.2 (IIAB MIGHT SUPPORT THESE LATER IN 2023)
    # or php_version == 7.2 or php_version == 7.3 (PROBABLY WORK, AT YOUR OWN RISK!)
 
 - name: Create dir {{ doc_root }}/home -- if you customized var iiab_home_url e.g. in /etc/iiab/local_vars.yml, that dir is created later -- by www_options/tasks/main.yml
@@ -53,6 +59,17 @@
 
 
 # RECORD www_base AS INSTALLED
+
+- name: Record (final) disk space used
+  shell: df -B1 --output=used / | tail -1
+  register: df2
+
+- name: Add 'www_base_disk_usage = {{ df2.stdout|int - df1.stdout|int }}' to {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+    section: www_base
+    option: www_base_disk_usage
+    value: "{{ df2.stdout|int - df1.stdout|int }}"
 
 - name: "Set 'www_base_installed: True'"
   set_fact:

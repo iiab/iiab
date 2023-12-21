@@ -1,4 +1,20 @@
 # sysd-netd-debian.yml
+- name: Install networkd-dispatcher
+  package:
+    name: networkd-dispatcher    #  15kB download: Dispatcher service for systemd-networkd connection status changes
+
+# 2023-10-14 #3657, #3658, #3659: New RasPiOS 12/Bookworm issue.
+# FWIW Ubuntu >= 22.10 offers 'systemd-resolved' as a distinct apt package.
+# Whereas Ubuntu <= 22.04 bundled the functionality within apt package 'systemd'
+# Debian 12/Bookworm (like Ubuntu >= 22.10) offers it as a distinct package:
+# https://www.debian.org/releases/bookworm/amd64/release-notes/ch-information.en.html#systemd-resolved
+- name: Install systemd-resolved (or intentionally show red error then continue, if apt package not available)
+  package:
+    name: systemd-resolved       # 278kB download: For RasPiOS 12/Bookworm
+  ignore_errors: yes
+  #shell: apt -y install systemd-resolved || true
+  #when: is_raspbian and os_ver is version('raspbian-12', '>=')
+
 - name: Copy the bridge script - Creates br0
   template:
     dest: /etc/systemd/network/IIAB-Bridge.netdev
@@ -40,22 +56,52 @@
   template:
     dest: /etc/systemd/network/IIAB-Static.network
     src: network/systemd-static-net.j2
-  when: wan_ip != "dhcp" and ( is_ubuntu_16 or not network_manager_active )
+  when: wan_ip != "dhcp" and not network_manager_active
+  #when: wan_ip != "dhcp" and ( is_ubuntu_16 or not network_manager_active )
 
-  #when: wan_ip != "dhcp" and not is_ubuntu_18
+- name: Create networkd-dispatcher diagnostic hook for recording network events
+  template:
+    owner: root
+    group: root
+    mode: 0755
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+  with_items:
+    - { src: 'hostapd/00-iiab-debug', dest: '/etc/networkd-dispatcher/carrier.d/00-iiab-debug' }
+    - { src: 'hostapd/00-iiab-debug', dest: '/etc/networkd-dispatcher/degraded.d/00-iiab-debug' }
+    - { src: 'hostapd/00-iiab-debug', dest: '/etc/networkd-dispatcher/dormant.d/00-iiab-debug' }
+    - { src: 'hostapd/00-iiab-debug', dest: '/etc/networkd-dispatcher/no-carrier.d/00-iiab-debug' }
+    - { src: 'hostapd/00-iiab-debug', dest: '/etc/networkd-dispatcher/off.d/00-iiab-debug' }
+    - { src: 'hostapd/00-iiab-debug', dest: '/etc/networkd-dispatcher/routable.d/00-iiab-debug' }
+  # when: discovered_wireless_iface != "none" or discovered_wired_iface != "none"
 
-- name: Stopping services
-  include_tasks: down-debian.yml
+- name: Create networkd-dispatcher hook for ap0 on RPi hardware with wifi_up_down True
+  template:
+    owner: root
+    group: root
+    mode: 0755
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+  with_items:
+    - { src: 'hostapd/netd-disp', dest: '/etc/networkd-dispatcher/carrier.d/iiab-wifi' }
+    - { src: 'hostapd/netd-disp', dest: '/etc/networkd-dispatcher/no-carrier.d/iiab-wifi' }
+    - { src: 'hostapd/netd-disp2', dest: '/etc/networkd-dispatcher/routable.d/iiab-wifi2' }
+  when: discovered_wireless_iface != "none" and rpi_model != "none" and wifi_up_down
+
+- name: Remove networkd-dispatcher hook for ap0 on RPi hardware with wifi_up_down False
+  file:
+    path: "{{ item.dest }}"
+    state: absent
+  with_items:
+    - { dest: '/etc/networkd-dispatcher/carrier.d/iiab-wifi' }
+    - { dest: '/etc/networkd-dispatcher/no-carrier.d/iiab-wifi' }
+    - { dest: '/etc/networkd-dispatcher/routable.d/iiab-wifi' }
+    - { dest: '/etc/networkd-dispatcher/routable.d/iiab-wifi2' }
+  when: discovered_wireless_iface != "none" and rpi_model != "none" and not wifi_up_down
 
 - name: Reload systemd
   systemd:
     daemon_reload: yes
-
-- name: Clone wifi if needed
-  systemd:
-    name: iiab-clone-wifi
-    state: started
-  when: wifi_up_down and discovered_wireless_iface != "none"
 
 - name: Enable & Restart systemd-networkd.service
   systemd:
@@ -64,15 +110,9 @@
     enabled: yes
     masked: no
 
-- name: Enable & Restart networkd-dispatcher.service
+- name: Enable & Restart systemd-resolved.service
   systemd:
-    name: networkd-dispatcher
+    name: systemd-resolved
     state: restarted
     enabled: yes
     masked: no
-
-- name: Restart hostapd when WiFi is present but not when using WiFi as gateway with wifi_up_down False
-  systemd:
-    name: hostapd
-    state: restarted
-  when: hostapd_enabled and (wifi_up_down or not no_net_restart)

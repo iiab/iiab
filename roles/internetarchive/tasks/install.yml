@@ -9,10 +9,10 @@
   include_role:
     name: nodejs
 
-- name: Assert that 10.x <= nodejs_version ({{ nodejs_version }}) <= 16.x
+- name: Assert that 10.x <= nodejs_version ({{ nodejs_version }}) <= 20.x
   assert:
-    that: nodejs_version is version('10.x', '>=') and nodejs_version is version('16.x', '<=')
-    fail_msg: "Internet Archive install cannot proceed, as it currently requires Node.js 10.x - 16.x, and your nodejs_version is set to {{ nodejs_version }}.  Please check the value of nodejs_version in /opt/iiab/iiab/vars/default_vars.yml and possibly also /etc/iiab/local_vars.yml"
+    that: nodejs_version is version('10.x', '>=') and nodejs_version is version('20.x', '<=')
+    fail_msg: "Internet Archive install cannot proceed, as it currently requires Node.js 10.x - 20.x, and your nodejs_version is set to {{ nodejs_version }}.  Please check the value of nodejs_version in /opt/iiab/iiab/vars/default_vars.yml and possibly also /etc/iiab/local_vars.yml"
     quiet: yes
 
 - name: "Set 'yarn_install: True' and 'yarn_enabled: True'"
@@ -28,6 +28,11 @@
   package:
     name: libsecret-1-dev
     state: present
+
+
+- name: Record (initial) disk space used
+  shell: df -B1 --output=used / | tail -1
+  register: df1
 
 
 # 2. CREATE 2 DIRS, WIPE /opt/iiab/internetarchive/node_modules & RUN YARN
@@ -63,6 +68,17 @@
 
 
 # 4. RECORD Internet Archive AS INSTALLED
+
+- name: Record (final) disk space used
+  shell: df -B1 --output=used / | tail -1
+  register: df2
+
+- name: Add 'internetarchive_disk_usage = {{ df2.stdout|int - df1.stdout|int }}' to {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+    section: internetarchive
+    option: internetarchive_disk_usage
+    value: "{{ df2.stdout|int - df1.stdout|int }}"
 
 - name: "Set 'internetarchive_installed: True'"
   set_fact:

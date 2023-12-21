@@ -63,38 +63,28 @@
 #
 # 2020-11-04: Fix validation of 5 [now 4] core dependencies, for ./runrole etc
 
-- name: Set vars_checklist for 44 + 44 + 40 vars ("XYZ_install" + "XYZ_enabled" + "XYZ_installed") to be checked
+
+- name: Set vars_checklist for 45 + 45 + 40 vars ("XYZ_install" + "XYZ_enabled" + "XYZ_installed") to be checked
   set_fact:
     vars_checklist:
       - hostapd
-      - dhcpd
-      - named
       - dnsmasq
       - bluetooth
-      #- wondershaper       # Unmaintained
       - sshd
       - openvpn
       - remoteit
       - admin_console
       #- nginx              # MANDATORY
       #- apache             # Unmaintained - former dependency
-      #- mysql              # MANDATORY
       - squid
-      #- dansguardian       # Unmaintained
       - cups
       - samba
       - usb_lib
-      #- xo_services        # Unmaintained
-      #- activity_server    # Unmaintained
-      #- ejabberd_xs        # Unmaintained
-      #- idmgr              # Unmaintained
       - azuracast
-      #- dokuwiki           # Unmaintained
-      #- ejabberd           # Unmaintained
-      #- elgg               # Unmaintained
       - gitea
       - jupyterhub
       - lokole
+      - mysql               # Dependency - excluded from _installed check below
       - mediawiki
       - mosquitto
       - nodejs              # Dependency - excluded from _installed check below
@@ -111,6 +101,7 @@
       - osm_vector_maps
       - transmission
       - awstats
+      - matomo
       - monit
       - munin
       - phpmyadmin
@@ -122,6 +113,7 @@
       - calibreweb
       - calibre
       - pbx
+      - network
 
 - name: Assert that {{ vars_checklist | length }} "XYZ_install" vars are all... defined
   assert:
@@ -163,5 +155,41 @@
     that: "{{ item }}_install or {{ item }}_installed is undefined"
     fail_msg: "DISALLOWED: '{{ item }}_install: False' (e.g. in /etc/iiab/local_vars.yml) WHEN '{{ item }}_installed' is defined (e.g. in /etc/iiab/iiab_state.yml) -- IIAB DOES NOT SUPPORT UNINSTALLS -- please verify those 2 files especially, and other places variables are defined?"
     quiet: yes
-  when: item != 'nodejs' and item != 'postgresql' and item != 'mongodb' and item != 'yarn'    # Exclude auto-installed dependencies
+  when: item != 'mysql' and item != 'postgresql' and item != 'mongodb' and item != 'nodejs' and item != 'yarn'    # Exclude auto-installed dependencies
   loop: "{{ vars_checklist }}"
+
+
+- name: Set vars_deprecated_list for 4+ vars ("XYZ_install") to be checked
+  set_fact:
+    vars_deprecated_list:
+      - dhcpd               # Deprecated
+      - named               # Deprecated
+      - wondershaper        # Deprecated
+      - dansguardian        # Deprecated
+      #- xo_services        # Unmaintained
+      #- activity_server    # Unmaintained
+      #- ejabberd_xs        # Unmaintained
+      #- idmgr              # Unmaintained
+      #- dokuwiki           # Unmaintained
+      #- ejabberd           # Unmaintained
+      #- elgg               # Unmaintained
+
+- name: 'DISALLOW "XYZ_install: True" if deprecated'
+  assert:
+    that: "{{ item }}_install is undefined or not {{ item }}_install"
+    fail_msg: "DISALLOWED: '{{ item }}_install: True' (e.g. in /etc/iiab/local_vars.yml)"
+    quiet: yes
+  loop: "{{ vars_deprecated_list }}"
+  # 2023-12-04: ansible-core 2.16.1 suddenly no longer allows 'assert' with
+  # 'with_items' below (whereas 'loop' construct above works!)  BACKGROUND:
+  #
+  #  'due to mitigation of security issue CVE-2023-5764 in ansible-core 2.16.1,
+  #  conditional expressions with embedded template blocks can fail with the
+  #  message “Conditional is marked as unsafe, and cannot be evaluated.”'
+  #  https://docs.ansible.com/ansible-core/2.16/porting_guides/porting_guide_core_2.16.html#playbook
+  #
+  # with_items:
+  #   - dhcpd               # Deprecated
+  #   - named               # Deprecated
+  #   - wondershaper        # Deprecated
+  #   - dansguardian        # Deprecated

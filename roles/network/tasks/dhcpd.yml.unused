@@ -1,0 +1,62 @@
+- name: Install dhcp package (debuntu)
+  package:
+    name: isc-dhcp-server
+    state: present
+  when: is_debuntu
+
+- name: Install dhcp package (not debuntu)
+  package:
+    name: dhcp
+    state: present
+  when: not is_debuntu
+
+- name: Create non-privileged user 'dhcpd' (debuntu)
+  user:
+    name: dhcpd
+    createhome: no
+  when: is_debuntu
+
+- name: Disable stock dhcp_service (debuntu)
+  service:
+    name: "{{ dhcp_service }}"
+    enabled: no
+    state: stopped
+  when: is_debuntu
+
+- name: Disable stock dhcp_service ipv6 (ubuntu-18 and higher)
+  service:
+    name: "{{ dhcp_service }}6"
+    enabled: no
+    state: stopped
+  when: is_ubuntu
+  #when: is_ubuntu and not is_ubuntu_16
+  #when: is_ubuntu_18
+
+- name: Install systemd unit file to /etc/systemd/system/dhcpd.service
+  template:
+    src: roles/network/templates/dhcp/dhcpd.service
+    dest: /etc/systemd/system/dhcpd.service
+    # owner: root
+    # group: root
+    # mode: '0644'
+
+- name: Create file /var/lib/dhcpd/dhcpd.leases (redhat)
+  command: touch /var/lib/dhcpd/dhcpd.leases
+  args:
+    creates: /var/lib/dhcpd/dhcpd.leases
+  when: is_redhat
+
+- name: Set dhcpd.leases permissions/ownership (redhat)
+  file:
+    path: /var/lib/dhcpd/dhcpd.leases
+    owner: dhcpd
+    group: dhcpd
+    mode: '0644'
+    # state: file
+  when: is_redhat
+
+- name: "Add 'dhcpd_installed: True' to {{ iiab_state_file }}"
+  lineinfile:
+    path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
+    regexp: '^dhcpd_installed'
+    line: 'dhcpd_installed: True'

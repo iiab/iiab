@@ -19,76 +19,60 @@
     quiet: yes
 
 
-# 2020-02-11: @mitra42 & @holta agree (#2247) that the following 2-stanza
-# "UPDATE internetarchive" block should run whenever one isn't installing
-# (or reinstalling) internetarchive, for now.  We're aware this means slowness
-# during "./runrole internetarchive" but that's very intentional for now -- as
-# it leads to more testing of more recent versions of internetarchive, which
-# is strongly desired.  Finally, these current norms can and probably will be
-# changed in future, when broader IIAB norms develop around "./runrole
-# --upgrade internetarchive" or "./runrole --update internetarchive" or such,
-# as may evolve @ https://github.com/iiab/iiab/pull/2238#discussion_r376168178
+- block:
 
-- block:    # BEGIN 2-STANZA BLOCK
+  # 2020-02-11: @mitra42 & @holta agree (#2247) that the following 2-stanza
+  # "UPDATE internetarchive" portion should run whenever one isn't installing
+  # (or reinstalling) internetarchive, for now.  We're aware this means slowness
+  # during "./runrole internetarchive" but that's very intentional for now -- as
+  # it leads to more testing of more recent versions of internetarchive, which
+  # is strongly desired.  Finally, these current norms can and probably will be
+  # changed in future, when broader IIAB norms develop around "./runrole
+  # --upgrade internetarchive" or "./runrole --update internetarchive" or such,
+  # as may evolve @ https://github.com/iiab/iiab/pull/2238#discussion_r376168178
 
   - name: "UPGRADE: Stop 'internetarchive' systemd service, if internetarchive_installed is defined"
     systemd:
       name: internetarchive
       daemon_reload: yes
       state: stopped
+    when: internetarchive_installed is defined
 
   - name: "UPGRADE: Run 'yarn upgrade' in {{ internetarchive_dir }}, if internetarchive_installed is defined"
     shell: yarn config set child-concurrency 1 && yarn install && yarn upgrade
     args:
       chdir: "{{ internetarchive_dir }}"
+    when: internetarchive_installed is defined
 
-  when: internetarchive_installed is defined    # END 2-STANZA BLOCK
+  # "ELSE" INSTALL...
 
-# "ELSE" INSTALL...
-
-- name: Install Internet Archive if 'internetarchive_installed' not defined, e.g. in {{ iiab_state_file }}    # /etc/iiab/iiab_state.yml
-  include_tasks: install.yml
-  when: internetarchive_installed is undefined
-
-
-# ENABLE/DISABLE/RESTART SYSTEMD SERVICE & WEB SERVERS AS NEC ?
-
-- name: Enable & Restart 'internetarchive' systemd service, if internetarchive_enabled
-  systemd:
-    name: internetarchive
-    daemon_reload: yes
-    enabled: yes
-    state: restarted
-  when: internetarchive_enabled
-
-- name: Disable & Stop 'internetarchive' systemd service, if not internetarchive_enabled
-  systemd:
-    name: internetarchive
-    enabled: no
-    state: stopped
-  when: not internetarchive_enabled
-
-# - name: Enable/Disable/Restart Apache if primary
-#   include_tasks: apache.yml
-#   when: apache_installed is defined and not nginx_enabled
-
-- name: Enable/Disable/Restart NGINX if primary
-  include_tasks: nginx.yml
-  #when: nginx_enabled
+  - name: Install Internet Archive if 'internetarchive_installed' not defined, e.g. in {{ iiab_state_file }}    # /etc/iiab/iiab_state.yml
+    include_tasks: install.yml
+    when: internetarchive_installed is undefined
 
 
-- name: Add 'internetarchive' variable values to {{ iiab_ini_file }}
-  ini_file:
-    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
-    section: internetarchive
-    option: "{{ item.option }}"
-    value: "{{ item.value | string }}"
-  with_items:
-    - option: name
-      value: Internet Archive
-    - option: description
-      value: '"Take the Internet Archive experience and materials offline, in a decentralized way!"'
-    - option: internetarchive_install
-      value: "{{ internetarchive_install }}"
-    - option: internetarchive_enabled
-      value: "{{ internetarchive_enabled }}"
+  - include_tasks: enable-or-disable.yml
+
+
+  - name: Add 'internetarchive' variable values to {{ iiab_ini_file }}
+    ini_file:
+      path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+      section: internetarchive
+      option: "{{ item.option }}"
+      value: "{{ item.value | string }}"
+    with_items:
+      - option: name
+        value: Internet Archive
+      - option: description
+        value: '"Take the Internet Archive experience and materials offline, in a decentralized way!"'
+      - option: internetarchive_install
+        value: "{{ internetarchive_install }}"
+      - option: internetarchive_enabled
+        value: "{{ internetarchive_enabled }}"
+
+  rescue:
+
+  - name: 'SEE ERROR ABOVE (skip_role_on_error: {{ skip_role_on_error }})'
+    fail:
+      msg: ""
+    when: not skip_role_on_error

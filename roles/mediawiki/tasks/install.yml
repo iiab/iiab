@@ -1,3 +1,23 @@
+- name: "Set 'mysql_install: True' and 'mysql_enabled: True'"
+  set_fact:
+    mysql_install: True
+    mysql_enabled: True
+
+- name: MYSQL - run 'mysql' role (attempt to install & enable MySQL / MariaDB)
+  include_role:
+    name: mysql
+
+- name: FAIL (STOP THE INSTALL) IF 'mysql_installed is undefined'
+  fail:
+    msg: "MediaWiki install cannot proceed, as MySQL / MariaDB is not installed."
+  when: mysql_installed is undefined
+
+
+- name: Record (initial) disk space used
+  shell: df -B1 --output=used / | tail -1
+  register: df1
+
+
 # https://www.mediawiki.org/wiki/Manual:Installation_requirements#PHP
 - name: 'Install packages: php{{ php_version }}-intl, php{{ php_version }}-mbstring, php{{ php_version }}-xml'
   package:
@@ -94,6 +114,17 @@
 
 
 # RECORD MediaWiki AS INSTALLED
+
+- name: Record (final) disk space used
+  shell: df -B1 --output=used / | tail -1
+  register: df2
+
+- name: Add 'mediawiki_disk_usage = {{ df2.stdout|int - df1.stdout|int }}' to {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+    section: mediawiki
+    option: mediawiki_disk_usage
+    value: "{{ df2.stdout|int - df1.stdout|int }}"
 
 - name: "Set 'mediawiki_installed: True'"
   set_fact:

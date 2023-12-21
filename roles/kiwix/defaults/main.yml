@@ -8,11 +8,11 @@
 # If nec, change them by editing /etc/iiab/local_vars.yml prior to installing!
 
 
-# INSTRUCTIONS TO REINSTALL Kiwix:
-# (1) VERIFY THESE VARS IN /etc/iiab/local_vars.yml
+# ONLINE UPGRADE INSTRUCTIONS:
+# (1) VERIFY VARS IN /etc/iiab/local_vars.yml
 #     kiwix_install: True
 #     kiwix_enabled: True
-# (2) RUN: cd /opt/iiab/iiab; ./runrole --reinstall kiwix
+# (2) RUN: cd /opt/iiab/iiab; sudo ./runrole --reinstall kiwix
 
 
 # FYI /library/zims contains 3 important things:
@@ -21,14 +21,30 @@
 # - index = directory for legacy *.zim.idx's
 kiwix_library_xml: "{{ iiab_zim_path }}/library.xml"
 
-# 3 lines below specify which version(s) of kiwix-tools to download from...
-# http://download.iiab.io/packages/ ...as originally obtained from...
-# http://download.kiwix.org/release/kiwix-tools/ ...or sometimes...
-# http://download.kiwix.org/nightly/
+kiwix_base_url: https://download.kiwix.org/release/kiwix-tools/
+#kiwix_base_url: https://download.kiwix.org/nightly/2022-10-04/
+#kiwix_base_url: "{{ iiab_download_url }}/"    # e.g. https://download.iiab.io/packages/
 
-kiwix_version_armhf: kiwix-tools_linux-armhf-3.2.0-2
-kiwix_version_linux64: kiwix-tools_linux-x86_64-3.2.0-2
-kiwix_version_i686: kiwix-tools_linux-i586-3.2.0-2
+kiwix_arch_dict:      # 'dpkg --print-architecture' key would be: (to mitigate #3516 in future, if truly nec?)
+  #i386:              # ?
+  i686: i586          # ?
+  x86_64: x86_64      # amd64
+  armv6l: armv6       # armhf
+  armv7l: armv8       # armhf  BEWARE: armhf version of kiwix-tools suddenly FAILS on 64-bit RasPiOS, since 3.5.0 released 2023-04-28 -- #3574, PR #3576
+  aarch64: aarch64    # arm64  BEWARE: "32-bit" RasPiOS suddenly boots 64-bit kernel since March 2023 -- #3516, explained at https://github.com/iiab/iiab/pull/3422#issuecomment-1533441463
+
+# ansible_architecture might also work, if not quite as well:
+# https://stackoverflow.com/questions/66828315/what-is-the-difference-between-ansible-architecture-and-ansible-machine-on-a/66828837#66828837
+# CLAIM: 'ansible_machine might be "i686", whereas ansible_architecture on the same host would be "i386"'
+# https://stackoverflow.com/questions/44713880/how-do-i-make-decision-based-on-arch-in-ansible-playbooks/44714226#44714226
+kiwix_arch: "{{ kiwix_arch_dict[ansible_machine] | default('unsupported') }}"
+
+# Latest official kiwix-tools release, per Kiwix permalink redirects:
+# https://www.kiwix.org/en/downloads/kiwix-serve/
+# https://github.com/kiwix/container-images/issues/236
+# https://github.com/kiwix/kiwix-tools/issues/623
+kiwix_tar_gz: "kiwix-tools_linux-{{ kiwix_arch }}.tar.gz"
+#kiwix_tar_gz: "kiwix-tools_linux-{{ kiwix_arch }}-3.3.0-1.tar.gz"    # Version can be hard-coded if you prefer (as was done til 2022-10-04)
 
 # kiwix_src_file_i686: "kiwix-linux-i686.tar.bz2"
 # v0.9 for i686 published May 2014 ("use it to test legacy ZIM content")

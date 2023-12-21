@@ -3,14 +3,14 @@
 # /usr/bin/iiab-remote-off should fully turn off multiple remote support
 # services like OpenVPN and others, to reduce risk of remote attacks.
 
-echo -e '\nWARNING: To disable OpenVPN long-term, it'"'"'s recommended you:\n'
-
-echo -e '1) Set this variable in /etc/iiab/local_vars.yml'
-echo -e '   openvpn_enabled: False\n'
-
-echo -e '2) Run:'
-echo -e '   cd /opt/iiab/iiab'
-echo -e '   sudo ./runrole openvpn\n'
+# echo -e '\nWARNING: To disable OpenVPN long-term, it'"'"'s recommended you:\n'
+#
+# echo -e '1) Set this variable in /etc/iiab/local_vars.yml'
+# echo -e '   openvpn_enabled: False\n'
+#
+# echo -e '2) Run:'
+# echo -e '   cd /opt/iiab/iiab'
+# echo -e '   sudo ./runrole openvpn\n'
 
 # Do nothing if OpenVPN not installed
 which openvpn
@@ -19,13 +19,21 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
+if grep -q '^openvpn_enabled:' /etc/iiab/local_vars.yml; then
+    sed -i "s/^openvpn_enabled:.*/openvpn_enabled: False/" /etc/iiab/local_vars.yml
+else
+    echo "openvpn_enabled: False" >> /etc/iiab/local_vars.yml
+fi
+
 systemctl disable openvpn
 systemctl stop openvpn
 
 sleep 5
 ps -e | grep openvpn    # 2018-09-05: "ps -e | grep vpn" no longer works (nor would "pgrep vpn") when invoked from iiab-vpn-off (as filename itself causes [multiple] "vpn" instances to appear in process list!)
 if [ $? -eq 0 ]; then
-    echo OpenVPN failed to stop.
+    echo "OpenVPN failed to stop."
 else
-    echo Successfully stopped and disabled OpenVPN.
+    echo "OpenVPN's systemd service was successfully stopped and disabled."
+    echo
+    echo "Also, 'openvpn_enabled: False' was set in /etc/iiab/local_vars.yml"
 fi

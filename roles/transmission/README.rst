@@ -15,20 +15,25 @@ Transmission README
 
 Transmission is a set of lightweight BitTorrent clients (in GUI, CLI and daemon form).  All these incarnations feature a very simple and intuitive interface, on top on an efficient, cross-platform backend: https://transmissionbt.com
 
-Transmission is intended to download KA Lite content to Internet-in-a-Box (IIAB) from places like http://pantry.learningequality.org/downloads/ka-lite/0.17/content/ — and also to seed content, assisting others.
+Transmission is intended to download content like KA Lite to Internet-in-a-Box (IIAB), from places like https://pantry.learningequality.org/downloads/ka-lite/0.17/content/ — and also to seed content, assisting others.
 
 For example, once KA Lite videos and thumbnails are confirmed downloaded, copy them (carefully!) from ``/library/transmission`` into ``/library/ka-lite/content`` as outlined by "KA Lite Administration: What tips & tricks exist?" at http://FAQ.IIAB.IO
 
-Caution
--------
+2023 Caution
+------------
 
-Usage of Transmission consumes significant Internet data and system resources.
-Caveat emptor!  (That's Latin for "Buyer Beware")
+In order to make the latest features available to you as of Q4 2023, Internet-in-a-Box compiles the very latest `Transmission 4.0.4+ <https://github.com/transmission/transmission/commits/main>`_ as you install it, which unfortunately can take most of an hour.
+
+Thankfully `Transmission 4.1+ <https://github.com/transmission/transmission/milestones>`_ should once again install quickly, starting sometime soon in early 2024 (`#5585 <https://github.com/transmission/transmission/discussions/5585>`_, `PR #5866 <https://github.com/transmission/transmission/pull/5866>`_).
+
+Finally, if instead you want to quickly install an older version of Transmission (e.g. version 3.0 from May 2020) then set ``transmission_compile_latest: False`` in `/etc/iiab/local_vars.yml <https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it%3F>`_ prior to installing.
+
+.. Transmission can consume significant Internet data and system resources.  Caveat emptor!  (That's Latin for "Buyer Beware")
 
 Using It
 --------
 
-Install Transmission by setting 'transmission_install' and 'transmission_enabled' to True in `/etc/iiab/local_vars.yml <http://wiki.laptop.org/go/IIAB/local_vars.yml>`_ — carefully choosing language(s) for KA Lite videos you want to download — and then install IIAB.  Or, if IIAB is already installed, run as root::
+Install Transmission by setting ``transmission_install: True`` and ``transmission_enabled: True`` in `/etc/iiab/local_vars.yml <https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it%3F>`_ — carefully choosing language(s) for KA Lite videos you want to download — and then install IIAB.  Or, if IIAB is already installed, run as root::
 
   cd /opt/iiab/iiab
   ./runrole transmission
@@ -66,9 +71,9 @@ After saving your changes in 'settings.json', restart Transmission by running::
 Adding Torrents
 ---------------
 
-Transmission can facilitate provisioning content onto your IIAB, e.g. by adding thousands of KA Lite videos from places like: http://pantry.learningequality.org/downloads/ka-lite/0.17/content/
+Transmission can facilitate provisioning content onto your IIAB, e.g. by adding thousands of KA Lite videos from places like: https://pantry.learningequality.org/downloads/ka-lite/0.17/content/
 
-Please read the lettered instructions (A, B, C, D) in `/etc/iiab/local_vars.yml <http://wiki.laptop.org/go/IIAB/local_vars.yml>`_ and 'KA Lite Administration: What tips & tricks exist?' at http://FAQ.IIAB.IO outlining how to use Transmission to download and then install KA Lite content.
+Please read the lettered instructions (A, B, C, D) in `/etc/iiab/local_vars.yml <https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it%3F>`_ and 'KA Lite Administration: What tips & tricks exist?' at http://FAQ.IIAB.IO outlining how to use Transmission to download and then install KA Lite content.
 
 You can also download other torrents using Transmission's web interface, or by typing `transmission-remote <https://linux.die.net/man/1/transmission-remote>`_ at the command-line::
 
@@ -103,19 +108,36 @@ More advanced configuration and status are in directory ``/var/lib/transmission-
   stats.json
   torrents/
 
-These are further explained in https://github.com/transmission/transmission/wiki/Configuration-Files (to align with the above, apt package transmission-daemon sets user debian-transmission's home directory to ``/var/lib/transmission-daemon`` in /etc/passwd).
+These are further explained in |ss| https://github.com/transmission/transmission/wiki/Configuration-Files |se| (to align with the above, apt package transmission-daemon sets user debian-transmission's home directory to ``/var/lib/transmission-daemon`` in /etc/passwd).
+
+Docs
+----
+
+As of June 2023, these docs appear to be the most up-to-date:
+
+- https://github.com/transmission/transmission/tree/main/docs
+   - https://github.com/transmission/transmission/blob/main/docs/Building-Transmission.md
+   - https://github.com/transmission/transmission/blob/main/docs/Configuration-Files.md
+   - https://github.com/transmission/transmission/blob/main/docs/Editing-Configuration-Files.md
+   - https://github.com/transmission/transmission/blob/main/docs/Headless-Usage.md
+   - https://github.com/transmission/transmission/blob/main/docs/rpc-spec.md
+      - https://transmission-rpc.readthedocs.io
+- https://cli-ck.io/transmission-cli-user-guide/ (2016 but still useful)
+   - https://github.com/transmission/transmission#command-line-interface-notes ("``transmission-cli`` is deprecated and exists primarily to support older hardware dependent upon it. In almost all instances, ``transmission-remote`` should be used instead.")
+- https://wiki.archlinux.org/title/transmission (updated regularly)
+- https://trac.transmissionbt.com/wiki (2006-2019)
 
 Logging
 -------
 
-To turn on logging and/or record the Process ID (PID), follow these instructions: https://pawelrychlicki.pl/Home/Details/59/transmission-daemon-doesnt-create-a-log-file-nor-a-pid-file-ubuntu-server-1804
+Increase logging by changing transmission-daemon's ``--log-level=error`` to ``--log-level=debug`` in ``/lib/systemd/system/transmission-daemon.service``
 
-This gives permissions to user ``debian-transmission`` — if you use these 3 lines in ``/lib/systemd/system/transmission-daemon.service`` :
+(Options are: ``critical``, ``error``, ``warn``, ``info``, ``debug`` or ``trace``)
 
-::
+Then run::
 
-  RuntimeDirectory=transmission-daemon
-  LogsDirectory=transmission-daemon
-  ExecStart=/usr/bin/transmission-daemon -f --log-error --log-debug --logfile /var/log/transmission-daemon/transmission.log --pid-file /run/transmission-daemon/transmission.pid
+  systemctl daemon-reload
+  systemctl restart transmission-daemon
+  journalctl -eu transmission-daemon
 
 Noting that one should not normally edit files in ``/lib`` or ``/usr/lib`` — systemd has a command for customizing unit files: ``systemctl edit --full transmission-daemon.service``

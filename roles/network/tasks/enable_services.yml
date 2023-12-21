@@ -1,70 +1,19 @@
-- name: Disable dhcpd service
-  service:
-    name: dhcpd
-    enabled: no
-  when: (dhcpd_install or dhcpd_installed is defined) and not dhcpd_enabled
-
-# service is restarted with NM dispatcher.d script
-- name: Enable dhcpd service
-  service:
-    name: dhcpd
-    enabled: yes
-  when: dhcpd_install and dhcpd_enabled
-
-- name: Install /etc/sysconfig/dhcpd, /etc/dhcpd-iiab.conf from templates (root:root, 0644 by default)
-  template:
-    src: "{{ item.src }}"
-    dest: "{{ item.dest }}"
-    # owner: root
-    # group: root
-    # mode: "{{ item.mode }}"
-  with_items:
-   - { src: 'dhcp/dhcpd-env.j2', dest: '/etc/sysconfig/dhcpd' }
-   - { src: 'dhcp/dhcpd-iiab.conf.j2', dest: '/etc/dhcpd-iiab.conf' }
-  when: dhcpd_install and dhcpd_enabled
-
-- name: Install /etc/named-iiab.conf and two *.zone.db files into /var/named-iiab (root:root, 0644 by default)
-  template:
-    src: "{{ item.src }}"
-    dest: "{{ item.dest }}"
-    # owner: root
-    # group: root
-    # mode: "{{ item.mode }}"
-  with_items:
-   - { src: 'named/named-iiab.conf.j2', dest: '/etc/named-iiab.conf' }
-   - { src: 'named/school.local.zone.db', dest: '/var/named-iiab/' }
-   - { src: 'named/school.internal.zone.db', dest: '/var/named-iiab/' }
-  when: named_install and named_enabled
-
-- name: Enable named service ({{ dns_service }}) if named_enabled
-  systemd:
-    name: "{{ dns_service }}"
-    enabled: yes
-  when: named_install and named_enabled
-
-- name: Disable named service ({{ dns_service }}) if not named_enabled
-  systemd:
-    name: "{{ dns_service }}"
-    enabled: no
-  when: (named_install or named_installed is defined) and not named_enabled
-
 - name: Install /etc/dnsmasq.d/iiab.conf from template, when dnsmasq_enabled and isn't Appliance
   template:
     src: network/dnsmasq.conf.j2
     dest: /etc/dnsmasq.d/iiab.conf
-  when: dnsmasq_install and dnsmasq_enabled and (iiab_network_mode != "Appliance")
+  when: iiab_network_mode != "Appliance"
 
 - name: Install /etc/hosts.dnsmasq from template for /etc/dnsmasq.d/iiab.conf (instead of using /etc/hosts)
   template:
     src: network/hosts-dnsmasq.j2
     dest: /etc/hosts.dnsmasq
-  when: dnsmasq_install and dnsmasq_enabled and (iiab_network_mode != "Appliance")
+  when: iiab_network_mode != "Appliance"
 
 - name: Update /etc/dnsmasq.d/dnsmasq-iiab for custom dns setting
   template:
     src: network/dnsmasq-iiab
     dest: /etc/dnsmasq.d/dnsmasq-iiab
-  when: dnsmasq_install    # 2020-05-10: Are all these dnsmasq_install conditions really still necessary ?
 
 ## Another way to skin the cat
 ##- name: Check if systemd service networkd-dispatcher is enabled
@@ -81,26 +30,19 @@
 #  command: systemctl is-enabled networkd-dispatcher
 #  register: nd_enabled
 #  ignore_errors: True
-#
-#- debug:
-#    var: nd_enabled
 
 - name: Check if /etc/networkd-dispatcher/routable.d exists
   stat:
     path: /etc/networkd-dispatcher/routable.d
   register: nd_dir
 
-#- debug:
-#    var: nd_dir
-
 - name: To restart dnsmasq whenever br0 comes up, install /etc/networkd-dispatcher/routable.d/dnsmasq.sh from template (if isn't Appliance, and directory /etc/networkd-dispatcher/routable.d exists, i.e. OS's like Ubuntu 18.04 or later) (root:root by default)
   template:
     src: roles/network/templates/network/dnsmasq.sh.j2
     dest: /etc/networkd-dispatcher/routable.d/dnsmasq.sh
     mode: 0755
-    # owner: root
-    # group: root
-  when: dnsmasq_install and dnsmasq_enabled and nd_dir.stat.exists and nd_dir.stat.isdir and (iiab_network_mode != "Appliance")
+  when: nd_dir.stat.exists and nd_dir.stat.isdir and (iiab_network_mode != "Appliance")
+  #when: dnsmasq_install and dnsmasq_enabled and nd_dir.stat.exists and nd_dir.stat.isdir and (iiab_network_mode != "Appliance")
   #when: dnsmasq_install and dnsmasq_enabled and nd_enabled is defined and nd_enabled.stdout == "enabled" and nd_dir.stat.exists and nd_dir.stat.isdir and (iiab_network_mode != "Appliance")
   #when: dnsmasq_install and dnsmasq_enabled and systemd_out.status.UnitFileState == "enabled" and networkd_dir.stat.exists and networkd_dir.stat.isdir and (iiab_network_mode != "Appliance")
 
@@ -108,44 +50,33 @@
   file:
     path: /etc/dnsmasq.d/iiab.conf
     state: absent
-  when: (not dnsmasq_enabled) or (iiab_network_mode == "Appliance")
+  when: not dnsmasq_enabled or iiab_network_mode == "Appliance"
 
 - name: Enable iiab-dnsmasq systemd service, if dnsmasq_enabled
   systemd:
     name: iiab-dnsmasq
     enabled: yes
-  when: dnsmasq_install and dnsmasq_enabled
+  when: dnsmasq_enabled
 
 - name: Disable iiab-dnsmasq, if not dnsmasq_enabled
   systemd:
     name: iiab-dnsmasq
     enabled: no
-  when: dnsmasq_install and not dnsmasq_enabled
+  when: not dnsmasq_enabled
 
-# - name: Enable DansGuardian systemd service, if dansguardian_enabled
-#   systemd:
-#     name: dansguardian
-#     enabled: yes
-#   when: dansguardian_install and dansguardian_enabled
-
-# - name: Disable DansGuardian, if not dansguardian_enabled
-#   systemd:
-#     name: dansguardian
-#     enabled: no
-#   when: (dansguardian_install or dansguardian_installed is defined) and not dansguardian_enabled
 
 - name: Mandate 'HTTPCACHE_ON=True' in {{ iiab_env_file }} - if squid_install [{{ squid_install }}] and squid_enabled [{{ squid_enabled }}]
   lineinfile:
     path: "{{ iiab_env_file }}"
     regexp: '^HTTPCACHE_ON=*'
     line: 'HTTPCACHE_ON=True'
-  when: squid_install and squid_enabled
+  when: squid_installed is defined and squid_enabled
 
 - name: Enable systemd service '{{ proxy }}' - if squid_install and squid_enabled
   systemd:
     name: "{{ proxy }}"    # squid (or 'squid3' on vars/debian-8.yml, vars/raspbian-8.yml)
     enabled: yes
-  when: squid_install and squid_enabled
+  when: squid_installed is defined and squid_enabled
 
 - name: Install /etc/{{ proxy }}/squid.conf from template (root:root, 0644 by default) - and create a timestamped backup of the original - if squid_install and squid_enabled
   template:
@@ -154,7 +85,7 @@
     # owner: "{{ proxy_user }}"    # proxy (or 'squid' on vars/centos-7.yml, vars/fedora-18.yml, vars/fedora-12.yml)
     # group: "{{ proxy_user }}"
     backup: yes
-  when: squid_install and squid_enabled
+  when: squid_installed is defined and squid_enabled
 
 # - name: Point /etc/init.d/{{ proxy }} to /etc/{{ proxy }}/squid-iiab.conf - if squid_install and squid_enabled
 #   lineinfile:
@@ -167,46 +98,22 @@
   systemd:
     name: "{{ proxy }}"
     enabled: no
-  when: (squid_install or squid_installed is defined) and not squid_enabled
+  when: squid_installed is defined and not squid_enabled
 
 - name: Revert {{ iiab_env_file }} to 'HTTPCACHE_ON=False' - if squid_install and not squid_enabled
   lineinfile:
     path: "{{ iiab_env_file }}"
     regexp: '^HTTPCACHE_ON=*'
     line: 'HTTPCACHE_ON=False'
-  when: squid_install and not squid_enabled
+  when: squid_installed is defined and not squid_enabled
 
-# - name: Enable Wondershaper service, if wondershaper_enabled
-#   systemd:
-#     name: wondershaper
-#     enabled: yes
-#   when: wondershaper_install and wondershaper_enabled
-
-# - name: Disable Wondershaper service, if not wondershaper_enabled
-#   systemd:
-#     name: wondershaper
-#     enabled: no
-#   when: (wondershaper_install or wondershaper_installed is defined) and not wondershaper_enabled
 
 # check-LAN should be iptables.yml remove later
 - name: Install clean copy of /usr/bin/iiab-gen-iptables from template (root:root by default)
   template:
     src: gateway/iiab-gen-iptables
     dest: /usr/bin/iiab-gen-iptables
-    # owner: root
-    # group: root
     mode: 0755
-
-- name: Install /usr/bin/iiab-internet-on|off from template (root:root by default)
-  template:
-    src: "{{ item }}"
-    dest: /usr/bin/
-    # owner: root
-    # group: root
-    mode: 0755
-  with_items:
-    - gateway/iiab-internet-on
-    - gateway/iiab-internet-off
 
 
 - name: Add 'squid' variable values to {{ iiab_ini_file }} - if squid_installed is defined
@@ -221,29 +128,3 @@
     - option: squid_enabled
       value: "{{ squid_enabled }}"
   when: squid_installed is defined
-
-# - name: Add 'dansguardian' variable values to {{ iiab_ini_file }}
-#   ini_file:
-#     path: "{{ iiab_ini_file }}"
-#     section: dansguardian
-#     option: "{{ item.option }}"
-#     value: "{{ item.value | string }}"
-#   with_items:
-#     - option: dansguardian_install
-#       value: "{{ dansguardian_install }}"
-#     - option: dansguardian_enabled
-#       value: "{{ dansguardian_enabled }}"
-#   when: dansguardian_installed is defined
-
-# - name: Add 'wondershaper' variable values to {{ iiab_ini_file }}
-#   ini_file:
-#     path: "{{ iiab_ini_file }}"
-#     section: wondershaper
-#     option: "{{ item.option }}"
-#     value: "{{ item.value | string }}"
-#   with_items:
-#     - option: wondershaper_install
-#       value: "{{ wondershaper_install }}"
-#     - option: wondershaper_enabled
-#       value: "{{ wondershaper_enabled }}"
-#   when: wondershaper_installed is defined

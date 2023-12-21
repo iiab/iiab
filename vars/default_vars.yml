@@ -13,8 +13,14 @@
 
 
 # IIAB (PRE-)release version number, for {{ iiab_env_file }}
-iiab_base_ver: 8.0
+iiab_base_ver: 8.1
 iiab_revision: 0
+
+# 2022-06-23: ./iiab-install (with 'sudo iiab') follow the traditional linear
+# install path, intentionally overriding this value, until "SOFTWARE INSTALL IS
+# COMPLETE".  But you can run './iiab-install --risky' if you truly need
+# iiab-install to run with 'skip_role_on_error: True' (PRs #3255, #3256, #3262)
+skip_role_on_error: True
 
 iiab_etc_path: /etc/iiab
 
@@ -31,7 +37,7 @@ iiab_dir: "{{ iiab_base }}/iiab"
 pip_packages_dir: "{{ iiab_base }}/pip-packages"
 yum_packages_dir: "{{ iiab_base }}/yum-packages"
 downloads_dir: "{{ iiab_base }}/downloads"
-iiab_download_url: http://download.iiab.io/packages
+iiab_download_url: https://download.iiab.io/packages
 
 content_base: /library
 doc_base: "{{ content_base }}/www"
@@ -66,9 +72,6 @@ admin_console_group: iiab-admin    # This group & sudo log in to Admin Console.
 # Obtain a password hash - OLD WAY:
 #    python -c 'import crypt; print crypt.crypt("<plaintext>", "$6$<salt>")'
 
-# Time Zone (php used to need timezone set).  SEE: roles/0-init/tasks/tz.yml
-local_tz: "{{ ansible_date_time.tz }}"
-
 # Set these to False if you do not want to install/enable IIAB Admin Console
 admin_console_install: True
 admin_console_enabled: True
@@ -86,18 +89,18 @@ js_menu_install: True
 # IIAB Networking README: https://github.com/iiab/iiab/tree/master/roles/network
 # IIAB Networking Doc: https://github.com/iiab/iiab/wiki/IIAB-Networking
 # Read it offline too: http://box/info > "IIAB Networking"
+network_install: True
+network_enabled: True
 
 # NETWORK PARAMETERS FOLLOW ACROSS THE NEXT 100 LINES, as enabled by Ansible's
 # NETWORK role (/opt/iiab/iiab/roles/network).  SEE ALSO:
 # https://github.com/iiab/iiab/blob/master/roles/network/defaults/main.yml
 
-# The following variable may be useful in debugging:
-disregard_network: False    # Use cache, or error out if cache does not exist.
-
 iiab_hostname: box
 iiab_domain: lan
-lan_ip: 172.18.96.1
-lan_netmask: 255.255.224.0
+lan_ip: 10.10.10.10
+network_172: False    # Change to True if you set the above to 172.18.96.1
+lan_netmask: 255.255.255.0    # Change to 255.255.224.0 if using 172.18.96.1
 
 # Internal Wi-Fi Access Point
 # Values are used if there is an internal Wi-Fi adapter and hostapd is enabled.
@@ -106,7 +109,17 @@ lan_netmask: 255.255.224.0
 # YOU'LL PREVENT OLDER LAPTOPS/PHONES/TABLETS (WHICH REQUIRE 2.4 GHz) FROM
 # CONNECTING TO YOUR IIAB'S INTERNAL HOTSPOT.  See "wifi_up_down: True" below.
 #
-# Raspberry Pi OS requires WiFi country -- SET THIS IN /etc/iiab/local_vars.yml
+# Raspberry Pi OS requires WiFi country since March 2018.
+#
+# If you're running Raspberry Pi OS, you may have already set the country code
+# in /etc/wpa_supplicant/wpa_supplicant.conf e.g. if you ran raspi-config or used
+# the Wi-Fi widget in the top-right of its graphical desktop.
+#
+# If so, this detected value will be considered authoritative, and will be used
+# to populate /etc/hostapd/hostapd.conf
+#
+# Finally, if IIAB does not detect a country code from your OS, the following
+# fallback variable will be used instead: (to populate /etc/hostapd/hostapd.conf)
 host_country_code: US
 host_ssid: Internet in a Box
 host_wifi_mode: g
@@ -118,9 +131,10 @@ hostapd_enabled: True
 
 # Raspberry Pi 3 B+ and 4 OS's don't allow more than ~4 students to use the
 # internal WiFi hotspot.  Increase this to 19 or 24 student WiFi devices (or
-# 32 on older OS's from 2020) using EXACTLY 1 of the 4 lines below:
+# 32 on older OS's from 2020) using EXACTLY 1 of the 5 lines below:
 #
 #rpi3bplus_rpi4_wifi_firmware: os    # Use your OS's WiFi firmware e.g. 7.45.241
+#rpi3bplus_rpi4_wifi_firmware: ub    # Ubuntu-only OLD firmware e.g. 7.45.234
 rpi3bplus_rpi4_wifi_firmware: 19     # SEE: github.com/iiab/iiab/issues/2853
 #rpi3bplus_rpi4_wifi_firmware: 24    # REQUIRES "wifi_up_down: False" BELOW!
 #rpi3bplus_rpi4_wifi_firmware: 32    # UNRELIABLE (INTERMITTENT) with 2021+ OS's
@@ -130,7 +144,8 @@ rpi3bplus_rpi4_wifi_firmware: 19     # SEE: github.com/iiab/iiab/issues/2853
 # Raspberry Pi Zero W and 3 OS's don't allow more than ~10 students to use the
 # internal WiFi hotspot.  Or try increasing this to 30 student WiFi devices:
 #
-rpizerow_rpi3_wifi_firmware: os     # Use yr OS WiFi firmware e.g. 7.45.98.118
+rpizerow_rpi3_wifi_firmware: os     # Use yr OS WiFi firmware e.g. 7.45.98
+#rpizerow_rpi3_wifi_firmware: ub    # Ubuntu-only OLD firmware e.g. 7.45.98.118
 #rpizerow_rpi3_wifi_firmware: 30    # Or firmware 7.45.98.65 from 2018-09-28
 
 wifi_up_down: True    # AP+STA mode: Uses "ap0" WiFi adapter for upstream WiFi
@@ -155,7 +170,7 @@ wan_netmask:       # wan_netmask: 255.255.255.0
 wan_gateway:       # wan_gateway: 192.168.1.254
 # If nec wan_nameserver can override ISP-provided DNS servers via dnsmasq:
 # /etc/resolv.conf dictates which backend is used for the machine itself, so
-# 127.0.0.1 means you get dnsmasq (so it works right away on RaspiOS) while
+# 127.0.0.1 means you get dnsmasq (so it works right away on RasPiOS) while
 # 127.0.0.53 gives you systemd-networkd (so Ubuntu itself does NOT use this
 # dnsmasq-specified upstream DNS [e.g. wan_nameserver] but its LAN clients do!)
 wan_nameserver:    # wan_nameserver: 192.168.1.254 or 8.8.8.8 or 1.1.1.1
@@ -178,23 +193,23 @@ ports_externally_visible: 3     # ssh + http-or-https + common IIAB services
 #
 # Or further customize your iptables firewall by editing:
 # /opt/iiab/iiab/roles/network/templates/gateway/iiab-gen-iptables
-# And then run: cd /opt/iiab/iiab; ./iiab-network
+# And then run: sudo iiab-network
 
 # dnsmasq - handles DHCP and DNS
 dnsmasq_install: True
 dnsmasq_enabled: True
 
 # UNMAINTAINED as of July 2021
-dhcpd_install: False
-dhcpd_enabled: False
+#dhcpd_install: False
+#dhcpd_enabled: False
 
 # UNMAINTAINED as of July 2021
 # named (BIND)
-named_install: False
-named_enabled: False
+#named_install: False
+#named_enabled: False
 block_DNS: False
 
-# Enable in local_vars.yml AFTER installing IIAB!  Then run "cd /opt/iiab/iiab; ./iiab-network"
+# Enable in local_vars.yml AFTER installing IIAB!  Then run: sudo iiab-network
 dns_jail_enabled: False
 
 # UNMAINTAINED as of October 2017: https://github.com/iiab/iiab/pull/382
@@ -210,15 +225,18 @@ sshd_enabled: True
 sshd_port: 22    # Not fully functional.  SEE: roles/sshd/tasks/install.yml
 
 # https://remote.it can help you remotely maintain an IIAB.
+# INSTRUCTIONS: https://github.com/iiab/iiab/tree/master/roles/remoteit
 remoteit_install: True
 remoteit_enabled: False
+# OPTION #1: Run 'sudo iiab-remoteit' later.  OPTION #2: Set this now:
+# remoteit_license_key: 592AA9BB-XXXX-YYYY-ZZZZ-6E27654C3DF6
 
+# SECURITY WARNING: https://wiki.iiab.io/go/Security
 openvpn_install: True
 openvpn_enabled: False
-# For /etc/iiab/openvpn_handle
 openvpn_handle: ""    # Empty string on purpose since ~2016, for /etc/iiab/uuid
-# SEE https://github.com/iiab/iiab/blob/master/roles/openvpn/tasks/main.yml#L45
-# cron seems necessary on CentOS:
+# SEE https://github.com/iiab/iiab/blob/master/roles/openvpn/tasks/main.yml#L5-L20
+# cron seemed necessary on CentOS:
 openvpn_cron_enabled: False
 # General OpenVPN settings
 openvpn_server: xscenet.net
@@ -232,7 +250,7 @@ openvpn_server_port: 1194
 
 # dnsmasq is installed here -- configure LATER in 'network', after Stage 9.
 # (The full network stage runs after 9-LOCAL-ADDONS.  Or manually run
-# "cd /opt/iiab/iiab; sudo ./iiab-network").  Design under discussion: #2876
+# "sudo iiab-network").  Design under discussion: #2876
 
 # Some prefer 512MB for Zero W, others prefer 2048MB or higher for RPi 3 and 4.
 # Please see recommendations at: https://itsfoss.com/swap-size/
@@ -247,12 +265,13 @@ pi_swap_file_size: 1024
 
 # 3-BASE-SERVER
 
-# 2020-09-24: MySQL / MariaDB is MANDATORY but still evolving - please see:
-# https://github.com/iiab/iiab/blob/master/roles/mysql/tasks/install.yml
-# https://github.com/iiab/iiab/blob/master/roles/3-base-server/tasks/main.yml
-# THESE 2 LEGACY VARS ARE PRESERVED BUT HAVE NO EFFECT:
-mysql_install: True
-mysql_enabled: True
+# 2023-11-05: MySQL (actually MariaDB) had been mandatory, installed on every
+# IIAB by 3-base-server.  Now installed on demand -- as a dependency of Matomo,
+# MediaWiki, Nextcloud, PBX (for FreePBX), WordPress &/or Admin Console.
+# SO BOTH VALUES BELOW ARE INITIALLY IGNORED:
+mysql_install: False
+mysql_enabled: False
+mysql_service: mariadb
 
 # 2020-09-24: NGINX is MANDATORY but still evolving - please see:
 # https://github.com/iiab/iiab/blob/master/roles/nginx/README.md
@@ -281,6 +300,8 @@ squid_install: False
 squid_enabled: False    # Enabling this ~= 'iiab_gateway_enabled: True' (ABOVE)
 gw_squid_whitelist: False    # Works with HTTP sites, not HTTPS sites !
 gw_block_https: False
+proxy: squid         # Admin Console uses
+proxy_user: proxy    # Could move to roles/network/defaults/main.yml
 
 # UNMAINTAINED as of July 2021
 # DansGuardian REQUIRES Squid (above) be installed & enabled.
@@ -301,6 +322,7 @@ iiab_usb_lib_show_all: True
 # Set umask=0000 for VFAT, NTFS and exFAT in /etc/usbmount/usbmount.conf so
 # Kolibri can export & import channels to USB sticks/drive:
 usb_lib_umask0000_for_kolibri: True
+systemd_location: /lib/systemd/system    # 2-common iiab-startup also uses
 
 # Common UNIX Printing System (CUPS)
 cups_install: False
@@ -313,20 +335,25 @@ samba_enabled: False
 samba_udp_ports: 137:138
 samba_tcp_mports: 139,445
 shared_dir : "{{ content_base }}/public"    # /library/public
+smb_service: smbd    # Admin Console uses
+nmb_service: nmbd    # Could move to roles/samba/defaults/main.yml
 
 # roles/www_options HANDLES THE 3 VARS BELOW:
 
-# For schools that use WordPress/Nextcloud/Moodle/PBX intensively:
+# Set to True if intensively using Matomo/PBX/WordPress:
 nginx_high_php_limits: False
-# WARNING: Enabling this might cause excess use of RAM/disk or other resources!
-# roles/www_options & roles/moodle FORCE high limits if 'moodle_install: True'
-# REGARDLESS: AFTER INSTALLING IIAB, PLEASE VERIFY THESE 6 SETTINGS...
-# https://github.com/iiab/iiab/blob/master/roles/www_options/tasks/main.yml#L53-L133
+# SIMILARLY: 'moodle_install: True' and 'nextcloud_install: True' effectively
+# force this, via roles/www_options & roles/moodle & roles/nextcloud
+# WARNING: This might cause excess use of RAM/disk or other resources!
+# WARNING: AFTER INSTALLING IIAB, PLEASE VERIFY THESE 6 SETTINGS...
+# https://github.com/iiab/iiab/blob/master/roles/www_options/tasks/php-settings.yml
 # ...ARE SUITABLE FOR YOUR HARDWARE, as saved in: /etc/php/<VERSION>/*/php.ini
 # ALSO: ADJUST "client_max_body_size 10000M;" AS NEC, IN: /etc/nginx/server.conf
 
 # Make this True to enable http://box/js-menu/menu-files/services/power_off.php
 apache_allow_sudo: False
+apache_service: apache2
+apache_user: www-data    # Admin Console uses
 
 # Toggle iiab-refresh-wiki-docs scraping for offline docs (http://box/info)
 nodocs: False
@@ -338,20 +365,20 @@ nodocs: False
 # http://lists.laptop.org/pipermail/server-devel/ if you're able to help test.
 
 # UNMAINTAINED since about 2012-2017
-xo_services_install: False    # 2020-01-23: UNUSED
-xo_services_enabled: False    # 2020-01-23: Used in idmgr/tasks/main.yml & iiab-admin-console/roles/console/files/htmlf/20-configure.html
+#xo_services_install: False    # 2020-01-23: UNUSED
+#xo_services_enabled: False    # 2020-01-23: Used in idmgr/tasks/main.yml & iiab-admin-console/roles/console/files/htmlf/20-configure.html
 
 # UNMAINTAINED since about 2012-2017
-activity_server_install: False    # 2020-01-23: Used in 5-xo-services/tasks/main.yml (originally defined in activity-server/defaults/main.yml)
-activity_server_enabled: False    # 2020-01-23: Used in activity-server/tasks/main.yml (originally defined in activity-server/defaults/main.yml)
+#activity_server_install: False    # 2020-01-23: Used in 5-xo-services/tasks/main.yml (originally defined in activity-server/defaults/main.yml)
+#activity_server_enabled: False    # 2020-01-23: Used in activity-server/tasks/main.yml (originally defined in activity-server/defaults/main.yml)
 
 # UNMAINTAINED since about 2012-2017: consider 'ejabberd' in Stage 6-GENERIC-APPS below?
-ejabberd_xs_install: False    # 2020-01-23: Used in 5-xo-services/tasks/main.yml & roles/ejabberd_xs/tasks/main.yml
-ejabberd_xs_enabled: False    # 2020-01-23: Used in roles/ejabberd_xs/tasks/main.yml
+#ejabberd_xs_install: False    # 2020-01-23: Used in 5-xo-services/tasks/main.yml & roles/ejabberd_xs/tasks/main.yml
+#ejabberd_xs_enabled: False    # 2020-01-23: Used in roles/ejabberd_xs/tasks/main.yml
 
 # UNMAINTAINED since about 2012-2017: change calibre_port from 8080 to 8010 below, if you use idmgr
-idmgr_install: False    # 2020-01-23: Used in 5-xo-services/tasks/main.yml
-idmgr_enabled: False    # 2020-01-23: UNUSED
+#idmgr_install: False    # 2020-01-23: Used in 5-xo-services/tasks/main.yml
+#idmgr_enabled: False    # 2020-01-23: UNUSED
 
 
 # 6-GENERIC-APPS
@@ -359,27 +386,27 @@ idmgr_enabled: False    # 2020-01-23: UNUSED
 # Simple, Self-Hosted Web Radio - from AzuraCast.com
 azuracast_install: False
 azuracast_enabled: False    # This var is currently IGNORED
-azuracast_http_port: 10080
-azuracast_https_port: 10443
+azuracast_http_port: 12080
+azuracast_https_port: 12443
 #
-# AzuraCast needs many ports in the 8000:8100 range by default, but IIAB
-# services conflict with those ports so this variable below sets a sane prefix.
-# e.g. setting the below variable to 10 will result in port ranges 10000-10100
+# AzuraCast needs many ports in the 8000:8496 range by default, but IIAB
+# services conflict, so this variable below sets a sane prefix.
+# e.g. setting the below variable to 10 will result in port range 10000-10499
 # being reserved for AzuraCast:
 azuracast_port_range_prefix: 10
 
 # UNMAINTAINED as of January 2020: https://github.com/iiab/iiab/issues/2056
-dokuwiki_install: False
-dokuwiki_enabled: False
-dokuwiki_url: /dokuwiki
+#dokuwiki_install: False
+#dokuwiki_enabled: False
+#dokuwiki_url: /dokuwiki
 
 # UNMAINTAINED as of November 2019
-ejabberd_install: False
-ejabberd_enabled: False
+#ejabberd_install: False
+#ejabberd_enabled: False
 
 # UNMAINTAINED as of July 2021
-elgg_install: False
-elgg_enabled: False
+#elgg_install: False
+#elgg_enabled: False
 # elgg_mysql_password: $6$iiab51$jeTwnATcbaa92xo0QBTgjLBU.5aVDDrbKeNyyC99R/TAWz6pvfzj.L7lfnOVVjD78nxqT.gkNn6XZmuRV0W3o1
 elgg_mysql_password: elgg4kids
 
@@ -396,8 +423,8 @@ jupyterhub_venv: /opt/iiab/jupyterhub
 jupyterhub_port: 8000
 
 # Lokole (email for rural communities) from https://ascoderu.ca
-lokole_install: False
-lokole_enabled: False
+lokole_install: False    # 2022-03-13: Python 3.9+ work
+lokole_enabled: False    # https://github.com/iiab/iiab/issues/3132
 # lokole_sim_type can be: 'hologram', 'Ethernet', 'LocalOnly', or 'mkwvconf'
 # Details: https://github.com/ascoderu/lokole/blob/master/install.py#L35
 lokole_sim_type: LocalOnly
@@ -417,7 +444,7 @@ mosquitto_port: 1883
 # JupyterHub, nodered (Node-RED), pbx (Asterix, FreePBX) &/or Sugarizer:
 nodejs_install: False
 nodejs_enabled: False
-nodejs_version: 16.x    # was 8.x til 2019-02-02, 10.x til 2019-12-21, 12.x til 2020-10-29, 14.x til 2021-06-17
+nodejs_version: 20.x    # was 8.x til 2019-02-02, 10.x til 2019-12-21, 12.x til 2020-10-29, 14.x til 2021-06-17, 16.x til 2022-04-20, 18.x til 2023-05-20
 
 # Flow-based visual programming for wiring together IoT hardware devices etc
 nodered_install: False
@@ -439,7 +466,7 @@ nextcloud_enabled: False
 # 2020-01-07: If installing IIAB often, download.nextcloud.com may throttle
 # you to ~100 kbit/sec, delaying your IIAB install by an hour or more (#2112).
 # Uncomment the following line to end that: (might install an older Nextcloud!)
-# nextcloud_dl_url: http://d.iiab.io/packages/latest.tar.bz2
+# nextcloud_dl_url: https://d.iiab.io/packages/latest.tar.bz2
 
 # If using WordPress intensively, set nginx_high_php_limits further above.
 wordpress_install: False
@@ -457,7 +484,9 @@ kalite_root: "{{ content_base }}/ka-lite"    # /library/ka-lite
 # Successor to KA Lite, for offline-first teaching and learning - from learningequality.org
 kolibri_install: False
 kolibri_enabled: False
-kolibri_language: en    # See KOLIBRI_SUPPORTED_LANGUAGES at the bottom of https://github.com/learningequality/kolibri/blob/develop/kolibri/utils/i18n.py
+kolibri_language: en     # See KOLIBRI_SUPPORTED_LANGUAGES at the bottom of https://github.com/learningequality/kolibri/blob/develop/kolibri/utils/i18n.py
+kolibri_home: "{{ content_base }}/kolibri"    # /library/kolibri
+kolibri_user: kolibri    # WARNING: https://github.com/learningequality/kolibri-installer-debian/issues/115
 kolibri_http_port: 8009
 
 # kiwix_install: True is REQUIRED, if you install IIAB's Admin Console
@@ -474,10 +503,11 @@ kiwix_apk_src: https://download.kiwix.org/release/kiwix-android/kiwix.apk
 postgresql_install: False
 postgresql_enabled: False
 
-# Warning: Moodle is a serious LMS, that takes a while to install.
+# Warning: Moodle is a serious LMS, that takes a while to install
 moodle_install: False
 moodle_enabled: False
-# If using Moodle intensively, set nginx_high_php_limits further above.
+# FYI 'nginx_high_php_limits: True' (explained above) is mandated with Moodle,
+# as auto-enacted by roles/www_options/tasks/php-settings.yml
 
 # Regional OSM vector maps use far less disk space than bitmap/raster versions.
 # Instructions: https://github.com/iiab/iiab/wiki/IIAB-Maps
@@ -485,7 +515,6 @@ osm_vector_maps_install: True
 osm_vector_maps_enabled: False
 # Set to "True" to download .mbtiles files from Archive.org (might be slow!)
 maps_from_internet_archive: False
-iiab_map_url : http://download.iiab.io/content/OSM/vector-tiles/maplist/hidden
 vector_map_path: "{{ content_base }}/www/osm-vector-maps"    # /library/www/osm-vector-maps
 
 # MongoDB (/library/dbdata/mongodb) greatly enhances the Sugarizer experience.
@@ -515,6 +544,7 @@ sugarizer_port: 8089
 # Transmission is a BitTorrent downloader for large Content Packs etc
 transmission_install: False
 transmission_enabled: False
+transmission_compile_latest: True
 transmission_username: Admin
 transmission_password: changeme
 
@@ -526,11 +556,11 @@ transmission_group: debian-transmission
 # Monitor downloads at http://box:9091 or http://box:9091/transmission using Admin/changeme
 transmission_http_port: 9091
 transmission_url: /transmission/
-transmission_whitelist: 127.0.0.1,::1,192.168.*.*,172.18.96.*,10.8.0.*
+transmission_whitelist: 127.0.0.1,::1,192.168.*.*,10.10.10,*,172.18.96.*,10.8.0.*
 transmission_whitelist_enabled: "false"    # LOWERCASE STRING for settings.json
 transmission_peer_port: 51413
 
-# Provision Transmission with torrent(s) from http://pantry.learningequality.org/downloads/ka-lite/0.17/content/
+# Provision Transmission with torrent(s) from https://pantry.learningequality.org/downloads/ka-lite/0.17/content/
 transmission_provision: True
 transmission_kalite_version: 0.17
 
@@ -554,6 +584,11 @@ transmission_kalite_languages:
 # AWStats, originally known as Advanced Web Statistics - from https://awstats.sourceforge.io
 awstats_install: True
 awstats_enabled: True
+
+# Matomo is a web analytics alternative to Google Analytics, emphasizing privacy and data ownership.
+matomo_install: True
+matomo_enabled: True
+# If using Matomo intensively, investigate nginx_high_php_limits further above.
 
 # Process supervision tool - from https://mmonit.com/monit/
 # 2020-09-22 WARNING: both vars are IGNORED on Debian 10 due to: iiab/iiab#1849
@@ -609,8 +644,13 @@ internetarchive_port: 4244    # for http://box:4244
 minetest_install: False
 minetest_enabled: False
 minetest_port: 30000
+minetest_working_dir: /usr/share/games/minetest
+
 minetest_server_admin: Admin
-minetest_default_game: carbone-ng    # only carbone-ng and minetest are supported
+# minetest_default_game: carbone-ng    # carbone-ng is not longer compatible so not supported
+minetest_default_game: minetest
+# minetest_default_game: dreambuilder - after 5.6
+minetest_game_dir: "{{ minetest_working_dir }}/games/{{ minetest_default_game }}_game"
 minetest_flat_world: False
 
 # Calibre-Web E-Book Library -- Alternative to Calibre, offers a clean/modern UX
@@ -644,13 +684,15 @@ calibre_web_path: calibre  #NEEDS WORK: https://github.com/iiab/iiab/issues/529
 # Avoid URL collisions w/ calibreweb_url1, calibreweb_url2, calibreweb_url3 below!
 
 # A full-featured PBX (for rural telephony, etc) based on Asterisk and FreePBX.
-# REQUIRES PHP 7.4 e.g. Ubuntu 20.04, Debian 11 -- RaspiOS 11 might also work.
-# INSTRUCTIONS: https://github.com/iiab/iiab/tree/master/roles/pbx#pbx-readme
+# REQUIRES PHP 7.4 e.g. Debian 11 Bullseye or 64-bit RasPiOS IF Bullseye-based.
+# INSTRUCTIONS: https://github.com/iiab/iiab/tree/master/roles/pbx#readme
 # If using PBX intensively, investigate nginx_high_php_limits further above.
 pbx_install: False
 pbx_enabled: False
-pbx_use_apache: True    # 2021-08-17: Set either to 'False' if nec -- please
+pbx_use_apache: False   # 2023-04-03: Set to 'True' if nec -- please also
 pbx_use_nginx: True     # read github.com/iiab/iiab/issues/2914 & #2916, THX!
+# 2023-04-03: For EXPERIMENTAL testing on Raspberry Pi... (#3489, PR #3523)
+asterisk_rpi_patch: False
 asterisk_chan_dongle: False
 pbx_signaling_ports_chan_sip: 5160:5161
 pbx_signaling_ports_chan_pjsip: 5060
@@ -676,7 +718,7 @@ pbx_http_port: 83
 # authserver_install: False
 # authserver_enabled: False
 
-# Unmaintained (better to install from http://teamviewer.com or prep scripts at http://download.iiab.io)
+# Unmaintained (better to install from https://teamviewer.com or prep scripts at https://download.iiab.io)
 # teamviewer_install: False
 # teamviewer_enabled: False
 
@@ -726,45 +768,51 @@ pbx_http_port: 83
 
 
 # OS-DEPENDENT VARS: TURN OFF ALL VARS BELOW AND THEN THE CORRECT
-# /opt/iiab/iiab/vars/<OS>.yml WILL TURN ON WHAT'S APPROPRIATE.  See "How This
-# Works" ~32 lines below, and https://github.com/iiab/iiab/wiki/IIAB-Platforms
+# /opt/iiab/iiab/vars/<OS_VER>.yml WILL TURN ON WHAT'S APPROPRIATE.  See
+# "How This Works" below, and https://github.com/iiab/iiab/wiki/IIAB-Platforms
 
 # Wide to narrow (insofar as poss)
 is_debuntu: False    # Covers all 4: Ubuntu, Linux Mint, Debian, Raspberry Pi OS (Raspbian)
 
 is_ubuntu: False    # Covers: Ubuntu, Linux Mint
+is_ubuntu_2404: False
+is_ubuntu_2310: False
+is_ubuntu_2304: False
+is_ubuntu_2210: False
 is_ubuntu_2204: False
-is_ubuntu_2110: False
-is_ubuntu_2104: False
+#is_ubuntu_2110: False
+#is_ubuntu_2104: False
 is_ubuntu_2004: False
-is_ubuntu_19: False
-is_ubuntu_18: False
-is_ubuntu_17: False
-is_ubuntu_16: False
+#is_ubuntu_19: False
+#is_ubuntu_18: False
+#is_ubuntu_17: False
+#is_ubuntu_16: False
 
 is_linuxmint: False    # Subset of is_ubuntu
 is_linuxmint_21: False
 is_linuxmint_20: False
 
 is_debian: False    # Covers both: Debian, Raspberry Pi OS (Raspbian)
+is_debian_13: False
 is_debian_12: False
 is_debian_11: False
-is_debian_10: False
-is_debian_9: False
-is_debian_8: False
+#is_debian_10: False
+#is_debian_9: False
+#is_debian_8: False
 
 is_raspbian: False    # Covers both: RPi HW + non-RPi HW versions of Raspberry Pi OS (Raspbian)
+is_raspbian_12: False
 is_raspbian_11: False
-is_raspbian_10: False
-is_raspbian_9: False
-is_raspbian_8: False
+#is_raspbian_10: False
+#is_raspbian_9: False
+#is_raspbian_8: False
 
-is_redhat: False    # Not well supported as of 2019, see: https://github.com/iiab/iiab/issues/1434
-is_centos: False
-is_centos_7: False
-is_fedora: False
-is_fedora_22: False
-is_fedora_18: False
+#is_redhat: False    # Unsupported as of 2019, see: https://github.com/iiab/iiab/issues/1434
+#is_centos: False
+#is_centos_7: False
+#is_fedora: False
+#is_fedora_22: False
+#is_fedora_18: False
 
 # How This Works:
 #

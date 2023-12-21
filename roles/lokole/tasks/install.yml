@@ -2,12 +2,16 @@
 # https://github.com/iiab/iiab/blob/master/roles/www_base/templates/iiab-refresh-wiki-docs.sh#L51-L52
 
 
-- name: "Install 8 packages for Lokole: python3, python3-pip, python3-venv, python3-dev, python3-bcrypt, libffi-dev, libssl-dev, libopenjp2-7"
+- name: Record (initial) disk space used
+  shell: df -B1 --output=used / | tail -1
+  register: df1
+
+
+- name: Install 12 packages for Lokole
   apt:
     name:
-      - python3
-      - python3-pip
-      - python3-venv
+      #- python3    # 2022-12-21: IIAB pre-req, see scripts/local_facts.fact
+      #- python3-pip
       - python3-dev
       - python3-bcrypt    # 2019-10-14: Should work across modern Linux OS's
       #- bcrypt does not exist on Ubuntu 19.10
@@ -23,15 +27,16 @@
       - wvdial
     state: present
 
+
 # For development purposes -- To install Lokole from a given commit, add the
 # following line to roles/lokole/defaults/main.yml:
 # lokole_commit: <git_commit_id>
 - name: "OPTIONAL: pip install opwen_email_client (Lokole, git commit {{ lokole_commit }}) from GitHub to {{ lokole_venv }}, if lokole_commit is defined"
   pip:
-    name: "git+https://github.com/ascoderu/lokole.git@{{ lokole_commit }}#egg=opwen_email_client"
+    name: "git+{{ lokole_repo }}@{{ lokole_commit }}#egg=opwen_email_client"
     virtualenv: "{{ lokole_venv }}"
     virtualenv_command: python3 -m venv "{{ lokole_venv }}"
-    extra_args: --no-cache-dir    # To avoid caching issues e.g. soon after new releases hit https://pypi.org/project/opwen-email-client/
+    extra_args: --no-cache-dir --force-reinstall    # To avoid caching issues e.g. soon after new releases hit https://pypi.org/project/opwen-email-client/
   when: lokole_commit is defined
 
 # For development purposes -- To install a given pip version of Lokole, add
@@ -54,12 +59,19 @@
     extra_args: --no-cache-dir    # To avoid caching issues e.g. soon after new releases hit https://pypi.org/project/opwen-email-client/
   when: lokole_commit is undefined and lokole_version is undefined
 
-- name: Compile translations
+# - name: Compile translations
+#   shell: |
+#     python_version=$(python3 -c 'from sys import version_info; print("%s.%s" % (version_info.major, version_info.minor));';)
+#     {{ lokole_venv }}/bin/pybabel compile -d {{ item }}/translations
+#   with_items:
+#     - "{{ lokole_venv }}/lib/python${python_version}/site-packages/opwen_email_client/webapp"
+
+# 2022-12-21: python_version determined by scripts/local_facts.fact -- to match templates/lokole-nginx.conf.j2
+- name: Compile translations for Python {{ python_version }}
   shell: |
-    python_version=$(python3 -c 'from sys import version_info; print("%s.%s" % (version_info.major, version_info.minor));';)
     {{ lokole_venv }}/bin/pybabel compile -d {{ item }}/translations
   with_items:
-    - "{{ lokole_venv }}/lib/python${python_version}/site-packages/opwen_email_client/webapp"
+    - "{{ lokole_venv }}/lib/python{{ python_version }}/site-packages/opwen_email_client/webapp"
 
 - name: Create system {{ lokole_user }} user
   ansible.builtin.user:
@@ -125,6 +137,17 @@
 
 
 # RECORD Lokole AS INSTALLED
+
+- name: Record (final) disk space used
+  shell: df -B1 --output=used / | tail -1
+  register: df2
+
+- name: Add 'lokole_disk_usage = {{ df2.stdout|int - df1.stdout|int }}' to {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+    section: lokole
+    option: lokole_disk_usage
+    value: "{{ df2.stdout|int - df1.stdout|int }}"
 
 - name: "Set 'lokole_installed: True'"
   set_fact:

@@ -1,151 +1,366 @@
-# 1. INSTALL MongoDB PACKAGES OR BINARIES
+# MongoDB Install Docs:
+# https://www.mongodb.com/community/forums/t/installing-mongodb-over-ubuntu-22-04/159931/90
+# https://www.mongodb.com/docs/manual/tutorial/install-mongodb-on-ubuntu/
+# https://www.mongodb.com/docs/manual/installation/
+
+
+- name: Record (initial) disk space used
+  shell: df -B1 --output=used / | tail -1
+  register: df1
+
+
+# 1. INSTALL MongoDB PACKAGES AND/OR BINARIES
 
 # 2019-02-02: Sugarizer with Node.js 10.x requires MongoDB 2.6+ so
 # https://andyfelong.com/2017/08/mongodb-3-0-14-for-raspbian-stretch/ is
 # being used on Raspbian, all I found! (Raspbian's apt pkg is MongoDB 2.4.14)
 #
 # mongodb_stretch_3_0_14_core.zip (20M) & mongodb_stretch_3_0_14_tools.zip (15M)
-# were backed up from andyfelong.com to http://download.iiab.io/packages/
+# were backed up from andyfelong.com to https://download.iiab.io/packages/
 #
 # CLARIF: mongodb_stretch_3_0_14_core.zip IS IN FACT 3.0.14 (core) BUT...
 #         mongodb_stretch_3_0_14_tools.zip IS REALLY 3.0.15 (tools)
 
+# - debug:
+#     msg: '9-STANZA BLOCK BELOW, RUNS *IF* 32-BIT -- i.e. not (ansible_architecture == "aarch64" or ansible_architecture == "x86_64") -- WILL LIKELY BE REMOVED SOON IN 2023, as MongoDB 3.0.1 is insufficient for Sugarizer Server 1.5.0''s new MongoDB 3.2+ REQUIREMENT: https://github.com/iiab/iiab/pull/3478#issuecomment-1444395170'
+
+# - block:
+#   - name: Create dir /tmp/mongodb-3.0.1x (aarch32)
+#     file:
+#       path: /tmp/mongodb-3.0.1x
+#       state: directory
+
+#   - name: Download & unzip 20MB https://download.iiab.io/packages/mongodb_stretch_3_0_14_core.zip to /tmp/mongodb-3.0.1x (aarch32)
+#     unarchive:
+#       remote_src: yes
+#       src: "{{ iiab_download_url }}/mongodb_stretch_3_0_14_core.zip"    # https://download.iiab.io/packages
+#       dest: /tmp/mongodb-3.0.1x
+
+#   - name: Install (move) its 3 CORE binaries from /tmp/mongodb-3.0.1x/core to /usr/bin (aarch32)
+#     shell: mv /tmp/mongodb-3.0.1x/core/* /usr/bin
+
+#   - name: Download & unzip 15MB https://download.iiab.io/packages/mongodb_stretch_3_0_14_tools.zip [IN FACT THIS ONE'S 3.0.15] to /tmp/mongodb-3.0.1x (aarch32)
+#     unarchive:
+#       remote_src: yes
+#       src: "{{ iiab_download_url }}/mongodb_stretch_3_0_14_tools.zip"
+#       dest: /tmp/mongodb-3.0.1x
+
+#   - name: Install (move) its 9 TOOLS binaries from /opt/iiab/downloads/mongodb-3.0.1x/tools to /usr/bin (aarch32)
+#     shell: mv /tmp/mongodb-3.0.1x/tools/* /usr/bin
+
+#   - name: Create Linux group mongodb (aarch32)
+#     group:
+#       name: mongodb
+#       state: present
+
+#   - name: Create Linux user mongodb (aarch32)
+#     user:
+#       name: mongodb
+#       group: mongodb    # primary group
+#       groups: mongodb
+#       home: /var/lib/mongodb
+#       shell: /usr/sbin/nologin
+
+#   - name: Install {{ mongodb_conf }} from template (aarch32)
+#     template:
+#       src: mongod.conf.j2
+#       dest: "{{ mongodb_conf }}"    # /etc/mongod.conf
+
+#   - name: 'Create 2 dirs: /var/lib/mongodb, /var/log/mongodb (mongodb:mongodb)'
+#     file:
+#       state: directory
+#       path: "{{ item }}"
+#       owner: mongodb
+#       group: mongodb
+#     with_items:
+#       - /var/lib/mongodb
+#       - /var/log/mongodb
+
+#   # end block
+#   when: not (ansible_architecture == "x86_64" or ansible_architecture == "aarch64")    # ansible_machine is a bit safer than ansible_architecture (see kiwix/defaults/main.yml)
+
+# - debug:
+#     msg: 9-STANZA BLOCK ABOVE, RAN *IF* 32-BIT -- i.e. not (ansible_architecture == "aarch64" or ansible_architecture == "x86_64")
+
+# 32-bit OS's [WERE] handled above: this should handle aarch32 including 32-bit
+# Ubuntu from https://ubuntu.com/download/raspberry-pi but Ubuntu 20.04+ and
+# 22.04+ 32-bit might fail untested, and 32-bit Intel might puke as this was
+# orginally deployed for Raspbian.  (Haven't seen bootable 32-bit Intel
+# installers for a while now.)  64-bit OS's proceed below.
+
+
+# - debug:
+#     msg: 16-STANZA BLOCK BELOW, RUNS *IF* 64-BIT -- i.e. ansible_architecture == "aarch64" or ansible_architecture == "x86_64"
+
+# - block:
+- name: Add mongodb.org signing key (only 64-bit available) for MongoDB version {{ mongodb_version }}
+  # https://www.mongodb.com/community/forums/t/installing-mongodb-over-ubuntu-22-04/159931/90
+  shell: wget -qO - https://www.mongodb.org/static/pgp/server-{{ mongodb_version }}.asc | gpg --dearmor > /usr/share/keyrings/mongodb.gpg
+  #shell: wget -qO - https://www.mongodb.org/static/pgp/server-{{ mongodb_version }}.asc | apt-key add -
+  #shell: wget -qO - https://pgp.mongodb.com/server-{{ mongodb_version }}.asc | apt-key add -
+  #args:
+  #  warn: no
+  # Ansible 2.14 ERROR:
+  # "Unsupported parameters for (ansible.legacy.command) module: warn.
+  # Supported parameters include: removes, strip_empty_ends, _raw_params,
+  # _uses_shell, stdin_add_newline, creates, chdir, executable, argv, stdin."
+
+# 2023-01-19: MongoDB only offers x86_64 for Debian, AND IN ANY CASE all their
+# MongoDB 6.0's are ONLY COMPILED FOR ARM v8.2-A i.e. FAIL ON ARM v8-A RPi 4,
+# LIKE THEIR MongoDB 5.0 tested 2022-06-07 ~137 lines below.  Tested on Deb 11.
+# -> DELETE THIS STANZA AFTER DEBIAN 12 IS SOLID -- USING UBUNTU REPO BELOW ?
+- name: Install mongodb-org's Debian bullseye source/repo [ arch=amd64 ] for MongoDB version {{ mongodb_version }}, if x86_64 Debian < 12
+  apt_repository:
+    # 2020-10-28 and 2022-06-09: https://repo.mongodb.org/apt/debian/dists/
+    # supports only {Buster 10, Stretch 9, Jessie 8, Wheezy 7}.  So Bullseye
+    # 11 and Bookworm 12 (testing branch) revert to buster for now:
+    # 2022-09-27: Changed from 'buster' to 'bullseye' (i.e. Debian 11) as
+    # this was recently added to https://repo.mongodb.org/apt/debian/dists/
+    repo: deb [ arch=amd64 signed-by=/usr/share/keyrings/mongodb.gpg ] https://repo.mongodb.org/apt/debian bullseye/mongodb-org/{{ mongodb_version }} main
+    #repo: deb https://repo.mongodb.org/apt/debian bullseye/mongodb-org/{{ mongodb_version }} main
+    #repo: deb https://repo.mongodb.org/apt/debian {{ ansible_distribution_release }}/mongodb-org/4.4 main
+    #filename: mongodb-org
+  when: is_debian and os_ver is version('debian-12', '<') and ansible_architecture == "x86_64"
+
+- name: Install mongodb-org's Ubuntu jammy source/repo [ arch=amd64 ] for MongoDB version {{ mongodb_version }}, if other x86_64 OS
+  apt_repository:
+    repo: deb [ arch=amd64 signed-by=/usr/share/keyrings/mongodb.gpg ] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/{{ mongodb_version }} multiverse
+  when: not (is_debian and os_ver is version('debian-12', '<')) and ansible_architecture == "x86_64"
+
+# 2023-01-19: Tested on x86_64 VM's with Ubuntu 22.04 & Debian 12.  Based on
+# MongoDB 6.0.3 (released 2022-11-15) instructions here:
+# https://www.mongodb.com/community/forums/t/installing-mongodb-over-ubuntu-22-04/159931/90
+# WHEREAS 64-bit Raspberry Pi is likely NOT supported for now, as MongoDB 6.0
+# IS ONLY COMPILED FOR ARM v8.2-A i.e. FAIL ON ARM v8-A RPi 4 (JUST LIKE THEIR
+# MongoDB 5.0, tested 2022-06-07 ~116 lines below).  Though MongoDB 6.0.3+ on
+# 64-bit Ubuntu on Raspberry Pi hardware (MIGHT) hypothetically be possible:
+# https://www.mongodb.com/developer/products/mongodb/mongodb-on-raspberry-pi/
+# So IIAB overlays MongoDB 5.0.5 64-bit RPi binaries for now (~141 LINES BELOW!)
+- name: Otherwise, install mongodb-org's Ubuntu focal source/repo [ arch=arm64 ] for MongoDB version {{ mongodb_version }}
+  apt_repository:
+    repo: deb [ arch=arm64 signed-by=/usr/share/keyrings/mongodb.gpg ] https://repo.mongodb.org/apt/ubuntu focal/mongodb-org/{{ mongodb_version }} multiverse
+    #repo: deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb.gpg ] https://repo.mongodb.org/apt/ubuntu focal/mongodb-org/{{ mongodb_version }} multiverse
+    #repo: deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu focal/mongodb-org/{{ mongodb_version }} multiverse
+    #filename: mongodb-org
+  when: not ansible_architecture == "x86_64"
+  #when: is_ubuntu or is_debian and os_ver is version('debian-12', '>=')
+  #when: is_ubuntu and os_ver is version('ubuntu-2204', '>=') or is_linuxmint and os_ver is version('linuxmint-12', '>=') or is_debian and os_ver is version('debian-12', '>=')
+  #when: not (is_debian and ansible_architecture == "x86_64")
+
+
+# 2022-10-23: Force-install MongoDB on Ubuntu 22.04+, Mint 21 & Debian 12;
+# as each includes libssl3 not libssl1.1 (#3190).  LATER REMOVE ALL 7 STANZAS
+# BELOW, IF/WHEN MongoDB ONE DAY FINALLY SUPPORTS libssl3 ?  (MongoDB 6.2 fix
+# may be backported to 6.0, according to 2022-09-29 "official" gossip here...)
+# https://www.mongodb.com/community/forums/t/installing-mongodb-over-ubuntu-22-04/159931/58
+# https://askubuntu.com/questions/1403619/mongodb-install-fails-on-ubuntu-22-04-depends-on-libssl1-1-but-it-is-not-insta/1403683#1403683
+# echo "deb http://security.ubuntu.com/ubuntu focal-security main" | sudo tee /etc/apt/sources.list.d/focal-security.list
+# sudo apt-get update
+# sudo apt-get install libssl1.1
+# rm /etc/apt/sources.list.d/focal-security.list
+
+# 2023-02-25: RETROFITTING libssl1.1 STILL NEC on Ubuntu 22.04+ and Debian 12+
+# *IF* MongoDB < 6.0 (e.g. RPi, where MongoDB 6.0 is a complete non-starter!)
+#
+# Whereas libssl1.1 is thankfully NO LONGER NEC on x86_64, where MongoDB can
+# finally use libssl3 instead, since 2022-11-15:
+# https://www.mongodb.com/community/forums/t/installing-mongodb-over-ubuntu-22-04/159931/90
+
+- debug:
+    msg: 5-STANZA BLOCK FOLLOWS, TO FORCE INSTALL libssl1.1 -- runs *IF* mandated mongodb_version ({{ mongodb_version }}) < 6.0 (i.e. for aarch64/arm64) on Ubuntu 22.04+ or Debian 12+ -- whereas Linux Mint should never need libssl1.1
+
 - block:
-  - name: Create dir /tmp/mongodb-3.0.1x (aarch32)
-    file:
-      path: /tmp/mongodb-3.0.1x
-      state: directory
 
-  - name: Download & unzip 20MB http://download.iiab.io/packages/mongodb_stretch_3_0_14_core.zip to /tmp/mongodb-3.0.1x (aarch32)
-    unarchive:
-      remote_src: yes
-      src: "{{ iiab_download_url }}/mongodb_stretch_3_0_14_core.zip"    # http://download.iiab.io/packages
-      dest: /tmp/mongodb-3.0.1x
-
-  - name: Install (move) its 3 CORE binaries from /tmp/mongodb-3.0.1x/core to /usr/bin (aarch32)
-    shell: mv /tmp/mongodb-3.0.1x/core/* /usr/bin
-
-  - name: Download & unzip 15MB http://download.iiab.io/packages/mongodb_stretch_3_0_14_tools.zip [IN FACT THIS ONE'S 3.0.15] to /tmp/mongodb-3.0.1x (aarch32)
-    unarchive:
-      remote_src: yes
-      src: "{{ iiab_download_url }}/mongodb_stretch_3_0_14_tools.zip"
-      dest: /tmp/mongodb-3.0.1x
-
-  - name: Install (move) its 9 TOOLS binaries from /opt/iiab/downloads/mongodb-3.0.1x/tools to /usr/bin (aarch32)
-    shell: mv /tmp/mongodb-3.0.1x/tools/* /usr/bin
-
-  - name: Create Linux group mongodb (aarch32)
-    group:
-      name: mongodb
-      state: present
-
-  - name: Create Linux user mongodb (aarch32)
-    user:
-      name: mongodb
-      group: mongodb    # primary group
-      groups: mongodb
-      home: /var/lib/mongodb
-      shell: /usr/sbin/nologin
-
-  - name: Install {{ mongodb_conf }} from template (aarch32)
-    template:
-      src: mongod.conf.j2
-      dest: "{{ mongodb_conf }}"    # /etc/mongod.conf
-      #owner: root
-      #group: root
-      #mode: 0644
-
-  # end block
-  when: not (ansible_architecture == "x86_64" or ansible_architecture == "aarch64")
-
-# 32-bit OS's are handled above: this should handle aarch32 including 32-bit Ubuntu
-# from https://ubuntu.com/download/raspberry-pi but Ubuntu 20.04 32-bit might fail
-# untested, and 32-bit Intel might puke as this was orginally deployed for Raspbian.
-# (Haven't seen bootable 32-bit Intel installers for a while now.)
-# 64-bit OS's proceed below.
-
-- block:
-  - name: Add mongodb.org signing key (only 64-bit support available)
-    shell: wget -qO - https://www.mongodb.org/static/pgp/server-4.4.asc | apt-key add -
-    args:
-      warn: false
-
-  - name: Use mongodb-org's Debian repo for Debian (only amd64 support available)
+  - name: Install OLD source/repo "deb http://ports.ubuntu.com/ubuntu-ports focal-security main" at /etc/apt/sources.list.d/ports_ubuntu_com_ubuntu_ports.list if Ubuntu
     apt_repository:
-      # 2020-10-28: http://repo.mongodb.org/apt/debian/dists/ supports only
-      # {buster 10, stretch 9, jessie 8, wheezy 7}
-      # so Debian 11 "Bullseye" (testing branch) can revert to buster for now:
-      repo: deb http://repo.mongodb.org/apt/debian buster/mongodb-org/4.4 main
-      #repo: deb http://repo.mongodb.org/apt/debian {{ ansible_distribution_release }}/mongodb-org/4.4 main
-      state: present
-      filename: mongodb-org
-    when: is_debian and (ansible_architecture == "x86_64")
+      repo: deb http://ports.ubuntu.com/ubuntu-ports focal-security main
+    when: is_ubuntu
 
-  # Debian 10 aarch64 might work below but is blocked in main.yml
-  - name: Use mongodb-org's Ubuntu focal repo for RasPiOS-aarch64
+  - name: Install OLD source/repo "deb http://security.debian.org/debian-security bullseye-security main" at /etc/apt/sources.list.d/security_debian_org_debian_security.list if Debian
     apt_repository:
-      repo: deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu focal/mongodb-org/4.4 multiverse
-      state: present
-      filename: mongodb-org
-    when: is_raspbian and (ansible_architecture == "aarch64")
+      repo: deb http://security.debian.org/debian-security bullseye-security main
+      #repo: deb https://deb.debian.org/debian-security bullseye-security main    # New way, likely equivalent
+    when: is_debian
 
-  - name: Use mongodb-org's Ubuntu focal repo for Linux Mint - 64bit only
-    apt_repository:
-      repo: deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu focal/mongodb-org/4.4 multiverse
-      state: present
-      filename: mongodb-org
-    when: is_linuxmint
-
-  - name: Use mongodb-org's Ubuntu repo for all non-Mint Ubuntu - 64bit only
-    apt_repository:
-      # 2020-10-27: https://repo.mongodb.org/apt/ubuntu/dists/ supports only
-      # {focal 20.04, bionic 18.04, xenial 16.04, trusty 14.04, precise 12.04}
-      # so other Ubuntu's like groovy 20.10 need to revert to recent LTS repo:
-      repo: deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu focal/mongodb-org/4.4 multiverse
-      #repo: deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu {{ ansible_distribution_release }}/mongodb-org/4.4 multiverse
-      state: present
-      filename: mongodb-org
-    when: is_ubuntu and not is_linuxmint
-
-  - name: "Install packages: mongodb-org, mongodb-org-server"
+  - name: Force install libssl1.1
     package:
-      name:
-        - mongodb-org
-        - mongodb-org-server
+      name: libssl1.1
       state: present
 
-  - name: Establish {{ mongodb_conf }} port {{ mongodb_port }} (mongodb_conf) -- takes effect on next (re)start of the service -- via enable-or-disable.yml or via sugarizer.service auto-starting MongoDB on demand
-    lineinfile:
-      path: "{{ mongodb_conf }}"
-      regexp: '^\s*port:' # \s = any whitespace char. stackoverflow.com/a/38491899
-      #backrefs: yes
-      line: "  port: {{ mongodb_port }}"    # 27017
+  - name: Remove OLD source/repo "deb http://security.debian.org/debian-security bullseye-security main" at /etc/apt/sources.list.d/security_debian_org_debian_security.list if Debian
+    apt_repository:
+      repo: deb http://security.debian.org/debian-security bullseye-security main
+      #repo: deb https://deb.debian.org/debian-security bullseye-security main    # New way, likely equivalent
+      state: absent
+    when: is_debian
 
-  # end block
-  when: (ansible_architecture == "aarch64") or (ansible_architecture == "x86_64")
+  - name: Remove OLD source/repo "deb http://ports.ubuntu.com/ubuntu-ports focal-security main" at /etc/apt/sources.list.d/ports_ubuntu_com_ubuntu_ports.list if Ubuntu
+    apt_repository:
+      repo: deb http://ports.ubuntu.com/ubuntu-ports focal-security main
+      state: absent
+    when: is_ubuntu
+
+  when: mongodb_version is version('6.0', '<') and (is_ubuntu and os_ver is version('ubuntu-2204', '>=') or is_debian and os_ver is version('debian-12', '>='))
+
+- debug:
+    msg: 5-STANZA BLOCK ABOVE, RAN *IF* FORCED INSTALL OF libssl1.1 WAS NEEDED
+
+# - name: Install source/repo "deb http://security.ubuntu.com/ubuntu focal-security main" at /etc/apt/sources.list.d/security_ubuntu_com_ubuntu.list if Ubuntu 22.04+ x86_64 or Mint 21
+#   apt_repository:
+#     repo: deb http://security.ubuntu.com/ubuntu focal-security main
+#     #filename: focal-security    # If filename focal-security.list is preferred
+#   when: is_ubuntu and os_ver is version('ubuntu-2204', '>=') and ansible_architecture == "x86_64" or is_linuxmint_21
+
+# - name: Install source/repo "deb http://ports.ubuntu.com/ubuntu-ports focal-security main" at /etc/apt/sources.list.d/ports_ubuntu_com_ubuntu_ports.list if ubuntu 22.04+ aarch64
+#   apt_repository:
+#     repo: deb http://ports.ubuntu.com/ubuntu-ports focal-security main
+#   when: is_ubuntu and os_ver is version('ubuntu-2204', '>=') and ansible_architecture == "aarch64"
+
+# - name: Install source/repo "deb http://security.debian.org/debian-security bullseye-security main" at /etc/apt/sources.list.d/security_debian_org_debian_security.list if Debian 12
+#   apt_repository:
+#     repo: deb http://security.debian.org/debian-security bullseye-security main
+#     #repo: deb https://deb.debian.org/debian-security bullseye-security main    # New way, likely equivalent
+#   when: is_debian_12
+
+# - name: Install libssl1.1 if Ubuntu 22.04+ or Mint 21 or Debian 12 (required by MongoDB below)
+#   package:
+#     name: libssl1.1
+#     state: present
+#   when: is_ubuntu and os_ver is version('ubuntu-2204', '>=') or is_linuxmint_21 or is_debian_12
+
+# - name: Remove source/repo "deb http://security.debian.org/debian-security bullseye-security main" at /etc/apt/sources.list.d/security_debian_org_debian_security.list if Debian 12
+#   apt_repository:
+#     repo: deb http://security.debian.org/debian-security bullseye-security main
+#     #repo: deb https://deb.debian.org/debian-security bullseye-security main    # New way, likely equivalent
+#     state: absent
+#   when: is_debian_12
+
+# - name: Remove source/repo "deb http://ports.ubuntu.com/ubuntu-ports focal-security main" at /etc/apt/sources.list.d/ports_ubuntu_com_ubuntu_ports.list if ubuntu 22.04+ aarch64
+#   apt_repository:
+#     repo: deb http://ports.ubuntu.com/ubuntu-ports focal-security main
+#     state: absent
+#   when: is_ubuntu and os_ver is version('ubuntu-2204', '>=') and ansible_architecture == "aarch64"
+
+# - name: Remove source/repo "deb http://security.ubuntu.com/ubuntu focal-security main" at /etc/apt/sources.list.d/security_ubuntu_com_ubuntu.list if Ubuntu 22.04+ x86_64 or Mint 21
+#   apt_repository:
+#     repo: deb http://security.ubuntu.com/ubuntu focal-security main
+#     state: absent
+#     #filename: focal-security    # 100% IGNORED during repo deletion
+# when: is_ubuntu and os_ver is version('ubuntu-2204', '>=') and ansible_architecture == "x86_64" or is_linuxmint_21
+
+
+# # Debian 10 aarch64 might work below but is blocked in main.yml
+# - name: Use mongodb-org's Ubuntu focal repo for RasPiOS-aarch64
+#   apt_repository:
+#     repo: deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu focal/mongodb-org/5.0 multiverse
+#     filename: mongodb-org
+#   when: is_raspbian and ansible_architecture == "aarch64"
+
+# - name: Use mongodb-org's Ubuntu focal repo for Linux Mint - 64bit only
+#   apt_repository:
+#     repo: deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu focal/mongodb-org/5.0 multiverse
+#     filename: mongodb-org
+#   when: is_linuxmint
+
+# - name: Use mongodb-org's Ubuntu repo for all non-Mint Ubuntu - 64bit only
+#   apt_repository:
+#     # 2020-10-27: https://repo.mongodb.org/apt/ubuntu/dists/ supports only
+#     # {focal 20.04, bionic 18.04, xenial 16.04, trusty 14.04, precise 12.04}
+#     # so other Ubuntu's like groovy 20.10 need to revert to recent LTS repo:
+#     repo: deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu focal/mongodb-org/5.0 multiverse
+#     #repo: deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu {{ ansible_distribution_release }}/mongodb-org/4.4 multiverse
+#     filename: mongodb-org
+#   when: is_ubuntu and not is_linuxmint
+
+
+- name: "Install packages: mongodb-org, mongodb-org-server"
+  package:
+    name:
+      - mongodb-org    # Meta-package that's auto-installed anyway (SO PROB UNNEC HERE?)
+      - mongodb-org-server
+    state: present
+
+- name: Establish {{ mongodb_conf }} dbPath {{ mongodb_db_path }} -- instead of /var/lib/mongodb default -- takes effect on next (re)start of mongodb.service -- via enable-or-disable.yml or via sugarizer.service auto-starting MongoDB on demand
+  lineinfile:
+    path: "{{ mongodb_conf }}"    # /etc/mongod.conf
+    regexp: '^\s*dbPath:'    # \s = any whitespace char. stackoverflow.com/a/38491899
+    line: "  dbPath: {{ mongodb_db_path }}"    # /library/dbdata/mongodb
+
+# GRATUITOUS (port 27017 is already the default)
+- name: Establish {{ mongodb_conf }} port {{ mongodb_port }} -- takes effect on next (re)start of mongodb.service -- via enable-or-disable.yml or via sugarizer.service auto-starting MongoDB on demand
+  lineinfile:
+    path: "{{ mongodb_conf }}"
+    regexp: '^\s*port:'
+    line: "  port: {{ mongodb_port }}"    # 27017
+
+
+# 2022-06-07 #3236 MongoDB 5.0.9 "Illegal instruction" on RPi 4...
+# https://www.mongodb.com/community/forums/t/core-dump-on-mongodb-5-0-on-rpi-4/115291/14
+# ...as ARM v8-A < ARM v8.2-A ...also reveals:
+#
+# (1) For Intel x86_64, MongoDB 5.x requires Sandy Bridge or later.
+#     For AMD x86_64, MongoDB 5.x requires Bulldozer or later.
+#     Roughly speaking, this means post-2011 CPUs with AVX instructions:
+#     https://github.com/docker-library/mongo/issues/485#issuecomment-891991814
+# (2) dbPath needed fixing in /etc/mongod.conf (~16 lines above) from
+#     /var/lib/mongodb to /library/dbdata/mongodb
+# (3) mongod.lock is effectively NO LONGER A LOCK FILE -- but rather a PID
+#     file (it may be zero bytes, but never goes away) as confirmed with
+#     MongoDB 4.4.14 on RPi 4 and 5.0.9 Ubuntu 22.04 on x86_64.  And now
+#     'mongod --repair --dbpath /library/dbdata/mongodb/' IGNORES mongod.lock
+# (4) mongodb.service needed a more graceful way to shut down than
+#     'killall mongod' (MongoDB 5+ shuts down w/ 15sec quiesce period).
+# (5) MongoDB 6.0 is likely imminent; meantime a 2022-01-12 option (~12
+#     lines below) is MongoDB 5.0.5 compiled for 64-bit RPi 4 and RPi 400:
+# https://andyfelong.com/downloads/raspbian_mongodb_5.0.5.gz
+# https://andyfelong.com/2021/08/mongodb-4-4-under-raspberry-pi-os-64-bit-raspbian64/
+
+- name: If hardware is Raspberry Pi and mongodb_version >= 5.0, run 'apt-mark hold mongodb-org mongodb-org-server' -- so MongoDB 5.0.5 binaries {mongo, mongod, mongos} can be installed without apt interfering in future
+  command: apt-mark hold mongodb-org mongodb-org-server
+  when: rpi_model != "none" and mongodb_version is version('5.0', '>=')
+
+- name: If hardware is Raspberry Pi and mongodb_version >= 5.0, unarchive 76MB {{ iiab_download_url }}//packages/raspbian_mongodb_5.0.5.gz OVERWRITING 5.0.9+ {mongo, mongod, mongos} in /usr/bin
+  unarchive:
+    remote_src: yes
+    src: "{{ iiab_download_url }}/raspbian_mongodb_5.0.5.gz"
+    dest: /usr/bin
+  when: rpi_model != "none" and mongodb_version is version('5.0', '>=')
+
+#   # end block
+#   when: ansible_architecture == "aarch64" or ansible_architecture == "x86_64"
+
+# - debug:
+#     msg: 16-STANZA BLOCK ABOVE, RAN *IF* 64-BIT -- i.e. ansible_architecture == "aarch64" or ansible_architecture == "x86_64"    # ansible_machine is a bit safer than ansible_architecture (see kiwix/defaults/main.yml)
 
 
 # 2. CONFIGURE MongoDB FOR IIAB
 
-- name: 'Create 3 dirs for MongoDB: /var/lib/mongodb, /var/log/mongodb, {{ mongodb_db_path }}'
+# - name: 'Create 3 dirs for MongoDB: /var/lib/mongodb, /var/log/mongodb, {{ mongodb_db_path }}'
+#   file:
+#     state: directory
+#     path: "{{ item }}"
+#     owner: mongodb
+#     group: mongodb
+#   with_items:
+#     #- { path: '/var/run/mongodb' }
+#     - /var/lib/mongodb
+#     - /var/log/mongodb
+#     - "{{ mongodb_db_path }}"    # /library/dbdata/mongodb
+
+- name: 'Create dir {{ mongodb_db_path }} (mongodb:mongodb)'
   file:
     state: directory
-    path: "{{ item }}"
+    path: "{{ mongodb_db_path }}"    # /library/dbdata/mongodb
     owner: mongodb
     group: mongodb
-  with_items:
-    #- { path: '/var/run/mongodb' }
-    - /var/lib/mongodb
-    - /var/log/mongodb
-    - "{{ mongodb_db_path }}"    # /library/dbdata/mongodb
 
 - name: Install mongodb.service, /usr/bin/iiab-mongodb-repair-if-no-lock from templates
   template:
     src: "{{ item.src }}"
     dest: "{{ item.dest }}"
-    owner: root
-    group: root
     mode: "{{ item.mode }}"
+    #owner: root
+    #group: root
   with_items:
     - { src: 'mongodb.service.j2', dest: '/etc/systemd/system/mongodb.service', mode: '0644' }
     - { src: 'iiab-mongodb-repair-if-no-lock.j2', dest: '/usr/bin/iiab-mongodb-repair-if-no-lock', mode: '0755' }
@@ -156,6 +371,17 @@
 
 
 # 3. RECORD MongoDB AS INSTALLED
+
+- name: Record (final) disk space used
+  shell: df -B1 --output=used / | tail -1
+  register: df2
+
+- name: Add 'mongodb_disk_usage = {{ df2.stdout|int - df1.stdout|int }}' to {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+    section: mongodb
+    option: mongodb_disk_usage
+    value: "{{ df2.stdout|int - df1.stdout|int }}"
 
 - name: "Set 'mongodb_installed: True'"
   set_fact:

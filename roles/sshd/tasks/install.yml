@@ -1,13 +1,19 @@
 # TODO:
 #
-# 1) Implement sshd_port IF it's truly needed? Mentioned here as of 2020-09-24:
+# 1) Implement sshd_port IF it's truly needed? Mentioned here as of 2022-12-27:
 #
-#    vars/default_vars.yml  Line 212
-#    roles/sshd/tasks/main.yml  Lines 41-42
+#    vars/default_vars.yml  Line 226
+#    roles/sshd/tasks/install.yml  Lines 45-46
 #    roles/network/tasks/avahi.yml  Line 46
-#    roles/network/templates/gateway/iiab-gen-iptables  Line 49 & 135
+#    roles/network/templates/gateway/iiab-gen-iptables  Line 71 & 153
 #
 # 2) Use Ansible handler to reload ssh?
+
+
+- name: Record (initial) disk space used
+  shell: df -B1 --output=used / | tail -1
+  register: df1
+
 
 - name: "Install ssh daemon using package: {{ sshd_package }}"
   package:
@@ -20,7 +26,6 @@
     regexp: '^PermitRootLogin'
     line: 'PermitRootLogin without-password'
     state: present
-  #when: sshd_enabled
 
 - name: mkdir /root/.ssh
   file:
@@ -29,7 +34,6 @@
     owner: root
     group: root
     mode: '0700'
-  #when: sshd_enabled
 
 - name: Install dummy root keys as placeholder
   copy:
@@ -39,10 +43,20 @@
     group: root
     mode: '0600'
     force: no
-  #when: sshd_enabled
 
 
 # RECORD sshd AS INSTALLED
+
+- name: Record (final) disk space used
+  shell: df -B1 --output=used / | tail -1
+  register: df2
+
+- name: Add 'sshd_disk_usage = {{ df2.stdout|int - df1.stdout|int }}' to {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+    section: sshd
+    option: sshd_disk_usage
+    value: "{{ df2.stdout|int - df1.stdout|int }}"
 
 - name: "Set 'sshd_installed: True'"
   set_fact:

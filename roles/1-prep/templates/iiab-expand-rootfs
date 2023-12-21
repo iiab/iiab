@@ -1,4 +1,4 @@
-#!/bin/bash -x
+#!/bin/bash -xe
 
 # Expand rootfs partition to its maximum size, if /.expand-rootfs exists.
 # Used by /etc/systemd/system/iiab-expand-rootfs.service on IIAB boot.
@@ -8,14 +8,25 @@
 
 # Verifies that rootfs is the last partition.
 
+# RELATED:
+# 1. https://github.com/iiab/iiab-factory/blob/master/box/rpi/min-sd
+# 2. https://github.com/iiab/iiab-factory/blob/master/box/rpi/cp-sd
+# 3. https://github.com/iiab/iiab-factory/blob/master/box/rpi/xz-json-sd
+# OR https://github.com/iiab/iiab-factory/blob/master/box/rpi/exp-sd
+
 if [ -f /.expand-rootfs ] || [ -f /.resize-rootfs ]; then
     echo "$0: Expanding rootfs partition"
 
-    if [ -x /usr/bin/raspi-config ]; then    # Raspberry Pi OS
+    if [ -x /usr/bin/raspi-config ]; then    # Raspberry Pi OS -- WARNING: their fdisk-centric approach of course FAILS with "Hybrid MBR" or GPT partition tables, as required by any drive > 2TB :/
         # 2022-02-17: Uses do_expand_rootfs() from:
         # https://github.com/RPi-Distro/raspi-config/blob/master/raspi-config
-        raspi-config --expand-rootfs
-    else                                     # Other Linux OS's
+        # 2023-10-05: Official new RPi instructions:
+        # sudo raspi-config nonint do_expand_rootfs
+        # https://www.raspberrypi.com/documentation/computers/configuration.html#expand-filesystem-nonint
+        raspi-config --expand-rootfs    # REQUIRES A REBOOT
+        rm -f /.expand-rootfs /.resize-rootfs
+        reboot                          # In future, we might warn interactive users that a reboot is coming?
+    else                                # REQUIRES NO REBOOT; BEWARE iiab-expand-rootfs.service RACE CONDITION WITH fsck (PR #2522 & #3325)
         # 2022-03-15: Borrows from above raspi-config URL's do_expand_rootfs()
         ROOT_PART="$(findmnt / -o SOURCE -n)"    # e.g. /dev/sda2 or /dev/mmcblk0p2
         ROOT_DEV="/dev/$(lsblk -no pkname "$ROOT_PART")"    # e.g. /dev/sda or /dev/mmcblk0
@@ -30,8 +41,10 @@ if [ -f /.expand-rootfs ] || [ -f /.resize-rootfs ]; then
         fi
 
         # Expand partition
-        growpart $ROOT_DEV $ROOT_PART_NUM    # raspi-config instead uses fdisk
+        growpart $ROOT_DEV $ROOT_PART_NUM || true    # raspi-config instead uses fdisk (assuming MBR).  They really should transition to gdisk, as required by any drive > 2TB.  WARNING: growpart RC 2 is more severe than RC 1, and should possibly be handled separately in future?
+        rc=$?    # Make Return Code visible, for 'bash -x'
         resize2fs $ROOT_PART
+        rc=$?    # Make RC visible (as above)
 
         # 2022-03-15: Legacy code below worked with Raspberry Pi microSD cards
         # but *not* with USB boot drives, internal spinning disks/SSD's, etc.
@@ -53,7 +66,7 @@ if [ -f /.expand-rootfs ] || [ -f /.resize-rootfs ]; then
         # # Resize partition
         # growpart /dev/$root_dev $root_part_no
         # resize2fs /dev/$root_part
+        
+        rm -f /.expand-rootfs /.resize-rootfs
     fi
-
-    rm -f /.expand-rootfs /.resize-rootfs
 fi

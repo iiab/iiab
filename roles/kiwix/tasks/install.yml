@@ -1,49 +1,62 @@
-# 0. SET CPU ARCHITECTURE
+# 0. VERIFY CPU/OS ARCHITECTURE SUPPORTED
 
-- name: "Initialize 'kiwix_src_dir: False' just in case CPU architecture is not supported"
-  set_fact:
-    kiwix_src_dir: False
-
-- name: "Set fact 'kiwix_src_dir: {{ kiwix_version_armhf }}' (armv6l or armv71 or aarch64)"
-  set_fact:
-    kiwix_src_dir: "{{ kiwix_version_armhf }}"
-  when: ansible_machine == "armv6l" or ansible_machine == "armv7l" or ansible_machine == "aarch64"
-
-- name: "Set fact 'kiwix_src_dir: {{ kiwix_version_linux64 }}' (x86_64)"
-  set_fact:
-    kiwix_src_dir: "{{ kiwix_version_linux64 }}"
-  when: ansible_machine == "x86_64"
-
-- name: "Set fact 'kiwix_src_dir: {{ kiwix_version_i686 }}' (i686)"
-  set_fact:
-    kiwix_src_dir: "{{ kiwix_version_i686 }}"
-  when: ansible_machine == "i686"
-# COMMENT OUT LINE ABOVE TO TEST i686 CODE PATH ON X86_64 (WORKS NOV 2017)
-
-- name: Force Ansible to exit (FAIL) if kiwix-tools appears unavailable for your architecture ({{ ansible_machine }})
+- name: Force Ansible to exit (FAIL) if kiwix-tools appears unavailable for your CPU/OS architecture ({{ ansible_machine }})
   fail:
-    msg: "WARNING: kiwix-tools SOFTWARE APPEARS UNAVAILABLE FOR YOUR {{ ansible_machine }} OS/ARCHITECTURE."
-  when: not kiwix_src_dir
-
-- name: "Set fact 'kiwix_src_file: {{ kiwix_src_dir }}.tar.gz'"
-  set_fact:
-    kiwix_src_file: "{{ kiwix_src_dir }}.tar.gz"
+    msg: "WARNING: kiwix-tools SOFTWARE APPEARS UNAVAILABLE FOR YOUR {{ ansible_machine }} CPU/OS ARCHITECTURE."
+  when: kiwix_arch == "unsupported"
 
 
-# 1. PUT IN PLACE: /opt/iiab/downloads/kiwix-tools_linux-*.tar.gz, essential dirs, and test.zim if nec (library.xml is created later, by enable-or-disable.yml)
+- name: Record (initial) disk space used
+  shell: df -B1 --output=used / | tail -1
+  register: df1
 
-- name: Download {{ iiab_download_url }}/{{ kiwix_src_file }} to /opt/iiab/downloads
+
+# 1. PUT IN PLACE: /opt/iiab/downloads/kiwix-tools_linux-*.tar.gz, move /opt/iiab/kiwix/bin aside if nec, create essential dirs, and test.zim if nec (library.xml is created later, by enable-or-disable.yml)
+
+# 2022-10-04: get_url might be removed in future (unarchive below can handle
+# everything!)  Conversely: (1) unarchive doesn't support timeout (2) one day
+# /opt/iiab/downloads might have practical value beyond hoarding (unlikely!)
+- name: Download {{ kiwix_base_url }}{{ kiwix_tar_gz }} into /opt/iiab/downloads (ACTUAL filename should include kiwix-tools version, or nightly build date)
   get_url:
-    url: "{{ iiab_download_url }}/{{ kiwix_src_file }}"    # http://download.iiab.io/packages
-    dest: "{{ downloads_dir }}/{{ kiwix_src_file }}"    # /opt/iiab/downloads
+    url: "{{ kiwix_base_url }}{{ kiwix_tar_gz }}"    # e.g. https://download.kiwix.org/release/kiwix-tools/ + kiwix-tools_linux-x86_64.tar.gz
+    dest: "{{ downloads_dir }}"    # /opt/iiab/downloads
+    #force: yes    # Already implied b/c dest is a dir! (to recover from incomplete downloads, etc)
     timeout: "{{ download_timeout }}"
+  register: kiwix_dl    # PATH /opt/iiab/downloads + ACTUAL filename put in kiwix_dl.dest, for unarchive ~28 lines below
+
+# - name: "2023-05-14: TEMPORARY PATCH REVERTING TO KIWIX-TOOLS 3.4.0 IF BUGGY 32-BIT (armhf) VERSION 3.5.0 IS DETECTED -- #3574"
+#   get_url:
+#     url: https://download.kiwix.org/release/kiwix-tools/kiwix-tools_linux-armhf-3.4.0.tar.gz
+#     dest: "{{ downloads_dir }}"
+#     timeout: "{{ download_timeout }}"
+#   #register: kiwix_dl    # CLOBBERS kiwix_dl.dest WHEN THIS STANZA DOES NOT RUN :/
+#   when: kiwix_dl.dest == "/opt/iiab/downloads/kiwix-tools_linux-armhf-3.5.0.tar.gz"
+#
+# # Ansible does not allow changing individuals subfields in a dictionary, but
+# # this crude hack works, overwriting the entire kiwix_dl dictionary var with
+# # the single (needed) key/value pair.  (Or "register: tmp_dl" could be set
+# # above, if its other [subfields, key/value pairs, etc] really mattered...)
+# - name: "2023-05-15: TEMPORARY PATCH REVERTING TO KIWIX-TOOLS 3.4.0 IF BUGGY 32-BIT (armhf) VERSION 3.5.0 IS DETECTED -- #3574"
+#   set_fact:
+#     kiwix_dl:
+#       dest: /opt/iiab/downloads/kiwix-tools_linux-armhf-3.4.0.tar.gz
+#   when: kiwix_dl.dest == "/opt/iiab/downloads/kiwix-tools_linux-armhf-3.5.0.tar.gz"
+
+- name: Does {{ kiwix_path }}/bin already exist? (as a directory, symlink or file)
+  stat:
+    path: "{{ kiwix_path }}/bin"    # /opt/iiab/kiwix
+  register: kiwix_bin
+
+- name: If so, move {{ kiwix_path }}/bin to {{ kiwix_path }}/bin.DATE_TIME_TZ
+  shell: "mv {{ kiwix_path }}/bin {{ kiwix_path }}/bin.$(date +%F_%T_%Z)"
+  when: kiwix_bin.stat.exists
 
 - name: "Create dirs, including parent dirs: {{ kiwix_path }}/bin (executables), {{ iiab_zim_path }}/content (ZIM files), {{ iiab_zim_path }}/index (legacy indexes) (by default 0755)"
   file:
     path: "{{ item }}"
     state: directory
   with_items:
-    - "{{ kiwix_path }}/bin"           # /opt/iiab/kiwix
+    - "{{ kiwix_path }}/bin"
     - "{{ iiab_zim_path }}/content"    # /library/zims
     - "{{ iiab_zim_path }}/index"
 
@@ -63,13 +76,13 @@
 
 # 2. INSTALL KIWIX-TOOLS EXECUTABLES
 
-- name: Unarchive {{ kiwix_src_file }} to /tmp    # e.g. kiwix-tools_linux-armhf-3.1.2-3.tar.gz
+- name: Unarchive {{ kiwix_dl.dest }} to {{ kiwix_path }}/bin -- untar with '--strip-components=1' to chop tarball's top-level dir from path
   unarchive:
-    src: "{{ downloads_dir }}/{{ kiwix_src_file }}"
-    dest: /tmp
-
-- name: Move /tmp/{{ kiwix_src_dir }}/* to permanent location {{ kiwix_path }}/bin
-  shell: "mv /tmp/{{ kiwix_src_dir }}/* {{ kiwix_path }}/bin/"    # /opt/iiab/kiwix
+    src: "{{ kiwix_dl.dest }}"    # See ~28 lines above, e.g. /opt/iiab/downloads/kiwix-tools_linux-x86_64-3.3.0-1.tar.gz
+    dest: "{{ kiwix_path }}/bin"
+    extra_opts: --strip-components=1
+    owner: root    # 2023-05-14: When unpacking let's avoid bogus owner/group,
+    group: root    # arising from UID/GID on Kiwix's build machine.
 
 
 # 3. ENABLE MODS FOR APACHE PROXY IF DEBUNTU
@@ -103,13 +116,23 @@
   systemd:
     daemon_reload: yes
 
-# install kiwix app
 - name: Install Kiwix Android app
   include_tasks: kiwix-apk.yml
   when: kiwix_incl_apk
 
 
 # 5. RECORD Kiwix AS INSTALLED
+
+- name: Record (final) disk space used
+  shell: df -B1 --output=used / | tail -1
+  register: df2
+
+- name: Add 'kiwix_disk_usage = {{ df2.stdout|int - df1.stdout|int }}' to {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+    section: kiwix
+    option: kiwix_disk_usage
+    value: "{{ df2.stdout|int - df1.stdout|int }}"
 
 - name: "Set 'kiwix_installed: True'"
   set_fact:

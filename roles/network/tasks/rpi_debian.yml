@@ -20,18 +20,40 @@
     dest: /etc/dhcpcd.conf
     src: network/dhcpcd.conf.j2
 
+- name: Create dhcpcd hook for hostapd and ap0 when wifi_up_down True
+  template:
+    src: hostapd/50-hostapd
+    dest: /lib/dhcpcd/dhcpcd-hooks/50-hostapd
+    owner: root
+    group: root
+    mode: 0644
+  when: wifi_up_down
+
+- name: Remove dhcpcd hook for hostapd if WiFi is not split using ap0
+  file:
+    path: /lib/dhcpcd/dhcpcd-hooks/50-hostapd
+    state: absent
+  when: not wifi_up_down
+
 - name: New Raspbian requires country code -- check for it
-  shell: grep country /etc/wpa_supplicant/wpa_supplicant.conf
+  shell: grep country /etc/wpa_supplicant/wpa_supplicant.conf | awk -F = '{print $2}'
   register: country_code
   ignore_errors: True
+  when: wifi_up_down and can_be_ap
+
+- name: Set country code for hostapd to value found in /etc/wpa_supplicant/wpa_supplicant.conf
+  set_fact:
+    host_country_code: "{{ country_code.stdout }}"
+  when: country_code.stdout is defined and country_code.stdout | length > 0
 
 - name: Put country code ({{ host_country_code }}) in /etc/wpa_supplicant/wpa_supplicant.conf if nec
-  lineinfile: 
+  lineinfile:
     path: /etc/wpa_supplicant/wpa_supplicant.conf
     regexp: "^country.*"
     line: country={{ host_country_code }}
-  when: country_code is defined and country_code.stdout == ""
+  when: country_code.stdout is defined and country_code.stdout | length == 0
 
+# This should go away, should only be unblocked by raspi-config
 - name: Enable the WiFi with rfkill
   shell: rfkill unblock 0
   ignore_errors: True
@@ -49,20 +71,12 @@
     src: network/dnsmasq-iiab
   when: iiab_lan_iface == "br0"
 
-- name: Stopping services
-  include_tasks: down-debian.yml
+#- name: Stopping services
+#  include_tasks: down-debian.yml
 
 - name: Reload systemd
   systemd:
     daemon_reload: yes
-
-- name: Clone wifi if needed
-  systemd:
-    name: iiab-clone-wifi
-    state: started
-  when: discovered_wireless_iface != "none"
-  # Whereas sysd-netd-debian.yml uses...
-  # when: wifi_up_down and discovered_wireless_iface != "none"
 
 - name: Restart the networking service if appropriate
   systemd:
@@ -70,12 +84,6 @@
     enabled: yes
     state: restarted
   when: iiab_wired_lan_iface is defined
-
-- name: Restart hostapd when WiFi is present but not when using WiFi as gateway with wifi_up_down False
-  systemd:
-    name: hostapd
-    state: restarted
-  when: hostapd_enabled and (wifi_up_down or not no_net_restart)
 
 #- name: Stop wpa_supplicant on Raspbian
 #  shell: killall wpa_supplicant

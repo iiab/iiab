@@ -19,27 +19,33 @@
     quiet: yes
 
 
-- name: Install Captive Portal if 'captiveportal_installed' not defined, e.g. in {{ iiab_state_file }}    # /etc/iiab/iiab_state.yml
-  include_tasks: install.yml
-  when: captiveportal_installed is undefined
+- block:
 
+  - name: Install Captive Portal if 'captiveportal_installed' not defined, e.g. in {{ iiab_state_file }}    # /etc/iiab/iiab_state.yml
+    include_tasks: install.yml
+    when: captiveportal_installed is undefined
 
-- name: Enable or Disable Captive Portal
-  include_tasks: enable-or-disable.yml
+  - include_tasks: enable-or-disable.yml
 
+  - name: Add 'captiveportal' variable values to {{ iiab_ini_file }}
+    ini_file:
+      path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+      section: captiveportal
+      option: "{{ item.option }}"
+      value: "{{ item.value | string }}"
+    with_items:
+      - option: name
+        value: Captive Portal
+      - option: description
+        value: '"Captive Portal tries to open the browser automatically, so users don''t have to type in URL''s like http://box.lan in support of kiosk-like situations, in multilingual and less literate communities."'
+      - option: captiveportal_install
+        value: "{{ captiveportal_install }}"
+      - option: captiveportal_enabled
+        value: "{{ captiveportal_enabled }}"
 
-- name: Add 'captiveportal' variable values to {{ iiab_ini_file }}
-  ini_file:
-    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
-    section: captiveportal
-    option: "{{ item.option }}"
-    value: "{{ item.value | string }}"
-  with_items:
-    - option: name
-      value: Captive Portal
-    - option: description
-      value: '"Captive Portal tries to open the browser automatically, so users don''t have to type in URL''s like http://box.lan in support of kiosk-like situations, in multilingual and less literate communities."'
-    - option: captiveportal_install
-      value: "{{ captiveportal_install }}"
-    - option: captiveportal_enabled
-      value: "{{ captiveportal_enabled }}"
+  rescue:
+
+  - name: 'SEE ERROR ABOVE (skip_role_on_error: {{ skip_role_on_error }})'
+    fail:
+      msg: ""
+    when: not skip_role_on_error

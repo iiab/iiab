@@ -19,26 +19,33 @@
     quiet: yes
 
 
-- name: Install Mosquitto if 'mosquitto_installed' not defined, e.g. in {{ iiab_state_file }}    # /etc/iiab/iiab_state.yml
-  include_tasks: install.yml
-  when: mosquitto_installed is undefined
+- block:
 
+  - name: Install Mosquitto if 'mosquitto_installed' not defined, e.g. in {{ iiab_state_file }}    # /etc/iiab/iiab_state.yml
+    include_tasks: install.yml
+    when: mosquitto_installed is undefined
 
-- include_tasks: enable-or-disable.yml
+  - include_tasks: enable-or-disable.yml
 
+  - name: Add 'mosquitto' variable values to {{ iiab_ini_file }}
+    ini_file:
+      path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+      section: mosquitto
+      option: "{{ item.option }}"
+      value: "{{ item.value | string }}"
+    with_items:
+      - option: name
+        value: Mosquitto service
+      - option: description
+        value: '"Mosquitto (uses the MQTT protocol) is a pub-sub broker for electronics projects and educational Internet of Things (IoT) experiments.  It''s designed for TCP/IP with remote locations where a ''small code footprint'' is required or bandwidth is limited.  See also: Node-RED"'
+      - option: mosquitto_install
+        value: "{{ mosquitto_install }}"
+      - option: mosquitto_enabled
+        value: "{{ mosquitto_enabled }}"
 
-- name: Add 'mosquitto' variable values to {{ iiab_ini_file }}
-  ini_file:
-    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
-    section: mosquitto
-    option: "{{ item.option }}"
-    value: "{{ item.value | string }}"
-  with_items:
-    - option: name
-      value: Mosquitto service
-    - option: description
-      value: '"Mosquitto (uses the MQTT protocol) is a pub-sub broker for electronics projects and educational Internet of Things (IoT) experiments.  It''s designed for TCP/IP with remote locations where a ''small code footprint'' is required or bandwidth is limited.  See also: Node-RED"'
-    - option: mosquitto_install
-      value: "{{ mosquitto_install }}"
-    - option: mosquitto_enabled
-      value: "{{ mosquitto_enabled }}"
+  rescue:
+
+  - name: 'SEE ERROR ABOVE (skip_role_on_error: {{ skip_role_on_error }})'
+    fail:
+      msg: ""
+    when: not skip_role_on_error

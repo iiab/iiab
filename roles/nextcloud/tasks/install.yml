@@ -1,9 +1,29 @@
+- name: "Set 'mysql_install: True' and 'mysql_enabled: True'"
+  set_fact:
+    mysql_install: True
+    mysql_enabled: True
+
+- name: MYSQL - run 'mysql' role (attempt to install & enable MySQL / MariaDB)
+  include_role:
+    name: mysql
+
+- name: FAIL (STOP THE INSTALL) IF 'mysql_installed is undefined'
+  fail:
+    msg: "Nextcloud install cannot proceed, as MySQL / MariaDB is not installed."
+  when: mysql_installed is undefined
+
+
+- name: Record (initial) disk space used
+  shell: df -B1 --output=used / | tail -1
+  register: df1
+
+
 # CHECK FOR PHP VERSION AUTOMATICALLY, TO DETERMINE WHICH NEXTCLOUD TO INSTALL.
 # INSPIRED BY: github.com/iiab/iiab/blob/master/roles/nodejs/tasks/main.yml
 
 # - name: Try to run 'php -v' to get PHP version
 #   # e.g. converts multi-line "PHP 7.0.33-0ubuntu0.16.04.5 (cli) ( NTS ) ..." to "7.0.33"
-#   shell: php -v | head -1 | sed 's/^[^0-9.]*//' | sed 's/[^0-9.].*//'
+#   shell: php -v | head -1 | sed 's/^[^0-9.]*//; s/[^0-9.].*//'
 #   register: php_version_installed
 #   #ignore_errors: yes    # NOT NEC: if php is not installed, php_version_installed.stdout will get set to ""
 
@@ -41,9 +61,15 @@
 
 
 # February 2020: See @m-anish's PR #2119 and follow-up PR #2258.
-# 2021-07-06: If you're running Nextcloud 22+ in production, carefully check the latest required AND recommended prereqs:
+# December 2023: Check latest required AND recommended prereqs below!
+# e.g. Nextcloud 26 works with PHP 8.2; Nextcloud 27 deprecates PHP 8.0; Nextcloud 28 works with PHP 8.3
+# https://docs.nextcloud.com/server/latest/admin_manual/installation/system_requirements.html
 # https://docs.nextcloud.com/server/latest/admin_manual/installation/source_installation.html#prerequisites-for-manual-installation
-# https://docs.nextcloud.com/server/21/admin_manual/installation/source_installation.html#prerequisites-for-manual-installation
+# https://docs.nextcloud.com/server/latest/admin_manual/installation/php_configuration.html
+# https://docs.nextcloud.com/server/28/admin_manual/installation/
+# 2023-12-15: Lifesaver manual upgrade instructions below!  As Nextcloud OFTEN
+# gets badly stuck if its web-based upgrade process is attempted :/
+# https://docs.nextcloud.com/server/latest/admin_manual/maintenance/manual_upgrade.html
 - name: Install ffmpeg + libxml2 + 11 PHP packages (run 'php -m' or 'php -i' to verify)
   package:
     name:
@@ -61,11 +87,11 @@
       - php{{ php_version }}-gmp           # OPTIONAL (for SFTP storage)
       - php-imagick                        # OPTIONAL (for preview generation).  BUT drags in Apache's libapache2-mod-phpX.Y etc, as confirmed by 'apt depends php-imagick' -- while php{{ php_version }}-imagick installs (despite not being shown within 'apt list "php*imagick"') it's no better -- and 'apt depends phpX.Y-imagick' mysteriously does NOT show its deps.  Likewise installed in wordpress/tasks/install.yml
       - php{{ php_version }}-intl          # OPTIONAL (increases language translation performance and fixes sorting of non-ASCII characters): Likewise installed in mediawiki/tasks/install.yml, moodle/tasks/install.yml, wordpress/tasks/install.yml
-      #- php{{ php_version }}-json         # See stanza just below
+      #- php{{ php_version }}-json         # Included with PHP >= 8.0 -- see stanza just below
       #- php{{ php_version }}-libxml       # NOT INSTALLABLE: ENABLED BY DEFAULT (https://www.php.net/manual/en/libxml.installation.php)
       - php{{ php_version }}-mbstring      # Likewise installed in mediawiki/tasks/install.yml, moodle/tasks/install.yml, pbx/tasks/freepbx_dependencies.yml, wordpress/tasks/install.yml
       - php{{ php_version }}-mysql         # Likewise installed in mysql/tasks/install.yml, pbx/tasks/freepbx_dependencies.yml, wordpress/tasks/install.yml
-      #- php{{ php_version }}-openssl      # NOT INSTALLABLE: ENABLED BY DEFAULT?
+      #- php{{ php_version }}-openssl      # Included with PHP >= 8.0 -- NOT INSTALLABLE
       #- php{{ php_version }}-pdo_mysql    # NOT INSTALLABLE: php{{ php_version }}-mysql handles this on all OS's?
       #- php{{ php_version }}-redis        # @m-anish future work?
       #- php{{ php_version }}-session      # NOT INSTALLABLE: ENABLED BY DEFAULT?
@@ -85,13 +111,24 @@
 #    state: present
 #  when: php_version is version('8.0', '<')
 
+- name: "Run roles/www_options/tasks/php-settings.yml with 'nginx_high_php_limits: True' by default"
+  include_tasks: roles/www_options/tasks/php-settings.yml
+  when: php_settings_done is undefined
+
 
 - name: Create dir {{ nextcloud_root_dir }} (by default 755 dirs & 644 files)
   file:
     state: directory
     path: "{{ nextcloud_root_dir }}"    # /library/www/nextcloud
 
-- name: Unarchive {{ nextcloud_dl_url }} (~133 MB) to {{ nextcloud_root_dir }} (~476 MB initially, 498+ MB later, {{ apache_user }}:{{ apache_user }})
+# Nextcloud 25 EOL was 2023-10-01: https://endoflife.date/nextcloud
+# https://github.com/nextcloud/server/wiki/Maintenance-and-Release-Schedule#eol-versions
+#- name: "2023-03-24: NEXTCLOUD 26 REQUIRES PHP 8 -- SO THIS TEMPORARY PATCH INSTALLS THE OLDER NEXTCLOUD 25 ON OS's WITH PHP 7.x -- WHOSE END-OF-LIFE WAS NOVEMBER 2022"
+#  set_fact:
+#    nextcloud_dl_url: https://download.nextcloud.com/server/releases/latest-25.tar.bz2
+#  when: php_version is version('8.0', '<')
+
+- name: Unarchive {{ nextcloud_dl_url }} (~176 MB) to {{ nextcloud_root_dir }} (~616 MB initially, sometimes ~655 MB later, {{ apache_user }}:{{ apache_user }})
   unarchive:
     remote_src: yes    # Overwrite even if "already exists on the target"
     src: "{{ nextcloud_dl_url }}"
@@ -106,6 +143,17 @@
 
 
 # RECORD Nextcloud AS INSTALLED
+
+- name: Record (final) disk space used
+  shell: df -B1 --output=used / | tail -1
+  register: df2
+
+- name: Add 'nextcloud_disk_usage = {{ df2.stdout|int - df1.stdout|int }}' to {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+    section: nextcloud
+    option: nextcloud_disk_usage
+    value: "{{ df2.stdout|int - df1.stdout|int }}"
 
 - name: "Set 'nextcloud_installed: True'"
   set_fact:

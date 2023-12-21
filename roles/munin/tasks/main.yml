@@ -19,42 +19,33 @@
     quiet: yes
 
 
-- name: Install Munin if 'munin_installed' not defined, e.g. in {{ iiab_state_file }}    # /etc/iiab/iiab_state.yml
-  include_tasks: install.yml
-  when: munin_installed is undefined
+- block:
 
+  - name: Install Munin if 'munin_installed' not defined, e.g. in {{ iiab_state_file }}    # /etc/iiab/iiab_state.yml
+    include_tasks: install.yml
+    when: munin_installed is undefined
 
-- name: Enable & Start 'munin-node' systemd service
-  systemd:
-    name: munin-node
-    daemon_reload: yes
-    enabled: yes
-    state: started
-  when: munin_enabled
+  - include_tasks: enable-or-disable.yml
 
-- name: Disable & Stop 'munin-node' systemd service
-  systemd:
-    name: munin-node
-    enabled: no
-    state: stopped
-  when: not munin_enabled
+  - name: Add 'munin' variable values to {{ iiab_ini_file }}
+    ini_file:
+      path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+      section: munin
+      option: "{{ item.option }}"
+      value: "{{ item.value | string }}"
+    with_items:
+      - option: name
+        value: Munin
+      - option: description
+        value: '"Munin is a networked resource monitoring tool that can help analyze resource trends and ''what just happened to kill our performance?'' problems."'
+      - option: munin_install
+        value: "{{ munin_install }}"
+      - option: munin_enabled
+        value: "{{ munin_enabled }}"
 
-- name: Enable/Disable/Restart NGINX
-  include_tasks: nginx.yml
+  rescue:
 
-
-- name: Add 'munin' variable values to {{ iiab_ini_file }}
-  ini_file:
-    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
-    section: munin
-    option: "{{ item.option }}"
-    value: "{{ item.value | string }}"
-  with_items:
-    - option: name
-      value: Munin
-    - option: description
-      value: '"Munin is a networked resource monitoring tool that can help analyze resource trends and ''what just happened to kill our performance?'' problems."'
-    - option: munin_install
-      value: "{{ munin_install }}"
-    - option: munin_enabled
-      value: "{{ munin_enabled }}"
+  - name: 'SEE ERROR ABOVE (skip_role_on_error: {{ skip_role_on_error }})'
+    fail:
+      msg: ""
+    when: not skip_role_on_error

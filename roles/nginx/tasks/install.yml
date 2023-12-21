@@ -1,3 +1,8 @@
+- name: Record (initial) disk space used
+  shell: df -B1 --output=used / | tail -1
+  register: df1
+
+
 - name: Stop & Disable '{{ apache_service }}' systemd service, in case it exists
   systemd:
     name: "{{ apache_service }}"    # apache2 or httpd, per /opt/iiab/iiab/vars/<OS>.yml
@@ -65,6 +70,17 @@
 
 
 # RECORD NGINX AS INSTALLED
+
+- name: Record (final) disk space used
+  shell: df -B1 --output=used / | tail -1
+  register: df2
+
+- name: Add 'nginx_disk_usage = {{ df2.stdout|int - df1.stdout|int }}' to {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+    section: nginx
+    option: nginx_disk_usage
+    value: "{{ df2.stdout|int - df1.stdout|int }}"
 
 - name: "Set 'nginx_installed: True'"
   set_fact:

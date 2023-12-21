@@ -1,3 +1,8 @@
+- name: Record (initial) disk space used
+  shell: df -B1 --output=used / | tail -1
+  register: df1
+
+
 - name: "Create smb user: {{ smbuser }}"
   user:
     name: "{{ smbuser }}"
@@ -13,12 +18,13 @@
     state: directory
 
 # Install and configure samba server (requires ports 137, 138, 139, 445 open).
-- name: "Install 4 packages: samba, samba-client, samba-common, cifs-client"
+- name: "Install 4 packages: samba, samba-common, smbclient, cifs-client"
   package:
     name:
       - samba
-      - samba-client
+      #- samba-client    # 2022-04-13: Virtual package fails to install w/ ansible-core 2.13.0b0
       - samba-common
+      - smbclient
       - cifs-utils
     state: present
 
@@ -29,6 +35,17 @@
 
 
 # RECORD Samba AS INSTALLED
+
+- name: Record (final) disk space used
+  shell: df -B1 --output=used / | tail -1
+  register: df2
+
+- name: Add 'samba_disk_usage = {{ df2.stdout|int - df1.stdout|int }}' to {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+    section: samba
+    option: samba_disk_usage
+    value: "{{ df2.stdout|int - df1.stdout|int }}"
 
 - name: "Set 'samba_installed: True'"
   set_fact:

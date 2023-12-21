@@ -27,9 +27,14 @@
 #  when: nodejs_version != "12.x"
 
 
+- name: Record (initial) disk space used
+  shell: df -B1 --output=used / | tail -1
+  register: df1
+
+
 # 2. DOWNLOAD+LINK /opt/iiab/sugarizer
 
-- name: Clone llaske/sugarizer ({{ sugarizer_git_version }} branch/version) from GitHub to /opt/iiab/{{ sugarizer_dir_version }} (DOWNLOADS ~740 MB)
+- name: Clone llaske/sugarizer ({{ sugarizer_git_version }} branch/version) from GitHub to /opt/iiab/{{ sugarizer_dir_version }} (DOWNLOADS ~748 MB)
   git:
     repo: https://github.com/llaske/sugarizer
     dest: "{{ iiab_base }}/{{ sugarizer_dir_version }}"
@@ -46,7 +51,7 @@
 
 # 3. DOWNLOAD+LINK /opt/iiab/sugarizer-server
 
-# 2018-07-11: http://download.iiab.io/packages/sugarizer-server-1.0.tar.gz
+# 2018-07-11: https://download.iiab.io/packages/sugarizer-server-1.0.tar.gz
 # was flawed, as documented at:
 #    https://github.com/iiab/iiab/pull/814#issuecomment-404211098
 # Versions of MongoDB, npm (& Node.js ?) matter!  Sugarizer 1.0 Context:
@@ -61,7 +66,7 @@
 # CLARIF: during repeat runs of "./runrole sugarizer", this git sync shows
 # "changed" (whereas above git sync shows "ok").  Reason: "npm install"
 # (below) modifies /opt/iiab/sugarizer-server/node_modules
-- name: Clone llaske/sugarizer-server ({{ sugarizer_server_git_version }} branch/version) from GitHub to /opt/iiab/{{ sugarizer_server_dir_version }} (~9 MB initially, ~195+ MB later)
+- name: Clone llaske/sugarizer-server ({{ sugarizer_server_git_version }} branch/version) from GitHub to /opt/iiab/{{ sugarizer_server_dir_version }} (~16 MB initially, ~227+ MB later)
   git:
     repo: https://github.com/llaske/sugarizer-server
     dest: "{{ iiab_base }}/{{ sugarizer_server_dir_version }}"
@@ -159,7 +164,7 @@
 # WITH FUTURE UPGRADES BEYOND SUGARIZER 1.1?!
 #
 # SOME BACKGROUND -- WHY WE'RE AUTO-EDITING sugarizer-server'S CONFIG FILES:
-# http://github.com/iiab/iiab/pull/1430#issuecomment-459129378
+# https://github.com/iiab/iiab/pull/1430#issuecomment-459129378
 
 # sugarizer_port is set to 8089 in /opt/iiab/iiab/vars/default_vars.yml
 # If you need to change this, edit /etc/iiab/local_vars.yml prior to installing
@@ -231,6 +236,17 @@
 
 
 # 6. RECORD Sugarizer AS INSTALLED
+
+- name: Record (final) disk space used
+  shell: df -B1 --output=used / | tail -1
+  register: df2
+
+- name: Add 'sugarizer_disk_usage = {{ df2.stdout|int - df1.stdout|int }}' to {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+    section: sugarizer
+    option: sugarizer_disk_usage
+    value: "{{ df2.stdout|int - df1.stdout|int }}"
 
 - name: "Set 'sugarizer_installed: True'"
   set_fact:

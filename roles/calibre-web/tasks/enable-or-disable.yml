@@ -1,0 +1,52 @@
+- name: Enable & Restart 'calibre-web' systemd service, if calibreweb_enabled
+  systemd:
+    name: calibre-web
+    daemon_reload: yes
+    enabled: yes
+    state: restarted
+  when: calibreweb_enabled
+
+- name: Disable & Stop 'calibre-web' systemd service, if not calibreweb_enabled
+  systemd:
+    name: calibre-web
+    enabled: no
+    state: stopped
+  when: not calibreweb_enabled
+
+
+# TO DO: restore http://box/libros & http://box/livres etc, alongside English (#2195)
+# RELATED: https://github.com/janeczku/calibre-web/wiki/Setup-Reverse-Proxy
+
+- name: Enable http://box{{ calibreweb_url1 }} via NGINX, by installing {{ nginx_conf_dir }}/calibre-web-nginx.conf from template    # http://box/books
+  template:
+    src: calibre-web-nginx.conf.j2
+    dest: "{{ nginx_conf_dir }}/calibre-web-nginx.conf"    # /etc/nginx/conf.d
+  when: calibreweb_enabled
+
+- name: If enabling with Calibre-Web enhanced for large audio/video "books" too, also append onto calibre-web-nginx.conf AND symlink /library/www/html/calibre-web -> /library/calibre-web (WIP)
+  shell: |
+    if [ -f {{ calibreweb_venv_path }}/scripts/calibre-web-nginx.conf ]; then
+        cat {{ calibreweb_venv_path }}/scripts/calibre-web-nginx.conf >> {{ nginx_conf_dir }}/calibre-web-nginx.conf
+        # 2023-12-05: Not needed as a result of PR iiab/calibre-web#57
+        # ln -sf {{ calibreweb_home }} {{ doc_root }}/calibre-web
+    fi
+  when: calibreweb_enabled
+
+
+- name: Disable http://box{{ calibreweb_url1 }} via NGINX, by removing {{ nginx_conf_dir }}/calibre-web-nginx.conf
+  file:
+    path: "{{ nginx_conf_dir }}/calibre-web-nginx.conf"
+    state: absent
+  when: not calibreweb_enabled
+
+- name: If disabling, also remove symlink /library/www/html/calibre-web (WIP)
+  file:
+    path: "{{ doc_root }}/calibre-web"    # /library/www/html
+    state: absent
+  when: not calibreweb_enabled
+
+
+- name: Restart 'nginx' systemd service
+  systemd:
+    name: nginx
+    state: restarted

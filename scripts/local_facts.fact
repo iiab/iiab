@@ -3,21 +3,25 @@
 # Higher-level purpose explained at the bottom of:
 # https://github.com/iiab/iiab/blob/master/vars/default_vars.yml
 
-# 2020-10-27: Most of the 11 variables require a command[*] to be run to
+# 2020-10-27: Most of the [15] variables require a command[*] to be run to
 # establish the var's value.  WE DISPLAY ALL ERRORS / DIAGNOSTICS AND CONTINUE.
 #
 # [*] DOESN'T MATTER WHAT COMMAND: so long as it fails with Return Code != 0
-# If statements then use that RC to force the var to these default values...
+# If RC == 0, var is forced from its default value here: (using cmd's output)
 
 STAGE=0
 OS="none"
-VERSION_ID="none"    # This var's combined with the above, before being output
+VERSION_ID="none"    # Just a temp var, for: OS_VER="$OS-$VERSION_ID"
+OS_VER="none"
 IIAB_BRANCH="none"
+IIAB_REMOTE_URL="none"
+IIAB_RECENT_TAG="none"
 IIAB_COMMIT="none"
-#XO_MODEL="none"
 RPI_MODEL="none"
 DEVICETREE_MODEL="none"
 ANSIBLE_VERSION="none"
+PYTHON_VERSION="none"
+PHP_VERSION="none"
 DHCPCD="none"    # The last 3 conditioned on string output not RC.  SEE BELOW.
 NETWORK_MANAGER="none"
 SYSTEMD_NETWORKD="none"
@@ -55,6 +59,7 @@ OS_VER="$OS-$VERSION_ID"
 # Previously supported Linux distributions / versions:
     #"fedora-18"    | \
     #"fedora-22"    | \
+    #"centos-7"     | \
     #"debian-8"     | \
     #"debian-9"     | \
     #"debian-10"    | \
@@ -62,8 +67,11 @@ OS_VER="$OS-$VERSION_ID"
     #"ubuntu-17"    | \
     #"ubuntu-18"    | \
     #"ubuntu-19"    | \
+    #"ubuntu-2004"  | \
     #"ubuntu-2104"  | \
-    #"centos-7"     | \
+    #"ubuntu-2110"  | \
+    #"ubuntu-2210"  | \
+    #"linuxmint-20" | \
     #"raspbian-8"   | \
     #"raspbian-9"   | \
     #"raspbian-10"  | \
@@ -74,29 +82,42 @@ OS_VER="$OS-$VERSION_ID"
 case $OS_VER in
     "debian-11"    | \
     "debian-12"    | \
-    "ubuntu-2004"  | \
-    "ubuntu-2110"  | \
+    "debian-13"    | \
     "ubuntu-2204"  | \
-    "linuxmint-20" | \
+    "ubuntu-2304"  | \
+    "ubuntu-2310"  | \
+    "ubuntu-2404"  | \
     "linuxmint-21" | \
-    "raspbian-11")
+    "raspbian-11"  | \
+    "raspbian-12")
         ;;
     *) echo -e "\n\e[41;1mOS '$OS_VER' IS NOT SUPPORTED. Please read:\e[0m\n\n\e[1mhttps://github.com/iiab/iiab/wiki/IIAB-Platforms\e[0m\n" ; exit 1    # Used by /opt/iiab/iiab/iiab-install
         ;;
 esac
 
-# These next 2 help indicate what version of IIAB
+
+# These next 4 help indicate what version of IIAB
 tmp=$(git rev-parse --abbrev-ref HEAD) &&
     IIAB_BRANCH=$tmp
+
+tmp=$(git config branch.$IIAB_BRANCH.remote) && {
+    if [[ $tmp =~ ^"https://" ]]; then
+        IIAB_REMOTE_URL=$tmp
+    else
+        IIAB_REMOTE_URL=$(git config remote.$tmp.url)
+    fi
+}
+
+tmp=$(git describe --tags --abbrev=0) &&
+    IIAB_RECENT_TAG=$tmp
 
 tmp=$(git rev-parse --verify HEAD) &&
     IIAB_COMMIT=$tmp
 
-#tmp=$(cat /proc/device-tree/mfg-data/MN) &&
-#    XO_MODEL=$tmp
 
-grep -iq raspberry /proc/device-tree/model &&
-    RPI_MODEL=$(grep -ai raspberry /proc/device-tree/model | tr -d '\0')
+grep -iq raspberry /proc/cpuinfo &&
+    RPI_MODEL=$(grep -i raspberry /proc/cpuinfo | sed 's/.*: //')
+    #RPI_MODEL=$(grep -ai raspberry /proc/device-tree/model | tr -d '\0')
 
 # /proc/device-tree/model e.g. 'Parallels ARM Virtual Machine' identical to...
 # /sys/firmware/devicetree/base/model (also true on RPi hardware!)
@@ -106,11 +127,25 @@ grep -iq raspberry /proc/device-tree/model &&
 tmp=$(tr -d '\0' < /proc/device-tree/model) &&
     DEVICETREE_MODEL=$tmp
 
+
 tmp=$(ansible --version) &&
     ANSIBLE_VERSION=$(echo "$tmp" | head -1 | cut -f 2- -d " " | sed 's/.* \([^ ]*\)\].*/\1/')
     # Above works with 'ansible [core 2.11.0rc2]' -- these old ways do not:
     #ANSIBLE_VERSION=$(echo "$tmp" | head -1 | awk '{print $2}')
     #ANSIBLE_VERSION=$(echo "$tmp" | head -1 | sed -e 's/.* //')
+
+if tmp=$(python3 -c 'from sys import version_info; print("%s.%s" % (version_info.major, version_info.minor));'); then
+    PYTHON_VERSION=$tmp
+else
+    echo -e "\e[1m\nPython 3 is REQUIRED for Internet-in-a-Box.  You might want to run:\n\nsudo apt install python3\n\e[0m"
+    exit 1
+fi
+
+tmp=$(apt list php) &&
+    PHP_VERSION=$(echo $tmp | grep -Po '[0-9]+\.[0-9]+' | head -1)
+# Extracts the first (topmost, leftmost) MAJOR.MINOR, even if not yet installed
+# Safer than: echo $tmp | grep php | head -1 | sed 's/.*://; s/[^0-9.].*//')
+# https://stackoverflow.com/questions/16675179/how-to-use-sed-to-extract-substring/16675391#16675391
 
 
 # THE LAST 3 BELOW ARE DIFFERENT as "systemctl is-enabled" unhelpfully returns
@@ -137,16 +172,18 @@ tmp=$(systemctl is-enabled systemd-networkd)
 # https://en.wikipedia.org/wiki/Here_document
 cat <<EOF
 {"stage"                  : "$STAGE",
-"dhcpcd"                  : "$DHCPCD",
-"network_manager"         : "$NETWORK_MANAGER",
-"systemd_networkd"        : "$SYSTEMD_NETWORKD",
+"os"                      : "$OS",
+"os_ver"                  : "$OS_VER",
 "iiab_branch"             : "$IIAB_BRANCH",
+"iiab_remote_url"         : "$IIAB_REMOTE_URL",
+"iiab_recent_tag"         : "$IIAB_RECENT_TAG",
 "iiab_commit"             : "$IIAB_COMMIT",
 "rpi_model"               : "$RPI_MODEL",
 "devicetree_model"        : "$DEVICETREE_MODEL",
 "ansible_version"         : "$ANSIBLE_VERSION",
-"os"                      : "$OS",
-"os_ver"                  : "$OS_VER"}
+"python_version"          : "$PYTHON_VERSION",
+"php_version"             : "$PHP_VERSION",
+"dhcpcd"                  : "$DHCPCD",
+"network_manager"         : "$NETWORK_MANAGER",
+"systemd_networkd"        : "$SYSTEMD_NETWORKD"}
 EOF
-
-#"xo_model"                : "$XO_MODEL",
