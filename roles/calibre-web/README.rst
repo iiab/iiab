@@ -26,7 +26,7 @@ Teachers upload e-books, adjust e-book metadata, and create custom "bookshelf"
 collections — to help students build the best local community library!
 
 **NEW AS OF DECEMBER 2023: If you install** `IIAB's new version of Calibre-Web <https://github.com/iiab/calibre-web/wiki>`_
-**then you can also add YouTube and Vimeo videos (ETC!) to your community's or
+**then you can also add YouTube and Vimeo videos (ETC) to your community's or
 family's learning library!**
 
 .. image:: https://www.yankodesign.com/images/design_news/2019/05/221758/luo_beetle_library_8.jpg
