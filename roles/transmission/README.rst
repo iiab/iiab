@@ -22,7 +22,7 @@ For example, once KA Lite videos and thumbnails are confirmed downloaded, copy t
 2023 Caution
 ------------
 
-In order to make the latest features available to you as of Q4 2023, Internet-in-a-Box compiles the very latest `Transmission 4.0.4+ <https://github.com/transmission/transmission/commits/main>`_ as you install it, which unfortunately can take most of an hour.
+In order to make the latest features available to you as of Q4 2023, Internet-in-a-Box compiles the very latest `Transmission 4.0.5+ <https://github.com/transmission/transmission/commits/main>`_ as you install it, which unfortunately can take most of an hour.
 
 Thankfully `Transmission 4.1+ <https://github.com/transmission/transmission/milestones>`_ should once again install quickly, starting sometime soon in early 2024 (`#5585 <https://github.com/transmission/transmission/discussions/5585>`_, `PR #5866 <https://github.com/transmission/transmission/pull/5866>`_).
 
