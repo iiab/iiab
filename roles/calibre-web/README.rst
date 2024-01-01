@@ -25,9 +25,9 @@ download e-books using a
 Teachers upload e-books, adjust e-book metadata, and create custom "bookshelf"
 collections — to help students build the best local community library!
 
-**NEW AS OF JANUARY 2024: `IIAB's experimental new version of Calibre-Web <https://github.com/iiab/calibre-web/wiki>`_
+**NEW AS OF JANUARY 2024:** `IIAB's experimental new version of Calibre-Web <https://github.com/iiab/calibre-web/wiki>`_
 **also lets you add YouTube and Vimeo videos (and local videos, e.g. from
-teachers' phones) for indigenous/local/family learning libraries!**
+teachers' phones) to expand your indigenous/local/family learning library!**
 
 .. image:: https://www.yankodesign.com/images/design_news/2019/05/221758/luo_beetle_library_8.jpg
 
