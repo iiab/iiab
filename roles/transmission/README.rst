@@ -19,14 +19,14 @@ Transmission is intended to download content like KA Lite to Internet-in-a-Box (
 
 For example, once KA Lite videos and thumbnails are confirmed downloaded, copy them (carefully!) from ``/library/transmission`` into ``/library/ka-lite/content`` as outlined by "KA Lite Administration: What tips & tricks exist?" at http://FAQ.IIAB.IO
 
-2023 Caution
-------------
+Transmission 4.x Preview (Optional)
+-----------------------------------
 
-In order to make the latest features available to you as of Q4 2023, Internet-in-a-Box compiles the very latest `Transmission 4.0.5+ <https://github.com/transmission/transmission/commits/main>`_ as you install it, which unfortunately can take most of an hour.
+2023-12-31: To make the `latest Transmission features <https://github.com/transmission/transmission/commits/main>`_ available to you, Internet-in-a-Box can compile the very latest (above and beyond `Transmission 4.x+ official releases <https://github.com/transmission/transmission/releases>`_).   Just note this can take most of an hour, and is not without risk!
 
-Thankfully `Transmission 4.1+ <https://github.com/transmission/transmission/milestones>`_ should once again install quickly, starting sometime soon in early 2024 (`#5585 <https://github.com/transmission/transmission/discussions/5585>`_, `PR #5866 <https://github.com/transmission/transmission/pull/5866>`_).
+If you decide you want this, set ``transmission_compile_latest: True`` in `/etc/iiab/local_vars.yml <https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it%3F>`_ prior to installing Transmission, as explained below.
 
-Finally, if instead you want to quickly install an older version of Transmission (e.g. version 3.0 from May 2020) then set ``transmission_compile_latest: False`` in `/etc/iiab/local_vars.yml <https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it%3F>`_ prior to installing.
+NOTE: Later in 2024, fast auto-installation of `Transmission 4.1+ <https://github.com/transmission/transmission/milestones>`_ should once again hopefully become mainline (`#5585 <https://github.com/transmission/transmission/discussions/5585>`_, `PR #5866 <https://github.com/transmission/transmission/pull/5866>`_) just as in recent years with Transmission 3.0 (originally from May, 2020).
 
 .. Transmission can consume significant Internet data and system resources.  Caveat emptor!  (That's Latin for "Buyer Beware")
 
