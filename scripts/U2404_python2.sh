@@ -33,7 +33,7 @@ source bin/activate
 bin/pip install ka-lite-static  --no-python-version-warning --no-cache-dir
 deactivate
 
-apt -y remove `apt list *python2* | grep installed | awk -F / '{ print $1 }'`
+#apt -y remove `apt list *python2* | grep installed | awk -F / '{ print $1 }'`
 apt-mark unhold `apt-mark showhold`
 
 rm /etc/apt/sources.list.d/python2.list
