@@ -1,4 +1,4 @@
-!/bin/bash
+#!/bin/bash
 export DEBIAN_FRONTEND=noninteractive
 
 cat << EOF > /etc/apt/sources.list.d/python2.list
