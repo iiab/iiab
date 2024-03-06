@@ -33,7 +33,7 @@ virtualenv --always-copy --pip 20.3.4 --setuptools 44.1.1 --no-wheel -p python2.
 
 cd /usr/local/kalite/venv
 source bin/activate
-bin/pip install ka-lite-static  --no-python-version-warning --no-cache-dir
+bin/pip install ka-lite-static --no-python-version-warning --no-cache-dir
 deactivate
 
 #apt -y remove `apt list *python2* | grep installed | awk -F / '{ print $1 }'`
@@ -45,4 +45,3 @@ apt -y remove libmpdec3 python3-pip python3-wheel
 
 apt update
 apt -y upgrade
-
