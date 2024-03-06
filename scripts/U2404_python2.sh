@@ -20,6 +20,9 @@ apt -y install python2-pip-whl python2-setuptools-whl
 apt -y --allow-downgrades install python3-pip-whl=22.0.2+dfsg-1
 apt-mark hold python3-pip-whl
 
+apt -y --no-install-recommends install python3-pip=22.0.2+dfsg-1
+apt-mark hold python3-pip
+
 apt -y --allow-downgrades install python3-virtualenv=20.13.0+ds-2
 apt-mark hold python3-virtualenv
 
