@@ -14,8 +14,7 @@ apt-mark hold python3.11 python3.11-minimal libpython3.11-stdlib libpython3.11-m
 apt -y --allow-downgrades install python3-platformdirs=2.5.1-1
 apt-mark hold python3-platformdirs
 
-apt -y install python2
-apt -y install python2-pip-whl python2-setuptools-whl
+apt -y install python2 python2-pip-whl python2-setuptools-whl
 
 apt -y --allow-downgrades install python3-pip-whl=22.0.2+dfsg-1
 apt-mark hold python3-pip-whl
@@ -37,11 +36,11 @@ bin/pip install ka-lite-static --no-python-version-warning --no-cache-dir
 deactivate
 
 #apt -y remove `apt list *python2* | grep installed | awk -F / '{ print $1 }'`
-apt-mark unhold `apt-mark showhold`
+apt-mark unhold $(apt-mark showhold) || true
 
 rm /etc/apt/sources.list.d/python2.list
 
 apt -y remove libmpdec3 python3-pip python3-wheel
 
 apt update
-apt -y upgrade
+apt -y upgrade    # Why 'apt upgrade' here?
