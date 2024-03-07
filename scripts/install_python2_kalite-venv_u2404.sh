@@ -44,3 +44,8 @@ apt -y remove libmpdec3 python3-pip python3-wheel
 
 apt update
 apt -y upgrade    # Why 'apt upgrade' here?
+
+# python3-venv is needed for other venv's like roles/jupyterhub, e.g. #3716.
+# So we restore python3-venv originally installed by scripts/ansible -- this
+# is nec b/c python3-pip-whl downgrade to 22.0.2 (line ~19 above) removes it:
+apt -y install python3-venv
