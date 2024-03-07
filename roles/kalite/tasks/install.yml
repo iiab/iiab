@@ -15,32 +15,20 @@
 #  ignore_errors: yes
 #  when: is_raspbian
 
-- name: 'Install packages: python2, python-setuptools, virtualenv (for Python 2)'
+- name: 'Install packages: python2, python-setuptools, virtualenv (for Python 2) -- if Ubuntu 22.04 / Mint 21'
   package:
     name:
       - python2
       - python-setuptools    # Provides setuptools-44 on recent OS's (last version compatible with python2)
       - virtualenv           # Drags in 'python3-virtualenv' which in turn drags in 'python3-pip' -- for Ansible module 'pip' when used with 'virtualenv_command: /usr/bin/virtualenv' and 'virtualenv_python: python2.7' -- compare package 'python3-venv' used by roles {calibre-web, jupyterhub, lokole}
     state: present
-  when: (is_debian_11 is defined and is_debian_11) or (is_ubuntu_2204 is defined and is_ubuntu_2204)    # Covers is_raspbian_11 and is_linuxmint_21, and is more future-proof than...
-  #when: not (is_debian_12 or is_ubuntu_2304 or is_ubuntu_2310)
-  # 2020-03-31: Testing for {is_raspbian_9, is_raspbian_10} is not currently nec, as testing for {is_debian_9, is_debian_10} covers that already.
+  when: is_ubuntu_2204    # Also covers is_linuxmint_21
 
-#- name: Install Ubuntu keyrings on Debian
-#  get_url:
-#    url:
-#    dest: /etc/apt/keyrings/
-#    mode: 0644
-#    timeout: "{{ download_timeout }}"
-#  when: is_debian_12
-
-# use key retrieval from mongodb
-- name: Use scripts/install_python2.sh to install python2 and virtualenv
+- name: Run scripts/install_python2.sh to install python2 and virtualenv -- if Debian 12 or RasPiOS 12
   command: "{{ iiab_dir }}/scripts/install_python2.sh"
-  when: not ((is_debian_11 is defined and is_debian_11) or (is_ubuntu_2204 is defined and is_ubuntu_2204))    # Also avoids is_raspbian_11 and is_linuxmint_21, and is more future-proof than...
-  #when: is_debian_12 or is_ubuntu_2304 or is_ubuntu_2310
+  when: is_debian_12    # Also covers is_raspbian_12
 
-- name: Use pip to pin setuptools to 44 in {{ kalite_venv }}    # WAS: if Raspbian/Debian > 10 or Ubuntu > 19
+- name: Use pip to pin setuptools to 44 in {{ kalite_venv }} -- if Ubuntu 22.04 / Mint 21, Ubuntu 23.10, Debian 12 or RasPiOS 12
   pip:
     name: setuptools==44
     virtualenv: "{{ kalite_venv }}"    # /usr/local/kalite/venv
@@ -48,11 +36,9 @@
     virtualenv_command: virtualenv    # Traditionally /usr/bin/virtual/env -- but install_python2.sh (for Ubuntu 23.10+) sets up /usr/local/bin/virtualenv
     virtualenv_python: python2.7
     extra_args: "--no-use-pep517 --no-cache-dir --no-python-version-warning"
-  when: not (is_ubuntu_2404 is defined and is_ubuntu_2404)
-  #when: not (is_debian_9 or is_debian_10 or is_ubuntu_16 or is_ubuntu_17 or is_ubuntu_18 or is_ubuntu_19)
-  # long form of (is_debian_11+ or is_ubuntu_20+)
+  when: is_ubuntu_2204 or is_ubuntu_2310 or is_debian_12    # Also covers is_linuxmint_21 and is_raspbian_12
 
-- name: Use pip to install ka-lite-static to {{ kalite_venv }}
+- name: Use pip to install ka-lite-static to {{ kalite_venv }} -- if Ubuntu 22.04 / Mint 21, Ubuntu 23.10, Debian 12 or RasPiOS 12
   pip:
     name: ka-lite-static
     version: "{{ kalite_version }}"
@@ -61,11 +47,11 @@
     virtualenv_command: virtualenv
     virtualenv_python: python2.7
     extra_args: "--no-cache-dir"
-  when: not (is_ubuntu_2404 is defined and is_ubuntu_2404)
+  when: is_ubuntu_2204 or is_ubuntu_2310 or is_debian_12    # Also covers is_linuxmint_21 and is_raspbian_12
 
-- name: Run scripts/install_python2_kalite-venv_u2404.sh if Ubuntu 24.04
+- name: Run scripts/install_python2_kalite-venv_u2404.sh -- if Ubuntu 24.04+ or Mint 22
   command: bash "{{ iiab_dir }}/scripts/install_python2_kalite-venv_u2404.sh"
-  when: is_ubuntu_2404 is defined and is_ubuntu_2404
+  when: is_ubuntu and not is_linuxmint and os_ver is version('ubuntu-2404', '>=') or is_linuxmint_22
 
 - name: "Install from templates: venv wrapper /usr/bin/kalite, unit file /etc/systemd/system/kalite-serve.service"
   template:
@@ -76,30 +62,11 @@
     - { src: 'kalite.sh.j2', dest: '/usr/bin/kalite', mode: '0755' }
     - { src: 'kalite-serve.service.j2', dest: '/etc/systemd/system/kalite-serve.service', mode: '0644' }
 
-# Useless stanza, for 2 reasons: (1) http://box/kalite was never made to work
-# (2) /etc/apache2/sites-available does not exist on many IIAB's w/o Apache
-# - name: "Install from template: /etc/{{ apache_conf_dir }}/kalite.conf (useless, as http://box/kalite was never made to work)"
-#   template:
-#     src: kalite.conf
-#     dest: "/etc/{{ apache_conf_dir }}"    # apache2/sites-available on debuntu
-#   when: apache_installed is defined
-
 - name: Fix KA Lite bug in regex parsing ifconfig output (ifcfg/parser.py) for @m-anish's network names that contain dashes    # WAS: if Raspbian/Debian > 10 or Ubuntu > 19
   replace:
     path: "{{ kalite_venv }}/lib/python2.7/site-packages/kalite/packages/dist/ifcfg/parser.py"    # /usr/local/kalite/venv
     regexp: 'a-zA-Z0-9'
     replace: 'a-zA-Z0-9\-'
-  #when: not (is_debian_9 or is_debian_10 or is_ubuntu_16 or is_ubuntu_17 or is_ubuntu_18 or is_ubuntu_19)
-  # 2020-03-31: Testing for {is_raspbian_9, is_raspbian_10} is not currently nec, as testing for {is_debian_9, is_debian_10} covers that already.
-  # JV: why not just is_ubuntu_20? AH: to make this work on Ubuntu 21+ and ideally Debian/RasPiOS 11+ too?
-
-# - name: Fix KA Lite bug in regex parsing ifconfig output (ifcfg/parser.py) for @m-anish's network names that contain dashes, if Raspbian/Debian < 11 or Ubuntu < 20
-#   replace:
-#     path: "{{ kalite_venv }}/local/lib/python2.7/site-packages/kalite/packages/dist/ifcfg/parser.py"
-#     regexp: 'a-zA-Z0-9'
-#     replace: 'a-zA-Z0-9\-'
-#   when: is_debian_9 or is_debian_10 or is_ubuntu_16 or is_ubuntu_17 or is_ubuntu_18 or is_ubuntu_19
-#   # 2020-03-31: Testing for {is_raspbian_9, is_raspbian_10} is not currently nec, as testing for {is_debian_9, is_debian_10} covers that already.
 
 - name: Create dir {{ kalite_root }}
   file:
