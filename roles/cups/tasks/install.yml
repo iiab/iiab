@@ -58,14 +58,29 @@
         AuthType Default
         Require user @SYSTEM
 
-- name: "CUPS web administration: Create Linux username 'Admin' with password 'changeme' in Linux group 'lpadmin' (shell: /usr/sbin/nologin, create_home: no)"
+- name: "CUPS web administration: Create Linux username 'Admin' in Linux group 'lpadmin' (shell: /usr/sbin/nologin, create_home: no)"
   user:
     name: Admin
     append: yes    # Don't clobber other groups, that other IIAB Apps might need.
     groups: lpadmin
-    password: "{{ 'changeme' | password_hash('sha512') }}"    # Random salt.  Presumably runs 5000 rounds of SHA-512 per /etc/login.defs & /etc/pam.d/common-password -- https://docs.ansible.com/ansible/latest/user_guide/playbooks_filters.html#encrypting-and-checksumming-strings-and-passwords
+    #password: "{{ 'changeme' | password_hash('sha512') }}"    # Random salt.  Presumably runs 5000 rounds of SHA-512 per /etc/login.defs & /etc/pam.d/common-password -- https://docs.ansible.com/ansible/latest/user_guide/playbooks_filters.html#encrypting-and-checksumming-strings-and-passwords
     create_home: no
     shell: /usr/sbin/nologin    # Debian/Ubuntu norm -- instead of /sbin/nologin, /bin/false
+
+# 2024-05-01: Above password-setting approach no longer works w/ Ansible 2.17 RC1 (#3727).
+# Ansible STOPS with this error...
+#
+# "[DEPRECATION WARNING]: Encryption using the Python crypt module is deprecated. The Python crypt module is
+# deprecated and will be removed from Python 3.13. Install the passlib library for continued encryption
+# functionality. This feature will be removed in version 2.17. Deprecation warnings can be disabled by
+# setting deprecation_warnings=False in ansible.cfg."
+#
+# ...so we instead use Linux's "chpasswd" command (below!)
+
+- name: Use chpasswd to set Linux username 'Admin' password to 'changeme'
+  command: chpasswd
+  args:
+    stdin: Admin:changeme
 
 # - name: Add user '{{ iiab_admin_user }}' to Linux group 'lpadmin' -- for CUPS web administration (or modify default 'SystemGroup lpadmin' in /etc/cups/cups-files.conf -- in coordination with ~14 -> ~15 '@SYSTEM' lines in /etc/cups/cupsd.conf)
 #   #command: "gpasswd -a {{ iiab_admin_user | quote }} lpadmin"
