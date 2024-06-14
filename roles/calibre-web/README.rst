@@ -108,6 +108,10 @@ Whereas your e-book metadata is stored in a Calibre-style database::
 
   /library/calibre-web/metadata.db
 
+Videos' metadata is stored in database::
+
+  /library/calibre-web/xklb-metadata.db
+
 See also::
 
   /library/calibre-web/metadata_db_prefs_backup.json
