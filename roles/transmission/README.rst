@@ -86,6 +86,8 @@ Known Issues
 
 * Random Ports: Currently it is not possible to use random ports in the range 49152-65535, as it's difficult to open multiple ports in IIAB's `iptables-based firewall <https://github.com/iiab/iiab/wiki/IIAB-Networking#firewall-iptables>`_.
 
+* transmission-daemon (4.0.6 or 4.1-dev) install onto Ubuntu 24.04 or 24.10, but (1) its systemd service times out (fails to start) (2) rebooting kinda helps, but service then crashes on 1st visit to http://box:9091 `#3756 <https://github.com/iiab/iiab/issues/3756>`_
+
 Troubleshooting
 ---------------
 
