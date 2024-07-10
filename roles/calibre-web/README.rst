@@ -228,5 +228,5 @@ Known Issues
 
 * |ss| Upload of not supported file formats gives no feedback to the user: `janeczku/calibre-web#828 <https://github.com/janeczku/calibre-web/issues/828>`_ |se| |nbsp|  Fixed by `361a124 <https://github.com/janeczku/calibre-web/commit/361a1243d732116e6f520fabbaae017068b86037>`_ on 2019-02-27.
 
-* *Please assist us in reporting serious issues here:*
-  https://github.com/janeczku/calibre-web/issues
+* *Please report serious issues here:*
+  https://github.com/iiab/calibre-web/issues
