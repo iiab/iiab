@@ -2,7 +2,7 @@
 
 Remote.it can be a [great way](https://docs.remote.it/introduction/get-started/readme) to remotely support an Internet-in-a-Box (IIAB).
 
-As of [2023](https://remote.it/pricing/), 5 IIAB devices can be managed for free (their personal / non-commercial plan) and larger numbers for $10+/month.
+As of [2024](https://remote.it/pricing/), 5 IIAB devices can be managed for free (their personal / non-commercial plan) and larger numbers for $10+/month.
 
 For other approaches, please see [FAQ.IIAB.IO](https://wiki.iiab.io/go/FAQ) -> "How can I remotely manage my Internet-in-a-Box?"
 
