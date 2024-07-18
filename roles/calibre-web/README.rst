@@ -157,26 +157,31 @@ as it contains your Calibre-Web content **and** configuration settings!
 Upgrading
 ---------
 
-"Reinstalling" Calibre-Web automatically installs the latest version — if your
-Internet-in-a-Box (IIAB) is online.
+Please see our `new/automated upgrade technique (iiab-update) <https://github.com/iiab/calibre-web/wiki#upgrading>`_
+introduced in July 2024.
 
-But first: back up your content **and** configuration settings, as explained above.
+But first: back up your content **and** configuration settings, as outlined
+above!
 
-**Also move your /library/calibre-web/config/app.db AND/OR
-/library/calibre-web/metadata.db out of the way — if you're sure you want to
-fully reset your Calibre-Web settings (to install defaults) AND/OR remove all
-e-book metadata!  Then run, as root**::
+**Conversely if you're sure you want to fully reset your Calibre-Web settings,
+and remove all existing e-book/video/media metadata — then move your
+/library/calibre-web/config/app.db, /library/calibre-web/metadata.db and
+/library/calibre-web/xklb-metadata.db out of the way.**
+
+RECAP: In general, "reinstalling" Calibre-Web automatically installs the latest
+version — if your Internet-in-a-Box (IIAB) is online.  Strongly consider the
+new ``iiab-update`` technique described above.  But if you must use the
+older/manual technique, you would need to run, as root::
 
   cd /opt/iiab/iiab
   ./runrole --reinstall calibre-web
 
-Or, if you just want to upgrade Calibre-Web code alone, prior to proceeding
-manually::
+Or, if you want to try upgrading Calibre-Web code alone::
 
   cd /usr/local/calibre-web-py3
   git pull
 
-This older way is *no longer recommended*::
+Finally, this much older way is *no longer recommended*::
 
   cd /opt/iiab/iiab
   ./iiab-install --reinstall    # OR: ./iiab-configure
