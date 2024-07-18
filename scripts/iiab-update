@@ -12,72 +12,73 @@
 
 {
     if [[ $(id -un) != "root" ]]; then
-	echo -e "\nPlease run: sudo iiab-update\n"
-	exit 1
+        echo -e "\nPlease run: sudo iiab-update\n"
+        exit 1
     fi
 
     if [[ $1 == "-f" || $1 == "--fast" ]]; then
-	echo -e "\n\n\e[44;1mAttempting a FAST upgrade of IIAB Calibre-Web...\e[0m\n"
-	echo -e "\n\e[33m'iiab-update -f' DOES NOT apply apt updates.\e[0m"
+        echo -e "\n\n\e[44;1mAttempting a FAST upgrade of IIAB Calibre-Web...\e[0m\n"
+        echo -e "\n\e[33m'iiab-update -f' DOES NOT apply apt updates.\e[0m"
     else
-	echo -e "\n\n\e[44;1mUpgrade IIAB core software: (apt updates, Ansible, Admin Console, etc)\e[0m\n"
-	echo -e "\n\e[44;1mOr try 'iiab-update -f' for a FAST upgrade of IIAB Calibre-Web!\e[0m\n\n"
-	echo -e "\e[4mNow running: apt update\e[0m\n"
-	apt update
-	echo -e "\n\e[4mNow running: apt dist-upgrade -y\e[0m\n"
-	apt dist-upgrade -y
-	echo -e "\n\e[4mNow running: apt autoremove -y\e[0m\n"
-	apt autoremove -y
+        echo -e "\n\n\e[44;1mUpgrade IIAB core software: (apt updates, Ansible, Admin Console, etc)\e[0m\n"
+        echo -e "\n\e[44;1mOr try 'iiab-update -f' for a FAST upgrade of IIAB Calibre-Web!\e[0m\n\n"
+        echo -e "\e[4mNow running: apt update\e[0m\n"
+        apt update
+        echo -e "\n\e[4mNow running: apt dist-upgrade -y\e[0m\n"
+        apt dist-upgrade -y
+        echo -e "\n\e[4mNow running: apt autoremove -y\e[0m\n"
+        apt autoremove -y
     fi
 
     cd /opt/iiab/iiab
     if [[ $(git branch --show-current) != "master" || $(git status --porcelain) != "" ]]; then
-	echo -e "\n\n\e[41;1mIn /opt/iiab/iiab, (1) 'git branch' MUST show current branch 'master' and (2) 'git status' must show NO MODIFIED FILES.\e[0m\n\n"
-	exit 1
+        echo -e "\n\n\e[41;1mIn /opt/iiab/iiab, (1) 'git branch' MUST show current branch 'master' and (2) 'git status' must show NO MODIFIED FILES.\e[0m\n\n"
+        exit 1
     fi
     echo -e "\n\n\e[4mNow running: git pull https://github.com/iiab/iiab --no-rebase --no-edit\e[0m\n"
     git pull https://github.com/iiab/iiab --no-rebase --no-edit
     if [[ $1 == "-f" || $1 == "--fast" ]]; then    # Otherwise ./runrole does it below! (as Ansible runs roles/0-init)
-	cd scripts
-	echo -e "\n\e[4mNow running: cp iiab-update iiab-summary iiab-diagnostics /usr/bin\e[0m\n"
-	cp iiab-update iiab-summary iiab-diagnostics /usr/bin
+        cd scripts
+        echo -e "\n\e[4mNow running: cp iiab-update iiab-summary iiab-diagnostics /usr/bin\e[0m\n"
+        cp iiab-update iiab-summary iiab-diagnostics /usr/bin
     fi
 
     if [[ $1 == "-f" || $1 == "--fast" ]]; then
-	echo -e "\n\e[33m'iiab-update -f' DOES NOT upgrade Ansible.\e[0m\n"
+        echo -e "\n\e[33m'iiab-update -f' DOES NOT upgrade Ansible.\e[0m\n"
     else
-	echo -e "\n\n\e[4mNow running: scripts/ansible\e[0m"
-	scripts/ansible
+        echo -e "\n\n\e[4mNow running: scripts/ansible\e[0m"
+        scripts/ansible
     fi
 
     if grep -q 'calibreweb_installed: True' /etc/iiab/iiab_state.yml; then
-	if [[ $1 == "-f" || $1 == "--fast" ]]; then
+        if [[ $1 == "-f" || $1 == "--fast" ]]; then
             echo -e "\n\e[1mIf you want a COMPLETE reinstall of Calibre-Web, then also run:\n\n\e[0m\e[7mcd /opt/iiab/iiab ; ./runrole --reinstall calibre-web\e[0m\n"
-	fi
-	echo -e "\e[4mNow running: pipx uninstall xklb    # THIS ALSO UNINSTALLS yt-dlp\e[0m\n"
-	pipx uninstall xklb
-	echo -e "\n\e[4mNow running: pipx install xklb      # THIS ALSO INSTALLS yt-dlp\e[0m\n"
-	pipx install xklb
-	# IF YOU WANT THE "nightly" RELEASE OF yt-dlp, UNCOMMENT THE NEXT LINE:
-	# pipx inject --pip-args="--upgrade --pre" -f xklb yt-dlp[default]
-	echo -e "\n\e[4mNow running: yt-dlp --version\e[0m\n"
-	yt-dlp --version
-	cd /usr/local/calibre-web-py3
-	if [[ $(git branch --show-current) != "master" || $(git status --porcelain --untracked-files=no) != "" ]]; then    # Permit venv detritus, e.g. untracked files like these 5: bin/ include/ lib/ lib64 pyvenv.cfg
-	    echo -e "\n\n\e[41;1mIn /usr/local/calibre-web-py3, (1) 'git branch' MUST show current branch 'master' and (2) 'git status' must show NO MODIFIED FILES.\e[0m\n\n"
-	    exit 1
-	fi
-	systemctl stop calibre-web
-	echo -e "\n\e[4mNow running: git pull https://github.com/iiab/calibre-web --no-rebase --no-edit\e[0m\n"
-	git pull https://github.com/iiab/calibre-web --no-rebase --no-edit
-	cd /opt/iiab/iiab
-	if [[ $1 == "-f" || $1 == "--fast" ]]; then
-	    echo -e "\n\e[4mNow running: systemctl restart calibre-web\e[0m\n"
+        fi
+        echo -e "\e[4mNow running: pipx uninstall xklb    # THIS ALSO UNINSTALLS yt-dlp\e[0m\n"
+        pipx uninstall xklb
+        echo -e "\n\e[4mNow running: pipx install xklb      # THIS ALSO INSTALLS yt-dlp\e[0m\n"
+        pipx install xklb
+        # IF YOU WANT THE "nightly" RELEASE OF yt-dlp, UNCOMMENT THE NEXT LINE:
+        # pipx inject --pip-args="--upgrade --pre" -f xklb yt-dlp[default]
+        echo -e "\n\e[4mNow running: yt-dlp --version\e[0m\n"
+        yt-dlp --version
+        cd /usr/local/calibre-web-py3
+        if [[ $(git branch --show-current) != "master" || $(git status --porcelain --untracked-files=no) != "" ]]; then    # Permit venv detritus, e.g. untracked files like these 5: bin/ include/ lib/ lib64 pyvenv.cfg
+            echo -e "\n\n\e[41;1mIn /usr/local/calibre-web-py3, (1) 'git branch' MUST show current branch 'master' and (2) 'git status' must show NO MODIFIED FILES.\e[0m\n\n"
+            exit 1
+        fi
+        echo -e "\n\e[4mNow running: systemctl stop calibre-web\e[0m\n"
+        systemctl stop calibre-web
+        echo -e "\e[4mNow running: git pull https://github.com/iiab/calibre-web --no-rebase --no-edit\e[0m\n"
+        git pull https://github.com/iiab/calibre-web --no-rebase --no-edit
+        cd /opt/iiab/iiab
+        if [[ $1 == "-f" || $1 == "--fast" ]]; then
+            echo -e "\n\e[4mNow running: systemctl restart calibre-web\e[0m\n"
             systemctl restart calibre-web
-	else
-	    echo -e "\n\e[4mNow running: ./runrole --reinstall calibre-web\e[0m\n"
+        else
+            echo -e "\n\e[4mNow running: ./runrole --reinstall calibre-web\e[0m\n"
             ./runrole --reinstall calibre-web
-	fi
+        fi
     fi
 
     # 2024-07-17: Run Admin Console stanza last for safety -- it failed ~50% of the
@@ -101,19 +102,19 @@
     # [ VARIOUS ERRORS SOMETIMES HAPPEN HERE ]
 
     if [ -d /opt/admin ]; then
-	if [[ $1 == "-f" || $1 == "--fast" ]]; then
-	    echo -e "\n\e[33m'iiab-update -f' DOES NOT upgrade Admin Console.\e[0m"
-	else
-	    cd /opt/iiab/iiab-admin-console
-	    if [[ $(git branch --show-current) != "master" || $(git status --porcelain) != "" ]]; then
-		echo -e "\n\n\e[41;1mIn /opt/iiab/iiab-admin-console, (1) 'git branch' MUST show current branch 'master' and (2) 'git status' must show NO MODIFIED FILES.\e[0m\n\n"
-		exit 1
-	    fi
-	    echo -e "\n\e[4mNow running: git pull https://github.com/iiab/iiab-admin-console --no-rebase --no-edit\e[0m\n"
-	    git pull https://github.com/iiab/iiab-admin-console --no-rebase --no-edit
-	    echo -e "\n\e[4mNow running: ./install\e[0m\n"
-	    ./install
-	fi
+        if [[ $1 == "-f" || $1 == "--fast" ]]; then
+            echo -e "\n\e[33m'iiab-update -f' DOES NOT upgrade Admin Console.\e[0m"
+        else
+            cd /opt/iiab/iiab-admin-console
+            if [[ $(git branch --show-current) != "master" || $(git status --porcelain) != "" ]]; then
+                echo -e "\n\n\e[41;1mIn /opt/iiab/iiab-admin-console, (1) 'git branch' MUST show current branch 'master' and (2) 'git status' must show NO MODIFIED FILES.\e[0m\n\n"
+                exit 1
+            fi
+            echo -e "\n\e[4mNow running: git pull https://github.com/iiab/iiab-admin-console --no-rebase --no-edit\e[0m\n"
+            git pull https://github.com/iiab/iiab-admin-console --no-rebase --no-edit
+            echo -e "\n\e[4mNow running: ./install\e[0m\n"
+            ./install
+        fi
     fi
 
     echo -e "\n\n\e[44;1miiab-update COMPLETE!\e[0m\n\n"
