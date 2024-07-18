@@ -168,15 +168,15 @@ and remove all existing e-book/video/media metadata — then move your
 /library/calibre-web/config/app.db, /library/calibre-web/metadata.db and
 /library/calibre-web/xklb-metadata.db out of the way.**
 
-RECAP: In general, "reinstalling" Calibre-Web automatically installs the latest
-version — if your Internet-in-a-Box (IIAB) is online.  Strongly consider the
-new ``iiab-update`` technique described above.  But if you must use the
-older/manual technique, you would need to run, as root::
+RECAP: Either way, "reinstalling" Calibre-Web automatically installs the latest
+version — so long as your Internet-in-a-Box (IIAB) is online.  Most people
+should stick with the new ``iiab-update`` technique above.  However if you must
+use the older/manual approach, you would need to run, as root::
 
   cd /opt/iiab/iiab
   ./runrole --reinstall calibre-web
 
-Or, if you want to try upgrading Calibre-Web code alone::
+Or, if there's a need to try updating Calibre-Web's code alone::
 
   cd /usr/local/calibre-web-py3
   git pull
