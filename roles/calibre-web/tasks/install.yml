@@ -1,12 +1,22 @@
-# To upgrade IIAB Calibre-Web:
+# Or try 'iiab-update -f' for a more rapid upgrade of IIAB Calibre-Web:
+#
+# https://wiki.iiab.io/go/FAQ#Can_I_upgrade_IIAB_software%3F
 # https://github.com/iiab/calibre-web/wiki#upgrading
 # https://github.com/iiab/iiab/blob/master/scripts/iiab-update
+# https://github.com/iiab/iiab/tree/master/roles/calibre-web#upgrading
 
 
 - name: Record (initial) disk space used
   shell: df -B1 --output=used / | tail -1
   register: df1
 
+
+- name: Stop 'calibre-web' systemd service for safety (RED ERROR CAN BE IGNORED!)
+  systemd:
+    name: calibre-web
+    state: stopped
+  ignore_errors: True    # Shows red errors, and continue...
+  #failed_when: False    # Hides red errors, and continue...
 
 - name: "Install packages: imagemagick, python3-netifaces"
   package:
@@ -38,10 +48,10 @@
     state: absent
   when: calibreweb_venv_wipe
 
-- name: Does {{ calibreweb_venv_path }} exist?
-  stat:
-    path: "{{ calibreweb_venv_path }}"    # /usr/local/calibre-web-py3
-  register: calibreweb_venv
+# - name: Does {{ calibreweb_venv_path }} exist?
+#   stat:
+#     path: "{{ calibreweb_venv_path }}"
+#   register: calibreweb_venv
 
 - name: "Create 3 Calibre-Web folders to store data and config files: {{ calibreweb_home }}, {{ calibreweb_venv_path }}, {{ calibreweb_config }} (all set to {{ calibreweb_user }}:{{ apache_user }}) (default to 0755)"
   file:
@@ -52,7 +62,7 @@
   with_items:
     - "{{ calibreweb_home }}"         # /library/calibre-web
     - "{{ calibreweb_config }}"       # /library/calibre-web/config
-    - "{{ calibreweb_venv_path }}"
+    - "{{ calibreweb_venv_path }}"    # /usr/local/calibre-web-py3
 
 # FYI since May 2021, Calibre-Web (major releases) can be installed with pip:
 # https://pypi.org/project/calibreweb/
@@ -61,14 +71,15 @@
 # https://github.com/janeczku/calibre-web/pull/927
 # https://github.com/janeczku/calibre-web/pull/1459
 
-- name: "Clone i.e. download Calibre-Web ({{ calibreweb_version }}) from {{ calibreweb_repo_url }} to {{ calibreweb_venv_path }} (~120 MB initially, ~203+ MB later) -- if {{ calibreweb_venv_path }} created just above"
+#- name: "Clone i.e. download Calibre-Web ({{ calibreweb_version }}) from {{ calibreweb_repo_url }} to {{ calibreweb_venv_path }} (~120 MB initially, ~203+ MB later) -- if {{ calibreweb_venv_path }} created just above"
+- name: "Clone (or 'git pull' to update, forcibly!) Calibre-Web ({{ calibreweb_version }}) from {{ calibreweb_repo_url }} to {{ calibreweb_venv_path }} (~122 MB initially, ~191+ MB later)"
   git:
     repo: "{{ calibreweb_repo_url }}"    # e.g. https://github.com/iiab/calibre-web or https://github.com/janeczku/calibre-web
     dest: "{{ calibreweb_venv_path }}"
-    force: yes
-    #depth: 1    # 2023-11-04: Full clone for now, to help @deldesir & wider community testing
-    version: "{{ calibreweb_version }}"    # e.g. master, 0.6.21
-  when: not calibreweb_venv.stat.exists
+    force: yes    # "any modified files in the working repository will be discarded"
+    #depth: 1     # 2023-11-04: Full clone for now, to help @deldesir & wider community testing
+    version: "{{ calibreweb_version }}"    # e.g. master, 0.6.22
+  #when: not calibreweb_venv.stat.exists
 
 - name: If Calibre-Web is being enhanced with audio/video "books" too, install/upgrade additional prereqs -- SEE https://github.com/iiab/calibre-web/wiki
   shell: |
