@@ -42,17 +42,6 @@
     line: '  <policy domain="coder" rights="read" pattern="PDF" />'
     state: present
 
-- name: "Remove previous virtual environment {{ calibreweb_venv_path }} -- if 'calibreweb_venv_wipe: True'"
-  file:
-    path: "{{ calibreweb_venv_path }}"
-    state: absent
-  when: calibreweb_venv_wipe
-
-# - name: Does {{ calibreweb_venv_path }} exist?
-#   stat:
-#     path: "{{ calibreweb_venv_path }}"
-#   register: calibreweb_venv
-
 - name: "Create 3 Calibre-Web folders to store data and config files: {{ calibreweb_home }}, {{ calibreweb_venv_path }}, {{ calibreweb_config }} (all set to {{ calibreweb_user }}:{{ apache_user }}) (default to 0755)"
   file:
     state: directory
@@ -62,7 +51,6 @@
   with_items:
     - "{{ calibreweb_home }}"         # /library/calibre-web
     - "{{ calibreweb_config }}"       # /library/calibre-web/config
-    - "{{ calibreweb_venv_path }}"    # /usr/local/calibre-web-py3
 
 # FYI since May 2021, Calibre-Web (major releases) can be installed with pip:
 # https://pypi.org/project/calibreweb/
@@ -71,15 +59,31 @@
 # https://github.com/janeczku/calibre-web/pull/927
 # https://github.com/janeczku/calibre-web/pull/1459
 
-#- name: "Clone i.e. download Calibre-Web ({{ calibreweb_version }}) from {{ calibreweb_repo_url }} to {{ calibreweb_venv_path }} (~120 MB initially, ~203+ MB later) -- if {{ calibreweb_venv_path }} created just above"
-- name: "Clone (or 'git pull' to update, forcibly!) Calibre-Web ({{ calibreweb_version }}) from {{ calibreweb_repo_url }} to {{ calibreweb_venv_path }} (~122 MB initially, ~191+ or ~203+ MB later)"
+- name: "Remove previous virtual environment {{ calibreweb_venv_path }} -- if 'calibreweb_venv_wipe: True'"
+  file:
+    path: "{{ calibreweb_venv_path }}"    # /usr/local/calibre-web-py3
+    state: absent
+  when: calibreweb_venv_wipe
+
+- name: Does {{ calibreweb_venv_path }} exist?
+  stat:
+    path: "{{ calibreweb_venv_path }}"
+  register: calibreweb_venv
+
+- name: git clone Calibre-Web ({{ calibreweb_version }}) from {{ calibreweb_repo_url }} to {{ calibreweb_venv_path }} (~122 MB initially, ~191+ or ~203+ MB later) -- if {{ calibreweb_venv_path }} doesns't exist
   git:
     repo: "{{ calibreweb_repo_url }}"    # e.g. https://github.com/iiab/calibre-web or https://github.com/janeczku/calibre-web
     dest: "{{ calibreweb_venv_path }}"
-    force: yes    # "any modified files in the working repository will be discarded"
-    #depth: 1     # 2023-11-04: Full clone for now, to help @deldesir & wider community testing
+    #force: True    # CLAIM: "If true, any modified files in the working repository will be discarded" -- REALITY: even if `force: no`, Ansible destructively reclones (also removing all test branch commits etc!) -- unless a git credential is provided to Ansible?
+    #depth: 1       # 2023-11-04: Full clone for now, to help @deldesir & wider community testing
     version: "{{ calibreweb_version }}"    # e.g. master, 0.6.22
-  #when: not calibreweb_venv.stat.exists
+  when: not calibreweb_venv.stat.exists
+
+- name: cd {{ calibreweb_venv_path }} ; git pull {{ calibreweb_repo_url }} {{ calibreweb_version }} --no-rebase --no-edit -- if {{ calibreweb_venv_path }} exists
+  command: git pull "{{ calibreweb_repo_url }}" "{{ calibreweb_version }}" --no-rebase --no-edit
+  args:
+    chdir: "{{ calibreweb_venv_path }}"
+  when: calibreweb_venv.stat.exists
 
 - debug:
     msg:
