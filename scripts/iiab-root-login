@@ -1,0 +1,60 @@
+#!/bin/bash -e
+# "-e" tries to exit right away on error.
+
+# Enable (and set!) root login password for ssh and sftp.
+# To help everyday IIAB implementers upload content with FileZilla:
+# https://wiki.iiab.io/go/FAQ#How_do_I_add_my_own_content%3F
+
+# AT YOUR OWN RISK.  If this absolutely must be run non-interactively, use:
+# sudo iiab-root-login <PASSWORD>
+
+if [ ! -f /etc/ssh/sshd_config ]; then
+    echo -e '\n\e[41;1mERROR: /etc/ssh/sshd_config is missing (is openssh-server installed?)\e[0m\n'
+    exit 1
+fi
+
+if ! systemctl is-active ssh > /dev/null; then
+    echo -e "\n\e[41;1mERROR: ssh service is not active (run 'systemctl status ssh' ?)\e[0m\n"
+    exit 1
+fi
+
+if [ $# -eq 0 ]; then
+    echo -e '\n\e[1;33mPICK A STRONG PASSWORD TO PROTECT YOUR IIAB!\e[0m'
+    echo -en '\nWhat ssh and sftp password do you want for user "root" ? '
+    read ans < /dev/tty
+else
+    ans=$1
+    echo
+fi
+
+if [[ $ans == "" ]]; then
+    echo -e '\n\e[41;1mEXITING: User "root" cannot have an empty password.\e[0m\n'
+    exit 1
+else
+    echo root:"$ans" | chpasswd
+    echo -e 'Password changed, for user "root".\n'
+fi
+
+# Comment out problematic line(s) in file(s) like...
+# /etc/ssh/sshd_config.d/60-cloudimg-settings.conf
+# ...that appear in Multipass VMs, etc:
+sed -i 's/^PermitRootLogin[[:blank:]].*/# &/' /etc/ssh/sshd_config.d/* || true
+sed -i 's/^PasswordAuthentication[[:blank:]].*/# &/' /etc/ssh/sshd_config.d/* || true
+
+if grep -q '^PermitRootLogin[[:blank:]]' /etc/ssh/sshd_config; then
+    sed -i 's/^PermitRootLogin[[:blank:]].*/PermitRootLogin yes/' /etc/ssh/sshd_config
+else
+    echo 'PermitRootLogin yes' >> /etc/ssh/sshd_config
+fi
+
+if grep -q '^PasswordAuthentication[[:blank:]]' /etc/ssh/sshd_config; then
+    sed -i 's/^PasswordAuthentication[[:blank:]].*/PasswordAuthentication yes/' /etc/ssh/sshd_config
+else
+    echo 'PasswordAuthentication yes' >> /etc/ssh/sshd_config
+fi
+
+if systemctl reload ssh; then
+    echo -e '\e[44;1mUser "root" can now upload to IIAB using FileZilla!\e[0m\n'
+else
+    echo -e '\e[41;1mERROR: Unable to reload ssh service.\e[0m\n'
+fi
