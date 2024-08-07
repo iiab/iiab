@@ -58,14 +58,14 @@ Remote Support Tools
 
 The `iiab-diagnostics <../../scripts/iiab-diagnostics.README.md>`_ and `OpenVPN <https://en.wikipedia.org/wiki/OpenVPN>`_ options mentioned above can greatly help you empower your community, typically during the implementation phase of your project, even if Linux is new to you.
 
-Similarly, `access.yml <tasks/access.yml>`_ adds a couple text mode tools — extremely helpful over expensive / low-bandwidth connections:
+Similarly, `tasks/main.yml <tasks/main.yml>`_ adds a couple text mode tools — extremely helpful over expensive / low-bandwidth connections:
 
 * `lynx <https://en.wikipedia.org/wiki/Lynx_(web_browser)>`_
 * `screen <https://linuxize.com/post/how-to-use-linux-screen/>`_
 
 *More great tools to help you jumpstart community action at a distance:*
 
-* http://FAQ.IIAB.IO > "How can I remotely manage my Internet-in-a-Box?"
+* `FAQ.IIAB.IO <https://wiki.iiab.io/go/FAQ>`_ > "How can I remotely manage my Internet-in-a-Box?"
 
 Admin Console
 -------------
