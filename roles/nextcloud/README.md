@@ -42,7 +42,7 @@ Useful PHP recommendations for these settings (while largely tailored to WordPre
 
 - https://docs.nextcloud.com/server/latest/admin_manual/installation/system_requirements.html
 - https://docs.nextcloud.com/server/latest/admin_manual/installation/source_installation.html#prerequisites-for-manual-installation
-- https://docs.nextcloud.com/server/27/admin_manual/installation/source_installation.html#prerequisites-for-manual-installation
+- https://docs.nextcloud.com/server/30/admin_manual/installation/source_installation.html#prerequisites-for-manual-installation
 - https://github.com/iiab/iiab/blob/master/roles/nextcloud/tasks/install.yml
 
 ## Using It
