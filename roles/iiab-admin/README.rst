@@ -36,7 +36,7 @@ Security
    #. ``iiab-admin`` (specified by ``admin_console_group`` in `/opt/iiab/iiab/vars/default_vars.yml <../../vars/default_vars.yml>`_ and `/opt/iiab/iiab-admin-console/vars/default_vars.yml <https://github.com/iiab/iiab-admin-console/blob/master/vars/default_vars.yml>`_)
    #. ``sudo``
 * Please read much more about what escalated (root) actions are authorized when you log into IIAB's Admin Console, and how this works: https://github.com/iiab/iiab-admin-console/blob/master/Authentication.md
-* If your IIAB includes OpenVPN, ``/root/.ssh/authorized_keys`` should be installed by `roles/openvpn/tasks/install.yml <../openvpn/tasks/install.yml>`_ to facilitate remote community support.  Feel free to remove this as mentioned here: https://wiki.iiab.io/go/Security
+* If your IIAB includes Tailscale (VPN), ``/root/.ssh/authorized_keys`` should be installed by `roles/tailscale/tasks/install.yml <../tailscale/tasks/install.yml>`_ to facilitate remote community support.  Feel free to remove this as mentioned here: https://wiki.iiab.io/go/Security
 * Auto-checking for the default/published password (as specified by ``iiab_admin_published_pwd`` in `/opt/iiab/iiab/vars/default_vars.yml <../../vars/default_vars.yml>`_) is implemented in `/etc/profile.d <templates/sshpwd-profile-iiab.sh>`_ (and `/etc/xdg/lxsession/LXDE-pi <templates/sshpwd-lxde-iiab.sh>`_ when it exists, i.e. on Raspberry Pi OS with desktop).
 
 Example
@@ -56,7 +56,7 @@ Historical Notes
 Remote Support Tools
 --------------------
 
-The `iiab-diagnostics <../../scripts/iiab-diagnostics.README.md>`_ and `OpenVPN <https://en.wikipedia.org/wiki/OpenVPN>`_ options mentioned above can greatly help you empower your community, typically during the implementation phase of your project, even if Linux is new to you.
+The `iiab-diagnostics <../../scripts/iiab-diagnostics.README.md>`_ and `Tailscale (VPN) <https://en.wikipedia.org/wiki/Tailscale>`_ options mentioned above can greatly help you empower your community, typically during the implementation phase of your project, even if Linux is new to you.
 
 Similarly, `tasks/main.yml <tasks/main.yml>`_ adds a couple text mode tools — extremely helpful over expensive / low-bandwidth connections:
 

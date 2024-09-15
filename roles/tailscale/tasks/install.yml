@@ -1,0 +1,113 @@
+- name: Record (initial) disk space used
+  shell: df -B1 --output=used / | tail -1
+  register: df1
+
+
+- name: "Set up apt source (jammy) in /etc/apt/sources.list.d/tailscale.list and its key /usr/share/keyrings/tailscale-archive-keyring.gpg, to install Tailscale"
+  shell: |
+    curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/jammy.noarmor.gpg > /usr/share/keyrings/tailscale-archive-keyring.gpg
+    curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/jammy.tailscale-keyring.list > /etc/apt/sources.list.d/tailscale.list
+
+- name: "Install packages: jq, sudo, tailscale"
+  package:
+    name:
+      #- ncat    # Newer versions of NMap do not include NCat, WAS needed to announce openvpn_handle (if Debian > 9 or Ubuntu > 18)
+      #- nmap
+      - jq      # JSON parser used by /usr/bin/iiab-support == /usr/bin/iiab-vpn
+      - sudo    # (1) Should be installed prior to installing IIAB, (2) Can also be installed by 1-prep here, (3) Is definitely installed by 1-prep's roles/iiab-admin/tasks/sudo-prereqs.yml, (4) Used to be installed by roles/2-common/tasks/packages.yml (but that's too late!)
+      - tailscale
+    update_cache: yes
+
+- name: Set up tab completion for 'tailscale' at the command-line
+  shell: tailscale completion bash > /etc/bash_completion.d/tailscale
+
+- name: "Install ssh public keys for remote support (only runs if 'tailscale_install: True')"
+  lineinfile:
+    line: "{{ item.pubkey }}"
+    regexp: "{{ item.regexp }}"
+    path: /root/.ssh/authorized_keys
+  with_items:
+    - regexp: "LvCSAAcfYIdZPR4ePVpVUZ/IbkGjpQSoRMa5HuVjMO3cZNR27ptqjNjq2husJOyhMFCOBTzo4thioGyTpBr4u3s=$" # Tim Moody
+      pubkey: "ssh-rsa AAAAB3NzaC1yc2EAAAABJQAAAIEAhlQIh8ZPx4awdM0O6QNcPbx3qIZ39FHjF2YJ2SX3z7iLnYiz03Ek6Bux9P4HvaVAqlApiz2I68Vq8TfU2s/+LvCSAAcfYIdZPR4ePVpVUZ/IbkGjpQSoRMa5HuVjMO3cZNR27ptqjNjq2husJOyhMFCOBTzo4thioGyTpBr4u3s="
+    - regexp: "tUM4hl009fbXY4Yy3bAadWL1CquVrZmKfBBWhyhz8zLD6TQ== ghunt@ip-192-168-123-123.ec2.internal$"
+      pubkey: "ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAQEAxAmjU7VojyK+0Pjp2p8CCGTNBtE565A/L8IVbAT8MIucRE9LN1g5LjGnOHUShFJpwuTR1JLX2r9EDRMsf9MmyTgUAnuyP005giWVHXLPtjyjTzbsJ1DEtXRytulmF+GlCOaqPWNde6EOmReqPHbmjIQpRZ/Sc8hziS4jVSQuBA9EhaBmZ62CPqK33mPJvnpwMtdd6nHXAcXsZhStd3NhVDm27+B3sHI6mr2w7ExdBXE5DKiZL2po8n2y4hJYZreJopbjcQmv4oWdDWvPu5I92xDgYCsqcE7zSrv1um+tUM4hl009fbXY4Yy3bAadWL1CquVrZmKfBBWhyhz8zLD6TQ== ghunt@ip-192-168-123-123.ec2.internal"
+    - regexp: "heOMXXNU6skxdPh2fcHh0bzQcaCSQ== holt@crank$"
+      pubkey: "ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAQEApHPly+EA1M4bispl3AulTLjyYCjcJzh6s779K3epDkqh600a+fHsdIiddWCAfIonRq+9MJyOiaNQ+WYLOuajI1IiFZWFt45xDAiyCUnyuT+ytAX+IA3TgTwgTZPfzDOzI8rDRV9Sgl+LZLfPno7T3qxcGx2l51bRk+koRK+Txpph//M3jGvsFmTKhjvfxgEIUmMH9SkASxEdyqASr0+/+uLR92MnT+8CT1pOYYoJyZp9Lta5eGqJvbEmd3Dn7MXqD3vXE57o4rBJ0bR3q5LK59WVNxNQbulJ9z5V7aTJ4AbBFQWxm0fH0gBx+heOMXXNU6skxdPh2fcHh0bzQcaCSQ== holt@crank"
+
+# CLARIF: plus signs (+) in public keys cause duplicate key additions (above)
+# and failure during removal (below) as "+" has a special meaning as
+# interpreted in a Python regexp, as implemented by Ansible's lineinfile module:
+# https://docs.python.org/2/library/re.html
+
+# WORKAROUND: the tail end of each public key (after the last plus sign) is
+# being used (instead of the full key) as an abbreviated regexp for now.
+# A backslash in front of each plus sign (+) would also work.
+
+# - name: Remove those ssh public keys, if not tailscale_enabled
+#   lineinfile:
+#     regexp: "{{ item }}"
+#     path: /root/.ssh/authorized_keys
+#     state: absent
+#   with_items:
+#     - "LvCSAAcfYIdZPR4ePVpVUZ/IbkGjpQSoRMa5HuVjMO3cZNR27ptqjNjq2husJOyhMFCOBTzo4thioGyTpBr4u3s=$"
+#     - "tUM4hl009fbXY4Yy3bAadWL1CquVrZmKfBBWhyhz8zLD6TQ== ghunt@ip-192-168-123-123.ec2.internal$"
+#     - "heOMXXNU6skxdPh2fcHh0bzQcaCSQ== holt@crank$"
+#   when: not tailscale_enabled
+
+- name: Install /usr/bin/iiab-vpn & /usr/bin/iiab-vpn-off (BACKS UP FILES IF CHANGED)
+  template:
+    src: "{{ item }}"
+    dest: /usr/bin/
+    mode: '0755'
+    backup: yes
+  with_items:
+    - iiab-vpn
+    - iiab-vpn-off
+
+- name: Symlink /usr/bin/iiab-vpn-on -> /usr/bin/iiab-vpn
+  file:
+    src: /usr/bin/iiab-vpn
+    path: /usr/bin/iiab-vpn-on
+    state: link
+
+- name: Symlink /usr/bin/iiab-support -> /usr/bin/iiab-vpn
+  file:
+    src: /usr/bin/iiab-vpn
+    path: /usr/bin/iiab-support
+    state: link
+
+- name: Symlink /usr/bin/iiab-support-on -> /usr/bin/iiab-vpn
+  file:
+    src: /usr/bin/iiab-vpn
+    path: /usr/bin/iiab-support-on
+    state: link
+
+- name: Symlink /usr/bin/iiab-support-off -> /usr/bin/iiab-vpn-off
+  file:
+    src: /usr/bin/iiab-vpn-off
+    path: /usr/bin/iiab-support-off
+    state: link
+
+
+# RECORD Tailscale AS INSTALLED
+
+- name: Record (final) disk space used
+  shell: df -B1 --output=used / | tail -1
+  register: df2
+
+- name: Add 'tailscale_disk_usage = {{ df2.stdout|int - df1.stdout|int }}' to {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+    section: tailscale
+    option: tailscale_disk_usage
+    value: "{{ df2.stdout|int - df1.stdout|int }}"
+
+- name: "Set 'tailscale_installed: True'"
+  set_fact:
+    tailscale_installed: True
+
+- name: "Add 'tailscale_installed: True' to {{ iiab_state_file }}"
+  lineinfile:
+    path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
+    regexp: '^tailscale_installed'
+    line: 'tailscale_installed: True'
