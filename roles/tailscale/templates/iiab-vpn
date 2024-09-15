@@ -1,0 +1,54 @@
+#!/bin/bash
+
+# USEFUL DOC: https://tailscale.com/kb/1080/cli#status
+
+VPN_URL=https://iiab.net
+VPN_KEY="$1"
+
+# if tailscale status > /dev/null; then    # MANY IMPERFECT TESTS OF TAILNET CONNECTIVITY: tailscale0 CAN lose its IP address, as shown by 'ip a' and 'hostname -I' (testing 'systemctl is-active tailscaled' is likely no better!)  Unclear if 'tailscale status --json | jq -r .Self.Online' is much better?  Maybe explore 'tailscale debug --help' and 'tailscale debug prefs' for a cleaner/authoritative verdict?  Or use + display string output of 'systemctl show tailscaled --property=StatusText' e.g. 'StatusText=Connected; iiab; 100.64.0.4' ?  (OR JUST DON'T WORRY ABOUT IT, AS THE ~3 'tailscale up' COMMANDS BELOW ARE MORE PROACTIVE... AND APPEAR FAST + SAFE!)
+#     echo -e "\n\e[1;33mAlready connected to VPN!?\e[0m"
+# else
+#     [NEST ~20 LINES OF IF STATEMENTS FURTHER BELOW?]
+
+# Check that current profile key still exists in /var/lib/tailscale/tailscaled.state ?  (As 'tailscale logout' wipes it!)  In the end, these are 3 lousy tests...
+# if [ -f /var/lib/tailscale/tailscaled.state ] && [[ $(grep -c $(jq -r '."_current-profile"' /var/lib/tailscale/tailscaled.state) /var/lib/tailscale/tailscaled.state) > 1 ]]; then
+# if ! [[ $(tailscale status | tr '[:upper:]' '[:lower:]') =~ "logged out" ]]; then
+# if [[ $(tailscale status --json | jq -r .CurrentTailnet.Name) = "iiab.community" ]]; then
+
+# UX Optimization: {iiab-vpn, iiab-support} can be run WITHOUT key *IF* .BackendState is "Stopped" or "Running" *AND* .ControlURL is $VPN_URL (avoid their default, https://controlplane.tailscale.com !)
+if [[ $(tailscale status --json | jq -r .BackendState) != "NeedsLogin" && $(tailscale debug prefs | jq -r .ControlURL) = $VPN_URL ]]; then
+    if ! tailscale up --login-server "$VPN_URL" --timeout 8s; then    # (Re-)passing $VPN_URL is overkill on this line, but can't hurt!
+        echo -e "\n\e[41;1mERROR $?: Failed to connect to VPN\e[0m\n"
+        exit 1
+    fi
+elif [ -z $VPN_KEY ]; then
+    echo -e "\n\e[1;33mVPN key required!\e[0m\n\nEmail holt@unleashkids.org to explain your need?\n"
+    exit 1
+else
+    if ! tailscale up --login-server "$VPN_URL" --auth-key "$VPN_KEY" --timeout 8s; then
+        echo -e "\n\e[41;1mERROR $?: Failed to connect to VPN, so let's try --force-reauth\e[0m\n"
+        # If 'tailscale up' just above fails w/ exit code 1 ~= "can't change --login-server without --force-reauth" (i.e. if switching login server, e.g. to/from their default (https://controlplane.tailscale.com) -- SEE ALSO: 'tailscale switch -h' and https://tailscale.com/blog/fast-user-switching) then more "brute force" is attempted below...
+	# https://github.com/tailscale/tailscale/issues/3849 "Please warn that --force-reauth immediately disconnects"  (brute force, only as a last resort!)
+	# https://github.com/tailscale/tailscale/issues/4854 "Tailscale CLI has poor UX with expiring keys"  (long-term node keys thankfully mitigate this!)
+        if ! tailscale up --login-server "$VPN_URL" --auth-key "$VPN_KEY" --force-reauth --timeout 8s; then
+            echo -e "\n\e[41;1mERROR $?: Failed to connect to VPN, even with --force-reauth\e[0m\n"
+            exit 1
+        fi
+    fi
+fi
+
+# jq 1.7 (2023-09-05) on new OS's also allows new syntax...  jq -r .Node.Tags.[]
+# Can also work: tailscale whois --json $(tailscale ip -1) | jq -r .Node.Tags[])
+echo -e "\n\e[44;1mCheck that VPN ($(tailscale status --json | jq -r .Self.Tags[])) is now live:\e[0m\n"
+echo -e "    hostname -I"
+echo -e "    tailscale ip"
+echo -e "    tailscale status"
+echo -e "    tailscale whois $(tailscale ip -1)"
+echo -e "    tailscale whois --json $(tailscale ip -1) | jq"
+echo -e "    tailscale ping [IP or HOSTNAME]"
+echo -e "    tailscale status --json | jq"
+echo -e "    systemctl status tailscaled\n"
+echo -e "\e[4mTo disconnect from VPN:\e[0m\n"
+echo -e "    tailscale down\n"
+echo -e "\e[4mTo permanently log out of VPN:\e[0m\n"
+echo -e "    tailscale logout\n"
