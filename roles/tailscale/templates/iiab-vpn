@@ -32,8 +32,8 @@ else
     if ! tailscale up --login-server "$VPN_URL" --auth-key "$VPN_KEY" --timeout 8s; then
         echo -e "\n\e[41;1mERROR $?: Failed to connect to VPN, so let's try --force-reauth\e[0m\n"
         # If 'tailscale up' just above fails w/ exit code 1 ~= "can't change --login-server without --force-reauth" (i.e. if switching login server, e.g. to/from their default (https://controlplane.tailscale.com) -- SEE ALSO: 'tailscale switch -h' and https://tailscale.com/blog/fast-user-switching) then more "brute force" is attempted below...
-	# https://github.com/tailscale/tailscale/issues/3849 "Please warn that --force-reauth immediately disconnects"  (brute force, only as a last resort!)
-	# https://github.com/tailscale/tailscale/issues/4854 "Tailscale CLI has poor UX with expiring keys"  (long-term node keys thankfully mitigate this!)
+        # https://github.com/tailscale/tailscale/issues/3849 "Please warn that --force-reauth immediately disconnects"  (brute force, only as a last resort!)
+        # https://github.com/tailscale/tailscale/issues/4854 "Tailscale CLI has poor UX with expiring keys"  (long-term node keys thankfully mitigate this!)
         if ! tailscale up --login-server "$VPN_URL" --auth-key "$VPN_KEY" --force-reauth --timeout 8s; then
             echo -e "\n\e[41;1mERROR $?: Failed to connect to VPN, even with --force-reauth\e[0m\n"
             exit 1
@@ -48,11 +48,15 @@ echo -e "    hostname -I"
 echo -e "    tailscale ip"
 echo -e "    tailscale status"
 echo -e "    tailscale whois $(tailscale ip -1)"
-echo -e "    tailscale whois --json $(tailscale ip -1) | jq"
+echo -e "    tailscale whois --json $(tailscale ip -1) | jq .Node.Endpoints,.Node.Hostinfo"
 echo -e "    tailscale ping --verbose [IP or HOSTNAME]"
-echo -e "    tailscale status --json | grep -B3 tag:"
+echo -e "    tailscale status --json | jq"
 echo -e "    systemctl status tailscaled\n"
 echo -e "\e[4mTo disconnect from VPN:\e[0m\n"
 echo -e "    tailscale down\n"
 echo -e "\e[4mTo permanently log out of VPN:\e[0m\n"
 echo -e "    tailscale logout\n"
+
+# More useful output than 'tailscale status'
+echo -e "\e[44;1mVPN peers: (rightmost column = online/offline)\e[0m\n"
+tailscale status --json | jq -r '.Self,.Peer[] | .Tags[] + " " + .TailscaleIPs[] + " " + .HostName + " " + .DNSName + " " + .OS + " " + .Relay + " " + (.Online|tostring)' | sort -V | column -t
