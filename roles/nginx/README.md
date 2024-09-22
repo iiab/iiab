@@ -52,11 +52,11 @@
       * kalite (menu goes directly to ports 8006-8008)
       * minetest
       * mosquitto
-      * openvpn
       * pbx [FreePBX is usable with _both_ NGINX and Apache as of 2021-08-18, thanks to PR [#2954](https://github.com/iiab/iiab/pull/2954)]
       * phpmyadmin [*, requires Apache for now, as in Section iii.]
       * samba [*, [PR #2923](https://github.com/iiab/iiab/pull/2923)]
       * sshd
+      * tailscale
       * transmission
       * vnstat
 
