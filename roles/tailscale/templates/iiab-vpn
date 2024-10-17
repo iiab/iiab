@@ -62,7 +62,8 @@ echo -e "    tailscale logout\n"
 #tailscale status --json | jq -r '.Self,.Peer[] | .Tags[] + " " + .TailscaleIPs[] + " " + .HostName + " " + .DNSName + " " + .OS + " " + .Relay + " " + (.Online|tostring)' | sort -V | column -t
 #echo -e '\e[44;1mVPN peers: ("true" in 6th column means online)\e[0m\n'
 echo -e '\e[44;1mVPN peers: (6th column = online/offline)\e[0m\n'
-tailscale status --json | jq -r '.Self,.Peer[] | (if .Tags[] == "" then "-" else .Tags[] end) + " " + .TailscaleIPs[] + " " + .HostName + " " + .DNSName + " " + (if .Relay == "" then "-" else .Relay end) + " XXX" + (.Online|tostring) + "XXX " + .OS' | sort -V | column -t | \
+# (try .Tags[] catch "-") is safer than (.Tags[]? // "-") according to: https://stackoverflow.com/questions/54794749/jq-error-at-stdin0-cannot-iterate-over-null-null
+tailscale status --json | jq -r '.Self,.Peer[] | (try .Tags[] catch "-") + " " + .TailscaleIPs[] + " " + .HostName + " " + .DNSName + " " + (if .Relay == "" then "-" else .Relay end) + " XXX" + (.Online|tostring) + "XXX " + .OS' | sort -V | column -t | \
     while read l; do
         line=$(echo "$l" | sed 's/ XXXtrueXXX /\\e[0;32m ✅\\e[0m/ ; s/ XXXfalseXXX /\\e[0;31m ❌ \\e[0m/')
         echo -e "$line" $(tailscale whois --json $(echo $line | cut -d' ' -f2) | jq -r '.Node.Hostinfo | .Distro + " " + .DistroVersion + " " + .DeviceModel');
