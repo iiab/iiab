@@ -6,6 +6,7 @@ import os
 import json
 import subprocess
 import shlex
+import re
 import xml.etree.ElementTree as ET
 import iiab.iiab_const as CONST
 
@@ -46,11 +47,17 @@ def get_zim_list(path):
                 if filename in CONST.old_zim_map: # handle old names that don't parse
                     perma_ref = CONST.old_zim_map[filename]
                 else:
-                    ulpos = filename.rfind("_")
-                    # but old gutenberg and some other names are not canonical
-                    if filename.rfind("-") < 0: # non-canonical name
-                        ulpos = filename[:ulpos].rfind("_")
-                    perma_ref = filename[:ulpos]
+                    # handle various zim name patterns:
+                    # 1. canonical zim ending in _YYYY-MM
+                    # as of 10/16/2024 it looks like all Kiwix zims fit this pattern
+                    # 2. otherwise assume no versioning and perma_ref = filename
+
+                    match = re.search("_[0-5][0-9][0-5][0-9]-[0-5][0-9]$", filename)
+                    if match:
+                        perma_ref = filename[: match.span()[0]]
+                    else:
+                        perma_ref = filename
+
                 zim_info['file_name'] = filename
                 zim_versions[perma_ref] = zim_info # if there are multiples, last should win
     return files_processed, zim_versions
