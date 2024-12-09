@@ -43,19 +43,72 @@
 #     append: yes
 
 
-- name: Remove NGINX default config /etc/nginx/sites-enabled/default
+- name: Remove NGINX default config {{ nginx_dir }}/sites-enabled/default
   file:
-    path: /etc/nginx/sites-enabled/default
+    path: "{{ nginx_dir }}/sites-enabled/default"
     state: absent
+
+# start block
+- block:
+  - name: Insure alternate nginx path is present
+    file:
+      path: "{{ item }}"
+      state: directory
+    with_items:
+      - "{{ nginx_conf_dir }}"
+      - "{{ nginx_dir }}/sites-available"
+      - "{{ nginx_dir }}/sites-enabled"
+
+  - name: Link {{ nginx_dir }}/ files
+    file:
+      src: /etc/nginx/{{ item }}
+      path: "{{ nginx_dir }}/{{ item }}"
+      state: link
+    with_items:
+      - modules-available
+      - modules-enabled
+      - snippets
+      - fastcgi.conf
+      - fastcgi_params
+      - koi-win
+      - koi-utf
+      - proxy_params
+      - scgi_params
+      - uwsgi_params
+      - win-utf
+
+  - name: Grab stock unit file
+    copy:
+      force: yes
+      src: /lib/systemd/system/nginx.service
+      dest: /etc/systemd/system/{{ nginx_systemd_name }}.service
+
+  - name: shove {{ nginx_dir }}/nginx.conf into unit file
+    command: sed -i 's|/usr/sbin/nginx|/usr/sbin/nginx -c {{ nginx_dir }}/nginx.conf|g' /etc/systemd/system/{{ nginx_systemd_name }}.service
+#    lineinfile:
+#      path: /etc/systemd/system/nginx.service
+#      state: present
+#      regexp: "{{ item.regexp }}"
+#      line: "{{ item.line }}"
+#    with_items:
+#    - { regexp: '^ExecStartPre=/usr/sbin/nginx' , line: 'ExecStartPre=/usr/sbin/nginx -c {{ nginx_dir }}/nginx.conf' }
+#    - { regexp: '^ExecStart=/usr/sbin/nginx', line: 'ExecStart=/usr/sbin/nginx -c {{ nginx_dir }}/nginx.conf'  }
+#    - { regexp: '^ExecReload=/usr/sbin/nginx', line: 'ExecReload=/usr/sbin/nginx -c {{ nginx_dir }}/nginx.conf' }
+
+  - name: Alter /run/nginx.pid to be /run/{{ nginx_systemd_name }}.pid in unit file.
+    command: sed -i 's|/run/nginx.pid|/run/{{ nginx_systemd_name }}.pid|g' /etc/systemd/system/{{ nginx_systemd_name }}.service
+
+# end block
+  when: nginx_systemd_name != "nginx" or nginx_dir != "/etc/nginx"
 
 - name: 'Install 3 (of 5) files from template: /etc/nginx/server.conf, /etc/nginx/nginx.conf, /etc/nginx/mime.types'
   template:
     src: "{{ item.src }}"
     dest: "{{ item.dest }}"
   with_items:
-    - { src: 'server.conf.j2', dest: '/etc/nginx/server.conf' }
-    - { src: 'nginx.conf.j2', dest: '/etc/nginx/nginx.conf' }
-    - { src: 'mime.types.j2', dest: '/etc/nginx/mime.types' }
+    - { src: 'server.conf.j2', dest: '{{ nginx_dir }}/server.conf' }
+    - { src: 'nginx.conf.j2', dest: '{{ nginx_dir }}/nginx.conf' }
+    - { src: 'mime.types.j2', dest: '{{ nginx_dir }}/mime.types' }
     # - { src: 'ports.conf', dest: '/etc/{{ apache_service }}/ports.conf' }    # 2021-08-09: Restored from enable-or-disable.yml then moved to roles/pbx/tasks/apache.yml
     # - { src: 'iiab.conf.j2', dest: "{{ nginx_conf_dir }}/iiab.conf" }    # Moved into homepage.yml, invoked later by roles/www_options/tasks/main.yml (see below!)
 
@@ -63,11 +116,25 @@
     msg: roles/nginx/tasks/homepage.yml will run LATER (invoked by roles/www_options/tasks/main.yml) SO THAT NGINX CAN REDIRECT http://box TO http://box{{ iiab_home_url }} (based on var iiab_home_url)
 # - include_tasks: roles/nginx/tasks/homepage.yml
 
+#ubuntu@box:/opt/iiab/iiab$ grep -r 'fastcgi_pass' roles
+#roles/awstats/templates/awstats-nginx.conf:    fastcgi_pass    php;
+#roles/nextcloud/templates/nextcloud-nginx.conf.j2:        fastcgi_pass php;
+#roles/moodle/templates/moodle-nginx.conf.j2:    fastcgi_pass php;
+#roles/osm-vector-maps/templates/osm-vector-maps-nginx.conf.j2:    fastcgi_pass php;
+#roles/pbx/templates/freepbx-nginx.conf.j2:        fastcgi_pass unix:/run/php/php-asterisk.sock;
+#roles/mediawiki/templates/mediawiki-nginx.conf.j2:    fastcgi_pass php; # or whatever port your PHP-FPM listens on
+#roles/mediawiki/templates/mediawiki-nginx.conf.j2:#        fastcgi_pass 127.0.0.1:9000; # or whatever port your PHP-FPM listens on
+#roles/wordpress/templates/wordpress-nginx.conf.j2:        fastcgi_pass php;
+#roles/wordpress/templates/wordpress-nginx.conf.j2:        fastcgi_pass php;
+#roles/nginx/templates/admin-console-nginx.conf.unused:    fastcgi_pass php;
+ 
+# should really be 'state: stopped' 'enabled: no' and each role should enable and restart as needed to keep system resources in check when
+# php{{ php_version }}-fpm is not required by any selected roles.
+
 - name: Restart php{{ php_version }}-fpm systemd service
   systemd:
     name: "php{{ php_version }}-fpm"
     state: restarted
-
 
 # RECORD NGINX AS INSTALLED
 
