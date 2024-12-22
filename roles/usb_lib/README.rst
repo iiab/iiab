@@ -2,7 +2,7 @@
 usb_lib README
 ==============
 
-**PLEASE SEE "Can teachers display their own content?" WITHIN http://FAQ.IIAB.IO FOR UP-TO-DATE DOCUMENTATION.**
+**PLEASE SEE "Can teachers display their own content?" WITHIN https://FAQ.IIAB.IO FOR UP-TO-DATE DOCUMENTATION.**
 
 This role implements functionality similar to LibraryBox, to mount "teacher content" from USB drives.
 
@@ -22,7 +22,7 @@ USB drives must be formatted with one of the filesystems listed under "FILESYSTE
 
 IIAB will generally mount USB drives 'rw' allowing root to both read and write to them.  In addition, in March 2021 (`PR #2715 <https://github.com/iiab/iiab/issues/2715>`_) Kolibri exports were enabled by also giving non-root users read and write access to VFAT/FAT32, NTFS and exFAT USB drives, using ``umask=0000`` (in /etc/usbmount/usbmount.conf) to override the ``umask=0022`` default.  If however you prefer to restore usbmount's default, set ``usb_lib_umask0000_for_kolibri: False`` in `/etc/iiab/local_vars.yml <http://FAQ.IIAB.IO/#What_is_local_vars.yml_and_how_do_I_customize_it%3F>`_ (preferably do this prior to installing IIAB).
 
-Official `usbmount 0.0.22 (2011-08-08) <https://github.com/rbrito/usbmount/releases>`_ documentation:
+Official `usbmount 0.0.22 (2011-08-08) <https://github.com/rbrito/usbmount/tags>`_ documentation:
 
 * https://github.com/hfuchs/usbmount/blob/master/README (2010-08-11)
 * https://github.com/rbrito/usbmount/blob/master/README.md (2018-08-10)
