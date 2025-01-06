@@ -16,19 +16,14 @@ function getTargetUSBDriveLocation () {
          if (empty($removable_usb_path)) {
                 return "/library/www/html/local_content/";
          } else {
-
                 return $removable_usb_path . "/";
          }
-
 }
 
-//returns folder path where homework will be stored, if create_folder_p = 1, it will create the folder if it doesn't exist
+//returns folder path where file will be stored, if create_folder_p = 1, it will create the folder if it doesn't exist
 function getTargetFolderPath ($create_folder_p) {
          $parent_dir = getTargetUSBDriveLocation();
-
-
-error_log("PARENTDIR: " . $parent_dir);
-
+// error_log("PARENTDIR: " . $parent_dir);
          $today_folder_name = "UPLOADS." . date("Y-m-d");
          $target_folder_path = $parent_dir . $today_folder_name;
 
@@ -36,9 +31,7 @@ error_log("PARENTDIR: " . $parent_dir);
             mkdir($target_folder_path, 0777);
 
         }
-
         return $target_folder_path;
-
 }
 
 //return number of files within a specified folder
@@ -48,19 +41,16 @@ function getFileCount ($folder_path) {
 
 //*** TODO *** check file content to see if it's unique or not
 function isFileContentUnique ($file) {
-
-
 }
 
 
 //*** TODO **** check if file exists based on file name and return unique name if does
 function getUniqueFileName ($filename) {
-
 }
 
 
 // Check file size - we are not going to check file size for now.
-// elseif ($_FILES["hw_submission"]["size"] > 5000000) {
+// elseif ($_FILES["uploaded_file"]["size"] > 5000000) {
 //  $upload_msg = "Your file is too large.";
 //  $upload_ok = 0;
 // }

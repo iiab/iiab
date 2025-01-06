@@ -16,7 +16,7 @@ $file_count = getFileCount(getTargetFolderPath(0));
 <html>
 
   <head>
-    <title>IIAB Homework Submission App</title>
+    <title>IIAB Upload to USB App</title>
     <meta http-equiv="content-type" content="text/html; charset=UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
 
@@ -31,16 +31,16 @@ $file_count = getFileCount(getTargetFolderPath(0));
             <div class="row">
 		<div class="col-sm-6 offset-sm-3 text-center" style="padding:15px;">
 
-                  <form action="submit-hw.php" id="hw_submission_form" method="post" enctype="multipart/form-data">
-                    <img class="mb-4" src="unleash-kids-swing.png" alt="" width="75">
-                    <h1 class="h3 mb-3 font-weight-normal">Internet in a Box Homework Submission</h1>
+                  <form action="upload-file.php" id="upload2usb_form" method="post" enctype="multipart/form-data">
+                    <img class="mb-4" src="uk-swing.png" alt="" width="75">
+                    <h1 class="h3 mb-3 font-weight-normal">Internet in a Box Upload to USB</h1>
 
-                    <label for="submit_hw" style="font-weight:bold;padding-bottom:10px;">Submit your homework here!</label>
-                    <input type="file" name="hw_submission" id="hw_submission"><br/><br/>
+                    <label for="upload2usb" style="font-weight:bold;padding-bottom:10px;">Upload your file here!</label>
+                    <input type="file" name="uploaded_file" id="uploaded_file"><br/><br/>
                     <button class="btn btn-dark" name="submit" type="submit" style="width:150px;">Submit</button>
                   </form>
                   <br/>
-                    <?php echo $file_count ?> homework files have been submitted today!
+                    <?php echo $file_count ?> files have been uploaded today!
 
                 </div>
             </div>

@@ -6,13 +6,13 @@
 
 include("upload2usb.php");
 
-//get folder path where homework will be stored
+//get folder path where file will be stored
 $target_folder_path = getTargetFolderPath(1);
-$target_file = $target_folder_path . "/" . basename($_FILES["hw_submission"]["name"]);
+$target_file = $target_folder_path . "/" . basename($_FILES["uploaded_file"]["name"]);
 $upload_ok = 1;
 $upload_msg = "";
 
-if(!isset($_POST["submit"]) || empty(basename($_FILES["hw_submission"]["name"]))) {
+if(!isset($_POST["submit"]) || empty(basename($_FILES["uploaded_file"]["name"]))) {
     $upload_msg = "No file submitted.";
     $upload_ok = 0;
 } elseif (file_exists($target_file)) {
@@ -26,8 +26,8 @@ if ($upload_ok == 0) {
 
 // if everything is ok, try to upload file
 } else {
-  if (move_uploaded_file($_FILES["hw_submission"]["tmp_name"], $target_file)) {
-    $upload_msg = "&#x1F60A; &#x2705; Your homework file ". htmlspecialchars( basename( $_FILES["hw_submission"]["name"])). " was successfully uploaded!";
+  if (move_uploaded_file($_FILES["uploaded_file"]["tmp_name"], $target_file)) {
+    $upload_msg = "&#x1F60A; &#x2705; Your file <span style=\"font-weight:bold; font-style:italic;\">". htmlspecialchars( basename( $_FILES["uploaded_file"]["name"])). "</span> was successfully uploaded!";
   } else {
     $upload_msg = "&#x274C; There was an error uploading your file. " . $upload_msg;
   }
@@ -41,7 +41,7 @@ $file_count = getFileCount($target_folder_path)
 <html>
 
   <head>
-    <title>IIAB Homework Submission App</title>
+    <title>IIAB Upload to USB App</title>
     <meta http-equiv="content-type" content="text/html; charset=UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
 
@@ -57,9 +57,9 @@ $file_count = getFileCount($target_folder_path)
 		<div class="col-sm-6 offset-sm-3 text-center" style="padding:15px;">
 
                     <img class="mb-4" src="unleash-kids-swing.png" alt="" width="75">
-                    <h1 class="h3 mb-3 font-weight-normal">Internet in a Box Homework Submission</h1>
+                    <h1 class="h3 mb-3 font-weight-normal">Internet in a Box Upload to USB</h1>
                     <?php echo $upload_msg ?> <br/>
-                    <?php echo $file_count ?> homework files have been submitted today!
+                    <?php echo $file_count ?> files have been submitted today!
 
 		</div>
             </div>
