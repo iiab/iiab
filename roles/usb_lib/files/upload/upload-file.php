@@ -56,7 +56,7 @@ $file_count = getFileCount($target_folder_path)
             <div class="row">
 		<div class="col-sm-6 offset-sm-3 text-center" style="padding:15px;">
 
-                    <img class="mb-4" src="unleash-kids-swing.png" alt="" width="75">
+                    <img class="mb-4" src="uk-swing.png" alt="" width="75">
                     <h1 class="h3 mb-3 font-weight-normal">Internet in a Box Upload to USB</h1>
                     <?php echo $upload_msg ?> <br/>
                     <?php echo $file_count ?> files have been submitted today!

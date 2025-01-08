@@ -35,7 +35,7 @@ $file_count = getFileCount(getTargetFolderPath(0));
                     <img class="mb-4" src="uk-swing.png" alt="" width="75">
                     <h1 class="h3 mb-3 font-weight-normal">Internet in a Box Upload to USB</h1>
 
-                    <label for="upload2usb" style="font-weight:bold;padding-bottom:10px;">Upload your file here!</label>
+                    <label for="upload2usb" style="font-weight:bold;padding-bottom:10px;">Upload your file here!</label><br/>
                     <input type="file" name="uploaded_file" id="uploaded_file"><br/><br/>
                     <button class="btn btn-dark" name="submit" type="submit" style="width:150px;">Submit</button>
                   </form>

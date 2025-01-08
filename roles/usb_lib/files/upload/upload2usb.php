@@ -16,6 +16,7 @@ function getTargetUSBDriveLocation () {
          if (empty($removable_usb_path)) {
                 return "/library/www/html/local_content/";
          } else {
+// error_log ("REMOVABLE USB PATH: " . $removable_usb_path); 
                 return $removable_usb_path . "/";
          }
 }
