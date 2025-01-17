@@ -20,15 +20,15 @@ function getTargetUSBDriveLocation () {
 	 # error if 1<>usb sticks are installed 
 	 $rmv_usb_path_count = shell_exec('lsblk --output NAME,TRAN,RM,MOUNTPOINT --pairs |grep RM=\"1\" | grep -v MOUNTPOINT=\"\" | cut -d " " -f 4  | wc -l');
 	 if ($rmv_usb_path_count == 0) {
- 	    	throw new RuntimeException('0 USB sticks found <br/><br/>');
+ 	    	throw new RuntimeException('0 USB sticks found. <br/><br/>');
 	 } elseif ($rmv_usb_path_count > 1) {
-	    	throw new RuntimeException('More than 1 USB sticks installed <br/><br/>');
+	    	throw new RuntimeException('More than 1 USB sticks installed. <br/><br/>');
 	 }
 
          $rmv_usb_path = trim(str_replace('"', '', shell_exec('lsblk --output NAME,TRAN,RM,MOUNTPOINT --pairs |grep RM=\"1\" | grep -v MOUNTPOINT=\"\" | cut -d " " -f 4 | cut -d "=" -f 2')));
 
          if (empty($rmv_usb_path)) {
-	    	throw new RuntimeException('Not able to find USB stick <br/><br/>');
+	    	throw new RuntimeException('Not able to find USB stick. <br/><br/>');
          } else {
                 return $rmv_usb_path . "/";
          }
@@ -42,7 +42,7 @@ function getTargetFolderPath ($create_folder_p) {
          $target_folder_path = $parent_dir . $today_folder_name;
 
          if (!file_exists($target_folder_path) && $create_folder_p) {
-	      mkdir($target_folder_path, 0777);
+	      mkdir($target_folder_path, 0777) or throw new RuntimeException("Not able to create upload directory. <br/>Make sure 'usb_lib_umask0000_for_kolibri' is set to 'True'. <br/><br/>");
         }
         return $target_folder_path;
 }

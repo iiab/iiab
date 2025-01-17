@@ -4,7 +4,7 @@
 *  Upload2USB App - Process Submission
 */
 
-$title = "IIAB Upload to USB App Results";
+$title = "Upload to USB Results";
 include("header.php");
 
 //get folder path where file will be stored

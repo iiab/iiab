@@ -4,7 +4,7 @@
 *  Upload2USB App Index Page
 */
 
-$title = "IIAB Upload to USB";
+$title = "Upload to USB";
 include("header.php");
 
 //Check if folder for today exists, and get file count if it does
