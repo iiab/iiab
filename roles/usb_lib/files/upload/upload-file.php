@@ -21,15 +21,16 @@ if(!isset($_POST["submit"]) || !is_uploaded_file($_FILES['uploaded_file']['tmp_n
     $upload_msg = "You can not upload zips, executables, xml, and other high-risk files!";
     $upload_ok = 0;
 } elseif (file_exists($target_file)) {
-    // rename file so name is unique
-    $new_filename = getUniqueFileName($target_folder_path, $uploaded_filename);
-    $target_file = $target_folder_path . "/" . $new_filename;
-}
 
-#elseif (!isFileContentUnique($target_folder_path, $_FILES["uploaded_file"]["tmp_name"])) {
-#    $upload_msg = "This file already exists!";
-#    $upload_ok = 0;
-#}
+    if (!isFileContentUnique($target_folder_path, $_FILES["uploaded_file"]["tmp_name"])) {
+         $upload_msg = "This file already exists!";
+	 $upload_ok = 0;
+    } else {
+         // rename file so name is unique
+	 $new_filename = getUniqueFileName($target_folder_path, $uploaded_filename);
+    	 $target_file = $target_folder_path . "/" . $new_filename;
+    }
+}
 
 // Check if $upload_ok is set to 0 by an error
 if ($upload_ok == 0) {
