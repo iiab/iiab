@@ -15,10 +15,10 @@ $upload_ok = 1;
 $upload_msg = "";
 
 if(!isset($_POST["submit"]) || !is_uploaded_file($_FILES['uploaded_file']['tmp_name'])) {
-    $upload_msg = "No file submitted!";
+    $upload_msg = "No file uploaded!";
     $upload_ok = 0;
 } elseif (!isFileMimeTypeAcceptable($_FILES["uploaded_file"]["tmp_name"])) {
-    $upload_msg = "You can not upload zips, executables, xml, and other high-risk files!";
+    $upload_msg = "You cannot upload zips, executables, xml, or binary files!";
     $upload_ok = 0;
 } elseif (file_exists($target_file)) {
 
@@ -50,7 +50,7 @@ $file_count = getFileCount($target_folder_path);
 ?>
 
                     <?php echo $upload_msg ?> <br/>
-                    <?php echo $file_count ?> files have been submitted today!
+                    <?php echo $file_count ?> files have been uploaded today!
 
 <?php include ("footer.php"); ?>
 
