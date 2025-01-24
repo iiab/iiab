@@ -243,12 +243,16 @@
   shell: iw reg get | grep country | grep -v UNSET | awk '{print $2}' | sed "s|:||"
   register: REG_DOM
   ignore_errors: True
-  when: wifi_up_down and can_be_ap and has_wifi_gateway is defined
+
+- name: Set host_country_code_found
+  set_fact:
+    host_country_code_found: "{{ REG_DOM.stdout }}"
+  when: REG_DOM.stdout is defined and REG_DOM.stdout | length > 0
 
 - name: Set Wifi Region country to {{ REG_DOM.stdout }} for hostapd when present
   set_fact:
     host_country_code: "{{ REG_DOM.stdout }}"
-  when: REG_DOM.stdout is defined and REG_DOM.stdout | length > 0
+  when: REG_DOM.stdout is defined and REG_DOM.stdout | length > 0 and wifi_up_down and can_be_ap and has_wifi_gateway is defined
 
 - name: Detect current Wifi channel
   shell: iw {{ discovered_wireless_iface }} info | grep channel | cut -d' ' -f2
@@ -259,6 +263,16 @@
   set_fact:
     wifi_up_down: False
   when: rpi3bplus_rpi4_wifi_firmware == "24"
+
+- name: Detect "Firmware rejected country setting" in dmesg
+  shell: dmesg | grep ieee80211 | grep "Firmware rejected country setting"
+  register: FW_rejected_country
+  ignore_errors: True
+
+- name: Detect country code passed from cmdline in dmesg
+  shell: dmesg | grep -om1 'cfg80211\.ieee80211_regdom=\S*' | cut -d= -f2
+  register: cmdline_country_code
+  ignore_errors: True
 
 - name: In VM disable LAN - needs local_vars entry to activate
   set_fact:
@@ -317,7 +331,7 @@
     - option: can_be_ap
       value: "{{ can_be_ap }}"
     - option: host_country_code_found
-      value: "{{ host_country_code }}"
+      value: "{{ host_country_code_found }}"
     - option: wifi_firmware_43430
       value: "{{ rpizerow_rpi3_wifi_firmware }}"
     - option: wifi_firmware_43455
@@ -333,6 +347,17 @@
     - option: client_wifi_channel_found
       value: "{{ current_client_channel.stdout }}"
   when: current_client_channel.stdout is defined
+
+- name: Add 'detected_network' variable 'FW_rejected_country' value if defined, to {{ iiab_ini_file }}
+  ini_file:
+    dest: "{{ iiab_ini_file }}"
+    section: detected_network
+    option: "{{ item.option }}"
+    value: "{{ item.value | string }}"
+  with_items:
+    - option: FW_rejected_country
+      value: "{{ cmdline_country_code.stdout }}"
+  when: FW_rejected_country.stdout is defined
 
 # well if there ever was a point to tell the user things are FUBAR this is it.
 # limit 2 network adapters wifi wired
