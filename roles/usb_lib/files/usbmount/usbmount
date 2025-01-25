@@ -1,0 +1,210 @@
+#!/bin/sh
+# This script mounts USB mass storage devices when they are plugged in
+# and unmounts them when they are removed.
+# Copyright © 2004, 2005 Martin Dickopp
+# Copyright © 2008, 2009, 2010 Rogério Theodoro de Brito
+#
+# This file is free software; the copyright holder gives unlimited
+# permission to copy and/or distribute it, with or without
+# modifications, as long as this notice is preserved.
+#
+# This file is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY, to the extent permitted by law; without
+# even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+# PARTICULAR PURPOSE.
+#
+set -e
+exec > /dev/null 2>&1
+
+######################################################################
+# Auxiliary functions
+
+# Log a string via the syslog facility.
+log()
+{
+    if [ $1 != debug ] || expr "$VERBOSE" : "[yY]" > /dev/null; then
+	logger -p user.$1 -t "usbmount[$$]" -- "$2"
+    fi
+}
+
+
+# Test if the first parameter is in the list given by the second
+# parameter.
+in_list()
+{
+    for v in $2; do
+	[ "$1" != "$v" ] || return 0
+    done
+    return 1
+}
+
+
+######################################################################
+# Main program
+
+# Default values for configuration variables.
+ENABLED=1
+MOUNTPOINTS=
+FILESYSTEMS=
+MOUNTOPTIONS=
+FS_MOUNTOPTIONS=
+VERBOSE=no
+
+if [ -r /etc/usbmount/usbmount.conf ]; then
+    . /etc/usbmount/usbmount.conf
+    log debug "loaded usbmount configurations"
+fi
+
+if [ "${ENABLED:-1}" -eq 0 ]; then
+    log info "usbmount is disabled, see /etc/usbmount/usbmount.conf"
+    exit 0
+fi
+
+if [ ! -x /sbin/blkid ]; then
+    log err "cannot execute /sbin/blkid"
+    exit 1
+fi
+
+# Per Policy 9.3.2, directories under /var/run have to be created
+# after every reboot.
+if [ ! -e /var/run/usbmount ]; then
+    mkdir -p /var/run/usbmount
+    log debug "creating /var/run/usbmount directory"
+fi
+
+umask 022
+
+
+if [ "$1" = add ]; then
+
+    # Acquire lock.
+    log debug "trying to acquire lock /var/run/usbmount/.mount.lock"
+    lockfile-create --retry 3 /var/run/usbmount/.mount || \
+	{ log err "cannot acquire lock /var/run/usbmount/.mount.lock"; exit 1; }
+    trap '( lockfile-remove /var/run/usbmount/.mount )' 0
+    log debug "acquired lock /var/run/usbmount/.mount.lock"
+
+    # Grab device information from device and "divide it"
+    #   FIXME: improvement: implement mounting by label (notice that labels
+    #   can contain spaces, which makes things a little bit less comfortable).
+    DEVINFO=$(/sbin/blkid -p $DEVNAME)
+    FSTYPE=$(echo "$DEVINFO" | sed 's/.*[[:blank:]]TYPE="\([^"]*\)".*/\1/g; s/[[:blank:]]*//g;')
+    UUID=$(echo "$DEVINFO"   | sed 's/.*[[:blank:]]UUID="\([^"]*\)".*/\1/g; s/[[:blank:]]*//g;')
+    USAGE=$(echo "$DEVINFO"  | sed 's/.*[[:blank:]]USAGE="\([^"]*\)".*/\1/g; s/[[:blank:]]*//g;')
+
+    if ! echo $USAGE | egrep -q "(filesystem|disklabel)"; then
+	log info "$DEVNAME does not contain a filesystem or disklabel"
+	exit 1
+    fi
+
+    # Try to use specifications in /etc/fstab first.
+    if egrep -q "^[[:blank:]]*$DEVNAME" /etc/fstab; then
+	log info "executing command: mount $DEVNAME"
+	mount $DEVNAME || log err "mount by DEVNAME with $DEVNAME wasn't successful; return code $?"
+
+    elif grep -q "^[[:blank:]]*UUID=$UUID" /etc/fstab; then
+        log info "executing command: mount -U $UUID"
+	mount -U $UUID || log err "mount by UUID with $UUID wasn't successful; return code $?"
+
+    else
+	log debug "$DEVNAME contains filesystem type $FSTYPE"
+
+	fstype=$FSTYPE
+	# Test if the filesystem type is in the list of filesystem
+	# types to mount.
+	if in_list "$fstype" "$FILESYSTEMS"; then
+	    # Search an available mountpoint.
+	    for v in $MOUNTPOINTS; do
+		if [ -d "$v" ] && ! grep -q "^[^ ][^ ]*  *$v " /proc/mounts; then
+		    mountpoint="$v"
+		    log debug "mountpoint $mountpoint is available for $DEVNAME"
+		    break
+		fi
+	    done
+	    if [ -n "$mountpoint" ]; then
+		# Determine mount options.
+		options=
+		for v in $FS_MOUNTOPTIONS; do
+		    if expr "$v" : "-fstype=$fstype,."; then
+			options="$(echo "$v" | sed 's/^[^,]*,//')"
+			break
+		    fi
+		done
+		if [ -n "$MOUNTOPTIONS" ]; then
+		    options="$MOUNTOPTIONS${options:+,$options}"
+		fi
+
+		# Mount the filesystem.
+		log info "executing command: mount -t$fstype ${options:+-o$options} $DEVNAME $mountpoint"
+		mount "-t$fstype" "${options:+-o$options}" "$DEVNAME" "$mountpoint"
+
+		# Determine vendor and model.
+		vendor=
+		if [ -r "/sys$DEVPATH/device/vendor" ]; then
+		    vendor="`cat \"/sys$DEVPATH/device/vendor\"`"
+		elif [ -r "/sys$DEVPATH/../device/vendor" ]; then
+		    vendor="`cat \"/sys$DEVPATH/../device/vendor\"`"
+		elif [ -r "/sys$DEVPATH/device/../manufacturer" ]; then
+		    vendor="`cat \"/sys$DEVPATH/device/../manufacturer\"`"
+		elif [ -r "/sys$DEVPATH/../device/../manufacturer" ]; then
+		    vendor="`cat \"/sys$DEVPATH/../device/../manufacturer\"`"
+		fi
+		vendor="$(echo "$vendor" | sed 's/^[[:blank:]]\+//; s/[[:blank:]]\+$//')"
+
+		model=
+		if [ -r "/sys$DEVPATH/device/model" ]; then
+		    model="`cat \"/sys$DEVPATH/device/model\"`"
+		elif [ -r "/sys$DEVPATH/../device/model" ]; then
+		    model="`cat \"/sys$DEVPATH/../device/model\"`"
+		elif [ -r "/sys$DEVPATH/device/../product" ]; then
+		    model="`cat \"/sys$DEVPATH/device/../product\"`"
+		elif [ -r "/sys$DEVPATH/../device/../product" ]; then
+		    model="`cat \"/sys$DEVPATH/../device/../product\"`"
+		fi
+		model="$(echo "$model" | sed 's/^[[:blank:]]\+//; s/[[:blank:]]\+$//')"
+
+		# Run hook scripts; ignore errors.
+		export UM_DEVICE="$DEVNAME"
+		export UM_MOUNTPOINT="$mountpoint"
+		export UM_FILESYSTEM="$fstype"
+		export UM_MOUNTOPTIONS="$options"
+		export UM_VENDOR="$vendor"
+		export UM_MODEL="$model"
+		log info "executing command: run-parts /etc/usbmount/mount.d"
+		run-parts /etc/usbmount/mount.d || :
+	    else
+		# No suitable mount point found.
+		log warning "no mountpoint found for $DEVNAME"
+		exit 1
+	    fi
+	fi
+    fi
+elif [ "$1" = remove ]; then
+
+    # A block or partition device has been removed.
+    # Test if it is mounted.
+    while read device mountpoint fstype remainder; do
+	if [ "$DEVNAME" = "$device" ]; then
+	    # If the mountpoint and filesystem type are maintained by
+	    # this script, unmount the filesystem.
+	    if in_list "$mountpoint" "$MOUNTPOINTS" &&
+		in_list "$fstype" "$FILESYSTEMS"; then
+		log info "executing command: umount -l $mountpoint"
+		umount -l "$mountpoint"
+
+		# Run hook scripts; ignore errors.
+		export UM_DEVICE="$DEVNAME"
+		export UM_MOUNTPOINT="$mountpoint"
+		export UM_FILESYSTEM="$fstype"
+		log info "executing command: run-parts /etc/usbmount/umount.d"
+		run-parts /etc/usbmount/umount.d || :
+	    fi
+	    break
+	fi
+    done < /proc/mounts
+else
+    log err "unexpected: action '$1'"
+    exit 1
+fi
+
+log debug "usbmount execution finished"
