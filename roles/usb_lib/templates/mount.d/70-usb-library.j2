@@ -12,18 +12,11 @@
 VERBOSE=yes
 
 # UM_MOUNTPOINT and UM_DEVICE are documented at: https://github.com/rbrito/usbmount#hook-scripts
-SHARE_DIR=$UM_MOUNTPOINT
-if [ -d $UM_MOUNTPOINT/PUBLIC ]; then
-    SHARE_DIR="$UM_MOUNTPOINT/PUBLIC"
-    logger -p user.notice -t "usb_lib (70-usb-library)" -- "Found /PUBLIC on $UM_MOUNTPOINT"
-else
-    logger -p user.notice -t "usb_lib (70-usb-library)" -- "Did not find /PUBLIC on $UM_MOUNTPOINT"
-fi
 
-LIB_DEV=`findmnt /library | grep / | awk '{print $2}' | awk -F '[' '{print $1}'`
-ROOT_DEV=`findmnt / | grep / | awk '{print $2}'`
-BOOT_DEV=`findmnt /boot | grep / | awk '{print $2}'`
-BOOTFW_DEV=`findmnt /boot/firmware | grep / | awk '{print $2}'`
+LIB_DEV=$(findmnt -no source /library | cut -d '[' -f 1)
+ROOT_DEV=$(findmnt -no source /)
+BOOT_DEV=$(findmnt -no source /boot)
+BOOTFW_DEV=$(findmnt -no source /boot/firmware)
 if [ "$UM_DEVICE" == "$LIB_DEV" ]; then
     logger -p user.notice -t "usb_lib (70-usb-library)" -- "Skipping $UM_MOUNTPOINT containing /library"
     exit
@@ -36,6 +29,14 @@ elif [ "$UM_DEVICE" == "$BOOT_DEV" ]; then
 elif [ "$UM_DEVICE" == "$BOOTFW_DEV" ]; then
     logger -p user.notice -t "usb_lib (70-usb-library)" -- "Skipping $UM_MOUNTPOINT containing /boot/firmware"
     exit
+fi
+
+if [ -d $UM_MOUNTPOINT/PUBLIC ]; then
+    SHARE_DIR=$UM_MOUNTPOINT/PUBLIC
+    logger -p user.notice -t "usb_lib (70-usb-library)" -- "Found /PUBLIC on $UM_MOUNTPOINT"
+else
+    SHARE_DIR=$UM_MOUNTPOINT
+    logger -p user.notice -t "usb_lib (70-usb-library)" -- "Did not find /PUBLIC on $UM_MOUNTPOINT"
 fi
 
 CONTENT_LINK_USB=`basename $UM_MOUNTPOINT | awk '{print toupper($0)}'`
