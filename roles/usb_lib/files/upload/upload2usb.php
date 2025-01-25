@@ -42,7 +42,7 @@ function getTargetFolderPath ($create_folder_p) {
          $target_folder_path = $parent_dir . $today_folder_name;
 
          if (!file_exists($target_folder_path) && $create_folder_p) {
-	      mkdir($target_folder_path, 0777) or throw new RuntimeException("Not able to create upload directory. <br/>Make sure 'usb_lib_umask0000_for_kolibri' is set to 'True'. <br/><br/>");
+	      mkdir($target_folder_path, 0777) or throw new RuntimeException("Not able to create upload directory. <br/>Make sure 'usb_lib_writable_sticks' is set to 'True'. <br/><br/>");
         }
         return $target_folder_path;
 }
