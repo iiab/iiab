@@ -1,0 +1,45 @@
+#!/bin/bash
+# Create symlink in DocumentRoot/content to automounted usb drive
+#
+# based on a similar script in the xs-rsync package
+# by Martin Langhoff <martin@laptop.org>
+#
+# and the adaptation for xs-activity-server by Douglas Bagnall
+# <douglas@paradise.net.nz>
+#
+# by Tim Moody tim@timmoody.com
+
+VERBOSE=yes
+
+# UM_MOUNTPOINT and UM_DEVICE are documented at: https://github.com/rbrito/usbmount#hook-scripts
+SHARE_DIR=$UM_MOUNTPOINT
+if [ -d $UM_MOUNTPOINT/PUBLIC ]; then
+    SHARE_DIR="$UM_MOUNTPOINT/PUBLIC"
+    logger -p user.notice -t "usb_lib (70-usb-library)" -- "Found /PUBLIC on $UM_MOUNTPOINT"
+else
+    logger -p user.notice -t "usb_lib (70-usb-library)" -- "Did not find /PUBLIC on $UM_MOUNTPOINT"
+fi
+
+LIB_DEV=`findmnt /library | grep / | awk '{print $2}' | awk -F '[' '{print $1}'`
+ROOT_DEV=`findmnt / | grep / | awk '{print $2}'`
+BOOT_DEV=`findmnt /boot | grep / | awk '{print $2}'`
+BOOTFW_DEV=`findmnt /boot/firmware | grep / | awk '{print $2}'`
+if [ "$UM_DEVICE" == "$LIB_DEV" ]; then
+    logger -p user.notice -t "usb_lib (70-usb-library)" -- "Skipping $UM_MOUNTPOINT containing /library"
+    exit
+elif [ "$UM_DEVICE" == "$ROOT_DEV" ]; then
+    logger -p user.notice -t "usb_lib (70-usb-library)" -- "Skipping $UM_MOUNTPOINT containing rootfs"
+    exit
+elif [ "$UM_DEVICE" == "$BOOT_DEV" ]; then
+    logger -p user.notice -t "usb_lib (70-usb-library)" -- "Skipping $UM_MOUNTPOINT containing /boot"
+    exit
+elif [ "$UM_DEVICE" == "$BOOTFW_DEV" ]; then
+    logger -p user.notice -t "usb_lib (70-usb-library)" -- "Skipping $UM_MOUNTPOINT containing /boot/firmware"
+    exit
+fi
+
+CONTENT_LINK_USB=`basename $UM_MOUNTPOINT | awk '{print toupper($0)}'`
+CONTENT_LINK="{{ doc_root }}/local_content/$CONTENT_LINK_USB"
+logger -p user.notice -t "usb_lib (70-usb-library)" -- "Creating link from $SHARE_DIR to $CONTENT_LINK"
+ln -s $SHARE_DIR $CONTENT_LINK
+
