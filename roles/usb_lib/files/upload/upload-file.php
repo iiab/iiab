@@ -41,7 +41,8 @@ if ($upload_ok == 0) {
   if (move_uploaded_file($_FILES["uploaded_file"]["tmp_name"], $target_file)) {
     $upload_msg = "&#x1F60A; &#x2705; Your file <span style=\"font-weight:bold; font-style:italic;\">". htmlspecialchars( $uploaded_filename ). "</span> was successfully uploaded!";
   } else {
-    $upload_msg = "&#x274C; There was an error uploading your file. " . $_FILES["upload_file"]["error"] . $upload_msg;
+    $upload_ok = 0; 
+    throw new RuntimeException('There was an error uploading your file. <br/><br/>');
   }
 }
 
