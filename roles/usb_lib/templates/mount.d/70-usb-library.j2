@@ -12,7 +12,8 @@
 # Better to set this in /etc/usbmount/usbmount.conf
 # VERBOSE=yes
 
-# UM_MOUNTPOINT and UM_DEVICE are documented at: https://github.com/rbrito/usbmount#hook-scripts
+# UM_MOUNTPOINT is documented at: https://github.com/rbrito/usbmount#hook-scripts
+UM_DEV=$(findmnt -no source $UM_MOUNTPOINT)
 
 # 2022-06-16 better security thanks to @tim-moody and @jvonau:
 # https://github.com/iiab/iiab/pull/3254
@@ -20,26 +21,29 @@ LIB_DEV=$(findmnt -no source /library | cut -d '[' -f 1)
 ROOT_DEV=$(findmnt -no source /)
 BOOT_DEV=$(findmnt -no source /boot)
 BOOTFW_DEV=$(findmnt -no source /boot/firmware)
+
 # Verbose logging to illuminate occasional boot bugginess:
-logger -t "usb_lib (70-usb-library)" "UM_DEVICE is: $UM_DEVICE"
+logger -t "usb_lib (70-usb-library)" "UM_DEV is: $UM_DEV"
 logger -t "usb_lib (70-usb-library)" "LIB_DEV is: $LIB_DEV"
 logger -t "usb_lib (70-usb-library)" "ROOT_DEV is: $ROOT_DEV"
 logger -t "usb_lib (70-usb-library)" "BOOT_DEV is: $BOOT_DEV"
 logger -t "usb_lib (70-usb-library)" "BOOTFW_DEV is: $BOOTFW_DEV"
-if [ "$UM_DEVICE" == "$LIB_DEV" ]; then
+
+if [ "$UM_DEV" == "$LIB_DEV" ]; then
     logger -p user.notice -t "usb_lib (70-usb-library)" -- "Skipping $UM_MOUNTPOINT containing /library"
     exit
-elif [ "$UM_DEVICE" == "$ROOT_DEV" ]; then
+elif [ "$UM_DEV" == "$ROOT_DEV" ]; then
     logger -p user.notice -t "usb_lib (70-usb-library)" -- "Skipping $UM_MOUNTPOINT containing rootfs"
     exit
-elif [ "$UM_DEVICE" == "$BOOT_DEV" ]; then
+elif [ "$UM_DEV" == "$BOOT_DEV" ]; then
     logger -p user.notice -t "usb_lib (70-usb-library)" -- "Skipping $UM_MOUNTPOINT containing /boot"
     exit
-elif [ "$UM_DEVICE" == "$BOOTFW_DEV" ]; then
+elif [ "$UM_DEV" == "$BOOTFW_DEV" ]; then
     logger -p user.notice -t "usb_lib (70-usb-library)" -- "Skipping $UM_MOUNTPOINT containing /boot/firmware"
     exit
 fi
 
+# 2025-01-25: check for existence of PUBLIC folder on USB stick to determine if all stick content is public or private
 if [ -d $UM_MOUNTPOINT/PUBLIC ]; then
     SHARE_DIR=$UM_MOUNTPOINT/PUBLIC
     logger -p user.notice -t "usb_lib (70-usb-library)" -- "Found /PUBLIC on $UM_MOUNTPOINT"
