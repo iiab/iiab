@@ -55,7 +55,7 @@ function getFileCount ($folder_path) {
 //check if file mimetype is acceptable for upload
 function isFileMimeTypeAcceptable ($file) {
 	 $mimetype = strtolower(mime_content_type($file));
-	 $invalid_mimetypes_str = array ("compress", "image/svg+xml", "octet", "text/xml", "xhtml+xml", "zip");
+	 $invalid_mimetypes_str = array ("compress", "image/svg+xml", "octet", "text/xml", "xhtml+xml");
 	 foreach ($invalid_mimetypes_str as $invalid_mt_str) {
 	 	 if (str_contains($mimetype, $invalid_mt_str)) {
 	            error_log('UPLOAD2USB ERROR - MIMETYPE: ' . $mimetype);
