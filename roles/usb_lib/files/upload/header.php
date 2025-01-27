@@ -28,5 +28,5 @@ include("upload2usb.php");
             <div class="row">
 		<div class="col-sm-6 offset-sm-3 text-center" style="padding:15px;">
 
-                    <img class="mb-4" src="uk-swing.png" alt="" width="75">
+                    <a href="/upload2usb/"><img class="mb-4" src="uk-swing.png" alt="" width="75"></a>
                     <h1 class="h3 mb-3 font-weight-normal"><?php echo $title ?></h1>
