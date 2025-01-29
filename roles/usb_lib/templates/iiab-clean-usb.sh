@@ -9,6 +9,6 @@ logger -p user.notice -t "usb_lib (iiab-clean-usb.sh)" -- "Attempting to remove 
 
 if [ -L $CONTENT_LINK ]; then
   /bin/rm $CONTENT_LINK
-  logger -p user.notice -t "usb_lib (iiab-clean-usb.sh)" -- "$CONTENT_LINK removed."
+  logger -p user.notice -t "usb_lib (iiab-clean-usb.sh)" -- "$CONTENT_LINK removed, as auto-created earlier by usbmount."
 fi
 
