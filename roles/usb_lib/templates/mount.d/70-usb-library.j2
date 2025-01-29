@@ -1,0 +1,60 @@
+#!/bin/bash
+# Create symlink in DocumentRoot/content to automounted usb drive
+#
+# based on a similar script in the xs-rsync package
+# by Martin Langhoff <martin@laptop.org>
+#
+# and the adaptation for xs-activity-server by Douglas Bagnall
+# <douglas@paradise.net.nz>
+#
+# by Tim Moody tim@timmoody.com
+
+# Better to set this in /etc/usbmount/usbmount.conf
+# VERBOSE=yes
+
+# UM_MOUNTPOINT is documented at: https://github.com/rbrito/usbmount#hook-scripts
+UM_DEV=$(findmnt -no source $UM_MOUNTPOINT)
+
+# 2022-06-16 better security thanks to @tim-moody and @jvonau:
+# https://github.com/iiab/iiab/pull/3254
+LIB_DEV=$(findmnt -no source /library | cut -d '[' -f 1)
+ROOT_DEV=$(findmnt -no source /)
+BOOT_DEV=$(findmnt -no source /boot)
+BOOTFW_DEV=$(findmnt -no source /boot/firmware)
+
+# Verbose logging to illuminate occasional boot bugginess:
+logger -t "usb_lib (70-usb-library)" "UM_DEV is: $UM_DEV"
+logger -t "usb_lib (70-usb-library)" "LIB_DEV is: $LIB_DEV"
+logger -t "usb_lib (70-usb-library)" "ROOT_DEV is: $ROOT_DEV"
+logger -t "usb_lib (70-usb-library)" "BOOT_DEV is: $BOOT_DEV"
+logger -t "usb_lib (70-usb-library)" "BOOTFW_DEV is: $BOOTFW_DEV"
+
+if [ "$UM_DEV" == "$LIB_DEV" ]; then
+    logger -p user.notice -t "usb_lib (70-usb-library)" -- "Skipping $UM_MOUNTPOINT containing /library"
+    exit
+elif [ "$UM_DEV" == "$ROOT_DEV" ]; then
+    logger -p user.notice -t "usb_lib (70-usb-library)" -- "Skipping $UM_MOUNTPOINT containing rootfs"
+    exit
+elif [ "$UM_DEV" == "$BOOT_DEV" ]; then
+    logger -p user.notice -t "usb_lib (70-usb-library)" -- "Skipping $UM_MOUNTPOINT containing /boot"
+    exit
+elif [ "$UM_DEV" == "$BOOTFW_DEV" ]; then
+    logger -p user.notice -t "usb_lib (70-usb-library)" -- "Skipping $UM_MOUNTPOINT containing /boot/firmware"
+    exit
+fi
+
+# 2025-01-25: Check for existence of folder PUBLIC on USB stick: if found, the stick will not be completely browsable.
+# Teachers can set their stick for 1 of 2 two "personalities" — students can either upload "confidential homework" or
+# "public artwork" — as summarized here: https://github.com/iiab/iiab/blob/master/roles/usb_lib/README.rst
+if [ -d $UM_MOUNTPOINT/PUBLIC ]; then
+    SHARE_DIR=$UM_MOUNTPOINT/PUBLIC
+    logger -p user.notice -t "usb_lib (70-usb-library)" -- "Found /PUBLIC on $UM_MOUNTPOINT"
+else
+    SHARE_DIR=$UM_MOUNTPOINT
+    logger -p user.notice -t "usb_lib (70-usb-library)" -- "Did not find /PUBLIC on $UM_MOUNTPOINT"
+fi
+
+CONTENT_LINK_USB=$(basename $UM_MOUNTPOINT | awk '{print toupper($0)}')
+CONTENT_LINK="{{ doc_root }}/local_content/$CONTENT_LINK_USB"
+logger -p user.notice -t "usb_lib (70-usb-library)" -- "Creating link from $CONTENT_LINK to $SHARE_DIR"
+ln -s $SHARE_DIR $CONTENT_LINK
