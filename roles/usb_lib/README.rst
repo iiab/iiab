@@ -18,7 +18,7 @@ Technical Details:
 
 * USB sticks / drives must be formatted with one of the filesystems listed under "FILESYSTEMS=" at ``/etc/usbmount/usbmount.conf`` — these are specified on/around Line 103 of: `/opt/iiab/iiab/roles/usb_lib/tasks/install.yml <https://github.com/iiab/iiab/blob/master/roles/usb_lib/tasks/install.yml#L103>`_
 
-* IIAB will generally mount USB sticks / drives 'rw' allowing root to both read and write to them.  In addition, in March 2021 (`PR #2715 <https://github.com/iiab/iiab/pull/2715>`_) Kolibri exports were enabled by also giving non-root users read and write access to VFAT/FAT32, NTFS and exFAT USB sticks, using ``umask=0000`` (in /etc/usbmount/usbmount.conf) to override the ``umask=0022`` default.  This ``umask=0000`` is also required for students to upload to the teachers's VFAT/FAT32, NTFS and exFAT USB sticks, as introduced in January 2025 (`PR #3875 <https://github.com/iiab/iiab/pull/3875>`_).  If, however, you prefer to restore usbmount's default, set ``usb_lib_writable_sticks: False`` in `/etc/iiab/local_vars.yml <http://FAQ.IIAB.IO/#What_is_local_vars.yml_and_how_do_I_customize_it%3F>`_ — please do this prior to installing IIAB — so you don't have to run: ``cd /opt/iiab/iiab ; ./runrole --reinstall usb_lib``
+* IIAB will generally mount USB sticks / drives 'rw' allowing root to both read and write to them.  In addition, in March 2021 (`PR #2715 <https://github.com/iiab/iiab/pull/2715>`_) Kolibri exports were enabled, by also giving non-root users read and write access to VFAT/FAT32, NTFS and exFAT USB sticks — using ``umask=0000`` (in /etc/usbmount/usbmount.conf) to override the ``umask=0022`` default.  This ``umask=0000`` is also required for students to upload to the teachers's VFAT/FAT32, NTFS and exFAT USB sticks, as introduced in January 2025 (`PR #3875 <https://github.com/iiab/iiab/pull/3875>`_).  If, however, you prefer to restore usbmount's default, set ``usb_lib_writable_sticks: False`` in `/etc/iiab/local_vars.yml <http://FAQ.IIAB.IO/#What_is_local_vars.yml_and_how_do_I_customize_it%3F>`_ — please do this prior to installing IIAB — so you don't have to run: ``cd /opt/iiab/iiab ; ./runrole --reinstall usb_lib``
 
 * Official `usbmount 0.0.22 (2011-08-08) <https://github.com/rbrito/usbmount/tags>`_ documentation:
 
@@ -27,3 +27,5 @@ Technical Details:
   * https://github.com/rbrito/usbmount/blob/master/usbmount.conf (2010-04-25)
 
 * Dev Notes at the top of: https://github.com/iiab/iiab/blob/master/roles/usb_lib/tasks/install.yml
+
+  * January 2025 work to improve automount reliability during boot: `PR #3916 <https://github.com/iiab/iiab/pull/3916>`_
