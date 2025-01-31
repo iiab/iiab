@@ -264,8 +264,8 @@
     wifi_up_down: False
   when: rpi3bplus_rpi4_wifi_firmware == "24"
 
-- name: Detect "Firmware rejected country setting" in dmesg
-  shell: dmesg | grep ieee80211 | grep "Firmware rejected country setting"
+- name: Detect "Firmware rejected country setting" in dmesg (invert return code, for intentional red error)
+  shell: '! dmesg | grep ieee80211 | grep "Firmware rejected country setting"'
   register: FW_rejected_country
   ignore_errors: True
 
@@ -337,27 +337,29 @@
     - option: wifi_firmware_43455
       value: "{{ rpi3bplus_rpi4_wifi_firmware }}"
 
-- name: Add 'detected_network' variable 'current_client_channel_found' value if defined, to {{ iiab_ini_file }}
+- name: Add 'detected_network' variable 'current_client_channel_found' stdout value ({{ current_client_channel.stdout }}) if defined and non-empty, to {{ iiab_ini_file }}
   ini_file:
     dest: "{{ iiab_ini_file }}"
     section: detected_network
-    option: "{{ item.option }}"
-    value: "{{ item.value | string }}"
-  with_items:
-    - option: client_wifi_channel_found
-      value: "{{ current_client_channel.stdout }}"
-  when: current_client_channel.stdout is defined
+    option: client_wifi_channel_found
+    value: "{{ current_client_channel.stdout }}"
+  when: current_client_channel.stdout is defined and current_client_channel.stdout != ""
 
-- name: Add 'detected_network' variable 'FW_rejected_country' value if defined, to {{ iiab_ini_file }}
+- name: Add 'detected_network' variable 'FW_rejected_country' stdout value ({{ FW_rejected_country.stdout }}) if defined and non-empty, to {{ iiab_ini_file }}
   ini_file:
     dest: "{{ iiab_ini_file }}"
     section: detected_network
-    option: "{{ item.option }}"
-    value: "{{ item.value | string }}"
-  with_items:
-    - option: FW_rejected_country
-      value: "{{ cmdline_country_code.stdout }}"
-  when: FW_rejected_country.stdout is defined
+    option: FW_rejected_country
+    value: "{{ FW_rejected_country.stdout }}"
+  when: FW_rejected_country.stdout is defined and FW_rejected_country.stdout != ""
+
+- name: Add 'detected_network' variable 'cmdline_country_code' stdout value ({{ cmdline_country_code.stdout }}) if defined and non-empty, to {{ iiab_ini_file }}
+  ini_file:
+    dest: "{{ iiab_ini_file }}"
+    section: detected_network
+    option: cmdline_country_code
+    value: "{{ cmdline_country_code.stdout }}"
+  when: cmdline_country_code.stdout is defined and cmdline_country_code.stdout != ""
 
 # well if there ever was a point to tell the user things are FUBAR this is it.
 # limit 2 network adapters wifi wired
