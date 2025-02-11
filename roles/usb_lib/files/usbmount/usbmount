@@ -96,22 +96,41 @@ if [ "$1" = add ]; then
     USAGE=$(echo "$DEVINFO"  | sed 's/.*[[:blank:]]USAGE="\([^"]*\)".*/\1/g; s/[[:blank:]]*//g;')
 
     if ! echo $USAGE | egrep -q "(filesystem|disklabel)"; then
-	log info "$DEVNAME does not contain a filesystem or disklabel"
+	log info "/$DEVNAME does not contain a filesystem or disklabel"
 	exit
     fi
 
-    # Try to use specifications in /etc/fstab first.
+    log debug "DEVNAME /$DEVNAME"
+    BOOTFW_DEV=$(/usr/bin/findmnt -no source /boot/firmware)
+    log debug "BOOTFW_DEV $BOOTFW_DEV"
+    if [ $BOOTFW_DEV = /$DEVNAME ]; then
+	log debug "/$DEVNAME contains filesystem type $FSTYPE"
+	log debug "skipping BOOTFS_DEV $BOOTFS_DEV mounted at /boot/firmware"
+	exit
+    fi
+    ROOT_DEV=$(/usr/bin/findmnt -no source /)
+    log debug "ROOT_DEV $ROOT_DEV"
+    if [ $ROOT_DEV = /$DEVNAME ]; then
+	log debug "/$DEVNAME contains filesystem type $FSTYPE"
+	log debug "skipping ROOT_DEV $ROOT_DEV mounted at /"
+	exit
+    fi
+    BOOT_DEV=$(/usr/bin/findmnt -no source /boot)
+    log debug "BOOT_DEV $BOOT_DEV"
+    if [ $BOOT_DEV = /$DEVNAME ]; then
+	log debug "skipping BOOTFS_DEV $BOOT_DEV mount as /boot"
+	exit
+    fi
+
+    # Try to use specifications in /etc/fstab to skip.
     if egrep -q "^[[:blank:]]*$DEVNAME" /etc/fstab; then
-	log info "executing command: mount $DEVNAME"
-	mount $DEVNAME || log err "mount by DEVNAME with $DEVNAME wasn't successful; return code $?"
-
+	log debug "skipping /$DEVNAME exit"
+	exit
     elif grep -q "^[[:blank:]]*UUID=$UUID" /etc/fstab; then
-        log info "executing command: mount -U $UUID"
-	mount -U $UUID || log err "mount by UUID with $UUID wasn't successful; return code $?"
-
+	log debug "skipping $UUID"
+	exit
     else
-	log debug "$DEVNAME contains filesystem type $FSTYPE"
-
+	log debug "/$DEVNAME contains filesystem type $FSTYPE"
 	fstype=$FSTYPE
 	# Test if the filesystem type is in the list of filesystem
 	# types to mount.
