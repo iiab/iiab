@@ -18,7 +18,7 @@ function getTargetUSBDriveLocation () {
          // lsblk --output NAME,TRAN,RM,MOUNTPOINT --pairs |grep RM=\"1\" | grep -v MOUNTPOINT=\"\" | cut -d " " -f 4 | cut -d "=" -f 2
 
 	 # error if 1<>usb sticks are installed 
-	 $rmv_usb_path_count = shell_exec('lsblk --output NAME,TRAN,RM,MOUNTPOINT --pairs |grep RM=\"1\" | grep -v MOUNTPOINT=\"\" | cut -d " " -f 4  | wc -l');
+	 $rmv_usb_path_count = shell_exec('lsblk --output NAME,TRAN,RM,MOUNTPOINT --pairs |grep RM=\"1\" | grep -v MOUNTPOINT=\"\" | cut -d " " -f 4  | grep media | wc -l');
 	 if ($rmv_usb_path_count == 0) {
  	    	throw new RuntimeException('0 USB sticks found. <br/><br/>');
 	 } elseif ($rmv_usb_path_count > 1) {
