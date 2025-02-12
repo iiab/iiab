@@ -96,34 +96,30 @@ if [ "$1" = add ]; then
     USAGE=$(echo "$DEVINFO"  | sed 's/.*[[:blank:]]USAGE="\([^"]*\)".*/\1/g; s/[[:blank:]]*//g;')
 
     if ! echo $USAGE | egrep -q "(filesystem|disklabel)"; then
-	log info "/$DEVNAME does not contain a filesystem or disklabel"
+	log debug "/$DEVNAME does not contain a filesystem or disklabel"
 	exit
     fi
 
-    log debug "DEVNAME /$DEVNAME"
+    log debug "/$DEVNAME contains filesystem type $FSTYPE"
     BOOTFW_DEV=$(/usr/bin/findmnt -no source /boot/firmware)
     log debug "BOOTFW_DEV $BOOTFW_DEV"
-    if [ $BOOTFW_DEV = /$DEVNAME ]; then
-	log debug "/$DEVNAME contains filesystem type $FSTYPE"
-	log debug "skipping BOOTFS_DEV $BOOTFS_DEV mounted at /boot/firmware"
-	lockfile-remove /var/run/usbmount/.mount
-	exit
-    fi
     ROOT_DEV=$(/usr/bin/findmnt -no source /)
     log debug "ROOT_DEV $ROOT_DEV"
-    if [ $ROOT_DEV = /$DEVNAME ]; then
-	log debug "/$DEVNAME contains filesystem type $FSTYPE"
-	log debug "skipping ROOT_DEV $ROOT_DEV mounted at /"
-	lockfile-remove /var/run/usbmount/.mount
-	exit
-    fi
     BOOT_DEV=$(/usr/bin/findmnt -no source /boot)
     log debug "BOOT_DEV $BOOT_DEV"
-    if [ $BOOT_DEV = /$DEVNAME ]; then
-	log debug "/$DEVNAME contains filesystem type $FSTYPE"
-	log debug "skipping BOOT_DEV $BOOT_DEV mount as /boot"
-	lockfile-remove /var/run/usbmount/.mount
-	exit
+
+    if [ $BOOTFW_DEV = /$DEVNAME ]; then
+	log debug "skipping BOOTFS_DEV $BOOTFS_DEV mounted at /boot/firmware"
+        lockfile-remove /var/run/usbmount/.mount
+        exit
+    elif [ $ROOT_DEV = /$DEVNAME ]; then
+        log debug "skipping ROOT_DEV $ROOT_DEV mounted at /"
+        lockfile-remove /var/run/usbmount/.mount
+        exit
+    elif [ $BOOT_DEV = /$DEVNAME ]; then
+        log debug "skipping BOOT_DEV $BOOT_DEV mount as /boot"
+        lockfile-remove /var/run/usbmount/.mount
+        exit
     fi
 
     # Try to use specifications in /etc/fstab to skip.
@@ -145,7 +141,7 @@ if [ "$1" = add ]; then
 	    for v in $MOUNTPOINTS; do
 		if [ -d "$v" ] && ! grep -q "^[^ ][^ ]*  *$v " /proc/mounts; then
 		    mountpoint="$v"
-		    log debug "mountpoint $mountpoint is available for $DEVNAME"
+		    log debug "mountpoint $mountpoint is available for /$DEVNAME"
 		    break
 		fi
 	    done
