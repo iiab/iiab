@@ -90,12 +90,12 @@ if [ "$1" = add ]; then
     # Grab device information from device and "divide it"
     #   FIXME: improvement: implement mounting by label (notice that labels
     #   can contain spaces, which makes things a little bit less comfortable).
-    DEVINFO=$(/sbin/blkid -p "$DEVNAME")
+    DEVINFO=$(/sbin/blkid -p "/$DEVNAME")
     FSTYPE=$(echo "$DEVINFO" | sed 's/.*[[:blank:]]TYPE="\([^"]*\)".*/\1/g; s/[[:blank:]]*//g;')
     UUID=$(echo "$DEVINFO"   | sed 's/.*[[:blank:]]UUID="\([^"]*\)".*/\1/g; s/[[:blank:]]*//g;')
     USAGE=$(echo "$DEVINFO"  | sed 's/.*[[:blank:]]USAGE="\([^"]*\)".*/\1/g; s/[[:blank:]]*//g;')
 
-    if ! echo "$USAGE" | grep -Eq "(filesystem|disklabel)"; then
+    if ! echo "$USAGE" | grep -E "(filesystem|disklabel)"; then
         log debug "/$DEVNAME does not contain a filesystem or disklabel"
         lockfile-remove /var/run/usbmount/.mount
         exit
@@ -206,17 +206,19 @@ if [ "$1" = add ]; then
     fi
 elif [ "$1" = remove ]; then
 
+    log debug "DEVNAME is /$DEVNAME"
     # A block or partition device has been removed.
     # Test if it is mounted.
-    while read -r device mountpoint fstype; do
+    while read -r device mountpoint fstype junk; do
     if [ "/$DEVNAME" = "$device" ]; then
         log debug "umount device is $device"
-        log debug "umount mountpoint is $mountpoint"
+        log debug "umount fstype is $fstype"
         # If the mountpoint and filesystem type are maintained by
         # this script, unmount the filesystem.
         if in_list "$mountpoint" "$MOUNTPOINTS"; then
             # Run hook scripts; ignore errors.
-            export UM_DEVICE="/$DEVNAME"
+            log debug "umount mountpoint is $mountpoint"
+            export UM_DEVICE="$device"
             export UM_MOUNTPOINT="$mountpoint"
             export UM_FILESYSTEM="$fstype"
             log info "executing command: run-parts /etc/usbmount/umount.d"
