@@ -1,9 +1,13 @@
 #!/bin/bash
 # Remove symlink in /library/www/html/local_content to automounted USB drive
+# exported
+#UM_DEVICE="$DEVNAME"
+#UM_MOUNTPOINT="$mountpoint"
+#UM_FILESYSTEM="$fstype"
 
-DEVICE="/$(echo $1 | sed 's|-|/|')"
-MNT_POINT=$(findmnt -no target $DEVICE)
-CONTENT_LINK_USB=$(basename $MNT_POINT | awk '{print toupper($0)}')
+#DEVICE="/$(echo $1 | sed 's|-|/|')"
+#MNT_POINT=$(findmnt -no target $DEVICE)
+CONTENT_LINK_USB=$(basename "$UM_MOUNTPOINT" | awk '{print toupper($0)}')
 CONTENT_LINK="/library/www/html/local_content/$CONTENT_LINK_USB"
 
 logger -t "usbmount (iiab-clean-usb.sh)" "Attempting to remove symlink $CONTENT_LINK, as auto-created earlier by usb_lib."
