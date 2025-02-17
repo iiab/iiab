@@ -61,7 +61,11 @@
     content: 'KOLIBRI_HOME="{{ kolibri_home }}"'
     dest: /etc/kolibri/daemon.conf
 
+- name: Using PIP method
+  include_tasks: pip-install.yml
+  when: kolibri_version_pip is defined
 
+- block:
 # https://kolibri.readthedocs.io/en/latest/install/ubuntu-debian.html claims:
 # "When you use the PPA installation method, upgrades to newer versions
 # will be automatic, provided there is internet access available."
@@ -71,17 +75,17 @@
 # https://github.com/learningequality/kolibri-installer-debian/pull/117
 
 # 2022-08-31: keyring /etc/apt/trusted.gpg DEPRECATED as detailed on #3343
-- name: Download Kolibri's apt key to /usr/share/keyrings/learningequality-kolibri.gpg
-  shell: |
-    gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys DC5BAA93F9E4AE4F0411F97C74F88ADB3194DD81
-    gpg --yes --output /usr/share/keyrings/learningequality-kolibri.gpg --export DC5BAA93F9E4AE4F0411F97C74F88ADB3194DD81
+  - name: Download Kolibri's apt key to /usr/share/keyrings/learningequality-kolibri.gpg
+    shell: |
+      gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys DC5BAA93F9E4AE4F0411F97C74F88ADB3194DD81
+      gpg --yes --output /usr/share/keyrings/learningequality-kolibri.gpg --export DC5BAA93F9E4AE4F0411F97C74F88ADB3194DD81
 
 # 2024-06-25: Strongly consider PPA "kolibri-proposed" in future...
 # https://github.com/learningequality/kolibri/issues/11892
 # https://kolibri.readthedocs.io/en/latest/install/ubuntu-debian.html
-- name: Add signed Kolibri PPA 'jammy'
-  apt_repository:
-    repo: "deb [signed-by=/usr/share/keyrings/learningequality-kolibri.gpg] http://ppa.launchpad.net/learningequality/kolibri/ubuntu jammy main"
+  - name: Add signed Kolibri PPA 'jammy'
+    apt_repository:
+      repo: "deb [signed-by=/usr/share/keyrings/learningequality-kolibri.gpg] http://ppa.launchpad.net/learningequality/kolibri/ubuntu jammy main"
 #   when: is_ubuntu and os_ver is version('ubuntu-2204', '>=') or is_linuxmint_21 or is_debian_12
 #   #when: is_ubuntu_2204 or is_ubuntu_2210 or is_debian_12    # MINT 21 COVERED BY is_ubuntu_2204
 
@@ -133,27 +137,29 @@
 #     kolibri_deb_url: https://github.com/learningequality/kolibri/releases/download/v0.17.0/kolibri_0.17.0-0ubuntu1_all.deb
 #   when: python_version is version('3.12', '>=')    # For Ubuntu 24.04, Mint 22, pre-releases of Ubuntu 24.10, and Debian 13 (even if/when "Trixie" changes from Python 3.12 to 3.13!)  Regarding PPA kolibri-proposed not quite being ready yet, see: learningequality/kolibri#11316 -> learningequality/kolibri#11892
 
-- name: apt install kolibri (using apt source specified above, if kolibri_deb_url ISN'T defined)
-  apt:
-    name: kolibri
-  when: kolibri_deb_url is undefined
+  - name: apt install kolibri (using apt source specified above, if kolibri_deb_url ISN'T defined)
+    apt:
+      name: kolibri
+    when: kolibri_deb_url is undefined
   # environment:
   #   KOLIBRI_HOME: "{{ kolibri_home }}"    # 2023-03-27: These don't do a thing
   #   KOLIBRI_USER: "{{ kolibri_user }}"    # for now.
 
-- name: apt install {{ kolibri_deb_url }} (if kolibri_deb_url IS defined)
-  apt:
-    deb: "{{ kolibri_deb_url }}"    # e.g. https://learningequality.org/r/kolibri-deb-latest
-  when: kolibri_deb_url is defined
+  - name: apt install {{ kolibri_deb_url }} (if kolibri_deb_url IS defined)
+    apt:
+      deb: "{{ kolibri_deb_url }}"    # e.g. https://learningequality.org/r/kolibri-deb-latest
+    when: kolibri_deb_url is defined
   # environment:
   #   KOLIBRI_HOME: "{{ kolibri_home }}"    # 2023-03-27: These don't do a thing
   #   KOLIBRI_USER: "{{ kolibri_user }}"    # for now.
 
 
-- name: Run 'rm -rf /root/.kolibri' to remove "unavoidable" pollution created above
-  file:
-    state: absent
-    path: /root/.kolibri
+  - name: Run 'rm -rf /root/.kolibri' to remove "unavoidable" pollution created above
+    file:
+      state: absent
+      path: /root/.kolibri
+# end block
+  when: kolibri_version_pip is undefined
 
 - name: 'Install from template: /etc/systemd/system/kolibri.service'
   template:
