@@ -18,6 +18,30 @@
     fail_msg: "PLEASE GIVE VARIABLE 'kolibri_enabled' A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
     quiet: yes
 
+# 2022-09-08 @jredrejo's Ansible install scripts may provide guidelines:
+# https://github.com/learningequality/pi-gen/blob/master/stage2/04-hostapd/common.yml
+# https://github.com/learningequality/pi-gen/blob/master/stage2/04-hostapd/install.yml
+# https://github.com/learningequality/pi-gen/blob/master/stage2/04-hostapd/offline.yml
+# https://github.com/learningequality/pi-gen/blob/master/stage2/04-hostapd/online.yml
+
+# Install Kolibri » Debian/Ubuntu
+# https://kolibri.readthedocs.io/en/latest/install/ubuntu-debian.html
+
+# Advanced management
+# https://kolibri.readthedocs.io/en/latest/manage/advanced.html
+
+# Working with Kolibri from the command line
+# https://kolibri.readthedocs.io/en/latest/manage/command_line.html
+
+# Customize Kolibri settings with the [ /library/kolibri/options.ini ] file
+# https://kolibri.readthedocs.io/en/latest/manage/options_ini.html
+
+# Test Kolibri server performance
+
+- name: Set kolibri_version_pip if
+  set_fact:
+    kolibri_version_pip: 0.17.5
+  when: is_debian_13 or is_ubuntu_2504
 
 - block:
 
@@ -26,10 +50,20 @@
   #    kolibri_provision: False
   #  when: ???
 
-  - name: Install Kolibri, if 'kolibri_installed' not defined, e.g. in {{ iiab_state_file }}    # /etc/iiab/iiab_state.yml
-    include_tasks: install.yml
-    when: kolibri_installed is undefined
+  - block:
+    - name: Install Kolibri, if 'kolibri_installed' not defined, e.g. in {{ iiab_state_file }} # /etc/iiab/iiab_state.yml
+      include_tasks: pre-install.yml
 
+    - name: Using PPA method
+      include_tasks: install.yml
+      when: kolibri_version_pip is undefined
+
+    - name: Using PIP method
+      include_tasks: pip-install.yml
+      when: kolibri_version_pip is defined
+
+    - include_tasks: post-install.yml
+    when: kolibri_installed is undefined
 
   - include_tasks: enable-or-disable.yml
 
