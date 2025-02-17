@@ -1,0 +1,36 @@
+- name: Record (initial) disk space used
+  shell: df -B1 --output=used / | tail -1
+  register: df1
+
+- name: Create Linux user {{ kolibri_user }} and add it to groups {{ apache_user }}, disk
+  user:
+    name: "{{ kolibri_user }}"
+    groups: "{{ apache_user }}"    # 2023-03-29: Not really necessary (Kolibri is demonstrated to work without group 'www-data').  But it likely doesn't hurt.
+      #- disk    # 2023-03-29: Tested to be unnec with USB sticks (with 64-bit RasPiOS).  FWIW group 'disk' is "Mostly equivalent to root access" according to https://wiki.debian.org/SystemGroups
+    state: present
+    shell: /bin/false
+    system: yes
+    create_home: no
+    home: "{{ kolibri_home }}"
+
+- name: Create directory {{ kolibri_home }} for Kolibri content, configuration, sqlite3 databases ({{ kolibri_user }}:{{ apache_user }}, by default 0755)
+  file:
+    state: directory
+    path: "{{ kolibri_home }}"     # /library/kolibri
+    owner: "{{ kolibri_user }}"    # kolibri
+    group: "{{ apache_user }}"     # www-data (on Debian/Ubuntu/Raspbian)
+
+- name: Create directory /etc/kolibri (by default 0755)
+  file:
+    state: directory
+    name: /etc/kolibri
+
+- name: Save kolibri_user ({{ kolibri_user }}) to /etc/kolibri/username
+  copy:
+    content: "{{ kolibri_user }}"
+    dest: /etc/kolibri/username
+
+- name: Save kolibri_home (KOLIBRI_HOME="{{ kolibri_home }}") to /etc/kolibri/daemon.conf
+  copy:
+    content: 'KOLIBRI_HOME="{{ kolibri_home }}"'
+    dest: /etc/kolibri/daemon.conf
