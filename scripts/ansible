@@ -221,6 +221,16 @@ if [[ $(dpkg --print-architecture) == "i386" ]] && apt-cache show ansible-core >
     # 2023-08-10 #3613/#3615/#3617: apt-not-pip kludge for legacy 32-bit i386
     # (DEBIAN 12+ ETC) avoids #3547 rust/wheels/cryptography compiling mess!
     $APT_PATH/apt -y install ansible-core    # Bookworm ~= ansible-core 2.14.3
+
+    echo -e "\n\nIIAB requires these ~4 Ansible Collections: (we upgrade them here if possible!)\n"
+    cat > /opt/iiab/iiab/ansible.cfg << EOF
+[defaults]
+interpreter_python=/usr/bin/python3
+EOF
+    git commit -am "Alter ansible.cfg interpreter_python for deb install of ansible-core"
+    ansible-galaxy collection install --force-with-deps \
+                                      -r /opt/iiab/iiab/collections.yml \
+                                      -p /usr/share/ansible/collections
 else
     # 2023-03-22: OS's like Ubuntu 23.04 and Debian 12 (e.g. with Python 3.11+) ask
     # that virtual environments (venv) be used to safely isolate pip installs:
@@ -283,18 +293,29 @@ EOF
     echo -e "\nCreate symlinks /usr/local/bin/ansible* -> /usr/local/ansible/bin/ansible*"
     cd /usr/local/ansible/bin
     for bin in ansible*; do
-	ln -sf /usr/local/ansible/bin/"$bin" /usr/local/bin/"$bin"
+        ln -sf /usr/local/ansible/bin/"$bin" /usr/local/bin/"$bin"
     done
+
+    echo -e "\n\nIIAB requires these ~4 Ansible Collections: (we upgrade them here if possible!)\n"
+    # 2025-02-19: Collections more fully in venv, with /opt/iiab/iiab/ansible.cfg containing...
+    # collections_path=/usr/local/ansible/collections
+    # ...overriding default shown by 'ansible --version' here:
+    # ansible collection location = /root/.ansible/collections:/usr/share/ansible/collections
+    /usr/local/ansible/bin/ansible-galaxy collection install --force-with-deps \
+                                          -r /opt/iiab/iiab/collections.yml \
+                                          -p /usr/local/ansible/collections
 fi
 
 # (Re)running collection installs appears safe, with --force-with-deps to force
 # upgrade of collection and dependencies it pulls in.  Note Ansible may support
 # explicit upgrading of collections (--upgrade / -U flag) in version "2.11"
 # with PR ansible/ansible#73336.  See also IIAB PRs #2647 #2652 #2653 #2655.
-echo -e "\n\nIIAB requires these ~4 Ansible Collections: (we upgrade them here if possible!)\n"
-ansible-galaxy collection install --force-with-deps \
-               -r /opt/iiab/iiab/collections.yml \
-               -p /usr/share/ansible/collections
+
+# echo -e "\n\nIIAB requires these ~4 Ansible Collections: (we upgrade them here if possible!)\n"
+# ansible-galaxy collection install --force-with-deps \
+#                -r /opt/iiab/iiab/collections.yml \
+#                -p /usr/share/ansible/collections
+
 # 2021-02-24: 'ansible-galaxy collection list' lists those installed. (#2659)
 # 2020-11-28: The ~3 Ansible Collections used by IIAB (~37MB) once lived here:
 #    /root/.ansible/collections/ansible_collections
@@ -309,6 +330,7 @@ ansible-galaxy collection install --force-with-deps \
 echo -e "\n\nSUCCESS!  PLEASE VERIFY ANSIBLE WITH COMMANDS LIKE:\n"
 echo -e "    ansible --version"
 echo -e "    /usr/local/ansible/bin/pip3 show ansible-core"
-echo -e '    apt -a list "ansible*"'
-echo -e "    ansible-galaxy collection list\n\n"
+#echo -e "    /usr/local/ansible/bin/ansible-galaxy collection list"
+echo -e "    ansible-galaxy collection list"
+echo -e '    apt -a list "ansible*"\n\n'
 #echo -e "WARNING: Start a new Linux shell, if it changed from /usr/bin to /usr/local/bin\n\n"
