@@ -1,4 +1,4 @@
-- name: Remove kolibre deb if installed
+- name: Remove kolibri deb if installed
   apt:
     name: kolibri
     state: "absent"
@@ -13,7 +13,21 @@
     path: "{{ kolibri_venv_path }}"
     state: absent
 
-- name: Install prep for kolibri
+# can't hurt but should be called in as a dependency
+- name: Install prep for kolibri when NOT is_debian_13 or is_ubuntu_2504
+  pip:
+    name:
+      - pip
+      - wheel
+      - setuptools
+      - cgi
+    virtualenv: "{{ kolibri_venv_path }}"
+    virtualenv_command: python3 -m venv "{{ kolibri_venv_path }}"
+    extra_args: "--no-cache-dir --prefer-binary"
+  when: not (is_debian_13 or is_ubuntu_2504)
+
+# package name change
+- name: Install prep for kolibri when is_debian_13 or is_ubuntu_2504
   pip:
     name:
       - pip
@@ -23,6 +37,7 @@
     virtualenv: "{{ kolibri_venv_path }}"
     virtualenv_command: python3 -m venv "{{ kolibri_venv_path }}"
     extra_args: "--no-cache-dir --prefer-binary"
+  when: (is_debian_13 or is_ubuntu_2504)
 
 - name: Install kolibri {{ kolibri_version_pip }} using pip
   pip:
@@ -31,6 +46,17 @@
     virtualenv: "{{ kolibri_venv_path }}"
     virtualenv_command: python3 -m venv "{{ kolibri_venv_path }}"
     extra_args: "--no-cache-dir --prefer-binary --ignore-requires-python"
+  when: kolibri_version_pip_web is undefined
+
+# use kolibri_version_pip_web: https://github.com/learningequality/kolibri/releases/download/<release> and set kolibri_version_pip
+# and not the full path note v0.18.0-alpha1/kolibri-0.18.0a1-py2.py3-none-any.whl
+- name: Install kolibri using {{ kolibri_version_pip_web }}/{{ kolibri_version_pip }}-py2.py3-none-any.whl
+  pip:
+    name: "{{ kolibri_version_pip_web }}/kolibri-{{ kolibri_version_pip }}-py2.py3-none-any.whl"
+    virtualenv: "{{ kolibri_venv_path }}"
+    virtualenv_command: python3 -m venv "{{ kolibri_venv_path }}"
+    extra_args: "--no-cache-dir --prefer-binary --ignore-requires-python"
+  when: kolibri_version_pip_web is defined
 
 - name: Create {{ kolibri_exec_path }} symlink to {{ kolibri_venv_path }}/bin/kolibri
   file:
