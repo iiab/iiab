@@ -24,8 +24,8 @@ exec > /dev/null 2>&1
 # Log a string via the syslog facility.
 log()
 {
-    if [ $1 != debug ] || expr "$VERBOSE" : "[yY]" > /dev/null; then
-	logger -p user.$1 -t "usbmount[$$]" -- "$2"
+    if [ "$1" != debug ] || expr "$VERBOSE" : "[yY]" > /dev/null; then
+	logger -p user."$1" -t "usbmount[$$]" -- "$2"
     fi
 }
 
@@ -83,22 +83,22 @@ if [ "$1" = add ]; then
     # Acquire lock.
     log debug "trying to acquire lock /var/run/usbmount/.mount.lock"
     lockfile-create --retry 6 /var/run/usbmount/.mount || \
-	{ log err "cannot acquire lock /var/run/usbmount/.mount.lock"; exit 1; }
+        { log err "cannot acquire lock /var/run/usbmount/.mount.lock"; exit 1; }
     trap '( lockfile-remove /var/run/usbmount/.mount )' 0
     log debug "acquired lock /var/run/usbmount/.mount.lock"
 
     # Grab device information from device and "divide it"
     #   FIXME: improvement: implement mounting by label (notice that labels
     #   can contain spaces, which makes things a little bit less comfortable).
-    DEVINFO=$(/sbin/blkid -p $DEVNAME)
+    DEVINFO=$(/sbin/blkid -p "/$DEVNAME")
     FSTYPE=$(echo "$DEVINFO" | sed 's/.*[[:blank:]]TYPE="\([^"]*\)".*/\1/g; s/[[:blank:]]*//g;')
     UUID=$(echo "$DEVINFO"   | sed 's/.*[[:blank:]]UUID="\([^"]*\)".*/\1/g; s/[[:blank:]]*//g;')
     USAGE=$(echo "$DEVINFO"  | sed 's/.*[[:blank:]]USAGE="\([^"]*\)".*/\1/g; s/[[:blank:]]*//g;')
 
-    if ! echo $USAGE | egrep -q "(filesystem|disklabel)"; then
+    if ! echo "$USAGE" | grep -E "(filesystem|disklabel)"; then
         log debug "/$DEVNAME does not contain a filesystem or disklabel"
         lockfile-remove /var/run/usbmount/.mount
-	    exit
+        exit
     fi
 
     log debug "/$DEVNAME contains filesystem type $FSTYPE"
@@ -109,29 +109,29 @@ if [ "$1" = add ]; then
     BOOT_DEV=$(/usr/bin/findmnt -no source /boot)
     log debug "BOOT_DEV $BOOT_DEV"
 
-    if [ $BOOTFW_DEV = /$DEVNAME ]; then
-	    log debug "skipping BOOTFS_DEV $BOOTFS_DEV mounted at /boot/firmware"
+    if [ "$BOOTFW_DEV" = /"$DEVNAME" ]; then
+        log debug "skipping BOOTFW_DEV $BOOTFW_DEV mounted at /boot/firmware"
         lockfile-remove /var/run/usbmount/.mount
         exit
-    elif [ $ROOT_DEV = /$DEVNAME ]; then
+    elif [ "$ROOT_DEV" = /"$DEVNAME" ]; then
         log debug "skipping ROOT_DEV $ROOT_DEV mounted at /"
         lockfile-remove /var/run/usbmount/.mount
         exit
-    elif [ $BOOT_DEV = /$DEVNAME ]; then
+    elif [ "$BOOT_DEV" = /"$DEVNAME" ]; then
         log debug "skipping BOOT_DEV $BOOT_DEV mount as /boot"
         lockfile-remove /var/run/usbmount/.mount
         exit
     fi
 
     # Try to use specifications in /etc/fstab to skip.
-    if egrep -q "^[[:blank:]]*$DEVNAME" /etc/fstab; then
+    if grep -Eq "^[[:blank:]]*$DEVNAME" /etc/fstab; then
         log debug "skipping /$DEVNAME exit"
         lockfile-remove /var/run/usbmount/.mount
         exit
-    elif grep -q "^[[:blank:]]*UUID=$UUID" /etc/fstab; then
+    elif grep -Eq "^[[:blank:]]*UUID=$UUID" /etc/fstab; then
         log debug "skipping $UUID"
         lockfile-remove /var/run/usbmount/.mount
-	exit
+        exit
     else
         log debug "/$DEVNAME contains filesystem type $FSTYPE"
         fstype=$FSTYPE
@@ -142,7 +142,7 @@ if [ "$1" = add ]; then
             for v in $MOUNTPOINTS; do
                 if [ -d "$v" ] && ! grep -q "^[^ ][^ ]*  *$v " /proc/mounts; then
                     mountpoint="$v"
-		            log debug "mountpoint $mountpoint is available for /$DEVNAME"
+                    log debug "mountpoint $mountpoint is available for /$DEVNAME"
                     break
                 fi
             done
@@ -155,74 +155,76 @@ if [ "$1" = add ]; then
                         break
                     fi
                 done
-            if [ -n "$MOUNTOPTIONS" ]; then
-                options="$MOUNTOPTIONS${options:+,$options}"
+                if [ -n "$MOUNTOPTIONS" ]; then
+                    options="$MOUNTOPTIONS${options:+,$options}"
+                fi
+
+                # Mount the filesystem.
+                log info "executing command: mount -t$fstype ${options:+-o$options} /$DEVNAME $mountpoint"
+                mount "-t$fstype" "${options:+-o$options}" "/$DEVNAME" "$mountpoint"
+
+                # Determine vendor and model.
+                vendor=
+                if [ -r "/sys$DEVPATH/device/vendor" ]; then
+                    vendor="$(cat \"/sys"$DEVPATH"/device/vendor\")"
+                elif [ -r "/sys$DEVPATH/../device/vendor" ]; then
+                    vendor="$(cat \"/sys"$DEVPATH"/../device/vendor\")"
+                elif [ -r "/sys$DEVPATH/device/../manufacturer" ]; then
+                    vendor="$(cat \"/sys"$DEVPATH"/device/../manufacturer\")"
+                elif [ -r "/sys$DEVPATH/../device/../manufacturer" ]; then
+                    vendor="$(cat \"/sys"$DEVPATH"/../device/../manufacturer\")"
+                fi
+                vendor="$(echo "$vendor" | sed 's/^[[:blank:]]\+//; s/[[:blank:]]\+$//')"
+
+                model=
+                if [ -r "/sys$DEVPATH/device/model" ]; then
+                    model="$(cat \"/sys"$DEVPATH"/device/model\")"
+                elif [ -r "/sys$DEVPATH/../device/model" ]; then
+                    model="$(cat \"/sys"$DEVPATH"/../device/model\")"
+                elif [ -r "/sys$DEVPATH/device/../product" ]; then
+                    model="$(cat \"/sys"$DEVPATH"/device/../product\")"
+                elif [ -r "/sys$DEVPATH/../device/../product" ]; then
+                    model="$(cat \"/sys"$DEVPATH"/../device/../product\")"
+                fi
+                model="$(echo "$model" | sed 's/^[[:blank:]]\+//; s/[[:blank:]]\+$//')"
+
+                # Run hook scripts; ignore errors.
+                export UM_DEVICE="/$DEVNAME"
+                export UM_MOUNTPOINT="$mountpoint"
+                export UM_FILESYSTEM="$fstype"
+                export UM_MOUNTOPTIONS="$options"
+                export UM_VENDOR="$vendor"
+                export UM_MODEL="$model"
+                log info "executing command: run-parts /etc/usbmount/mount.d"
+                run-parts /etc/usbmount/mount.d || :
+            else
+                # No suitable mount point found.
+                log warning "no mountpoint found for /$DEVNAME"
+                exit 1
             fi
-
-            # Mount the filesystem.
-            log info "executing command: mount -t$fstype ${options:+-o$options} $DEVNAME $mountpoint"
-            mount "-t$fstype" "${options:+-o$options}" "$DEVNAME" "$mountpoint"
-
-            # Determine vendor and model.
-            vendor=
-            if [ -r "/sys$DEVPATH/device/vendor" ]; then
-                vendor="`cat \"/sys$DEVPATH/device/vendor\"`"
-            elif [ -r "/sys$DEVPATH/../device/vendor" ]; then
-                vendor="`cat \"/sys$DEVPATH/../device/vendor\"`"
-            elif [ -r "/sys$DEVPATH/device/../manufacturer" ]; then
-                vendor="`cat \"/sys$DEVPATH/device/../manufacturer\"`"
-            elif [ -r "/sys$DEVPATH/../device/../manufacturer" ]; then
-                vendor="`cat \"/sys$DEVPATH/../device/../manufacturer\"`"
-            fi
-            vendor="$(echo "$vendor" | sed 's/^[[:blank:]]\+//; s/[[:blank:]]\+$//')"
-
-            model=
-            if [ -r "/sys$DEVPATH/device/model" ]; then
-                model="`cat \"/sys$DEVPATH/device/model\"`"
-            elif [ -r "/sys$DEVPATH/../device/model" ]; then
-                model="`cat \"/sys$DEVPATH/../device/model\"`"
-            elif [ -r "/sys$DEVPATH/device/../product" ]; then
-                model="`cat \"/sys$DEVPATH/device/../product\"`"
-            elif [ -r "/sys$DEVPATH/../device/../product" ]; then
-                model="`cat \"/sys$DEVPATH/../device/../product\"`"
-            fi
-            model="$(echo "$model" | sed 's/^[[:blank:]]\+//; s/[[:blank:]]\+$//')"
-
-            # Run hook scripts; ignore errors.
-            export UM_DEVICE="$DEVNAME"
-            export UM_MOUNTPOINT="$mountpoint"
-            export UM_FILESYSTEM="$fstype"
-            export UM_MOUNTOPTIONS="$options"
-            export UM_VENDOR="$vendor"
-            export UM_MODEL="$model"
-            log info "executing command: run-parts /etc/usbmount/mount.d"
-            run-parts /etc/usbmount/mount.d || :
-        else
-            # No suitable mount point found.
-            log warning "no mountpoint found for $DEVNAME"
-            exit 1
         fi
-	fi
-fi
+    fi
 elif [ "$1" = remove ]; then
 
+    log debug "DEVNAME is /$DEVNAME"
     # A block or partition device has been removed.
     # Test if it is mounted.
-    while read device mountpoint fstype remainder; do
-    if [ "$DEVNAME" = "$device" ]; then
-	    # If the mountpoint and filesystem type are maintained by
-	    # this script, unmount the filesystem.
-	    if in_list "$mountpoint" "$MOUNTPOINTS" &&
-            in_list "$fstype" "$FILESYSTEMS"; then
-            log info "executing command: umount -l $mountpoint"
-            umount -l "$mountpoint"
-
+    while read -r device mountpoint fstype junk; do
+    if [ "/$DEVNAME" = "$device" ]; then
+        log debug "umount device is $device"
+        log debug "umount fstype is $fstype"
+        # If the mountpoint and filesystem type are maintained by
+        # this script, unmount the filesystem.
+        if in_list "$mountpoint" "$MOUNTPOINTS"; then
             # Run hook scripts; ignore errors.
-            export UM_DEVICE="$DEVNAME"
+            log debug "umount mountpoint is $mountpoint"
+            export UM_DEVICE="$device"
             export UM_MOUNTPOINT="$mountpoint"
             export UM_FILESYSTEM="$fstype"
             log info "executing command: run-parts /etc/usbmount/umount.d"
             run-parts /etc/usbmount/umount.d || :
+            log info "executing command: umount -l $mountpoint"
+            umount -l "$mountpoint"
         fi
         break
     fi
