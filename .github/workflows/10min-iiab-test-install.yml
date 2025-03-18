@@ -1,24 +1,27 @@
 name: '"10 min" IIAB on Ubuntu 24.04 on x86-64'
-
+# https://michaelcurrin.github.io/dev-cheatsheets/cheatsheets/ci-cd/github-actions/triggers.html
 on: [push, pull_request, workflow_dispatch]
 
 jobs:
   test-install:
     runs-on: ubuntu-24.04
     steps:
-      - name: Check out repository code
+      - name: Check out repository code # clones repo onto github runner
         uses: actions/checkout@v4
-      - name: Set up /opt/iiab/iiab
+        with:
+          fetch-depth: 10000 # default is 1, but this appears to be causing issues with iiab-summary
+      - name: Set up /opt/iiab/iiab # some steps to get ready for the install
         run: |
           mkdir /opt/iiab
           mv $GITHUB_WORKSPACE /opt/iiab
-          mkdir $GITHUB_WORKSPACE
+          mkdir $GITHUB_WORKSPACE    # OR SUBSEQUENT STEPS WILL FAIL ('working-directory: /opt/iiab/iiab' hacks NOT worth it!)
       - name: Set up /etc/iiab/local_vars.yml
         run: |
           sudo mkdir /etc/iiab
-          sudo cp /opt/iiab/iiab/vars/local_vars_small.yml /etc/iiab/local_vars.yml
-      - run: sudo /opt/iiab/iiab/scripts/ansible
-      - run: sudo ./iiab-install
+          # local_vars_none.yml only installs the essential applications and nothing extra
+          sudo cp /opt/iiab/iiab/vars/local_vars_none.yml /etc/iiab/local_vars.yml
+      - run: sudo /opt/iiab/iiab/scripts/ansible # installs ansible
+      - run: sudo ./iiab-install # installs IIAB
         working-directory: /opt/iiab/iiab
       - run: iiab-summary
-      - run: diff /etc/iiab/iiab_state.yml /opt/iiab/iiab/tests.unused/expected_state_small.yml
+      - run: diff /etc/iiab/iiab_state.yml /opt/iiab/iiab/.github/workflows/tests/expected_state_none.yml
