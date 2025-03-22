@@ -1,0 +1,27 @@
+name: '"20 min" IIAB with local_vars_small on Ubuntu 24.04 on x86-64'
+
+on: [push, pull_request, workflow_dispatch]
+
+jobs:
+  test-install:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 10000 # default is 1, but causes issues with iiab-summary
+      - name: Set up /opt/iiab/iiab
+        run: |
+          mkdir /opt/iiab
+          mv $GITHUB_WORKSPACE /opt/iiab
+          # github actions is weird, do not delete the line below. Yes, it will cause everything to break. Really.
+          mkdir $GITHUB_WORKSPACE
+      - name: Set up /etc/iiab/local_vars.yml
+        run: |
+          sudo mkdir /etc/iiab
+          sudo cp /opt/iiab/iiab/vars/local_vars_small.yml /etc/iiab/local_vars.yml # local_vars_small, so some apps are installed
+      - run: sudo /opt/iiab/iiab/scripts/ansible # install ansible
+      - run: sudo ./iiab-install # installation!
+        working-directory: /opt/iiab/iiab
+      - run: iiab-summary
+      - run: diff /etc/iiab/iiab_state.yml /opt/iiab/iiab/.github/workflows/tests/expected_state_small.yml # final validation
