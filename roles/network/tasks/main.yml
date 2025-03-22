@@ -37,19 +37,6 @@
 - name: Configuring Network if enabled
   block:
 
-  # DEPRECATED
-  #- name: Configure wondershaper
-  #  include_tasks: wondershaper.yml
-  #  when: wondershaper_install or wondershaper_installed is defined
-  #
-  #- name: (Re)Install named
-  #  include_tasks: named.yml
-  #  when: named_install and FQDN_changed and iiab_stage|int == 9
-  #
-  #- name: (Re)Install dhcpd
-  #  include_tasks: dhcpd.yml
-  #  when: dhcpd_install and FQDN_changed and iiab_stage|int == 9
-
   # 2022-07-22: Is './runrole --reinstall network' the new way to make this run?
   #- name: (Re)Install Squid
   #  include_tasks: squid.yml
@@ -64,20 +51,27 @@
 
   #### Start network layout
 
-  # 2024-12-18: As `rfkill unblock wifi` formerly in rpi_debian.yml wasn't enough, especially with NM (NetworkManager)
-  - name: Run 'raspi-config nonint do_wifi_country {{ host_country_code }}' (using var host_country_code) to unblock WiFi, if RasPiOS
-    command: raspi-config nonint do_wifi_country {{ host_country_code }}
-    when: is_raspbian
-    #ignore_errors: True
-
-  #- name: Redhat networking
-  #  include_tasks: ifcfg_mods.yml
-  #  when: is_redhat
-
   - name: NetworkManager in use
     include_tasks: NM-debian.yml
     when: network_manager_active
 
+  # 2025-03-21 #3961 WARNING: RasPiOS standard wifi firmware for RPi 4, 5, 500
+  # [ /lib/firmware/cypress/cyfmac43455-sdio-standard.bin i.e. BCM4345/6 wl0:
+  # Aug 29 2023 01:47:08 version 7.45.265 (28bca26 CY) FWID 01-b677b91b ]
+  # crashes OFTEN during NM-debian.yml restart of NetworkManager.  Similarly,
+  # 'nmcli radio wifi off' OFTEN triggers crashes on bare RasPiOS, as seen by:
+  # watch -n.1 "iw reg get; iw dev; echo; dmesg | grep Firmware:"
+
+  # PR #3965 MITIGATION: Deferring the setting of wifi country code (moved from
+  # just above NM-debian.yml, to just below) is NOT a complete solution, but
+  # this is just one of several helpful mitigations, evolving to make IIAB
+  # installs much more reliable.
+
+  # 2024-12-18: As `rfkill unblock wifi` formerly in rpi_debian.yml wasn't enough, especially with NM (NetworkManager)
+  - name: Run 'raspi-config nonint do_wifi_country {{ host_country_code }}' (using var host_country_code) to unblock WiFi, if RasPiOS
+    command: raspi-config nonint do_wifi_country {{ host_country_code }}
+    when: is_raspbian
+  
   - name: systemd-networkd in use
     include_tasks: sysd-netd-debian.yml
     when: systemd_networkd_active
