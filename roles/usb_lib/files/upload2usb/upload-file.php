@@ -5,7 +5,7 @@
 */
 
 $title = "Upload to USB Results";
-include("header.php");
+include("upload2usb.php");
 
 //get folder path where file will be stored
 $target_folder_path = getTargetFolderPath(1);
@@ -47,8 +47,11 @@ if ($upload_ok == 0) {
 }
 
 $file_count = getFileCount($target_folder_path);
+//$requesting_url = $_SERVER['REQUEST_URI']; 
 
 ?>
+
+<?php include("header.php"); ?>
 
                     <?php echo $upload_msg ?> <br/>
                     <?php echo $file_count ?> files have been uploaded today!
