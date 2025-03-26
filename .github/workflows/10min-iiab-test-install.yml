@@ -1,4 +1,4 @@
-name: '"10 min" IIAB on Ubuntu 24.04 on x86-64'
+name: '"10 min" UNITTEST IIAB on Ubuntu 24.04 on x86-64'
 # run-name: ${{ github.actor }} is testing out GitHub Actions 🚀
 
 # https://michaelcurrin.github.io/dev-cheatsheets/cheatsheets/ci-cd/github-actions/triggers.html
@@ -26,8 +26,10 @@ jobs:
       #  env:
       #    GITHUB_CONTEXT: ${{ toJSON(github) }}
       #  run: echo "$GITHUB_CONTEXT"
-      - name: Check out repository code
+      - name: Check out repository code    # Clones repo onto github runner
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 10000    # Default is 1, but iiab-summary (below) needs git tag history
       - run: echo "🍏 This job's status is ${{ job.status }}."
       - name: GitHub Actions "runner" environment
         run: |
@@ -41,7 +43,7 @@ jobs:
           # apt update
           # apt dist-upgrade -y
           # apt autoremove -y
-      - name: Set up /opt/iiab/iiab
+      - name: Set up /opt/iiab/iiab    # Some steps to get ready for the install
         run: |
           mkdir /opt/iiab
           mv $GITHUB_WORKSPACE /opt/iiab
@@ -49,10 +51,10 @@ jobs:
       - name: Set up /etc/iiab/local_vars.yml
         run: |
           sudo mkdir /etc/iiab
-          # touch /etc/iiab/local_vars.yml
-          sudo cp /opt/iiab/iiab/vars/local_vars_none.yml /etc/iiab/local_vars.yml
-      - run: sudo /opt/iiab/iiab/scripts/ansible
-      - run: sudo ./iiab-install
+          # local_vars_unittest.yml installs a quite minimal IIAB, without IIAB Apps
+          sudo cp /opt/iiab/iiab/vars/local_vars_unittest.yml /etc/iiab/local_vars.yml
+      - run: sudo /opt/iiab/iiab/scripts/ansible    # Installs Ansible
+      - run: sudo ./iiab-install                    # Installs IIAB!
         working-directory: /opt/iiab/iiab
       - run: iiab-summary
-      - run: cat /etc/iiab/iiab_state.yml
+      - run: diff /etc/iiab/iiab_state.yml /opt/iiab/iiab/.github/workflows/tests/expected_state_unittest.yml    # Final validation
