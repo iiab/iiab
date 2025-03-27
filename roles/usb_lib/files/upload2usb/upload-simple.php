@@ -9,9 +9,21 @@ include("upload2usb.php");
 //Check if folder for today exists, and get file count if it does
 $file_count = getFileCount(getTargetFolderPath(0));
 
-//TODO: Check if upload_msg exists and display result if it does - this is not yet working quite right. 
-$upload_msg = isset($_GET['upload_msg']) ? "<br/><span>" . $_GET['upload_msg'] . "</span>": "" ;
-
+//TODO: Check if upload_msg exists and display result if it does - this is not yet working quite right.
+$url_components = parse_url($_SERVER['REQUEST_URI']);
+//error_log ("URL: ". var_dump($url_components));
+$upload_msg = "";
+if (array_key_exists("query", $url_components)) {
+  parse_str($url_components['query'], $query);
+  $upload_ok = $query['upload_ok'];
+//  error_log ("UPLOAD_OK: " . $upload_ok);
+  if ($upload_ok == 1) {
+    $upload_msg = "Your file was successfully uploaded!";
+  } else {
+    $upload_msg = "There was an error uploading your file.";
+  }
+  $upload_msg = "<span class='upload_msg'>".$upload_msg."</span>";
+}
 ?>
 
 <script>
@@ -21,9 +33,9 @@ $upload_msg = isset($_GET['upload_msg']) ? "<br/><span>" . $_GET['upload_msg'] .
 </script>
 
 <style>
-    
     div.container {
       text-align:center;
+      width:260px;
       max-width:350px;
       float:right;
       color: #fff;
@@ -39,11 +51,7 @@ $upload_msg = isset($_GET['upload_msg']) ? "<br/><span>" . $_GET['upload_msg'] .
       border-radius:.3rem;
       padding:.5rem;
     }
-    input {
-      margin-right:-3rem;
-      font-size:.75rem;
-    }
-    button, input[type="file"]::file-selector-button {
+    button {
       background-color: #ddd;
       border: none;
       border-radius:.3rem;
@@ -66,6 +74,19 @@ $upload_msg = isset($_GET['upload_msg']) ? "<br/><span>" . $_GET['upload_msg'] .
       font-size:.8rem;
 
     }
+
+/* TODO: FIX FADING
+    .upload_msg{
+      transition: 5s opacity, 5s visibility;
+      opacity: 1;
+    }
+
+    .upload_msg.fade{
+       opacity: 0;
+       visibility: hidden;
+    }
+*/
+    
 </style>
 
 <div class="container">
