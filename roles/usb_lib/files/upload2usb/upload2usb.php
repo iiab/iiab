@@ -6,15 +6,19 @@
 
 set_exception_handler(function (Throwable $exception) {
     error_log('UPLOAD2USB ERROR: ' . (string)$exception);
-    
-    include ("error.php");
+    $requesting_url = $_SERVER['REQUEST_URI']; 
+
+    // If user is on the main app page (i.e., /upload2usb/), show the error on the page, otherwise fail silently
+    if (strcmp($requesting_url,"/upload2usb/") == 0 || strcmp($requesting_url,"/upload2usb/index.php") == 0) {
+        include ("error.php");
+    }
 });
 
 //return the first removable USB drive location
 function getTargetUSBDriveLocation () {
+
          // Get the count of storage mounted at /media, and error if there is <>1 otherwise return upload path
 
-         # error if 1<>usb sticks are installed
          $rmv_usb_path_count = shell_exec('lsblk --output NAME,TRAN,RM,MOUNTPOINT --pairs | cut -d " " -f 4 | grep "^MOUNTPOINT=\"/media" | wc -l');
 
          if ($rmv_usb_path_count == 0) {
