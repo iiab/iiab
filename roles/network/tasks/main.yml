@@ -57,15 +57,22 @@
 
   # 2025-03-21 #3961 WARNING: RasPiOS standard wifi firmware for RPi 4, 5, 500
   # [ /lib/firmware/cypress/cyfmac43455-sdio-standard.bin i.e. BCM4345/6 wl0:
-  # Aug 29 2023 01:47:08 version 7.45.265 (28bca26 CY) FWID 01-b677b91b ]
-  # crashes OFTEN during NM-debian.yml restart of NetworkManager.  Similarly,
+  # Aug 29 2023 01:47:08 version 7.45.265 (28bca26 CY) FWID 01-b677b91b ] was
+  # crashing OFTEN during NM-debian.yml restart of NetworkManager.  Similarly,
   # 'nmcli radio wifi off' OFTEN triggers crashes on bare RasPiOS, as seen by:
-  # watch -n.1 "iw reg get; iw dev; echo; dmesg | grep Firmware:"
+  # watch -n0 "iw reg get; iw dev; echo; dmesg | grep Firmware:"
 
-  # PR #3965 MITIGATION: Deferring the setting of wifi country code (moved from
-  # just above NM-debian.yml, to just below) is NOT a complete solution, but
-  # this is just one of several helpful mitigations, evolving to make IIAB
-  # installs much more reliable.
+  # Workarounds with potential: (discussed on PR #3965)
+  # (1) Defer the setting of wifi country code (moved from just above
+  #     NM-debian.yml, to just below) -- tested to work well.
+  # (2) iiab-clone-wifi.service.j2 can add ap0 to the correct phyname
+  #     {phy0, phy1, ...} -- tested to work well.
+  # (3) raspberrypi/linux#6049 hack adds brcmfmac.roamoff=1 and
+  #     brcmfmac.feature_disable=0x282000 to /boot/firmware/cmdline.txt (then
+  #     reboot) or add similar to /etc/modprobe.d/brcmfmac.conf (then reload
+  #     kernel modul brcmfmac).  But deviating from RasPiOS RISKS problematic
+  #     side effects with other firmware, or on other hardware -- and making
+  #     IIAB microSD cards less portable.
 
   # 2024-12-18: As `rfkill unblock wifi` formerly in rpi_debian.yml wasn't enough, especially with NM (NetworkManager)
   - name: Run 'raspi-config nonint do_wifi_country {{ host_country_code }}' (using var host_country_code) to unblock WiFi, if RasPiOS
@@ -85,7 +92,6 @@
   - name: Not RPi, Not NetworkManager, Not systemd-networkd in use
     include_tasks: debian.yml
     when: not is_raspbian and not network_manager_active and not systemd_networkd_active
-    #when: (not is_raspbian and not network_manager_active and not systemd_networkd_active and is_debuntu) or is_ubuntu_16
   #### end network layout
 
   - name: hostapd
