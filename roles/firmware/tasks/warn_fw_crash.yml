@@ -4,13 +4,13 @@
 # (just below NM-debian.yml) and at https://github.com/iiab/iiab/pull/3965
 
 
-- name: Did WiFi firmware crash since boot? Run 'ls /sys/class/ieee80211/ | head -1' to check
-  shell: ls /sys/class/ieee80211/ | head -1
+- name: Did WiFi firmware crash since boot? Run '[ -d /sys/class/ieee80211/ ] && ls /sys/class/ieee80211/ | head -1' to check
+  shell: '[ -d /sys/class/ieee80211/ ] && ls /sys/class/ieee80211/ | head -1'
   register: phyname
   failed_when: False    # Stronger than 'ignore_errors: yes' (defer red errors until below!)
 
-- name: Did WiFi firmware crash since boot? Run '! dmesg | grep "Firmware has halted or crashed"' to check
-  shell: '! dmesg | grep "Firmware has halted or crashed"'
+- name: Did WiFi firmware crash since boot? Run 'dmesg | grep "Firmware has halted or crashed"' to check
+  shell: dmesg | grep "Firmware has halted or crashed"
   register: dmesg_fw_crash
   failed_when: False
 
@@ -18,21 +18,21 @@
 - name: WARN if WiFi firmware appears to have crashed since boot (intentionally show red error)
   fail:
     msg: "WARNING: /sys/class/ieee80211/{{ phyname.stdout }} (normally phy0) SUGGESTS YOUR WIFI FIRMWARE CRASHED SINCE BOOT."
-  when: phyname.stdout != "phy0"
+  when: phyname.rc == 0 and phyname.stdout != "phy0"
   ignore_errors: yes
 
 - name: WARN if WiFi firmware appears to have crashed since boot (intentionally show red error)
   fail:
     msg: "WARNING: dmesg SHOWS WIFI FIRMWARE CRASH(ES) SINCE BOOT... {{ dmesg_fw_crash.stdout }}"
-  when: dmesg_fw_crash.rc != 0
+  when: dmesg_fw_crash.rc == 0
   ignore_errors: yes
 
 
 - fail:    # Also intentionally red, with a 1 minute pause below, for extra emphasis
     msg: "PLEASE CONSIDER: (1) adding 'brcmfmac.debug=0x100000' to /boot/firmware/cmdline.txt (and then reboot) to provide much more logging, (2) running 'sudo iiab-diagnostics' to submit a bug report, (3) reading https://github.com/iiab/iiab/pull/3965 to learn more."
-  when: phyname.stdout != "phy0" or dmesg_fw_crash.rc != 0
+  when: phyname.rc == 0 and phyname.stdout != "phy0" or dmesg_fw_crash.rc == 0
   ignore_errors: yes
 
 - pause:
     minutes: 1
-  when: phyname.stdout != "phy0" or dmesg_fw_crash.rc != 0
+  when: phyname.rc == 0 and phyname.stdout != "phy0" or dmesg_fw_crash.rc == 0
