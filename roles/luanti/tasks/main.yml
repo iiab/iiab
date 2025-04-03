@@ -1,0 +1,72 @@
+# "How do i fail a task in Ansible if the variable contains a boolean value?
+# I want to perform input validation for Ansible playbooks"
+# https://stackoverflow.com/questions/46664127/how-do-i-fail-a-task-in-ansible-if-the-variable-contains-a-boolean-value-i-want/46667499#46667499
+
+# We assume 0-init/tasks/validate_vars.yml has DEFINITELY been run, so no need
+# to re-check whether vars are defined here.  As Ansible vars cannot be unset:
+# https://serverfault.com/questions/856729/how-to-destroy-delete-unset-a-variable-value-in-ansible
+
+- name: Assert that "luanti_install is sameas true" (boolean not string etc)
+  assert:
+    that: luanti_install is sameas true
+    fail_msg: "PLEASE SET 'luanti_install: True' e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+
+- name: Assert that "luanti_enabled | type_debug == 'bool'" (boolean not string etc)
+  assert:
+    that: luanti_enabled | type_debug == 'bool'
+    fail_msg: "PLEASE GIVE VARIABLE 'luanti_enabled' A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+
+
+- block:
+
+  - name: Create default var 'luanti_systemd_unit' (THIS VAR & MINETEST RESIDUE LOGIC SHOULD GO AWAY IN ~2026)
+    set_fact:
+      luanti_systemd_unit: luanti-server
+
+  - name: Revert {luanti_config_file, luanti_working_dir, luanti_systemd_unit} to older Minetest values -- if Debian < 13 or Ubuntu < 25.10
+    set_fact:
+      luanti_config_file: /etc/minetest/minetest.conf    # OVERRIDE /etc/luanti/default.conf (set in defaults/main.yml)
+      luanti_working_dir: /usr/share/games/minetest      # OVERRIDE /usr/share/luanti (set in default_vars.yml)
+      luanti_systemd_unit: minetest-server               # OVERRIDE luanti-server (set just above)
+    when: (is_debian and os_ver is version('debian-13', '<')) or (is_ubuntu and os_ver is version('ubuntu-2510', '<'))
+
+  - name: Install Luanti if 'luanti_installed' not defined, e.g. in {{ iiab_state_file }}    # /etc/iiab/iiab_state.yml
+    include_tasks: install.yml
+    when: luanti_installed is undefined
+
+  - include_tasks: enable-or-disable.yml
+
+  - name: Add 'luanti' variable values to {{ iiab_ini_file }}
+    ini_file:
+      path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+      section: luanti
+      option: "{{ item.option }}"
+      value: "{{ item.value | string }}"
+    with_items:
+      - option: name
+        value: Luanti Server
+      - option: description
+        value: '"Luanti is an open source clone of the Minecraft building blocks game."'
+      - option: luanti_install
+        value: "{{ luanti_install }}"
+      - option: luanti_enabled
+        value: "{{ luanti_enabled }}"
+      - option: luanti_port
+        value: "{{ luanti_port }}"
+      - option: luanti_config_file
+        value: "{{ luanti_config_file }}"
+      - option: luanti_working_dir
+        value: "{{ luanti_working_dir }}"
+      - option: luanti_systemd_unit
+        value: "{{ luanti_systemd_unit }}"
+      - option: luanti_world_dir
+        value: "{{ luanti_world_dir }}"
+
+  rescue:
+
+  - name: 'SEE ERROR ABOVE (skip_role_on_error: {{ skip_role_on_error }})'
+    fail:
+      msg: ""
+    when: not skip_role_on_error

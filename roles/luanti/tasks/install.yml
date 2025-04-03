@@ -1,0 +1,81 @@
+- name: Record (initial) disk space used
+  shell: df -B1 --output=used / | tail -1
+  register: df1
+
+
+- name: Check for Luanti world file ({{ luanti_world_dir }}/world.mt)
+  stat:
+    path: "{{ luanti_world_dir }}/world.mt"
+  register: luanti_world
+
+# Parent dirs auto-created in luanti_install.yml
+# - name: mkdir /library/games
+#   file:
+#     state: directory
+#     path: /library/games
+
+- include_tasks: luanti_install.yml
+  when: not luanti_world.stat.exists
+
+
+# Install games
+#- include_tasks: luanti_install_games.yml
+#  with_items:
+#    - name: carbone-ng
+#      url: https://github.com/Calinou/carbone-ng
+
+# "As of 5.8.0 [2023-12-04], Luanti no longer ships with a default game,
+# meaning you will have to provide your own game to use with the server."
+# https://docs.luanti.org/for-server-hosts/setup/#running-the-server
+
+- name: Create dir {{ luanti_working_dir }}/games/    # e.g. /usr/share/luanti, formerly /usr/share/games/minetest
+  file:
+    state: directory
+    path: "{{ luanti_working_dir }}/games/"
+
+- name: Download default game https://content.luanti.org/packages/Luanti/minetest_game/ (2025-03-02 VERSION FOR NOW) -- if Debian >= 13 or Ubuntu >= 25.10
+  unarchive:
+    remote_src: yes
+    src: https://content.luanti.org/packages/Luanti/minetest_game/releases/29922/download/
+    dest: "{{ luanti_working_dir }}/games/"
+  when: luanti_default_game == "minetest" and ((is_debian and os_ver is version('debian-13', '>=')) or (is_ubuntu and os_ver is version('ubuntu-2510', '>=')))
+
+
+- name: Install mods
+  include_tasks: luanti_install_mods.yml
+  with_items:
+    - name: basic_materials
+      url: https://content.luanti.org/packages/VanessaE/basic_materials/releases/14936/download/
+    - name: mesecons
+      url: https://content.luanti.org/packages/Jeija/mesecons/releases/14247/download/
+    - name: digilines
+      url: https://content.luanti.org/packages/Jeija/digilines/releases/13248/download/
+    - name: pipeworks
+      url: https://content.luanti.org/packages/VanessaE/pipeworks/releases/7488/download/
+    - name: WorldEdit
+      url: https://content.luanti.org/packages/sfan5/worldedit/releases/13367/download/
+  when: luanti_default_game == "minetest"
+
+
+# RECORD Luanti AS INSTALLED
+
+- name: Record (final) disk space used
+  shell: df -B1 --output=used / | tail -1
+  register: df2
+
+- name: Add 'luanti_disk_usage = {{ df2.stdout|int - df1.stdout|int }}' to {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+    section: luanti
+    option: luanti_disk_usage
+    value: "{{ df2.stdout|int - df1.stdout|int }}"
+
+- name: "Set 'luanti_installed: True'"
+  set_fact:
+    luanti_installed: True
+
+- name: "Add 'luanti_installed: True' to {{ iiab_state_file }}"
+  lineinfile:
+    path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
+    regexp: '^luanti_installed'
+    line: 'luanti_installed: True'
