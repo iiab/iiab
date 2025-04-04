@@ -50,7 +50,7 @@
       * cups (NGINX redirects http://box/print to port 631, changing URL hostname to localhost when necessary, per [PR #2858](https://github.com/iiab/iiab/pull/2858))
       * internetarchive (menu goes directly to port 4244) [*, [PR #2120](https://github.com/iiab/iiab/pull/2120)]
       * kalite (menu goes directly to ports 8006-8008)
-      * minetest
+      * luanti (formerly minetest)
       * mosquitto
       * pbx [FreePBX is usable with _both_ NGINX and Apache as of 2021-08-18, thanks to PR [#2954](https://github.com/iiab/iiab/pull/2954)]
       * phpmyadmin [*, requires Apache for now, as in Section iii.]
