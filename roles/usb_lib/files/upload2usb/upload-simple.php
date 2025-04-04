@@ -92,7 +92,7 @@ if (array_key_exists("query", $url_components)) {
 <div class="container">
     <form action="/upload2usb/upload-file.php" id="upload2usb_form" method="post" enctype="multipart/form-data">
         <input type="file" name="uploaded_file" id="uploaded_file" onChange="this.form.submit();" style="display:none;">
-	<button name="upload_btn" type="button" onClick="uploadFile();">Upload</button>
+	<button name="upload_btn" type="button" onClick="uploadFile();">Upload to USB</button>
         <span><?php echo $file_count ?> files uploaded today!</span>
 	<?php echo $upload_msg ?>
     </form>
