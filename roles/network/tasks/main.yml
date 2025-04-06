@@ -37,19 +37,6 @@
 - name: Configuring Network if enabled
   block:
 
-  # DEPRECATED
-  #- name: Configure wondershaper
-  #  include_tasks: wondershaper.yml
-  #  when: wondershaper_install or wondershaper_installed is defined
-  #
-  #- name: (Re)Install named
-  #  include_tasks: named.yml
-  #  when: named_install and FQDN_changed and iiab_stage|int == 9
-  #
-  #- name: (Re)Install dhcpd
-  #  include_tasks: dhcpd.yml
-  #  when: dhcpd_install and FQDN_changed and iiab_stage|int == 9
-
   # 2022-07-22: Is './runrole --reinstall network' the new way to make this run?
   #- name: (Re)Install Squid
   #  include_tasks: squid.yml
@@ -64,20 +51,36 @@
 
   #### Start network layout
 
-  # 2024-12-18: As `rfkill unblock wifi` formerly in rpi_debian.yml wasn't enough, especially with NM (NetworkManager)
-  - name: Run 'raspi-config nonint do_wifi_country {{ host_country_code }}' (using var host_country_code) to unblock WiFi, if RasPiOS
-    command: raspi-config nonint do_wifi_country {{ host_country_code }}
-    when: is_raspbian
-    #ignore_errors: True
-
-  #- name: Redhat networking
-  #  include_tasks: ifcfg_mods.yml
-  #  when: is_redhat
-
   - name: NetworkManager in use
     include_tasks: NM-debian.yml
     when: network_manager_active
 
+  # 2025-03-21 #3961 WARNING: RasPiOS standard wifi firmware for RPi 4, 5, 500
+  # [ /lib/firmware/cypress/cyfmac43455-sdio-standard.bin i.e. BCM4345/6 wl0:
+  # Aug 29 2023 01:47:08 version 7.45.265 (28bca26 CY) FWID 01-b677b91b ] was
+  # crashing OFTEN during NM-debian.yml restart of NetworkManager.  Similarly,
+  # 'nmcli radio wifi off; nmcli radio wifi on' OFTEN triggers crashes on bare
+  # RasPiOS, as seen by: watch -n0 "iw reg get; iw dev; echo; dmesg | grep Firmware:"
+
+  # Workarounds with potential: (discussed on PR #3965)
+  # (1) Defer the setting of wifi country code (moved from just above
+  #     NM-debian.yml, to just below) -- tested to work well.
+  # (2) iiab-clone-wifi.service.j2 can add ap0 to the correct phyname
+  #     {phy0, phy1, ...} -- tested to work well.
+  # (3) raspberrypi/linux#6049 hack holds promise, adding brcmfmac.roamoff=1
+  #     brcmfmac.feature_disable=0x282000 to /boot/firmware/cmdline.txt (then
+  #     reboot) -- or add similar to /etc/modprobe.d/brcmfmac.conf (then reload
+  #     kernel module brcmfmac).  Well-tested workarounds above mean this hack
+  #     appears unnecessary: either as a one-off during IIAB install (carefully
+  #     avoiding reboots), or by deviating from RasPiOS longer term which risks
+  #     problematic side effects with other/past/future WiFi firmware -- or on
+  #     other hardware -- perhaps making IIAB microSD cards less portable.
+
+  # 2024-12-18: As `rfkill unblock wifi` formerly in rpi_debian.yml wasn't enough, especially with NM (NetworkManager)
+  - name: Run 'raspi-config nonint do_wifi_country {{ host_country_code }}' (using var host_country_code) to unblock WiFi, if RasPiOS
+    command: raspi-config nonint do_wifi_country {{ host_country_code }}
+    when: is_raspbian
+  
   - name: systemd-networkd in use
     include_tasks: sysd-netd-debian.yml
     when: systemd_networkd_active
@@ -91,7 +94,6 @@
   - name: Not RPi, Not NetworkManager, Not systemd-networkd in use
     include_tasks: debian.yml
     when: not is_raspbian and not network_manager_active and not systemd_networkd_active
-    #when: (not is_raspbian and not network_manager_active and not systemd_networkd_active and is_debuntu) or is_ubuntu_16
   #### end network layout
 
   - name: hostapd
@@ -107,6 +109,9 @@
   include_role:
     name: firmware
   when: rpi_model != "none"
+
+- name: "2025-03-31: WiFi firmware was crashing OFTEN in NM-debian.yml above, so let's help everyone better monitor in future, on RPi or elsewhere"
+  include_tasks: roles/firmware/tasks/warn_fw_crash.yml
 
 
 - name: Create {{ iiab_etc_path }}/install-flags/iiab-network-complete on second pass of network role
