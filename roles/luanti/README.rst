@@ -3,27 +3,27 @@ Luanti README
 =============
 
 `Luanti <https://www.luanti.org/>`_ (formerly Minetest) is a `Minecraft <https://en.wikipedia.org/wiki/Minecraft>`_-inspired creative/explorational building blocks game, written from scratch and licensed
-under the LGPL (version 2.1 or later).  It supports both survival and creative modes along with multiplayer support, dynamic lighting, and an "infinite" map generator.
+under LGPL 2.1+.
 
-The Luanti multiplayer server can be installed as part of any Internet-in-a-Box (IIAB).
+The Luanti multiplayer server can be installed as part of any Internet-in-a-Box (IIAB) — examples of Luanti in education: `luanti.org/education <https://www.luanti.org/education/>`_
 
-For examples of Luanti in education, please see: `luanti.org/education <https://www.luanti.org/education/>`_
+It supports both survival and creative modes along with multiplayer support, dynamic lighting, and an "infinite" map generator.  Initial configuration is "creative mode" by default, and a number of mods are installed (see the list in `tasks/install.yml <tasks/install.yml>`_).
 
-Initial configuration is "creative mode" by default, and a number of mods are installed (see the list in `tasks/install.yml <tasks/install.yml>`_).
+Install Luanti onto each Student Device
+---------------------------------------
 
-Connecting to the Server
-------------------------
+To connect to the multiplayer game running on your IIAB, Luanti client software first needs to be downloaded and installed onto each student device, e.g. from: `luanti.org/downloads <https://www.luanti.org/downloads/>`_
 
-To connect to the server, you will also need to download Luanti client software for each of your client devices, e.g. from: `luanti.org/downloads <https://www.luanti.org/downloads/>`_
+[SCREENSHOT(S) & EXPLANATION FORTHCOMING!]
 
-The port is nominally the standard 30000.  If necessary, change the ``luanti_port`` as explained below.
+The port is nominally the standard 30000.  If necessary, change ``luanti_port`` on the server side (IIAB side) as explained below.
 
 The admin user is the usual: ``Admin``
 
 No password is required.
 
-Configurable Parameters
------------------------
+Optional Server-side Customizations
+-----------------------------------
 
 If changes are necessary, please edit `/etc/iiab/local_vars.yml <https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it%3F>`_ (adding any variables that you need) prior to installation:
 
