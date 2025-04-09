@@ -26,7 +26,7 @@ Before students can connect, Luanti client software needs to be downloaded and i
 
       flatpak run net.minetest.Minetest
 
-Finally, any student can now connect to the multiplayer game: (if Luanti server is running on their IIAB!)
+Finally, any student can now connect to the multiplayer game: (if Luanti server is running on the IIAB!)
 
 - Click **Join Game**.
 - In the **Address** field, type in IIAB's IP address (e.g. 10.10.10.10, or box.lan).
