@@ -30,7 +30,7 @@ Finally, any student can now connect to the multiplayer game: (if Luanti server 
 
 - Click **Join Game**.
 - In the **Address** field, type in IIAB's IP address (e.g. 10.10.10.10, or box.lan).
-- Click **Register** to create an account (password optional!)
+- Click **Register** to create a student account (password optional!)
 - After **Login**, help students understand Luanti's `keyboard controls <https://docs.luanti.org/for-players/getting-started/#basic-controls>`_.
 
 *[ SCREENSHOT(S) & GAME TIPS FOR EDUCATORS FORTHCOMING ]*
