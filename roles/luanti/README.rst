@@ -2,12 +2,12 @@
 Luanti README
 =============
 
-`Luanti <https://https://www.luanti.org/>`_ (formerly Minetest) is a `Minecraft <https://en.wikipedia.org/wiki/Minecraft>`_-inspired creative/explorational building blocks game, written from scratch and licensed
+`Luanti <https://www.luanti.org/>`_ (formerly Minetest) is a `Minecraft <https://en.wikipedia.org/wiki/Minecraft>`_-inspired creative/explorational building blocks game, written from scratch and licensed
 under the LGPL (version 2.1 or later).  It supports both survival and creative modes along with multiplayer support, dynamic lighting, and an "infinite" map generator.
 
 The Luanti multiplayer server can be installed as part of any Internet-in-a-Box (IIAB).
 
-For examples of Luanti uses in education, please see: `luanti.org/education <https://www.luanti.org/education/>`_
+For examples of Luanti in education, please see: `luanti.org/education <https://www.luanti.org/education/>`_
 
 Initial configuration is "creative mode" by default, and a number of mods are installed (see the list in `tasks/install.yml <tasks/install.yml>`_).
 
