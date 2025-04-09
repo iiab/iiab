@@ -14,7 +14,7 @@ Initial configuration is "creative mode" by default, and a number of mods are in
 Connecting to the Server
 ------------------------
 
-To connect to the server, you will also need to download Luanti client software for each of your client devices, e.g. from: https://www.luanti.org/downloads/
+To connect to the server, you will also need to download Luanti client software for each of your client devices, e.g. from: `luanti.org/downloads <https://www.luanti.org/downloads/>`_
 
 The port is nominally the standard 30000.  If necessary, change the ``luanti_port`` as explained below.
 
