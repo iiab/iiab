@@ -12,15 +12,34 @@ It supports both survival and creative modes along with multiplayer support, dyn
 Install Luanti onto each Student Device
 ---------------------------------------
 
-To connect to the multiplayer game running on your IIAB, Luanti client software first needs to be downloaded and installed onto each student device, e.g. from: `luanti.org/downloads <https://www.luanti.org/downloads/>`_
+Before students can connect, Luanti client software needs to be downloaded and installed onto their individual devices.
 
-[SCREENSHOT(S) & EXPLANATION FORTHCOMING!]
+1. If a student device is Android, Windows or Mac, install it using: `luanti.org/downloads <https://www.luanti.org/downloads/>`_
 
-The port is nominally the standard 30000.  If necessary, change ``luanti_port`` on the server side (IIAB side) as explained below.
+2. Or, if a student device is Raspberry Pi OS or any other Linux, `install Flatpak <https://flathub.org/setup>`_ and then,
 
-The admin user is the usual: ``Admin``
+   - Install Luanti::
 
-No password is required.
+      flatpak install flathub net.minetest.Minetest
+
+   - Run Luanti::
+
+      flatpak run net.minetest.Minetest
+
+Finally, any student can now connect to the multiplayer game: (if Luanti server is running on their IIAB!)
+
+- Click **Join Game**.
+- In the **Address** field, type in IIAB's IP address (e.g. 10.10.10.10, or box.lan).
+- Click **Register** to create an account (password optional!)
+- After **Login**, help students understand Luanti's `keyboard controls <https://docs.luanti.org/for-players/getting-started/#basic-controls>`_.
+
+*[ SCREENSHOT(S) & GAME TIPS FOR EDUCATORS FORTHCOMING ]*
+
+.. The port is nominally the standard 30000.  If necessary, change ``luanti_port`` on the server side (IIAB side) as explained below.
+
+.. The admin user is the usual: Admin
+
+.. No password is required.
 
 Optional Server-side Customizations
 -----------------------------------
