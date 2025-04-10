@@ -25,12 +25,17 @@
     set_fact:
       luanti_deb_and_systemd_name: luanti-server    # Debian 13 renamed deb/apt package TO 'luanti-server': WILL UBUNTU 25.10+ DO LIKEWISE??
 
-  - name: Revert {luanti_deb_and_systemd_name, luanti_config_file, luanti_working_dir} to older Minetest values -- if RasPiOS < 13 or Debian < 13 or Ubuntu < 25.10
+  - name: Is apt package 'luanti-server' available? (Quite likely if OS is new since mid-2025!)
+    command: apt-cache show luanti-server
+    register: luanti_server_renamed
+
+  - name: Revert {luanti_deb_and_systemd_name, luanti_config_file, luanti_working_dir} to older Minetest values -- if apt package 'luanti-server' isn't available
     set_fact:
-      luanti_deb_and_systemd_name: minetest-server       # OVERRIDE luanti-server (set just above)
+      luanti_deb_and_systemd_name: minetest-server       # OVERRIDE luanti-server (set above)
       luanti_config_file: /etc/minetest/minetest.conf    # OVERRIDE /etc/luanti/default.conf (set in defaults/main.yml)
       luanti_working_dir: /usr/share/games/minetest      # OVERRIDE /usr/share/luanti (set in default_vars.yml)
-    when: (is_raspbian and os_ver is version('raspbian-13', '<')) or (is_debian and not is_raspbian and os_ver is version('debian-13', '<')) or (is_ubuntu and os_ver is version('ubuntu-2510', '<'))    # Gratuitous parens for clarity
+    when: luanti_server_renamed.failed
+    #when: (is_raspbian and os_ver is version('raspbian-13', '<')) or (is_debian and not is_raspbian and os_ver is version('debian-13', '<')) or (is_ubuntu and os_ver is version('ubuntu-2510', '<'))    # Gratuitous parens for clarity
 
   - name: Install Luanti if 'luanti_installed' not defined, e.g. in {{ iiab_state_file }}    # /etc/iiab/iiab_state.yml
     include_tasks: install.yml
