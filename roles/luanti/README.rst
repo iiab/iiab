@@ -73,4 +73,4 @@ To Do
 - Add more mods
 - Add more games
 - Luanti client software for Windows and Android, included onboard IIAB for offline communities? (`#1465 <https://github.com/iiab/iiab/issues/1465>`_)
-- Monitor Ubuntu 25.10 and 26.04 to see how they refine ``/usr/lib/systemd/system/minetest-server.service`` (or luanti-server.service) in 2025 and 2026 — perhaps softcoding ``--gameid minetest_game`` on the ``ExecStart=`` line as they rename apt package 'minetest-server' to 'luanti-server' — as Debian 13 has already done? (`#3985 <https://github.com/iiab/iiab/pull/3985#issuecomment-2791734459>`_)
+- Monitor Ubuntu 25.10 and 26.04 to see how they refine ``/usr/lib/systemd/system/minetest-server.service`` (or luanti-server.service) in 2025 and 2026 — perhaps softcoding ``--gameid minetest_game`` on the ``ExecStart=`` line, as they rename apt package 'minetest-server' to 'luanti-server' — as Debian 13 has already done? (`#3985 <https://github.com/iiab/iiab/pull/3985#issuecomment-2791734459>`_)
