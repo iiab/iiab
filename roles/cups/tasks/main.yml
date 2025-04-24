@@ -1,7 +1,6 @@
+---
 # ADMINISTER CUPS AT http://box/print -- USERNAME 'Admin' & PASSWORD 'changeme'
 # (OR ANY MEMBER OF LINUX GROUP 'lpadmin') PER cups/tasks/install.yml
-
-
 # "How do i fail a task in Ansible if the variable contains a boolean value?
 # I want to perform input validation for Ansible playbooks"
 # https://stackoverflow.com/questions/46664127/how-do-i-fail-a-task-in-ansible-if-the-variable-contains-a-boolean-value-i-want/46667499#46667499
@@ -14,42 +13,40 @@
   assert:
     that: cups_install is sameas true
     fail_msg: "PLEASE SET 'cups_install: True' e.g. IN: /etc/iiab/local_vars.yml"
-    quiet: yes
+    quiet: true
 
 - name: Assert that "cups_enabled | type_debug == 'bool'" (boolean not string etc)
   assert:
     that: cups_enabled | type_debug == 'bool'
     fail_msg: "PLEASE GIVE VARIABLE 'cups_enabled' A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
-    quiet: yes
-
+    quiet: true
 
 - block:
+    - name: Install CUPS if 'cups_installed' not defined, e.g. in {{ iiab_state_file }} # /etc/iiab/iiab_state.yml
+      include_tasks: install.yml
+      when: cups_installed is undefined
 
-  - name: Install CUPS if 'cups_installed' not defined, e.g. in {{ iiab_state_file }}    # /etc/iiab/iiab_state.yml
-    include_tasks: install.yml
-    when: cups_installed is undefined
+    - include_tasks: enable-or-disable.yml
 
-  - include_tasks: enable-or-disable.yml
-
-  - name: Add 'cups' variable values to {{ iiab_ini_file }}
-    ini_file:
-      path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
-      section: cups
-      option: "{{ item.option }}"
-      value: "{{ item.value | string }}"
-    with_items:
-      - option: name
-        value: CUPS
-      - option: description
-        value: '"CUPS (Common UNIX Printing System) is a modular printing system that allows a computer to act as a print server.  A computer running CUPS is a host that can accept print jobs from client computers, process them, and send them to the appropriate printer."'
-      - option: cups_install
-        value: "{{ cups_install }}"
-      - option: cups_enabled
-        value: "{{ cups_enabled }}"
+    - name: Add 'cups' variable values to {{ iiab_ini_file }}
+      ini_file:
+        path: "{{ iiab_ini_file }}" # /etc/iiab/iiab.ini
+        section: cups
+        option: "{{ item.option }}"
+        value: "{{ item.value | string }}"
+      with_items:
+        - option: name
+          value: CUPS
+        - option: description
+          value: '"CUPS (Common UNIX Printing System) is a modular printing system that allows a computer to act as a print server.  A computer running CUPS is a
+            host that can accept print jobs from client computers, process them, and send them to the appropriate printer."'
+        - option: cups_install
+          value: "{{ cups_install }}"
+        - option: cups_enabled
+          value: "{{ cups_enabled }}"
 
   rescue:
-
-  - name: 'SEE ERROR ABOVE (skip_role_on_error: {{ skip_role_on_error }})'
-    fail:
-      msg: ""
-    when: not skip_role_on_error
+    - name: "SEE ERROR ABOVE (skip_role_on_error: {{ skip_role_on_error }})"
+      fail:
+        msg: ""
+      when: not skip_role_on_error

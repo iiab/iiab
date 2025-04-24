@@ -1,11 +1,9 @@
+---
 # ADMINISTER CUPS AT http://box/print -- USERNAME 'Admin' & PASSWORD 'changeme'
 # (OR ANY MEMBER OF LINUX GROUP 'lpadmin') AS SET UP BELOW...
-
-
 - name: Record (initial) disk space used
   shell: df -B1 --output=used / | tail -1
   register: df1
-
 
 - name: Install 'cups' package
   package:
@@ -25,7 +23,8 @@
 
 # OPTION #2: NEW WAY (MORE FUTURE-PROOF, WE HOPE!)
 
-- name: PLEASE RUN 'sudo cupsctl' AND 'sudo cupsd -t' TO VERIFY /etc/cups/cupsd.conf IF YOU MODIFY IT!  The file will now be created -- by ~4 stanzas below.  Also keep an eye on /var/log/cups/error_log
+- name: PLEASE RUN 'sudo cupsctl' AND 'sudo cupsd -t' TO VERIFY /etc/cups/cupsd.conf IF YOU MODIFY IT!  The file will now be created -- by ~4 stanzas below.  Also
+    keep an eye on /var/log/cups/error_log
   meta: noop
 
 - name: Copy /usr/share/cups/cupsd.conf.default to /etc/cups/cupsd.conf (root:lp, 0640) -- a timestamped backup of the prior 'cupsd.conf' will be saved in /etc/cups
@@ -34,8 +33,8 @@
     dest: /etc/cups/cupsd.conf
     owner: root
     group: lp
-    mode: 0640
-    backup: yes
+    mode: "0640"
+    backup: true
 
 # 2021-07-12: lineinfile fails to insert the needed lines, as these same 2 lines
 # already appear throughout /etc/cups/cupsd.conf -- so we use blockinfile below.
@@ -50,10 +49,12 @@
 #     - "  Require user @SYSTEM"    # Will appear BELOW, in /etc/cups/cupsd.conf
 #     - "  AuthType Default"        # Will appear ABOVE, in /etc/cups/cupsd.conf
 
-- name: "CUPS web administration: Insert 2-line block into /etc/cups/cupsd.conf to LOCK DOWN URL'S LIKE http://localhost:631/admin TO LINUX GROUP 'lpadmin' -- to avoid accidental damage to /etc/cups/cupsd.conf and other CUPS settings.  This uses 'SystemGroup lpadmin' in /etc/cups/cups-files.conf -- in coordination with ~14 -> ~15 '@SYSTEM' lines and 'DefaultAuthType Basic' in /etc/cups/cupsd.conf"
+- name: "CUPS web administration: Insert 2-line block into /etc/cups/cupsd.conf to LOCK DOWN URL'S LIKE http://localhost:631/admin TO LINUX GROUP 'lpadmin' -- to
+    avoid accidental damage to /etc/cups/cupsd.conf and other CUPS settings.  This uses 'SystemGroup lpadmin' in /etc/cups/cups-files.conf -- in coordination with
+    ~14 -> ~15 '@SYSTEM' lines and 'DefaultAuthType Basic' in /etc/cups/cupsd.conf"
   blockinfile:
     path: /etc/cups/cupsd.conf
-    insertafter: '^<Location /admin>$'
+    insertafter: "^<Location /admin>$"
     block: |2    # |n MEANS: Set the block's left edge n CHARACTERS TO THE RIGHT of *this line's* indentation -- where n is {1..9} -- instead of setting its left edge to the 1st non-blank line's indentation below.  Also surround block with comment lines: "# BEGIN ANSIBLE MANAGED BLOCK", "# END ANSIBLE MANAGED BLOCK"
         AuthType Default
         Require user @SYSTEM
@@ -61,11 +62,11 @@
 - name: "CUPS web administration: Create Linux username 'Admin' in Linux group 'lpadmin' (shell: /usr/sbin/nologin, create_home: no)"
   user:
     name: Admin
-    append: yes    # Don't clobber other groups, that other IIAB Apps might need.
+    append: true # Don't clobber other groups, that other IIAB Apps might need.
     groups: lpadmin
     #password: "{{ 'changeme' | password_hash('sha512') }}"    # Random salt.  Presumably runs 5000 rounds of SHA-512 per /etc/login.defs & /etc/pam.d/common-password -- https://docs.ansible.com/ansible/latest/playbook_guide/playbooks_filters.html#hashing-and-encrypting-strings-and-passwords
-    create_home: no
-    shell: /usr/sbin/nologin    # Debian/Ubuntu norm -- instead of /sbin/nologin, /bin/false
+    create_home: false
+    shell: /usr/sbin/nologin # Debian/Ubuntu norm -- instead of /sbin/nologin, /bin/false
 
 # 2024-05-01: Above password-setting approach no longer works w/ Ansible 2.17 RC1 (#3727).
 # Ansible STOPS with this error...
@@ -103,7 +104,9 @@
 # (1) '--remote-admin' AS ABOVE, OR (2) '--remote-any' AS BELOW.
 # (RUN 'cupsctl' WITHOUT PARAMETERS TO CONFIRM THIS!)
 
-- name: "Authorize All IP Addresses: Run 'cupsctl --remote-any --share-printers --user-cancel-any' to enable http://192.168.0.x:631 AND http://{{ lan_ip }}:631 AND http://10.8.0.y:631 (if cups_enabled) -- REPEATED USE OF 'cupsctl' COMMANDS CAN *DAMAGE* /etc/cups/cupsd.conf BY ADDING DUPLICATE LINES (AND WORSE!) -- SO PLEASE ALSO MANUALLY RUN 'sudo cupsctl' AND 'sudo cupsd -t' TO VERIFY /etc/cups/cupsd.conf"
+- name: "Authorize All IP Addresses: Run 'cupsctl --remote-any --share-printers --user-cancel-any' to enable http://192.168.0.x:631 AND http://{{ lan_ip }}:631 AND
+    http://10.8.0.y:631 (if cups_enabled) -- REPEATED USE OF 'cupsctl' COMMANDS CAN *DAMAGE* /etc/cups/cupsd.conf BY ADDING DUPLICATE LINES (AND WORSE!) -- SO PLEASE
+    ALSO MANUALLY RUN 'sudo cupsctl' AND 'sudo cupsd -t' TO VERIFY /etc/cups/cupsd.conf"
   command: cupsctl --remote-any --share-printers --user-cancel-any
 
 # 2021-07-11: In theory 'cupsctl' stanzas could be put in enable-or-disable.yml
@@ -141,7 +144,6 @@
 # REMINDER: 3 SYSTEMD SERVICES WILL BE RESTARTED (cups, cups-browsed, nginx)
 # LATER IN enable-or-disable.yml, SO /etc/cups/cupsd.conf (ETC) TAKE EFFECT!
 
-
 # RECORD CUPS AS INSTALLED
 
 - name: Record (final) disk space used
@@ -150,17 +152,17 @@
 
 - name: Add 'cups_disk_usage = {{ df2.stdout|int - df1.stdout|int }}' to {{ iiab_ini_file }}
   ini_file:
-    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+    path: "{{ iiab_ini_file }}" # /etc/iiab/iiab.ini
     section: cups
     option: cups_disk_usage
-    value: "{{ df2.stdout|int - df1.stdout|int }}"
+    value: "{{ df2.stdout | int - df1.stdout | int }}"
 
 - name: "Set 'cups_installed: True'"
   set_fact:
-    cups_installed: True
+    cups_installed: true
 
 - name: "Add 'cups_installed: True' to {{ iiab_state_file }}"
   lineinfile:
-    path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
-    regexp: '^cups_installed'
-    line: 'cups_installed: True'
+    path: "{{ iiab_state_file }}" # /etc/iiab/iiab_state.yml
+    regexp: "^cups_installed"
+    line: "cups_installed: True"

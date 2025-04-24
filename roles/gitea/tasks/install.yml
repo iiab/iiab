@@ -1,7 +1,7 @@
+---
 - name: Record (initial) disk space used
   shell: df -B1 --output=used / | tail -1
   register: df1
-
 
 # 1. Prepare to install Gitea: create user and directory structure
 
@@ -9,7 +9,7 @@
   systemd:
     name: gitea
     state: stopped
-  ignore_errors: yes
+  ignore_errors: true
 
 - name: Ensure group 'gitea' exists
   group:
@@ -21,11 +21,11 @@
     name: gitea
     comment: Gitea daemon account
     groups: gitea
-    home: "{{ gitea_home }}"    # /home/gitea
+    home: "{{ gitea_home }}" # /home/gitea
 
 - name: Create {{ gitea_root_directory }} directory structures
   file:
-    path: "{{ gitea_root_directory }}/{{ item }}"    # /library/gitea
+    path: "{{ gitea_root_directory }}/{{ item }}" # /library/gitea
     state: directory
     owner: gitea
     group: gitea
@@ -33,13 +33,12 @@
 
 - name: Make directories data, indexers, and log writable (0750)
   file:
-    path: "{{ gitea_root_directory }}/{{ item }}"    # /library/gitea
-    mode: '0750'
+    path: "{{ gitea_root_directory }}/{{ item }}" # /library/gitea
+    mode: "0750"
   with_items:
     - data
     - indexers
     - log
-
 
 # 2. Download, verify, and link Gitea binary
 
@@ -51,8 +50,8 @@
 - name: Download Gitea binary {{ gitea_download_url }} to {{ gitea_install_path }} (0775, ~134 MB, SLOW DOWNLOAD CAN TAKE ~15 MIN)
   get_url:
     url: "{{ gitea_download_url }}"
-    dest: "{{ gitea_install_path }}"    # e.g. /library/gitea/bin/gitea-1.21
-    mode: 0775
+    dest: "{{ gitea_install_path }}" # e.g. /library/gitea/bin/gitea-1.21
+    mode: "0775"
     timeout: "{{ download_timeout }}"
 
 - name: Download Gitea GPG signature {{ gitea_integrity_url }} to {{ gitea_checksum_path }}
@@ -65,16 +64,15 @@
   shell: |
     gpg --keyserver keys.openpgp.org --recv {{ gitea_gpg_key }}
     gpg --verify {{ gitea_checksum_path }} {{ gitea_install_path }}
-  ignore_errors: yes
+  ignore_errors: true
 
 - name: Symlink {{ gitea_link_path }} -> {{ gitea_install_path }}
   file:
     src: "{{ gitea_install_path }}"
-    path: "{{ gitea_link_path }}"    # /library/gitea/gitea
+    path: "{{ gitea_link_path }}" # /library/gitea/gitea
     owner: gitea
     group: gitea
     state: link
-
 
 # 3. Configure Gitea
 
@@ -89,7 +87,7 @@
     path: /etc/gitea
     owner: root
     group: gitea
-    mode: 0770
+    mode: "0770"
 
 - name: Install /etc/gitea/app.ini from template (0664)
   template:
@@ -97,8 +95,7 @@
     dest: /etc/gitea/app.ini
     owner: root
     group: gitea
-    mode: 0664
-
+    mode: "0664"
 
 # 4. Create systemd service & prepare NGINX for http://box/gitea
 
@@ -106,7 +103,6 @@
   template:
     src: gitea.service.j2
     dest: /etc/systemd/system/gitea.service
-
 
 # 5. RECORD Gitea AS INSTALLED
 
@@ -116,17 +112,17 @@
 
 - name: Add 'gitea_disk_usage = {{ df2.stdout|int - df1.stdout|int }}' to {{ iiab_ini_file }}
   ini_file:
-    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+    path: "{{ iiab_ini_file }}" # /etc/iiab/iiab.ini
     section: gitea
     option: gitea_disk_usage
-    value: "{{ df2.stdout|int - df1.stdout|int }}"
+    value: "{{ df2.stdout | int - df1.stdout | int }}"
 
 - name: "Set 'gitea_installed: True'"
   set_fact:
-    gitea_installed: True
+    gitea_installed: true
 
 - name: "Add 'gitea_installed: True' to {{ iiab_state_file }}"
   lineinfile:
-    path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
-    regexp: '^gitea_installed'
-    line: 'gitea_installed: True'
+    path: "{{ iiab_state_file }}" # /etc/iiab/iiab_state.yml
+    regexp: "^gitea_installed"
+    line: "gitea_installed: True"

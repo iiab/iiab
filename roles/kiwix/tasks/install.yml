@@ -1,3 +1,4 @@
+---
 # 0. VERIFY CPU/OS ARCHITECTURE SUPPORTED
 
 - name: Force Ansible to exit (FAIL) if kiwix-tools appears unavailable for your CPU/OS architecture ({{ ansible_machine }})
@@ -5,11 +6,9 @@
     msg: "WARNING: kiwix-tools SOFTWARE APPEARS UNAVAILABLE FOR YOUR {{ ansible_machine }} CPU/OS ARCHITECTURE."
   when: kiwix_arch == "unsupported"
 
-
 - name: Record (initial) disk space used
   shell: df -B1 --output=used / | tail -1
   register: df1
-
 
 # 1. PUT IN PLACE: /opt/iiab/downloads/kiwix-tools_linux-*.tar.gz, move /opt/iiab/kiwix/bin aside if nec, create essential dirs, and test.zim if nec (library.xml is created later, by enable-or-disable.yml)
 
@@ -18,11 +17,11 @@
 # /opt/iiab/downloads might have practical value beyond hoarding (unlikely!)
 - name: Download {{ kiwix_base_url }}{{ kiwix_tar_gz }} into /opt/iiab/downloads (ACTUAL filename should include kiwix-tools version, or nightly build date)
   get_url:
-    url: "{{ kiwix_base_url }}{{ kiwix_tar_gz }}"    # e.g. https://download.kiwix.org/release/kiwix-tools/ + kiwix-tools_linux-x86_64.tar.gz
-    dest: "{{ downloads_dir }}"    # /opt/iiab/downloads
+    url: "{{ kiwix_base_url }}{{ kiwix_tar_gz }}" # e.g. https://download.kiwix.org/release/kiwix-tools/ + kiwix-tools_linux-x86_64.tar.gz
+    dest: "{{ downloads_dir }}" # /opt/iiab/downloads
     #force: yes    # Already implied b/c dest is a dir! (to recover from incomplete downloads, etc)
     timeout: "{{ download_timeout }}"
-  register: kiwix_dl    # PATH /opt/iiab/downloads + ACTUAL filename put in kiwix_dl.dest, for unarchive ~28 lines below
+  register: kiwix_dl # PATH /opt/iiab/downloads + ACTUAL filename put in kiwix_dl.dest, for unarchive ~28 lines below
 
 # - name: "2023-05-14: TEMPORARY PATCH REVERTING TO KIWIX-TOOLS 3.4.0 IF BUGGY 32-BIT (armhf) VERSION 3.5.0 IS DETECTED -- #3574"
 #   get_url:
@@ -44,26 +43,27 @@
 
 - name: Does {{ kiwix_path }}/bin already exist? (as a directory, symlink or file)
   stat:
-    path: "{{ kiwix_path }}/bin"    # /opt/iiab/kiwix
+    path: "{{ kiwix_path }}/bin" # /opt/iiab/kiwix
   register: kiwix_bin
 
 - name: If so, move {{ kiwix_path }}/bin to {{ kiwix_path }}/bin.DATE_TIME_TZ
   shell: "mv {{ kiwix_path }}/bin {{ kiwix_path }}/bin.$(date +%F_%T_%Z)"
   when: kiwix_bin.stat.exists
 
-- name: "Create dirs, including parent dirs: {{ kiwix_path }}/bin (executables), {{ iiab_zim_path }}/content (ZIM files), {{ iiab_zim_path }}/index (legacy indexes) (by default 0755)"
+- name: "Create dirs, including parent dirs: {{ kiwix_path }}/bin (executables), {{ iiab_zim_path }}/content (ZIM files), {{ iiab_zim_path }}/index (legacy indexes)
+    (by default 0755)"
   file:
     path: "{{ item }}"
     state: directory
   with_items:
     - "{{ kiwix_path }}/bin"
-    - "{{ iiab_zim_path }}/content"    # /library/zims
+    - "{{ iiab_zim_path }}/content" # /library/zims
     - "{{ iiab_zim_path }}/index"
 
 - name: Count *.zim files in {{ iiab_zim_path }}/content
   find:
     paths: "{{ iiab_zim_path }}/content"
-    patterns: '*.zim'
+    patterns: "*.zim"
   register: kiwix_zims
 
 - name: If there were none, install {{ iiab_zim_path }}/content/test.zim
@@ -73,17 +73,15 @@
     #force: no
   when: kiwix_zims.matched == 0
 
-
 # 2. INSTALL KIWIX-TOOLS EXECUTABLES
 
 - name: Unarchive {{ kiwix_dl.dest }} to {{ kiwix_path }}/bin -- untar with '--strip-components=1' to chop tarball's top-level dir from path
   unarchive:
-    src: "{{ kiwix_dl.dest }}"    # See ~28 lines above, e.g. /opt/iiab/downloads/kiwix-tools_linux-x86_64-3.3.0-1.tar.gz
+    src: "{{ kiwix_dl.dest }}" # See ~28 lines above, e.g. /opt/iiab/downloads/kiwix-tools_linux-x86_64-3.3.0-1.tar.gz
     dest: "{{ kiwix_path }}/bin"
     extra_opts: --strip-components=1
-    owner: root    # 2023-05-14: When unpacking let's avoid bogus owner/group,
-    group: root    # arising from UID/GID on Kiwix's build machine.
-
+    owner: root # 2023-05-14: When unpacking let's avoid bogus owner/group,
+    group: root # arising from UID/GID on Kiwix's build machine.
 
 # 3. ENABLE MODS FOR APACHE PROXY IF DEBUNTU
 
@@ -99,27 +97,25 @@
 #    - rewrite
 #  when: is_debuntu
 
-
 # 4. INSTALL iiab-make-kiwix-lib*, kiwix-serve.service, kiwix.conf for Apache
 
-- name: 'Install from templates: kiwix-serve.service, iiab-make-kiwix-lib, iiab-make-kiwix-lib.py'
+- name: "Install from templates: kiwix-serve.service, iiab-make-kiwix-lib, iiab-make-kiwix-lib.py"
   template:
     src: "{{ item.src }}"
     dest: "{{ item.dest }}"
     mode: "{{ item.mode }}"
   with_items:
-    - { src: 'kiwix-serve.service.j2', dest: '/etc/systemd/system/kiwix-serve.service', mode: '0644' }
-    - { src: 'iiab-make-kiwix-lib', dest: '/usr/bin/iiab-make-kiwix-lib', mode: '0755' }
-    - { src: 'iiab-make-kiwix-lib3.py', dest: '/usr/bin/iiab-make-kiwix-lib.py', mode: '0755' }
+    - { src: "kiwix-serve.service.j2", dest: "/etc/systemd/system/kiwix-serve.service", mode: "0644" }
+    - { src: "iiab-make-kiwix-lib", dest: "/usr/bin/iiab-make-kiwix-lib", mode: "0755" }
+    - { src: "iiab-make-kiwix-lib3.py", dest: "/usr/bin/iiab-make-kiwix-lib.py", mode: "0755" }
 
 - name: daemon_reload, so systemd (re)reads newly installed kiwix-serve.service
   systemd:
-    daemon_reload: yes
+    daemon_reload: true
 
 - name: Install Kiwix Android app
   include_tasks: kiwix-apk.yml
   when: kiwix_incl_apk
-
 
 # 5. RECORD Kiwix AS INSTALLED
 
@@ -129,17 +125,17 @@
 
 - name: Add 'kiwix_disk_usage = {{ df2.stdout|int - df1.stdout|int }}' to {{ iiab_ini_file }}
   ini_file:
-    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+    path: "{{ iiab_ini_file }}" # /etc/iiab/iiab.ini
     section: kiwix
     option: kiwix_disk_usage
-    value: "{{ df2.stdout|int - df1.stdout|int }}"
+    value: "{{ df2.stdout | int - df1.stdout | int }}"
 
 - name: "Set 'kiwix_installed: True'"
   set_fact:
-    kiwix_installed: True
+    kiwix_installed: true
 
 - name: "Add 'kiwix_installed: True' to {{ iiab_state_file }}"
   lineinfile:
-    path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
-    regexp: '^kiwix_installed'
-    line: 'kiwix_installed: True'
+    path: "{{ iiab_state_file }}" # /etc/iiab/iiab_state.yml
+    regexp: "^kiwix_installed"
+    line: "kiwix_installed: True"

@@ -1,15 +1,14 @@
+---
 # 0. INSTALL/ASSERT PREREQ #1: MongoDB
 
 # 3 stanzas moved up to main.yml, so Debian finishes "LARGE-sized" IIAB install
 # (WITH LOUD RED WARNINGS!)
-
-
 # 1. INSTALL/ASSERT PREREQ #2: Node.js
 
 - name: "Set 'nodejs_install: True' and 'nodejs_enabled: True'"
   set_fact:
-    nodejs_install: True
-    nodejs_enabled: True
+    nodejs_install: true
+    nodejs_enabled: true
 
 - name: NODEJS - run 'nodejs' role (attempt to install & enable Node.js)
   include_role:
@@ -26,11 +25,9 @@
 #    msg: "Sugarizer install cannot proceed, as it currently requires Node.js 12.x, whereas nodejs_version is set to {{ nodejs_version }}.  Please check the value of nodejs_version in /opt/iiab/iiab/vars/default_vars.yml, /etc/iiab/local_vars.yml, /opt/iiab/iiab/roles/nodejs, etc."
 #  when: nodejs_version != "12.x"
 
-
 - name: Record (initial) disk space used
   shell: df -B1 --output=used / | tail -1
   register: df1
-
 
 # 2. DOWNLOAD+LINK /opt/iiab/sugarizer
 
@@ -39,7 +36,7 @@
     repo: https://github.com/llaske/sugarizer
     dest: "{{ iiab_base }}/{{ sugarizer_dir_version }}"
     version: "{{ sugarizer_git_version }}"
-    force: yes
+    force: true
     depth: 1
 
 - name: Symlink /opt/iiab/sugarizer -> /opt/iiab/{{ sugarizer_dir_version }}
@@ -47,7 +44,6 @@
     src: "{{ iiab_base }}/{{ sugarizer_dir_version }}"
     dest: "{{ iiab_base }}/sugarizer"
     state: link
-
 
 # 3. DOWNLOAD+LINK /opt/iiab/sugarizer-server
 
@@ -66,12 +62,13 @@
 # CLARIF: during repeat runs of "./runrole sugarizer", this git sync shows
 # "changed" (whereas above git sync shows "ok").  Reason: "npm install"
 # (below) modifies /opt/iiab/sugarizer-server/node_modules
-- name: Clone llaske/sugarizer-server ({{ sugarizer_server_git_version }} branch/version) from GitHub to /opt/iiab/{{ sugarizer_server_dir_version }} (~16 MB initially, ~227+ MB later)
+- name: Clone llaske/sugarizer-server ({{ sugarizer_server_git_version }} branch/version) from GitHub to /opt/iiab/{{ sugarizer_server_dir_version }} (~16 MB initially,
+    ~227+ MB later)
   git:
     repo: https://github.com/llaske/sugarizer-server
     dest: "{{ iiab_base }}/{{ sugarizer_server_dir_version }}"
     version: "{{ sugarizer_server_git_version }}"
-    force: yes
+    force: true
     depth: 1
 
 - name: Symlink /opt/iiab/sugarizer-server -> /opt/iiab/{{ sugarizer_server_dir_version }}
@@ -79,7 +76,6 @@
     src: "{{ iiab_base }}/{{ sugarizer_server_dir_version }}"
     dest: "{{ iiab_base }}/sugarizer-server"
     state: link
-
 
 # 4. RUN "npm install" TO POPULATE ~35MB /opt/iiab/sugarizer-server/node_modules (TWICE, BIG JOB THEN SMALL JOB)
 
@@ -132,7 +128,7 @@
 
 #- name: Create the express framework for Node.js (OS's other than Fedora 18)
 - name: Run 'npm install --allow-root --unsafe-perm=true' to create /opt/iiab/sugarizer-server/node_modules (CAN TAKE ~10 MINUTES)
-  command: npm install --allow-root --unsafe-perm=true    # "command:" a bit safer than "shell:"
+  command: npm install --allow-root --unsafe-perm=true # "command:" a bit safer than "shell:"
   args:
     chdir: "{{ iiab_base }}/sugarizer-server"
     #creates: "{{ iiab_base }}/sugarizer-server/node_modules"    # OLD WAY 2
@@ -148,7 +144,6 @@
   args:
     chdir: "{{ iiab_base }}/sugarizer-server"
 
-
 # 5. CONFIG FILES
 
 - name: "Install from template: /etc/systemd/system/sugarizer.service"
@@ -158,7 +153,7 @@
 
 - name: systemctl daemon_reload, so systemd (re)reads sugarizer.service
   systemd:
-    daemon_reload: yes
+    daemon_reload: true
 
 # 3 [WAS 4] STANZAS ADDED BELOW JAN/FEB 2019, HOPING THIS MIGHT "JUST WORK"
 # WITH FUTURE UPGRADES BEYOND SUGARIZER 1.1?!
@@ -171,7 +166,7 @@
 - name: Set Sugarizer port to {{ sugarizer_port }} in /opt/iiab/sugarizer-server/env/sugarizer.ini
   lineinfile:
     path: "{{ iiab_base }}/sugarizer-server/env/sugarizer.ini"
-    regexp: '^port = 8080$'
+    regexp: "^port = 8080$"
     line: "port = {{ sugarizer_port }}"
 
 # 2019-02-02 No Longer Required thanks to @llaske's upstream fix:
@@ -200,7 +195,7 @@
 - name: Set MongoDB port to {{ mongodb_port }} in /opt/iiab/sugarizer-server/env/sugarizer.ini
   lineinfile:
     path: "{{ iiab_base }}/sugarizer-server/env/sugarizer.ini"
-    regexp: '^port = 27017$'    # Careful as file also contains 2 other ports!
+    regexp: "^port = 27017$" # Careful as file also contains 2 other ports!
     line: "port = {{ mongodb_port }}"
 
 # 2-LINE FIX FOR sugarizer.js BY @georgejhunt FOR http://box/sugarizer
@@ -210,14 +205,14 @@
 - name: For http://box/sugarizer -- add pathPrefix lines in /opt/iiab/sugarizer-server/sugarizer.js
   lineinfile:
     path: "{{ iiab_base }}/sugarizer-server/sugarizer.js"
-    regexp: 'AUTO-INSERTED BY IIAB'    # avoids inserting it twice!
+    regexp: "AUTO-INSERTED BY IIAB" # avoids inserting it twice!
     insertbefore: "// Start listening$"
     line: |    # SEE https://yaml-multiline.info (use |+ to 'keep' newlines at end...though |8 and |+4 "indentation indicators" don't work with Ansible)
       // AUTO-INSERTED BY IIAB FOR http://box/sugarizer
       var pathPrefix = '/sugarizer';
       app.use(pathPrefix, require('path-prefix-proxy')(pathPrefix));
-    # Use this instead, if tabs are truly nec:
-    # line: "\t// AUTO-INSERTED BY IIAB FOR http://box/sugarizer\n\tvar pathPrefix = '/sugarizer';\n\tapp.use(pathPrefix, require('path-prefix-proxy')(pathPrefix));\n"
+# Use this instead, if tabs are truly nec:
+# line: "\t// AUTO-INSERTED BY IIAB FOR http://box/sugarizer\n\tvar pathPrefix = '/sugarizer';\n\tapp.use(pathPrefix, require('path-prefix-proxy')(pathPrefix));\n"
 
 # Ansible's blockinfile module:
 # - inserts a mandatory marker line at beginning AND end of the block...ok fine
@@ -234,7 +229,6 @@
 #    # Use this instead, if tabs are truly nec:
 #    # block: "\tvar pathPrefix = '/sugarizer';\n\tapp.use(pathPrefix, require('path-prefix-proxy')(pathPrefix));"
 
-
 # 6. RECORD Sugarizer AS INSTALLED
 
 - name: Record (final) disk space used
@@ -243,17 +237,17 @@
 
 - name: Add 'sugarizer_disk_usage = {{ df2.stdout|int - df1.stdout|int }}' to {{ iiab_ini_file }}
   ini_file:
-    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+    path: "{{ iiab_ini_file }}" # /etc/iiab/iiab.ini
     section: sugarizer
     option: sugarizer_disk_usage
-    value: "{{ df2.stdout|int - df1.stdout|int }}"
+    value: "{{ df2.stdout | int - df1.stdout | int }}"
 
 - name: "Set 'sugarizer_installed: True'"
   set_fact:
-    sugarizer_installed: True
+    sugarizer_installed: true
 
 - name: "Add 'sugarizer_installed: True' to {{ iiab_state_file }}"
   lineinfile:
-    path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
-    regexp: '^sugarizer_installed'
-    line: 'sugarizer_installed: True'
+    path: "{{ iiab_state_file }}" # /etc/iiab/iiab_state.yml
+    regexp: "^sugarizer_installed"
+    line: "sugarizer_installed: True"

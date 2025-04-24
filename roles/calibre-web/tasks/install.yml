@@ -1,21 +1,19 @@
+---
 # Or try 'iiab-update -f' for a more rapid upgrade of IIAB Calibre-Web:
 #
 # https://wiki.iiab.io/go/FAQ#Can_I_upgrade_IIAB_software%3F
 # https://github.com/iiab/calibre-web/wiki#upgrading
 # https://github.com/iiab/iiab/blob/master/scripts/iiab-update
 # https://github.com/iiab/iiab/tree/master/roles/calibre-web#upgrading
-
-
 - name: Record (initial) disk space used
   shell: df -B1 --output=used / | tail -1
   register: df1
-
 
 - name: Stop 'calibre-web' systemd service for safety (RED ERROR CAN BE IGNORED!)
   systemd:
     name: calibre-web
     state: stopped
-  ignore_errors: True    # Shows red errors, and continue...
+  ignore_errors: true # Shows red errors, and continue...
   #failed_when: False    # Hides red errors, and continue...
 
 # Official upstream instructions:
@@ -49,20 +47,21 @@
   lineinfile:
     path: /etc/ImageMagick-6/policy.xml
     regexp: '<policy domain="coder" rights="none" pattern="PDF" />'
-    backrefs: yes
+    backrefs: true
     line: '  <policy domain="coder" rights="read" pattern="PDF" />'
     state: present
   when: imagemagick6_policy_xml.stat.exists
 
-- name: "Create 2 Calibre-Web folders to store data and config files: {{ calibreweb_home }}, {{ calibreweb_config }} (each set to {{ calibreweb_user }}:{{ apache_user }}, default to 0755)"
+- name: "Create 2 Calibre-Web folders to store data and config files: {{ calibreweb_home }}, {{ calibreweb_config }} (each set to {{ calibreweb_user }}:{{ apache_user
+    }}, default to 0755)"
   file:
     state: directory
     path: "{{ item }}"
-    owner: "{{ calibreweb_user }}"    # root
-    group: "{{ apache_user }}"        # www-data on debuntu
+    owner: "{{ calibreweb_user }}" # root
+    group: "{{ apache_user }}" # www-data on debuntu
   with_items:
-    - "{{ calibreweb_home }}"         # /library/calibre-web
-    - "{{ calibreweb_config }}"       # /library/calibre-web/config
+    - "{{ calibreweb_home }}" # /library/calibre-web
+    - "{{ calibreweb_config }}" # /library/calibre-web/config
 
 # FYI since May 2021, Calibre-Web (major releases) can be installed with pip:
 # https://pypi.org/project/calibreweb/
@@ -73,7 +72,7 @@
 
 - name: "Remove previous virtual environment {{ calibreweb_venv_path }} -- if 'calibreweb_venv_wipe: True'"
   file:
-    path: "{{ calibreweb_venv_path }}"    # /usr/local/calibre-web-py3
+    path: "{{ calibreweb_venv_path }}" # /usr/local/calibre-web-py3
     state: absent
   when: calibreweb_venv_wipe
 
@@ -82,13 +81,14 @@
     path: "{{ calibreweb_venv_path }}"
   register: calibreweb_venv
 
-- name: git clone Calibre-Web ({{ calibreweb_version }}) from {{ calibreweb_repo_url }} to {{ calibreweb_venv_path }} (~122 MB initially, ~191+ or ~203+ MB later) -- if {{ calibreweb_venv_path }} doesns't exist
+- name: git clone Calibre-Web ({{ calibreweb_version }}) from {{ calibreweb_repo_url }} to {{ calibreweb_venv_path }} (~122 MB initially, ~191+ or ~203+ MB later)
+    -- if {{ calibreweb_venv_path }} doesns't exist
   git:
-    repo: "{{ calibreweb_repo_url }}"    # e.g. https://github.com/iiab/calibre-web or https://github.com/janeczku/calibre-web
+    repo: "{{ calibreweb_repo_url }}" # e.g. https://github.com/iiab/calibre-web or https://github.com/janeczku/calibre-web
     dest: "{{ calibreweb_venv_path }}"
     #force: True    # CLAIM: "If true, any modified files in the working repository will be discarded" -- REALITY: even if `force: no`, Ansible destructively reclones (also removing all test branch commits etc!) -- unless a git credential is provided to Ansible?
     #depth: 1       # 2023-11-04: Full clone for now, to help @deldesir & wider community testing
-    version: "{{ calibreweb_version }}"    # e.g. master, 0.6.22
+    version: "{{ calibreweb_version }}" # e.g. master, 0.6.22
   when: not calibreweb_venv.stat.exists
 
 - name: cd {{ calibreweb_venv_path }} ; git pull {{ calibreweb_repo_url }} {{ calibreweb_version }} --no-rebase --no-edit -- if {{ calibreweb_venv_path }} exists
@@ -136,11 +136,11 @@
 - name: Download Calibre-Web dependencies from 'requirements.txt' into python3 virtual environment {{ calibreweb_venv_path }}
   pip:
     requirements: "{{ calibreweb_venv_path }}/requirements.txt"
-    virtualenv: "{{ calibreweb_venv_path }}"    # /usr/local/calibre-web-py3
+    virtualenv: "{{ calibreweb_venv_path }}" # /usr/local/calibre-web-py3
     #virtualenv_site_packages: no
     #virtualenv_command: python3 -m venv --system-site-packages {{ calibreweb_venv_path }}
     virtualenv_command: python3 -m venv {{ calibreweb_venv_path }}
-    extra_args: --prefer-binary    # 2023-10-01: Lifesaver when recent wheels (e.g. piwheels.org) are inevitably not yet built!  SEE #3560
+    extra_args: --prefer-binary # 2023-10-01: Lifesaver when recent wheels (e.g. piwheels.org) are inevitably not yet built!  SEE #3560
 
 # 2023-10-11: RasPiOS Bookworm doc for Python with venv (PEP 668 now enforced!)
 # https://www.raspberrypi.com/documentation/computers/os.html#use-python-on-a-raspberry-pi
@@ -171,10 +171,10 @@
 - name: Provision/Copy both default metadata files (metadata.db, metadata_db_prefs_backup.json) into {{ calibreweb_home }} IF metadata.db did not exist
   copy:
     src: "{{ item }}"
-    dest: "{{ calibreweb_home }}"     # /library/calibre-web
-    owner: "{{ calibreweb_user }}"    # root
-    group: "{{ apache_user }}"        # www-data on debuntu
-    backup: yes
+    dest: "{{ calibreweb_home }}" # /library/calibre-web
+    owner: "{{ calibreweb_user }}" # root
+    group: "{{ apache_user }}" # www-data on debuntu
+    backup: true
   with_items:
     - roles/calibre-web/files/metadata.db
     - roles/calibre-web/files/metadata_db_prefs_backup.json
@@ -188,12 +188,11 @@
 - name: Provision/Copy default admin settings to {{ calibreweb_config }}/app.db IF it did not exist
   copy:
     src: roles/calibre-web/files/app.db
-    dest: "{{ calibreweb_config }}"    # /library/calibre-web/config
-    owner: "{{ calibreweb_user }}"     # root
-    group: "{{ apache_user }}"         # www-data on debuntu
-    backup: yes
+    dest: "{{ calibreweb_config }}" # /library/calibre-web/config
+    owner: "{{ calibreweb_user }}" # root
+    group: "{{ apache_user }}" # www-data on debuntu
+    backup: true
   when: not appdb.stat.exists
-
 
 # RECORD Calibre-Web AS INSTALLED
 
@@ -203,17 +202,17 @@
 
 - name: Add 'calibreweb_disk_usage = {{ df2.stdout|int - df1.stdout|int }}' to {{ iiab_ini_file }}
   ini_file:
-    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+    path: "{{ iiab_ini_file }}" # /etc/iiab/iiab.ini
     section: calibre-web
     option: calibreweb_disk_usage
-    value: "{{ df2.stdout|int - df1.stdout|int }}"
+    value: "{{ df2.stdout | int - df1.stdout | int }}"
 
 - name: "Set 'calibreweb_installed: True'"
   set_fact:
-    calibreweb_installed: True
+    calibreweb_installed: true
 
 - name: "Add 'calibreweb_installed: True' to {{ iiab_state_file }}"
   lineinfile:
-    path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
-    regexp: '^calibreweb_installed'
-    line: 'calibreweb_installed: True'
+    path: "{{ iiab_state_file }}" # /etc/iiab/iiab_state.yml
+    regexp: "^calibreweb_installed"
+    line: "calibreweb_installed: True"

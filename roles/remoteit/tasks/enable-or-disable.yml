@@ -1,3 +1,4 @@
+---
 # Passwords and license keys in /etc/iiab/local_vars.yml are not a healthy
 # precedent :/  (Going forward let's try to keep credentials in their own apps)
 
@@ -12,10 +13,9 @@
   # shell: sed -i '/^remoteit_license_key:/d' {{ iiab_local_vars_file }}
   lineinfile:
     path: "{{ iiab_local_vars_file }}"
-    regexp: '^remoteit_license_key:.*'
+    regexp: "^remoteit_license_key:.*"
     state: absent
   when: remoteit_license_key is defined
-
 
 - name: Does empty file /etc/remoteit/registration exist?
   stat:
@@ -28,12 +28,12 @@
     state: absent
   when: remoteit_enabled and remoteit_reg.stat.exists and remoteit_reg.stat.size == 0
 
-
 # 2022-10-09: refresh.sh is equivalent to their old connectd "parent" systemd
 # service, that they removed from 4.15.2 device packages on 2022-09-07.
 # (Either way, the job below never deletes /etc/remoteit/registration)
 
-- name: 'Run /usr/share/remoteit/refresh.sh to put a claim code in /etc/remoteit/config.json (if you don''t already have a license key in /etc/remoteit/registration) -- FYI this should spawn 2 "child" services/daemons: schannel & e.g. remoteit@80:00:01:7F:7E:00:56:36.service'
+- name: 'Run /usr/share/remoteit/refresh.sh to put a claim code in /etc/remoteit/config.json (if you don''t already have a license key in /etc/remoteit/registration)
+    -- FYI this should spawn 2 "child" services/daemons: schannel & e.g. remoteit@80:00:01:7F:7E:00:56:36.service'
   command: /usr/share/remoteit/refresh.sh
   when: remoteit_enabled
 
@@ -53,20 +53,19 @@
 #     state: started
 #   when: remoteit_enabled
 
-
 - name: Disable & Stop remote.it service schannel
   systemd:
     name: schannel
-    enabled: no
+    enabled: false
     state: stopped
-  ignore_errors: yes    # 2023-06-12: Let's make these rare-but-unavoidable errors RED very intentionally, as below.  Thanks to @neomatrixcode for surfacing this GitHub Actions problem, likely arising from inbound ICMP being blocked during remote.it install and/or above refresh.sh setup: https://docs.github.com/en/actions/using-github-hosted-runners/about-github-hosted-runners#cloud-hosts-used-by-github-hosted-runners
+  ignore_errors: true # 2023-06-12: Let's make these rare-but-unavoidable errors RED very intentionally, as below.  Thanks to @neomatrixcode for surfacing this GitHub Actions problem, likely arising from inbound ICMP being blocked during remote.it install and/or above refresh.sh setup: https://docs.github.com/en/actions/using-github-hosted-runners/about-github-hosted-runners#cloud-hosts-used-by-github-hosted-runners
   when: not remoteit_enabled
 
 - name: Stop & Disable "Remote tcp connection services" remoteit@* found in /etc/systemd/system/multi-user.target.wants/ e.g. remoteit@80:00:01:7F:7E:00:56:36.service
   shell: |
     systemctl stop $(ls /etc/systemd/system/multi-user.target.wants/ | grep remoteit@*)
     systemctl disable $(ls /etc/systemd/system/multi-user.target.wants/ | grep remoteit@*)
-  ignore_errors: yes
+  ignore_errors: true
   when: not remoteit_enabled
 
 # - name: Identify remoteit "Remote tcp connection service" unit file name, including uuid, e.g. remoteit@80:00:01:7F:7E:00:56:36.service

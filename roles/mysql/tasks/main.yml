@@ -1,3 +1,4 @@
+---
 # "How do i fail a task in Ansible if the variable contains a boolean value?
 # I want to perform input validation for Ansible playbooks"
 # https://stackoverflow.com/questions/46664127/how-do-i-fail-a-task-in-ansible-if-the-variable-contains-a-boolean-value-i-want/46667499#46667499
@@ -10,13 +11,13 @@
   assert:
     that: mysql_install is sameas true
     fail_msg: "PLEASE SET 'mysql_install: True' e.g. IN: /etc/iiab/local_vars.yml"
-    quiet: yes
+    quiet: true
 
 - name: Assert that "mysql_enabled | type_debug == 'bool'" (boolean not string etc)
   assert:
     that: mysql_enabled | type_debug == 'bool'
     fail_msg: "PLEASE GIVE VARIABLE 'mysql_enabled' A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
-    quiet: yes
+    quiet: true
 
 - debug:
     var: mysql_install
@@ -25,34 +26,31 @@
 - debug:
     var: mysql_installed
 
-
 - block:
+    - name: Install MySQL if 'mysql_installed' not defined, e.g. in {{ iiab_state_file }} # /etc/iiab/iiab_state.yml
+      include_tasks: install.yml
+      when: mysql_installed is undefined
 
-  - name: Install MySQL if 'mysql_installed' not defined, e.g. in {{ iiab_state_file }}    # /etc/iiab/iiab_state.yml
-    include_tasks: install.yml
-    when: mysql_installed is undefined
+    - include_tasks: enable-or-disable.yml
 
-  - include_tasks: enable-or-disable.yml
-
-  - name: Add 'mysql' variable values to {{ iiab_ini_file }}
-    ini_file:
-      path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
-      section: mysql
-      option: "{{ item.option }}"
-      value: "{{ item.value | string }}"
-    with_items:
-      - option: name
-        value: MySQL
-      - option: description
-        value: '"MySQL is a widely used free and open source (GPLv2) database, offered by most web hosting services, on a diversity of platforms."'
-      - option: mysql_install
-        value: "{{ mysql_install }}"
-      - option: mysql_enabled
-        value: "{{ mysql_enabled }}"
+    - name: Add 'mysql' variable values to {{ iiab_ini_file }}
+      ini_file:
+        path: "{{ iiab_ini_file }}" # /etc/iiab/iiab.ini
+        section: mysql
+        option: "{{ item.option }}"
+        value: "{{ item.value | string }}"
+      with_items:
+        - option: name
+          value: MySQL
+        - option: description
+          value: '"MySQL is a widely used free and open source (GPLv2) database, offered by most web hosting services, on a diversity of platforms."'
+        - option: mysql_install
+          value: "{{ mysql_install }}"
+        - option: mysql_enabled
+          value: "{{ mysql_enabled }}"
 
   rescue:
-
-  - name: 'SEE ERROR ABOVE (skip_role_on_error: {{ skip_role_on_error }})'
-    fail:
-      msg: ""
-    when: not skip_role_on_error
+    - name: "SEE ERROR ABOVE (skip_role_on_error: {{ skip_role_on_error }})"
+      fail:
+        msg: ""
+      when: not skip_role_on_error

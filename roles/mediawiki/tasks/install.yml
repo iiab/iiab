@@ -1,7 +1,8 @@
+---
 - name: "Set 'mysql_install: True' and 'mysql_enabled: True'"
   set_fact:
-    mysql_install: True
-    mysql_enabled: True
+    mysql_install: true
+    mysql_enabled: true
 
 - name: MYSQL - run 'mysql' role (attempt to install & enable MySQL / MariaDB)
   include_role:
@@ -12,21 +13,19 @@
     msg: "MediaWiki install cannot proceed, as MySQL / MariaDB is not installed."
   when: mysql_installed is undefined
 
-
 - name: Record (initial) disk space used
   shell: df -B1 --output=used / | tail -1
   register: df1
 
-
 # https://www.mediawiki.org/wiki/Manual:Installation_requirements#PHP
-- name: 'Install packages: php{{ php_version }}-intl, php{{ php_version }}-mbstring, php{{ php_version }}-xml'
+- name: "Install packages: php{{ php_version }}-intl, php{{ php_version }}-mbstring, php{{ php_version }}-xml"
   package:
     name:
       #- php{{ php_version }}-common     # Auto-installed as an apt dependency.  REGARDLESS: php{{ php_version }}-common superset php{{ php_version }}-cli is auto-installed by php{{ php_version }}-fpm in nginx/tasks/install.yml
-      - php{{ php_version }}-intl        # Likewise installed in moodle/tasks/install.yml, nextcloud/tasks/install.yml, wordpress/tasks/install.yml
+      - php{{ php_version }}-intl # Likewise installed in moodle/tasks/install.yml, nextcloud/tasks/install.yml, wordpress/tasks/install.yml
       #- php{{ php_version }}-json       # See stanza just below
-      - php{{ php_version }}-mbstring    # Likewise installed in moodle/tasks/install.yml, nextcloud/tasks/install.yml, pbx/tasks/freepbx_dependencies.yml, wordpress/tasks/install.yml
-      - php{{ php_version }}-xml         # 2021-06-27: REQUIRED (AND ENFORCED) despite this being missing from MediaWiki's above requirements doc!  Likewise installed in moodle/tasks/install.yml, nextcloud/tasks/install.yml, pbx/tasks/freepbx_dependencies.yml, wordpress/tasks/install.yml -- AND REGARDLESS dragged in later by Admin Console's use of php-pear for roles/cmdsrv/tasks/main.yml
+      - php{{ php_version }}-mbstring # Likewise installed in moodle/tasks/install.yml, nextcloud/tasks/install.yml, pbx/tasks/freepbx_dependencies.yml, wordpress/tasks/install.yml
+      - php{{ php_version }}-xml # 2021-06-27: REQUIRED (AND ENFORCED) despite this being missing from MediaWiki's above requirements doc!  Likewise installed in moodle/tasks/install.yml, nextcloud/tasks/install.yml, pbx/tasks/freepbx_dependencies.yml, wordpress/tasks/install.yml -- AND REGARDLESS dragged in later by Admin Console's use of php-pear for roles/cmdsrv/tasks/main.yml
     state: present
 
 # For PHP >= 8.0: phpX.Y-json is baked into PHP itself.
@@ -41,7 +40,7 @@
 - name: Download {{ mediawiki_download_base_url }}/{{ mediawiki_src }} to {{ downloads_dir }}
   get_url:
     url: "{{ mediawiki_download_base_url }}/{{ mediawiki_src }}"
-    dest: "{{ downloads_dir }}"    # /opt/iiab/downloads
+    dest: "{{ downloads_dir }}" # /opt/iiab/downloads
     timeout: "{{ download_timeout }}"
     #force: yes
     #backup: yes
@@ -49,31 +48,31 @@
 - name: Unarchive (unpack) it to permanent location {{ mediawiki_abs_path }} ({{ apache_user }}:{{ apache_user }}, u+rw,g+r,o+r)
   unarchive:
     src: "{{ downloads_dir }}/{{ mediawiki_src }}"
-    dest: "{{ mediawiki_install_path }}"    # /library
-    owner: "{{ apache_user }}"    # www-data on debuntu
+    dest: "{{ mediawiki_install_path }}" # /library
+    owner: "{{ apache_user }}" # www-data on debuntu
     group: "{{ apache_user }}"
-    mode: u+rw,g+r,o+r    # '0755' forced executable bits on files
-    keep_newer: yes
+    mode: u+rw,g+r,o+r # '0755' forced executable bits on files
+    keep_newer: true
 
 - name: Symlink {{ doc_root }}/{{ mediawiki_symlink }} -> {{ mediawiki_abs_path }}
   file:
-    src: "{{ mediawiki_abs_path }}"    # /library/mediawiki-1.XY.Z
-    path: "{{ doc_root }}/{{ mediawiki_symlink }}"    # /library/www/html/w
+    src: "{{ mediawiki_abs_path }}" # /library/mediawiki-1.XY.Z
+    path: "{{ doc_root }}/{{ mediawiki_symlink }}" # /library/www/html/w
     state: link
 
 - name: Start MySQL systemd service ({{ mysql_service }}) so we can create db
   systemd:
-    name: "{{ mysql_service }}"    # mariadb on debuntu
+    name: "{{ mysql_service }}" # mariadb on debuntu
     state: started
 
 - name: Create MySQL database {{ mediawiki_db_name }}
   mysql_db:
-    name: "{{ mediawiki_db_name }}"    # iiab_mediawiki
+    name: "{{ mediawiki_db_name }}" # iiab_mediawiki
     #state: present
 
 - name: Create MySQL database user {{ mediawiki_db_user }} with password, and permissions to above db
   mysql_user:
-    name: "{{ mediawiki_db_user }}"    # iiab_mediawiki_user
+    name: "{{ mediawiki_db_user }}" # iiab_mediawiki_user
     password: "{{ mediawiki_db_user_password }}"
     priv: "{{ mediawiki_db_name }}.*:ALL,GRANT"
     #state: present
@@ -93,25 +92,24 @@
     "{{ mediawiki_site_name }}"
     "{{ mediawiki_admin_user }}"
   args:
-    chdir: "{{ mediawiki_abs_path }}"    # /library/mediawiki-1.XY.Z
+    chdir: "{{ mediawiki_abs_path }}" # /library/mediawiki-1.XY.Z
     creates: "{{ mediawiki_abs_path }}/LocalSettings.php"
 
 - name: Configure $wgArticlePath variable in {{ mediawiki_abs_path }}/LocalSettings.php
   lineinfile:
-    path: "{{ mediawiki_abs_path }}/LocalSettings.php"    # /library/mediawiki-1.XY.Z
+    path: "{{ mediawiki_abs_path }}/LocalSettings.php" # /library/mediawiki-1.XY.Z
     line: '$wgArticlePath = "/wiki/$1";'
 
 - name: Configure $wgUsePathInfo variable in {{ mediawiki_abs_path }}/LocalSettings.php
   lineinfile:
-    path: "{{ mediawiki_abs_path }}/LocalSettings.php"    # /library/mediawiki-1.XY.Z
-    line: '$wgUsePathInfo = true;'
+    path: "{{ mediawiki_abs_path }}/LocalSettings.php" # /library/mediawiki-1.XY.Z
+    line: "$wgUsePathInfo = true;"
 
 - name: Configure $wgServer variable in {{ mediawiki_abs_path }}/LocalSettings.php
   lineinfile:
-    path: "{{ mediawiki_abs_path }}/LocalSettings.php"    # /library/mediawiki-1.XY.Z
-    regexp: '^\$wgServer ='
+    path: "{{ mediawiki_abs_path }}/LocalSettings.php" # /library/mediawiki-1.XY.Z
+    regexp: "^\\$wgServer ="
     line: '$wgServer = "//" . $_SERVER["HTTP_HOST"];'
-
 
 # RECORD MediaWiki AS INSTALLED
 
@@ -121,17 +119,17 @@
 
 - name: Add 'mediawiki_disk_usage = {{ df2.stdout|int - df1.stdout|int }}' to {{ iiab_ini_file }}
   ini_file:
-    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+    path: "{{ iiab_ini_file }}" # /etc/iiab/iiab.ini
     section: mediawiki
     option: mediawiki_disk_usage
-    value: "{{ df2.stdout|int - df1.stdout|int }}"
+    value: "{{ df2.stdout | int - df1.stdout | int }}"
 
 - name: "Set 'mediawiki_installed: True'"
   set_fact:
-    mediawiki_installed: True
+    mediawiki_installed: true
 
 - name: "Add 'mediawiki_installed: True' to {{ iiab_state_file }}"
   lineinfile:
-    path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
-    regexp: '^mediawiki_installed'
-    line: 'mediawiki_installed: True'
+    path: "{{ iiab_state_file }}" # /etc/iiab/iiab_state.yml
+    regexp: "^mediawiki_installed"
+    line: "mediawiki_installed: True"

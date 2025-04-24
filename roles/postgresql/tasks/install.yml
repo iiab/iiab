@@ -1,9 +1,9 @@
+---
 - name: Record (initial) disk space used
   shell: df -B1 --output=used / | tail -1
   register: df1
 
-
-- name: 'Install packages: postgresql, postgresql-client'
+- name: "Install packages: postgresql, postgresql-client"
   package:
     name:
       - postgresql
@@ -11,11 +11,12 @@
       #- python3-psycopg2    # For Ansible modules {postgresql_db, postgresql_user} in Ansible collection community.postgresql -- used in moodle/tasks/install.yml
     state: present
 
-- name: pip install 'psycopg' (NEW Psycopg 3) into venv /usr/local/ansible -- for Ansible modules {postgresql_db, postgresql_user} in Ansible collection community.postgresql -- used in moodle/tasks/install.yml
+- name: pip install 'psycopg' (NEW Psycopg 3) into venv /usr/local/ansible -- for Ansible modules {postgresql_db, postgresql_user} in Ansible collection community.postgresql
+    -- used in moodle/tasks/install.yml
   pip:
     name: psycopg
     virtualenv: /usr/local/ansible
-    extra_args: "--upgrade --no-cache-dir --prefer-binary"    # 2023-10-01: Lifesaver when recent wheels (e.g. piwheels.org) are inevitably not yet built!  SEE #3560
+    extra_args: "--upgrade --no-cache-dir --prefer-binary" # 2023-10-01: Lifesaver when recent wheels (e.g. piwheels.org) are inevitably not yet built!  SEE #3560
 
 - name: Run shell command "pg_config --version" to extract MAJOR version number -- strip off MINOR/PATCH version number(s)
   shell: pg_config --version | sed 's/^[^0-9]*//; s/[^0-9].*//'
@@ -36,9 +37,9 @@
     path: /library/pgsql-iiab
     owner: postgres
     group: postgres
-    mode: 0700
+    mode: "0700"
 
-- name: Make sure locale {{ postgresql_locale }} is enabled    # en_US.UTF-8
+- name: Make sure locale {{ postgresql_locale }} is enabled # en_US.UTF-8
   lineinfile:
     dest: /etc/locale.gen
     line: "{{ postgresql_locale }} UTF-8"
@@ -51,7 +52,7 @@
   command: /usr/lib/postgresql/{{ postgresql_version }}/bin/initdb -E 'UTF-8' --locale={{ postgresql_locale }} -D /library/pgsql-iiab
   args:
     creates: /library/pgsql-iiab/pg_hba.conf
-  become: yes
+  become: true
   become_user: postgres
 
 # - name: Initialize the PostgreSQL db, creating /library/pgsql-iiab/pg_hba.conf (OS's other than debuntu)
@@ -65,18 +66,18 @@
 
 - name: Install /library/pgsql-iiab/postgresql.conf from template (postgres:postgres, 0640)
   template:
-    backup: yes
+    backup: true
     src: postgresql.conf.j2
     dest: /library/pgsql-iiab/postgresql.conf
     owner: postgres
     group: postgres
-    mode: 0640
+    mode: "0640"
 
 - name: Disable & Stop stock 'postgresql' (parent) systemd service
   systemd:
     name: postgresql
     state: stopped
-    enabled: no
+    enabled: false
 
 # Above parent service postgresql.service uses template postgresql@.service to
 # start/stop` child service e.g. postgresql@11-main.service on Debian 10, or
@@ -98,7 +99,6 @@
 #    enabled: no       # Doesn't do anything
 #  when: is_debian and not is_raspbian
 
-
 # RECORD PostgreSQL AS INSTALLED
 
 - name: Record (final) disk space used
@@ -107,17 +107,17 @@
 
 - name: Add 'postgresql_disk_usage = {{ df2.stdout|int - df1.stdout|int }}' to {{ iiab_ini_file }}
   ini_file:
-    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+    path: "{{ iiab_ini_file }}" # /etc/iiab/iiab.ini
     section: postgresql
     option: postgresql_disk_usage
-    value: "{{ df2.stdout|int - df1.stdout|int }}"
+    value: "{{ df2.stdout | int - df1.stdout | int }}"
 
 - name: "Set 'postgresql_installed: True'"
   set_fact:
-    postgresql_installed: True
+    postgresql_installed: true
 
 - name: "Add 'postgresql_installed: True' to {{ iiab_state_file }}"
   lineinfile:
-    path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
-    regexp: '^postgresql_installed'
-    line: 'postgresql_installed: True'
+    path: "{{ iiab_state_file }}" # /etc/iiab/iiab_state.yml
+    regexp: "^postgresql_installed"
+    line: "postgresql_installed: True"

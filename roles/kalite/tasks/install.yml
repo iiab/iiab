@@ -1,12 +1,12 @@
+---
 - name: Record (initial) disk space used
   shell: df -B1 --output=used / | tail -1
   register: df1
 
-
 - name: Download {{ kalite_requirements }} to {{ pip_packages_dir }}/kalite.txt
   get_url:
     url: "{{ kalite_requirements }}"
-    dest: "{{ pip_packages_dir }}/kalite.txt"    # /opt/iiab/pip-packages/kalite.txt
+    dest: "{{ pip_packages_dir }}/kalite.txt" # /opt/iiab/pip-packages/kalite.txt
     timeout: "{{ download_timeout }}"
 
 # 2020-01-19: https://github.com/piwheels/packages/issues/74 says the following is no longer needed...
@@ -15,39 +15,39 @@
 #  ignore_errors: yes
 #  when: is_raspbian
 
-- name: 'Install packages: python2, python-setuptools, virtualenv (for Python 2) -- if Ubuntu 22.04 / Mint 21'
+- name: "Install packages: python2, python-setuptools, virtualenv (for Python 2) -- if Ubuntu 22.04 / Mint 21"
   package:
     name:
       - python2
-      - python-setuptools    # Provides setuptools-44 on recent OS's (last version compatible with python2)
-      - virtualenv           # Drags in 'python3-virtualenv' which in turn drags in 'python3-pip' -- for Ansible module 'pip' when used with 'virtualenv_command: /usr/bin/virtualenv' and 'virtualenv_python: python2.7' -- compare package 'python3-venv' used by roles {calibre-web, jupyterhub, lokole}
+      - python-setuptools # Provides setuptools-44 on recent OS's (last version compatible with python2)
+      - virtualenv # Drags in 'python3-virtualenv' which in turn drags in 'python3-pip' -- for Ansible module 'pip' when used with 'virtualenv_command: /usr/bin/virtualenv' and 'virtualenv_python: python2.7' -- compare package 'python3-venv' used by roles {calibre-web, jupyterhub, lokole}
     state: present
-  when: is_ubuntu_2204    # Also covers is_linuxmint_21
+  when: is_ubuntu_2204 # Also covers is_linuxmint_21
 
 - name: Run scripts/install_python2.sh to install python2 and virtualenv -- if Debian 12 or RasPiOS 12
   command: "{{ iiab_dir }}/scripts/install_python2.sh"
-  when: is_debian_12    # Also covers is_raspbian_12
+  when: is_debian_12 # Also covers is_raspbian_12
 
 - name: Use pip to pin setuptools to 44 in {{ kalite_venv }} -- if Ubuntu 22.04 / Mint 21, Ubuntu 23.10, Debian 12 or RasPiOS 12
   pip:
     name: setuptools==44
-    virtualenv: "{{ kalite_venv }}"    # /usr/local/kalite/venv
-    virtualenv_site_packages: no
-    virtualenv_command: virtualenv    # Traditionally /usr/bin/virtual/env -- but install_python2.sh (for Ubuntu 23.10+) sets up /usr/local/bin/virtualenv
+    virtualenv: "{{ kalite_venv }}" # /usr/local/kalite/venv
+    virtualenv_site_packages: false
+    virtualenv_command: virtualenv # Traditionally /usr/bin/virtual/env -- but install_python2.sh (for Ubuntu 23.10+) sets up /usr/local/bin/virtualenv
     virtualenv_python: python2.7
     extra_args: "--no-use-pep517 --no-cache-dir --no-python-version-warning"
-  when: is_ubuntu_2204 or is_ubuntu_2310 or is_debian_12    # Also covers is_linuxmint_21 and is_raspbian_12
+  when: is_ubuntu_2204 or is_ubuntu_2310 or is_debian_12 # Also covers is_linuxmint_21 and is_raspbian_12
 
 - name: Use pip to install ka-lite-static to {{ kalite_venv }} -- if Ubuntu 22.04 / Mint 21, Ubuntu 23.10, Debian 12 or RasPiOS 12
   pip:
     name: ka-lite-static
     version: "{{ kalite_version }}"
     virtualenv: "{{ kalite_venv }}"
-    virtualenv_site_packages: no
+    virtualenv_site_packages: false
     virtualenv_command: virtualenv
     virtualenv_python: python2.7
     extra_args: "--no-cache-dir"
-  when: is_ubuntu_2204 or is_ubuntu_2310 or is_debian_12    # Also covers is_linuxmint_21 and is_raspbian_12
+  when: is_ubuntu_2204 or is_ubuntu_2310 or is_debian_12 # Also covers is_linuxmint_21 and is_raspbian_12
 
 # 2024-04-30: Sadly no longer works with Ubuntu 24.04 LTS final release (#3731).
 # So roles/kalite is OS-restricted during initial install, SEE: roles/7-edu-apps/tasks/main.yml
@@ -62,27 +62,26 @@
     dest: "{{ item.dest }}"
     mode: "{{ item.mode }}"
   with_items:
-    - { src: 'kalite.sh.j2', dest: '/usr/bin/kalite', mode: '0755' }
-    - { src: 'kalite-serve.service.j2', dest: '/etc/systemd/system/kalite-serve.service', mode: '0644' }
+    - { src: "kalite.sh.j2", dest: "/usr/bin/kalite", mode: "0755" }
+    - { src: "kalite-serve.service.j2", dest: "/etc/systemd/system/kalite-serve.service", mode: "0644" }
 
-- name: Fix KA Lite bug in regex parsing ifconfig output (ifcfg/parser.py) for @m-anish's network names that contain dashes    # WAS: if Raspbian/Debian > 10 or Ubuntu > 19
+- name: Fix KA Lite bug in regex parsing ifconfig output (ifcfg/parser.py) for @m-anish's network names that contain dashes # WAS: if Raspbian/Debian > 10 or Ubuntu > 19
   replace:
-    path: "{{ kalite_venv }}/lib/python2.7/site-packages/kalite/packages/dist/ifcfg/parser.py"    # /usr/local/kalite/venv
-    regexp: 'a-zA-Z0-9'
-    replace: 'a-zA-Z0-9\-'
+    path: "{{ kalite_venv }}/lib/python2.7/site-packages/kalite/packages/dist/ifcfg/parser.py" # /usr/local/kalite/venv
+    regexp: "a-zA-Z0-9"
+    replace: "a-zA-Z0-9\\-"
 
 - name: Create dir {{ kalite_root }}
   file:
     state: directory
-    path: "{{ kalite_root }}/httpsrv/static"    # /library/ka-lite
+    path: "{{ kalite_root }}/httpsrv/static" # /library/ka-lite
 
 - name: Run '{{ kalite_program }} manage setup ...'
-  command: "{{ kalite_program }} manage setup --username={{ kalite_admin_user }} --password={{ kalite_admin_password }} --noinput"    # Runs /usr/local/kalite/venv/bin/kalite
+  command: "{{ kalite_program }} manage setup --username={{ kalite_admin_user }} --password={{ kalite_admin_password }} --noinput" # Runs /usr/local/kalite/venv/bin/kalite
   environment:
-    KALITE_HOME: "{{ kalite_root }}"    # /library/ka-lite
+    KALITE_HOME: "{{ kalite_root }}" # /library/ka-lite
   async: 1800
   poll: 10
-
 
 # RECORD KA Lite AS INSTALLED
 
@@ -92,17 +91,17 @@
 
 - name: Add 'kalite_disk_usage = {{ df2.stdout|int - df1.stdout|int }}' to {{ iiab_ini_file }}
   ini_file:
-    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+    path: "{{ iiab_ini_file }}" # /etc/iiab/iiab.ini
     section: kalite
     option: kalite_disk_usage
-    value: "{{ df2.stdout|int - df1.stdout|int }}"
+    value: "{{ df2.stdout | int - df1.stdout | int }}"
 
 - name: "Set 'kalite_installed: True'"
   set_fact:
-    kalite_installed: True
+    kalite_installed: true
 
 - name: "Add 'kalite_installed: True' to {{ iiab_state_file }}"
   lineinfile:
-    path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
-    regexp: '^kalite_installed'
-    line: 'kalite_installed: True'
+    path: "{{ iiab_state_file }}" # /etc/iiab/iiab_state.yml
+    regexp: "^kalite_installed"
+    line: "kalite_installed: True"

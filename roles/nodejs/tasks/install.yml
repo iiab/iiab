@@ -1,11 +1,9 @@
+---
 # Lokole PDF (User's Guide) gets copied for offline use (http://box/info) here:
 # https://github.com/iiab/iiab/blob/master/roles/www_base/templates/iiab-refresh-wiki-docs.sh#L51-L52
-
-
 - name: Record (initial) disk space used
   shell: df -B1 --output=used / | tail -1
   register: df1
-
 
 # 1. TEST IF Node.js ALEADY INSTALLED & IF SO WARN IT'LL BE REPLACED
 
@@ -55,10 +53,10 @@
 
 - name: LOUD WARNING if Node.js will be replaced -- BRUTAL but helps OS's / distros with older Node.js
   #debug:    # GREEN
-  fail:      # FORCE IT RED THIS ONCE!
+  fail: # FORCE IT RED THIS ONCE!
     msg: "WARNING: YOUR Node.js {{ nodejs_version_installed.stdout }} WILL BE WIPED AND REPLACED"
-  when: nodejs_version_installed.stderr == ""    # and nodejs_version_installed.stdout == nodejs_version
-  ignore_errors: yes
+  when: nodejs_version_installed.stderr == "" # and nodejs_version_installed.stdout == nodejs_version
+  ignore_errors: true
 
 # 2022-10-22: Above 2 stanzas could be removed (tho informational value remains)
 
@@ -68,7 +66,6 @@
       - nodejs
       - npm
     state: absent
-
 
 # 2. INSTALL Node.js AND npm USING nodesource.com (OR OS's apt IF THAT FAILS!)
 
@@ -102,7 +99,7 @@
     curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg
     echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_{{ nodejs_version }} nodistro main" > /etc/apt/sources.list.d/nodesource.list
   register: curl_nodesource
-  ignore_errors: yes
+  ignore_errors: true
 
 # 2023-09-06: OBSOLETE as nodesource.com no longer supports https://deb.nodesource.com/node_{{ nodejs_version }}/dists/
 # - name: Try 'curl -fsSL https://deb.nodesource.com/setup_{{ nodejs_version }} | bash -' to overwrite /etc/apt/sources.list.d/nodesource.list
@@ -123,14 +120,14 @@
   apt:
     #name: nodejs={{ nodejs_version }}
     name: nodejs
-    state: latest    # Equivalent to 'state: present' ?
-    update_cache: yes
+    state: latest # Equivalent to 'state: present' ?
+    update_cache: true
 
 # Also run 'npm install -g npm' later, if you truly want the LATEST!
 - name: Also install latest npm (OS's) if nodesource failed to install above -- i.e. if OS not yet supported by https://github.com/nodesource/distributions
   package:
     name: npm
-    state: latest    # Equivalent to 'state: present' ?
+    state: latest # Equivalent to 'state: present' ?
   when: curl_nodesource.failed
 
 # NEED BLEEDING EDGE? Then Also Run: npm install -g npm@latest
@@ -179,7 +176,6 @@
 # 2019-03-29: Debian 10 Buster & Ubuntu 19.04 pre-releases made the jump
 # thankfully; currently both offer Node.js 10.15.2
 
-
 # 3. RECORD Node.js AS INSTALLED
 
 - name: Record (final) disk space used
@@ -188,17 +184,17 @@
 
 - name: Add 'nodejs_disk_usage = {{ df2.stdout|int - df1.stdout|int }}' to {{ iiab_ini_file }}
   ini_file:
-    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+    path: "{{ iiab_ini_file }}" # /etc/iiab/iiab.ini
     section: nodejs
     option: nodejs_disk_usage
-    value: "{{ df2.stdout|int - df1.stdout|int }}"
+    value: "{{ df2.stdout | int - df1.stdout | int }}"
 
 - name: "Set 'nodejs_installed: True'"
   set_fact:
-    nodejs_installed: True
+    nodejs_installed: true
 
 - name: "Add 'nodejs_installed: True' to {{ iiab_state_file }}"
   lineinfile:
-    path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
-    regexp: '^nodejs_installed'
-    line: 'nodejs_installed: True'
+    path: "{{ iiab_state_file }}" # /etc/iiab/iiab_state.yml
+    regexp: "^nodejs_installed"
+    line: "nodejs_installed: True"

@@ -1,7 +1,8 @@
+---
 - name: Install package '{{ proxy }}' -- IIAB will later overwrite its /etc/squid/squid.conf
   package:
-    name: "{{ proxy }}"    # squid (or 'squid3' on vars/debian-8.yml, vars/raspbian-8.yml)
-      # - cadaver
+    name: "{{ proxy }}" # squid (or 'squid3' on vars/debian-8.yml, vars/raspbian-8.yml)
+    # - cadaver
     state: present
 
 # - name: "Bigger hammer for Ubuntu, run: /etc/init.d/squid stop"
@@ -12,17 +13,18 @@
   systemd:
     name: "{{ proxy }}"
     state: stopped
-  # when: squid_installed is undefined
+# when: squid_installed is undefined
 
 # 2021-08-17: This stanza is gratuitous on most distros, where the user 'proxy'
 # or 'squid' is preinstalled (typically with UID and GID 13 in /etc/passwd) but
 # let's be sure, as distro internals / favorite distros change without warning.
-- name: Ensure Linux user:group '{{ proxy_user }}:{{ proxy_user }}' exists, to own /library/cache -- and for recent versions of /usr/lib/systemd/system/squid.service that use 'Group=proxy'
+- name: Ensure Linux user:group '{{ proxy_user }}:{{ proxy_user }}' exists, to own /library/cache -- and for recent versions of /usr/lib/systemd/system/squid.service
+    that use 'Group=proxy'
   user:
-    name: "{{ proxy_user }}"    # proxy (or 'squid' on vars/centos-7.yml, vars/fedora-18.yml, vars/fedora-12.yml)
+    name: "{{ proxy_user }}" # proxy (or 'squid' on vars/centos-7.yml, vars/fedora-18.yml, vars/fedora-12.yml)
     group: "{{ proxy_user }}"
-    create_home: False
-    shell: /bin/false    # UNIX norm should work across all distros, overriding Debian/Ubuntu norm /usr/sbin/nologin
+    create_home: false
+    shell: /bin/false # UNIX norm should work across all distros, overriding Debian/Ubuntu norm /usr/sbin/nologin
 
 # 2021-08-16: Squid runs as 'nobody' when started as root:
 # http://www.squid-cache.org/Doc/config/cache_effective_user/
@@ -42,13 +44,14 @@
     path: /library/cache
     owner: "{{ proxy_user }}"
     group: "{{ proxy_user }}"
-    mode: 0750
+    mode: "0750"
 
-- name: "Install site allowlists /etc/{{ proxy }}/allow_dst_domains, /etc/{{ proxy }}/allow_url_regexs from template (root:root, 0644 by default) -- activated for HTTP/80 if you set 'gw_squid_whitelist: True' in /etc/iiab/local_vars.yml -- SEE https://wiki.squid-cache.org/SquidFaq/SquidAcl"
+- name: "Install site allowlists /etc/{{ proxy }}/allow_dst_domains, /etc/{{ proxy }}/allow_url_regexs from template (root:root, 0644 by default) -- activated for
+    HTTP/80 if you set 'gw_squid_whitelist: True' in /etc/iiab/local_vars.yml -- SEE https://wiki.squid-cache.org/SquidFaq/SquidAcl"
   template:
     src: "{{ item }}"
     dest: /etc/{{ proxy }}/
-    backup: yes
+    backup: true
   with_items:
     - roles/network/templates/squid/allow_dst_domains
     - roles/network/templates/squid/allow_url_regexs
@@ -104,24 +107,22 @@
 # - include_tasks: roles/network/tasks/dansguardian.yml
 #   when: dansguardian_install
 
-
 # RECORD Squid AS INSTALLED
 
 - name: "Set 'squid_installed: True'"
   set_fact:
-    squid_installed: True
+    squid_installed: true
 
 - name: "Add 'squid_installed: True' to {{ iiab_state_file }}"
   lineinfile:
-    path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
-    regexp: '^squid_installed'
-    line: 'squid_installed: True'
-
+    path: "{{ iiab_state_file }}" # /etc/iiab/iiab_state.yml
+    regexp: "^squid_installed"
+    line: "squid_installed: True"
 
 # {{ proxy }} is normally "squid", but is "squid3" on raspbian-8 & debian-8
 - name: Add '{{ proxy }}' variable values to {{ iiab_ini_file }}
   ini_file:
-    dest: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+    dest: "{{ iiab_ini_file }}" # /etc/iiab/iiab.ini
     section: "{{ proxy }}"
     option: "{{ item.option }}"
     value: "{{ item.value | string }}"

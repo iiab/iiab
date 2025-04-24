@@ -1,3 +1,4 @@
+---
 # "How do i fail a task in Ansible if the variable contains a boolean value?
 # I want to perform input validation for Ansible playbooks"
 # https://stackoverflow.com/questions/46664127/how-do-i-fail-a-task-in-ansible-if-the-variable-contains-a-boolean-value-i-want/46667499#46667499
@@ -10,53 +11,50 @@
   assert:
     that: nextcloud_install is sameas true
     fail_msg: "PLEASE SET 'nextcloud_install: True' e.g. IN: /etc/iiab/local_vars.yml"
-    quiet: yes
+    quiet: true
 
 - name: Assert that "nextcloud_enabled | type_debug == 'bool'" (boolean not string etc)
   assert:
     that: nextcloud_enabled | type_debug == 'bool'
     fail_msg: "PLEASE GIVE VARIABLE 'nextcloud_enabled' A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
-    quiet: yes
-
+    quiet: true
 
 - block:
+    - name: Install Nextcloud if 'nextcloud_installed' not defined, e.g. in {{ iiab_state_file }} # /etc/iiab/iiab_state.yml
+      include_tasks: install.yml
+      when: nextcloud_installed is undefined
 
-  - name: Install Nextcloud if 'nextcloud_installed' not defined, e.g. in {{ iiab_state_file }}    # /etc/iiab/iiab_state.yml
-    include_tasks: install.yml
-    when: nextcloud_installed is undefined
+    - name: Enable/Disable/Restart NGINX
+      include_tasks: nginx.yml
 
-  - name: Enable/Disable/Restart NGINX
-    include_tasks: nginx.yml
-
-  - name: Add 'nextcloud' variable values to {{ iiab_ini_file }}
-    ini_file:
-      path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
-      section: nextcloud
-      option: "{{ item.option }}"
-      value: "{{ item.value | string }}"
-    with_items:
-      - option: name
-        value: Nextcloud
-      - option: description
-        value: '"Nextcloud is a local server-based facility for sharing files, photos, contacts, calendars, etc."'
-      - option: nextcloud_install
-        value: "{{ nextcloud_install }}"
-      - option: nextcloud_enabled
-        value: "{{ nextcloud_enabled }}"
-      - option: nextcloud_dl_url
-        value: "{{ nextcloud_dl_url }}"
-      - option: nextcloud_url
-        value: "{{ nextcloud_url }}"
-      - option: nextcloud_base_dir
-        value: "{{ nextcloud_base_dir }}"
-      - option: nextcloud_root_dir
-        value: "{{ nextcloud_root_dir }}"
-      - option: nextcloud_data_dir
-        value: "{{ nextcloud_data_dir }}"
+    - name: Add 'nextcloud' variable values to {{ iiab_ini_file }}
+      ini_file:
+        path: "{{ iiab_ini_file }}" # /etc/iiab/iiab.ini
+        section: nextcloud
+        option: "{{ item.option }}"
+        value: "{{ item.value | string }}"
+      with_items:
+        - option: name
+          value: Nextcloud
+        - option: description
+          value: '"Nextcloud is a local server-based facility for sharing files, photos, contacts, calendars, etc."'
+        - option: nextcloud_install
+          value: "{{ nextcloud_install }}"
+        - option: nextcloud_enabled
+          value: "{{ nextcloud_enabled }}"
+        - option: nextcloud_dl_url
+          value: "{{ nextcloud_dl_url }}"
+        - option: nextcloud_url
+          value: "{{ nextcloud_url }}"
+        - option: nextcloud_base_dir
+          value: "{{ nextcloud_base_dir }}"
+        - option: nextcloud_root_dir
+          value: "{{ nextcloud_root_dir }}"
+        - option: nextcloud_data_dir
+          value: "{{ nextcloud_data_dir }}"
 
   rescue:
-
-  - name: 'SEE ERROR ABOVE (skip_role_on_error: {{ skip_role_on_error }})'
-    fail:
-      msg: ""
-    when: not skip_role_on_error
+    - name: "SEE ERROR ABOVE (skip_role_on_error: {{ skip_role_on_error }})"
+      fail:
+        msg: ""
+      when: not skip_role_on_error

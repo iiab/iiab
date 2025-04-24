@@ -1,3 +1,4 @@
+---
 - name: Install /etc/dnsmasq.d/iiab.conf from template, when dnsmasq_enabled and isn't Appliance
   template:
     src: network/dnsmasq.conf.j2
@@ -36,11 +37,12 @@
     path: /etc/networkd-dispatcher/routable.d
   register: nd_dir
 
-- name: To restart dnsmasq whenever br0 comes up, install /etc/networkd-dispatcher/routable.d/dnsmasq.sh from template (if isn't Appliance, and directory /etc/networkd-dispatcher/routable.d exists, i.e. OS's like Ubuntu 18.04 or later) (root:root by default)
+- name: To restart dnsmasq whenever br0 comes up, install /etc/networkd-dispatcher/routable.d/dnsmasq.sh from template (if isn't Appliance, and directory /etc/networkd-dispatcher/routable.d
+    exists, i.e. OS's like Ubuntu 18.04 or later) (root:root by default)
   template:
     src: roles/network/templates/network/dnsmasq.sh.j2
     dest: /etc/networkd-dispatcher/routable.d/dnsmasq.sh
-    mode: 0755
+    mode: "0755"
   when: nd_dir.stat.exists and nd_dir.stat.isdir and (iiab_network_mode != "Appliance")
   #when: dnsmasq_install and dnsmasq_enabled and nd_dir.stat.exists and nd_dir.stat.isdir and (iiab_network_mode != "Appliance")
   #when: dnsmasq_install and dnsmasq_enabled and nd_enabled is defined and nd_enabled.stdout == "enabled" and nd_dir.stat.exists and nd_dir.stat.isdir and (iiab_network_mode != "Appliance")
@@ -55,27 +57,26 @@
 - name: Enable iiab-dnsmasq systemd service, if dnsmasq_enabled
   systemd:
     name: iiab-dnsmasq
-    enabled: yes
+    enabled: true
   when: dnsmasq_enabled
 
 - name: Disable iiab-dnsmasq, if not dnsmasq_enabled
   systemd:
     name: iiab-dnsmasq
-    enabled: no
+    enabled: false
   when: not dnsmasq_enabled
-
 
 - name: Mandate 'HTTPCACHE_ON=True' in {{ iiab_env_file }} - if squid_install [{{ squid_install }}] and squid_enabled [{{ squid_enabled }}]
   lineinfile:
     path: "{{ iiab_env_file }}"
-    regexp: '^HTTPCACHE_ON=*'
-    line: 'HTTPCACHE_ON=True'
+    regexp: "^HTTPCACHE_ON=*"
+    line: "HTTPCACHE_ON=True"
   when: squid_installed is defined and squid_enabled
 
 - name: Enable systemd service '{{ proxy }}' - if squid_install and squid_enabled
   systemd:
-    name: "{{ proxy }}"    # squid (or 'squid3' on vars/debian-8.yml, vars/raspbian-8.yml)
-    enabled: yes
+    name: "{{ proxy }}" # squid (or 'squid3' on vars/debian-8.yml, vars/raspbian-8.yml)
+    enabled: true
   when: squid_installed is defined and squid_enabled
 
 - name: Install /etc/{{ proxy }}/squid.conf from template (root:root, 0644 by default) - and create a timestamped backup of the original - if squid_install and squid_enabled
@@ -84,7 +85,7 @@
     dest: /etc/{{ proxy }}/squid.conf
     # owner: "{{ proxy_user }}"    # proxy (or 'squid' on vars/centos-7.yml, vars/fedora-18.yml, vars/fedora-12.yml)
     # group: "{{ proxy_user }}"
-    backup: yes
+    backup: true
   when: squid_installed is defined and squid_enabled
 
 # - name: Point /etc/init.d/{{ proxy }} to /etc/{{ proxy }}/squid-iiab.conf - if squid_install and squid_enabled
@@ -97,28 +98,26 @@
 - name: Disable systemd service '{{ proxy }}' - if (squid_install or squid_installed [{{ squid_installed }}] is defined) and not squid_enabled
   systemd:
     name: "{{ proxy }}"
-    enabled: no
+    enabled: false
   when: squid_installed is defined and not squid_enabled
 
 - name: Revert {{ iiab_env_file }} to 'HTTPCACHE_ON=False' - if squid_install and not squid_enabled
   lineinfile:
     path: "{{ iiab_env_file }}"
-    regexp: '^HTTPCACHE_ON=*'
-    line: 'HTTPCACHE_ON=False'
+    regexp: "^HTTPCACHE_ON=*"
+    line: "HTTPCACHE_ON=False"
   when: squid_installed is defined and not squid_enabled
-
 
 # check-LAN should be iptables.yml remove later
 - name: Install clean copy of /usr/bin/iiab-gen-iptables from template (root:root by default)
   template:
     src: gateway/iiab-gen-iptables
     dest: /usr/bin/iiab-gen-iptables
-    mode: 0755
-
+    mode: "0755"
 
 - name: Add 'squid' variable values to {{ iiab_ini_file }} - if squid_installed is defined
   ini_file:
-    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+    path: "{{ iiab_ini_file }}" # /etc/iiab/iiab.ini
     section: squid
     option: "{{ item.option }}"
     value: "{{ item.value | string }}"

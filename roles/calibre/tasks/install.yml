@@ -1,7 +1,7 @@
+---
 - name: Record (initial) disk space used
   shell: df -B1 --output=used / | tail -1
   register: df1
-
 
 # 1. APT INSTALL CALIBRE 4.12+ or 5.12+ (calibre, calibredb, calibre-server etc) ON ALL OS'S
 
@@ -39,36 +39,33 @@
 # - run testing branch for Ubuntu 16.04: scripts/calibre-install-latest.sh
 # - run unstable branch for Debian etc: scripts/calibre-install-unstable.sh
 
-
 # 2. SYSTEMD SERVICES
 
-- name: 'Install from template: /etc/systemd/system/calibre-serve.service'
+- name: "Install from template: /etc/systemd/system/calibre-serve.service"
   template:
     src: "{{ item.src }}"
     dest: "{{ item.dest }}"
   with_items:
-    - { src: 'calibre-serve.service.j2', dest: '/etc/systemd/system/calibre-serve.service' }
+    - { src: "calibre-serve.service.j2", dest: "/etc/systemd/system/calibre-serve.service" }
     #- { src: 'calibre.conf', dest: '/etc/{{ apache_conf_dir }}' }    # apache2/sites-available (this doesn't work, see #529: let's try to create /etc/nginx/conf.d/calibre-nginx.conf in future!)
 
 - name: Stop service 'calibre-serve' (/usr/bin/calibre-server by Kovid Goyal)
   systemd:
     name: calibre-serve
     state: stopped
-    daemon_reload: yes
-
+    daemon_reload: true
 
 # 3. CREATE USER DATABASE
 
 - name: Create {{ calibre_dbpath }} (mandatory since Calibre 3.x)
   file:
-    path: "{{ calibre_dbpath }}"    # /library/calibre
+    path: "{{ calibre_dbpath }}" # /library/calibre
     state: directory
 
 - name: Copy template userdb to {{ calibre_userdb }}
   copy:
     src: /opt/iiab/iiab/roles/calibre/templates/users.sqlite
-    dest: "{{ calibre_userdb }}"    # /library/calibre/users.sqlite
-
+    dest: "{{ calibre_userdb }}" # /library/calibre/users.sqlite
 
 # 4. CREATE CONTENT DATABASE WITH A SAMPLE BOOK (REQUIRED AS OF CALIBRE 3.x)
 
@@ -81,7 +78,6 @@
   include_tasks: create-db.yml
   when: not calibre_db.stat.exists
 
-
 # 5. RECORD Calibre AS INSTALLED
 
 - name: Record (final) disk space used
@@ -90,17 +86,17 @@
 
 - name: Add 'calibre_disk_usage = {{ df2.stdout|int - df1.stdout|int }}' to {{ iiab_ini_file }}
   ini_file:
-    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+    path: "{{ iiab_ini_file }}" # /etc/iiab/iiab.ini
     section: calibre
     option: calibre_disk_usage
-    value: "{{ df2.stdout|int - df1.stdout|int }}"
+    value: "{{ df2.stdout | int - df1.stdout | int }}"
 
 - name: "Set 'calibre_installed: True'"
   set_fact:
-    calibre_installed: True
+    calibre_installed: true
 
 - name: "Add 'calibre_installed: True' to {{ iiab_state_file }}"
   lineinfile:
-    path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
-    regexp: '^calibre_installed'
-    line: 'calibre_installed: True'
+    path: "{{ iiab_state_file }}" # /etc/iiab/iiab_state.yml
+    regexp: "^calibre_installed"
+    line: "calibre_installed: True"

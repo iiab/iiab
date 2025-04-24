@@ -1,3 +1,4 @@
+---
 # "How do i fail a task in Ansible if the variable contains a boolean value?
 # I want to perform input validation for Ansible playbooks"
 # https://stackoverflow.com/questions/46664127/how-do-i-fail-a-task-in-ansible-if-the-variable-contains-a-boolean-value-i-want/46667499#46667499
@@ -10,57 +11,54 @@
   assert:
     that: pbx_install is sameas true
     fail_msg: "PLEASE SET 'pbx_install: True' e.g. IN: /etc/iiab/local_vars.yml"
-    quiet: yes
+    quiet: true
 
 - name: Assert that "pbx_enabled | type_debug == 'bool'" (boolean not string etc)
   assert:
     that: pbx_enabled | type_debug == 'bool'
     fail_msg: "PLEASE GIVE VARIABLE 'pbx_enabled' A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
-    quiet: yes
-
+    quiet: true
 
 - block:
+    - name: If PHP >= 8 is detected, loudly warn that FreePBX does not support PHP 8+ (as of April 2023)
+      fail: # FORCE IT RED, allowing adventurous/testing people to proceed at their own risk!
+        msg: "FreePBX DOES NOT SUPPORT PHP 8+ AS OF APRIL 2023.  YOU ARE PROCEEDING ENTIRELY AT YOUR OWN RISK."
+      when: php_version is version('8.0', '>=')
+      ignore_errors: true
 
-  - name: If PHP >= 8 is detected, loudly warn that FreePBX does not support PHP 8+ (as of April 2023)
-    fail:    # FORCE IT RED, allowing adventurous/testing people to proceed at their own risk!
-      msg: 'FreePBX DOES NOT SUPPORT PHP 8+ AS OF APRIL 2023.  YOU ARE PROCEEDING ENTIRELY AT YOUR OWN RISK.'
-    when: php_version is version('8.0', '>=')
-    ignore_errors: yes
+    - name: Install PBX if pbx_installed is not defined, e.g. in {{ iiab_state_file }} # /etc/iiab/iiab_state.yml
+      include_tasks: install.yml
+      when: pbx_installed is undefined
 
-  - name: Install PBX if pbx_installed is not defined, e.g. in {{ iiab_state_file }}    # /etc/iiab/iiab_state.yml
-    include_tasks: install.yml
-    when: pbx_installed is undefined
+    - name: Install & Enable chan_dongle for Huawei USB modems - if asterisk_chan_dongle
+      include_tasks: chan_dongle.yml
+      when: asterisk_chan_dongle
 
-  - name: Install & Enable chan_dongle for Huawei USB modems - if asterisk_chan_dongle
-    include_tasks: chan_dongle.yml
-    when: asterisk_chan_dongle
+    - include_tasks: enable-or-disable.yml
 
-  - include_tasks: enable-or-disable.yml
-
-
-  - name: Add 'pbx' variable values to {{ iiab_ini_file }}
-    ini_file:
-      path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
-      section: pbx
-      option: "{{ item.option }}"
-      value: "{{ item.value | string }}"
-    with_items:
-      - option: name
-        value: PBX
-      - option: description
-        value: '"Full-featured PBX for rural telephony etc, that can integrate with GSM (mobile phone) networks.  Based on Asterisk (Voice over IP, SIP telephone numbers) and FreePBX (web-based GUI to administer it)."'
-      - option: pbx_install
-        value: "{{ pbx_install }}"
-      - option: pbx_enabled
-        value: "{{ pbx_enabled }}"
-      - option: pbx_use_apache
-        value: "{{ pbx_use_apache }}"
-      - option: pbx_use_nginx
-        value: "{{ pbx_use_nginx }}"
+    - name: Add 'pbx' variable values to {{ iiab_ini_file }}
+      ini_file:
+        path: "{{ iiab_ini_file }}" # /etc/iiab/iiab.ini
+        section: pbx
+        option: "{{ item.option }}"
+        value: "{{ item.value | string }}"
+      with_items:
+        - option: name
+          value: PBX
+        - option: description
+          value: '"Full-featured PBX for rural telephony etc, that can integrate with GSM (mobile phone) networks.  Based on Asterisk (Voice over IP, SIP telephone
+            numbers) and FreePBX (web-based GUI to administer it)."'
+        - option: pbx_install
+          value: "{{ pbx_install }}"
+        - option: pbx_enabled
+          value: "{{ pbx_enabled }}"
+        - option: pbx_use_apache
+          value: "{{ pbx_use_apache }}"
+        - option: pbx_use_nginx
+          value: "{{ pbx_use_nginx }}"
 
   rescue:
-
-  - name: 'SEE ERROR ABOVE (skip_role_on_error: {{ skip_role_on_error }})'
-    fail:
-      msg: ""
-    when: not skip_role_on_error
+    - name: "SEE ERROR ABOVE (skip_role_on_error: {{ skip_role_on_error }})"
+      fail:
+        msg: ""
+      when: not skip_role_on_error

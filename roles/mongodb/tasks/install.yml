@@ -1,13 +1,11 @@
+---
 # MongoDB Install Docs:
 # https://www.mongodb.com/community/forums/t/installing-mongodb-over-ubuntu-22-04/159931/90
 # https://www.mongodb.com/docs/manual/tutorial/install-mongodb-on-ubuntu/
 # https://www.mongodb.com/docs/manual/installation/
-
-
 - name: Record (initial) disk space used
   shell: df -B1 --output=used / | tail -1
   register: df1
-
 
 # 1. INSTALL MongoDB PACKAGES AND/OR BINARIES
 
@@ -88,7 +86,6 @@
 # orginally deployed for Raspbian.  (Haven't seen bootable 32-bit Intel
 # installers for a while now.)  64-bit OS's proceed below.
 
-
 # - debug:
 #     msg: 16-STANZA BLOCK BELOW, RUNS *IF* 64-BIT -- i.e. ansible_architecture == "aarch64" or ansible_architecture == "x86_64"
 
@@ -147,7 +144,6 @@
   #when: is_ubuntu and os_ver is version('ubuntu-2204', '>=') or is_linuxmint and os_ver is version('linuxmint-12', '>=') or is_debian and os_ver is version('debian-12', '>=')
   #when: not (is_debian and ansible_architecture == "x86_64")
 
-
 # 2022-10-23: Force-install MongoDB on Ubuntu 22.04+, Mint 21 & Debian 12;
 # as each includes libssl3 not libssl1.1 (#3190).  LATER REMOVE ALL 7 STANZAS
 # BELOW, IF/WHEN MongoDB ONE DAY FINALLY SUPPORTS libssl3 ?  (MongoDB 6.2 fix
@@ -167,40 +163,44 @@
 # https://www.mongodb.com/community/forums/t/installing-mongodb-over-ubuntu-22-04/159931/90
 
 - debug:
-    msg: 5-STANZA BLOCK FOLLOWS, TO FORCE INSTALL libssl1.1 -- runs *IF* mandated mongodb_version ({{ mongodb_version }}) < 6.0 (i.e. for aarch64/arm64) on Ubuntu 22.04+ or Debian 12+ -- whereas Linux Mint should never need libssl1.1
+    msg: 5-STANZA BLOCK FOLLOWS, TO FORCE INSTALL libssl1.1 -- runs *IF* mandated mongodb_version ({{ mongodb_version }}) < 6.0 (i.e. for aarch64/arm64) on Ubuntu
+      22.04+ or Debian 12+ -- whereas Linux Mint should never need libssl1.1
 
-- block:
+- when: mongodb_version is version('6.0', '<') and (is_ubuntu and os_ver is version('ubuntu-2204', '>=') or is_debian and os_ver is version('debian-12', '>='))
 
-  - name: Install OLD source/repo "deb http://ports.ubuntu.com/ubuntu-ports focal-security main" at /etc/apt/sources.list.d/ports_ubuntu_com_ubuntu_ports.list if Ubuntu
-    apt_repository:
-      repo: deb http://ports.ubuntu.com/ubuntu-ports focal-security main
-    when: is_ubuntu
+  block:
+    - name: Install OLD source/repo "deb http://ports.ubuntu.com/ubuntu-ports focal-security main" at /etc/apt/sources.list.d/ports_ubuntu_com_ubuntu_ports.list if
+        Ubuntu
+      apt_repository:
+        repo: deb http://ports.ubuntu.com/ubuntu-ports focal-security main
+      when: is_ubuntu
 
-  - name: Install OLD source/repo "deb http://security.debian.org/debian-security bullseye-security main" at /etc/apt/sources.list.d/security_debian_org_debian_security.list if Debian
-    apt_repository:
-      repo: deb http://security.debian.org/debian-security bullseye-security main
+    - name: Install OLD source/repo "deb http://security.debian.org/debian-security bullseye-security main" at /etc/apt/sources.list.d/security_debian_org_debian_security.list
+        if Debian
+      apt_repository:
+        repo: deb http://security.debian.org/debian-security bullseye-security main
       #repo: deb https://deb.debian.org/debian-security bullseye-security main    # New way, likely equivalent
-    when: is_debian
+      when: is_debian
 
-  - name: Force install libssl1.1
-    package:
-      name: libssl1.1
-      state: present
+    - name: Force install libssl1.1
+      package:
+        name: libssl1.1
+        state: present
 
-  - name: Remove OLD source/repo "deb http://security.debian.org/debian-security bullseye-security main" at /etc/apt/sources.list.d/security_debian_org_debian_security.list if Debian
-    apt_repository:
-      repo: deb http://security.debian.org/debian-security bullseye-security main
-      #repo: deb https://deb.debian.org/debian-security bullseye-security main    # New way, likely equivalent
-      state: absent
-    when: is_debian
+    - name: Remove OLD source/repo "deb http://security.debian.org/debian-security bullseye-security main" at /etc/apt/sources.list.d/security_debian_org_debian_security.list
+        if Debian
+      apt_repository:
+        repo: deb http://security.debian.org/debian-security bullseye-security main
+        #repo: deb https://deb.debian.org/debian-security bullseye-security main    # New way, likely equivalent
+        state: absent
+      when: is_debian
 
-  - name: Remove OLD source/repo "deb http://ports.ubuntu.com/ubuntu-ports focal-security main" at /etc/apt/sources.list.d/ports_ubuntu_com_ubuntu_ports.list if Ubuntu
-    apt_repository:
-      repo: deb http://ports.ubuntu.com/ubuntu-ports focal-security main
-      state: absent
-    when: is_ubuntu
-
-  when: mongodb_version is version('6.0', '<') and (is_ubuntu and os_ver is version('ubuntu-2204', '>=') or is_debian and os_ver is version('debian-12', '>='))
+    - name: Remove OLD source/repo "deb http://ports.ubuntu.com/ubuntu-ports focal-security main" at /etc/apt/sources.list.d/ports_ubuntu_com_ubuntu_ports.list if
+        Ubuntu
+      apt_repository:
+        repo: deb http://ports.ubuntu.com/ubuntu-ports focal-security main
+        state: absent
+      when: is_ubuntu
 
 - debug:
     msg: 5-STANZA BLOCK ABOVE, RAN *IF* FORCED INSTALL OF libssl1.1 WAS NEEDED
@@ -248,7 +248,6 @@
 #     #filename: focal-security    # 100% IGNORED during repo deletion
 # when: is_ubuntu and os_ver is version('ubuntu-2204', '>=') and ansible_architecture == "x86_64" or is_linuxmint_21
 
-
 # # Debian 10 aarch64 might work below but is blocked in main.yml
 # - name: Use mongodb-org's Ubuntu focal repo for RasPiOS-aarch64
 #   apt_repository:
@@ -272,27 +271,27 @@
 #     filename: mongodb-org
 #   when: is_ubuntu and not is_linuxmint
 
-
 - name: "Install packages: mongodb-org, mongodb-org-server"
   package:
     name:
-      - mongodb-org    # Meta-package that's auto-installed anyway (SO PROB UNNEC HERE?)
+      - mongodb-org # Meta-package that's auto-installed anyway (SO PROB UNNEC HERE?)
       - mongodb-org-server
     state: present
 
-- name: Establish {{ mongodb_conf }} dbPath {{ mongodb_db_path }} -- instead of /var/lib/mongodb default -- takes effect on next (re)start of mongodb.service -- via enable-or-disable.yml or via sugarizer.service auto-starting MongoDB on demand
+- name: Establish {{ mongodb_conf }} dbPath {{ mongodb_db_path }} -- instead of /var/lib/mongodb default -- takes effect on next (re)start of mongodb.service -- via
+    enable-or-disable.yml or via sugarizer.service auto-starting MongoDB on demand
   lineinfile:
-    path: "{{ mongodb_conf }}"    # /etc/mongod.conf
-    regexp: '^\s*dbPath:'    # \s = any whitespace char. stackoverflow.com/a/38491899
-    line: "  dbPath: {{ mongodb_db_path }}"    # /library/dbdata/mongodb
+    path: "{{ mongodb_conf }}" # /etc/mongod.conf
+    regexp: "^\\s*dbPath:" # \s = any whitespace char. stackoverflow.com/a/38491899
+    line: "  dbPath: {{ mongodb_db_path }}" # /library/dbdata/mongodb
 
 # GRATUITOUS (port 27017 is already the default)
-- name: Establish {{ mongodb_conf }} port {{ mongodb_port }} -- takes effect on next (re)start of mongodb.service -- via enable-or-disable.yml or via sugarizer.service auto-starting MongoDB on demand
+- name: Establish {{ mongodb_conf }} port {{ mongodb_port }} -- takes effect on next (re)start of mongodb.service -- via enable-or-disable.yml or via sugarizer.service
+    auto-starting MongoDB on demand
   lineinfile:
     path: "{{ mongodb_conf }}"
-    regexp: '^\s*port:'
-    line: "  port: {{ mongodb_port }}"    # 27017
-
+    regexp: "^\\s*port:"
+    line: "  port: {{ mongodb_port }}" # 27017
 
 # 2022-06-07 #3236 MongoDB 5.0.9 "Illegal instruction" on RPi 4...
 # https://www.mongodb.com/community/forums/t/core-dump-on-mongodb-5-0-on-rpi-4/115291/14
@@ -315,13 +314,15 @@
 # https://andyfelong.com/downloads/raspbian_mongodb_5.0.5.gz
 # https://andyfelong.com/2021/08/mongodb-4-4-under-raspberry-pi-os-64-bit-raspbian64/
 
-- name: If hardware is Raspberry Pi and mongodb_version >= 5.0, run 'apt-mark hold mongodb-org mongodb-org-server' -- so MongoDB 5.0.5 binaries {mongo, mongod, mongos} can be installed without apt interfering in future
+- name: If hardware is Raspberry Pi and mongodb_version >= 5.0, run 'apt-mark hold mongodb-org mongodb-org-server' -- so MongoDB 5.0.5 binaries {mongo, mongod, mongos}
+    can be installed without apt interfering in future
   command: apt-mark hold mongodb-org mongodb-org-server
   when: rpi_model != "none" and mongodb_version is version('5.0', '>=')
 
-- name: If hardware is Raspberry Pi and mongodb_version >= 5.0, unarchive 76MB {{ iiab_download_url }}//packages/raspbian_mongodb_5.0.5.gz OVERWRITING 5.0.9+ {mongo, mongod, mongos} in /usr/bin
+- name: If hardware is Raspberry Pi and mongodb_version >= 5.0, unarchive 76MB {{ iiab_download_url }}//packages/raspbian_mongodb_5.0.5.gz OVERWRITING 5.0.9+ {mongo,
+    mongod, mongos} in /usr/bin
   unarchive:
-    remote_src: yes
+    remote_src: true
     src: "{{ iiab_download_url }}/raspbian_mongodb_5.0.5.gz"
     dest: /usr/bin
   when: rpi_model != "none" and mongodb_version is version('5.0', '>=')
@@ -331,7 +332,6 @@
 
 # - debug:
 #     msg: 16-STANZA BLOCK ABOVE, RAN *IF* 64-BIT -- i.e. ansible_architecture == "aarch64" or ansible_architecture == "x86_64"    # ansible_machine is a bit safer than ansible_architecture (see kiwix/defaults/main.yml)
-
 
 # 2. CONFIGURE MongoDB FOR IIAB
 
@@ -347,10 +347,10 @@
 #     - /var/log/mongodb
 #     - "{{ mongodb_db_path }}"    # /library/dbdata/mongodb
 
-- name: 'Create dir {{ mongodb_db_path }} (mongodb:mongodb)'
+- name: "Create dir {{ mongodb_db_path }} (mongodb:mongodb)"
   file:
     state: directory
-    path: "{{ mongodb_db_path }}"    # /library/dbdata/mongodb
+    path: "{{ mongodb_db_path }}" # /library/dbdata/mongodb
     owner: mongodb
     group: mongodb
 
@@ -362,13 +362,12 @@
     #owner: root
     #group: root
   with_items:
-    - { src: 'mongodb.service.j2', dest: '/etc/systemd/system/mongodb.service', mode: '0644' }
-    - { src: 'iiab-mongodb-repair-if-no-lock.j2', dest: '/usr/bin/iiab-mongodb-repair-if-no-lock', mode: '0755' }
+    - { src: "mongodb.service.j2", dest: "/etc/systemd/system/mongodb.service", mode: "0644" }
+    - { src: "iiab-mongodb-repair-if-no-lock.j2", dest: "/usr/bin/iiab-mongodb-repair-if-no-lock", mode: "0755" }
 
 - name: systemctl daemon_reload, so systemd (re)reads mongodb.service
   systemd:
-    daemon_reload: yes
-
+    daemon_reload: true
 
 # 3. RECORD MongoDB AS INSTALLED
 
@@ -378,17 +377,17 @@
 
 - name: Add 'mongodb_disk_usage = {{ df2.stdout|int - df1.stdout|int }}' to {{ iiab_ini_file }}
   ini_file:
-    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+    path: "{{ iiab_ini_file }}" # /etc/iiab/iiab.ini
     section: mongodb
     option: mongodb_disk_usage
-    value: "{{ df2.stdout|int - df1.stdout|int }}"
+    value: "{{ df2.stdout | int - df1.stdout | int }}"
 
 - name: "Set 'mongodb_installed: True'"
   set_fact:
-    mongodb_installed: True
+    mongodb_installed: true
 
 - name: "Add 'mongodb_installed: True' to {{ iiab_state_file }}"
   lineinfile:
-    path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
-    regexp: '^mongodb_installed'
-    line: 'mongodb_installed: True'
+    path: "{{ iiab_state_file }}" # /etc/iiab/iiab_state.yml
+    regexp: "^mongodb_installed"
+    line: "mongodb_installed: True"

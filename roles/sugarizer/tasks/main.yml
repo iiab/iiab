@@ -1,3 +1,4 @@
+---
 # "How do i fail a task in Ansible if the variable contains a boolean value?
 # I want to perform input validation for Ansible playbooks"
 # https://stackoverflow.com/questions/46664127/how-do-i-fail-a-task-in-ansible-if-the-variable-contains-a-boolean-value-i-want/46667499#46667499
@@ -10,32 +11,31 @@
   assert:
     that: sugarizer_install is sameas true
     fail_msg: "PLEASE SET 'sugarizer_install: True' e.g. IN: /etc/iiab/local_vars.yml"
-    quiet: yes
+    quiet: true
 
 - name: Assert that "sugarizer_enabled | type_debug == 'bool'" (boolean not string etc)
   assert:
     that: sugarizer_enabled | type_debug == 'bool'
     fail_msg: "PLEASE GIVE VARIABLE 'sugarizer_enabled' A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
-    quiet: yes
-
+    quiet: true
 
 - block:
-
   # 3 stanzas moved up from install.yml, so Debian-or-any-OS-where-MongoDB-fails
   # still finish their "LARGE-sized" IIAB install: (WITH LOUD RED WARNINGS!)
 
-  - name: "Set 'mongodb_install: True'"
-    set_fact:
-      mongodb_install: True
+    - name: "Set 'mongodb_install: True'"
+      set_fact:
+        mongodb_install: true
 
-  - name: 'CAUTION: IF ''mongodb.service'' IS STOPPED FOR ANY REASON, IT WILL IMMEDIATELY CAUSE SUGARIZER TO FAIL ("502 Bad Gateway") !'
-    debug:
-      msg: "/etc/systemd/system/sugarizer.service Line 4 'Requires=mongodb.service' tries to auto-start MongoDB every time Sugarizer starts.  IIAB (roles/mongodb/tasks/enable-or-disable.yml) tries its best to keep Ansible var 'mongodb_enabled' in sync with its systemd equivalent, i.e. the output of 'systemctl is-enabled mongodb' (as of 2020-10-29 both are typically disabled, unless other apps/services/operators choose to use MongoDB)."
+    - name: 'CAUTION: IF ''mongodb.service'' IS STOPPED FOR ANY REASON, IT WILL IMMEDIATELY CAUSE SUGARIZER TO FAIL ("502 Bad Gateway") !'
+      debug:
+        msg: "/etc/systemd/system/sugarizer.service Line 4 'Requires=mongodb.service' tries to auto-start MongoDB every time Sugarizer starts.  IIAB (roles/mongodb/tasks/enable-or-disable.yml)
+          tries its best to keep Ansible var 'mongodb_enabled' in sync with its systemd equivalent, i.e. the output of 'systemctl is-enabled mongodb' (as of 2020-10-29
+          both are typically disabled, unless other apps/services/operators choose to use MongoDB)."
 
-  - name: MONGODB - run 'mongodb' role (attempt to install MongoDB)
-    include_role:
-      name: mongodb
-
+    - name: MONGODB - run 'mongodb' role (attempt to install MongoDB)
+      include_role:
+        name: mongodb
 
   # - name: EXIT 'sugarizer' ROLE & CONTINUE, IF 'mongodb_installed is undefined'
   #   fail:    # FORCE IT RED THIS ONCE!
@@ -43,16 +43,16 @@
   #   when: mongodb_installed is undefined
   #   ignore_errors: yes    # RESCUE (BELOW) NOW HANDLES THIS
 
-  - name: Verify that mongodb_installed is defined
-    fail:
-      msg: MongoDB INSTALLATION FAILED, perhaps because MongoDB doesn't yet support Ubuntu 22.04 with libssl3? #3190
-    when: mongodb_installed is undefined
+    - name: Verify that mongodb_installed is defined
+      fail:
+        msg: MongoDB INSTALLATION FAILED, perhaps because MongoDB doesn't yet support Ubuntu 22.04 with libssl3? #3190
+      when: mongodb_installed is undefined
 
   # ELSE...
 
-  - name: Install/Enable/Disable/Record Sugarizer (main2.yml) IF 'mongodb_installed is defined'
-    include_tasks: main2.yml
-    when: mongodb_installed is defined
+    - name: Install/Enable/Disable/Record Sugarizer (main2.yml) IF 'mongodb_installed is defined'
+      include_tasks: main2.yml
+      when: mongodb_installed is defined
 
   # THE block: APPROACH BELOW WORKS JUST LIKE main2.yml ABOVE.
   # BUT IT VISUALLY POLLUTES: MANY BLUE "skipping:" MESSAGES IN ANSIBLE'S OUTPUT.
@@ -64,8 +64,7 @@
   #   when: mongodb_installed is defined    # CONDITION FOR ENTIRE ABOVE block:
 
   rescue:
-
-  - name: 'SEE ERROR ABOVE (skip_role_on_error: {{ skip_role_on_error }})'
-    fail:
-      msg: ""
-    when: not skip_role_on_error
+    - name: "SEE ERROR ABOVE (skip_role_on_error: {{ skip_role_on_error }})"
+      fail:
+        msg: ""
+      when: not skip_role_on_error
