@@ -1,3 +1,4 @@
+---
 # 2022-09-08 @jredrejo's Ansible install scripts may provide guidelines:
 # https://github.com/learningequality/pi-gen/blob/master/stage2/04-hostapd/common.yml
 # https://github.com/learningequality/pi-gen/blob/master/stage2/04-hostapd/install.yml
@@ -21,30 +22,27 @@
 
 # Provisioning many servers
 # https://kolibri.readthedocs.io/en/latest/install/provision.html
-
-
 - name: Record (initial) disk space used
   shell: df -B1 --output=used / | tail -1
   register: df1
 
-
 - name: Create Linux user {{ kolibri_user }} and add it to groups {{ apache_user }}, disk
   user:
     name: "{{ kolibri_user }}"
-    groups: "{{ apache_user }}"    # 2023-03-29: Not really necessary (Kolibri is demonstrated to work without group 'www-data').  But it likely doesn't hurt.
-      #- disk    # 2023-03-29: Tested to be unnec with USB sticks (with 64-bit RasPiOS).  FWIW group 'disk' is "Mostly equivalent to root access" according to https://wiki.debian.org/SystemGroups
+    groups: "{{ apache_user }}" # 2023-03-29: Not really necessary (Kolibri is demonstrated to work without group 'www-data').  But it likely doesn't hurt.
+    #- disk    # 2023-03-29: Tested to be unnec with USB sticks (with 64-bit RasPiOS).  FWIW group 'disk' is "Mostly equivalent to root access" according to https://wiki.debian.org/SystemGroups
     state: present
     shell: /bin/false
-    system: yes
-    create_home: no
+    system: true
+    create_home: false
     home: "{{ kolibri_home }}"
 
 - name: Create directory {{ kolibri_home }} for Kolibri content, configuration, sqlite3 databases ({{ kolibri_user }}:{{ apache_user }}, by default 0755)
   file:
     state: directory
-    path: "{{ kolibri_home }}"     # /library/kolibri
-    owner: "{{ kolibri_user }}"    # kolibri
-    group: "{{ apache_user }}"     # www-data (on Debian/Ubuntu/Raspbian)
+    path: "{{ kolibri_home }}" # /library/kolibri
+    owner: "{{ kolibri_user }}" # kolibri
+    group: "{{ apache_user }}" # www-data (on Debian/Ubuntu/Raspbian)
 
 - name: Create directory /etc/kolibri (by default 0755)
   file:
@@ -60,7 +58,6 @@
   copy:
     content: 'KOLIBRI_HOME="{{ kolibri_home }}"'
     dest: /etc/kolibri/daemon.conf
-
 
 # https://kolibri.readthedocs.io/en/latest/install/ubuntu-debian.html claims:
 # "When you use the PPA installation method, upgrades to newer versions
@@ -124,7 +121,6 @@
 #     codename: focal    # UPDATE THIS TO 'jammy' AFTER "RasPiOS Bookworm" (based on Debian 12) IS RELEASED! (ETA Q3 2023)
 #   when: is_debian or is_linuxmint_20
 
-
 # 2024-08-07: Hack no longer needed!  As Kolibri 0.17.0 now installs via "kolibri" PPA (https://launchpad.net/~learningequality/+archive/ubuntu/kolibri).
 # Hopefully "kolibri-proposed" PPA will install 0.18 pre-releases soon, on Python 3.13 too!  https://github.com/learningequality/kolibri/issues/11892
 
@@ -133,10 +129,11 @@
 #     kolibri_deb_url: https://github.com/learningequality/kolibri/releases/download/v0.17.0/kolibri_0.17.0-0ubuntu1_all.deb
 #   when: python_version is version('3.12', '>=')    # For Ubuntu 24.04, Mint 22, pre-releases of Ubuntu 24.10, and Debian 13 (even if/when "Trixie" changes from Python 3.12 to 3.13!)  Regarding PPA kolibri-proposed not quite being ready yet, see: learningequality/kolibri#11316 -> learningequality/kolibri#11892
 
-- name: '2025-04-24 TEMPORARY HACK: Hard code kolibri_deb_url to Kolibri 0.18.0 Release Candidate 0 if Python >= 3.13 -- kolibri-proposed PPA should do this automatically in future!'
+- name: "2025-04-24 TEMPORARY HACK: Hard code kolibri_deb_url to Kolibri 0.18.0 Release Candidate 0 if Python >= 3.13 -- kolibri-proposed PPA should do this automatically
+    in future!"
   set_fact:
     kolibri_deb_url: https://github.com/learningequality/kolibri/releases/download/v0.18.0-rc0/kolibri_0.18.0rc0-0ubuntu1_all.deb
-  when: python_version is version('3.13', '>=')    # For Ubuntu 25.04+, Debian 13+, etc.  Regarding PPA kolibri-proposed not quite being ready yet, see: learningequality/kolibri#11316 -> learningequality/kolibri#11892
+  when: python_version is version('3.13', '>=') # For Ubuntu 25.04+, Debian 13+, etc.  Regarding PPA kolibri-proposed not quite being ready yet, see: learningequality/kolibri#11316 -> learningequality/kolibri#11892
 
 - name: apt install kolibri (using apt source specified above, if kolibri_deb_url ISN'T defined)
   apt:
@@ -148,29 +145,27 @@
 
 - name: apt install {{ kolibri_deb_url }} (if kolibri_deb_url IS defined)
   apt:
-    deb: "{{ kolibri_deb_url }}"    # e.g. https://learningequality.org/r/kolibri-deb-latest
+    deb: "{{ kolibri_deb_url }}" # e.g. https://learningequality.org/r/kolibri-deb-latest
   when: kolibri_deb_url is defined
   # environment:
   #   KOLIBRI_HOME: "{{ kolibri_home }}"    # 2023-03-27: These don't do a thing
   #   KOLIBRI_USER: "{{ kolibri_user }}"    # for now.
-
 
 - name: Run 'rm -rf /root/.kolibri' to remove "unavoidable" pollution created above
   file:
     state: absent
     path: /root/.kolibri
 
-- name: 'Install from template: /etc/systemd/system/kolibri.service'
+- name: "Install from template: /etc/systemd/system/kolibri.service"
   template:
     src: kolibri.service.j2
     dest: /etc/systemd/system/kolibri.service
 
 - name: Stop 'kolibri' systemd service, for Kolibri provisioning (after daemon_reload)
   systemd:
-    daemon_reload: yes
+    daemon_reload: true
     name: kolibri
     state: stopped
-
 
 # 2019-10-01: Should no longer be nec, thanks to /etc/kolibri/daemon.conf
 #             containing KOLIBRI_HOME="/library/kolibri" (above)
@@ -194,20 +189,19 @@
 #                         JSON file containing facility settings
 #   --device_settings DEVICE_SETTINGS
 #                         JSON file containing device settings
-- name: 'Provision Kolibri, while setting: facility name, admin acnt / password, preset type, and language'
+- name: "Provision Kolibri, while setting: facility name, admin acnt / password, preset type, and language"
   shell: >
     "{{ kolibri_exec_path }}" manage provisiondevice --facility "{{ kolibri_facility }}"
     --superusername "{{ kolibri_admin_user }}" --superuserpassword "{{ kolibri_admin_password }}"
     --preset "{{ kolibri_preset }}" --language_id "{{ kolibri_language }}"
     #--preset "{{ kolibri_preset }}" --language_id "{{ kolibri_language }}" --verbosity 0 --noinput
-  ignore_errors: yes
-  become: yes
+  ignore_errors: true
+  become: true
   become_user: "{{ kolibri_user }}"
   when: kolibri_provision
   environment:
-    KOLIBRI_HOME: "{{ kolibri_home }}"     # 2023-03-27: Required!
+    KOLIBRI_HOME: "{{ kolibri_home }}" # 2023-03-27: Required!
     #KOLIBRI_USER: "{{ kolibri_user }}"    # 2023-03-27: Not nec due to /etc/kolibri/username ?
-
 
 # 2023-03-25: Likely overkill (let's strongly consider removing this stanza?)
 # Certainly, setting owner (recursively) is advised when moving /library/kolibri :
@@ -228,7 +222,6 @@
 #   apache2_module:
 #     name: proxy_http
 
-
 # RECORD Kolibri AS INSTALLED
 
 - name: Record (final) disk space used
@@ -237,17 +230,17 @@
 
 - name: Add 'kolibri_disk_usage = {{ df2.stdout | int - df1.stdout | int }}' to {{ iiab_ini_file }}
   ini_file:
-    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+    path: "{{ iiab_ini_file }}" # /etc/iiab/iiab.ini
     section: kolibri
     option: kolibri_disk_usage
-    value: "{{ df2.stdout|int - df1.stdout|int }}"
+    value: "{{ df2.stdout | int - df1.stdout | int }}"
 
 - name: "Set 'kolibri_installed: True'"
   set_fact:
-    kolibri_installed: True
+    kolibri_installed: true
 
 - name: "Add 'kolibri_installed: True' to {{ iiab_state_file }}"
   lineinfile:
-    path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
-    regexp: '^kolibri_installed'
-    line: 'kolibri_installed: True'
+    path: "{{ iiab_state_file }}" # /etc/iiab/iiab_state.yml
+    regexp: "^kolibri_installed"
+    line: "kolibri_installed: True"
