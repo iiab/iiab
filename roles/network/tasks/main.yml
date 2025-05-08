@@ -42,65 +42,65 @@
   #  include_tasks: squid.yml
   #  when: squid_install and FQDN_changed and iiab_stage|int == 9
 
-  #### Start services
-  - name: computed_services
-    include_tasks: computed_services.yml
-  - name: enable_services
-    include_tasks: enable_services.yml
+    #### Start services
+    - name: computed_services
+      include_tasks: computed_services.yml
+    - name: enable_services
+      include_tasks: enable_services.yml
   #### End services
 
   #### Start network layout
 
-  - name: NetworkManager in use
-    include_tasks: NM-debian.yml
-    when: network_manager_active
+    - name: NetworkManager in use
+      include_tasks: NM-debian.yml
+      when: network_manager_active
 
-  # 2025-03-21 #3961 WARNING: RasPiOS standard wifi firmware for RPi 4, 5, 500
-  # [ /lib/firmware/cypress/cyfmac43455-sdio-standard.bin i.e. BCM4345/6 wl0:
-  # Aug 29 2023 01:47:08 version 7.45.265 (28bca26 CY) FWID 01-b677b91b ] was
-  # crashing OFTEN during NM-debian.yml restart of NetworkManager.  Similarly,
-  # 'nmcli radio wifi off; nmcli radio wifi on' OFTEN triggers crashes on bare
-  # RasPiOS, as seen by: watch -n0 "iw reg get; iw dev; echo; dmesg | grep Firmware:"
+    # 2025-03-21 #3961 WARNING: RasPiOS standard wifi firmware for RPi 4, 5, 500
+    # [ /lib/firmware/cypress/cyfmac43455-sdio-standard.bin i.e. BCM4345/6 wl0:
+    # Aug 29 2023 01:47:08 version 7.45.265 (28bca26 CY) FWID 01-b677b91b ] was
+    # crashing OFTEN during NM-debian.yml restart of NetworkManager.  Similarly,
+    # 'nmcli radio wifi off; nmcli radio wifi on' OFTEN triggers crashes on bare
+    # RasPiOS, as seen by: watch -n0 "iw reg get; iw dev; echo; dmesg | grep Firmware:"
 
-  # Workarounds with potential: (discussed on PR #3965)
-  # (1) Defer the setting of wifi country code (moved from just above
-  #     NM-debian.yml, to just below) -- tested to work well.
-  # (2) iiab-clone-wifi.service.j2 can add ap0 to the correct phyname
-  #     {phy0, phy1, ...} -- tested to work well.
-  # (3) raspberrypi/linux#6049 hack holds promise, adding brcmfmac.roamoff=1
-  #     brcmfmac.feature_disable=0x282000 to /boot/firmware/cmdline.txt (then
-  #     reboot) -- or add similar to /etc/modprobe.d/brcmfmac.conf (then reload
-  #     kernel module brcmfmac).  Well-tested workarounds above mean this hack
-  #     appears unnecessary: either as a one-off during IIAB install (carefully
-  #     avoiding reboots), or by deviating from RasPiOS longer term which risks
-  #     problematic side effects with other/past/future WiFi firmware -- or on
-  #     other hardware -- perhaps making IIAB microSD cards less portable.
+    # Workarounds with potential: (discussed on PR #3965)
+    # (1) Defer the setting of wifi country code (moved from just above
+    #     NM-debian.yml, to just below) -- tested to work well.
+    # (2) iiab-clone-wifi.service.j2 can add ap0 to the correct phyname
+    #     {phy0, phy1, ...} -- tested to work well.
+    # (3) raspberrypi/linux#6049 hack holds promise, adding brcmfmac.roamoff=1
+    #     brcmfmac.feature_disable=0x282000 to /boot/firmware/cmdline.txt (then
+    #     reboot) -- or add similar to /etc/modprobe.d/brcmfmac.conf (then reload
+    #     kernel module brcmfmac).  Well-tested workarounds above mean this hack
+    #     appears unnecessary: either as a one-off during IIAB install (carefully
+    #     avoiding reboots), or by deviating from RasPiOS longer term which risks
+    #     problematic side effects with other/past/future WiFi firmware -- or on
+    #     other hardware -- perhaps making IIAB microSD cards less portable.
 
-  # 2024-12-18: As `rfkill unblock wifi` formerly in rpi_debian.yml wasn't enough, especially with NM (NetworkManager)
-  - name: Run 'raspi-config nonint do_wifi_country {{ host_country_code }}' (using var host_country_code) to unblock WiFi, if RasPiOS
-    command: raspi-config nonint do_wifi_country {{ host_country_code }}
-    when: is_raspbian
-  
-  - name: systemd-networkd in use
-    include_tasks: sysd-netd-debian.yml
-    when: systemd_networkd_active
-    #when: systemd_networkd_active and not network_manager_active    # 2023-10-11: NOT the right way to solve #3657 (systemd-resolved issue on RasPiOS 12+) as this would damage Ubuntu/Mint.
+    # 2024-12-18: As `rfkill unblock wifi` formerly in rpi_debian.yml wasn't enough, especially with NM (NetworkManager)
+    - name: Run 'raspi-config nonint do_wifi_country {{ host_country_code }}' (using var host_country_code) to unblock WiFi, if RasPiOS
+      command: raspi-config nonint do_wifi_country {{ host_country_code }}
+      when: is_raspbian
 
-  # 2023-10-11: Should rpi_debian.yml go away in future, now that RasPiOS Bookworm uses NetworkManager?
-  - name: Raspbian can use dhcpcd only with no N-M or SYS-NETD active
-    include_tasks: rpi_debian.yml
-    when: is_raspbian and not network_manager_active
+    - name: systemd-networkd in use
+      include_tasks: sysd-netd-debian.yml
+      when: systemd_networkd_active
+      #when: systemd_networkd_active and not network_manager_active    # 2023-10-11: NOT the right way to solve #3657 (systemd-resolved issue on RasPiOS 12+) as this would damage Ubuntu/Mint.
 
-  - name: Not RPi, Not NetworkManager, Not systemd-networkd in use
-    include_tasks: debian.yml
-    when: not is_raspbian and not network_manager_active and not systemd_networkd_active
-  #### end network layout
+    # 2023-10-11: Should rpi_debian.yml go away in future, now that RasPiOS Bookworm uses NetworkManager?
+    - name: Raspbian can use dhcpcd only with no N-M or SYS-NETD active
+      include_tasks: rpi_debian.yml
+      when: is_raspbian and not network_manager_active
 
-  - name: hostapd
-    include_tasks: hostapd.yml
+    - name: Not RPi, Not NetworkManager, Not systemd-networkd in use
+      include_tasks: debian.yml
+      when: not is_raspbian and not network_manager_active and not systemd_networkd_active
+    #### end network layout
 
-  - name: Restart services (and clone wifi to create ap0 if necessary)
-    include_tasks: restart.yml
+    - name: hostapd
+      include_tasks: hostapd.yml
+
+    - name: Restart services (and clone wifi to create ap0 if necessary)
+      include_tasks: restart.yml
 
   # end block
   when: network_installed is defined and network_enabled
