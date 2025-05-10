@@ -13,46 +13,46 @@
 
 - block:
 
-  - name: "TRY TO COMPILE & INSTALL very latest Transmission, installing ~5 binaries in /usr/local/bin to take precedence over above ~6 binaries in /usr/bin (attempt surgery on systemd unit file from apt install above!)"
-    meta: noop
+    - name: "TRY TO COMPILE & INSTALL very latest Transmission, installing ~5 binaries in /usr/local/bin to take precedence over above ~6 binaries in /usr/bin (attempt surgery on systemd unit file from apt install above!)"
+      meta: noop
 
-  # https://github.com/transmission/transmission/blob/main/docs/Building-Transmission.md#on-unix
-  # https://github.com/transmission/transmission/issues/5362 tips thanks to @tearfur
-  - name: apt install build-essential cmake libcurl4-openssl-dev libssl-dev libsystemd-dev    # git python3
-    package:
-      name:
-        - build-essential
-        - cmake
-        - libcurl4-openssl-dev
-        - libssl-dev
-        - libsystemd-dev
-      state: present
+    # https://github.com/transmission/transmission/blob/main/docs/Building-Transmission.md#on-unix
+    # https://github.com/transmission/transmission/issues/5362 tips thanks to @tearfur
+    - name: apt install build-essential cmake libcurl4-openssl-dev libssl-dev libsystemd-dev    # git python3
+      package:
+        name:
+          - build-essential
+          - cmake
+          - libcurl4-openssl-dev
+          - libssl-dev
+          - libsystemd-dev
+        state: present
 
-  - name: Git clone https://github.com/transmission/transmission to /opt/iiab/transmission
-    git:
-      repo: https://github.com/transmission/transmission
-      dest: /opt/iiab/transmission
-      #version: 4.0.x    # Otherwise default branch 'main'
-      depth: 1
-      force: yes
+    - name: Git clone https://github.com/transmission/transmission to /opt/iiab/transmission
+      git:
+        repo: https://github.com/transmission/transmission
+        dest: /opt/iiab/transmission
+        #version: 4.0.x    # Otherwise default branch 'main'
+        depth: 1
+        force: yes
 
-  # https://github.com/transmission/transmission/blob/main/docs/Building-Transmission.md#building-transmission-from-git-first-time
-  - name: Compile, install & remove detritus (CAN TAKE 60+ MINUTES ON RASPBERRY PI 4!)
-    shell: |
-      cd /opt/iiab/transmission
-      git submodule update --init --recursive
-      mkdir build
-      cd build
-      cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo ..
-      make
-      make install
-      cd
-      rm -rf /opt/iiab/transmission    # 2023-06-12: Frees up 1.1 GB on 32-bit RasPiOS.  Frees up 1.6 GB on 64-bit RasPiOS.
+    # https://github.com/transmission/transmission/blob/main/docs/Building-Transmission.md#building-transmission-from-git-first-time
+    - name: Compile, install & remove detritus (CAN TAKE 60+ MINUTES ON RASPBERRY PI 4!)
+      shell: |
+        cd /opt/iiab/transmission
+        git submodule update --init --recursive
+        mkdir build
+        cd build
+        cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo ..
+        make
+        make install
+        cd
+        rm -rf /opt/iiab/transmission    # 2023-06-12: Frees up 1.1 GB on 32-bit RasPiOS.  Frees up 1.6 GB on 64-bit RasPiOS.
 
-  - name: Attempt surgery on /lib/systemd/system/transmission-daemon.service (1) changing --log-error to --log-level=error (2) changing /usr/bin/transmission* to /usr/local/bin/transmission*
-    shell: |
-      sed -i 's/--log-error/--log-level=error/' /lib/systemd/system/transmission-daemon.service    # --log-error deprecated since ~2020
-      sed -i 's#/usr/bin/transmission#/usr/local/bin/transmission#' /lib/systemd/system/transmission-daemon.service    # daemon_reload handled by enable-or-disable.yml
+    - name: Attempt surgery on /lib/systemd/system/transmission-daemon.service (1) changing --log-error to --log-level=error (2) changing /usr/bin/transmission* to /usr/local/bin/transmission*
+      shell: |
+        sed -i 's/--log-error/--log-level=error/' /lib/systemd/system/transmission-daemon.service    # --log-error deprecated since ~2020
+        sed -i 's#/usr/bin/transmission#/usr/local/bin/transmission#' /lib/systemd/system/transmission-daemon.service    # daemon_reload handled by enable-or-disable.yml
 
   when: transmission_compile_latest
 
