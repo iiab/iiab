@@ -22,8 +22,10 @@ if [ "$VALID" != 1 ]; then
     exit 1
 fi
 
-# Prevent apparmor profiles breaking server packages.
+# Make sure basic necessary packages are in place for further steps
 apt-get -y install curl
+# Prevent apparmor profiles breaking server packages.
+## php-fpm profile
 if [ -f "$PHP_APPARMOR_DISABLED" ];  then
    echo "- php-fpm apparmor profile disabled, moving on."
 elif [ ! -f "$PHP_APPARMOR_DISABLED" ] && [ -f "$PHP_APPARMOR" ]; then
