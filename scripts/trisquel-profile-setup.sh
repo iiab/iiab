@@ -28,8 +28,11 @@ fi
 if [ -f "$PHP_APPARMOR_DISABLED" ]; then
     echo "- php-fpm apparmor profile disabled, moving on."
 elif [ ! -f "$PHP_APPARMOR_DISABLED" ] && [ -f "$PHP_APPARMOR" ]; then
-    ln -s /etc/apparmor.d/php-fpm /etc/apparmor.d/disable/
-    apparmor_parser -R /etc/apparmor.d/php-fpm
+    for i in php-fpm transmission
+    do
+        ln -s /etc/apparmor.d/$i /etc/apparmor.d/disable/
+        apparmor_parser -R /etc/apparmor.d/$i
+    done
 fi
 
 gpg --keyserver keyserver.ubuntu.com --recv-keys "$REPO_GPGKEY"
