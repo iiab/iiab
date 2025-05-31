@@ -9,8 +9,8 @@ fi
 UPSTREAM_REPO="/etc/apt/sources.list.d/upstream_repo.list"
 UPSTREAM_PIN="/etc/apt/preferences.d/python3-pip"
 UPSTREAM_GPGKEY="/etc/apt/trusted.gpg.d/upstream_repo.gpg"
-PHP_APPARMOR=/etc/apparmor.d/php-fpm
-PHP_APPARMOR_DISABLED=/etc/apparmor.d/disable/php-fpm
+APPARMOR_DIR=/etc/apparmor.d
+APPARMOR_DISABLED_DIR=/etc/apparmor.d/disable
 
 # Cleaning previous attempts
 rm -f $UPSTREAM_REPO $UPSTREAM_PIN
@@ -24,13 +24,15 @@ if [ "$VALID_TRISQUEL_VER" != 1 ]; then
 fi
 
 # Prevent apparmor profiles breaking server packages.
-## php-fpm profile
-if [ -f "$PHP_APPARMOR_DISABLED" ]; then
-    echo "- php-fpm apparmor profile disabled, moving on."
-elif [ ! -f "$PHP_APPARMOR_DISABLED" ] && [ -f "$PHP_APPARMOR" ]; then
-    ln -s /etc/apparmor.d/php-fpm /etc/apparmor.d/disable/
-    apparmor_parser -R /etc/apparmor.d/php-fpm
-fi
+for i in php-fpm
+do
+    if [ -f "$APPARMOR_DISABLED_DIR/$i" ]; then
+        echo "- $i apparmor profile disabled, moving on."
+    elif [ ! -f "$APPARMOR_DISABLED_DIR/$i" ] && [ -f "$APPARMOR_DIR/$i" ]; then
+        ln -s "$APPARMOR_DIR/$i" "$APPARMOR_DISABLED_DIR/"
+        apparmor_parser -R "$APPARMOR_DIR/$i"
+    fi
+done
 
 gpg --keyserver keyserver.ubuntu.com --recv-keys "$REPO_GPGKEY"
 gpg --export "$REPO_GPGKEY" | gpg --dearmour > "$UPSTREAM_GPGKEY"
