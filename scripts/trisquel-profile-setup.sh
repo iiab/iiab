@@ -24,7 +24,7 @@ if [ "$VALID_TRISQUEL_VER" != 1 ]; then
 fi
 
 # Prevent apparmor profiles breaking server packages.
-for i in php-fpm transmission
+for i in php-fpm
 do
     if [ -f "$APPARMOR_DISABLED_DIR/$i" ]; then
         echo "- $i apparmor profile disabled, moving on."
