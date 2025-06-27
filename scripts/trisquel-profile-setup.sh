@@ -37,13 +37,13 @@ gpg --export "$REPO_GPGKEY" | gpg --dearmour > "$UPSTREAM_GPGKEY"
 
 echo "
 # For amd64
-deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ ${UPSTREAM} main universe multiverse
-deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ ${UPSTREAM}-updates main universe multiverse
-deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ ${UPSTREAM}-security main universe multiverse
+deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ ${UPSTREAM} main universe
+deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ ${UPSTREAM}-updates main universe
+deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ ${UPSTREAM}-security main universe
 # For arm64
-deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ ${UPSTREAM} main universe multiverse
-deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ ${UPSTREAM}-updates main universe multiverse
-deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ ${UPSTREAM}-security main universe multiverse" | \
+deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ ${UPSTREAM} main universe
+deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ ${UPSTREAM}-updates main universe
+deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ ${UPSTREAM}-security main universe" | \
 sudo tee $UPSTREAM_REPO
 
 echo "
