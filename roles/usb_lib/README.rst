@@ -6,7 +6,7 @@ usb_lib README
 
 This role (1) implements functionality similar to LibraryBox, to mount "teacher content" from USB sticks / drives for students, and (2) allows students to upload their work to the teacher's USB stick / drive:
 
-#. Students should have nearly immediate access to "teacher content" (on all inserted USB sticks) by browsing to http://box/usb.
+#. Students should have nearly immediate access to "teacher content" (on all inserted USB sticks) by browsing to: http://box/usb
 #. Students can also click the "Upload to USB" button on top of this same page (http://box/usb), to upload their work to the teacher's USB stick.  (FYI student uploads appear in folders like ``UPLOADS.YYYY-MM-DD`` within the root of the teacher's USB stick).
 
 As of January 2025, automount is handled by usbmount: (`devmon included with udevil <https://ignorantguru.github.io/udevil/>`_ might be considered in future)
