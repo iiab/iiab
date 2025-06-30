@@ -35,7 +35,7 @@ fi
 gpg --keyserver keyserver.ubuntu.com --recv-keys "$REPO_GPGKEY"
 gpg --export "$REPO_GPGKEY" | gpg --dearmour > "$UPSTREAM_GPGKEY"
 
-if dpkg-architecture --is amd64 ; then
+if [ "$(dpkg --print-architecture)" = amd64 ]; then
 echo "
 # For regular x86_64/amd64
 deb http://archive.ubuntu.com/ubuntu/ ${UPSTREAM} main universe
