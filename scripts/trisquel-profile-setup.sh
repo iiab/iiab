@@ -41,14 +41,14 @@ if [ "$(dpkg --print-architecture)" = amd64 ]; then
     echo "deb http://archive.ubuntu.com/ubuntu/ ${UPSTREAM} main universe"
     echo "deb http://archive.ubuntu.com/ubuntu/ ${UPSTREAM}-updates main universe"
     echo "deb http://archive.ubuntu.com/ubuntu/ ${UPSTREAM}-security main universe"
-    } | sudo tee $UPSTREAM_REPO
+    } | tee $UPSTREAM_REPO
 else
     {
     echo "# For any other arch (especially arm64 or armhf, and potentially also ppc64el)"
     echo "deb http://ports.ubuntu.com/ubuntu-ports/ ${UPSTREAM} main universe"
     echo "deb http://ports.ubuntu.com/ubuntu-ports/ ${UPSTREAM}-updates main universe"
     echo "deb http://ports.ubuntu.com/ubuntu-ports/ ${UPSTREAM}-security main universe"
-    } | sudo tee $UPSTREAM_REPO
+    } | tee $UPSTREAM_REPO
 fi
 
 echo "
@@ -63,4 +63,4 @@ Pin-Priority: 500
 Package: *
 Pin: release n=$UPSTREAM
 Pin-Priority: -1" | \
-sudo tee $UPSTREAM_PIN
+tee $UPSTREAM_PIN
