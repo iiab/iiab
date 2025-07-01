@@ -36,19 +36,19 @@ gpg --keyserver keyserver.ubuntu.com --recv-keys "$REPO_GPGKEY"
 gpg --export "$REPO_GPGKEY" | gpg --dearmour > "$UPSTREAM_GPGKEY"
 
 if [ "$(dpkg --print-architecture)" = amd64 ]; then
-echo "
-# For regular x86_64/amd64
-deb http://archive.ubuntu.com/ubuntu/ ${UPSTREAM} main universe
-deb http://archive.ubuntu.com/ubuntu/ ${UPSTREAM}-updates main universe
-deb http://archive.ubuntu.com/ubuntu/ ${UPSTREAM}-security main universe" | \
-sudo tee $UPSTREAM_REPO
+    {
+    echo "# For regular x86_64/amd64"
+    echo "deb http://archive.ubuntu.com/ubuntu/ ${UPSTREAM} main universe"
+    echo "deb http://archive.ubuntu.com/ubuntu/ ${UPSTREAM}-updates main universe"
+    echo "deb http://archive.ubuntu.com/ubuntu/ ${UPSTREAM}-security main universe"
+    } | sudo tee $UPSTREAM_REPO
 else
-echo "
-# For any arch port (arm64, armhf, ppc64el)
-deb http://ports.ubuntu.com/ubuntu-ports/ ${UPSTREAM} main universe
-deb http://ports.ubuntu.com/ubuntu-ports/ ${UPSTREAM}-updates main universe
-deb http://ports.ubuntu.com/ubuntu-ports/ ${UPSTREAM}-security main universe" | \
-sudo tee $UPSTREAM_REPO
+    {
+    echo "# For any arch port (arm64, armhf, ppc64el)"
+    echo "deb http://ports.ubuntu.com/ubuntu-ports/ ${UPSTREAM} main universe"
+    echo "deb http://ports.ubuntu.com/ubuntu-ports/ ${UPSTREAM}-updates main universe"
+    echo "deb http://ports.ubuntu.com/ubuntu-ports/ ${UPSTREAM}-security main universe"
+    } | sudo tee $UPSTREAM_REPO
 fi
 
 echo "
