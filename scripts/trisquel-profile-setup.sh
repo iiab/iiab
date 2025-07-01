@@ -44,7 +44,7 @@ if [ "$(dpkg --print-architecture)" = amd64 ]; then
     } | sudo tee $UPSTREAM_REPO
 else
     {
-    echo "# For any other arch"
+    echo "# For any other arch (especially arm64 or armhf, and potentially also ppc64el)"
     echo "deb http://ports.ubuntu.com/ubuntu-ports/ ${UPSTREAM} main universe"
     echo "deb http://ports.ubuntu.com/ubuntu-ports/ ${UPSTREAM}-updates main universe"
     echo "deb http://ports.ubuntu.com/ubuntu-ports/ ${UPSTREAM}-security main universe"
