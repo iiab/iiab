@@ -35,16 +35,21 @@ fi
 gpg --keyserver keyserver.ubuntu.com --recv-keys "$REPO_GPGKEY"
 gpg --export "$REPO_GPGKEY" | gpg --dearmour > "$UPSTREAM_GPGKEY"
 
-echo "
-# For amd64
-deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ ${UPSTREAM} main universe
-deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ ${UPSTREAM}-updates main universe
-deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ ${UPSTREAM}-security main universe
-# For arm64
-deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ ${UPSTREAM} main universe
-deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ ${UPSTREAM}-updates main universe
-deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ ${UPSTREAM}-security main universe" | \
-sudo tee $UPSTREAM_REPO
+if [ "$(dpkg --print-architecture)" = amd64 ]; then
+    {
+    echo "# For regular x86_64/amd64"
+    echo "deb http://archive.ubuntu.com/ubuntu/ ${UPSTREAM} main universe"
+    echo "deb http://archive.ubuntu.com/ubuntu/ ${UPSTREAM}-updates main universe"
+    echo "deb http://archive.ubuntu.com/ubuntu/ ${UPSTREAM}-security main universe"
+    } | tee $UPSTREAM_REPO
+else
+    {
+    echo "# For any other arch (especially arm64 or armhf, and potentially also ppc64el)"
+    echo "deb http://ports.ubuntu.com/ubuntu-ports/ ${UPSTREAM} main universe"
+    echo "deb http://ports.ubuntu.com/ubuntu-ports/ ${UPSTREAM}-updates main universe"
+    echo "deb http://ports.ubuntu.com/ubuntu-ports/ ${UPSTREAM}-security main universe"
+    } | tee $UPSTREAM_REPO
+fi
 
 echo "
 Package: python3-pip
@@ -58,4 +63,4 @@ Pin-Priority: 500
 Package: *
 Pin: release n=$UPSTREAM
 Pin-Priority: -1" | \
-sudo tee $UPSTREAM_PIN
+tee $UPSTREAM_PIN
