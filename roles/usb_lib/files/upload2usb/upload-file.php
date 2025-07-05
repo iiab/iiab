@@ -56,4 +56,3 @@ $referring_url = explode('?',$_SERVER['HTTP_REFERER'])[0];
 $query_string = 'upload_ok=' . urlencode($upload_ok) . '&upload_msg=' . urlencode($upload_msg);
 header('Location:' . $referring_url . '?' . $query_string);
 ?>
-
