@@ -6,12 +6,9 @@
 
 set_exception_handler(function (Throwable $exception) {
     error_log('UPLOAD2USB ERROR: ' . (string)$exception);
-    $requesting_url = $_SERVER['REQUEST_URI']; 
-
-    // If user is on the main app page (i.e., /upload2usb/), show the error on the page, otherwise fail silently
-    if (strcmp($requesting_url,"/upload2usb/") == 0 || strcmp($requesting_url,"/upload2usb/index.php") == 0) {
-        include ("error.php");
-    }
+    
+    // Always include error.php for upload2usb directory requests
+    include ("error.php");
 });
 
 //return the first removable USB drive location

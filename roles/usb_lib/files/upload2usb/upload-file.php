@@ -52,20 +52,7 @@ if ($upload_ok == 0) {
 $file_count = getFileCount($target_folder_path);
 $referring_url = explode('?',$_SERVER['HTTP_REFERER'])[0];
 
+// Always redirect back to referring page with status parameters
+$query_string = 'upload_ok=' . urlencode($upload_ok) . '&upload_msg=' . urlencode($upload_msg);
+header('Location:' . $referring_url . '?' . $query_string);
 ?>
-
-<?php if (str_contains($referring_url,"/upload2usb/") || str_contains($referring_url, "/upload-file.php")): ?>
-
-  <?php include("header.php"); ?>
-     <?php echo $upload_msg ?> <br/>
-     <?php echo $file_count ?> files have been uploaded today!
-
-  <?php include ("footer.php"); ?>
-
-<?php else: ?>
-
-  <?php $query_string = 'upload_ok=' . urlencode($upload_ok) . '&upload_msg=' . urlencode($upload_msg); ?>
-  <?php header('Location:' . $referring_url. '?' . $query_string)  ?>
-
-<?php endif; ?>
-
