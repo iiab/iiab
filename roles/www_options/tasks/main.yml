@@ -1,21 +1,19 @@
 # Role "www_base" runs earlier, likely in 3-BASE-SERVER.
 # Role "www_options" runs here, probably in 4-SERVER-OPTIONS.
 
-
 - name: Record (initial) disk space used
   shell: df -B1 --output=used / | tail -1
   register: df1
-
 
 # HOMEPAGE
 
 - name: Create dir {{ doc_root }}{{ iiab_home_url }} just in case variable iiab_home_url was customized.  (Standard path {{ doc_root }}/home was created earlier.)
   file:
     state: directory
-    path: "{{ doc_root }}{{ iiab_home_url }}"    # e.g. /library/www/html/home
+    path: "{{ doc_root }}{{ iiab_home_url }}" # e.g. /library/www/html/home
     owner: "{{ apache_user }}"
     group: "{{ apache_user }}"
-    mode: '0755'
+    mode: "0755"
 
 # Used to be run by httpd/tasks/install.yml
 #- name: "IN CASE NGINX IS DISABLED: Enable IIAB pages via Apache (e.g. on port 80) if apache_install"
@@ -26,7 +24,6 @@
 - name: Enable IIAB pages via NGINX (e.g. on port 80) if nginx_install
   include_tasks: roles/nginx/tasks/homepage.yml
   when: nginx_installed is defined
-
 
 # 2022-07-22: SIMILAR TO roles/iiab-admin/tasks/pwd-warnings.yml FOR passwords
 #                    AND roles/network/tasks/netwarn.yml      FOR iiab-network
@@ -50,10 +47,10 @@
 # 2024-12-12: RasPiOS changed compositor from wayfire to labwc: https://forums.raspberrypi.com/viewtopic.php?t=379321
 - name: If both above exist, add '/usr/bin/chromium-browser --disable-restore-session-state http://box/home &' to /home/{{ iiab_admin_user }}/.config/labwc/autostart
   lineinfile:
-    path: /home/{{ iiab_admin_user }}/.config/labwc/autostart    # iiab-admin
+    path: /home/{{ iiab_admin_user }}/.config/labwc/autostart # iiab-admin
     create: yes
-    regexp: '^/usr/bin/chromium'
-    line: '/usr/bin/chromium-browser --disable-restore-session-state http://box/home &'
+    regexp: "^/usr/bin/chromium"
+    line: "/usr/bin/chromium-browser --disable-restore-session-state http://box/home &"
   when: labwc_dir.stat.exists and labwc_dir.stat.isdir and chromium_browser.stat.exists
 
 # - name: Add chromium to /etc/xdg/lxsession/LXDE-pi/autostart
@@ -62,8 +59,6 @@
 #     regexp: '^/usr/bin/chromium'
 #     line: '/usr/bin/chromium --disable-restore-session-state http://box/home'
 #   when: lxde_pi_autostart_present.stat.exists and chromium_present.stat.exists
-
-
 # 2022-12-29: php-settings.yml is ALSO attempted (on demand) by every
 # <ROLE>/tasks/install.yml that needs it (Matomo, Moodle, Nextcloud, PBX,
 # WordPress) so './runrole <ROLE>' and similar are fully self-sufficient!
@@ -71,7 +66,6 @@
   include_tasks: php-settings.yml
   # 2025-01-29: PHP's own defaults (presumably from the 1990s?) were Way Too Low -- for usb-lib's upload2usb, and in general -- so let's run php-settings.yml every time!
   # when: nginx_high_php_limits or matomo_install or moodle_install or nextcloud_install or pbx_install or wordpress_install
-
 
 # 'Is a "Rapid Power Off" button possible for low-electricity environments?'
 # gives more details here: http://FAQ.IIAB.IO
@@ -86,7 +80,7 @@
   template:
     src: 020_www_data_poweroff.j2
     dest: /etc/sudoers.d/020_www_data_poweroff
-    mode: '0440'
+    mode: "0440"
   when: allow_www_data_poweroff
 
 - name: Remove {{ apache_user }} (per variable apache_user) permission to poweroff, removing /etc/sudoers.d/020_www_data_poweroff
@@ -95,9 +89,8 @@
     state: absent
   when: not allow_www_data_poweroff
 
-
 # 2022-06-30: internet_available var removed
-- name: 'Test for Internet access, using: https://wiki.iiab.io'
+- name: "Test for Internet access, using: https://wiki.iiab.io"
   get_url:
     #url: "{{ iiab_download_url }}/heart-beat.txt"
     url: https://wiki.iiab.io
@@ -119,10 +112,9 @@
   command: /usr/bin/iiab-refresh-wiki-docs
   when: not internet_access_test.failed and not nodocs
 
-
 - name: (Re)Start '{{ apache_service }}' systemd service, if installed & enabled
   systemd:
-    name: "{{ apache_service }}"    # apache2 on debuntu
+    name: "{{ apache_service }}" # apache2 on debuntu
     state: restarted
   when: apache_installed is defined and apache_enabled
 
@@ -132,7 +124,6 @@
     state: restarted
   when: nginx_enabled
 
-
 # RECORD www_options AS INSTALLED
 
 - name: Record (final) disk space used
@@ -141,7 +132,7 @@
 
 - name: Add 'www_options_disk_usage = {{ df2.stdout | int - df1.stdout | int }}' to {{ iiab_ini_file }}
   ini_file:
-    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+    path: "{{ iiab_ini_file }}" # /etc/iiab/iiab.ini
     section: www_options
     option: www_options_disk_usage
     value: "{{ df2.stdout | int - df1.stdout | int }}"
@@ -152,6 +143,6 @@
 
 - name: "Add 'www_options_installed: True' to {{ iiab_state_file }}"
   lineinfile:
-    path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
-    regexp: '^www_options_installed'
-    line: 'www_options_installed: True'
+    path: "{{ iiab_state_file }}" # /etc/iiab/iiab_state.yml
+    regexp: "^www_options_installed"
+    line: "www_options_installed: True"
