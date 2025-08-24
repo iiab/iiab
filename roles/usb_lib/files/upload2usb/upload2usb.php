@@ -6,6 +6,10 @@
 
 set_exception_handler(function (Throwable $exception) {
     error_log('UPLOAD2USB ERROR: ' . (string)$exception);
+
+    $exception_details = json_decode($exception->getMessage(), true);
+    $usb_count = $exception_details['usb_count'];
+    $exception_msg = $exception_details['exception_msg'];
     
     // Always include error.php for upload2usb directory requests
     include ("error.php");
@@ -19,15 +23,27 @@ function getTargetUSBDriveLocation () {
          $rmv_usb_path_count = shell_exec('lsblk --output NAME,TRAN,RM,MOUNTPOINT --pairs | cut -d " " -f 4 | grep "^MOUNTPOINT=\"/media" | wc -l');
 
          if ($rmv_usb_path_count == 0) {
-               throw new RuntimeException('0 USB sticks found. <br/><br/>');
+	       $exception_data = [
+	           'usb_count' => 0,
+		   'exception_msg' => '0 USB sticks found. <br/><br/>'
+	       ];
+               throw new RuntimeException(json_encode($exception_data));
          } elseif ($rmv_usb_path_count > 1) {
-               throw new RuntimeException('More than 1 USB sticks installed. <br/><br/>');
+	       $exception_data = [
+	           'usb_count' => $rmv_usb_path_count,
+		   'exception_msg' => 'More than 1 USB stick installed. <br/><br/>'
+	       ];
+               throw new RuntimeException(json_encode($exception_data));
          }
 
          $rmv_usb_path = trim(str_replace('"', '', shell_exec('lsblk --output NAME,TRAN,RM,MOUNTPOINT --pairs | cut -d " " -f 4 | grep "^MOUNTPOINT=\"/media" | cut -d "=" -f 2')));
 
          if (empty($rmv_usb_path)) {
-               throw new RuntimeException('Not able to find USB stick. <br/><br/>');
+	       $exception_data = [
+	           'usb_count' => -1, 
+		   'exception_msg' => 'Not able to find USB stick. <br/><br/>'
+	       ];
+               throw new RuntimeException(json_encode($exception_data));
          } else {
                return $rmv_usb_path . "/";
          }
@@ -41,7 +57,14 @@ function getTargetFolderPath ($create_folder_p) {
          $target_folder_path = $parent_dir . $today_folder_name;
 
          if (!file_exists($target_folder_path) && $create_folder_p) {
-               mkdir($target_folder_path, 0777) or throw new RuntimeException("Not able to create upload directory. <br/>Make sure 'usb_lib_writable_sticks' is set to 'True'. <br/><br/>");
+
+	       $exception_data = [
+	           'usb_count' => -1, 
+		   'exception_msg' => "Not able to create upload directory. <br/>Make sure 'usb_lib_writable_sticks' is set to 'True'. <br/><br/>"
+	       ];
+               throw new RuntimeException(json_encode($exception_data));
+	 
+               mkdir($target_folder_path, 0777) or throw new RuntimeException(json_encode($exception_data));
          }
          return $target_folder_path;
 }
