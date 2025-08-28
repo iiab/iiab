@@ -44,8 +44,13 @@ if ($upload_ok == 0) {
     $upload_msg = "&#x1F60A; &#x2705; Your file <span style=\"font-weight:bold; font-style:italic;\">". htmlspecialchars( $uploaded_filename ). "</span> was successfully uploaded!";
     $upload_msg_short = "&#x2705; Your file was uploaded!"; 
   } else {
-    $upload_ok = 0; 
-    throw new RuntimeException('There was an error uploading your file. <br/><br/>');
+    $upload_ok = 0;
+    $exception_data = [
+      'usb_count' => -1,
+      'exception_msg' => 'There was an error uploading your file. <br/><br/>'
+    ];
+
+    throw new RuntimeException(json_encode($exception_data));
   }
 }
 
