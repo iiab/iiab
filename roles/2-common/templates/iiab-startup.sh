@@ -3,8 +3,8 @@
 # /usr/libexec/iiab-startup.sh is AUTOEXEC.BAT for IIAB
 # (put initializations here, if needed on every boot)
 
-if [ ! -f /etc/iiab/uuid ]; then
-    uuidgen > /etc/iiab/uuid
+if [ ! -f {{ iiab_etc_path }}/uuid ]; then
+    uuidgen > {{ iiab_etc_path }}/uuid
     echo "/etc/iiab/uuid was MISSING, so a new one was generated."
 fi
 
@@ -12,7 +12,7 @@ fi
 # Sets wlan0 to promiscuous on boot if needed as gateway (i.e. AP's OFF).
 # Manually run iiab-hotspot-[on|off] to toggle AP & boot flag hostapd_enabled
 # https://github.com/iiab/iiab/issues/638#issuecomment-355455454
-if [[ $(grep -i raspbian /etc/*release) &&
+if [[ $(grep -i raspbian {{ etc_path }}/*release) &&
         #($(grep "hostapd_enabled = False" /etc/iiab/config_vars.yml) ||
             #((! $(grep "hostapd_enabled = True" /etc/iiab/config_vars.yml)) &&
                  ! $(grep "^HOSTAPD_ENABLED=True" {{ iiab_env_file }}) ]];
