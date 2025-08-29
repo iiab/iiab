@@ -67,7 +67,11 @@ def main():
         print("Writing zim_versions_idx")
         iiab.read_lang_codes() # needed by following
         zim_menu_defs = adm.get_zim_menu_defs() # read all menu defs
-        adm.write_zim_versions_idx(zim_versions, kiwix_library_xml, zim_version_idx_dir, zim_menu_defs)
+        try:
+            adm.write_zim_versions_idx(zim_versions, kiwix_library_xml, zim_version_idx_dir, zim_menu_defs)
+        except:
+            print("Failed to write zim_version_idx.json")
+            sys.exit(1)
     sys.exit()
 
 def parse_args():
