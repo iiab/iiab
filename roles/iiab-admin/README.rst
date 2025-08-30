@@ -37,13 +37,13 @@ Security
    #. ``sudo``
 * Please read much more about what escalated (root) actions are authorized when you log into IIAB's Admin Console, and how this works: https://github.com/iiab/iiab-admin-console/blob/master/Authentication.md
 * If your IIAB includes Tailscale (VPN), ``/root/.ssh/authorized_keys`` should be installed by `roles/tailscale/tasks/install.yml <../tailscale/tasks/install.yml>`_ to facilitate remote community support.  Feel free to remove this as mentioned here: https://wiki.iiab.io/go/Security
-* Auto-checking for the default/published password (as specified by ``iiab_admin_published_pwd`` in `/opt/iiab/iiab/vars/default_vars.yml <../../vars/default_vars.yml>`_) is implemented in `/etc/profile.d <templates/sshpwd-profile-iiab.sh>`_ (and `/etc/xdg/lxsession/LXDE-pi <templates/sshpwd-lxde-iiab.sh>`_ when it exists, i.e. on Raspberry Pi OS with desktop).
+* Auto-checking for the default/published password (as specified by ``iiab_admin_published_pwd`` in `/opt/iiab/iiab/vars/default_vars.yml <../../vars/default_vars.yml>`_) is implemented in `{{ etc_path }}/profile.d <templates/sshpwd-profile-iiab.sh>`_ (and `{{ etc_path }}/xdg/lxsession/LXDE-pi <templates/sshpwd-lxde-iiab.sh>`_ when it exists, i.e. on Raspberry Pi OS with desktop).
 
 Example
 =======
 
 * If you later change your mind about ``sudo`` privileges for user 'iiab-admin' (as specified by ``iiab_admin_user``) then do this:
-   #. Go ahead and change the value of ``iiab_admin_can_sudo`` (to either True or False) in `/etc/iiab/local_vars.yml <https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it%3F>`_
+   #. Go ahead and change the value of ``iiab_admin_can_sudo`` (to either True or False) in `{{ iiab_etc_path }}/local_vars.yml <https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it%3F>`_
    #. Make sure that ``iiab_admin_user_install: True`` is also set.
    #. Then re-run this Ansible playbook, by running ``cd /opt/iiab/iiab`` followed by ``sudo ./runrole --reinstall iiab-admin``
 
