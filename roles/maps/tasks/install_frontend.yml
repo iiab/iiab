@@ -1,0 +1,54 @@
+# TODO - files should be owned by www-data
+
+- name: Make serving directory (0755 by default)
+  file:
+    path: "{{ maps_serve_path }}"
+    state: directory
+    # mode: 0755
+
+- name: Make index file
+  copy:
+    src: "files/index.html"
+    dest: "{{ maps_serve_path }}/index.html"
+
+### maps.black ###
+
+- name: Download all the basic maps.black javascript and styles (0644)
+  get_url:
+    url: "{{ maps_dot_black_small_assets_url }}/{{ item.filename }}"
+    dest: "{{ maps_serve_path }}"
+    checksum: "sha256:{{ item.sha256sum }}"
+    mode: "0644"
+    timeout: "{{ download_timeout }}"
+  with_items: "{{ maps_dot_black_js_and_styles }}"
+
+- name: Download map tiles
+  include_tasks: download_large_file.yml
+  vars:
+    src_base_url: "{{ maps_dot_black_tiles_url }}"
+    dest_base_path: "{{ maps_serve_path }}"
+  with_items: "{{ maps_dot_black_tiles }}"
+
+- name: Download satellite tile
+  include_tasks: download_large_file.yml
+  vars:
+    src_base_url: "{{ s3_url }}"
+    dest_base_path: "{{ maps_serve_path }}"
+    item: "{{ satellite_tiles[maps_sat_high_res] }}"
+
+- name: Select satellite tiles
+  file:
+    src: "{{ maps_serve_path }}/{{ satellite_tiles[maps_sat_high_res].filename }}"
+    dest: "{{ maps_serve_path }}/{{ satellite_symlink_name }}"
+    state: link
+
+### maplibre search ###
+
+- name: Download all the basic maplibre javascript and styles (0644)
+  get_url:
+    url: "{{ unpkg_url }}/{{ item.filename }}"
+    dest: "{{ maps_serve_path }}"
+    checksum: "sha256:{{ item.sha256sum }}"
+    mode: "0644"
+    timeout: "{{ download_timeout }}"
+  with_items: "{{ maplibre_search_js_and_styles }}"

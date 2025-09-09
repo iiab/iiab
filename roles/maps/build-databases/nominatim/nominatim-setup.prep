@@ -1,0 +1,68 @@
+#!/bin/bash
+here="$(dirname "$(readlink -f "$0")")"
+cd "$here"
+
+set -euo pipefail
+
+export USERNAME=nominatim
+export USERHOME=/srv/nominatim
+
+chmod a+x $USERHOME
+
+(ls $USERHOME/nominatim-venv/bin > /dev/null) || (echo "making virtualenv"; virtualenv $USERHOME/nominatim-venv)
+
+$USERHOME/nominatim-venv/bin/python3 -c "import aiosqlite" || (echo "installing aiosqlite"; $USERHOME/nominatim-venv/bin/pip install aiosqlite)
+
+$USERHOME/nominatim-venv/bin/python3 -c "import psycopg" || (echo "installing psycopg"; $USERHOME/nominatim-venv/bin/pip install psycopg[binary])
+
+$USERHOME/nominatim-venv/bin/python3 -c "import nominatim_db" || (echo "installing nominatim-db"; $USERHOME/nominatim-venv/bin/pip install nominatim-db)
+
+echo "installing other stuff"
+$USERHOME/nominatim-venv/bin/pip install falcon uvicorn gunicorn nominatim-api
+
+# https://nominatim.org/release-docs/latest/admin/Import/
+# Requires 64GB of RAM and around 900GB of SSD hard disks
+
+echo "building the db"
+cd ~
+. nominatim-venv/bin/activate
+
+# https://nominatim.org/release-docs/latest/customize/Importance/
+ls wikimedia-importance.csv.gz || wget https://nominatim.org/data/wikimedia-importance.csv.gz
+ls secondary_importance.sql.gz || wget -O secondary_importance.sql.gz https://nominatim.org/data/wikimedia-secondary-importance.sql.gz
+
+# https://nominatim.org/release-docs/latest/customize/Postcodes/
+# There could be more postcodes for other parts of the world? Something to improve later.
+ls gb_postcodes.csv.gz || wget https://nominatim.org/data/gb_postcodes.csv.gz
+ls us_postcodes.csv.gz || wget https://nominatim.org/data/us_postcodes.csv.gz
+
+# Using --no-updates because we probably will generate the database de novo
+# each time. It will cut down on the amount of space, fwiw. Not sure if it
+# affects the resulting sqlite3 file.
+#
+# NOTE - If I decide I want to import anything after, like TIGER housenumber
+# data, I should omit this. In that case I could remove --no-updates and just
+# add `nominatim freeze`.
+#ls dc.osm.pbf || time curl -L https://download.geofabrik.de/north-america/us/district-of-columbia-latest.osm.pbf > dc.osm.pbf
+#ls nh.osm.pbf || time curl -L https://download.geofabrik.de/north-america/us/new-hampshire-latest.osm.pbf > nh.osm.pbf
+#ls ca.osm.pbf || time curl -L https://download.geofabrik.de/north-america/us/california-latest.osm.pbf > ca.osm.pbf
+
+# download the planet via bittorrent and normalize the file name
+ls planet.osm.pbf || (aria2c https://planet.osm.org/pbf/planet-latest.osm.pbf.torrent --seed-time=30; mv planet-[0-9]*.osm.pbf planet.osm.pbf)
+
+export NOMINATIM_FLATNODE_FILE=$USERHOME/flatnode.file # reduce memory usage and/or database usage for temporary data
+export NOMINATIM_IMPORT_STYLE="iiab.lua" # our thing
+#export NOMINATIM_IMPORT_STYLE="admin" # for comparison
+psql template1 -c 'drop database nominatim' || echo "no db to drop"
+
+#time nominatim import --no-updates --osm-file ~/dc.osm.pbf 2>&1 | tee setup.log
+#time nominatim import --no-updates --osm-file ~/nh.osm.pbf 2>&1 | tee setup.log
+#time nominatim import --no-updates --osm-file ~/ca.osm.pbf 2>&1 | tee setup.log
+time nominatim import --no-updates --osm-file ~/planet.osm.pbf 2>&1 | tee setup.log
+
+nominatim admin --check-database
+nominatim search --query Capitol
+nominatim reverse --lat 38.8848 --lon -77.0145
+
+rm -f mydb.sqlite
+time nominatim convert -o mydb.sqlite
