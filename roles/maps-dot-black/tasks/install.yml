@@ -1,0 +1,39 @@
+- name: Make serving directory (0755 by default)
+  file:
+    path: "{{ maps_dot_black_path }}"
+    state: directory
+    # mode: 0755
+
+- name: Make index file
+  copy:
+    src: "files/index.html"
+    dest: "{{ maps_dot_black_path }}/index.html"
+
+- name: Download all the basic maps.black javascript and styles (0755)
+  get_url:
+    url: "{{ maps_dot_black_small_assets_url }}/{{ item.filename }}"
+    dest: "{{ maps_dot_black_path }}"
+    checksum: "{{ item.checksum }}" # Avoid repeated downloads
+    mode: "0755"
+    timeout: "{{ download_timeout }}"
+  with_items: "{{ maps_dot_black_js_and_styles }}"
+
+- name: Download map tiles (0755)
+  get_url:
+    url: "{{ maps_dot_black_tiles_url }}/{{ item.filename }}"
+    dest: "{{ maps_dot_black_path }}"
+    checksum: "{{ item.checksum }}" # Avoid repeated downloads (especially for these big files)
+    mode: "0755"
+    timeout: "{{ download_timeout }}"
+  when: "{{ item.included }}"
+  with_items: "{{ maps_dot_black_tiles }}"
+
+- name: "Set 'maps_dot_black_installed: True'"
+  set_fact:
+    maps_dot_black_installed: True
+
+- name: "Add 'maps_dot_black_installed: True' to {{ iiab_state_file }}"
+  lineinfile:
+    path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
+    regexp: '^maps_dot_black_installed'
+    line: 'maps_dot_black_installed: True'
