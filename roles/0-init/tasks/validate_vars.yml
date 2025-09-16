@@ -64,133 +64,156 @@
 # 2020-11-04: Fix validation of 5 [now 4] core dependencies, for ./runrole etc
 
 
-- name: Set vars_checklist for 45 + 45 + 40 vars ("XYZ_install" + "XYZ_enabled" + "XYZ_installed") to be checked
-  set_fact:
-    vars_checklist:
-      - hostapd
-      - dnsmasq
-      - bluetooth
-      - sshd
-      #- openvpn            # Deprecated
-      - tailscale
-      - remoteit
-      - admin_console
-      #- nginx              # MANDATORY
-      #- apache             # Unmaintained - former dependency
-      - squid
-      - cups
-      - samba
-      - usb_lib
-      - azuracast
-      - gitea
-      - jupyterhub
-      - lokole
-      - mysql               # Dependency - excluded from _installed check below
-      - mediawiki
-      - mosquitto
-      - nodejs              # Dependency - excluded from _installed check below
-      - nodered
-      - nextcloud
-      - wordpress
-      - kalite
-      - kolibri
-      - kiwix
-      - postgresql          # Dependency - excluded from _installed check below
-      - moodle
-      - mongodb             # Dependency - excluded from _installed check below
-      - sugarizer
-      - osm_vector_maps
-      - transmission
-      - awstats
-      - matomo
-      - monit
-      - munin
-      - phpmyadmin
-      - vnstat
-      - yarn                # Dependency - excluded from _installed check below
-      - captiveportal
-      - internetarchive
-      - luanti
-      - calibreweb
-      - calibre
-      - pbx
-      - network
+# 2025-09-15: ansible-core 2.19 suddenly DISALLOWS variable names derived from
+# (instantiated from) strings -- see: https://github.com/iiab/iiab/issues/4030
+# So for now, validation tests are spelled out exhaustively in these 7 subtasks:
 
-- name: Assert that {{ vars_checklist | length }} "XYZ_install" vars are all... defined
-  assert:
-    that: "{{ item }}_install is defined"
-    fail_msg: "VARIABLE MUST BE DEFINED: '{{ item }}_install' NEEDS A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
-    quiet: yes
-  loop: "{{ vars_checklist }}"
+- name: VERIFY that all ~45 APP_install vars are DEFINED
+  include_tasks: validate_install_vars_defined.yml
+- name: VERIFY that all ~45 APP_enabled vars are DEFINED
+  include_tasks: validate_enabled_vars_defined.yml
 
-- name: Assert that {{ vars_checklist | length }} "XYZ_enabled" vars are all... defined
-  assert:
-    that: "{{ item }}_enabled is defined"
-    fail_msg: "VARIABLE MUST BE DEFINED: '{{ item }}_enabled' NEEDS A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
-    quiet: yes
-  loop: "{{ vars_checklist }}"
+- name: VERIFY that all ~45 APP_install vars are BOOLEAN
+  include_tasks: validate_install_vars_boolean.yml
+- name: VERIFY that all ~45 APP_enabled vars are BOOLEAN
+  include_tasks: validate_enabled_vars_boolean.yml
 
-- name: Assert that {{ vars_checklist | length }} "XYZ_install" vars are all... type boolean (NOT type string, which can invert logic!)
-  assert:
-    that: "{{ item }}_install | type_debug == 'bool'"
-    fail_msg: "VARIABLE MUST BE BOOLEAN: '{{ item }}_install' now has type '{{ lookup('vars', item + '_install') | type_debug }}' and value '{{ lookup('vars', item + '_install') }}' -- PLEASE SET A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
-    quiet: yes
-  loop: "{{ vars_checklist }}"
+- name: VERIFY that all ~45 APP_install vars DON'T CONTRADICT THEIR APP_enabled vars
+  include_tasks: disallow_install_false_with_enabled_true.yml
+- name: VERIFY that all ~45 APP_install vars DON'T CONTRADICT THEIR APP_installed vars
+  include_tasks: disallow_install_false_with_installed_defined.yml
 
-- name: Assert that {{ vars_checklist | length }} "XYZ_enabled" vars are all... type boolean (NOT type string, which can invert logic!)
-  assert:
-    that: "{{ item }}_enabled | type_debug == 'bool'"
-    fail_msg: "VARIABLE MUST BE BOOLEAN: '{{ item }}_enabled' now has type '{{ lookup('vars', item + '_enabled') | type_debug }}' and value '{{ lookup('vars', item + '_enabled') }}' -- PLEASE SET A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
-    quiet: yes
-  loop: "{{ vars_checklist }}"
-
-- name: 'DISALLOW "XYZ_install: False" WITH "XYZ_enabled: True" ...for all {{ vars_checklist | length }} var pairs'
-  assert:
-    that: "{{ item }}_install or not {{ item }}_enabled"
-    fail_msg: "DISALLOWED: '{{ item }}_install: False' WITH '{{ item }}_enabled: True' -- IIAB DOES NOT SUPPORT UNINSTALLS -- please verify those 2 variable values e.g. in /etc/iiab/local_vars.yml, and other places variables are defined?"
-    quiet: yes
-  loop: "{{ vars_checklist }}"
-
-- name: 'DISALLOW "XYZ_install: False" WHEN "XYZ_installed is defined" IN /etc/iiab/iiab_state.yml ...for up-to-{{ vars_checklist | length }} var pairs'
-  assert:
-    that: "{{ item }}_install or {{ item }}_installed is undefined"
-    fail_msg: "DISALLOWED: '{{ item }}_install: False' (e.g. in /etc/iiab/local_vars.yml) WHEN '{{ item }}_installed' is defined (e.g. in /etc/iiab/iiab_state.yml) -- IIAB DOES NOT SUPPORT UNINSTALLS -- please verify those 2 files especially, and other places variables are defined?"
-    quiet: yes
-  when: item != 'mysql' and item != 'postgresql' and item != 'mongodb' and item != 'nodejs' and item != 'yarn'    # Exclude auto-installed dependencies
-  loop: "{{ vars_checklist }}"
+- name: VERIFY that ~4 deprecated APP_install vars are NO LONGER IN USE
+  include_tasks: disallow_deprecated_install_vars.yml
 
 
-- name: Set vars_deprecated_list for 4+ vars ("XYZ_install") to be checked
-  set_fact:
-    vars_deprecated_list:
-      - dhcpd               # Deprecated
-      - named               # Deprecated
-      - wondershaper        # Deprecated
-      - dansguardian        # Deprecated
-      #- xo_services        # Unmaintained
-      #- activity_server    # Unmaintained
-      #- ejabberd_xs        # Unmaintained
-      #- idmgr              # Unmaintained
-      #- dokuwiki           # Unmaintained
-      #- ejabberd           # Unmaintained
-      #- elgg               # Unmaintained
+# - name: Set vars_checklist for 45 + 45 + 40 vars ("XYZ_install" + "XYZ_enabled" + "XYZ_installed") to be checked
+#   set_fact:
+#     vars_checklist:
+#       - hostapd
+#       - dnsmasq
+#       - bluetooth
+#       - sshd
+#       #- openvpn            # Deprecated
+#       - tailscale
+#       - remoteit
+#       - admin_console
+#       #- nginx              # MANDATORY
+#       #- apache             # Unmaintained - former dependency
+#       - squid
+#       - cups
+#       - samba
+#       - usb_lib
+#       - azuracast
+#       - gitea
+#       - jupyterhub
+#       - lokole
+#       - mysql               # Dependency - excluded from _installed check below
+#       - mediawiki
+#       - mosquitto
+#       - nodejs              # Dependency - excluded from _installed check below
+#       - nodered
+#       - nextcloud
+#       - wordpress
+#       - kalite
+#       - kolibri
+#       - kiwix
+#       - postgresql          # Dependency - excluded from _installed check below
+#       - moodle
+#       - mongodb             # Dependency - excluded from _installed check below
+#       - sugarizer
+#       - osm_vector_maps
+#       - transmission
+#       - awstats
+#       - matomo
+#       - monit
+#       - munin
+#       - phpmyadmin
+#       - vnstat
+#       - yarn                # Dependency - excluded from _installed check below
+#       - captiveportal
+#       - internetarchive
+#       - luanti
+#       - calibreweb
+#       - calibre
+#       - pbx
+#       - network
 
-- name: 'DISALLOW "XYZ_install: True" if deprecated'
-  assert:
-    that: "{{ item }}_install is undefined or not {{ item }}_install"
-    fail_msg: "DISALLOWED: '{{ item }}_install: True' (e.g. in /etc/iiab/local_vars.yml)"
-    quiet: yes
-  loop: "{{ vars_deprecated_list }}"
-  # 2023-12-04: ansible-core 2.16.1 suddenly no longer allows 'assert' with
-  # 'with_items' below (whereas 'loop' construct above works!)  BACKGROUND:
-  #
-  #  'due to mitigation of security issue CVE-2023-5764 in ansible-core 2.16.1,
-  #  conditional expressions with embedded template blocks can fail with the
-  #  message “Conditional is marked as unsafe, and cannot be evaluated.”'
-  #  https://docs.ansible.com/ansible-core/2.16/porting_guides/porting_guide_core_2.16.html#playbook
-  #
-  # with_items:
-  #   - dhcpd               # Deprecated
-  #   - named               # Deprecated
-  #   - wondershaper        # Deprecated
-  #   - dansguardian        # Deprecated
+# - name: Assert that {{ vars_checklist | length }} "XYZ_install" vars are all... defined
+#   assert:
+#     that: "{{ item }}_install is defined"
+#     fail_msg: "VARIABLE MUST BE DEFINED: '{{ item }}_install' NEEDS A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+#     quiet: yes
+#   loop: "{{ vars_checklist }}"
+
+# - name: Assert that {{ vars_checklist | length }} "XYZ_enabled" vars are all... defined
+#   assert:
+#     that: "{{ item }}_enabled is defined"
+#     fail_msg: "VARIABLE MUST BE DEFINED: '{{ item }}_enabled' NEEDS A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+#     quiet: yes
+#   loop: "{{ vars_checklist }}"
+
+# - name: Assert that {{ vars_checklist | length }} "XYZ_install" vars are all... type boolean (NOT type string, which can invert logic!)
+#   assert:
+#     that: "{{ item }}_install | type_debug == 'bool'"
+#     fail_msg: "VARIABLE MUST BE BOOLEAN: '{{ item }}_install' now has type '{{ lookup('vars', item + '_install') | type_debug }}' and value '{{ lookup('vars', item + '_install') }}' -- PLEASE SET A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+#     quiet: yes
+#   loop: "{{ vars_checklist }}"
+
+# - name: Assert that {{ vars_checklist | length }} "XYZ_enabled" vars are all... type boolean (NOT type string, which can invert logic!)
+#   assert:
+#     that: "{{ item }}_enabled | type_debug == 'bool'"
+#     fail_msg: "VARIABLE MUST BE BOOLEAN: '{{ item }}_enabled' now has type '{{ lookup('vars', item + '_enabled') | type_debug }}' and value '{{ lookup('vars', item + '_enabled') }}' -- PLEASE SET A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+#     quiet: yes
+#   loop: "{{ vars_checklist }}"
+
+# - name: 'DISALLOW "XYZ_install: False" WITH "XYZ_enabled: True" ...for all {{ vars_checklist | length }} var pairs'
+#   assert:
+#     that: "{{ item }}_install or not {{ item }}_enabled"
+#     fail_msg: "DISALLOWED: '{{ item }}_install: False' WITH '{{ item }}_enabled: True' -- IIAB DOES NOT SUPPORT UNINSTALLS -- please verify those 2 variable values e.g. in /etc/iiab/local_vars.yml, and other places variables are defined?"
+#     quiet: yes
+#   loop: "{{ vars_checklist }}"
+
+# - name: 'DISALLOW "XYZ_install: False" WHEN "XYZ_installed is defined" IN /etc/iiab/iiab_state.yml ...for up-to-{{ vars_checklist | length }} var pairs'
+#   assert:
+#     that: "{{ item }}_install or {{ item }}_installed is undefined"
+#     fail_msg: "DISALLOWED: '{{ item }}_install: False' (e.g. in /etc/iiab/local_vars.yml) WHEN '{{ item }}_installed' is defined (e.g. in /etc/iiab/iiab_state.yml) -- IIAB DOES NOT SUPPORT UNINSTALLS -- please verify those 2 files especially, and other places variables are defined?"
+#     quiet: yes
+#   when: item != 'mysql' and item != 'postgresql' and item != 'mongodb' and item != 'nodejs' and item != 'yarn'    # Exclude auto-installed dependencies
+#   loop: "{{ vars_checklist }}"
+
+
+# - name: Set vars_deprecated_list for 4+ vars ("XYZ_install") to be checked
+#   set_fact:
+#     vars_deprecated_list:
+#       - dhcpd               # Deprecated
+#       - named               # Deprecated
+#       - wondershaper        # Deprecated
+#       - dansguardian        # Deprecated
+#       #- xo_services        # Unmaintained
+#       #- activity_server    # Unmaintained
+#       #- ejabberd_xs        # Unmaintained
+#       #- idmgr              # Unmaintained
+#       #- dokuwiki           # Unmaintained
+#       #- ejabberd           # Unmaintained
+#       #- elgg               # Unmaintained
+
+# - name: 'DISALLOW "XYZ_install: True" if deprecated'
+#   assert:
+#     that: "{{ item }}_install is undefined or not {{ item }}_install"
+#     fail_msg: "DISALLOWED: '{{ item }}_install: True' (e.g. in /etc/iiab/local_vars.yml)"
+#     quiet: yes
+#   loop: "{{ vars_deprecated_list }}"
+#   # 2023-12-04: ansible-core 2.16.1 suddenly no longer allows 'assert' with
+#   # 'with_items' below (whereas 'loop' construct above works!)  BACKGROUND:
+#   #
+#   #  'due to mitigation of security issue CVE-2023-5764 in ansible-core 2.16.1,
+#   #  conditional expressions with embedded template blocks can fail with the
+#   #  message “Conditional is marked as unsafe, and cannot be evaluated.”'
+#   #  https://docs.ansible.com/ansible-core/2.16/porting_guides/porting_guide_core_2.16.html#playbook
+#   #
+#   # with_items:
+#   #   - dhcpd               # Deprecated
+#   #   - named               # Deprecated
+#   #   - wondershaper        # Deprecated
+#   #   - dansguardian        # Deprecated
