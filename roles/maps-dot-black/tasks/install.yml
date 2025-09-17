@@ -1,3 +1,5 @@
+### maps.black ###
+
 - name: Make serving directory (0755 by default)
   file:
     path: "{{ maps_dot_black_serve_path }}"
@@ -38,27 +40,45 @@
   set_fact:
     maps_dot_black_installed: True
 
+### Photon ###
+
+# I would like to download the archive, check the checksum, and extract it.
+# AND, I would like to not repeat this if it's already done.
+# However, there's no module that does both checksum and extract, so we have
+# to construct it ourselves.
+
+- name: Check if photon is already downloaded
+  stat:
+    path: "{{ photon_marker }}"
+  register: photon_marker
+
 # Doing get_url / unarchive separately because I want checksum
 - name: Download photon data
   get_url:
     url: "{{ photon_data_url }}/{{ photon_data.filename }}"
     dest: "{{ maps_2_data_root }}/{{ photon_data.filename }}"
-    checksum: "{{ photon_data.checksum }}" # Avoid repeated downloads (especially for these big files) TODO - actually this won't work because you extract and delete it. think more.
+    checksum: "{{ photon_data.checksum }}"
     timeout: "{{ download_timeout }}"
-  when: photon_data.included
+  when: photon_data.included and (not photon_already_downloaded.stat.exists)
 
 - name: Extract photon data
   unarchive:
     src: "{{ maps_2_data_root }}/{{ photon_data.filename }}"
     dest: "{{ photon_data_path }}"
     remote_src: yes
-  when: photon_data.included
+  when: photon_data.included and (not photon_already_downloaded.stat.exists)
 
 - name: Delete photon archive
   file:
     path: "{{ maps_2_data_root }}/{{ photon_data.filename }}"
     state: absent
-  when: photon_data.included
+
+- name: Set marker to say photon database has been installed
+  file:
+    path: "{{ photon_marker }}"
+    state: touch
+
+### Finish ###
 
 - name: "Add 'maps_dot_black_installed: True' to {{ iiab_state_file }}"
   lineinfile:
