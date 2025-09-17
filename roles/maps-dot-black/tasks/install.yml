@@ -28,9 +28,35 @@
   when: item.included
   with_items: "{{ maps_dot_black_tiles }}"
 
+- name: Make photon (search) directory (0755 by default)
+  file:
+    path: "{{ photon_data_path }}"
+    state: directory
+    # mode: 0755
+
 - name: "Set 'maps_dot_black_installed: True'"
   set_fact:
     maps_dot_black_installed: True
+
+# Doing get_url / unarchive separately because I want checksum
+- name: Download photon data
+  get_url:
+    url: "{{ photon_data_url }}/{{ photon_data.filename }}"
+    dest: "{{ maps_2_data_root }}/{{ photon_data.filename }}"
+    checksum: "{{ photon_data.checksum }}" # Avoid repeated downloads (especially for these big files) TODO - actually this won't work because you extract and delete it. think more.
+    timeout: "{{ download_timeout }}"
+  when: photon_data.included
+
+- name: Extract photon data
+  unarchive:
+    src: "{{ maps_2_data_root }}/{{ photon_data.filename }}"
+    dest: "{{ photon_data_path }}"
+    remote_src: yes
+
+- name: Delete photon archive
+  file:
+    path: "{{ maps_2_data_root }}/{{ photon_data.filename }}"
+    state: absent
 
 - name: "Add 'maps_dot_black_installed: True' to {{ iiab_state_file }}"
   lineinfile:
