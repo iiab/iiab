@@ -12,3 +12,5 @@ if [ -L $CONTENT_LINK ]; then
     /usr/bin/rm $CONTENT_LINK
     logger -t "usb_lib (iiab-clean-usb.sh)" "Symlink $CONTENT_LINK removed, as auto-created earlier by usbmount."
 fi
+
+mkdir $CONTENT_LINK
