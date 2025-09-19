@@ -2,33 +2,28 @@
   shell: df -B1 --output=used / | tail -1
   register: df1
 
-# https://github.com/foundObjects/zram-swap/issues/8
-- name: Install linux-modules-extra if Ubuntu
+
+- name: Install systemd-zram-generator
   package:
-    name: linux-modules-extra
+    name: systemd-zram-generator
     state: present
-  when: is_ubuntu and ansible_architecture == "x86_64"
 
-- name: Install linux-modules-extra-raspi if Ubuntu on Raspberry Pi
-  package:
-    name: linux-modules-extra-raspi
-    state: present
-  when: is_ubuntu and ansible_architecture != "x86_64"
+- name: Enable and start systemd-zram-generator
+  systemd:
+    name: systemd-zram-setup@zram0.service
+    enabled: true
+    state: started
 
 
-- name: Git clone https://github.com/foundObjects/zram-swap.git to /opt/iiab/zram
-  git:
-    repo: https://github.com/foundObjects/zram-swap
-    dest: /opt/iiab/zram
-    version: v02
-    depth: 1
-    force: yes
-
-- name: Install zram-swap
-  shell: |
-    cd /opt/iiab/zram
-    ./install.sh
-
+- name: Configure zram sysctl parameters
+  sysctl:
+    name: "{{ item.name }}"
+    value: "{{ item.value }}"
+  with_items:
+    - { key: "vm.swappiness", value: "120" }
+    - { key: "vm.watermark_boost_factor", value: "0" }
+    - { key: "vm.watermark_scale_factor", value: "125" }
+    - { key: "vm.page-cluster", value: "0" }
 
 
 # RECORD zram AS INSTALLED
