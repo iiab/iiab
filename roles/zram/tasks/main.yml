@@ -3,17 +3,23 @@
   register: df1
 
 
-- name: Install linux-modules-extra if Ubuntu
-  package:
-    name: linux-image-generic
-    state: present
-  when: is_ubuntu and ansible_architecture == "x86_64"
 
-- name: Install linux-modules-extra-raspi if Ubuntu on Raspberry Pi
-  package:
-    name: linux-image-raspi
+- name: Install HWE kernel metapackage if Ubuntu
+  ansible.builtin.package:
+    name: "{{ item }}"
     state: present
-  when: is_ubuntu and ansible_architecture != "x86_64"
+  loop:
+    - linux-image-generic-hwe
+    - "linux-image-generic-hwe-{{ ansible_distribution_version }}"
+    - linux-raspi
+  ignore_errors: yes
+  when: is_ubuntu
+
+# fail early so that the problem is easier to debug
+- name: Load zram kernel module
+  community.general.modprobe:
+    name: zram
+    state: present
 
 
 
@@ -22,15 +28,10 @@
     name: systemd-zram-generator
     state: present
 
-- name: Trigger /lib/systemd/system-generators/zram-generator
-  command: systemctl daemon-reexec
-  become: true
-  changed_when: false
-
-- name: Enable and start systemd-zram-generator
+- name: Enable systemd-zram-generator
   systemd:
+    daemon_reexec: true  # trigger /lib/systemd/system-generators/zram-generator
     name: systemd-zram-setup@zram0.service
-    enabled: true
     state: started
 
 
