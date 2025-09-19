@@ -3,22 +3,45 @@
   register: df1
 
 
-
-- name: Install kernel metapackage if Ubuntu
-  package:
-    name: "{{ item }}"
-    state: present
-  loop:
-    # to pull in linux-modules-extra during kernel updates
-    - "linux-image-generic"
-    # to use zram immediately--when linux-image-generic does not match what is currently running
-    - "linux-modules-extra-{{ ansible_kernel }}"
-    # same for Raspberry Pi
-    - linux-raspi
-    - "linux-modules-extra-raspi"
-    # - "linux-modules-extra-raspi-{{ ansible_kernel }}"
-  ignore_errors: yes
+- name: add zram module
   when: is_ubuntu
+  ignore_errors: yes
+  block:
+    # to pull in linux-modules-extra during kernel updates
+    - name: Check if HWE exists
+      stat:
+        path: /bin/hwe-support-status
+      register: hwe
+
+    - name: Install kernel metapackage if Ubuntu w/ latest HWE enabled
+      package:
+        name: "{{ item }}"
+        state: present
+      when: hwe.stat.exists and rpi_model == "none"
+      loop:
+        - "linux-image-generic-hwe-{{ ansible_distribution_version }}"
+        # to use zram immediately--when linux-image-generic does not match what is currently running
+        - "linux-modules-extra-{{ ansible_kernel }}"
+
+    - name: Install kernel metapackage if Ubuntu LTS kernel
+      package:
+        name: "{{ item }}"
+        state: present
+      when: not hwe.stat.exists and rpi_model == "none"
+      loop:
+        - linux-image-generic
+        - "linux-image-generic-{{ ansible_distribution_version }}"
+        - "linux-modules-extra-{{ ansible_kernel }}"  # to use zram immediately
+
+    - name: Install kernel metapackage if Ubuntu Raspberry Pi
+      package:
+        name: "{{ item }}"
+        state: present
+      when: not hwe.stat.exists and rpi_model != "none"
+      loop:
+        - "linux-raspi"
+        - "linux-modules-extra-raspi"  # to use zram immediately
+        # - "linux-modules-extra-raspi-{{ ansible_kernel }}"
 
 # fail early so that the problem is easier to debug
 - name: Load zram kernel module
