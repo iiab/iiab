@@ -7,17 +7,23 @@
   when: is_ubuntu
   ignore_errors: yes
   block:
-    # to pull in linux-modules-extra during kernel updates
-    - stat:
-        path: /bin/hwe-support-status
-      register: hwe
+    - name: Check if HWE kernel is installed
+      shell: |
+        dpkg-query -W -f='${Package}\n' 'linux-image-generic-hwe*' 2>/dev/null | grep '^linux-image-generic-hwe'
+      register: hwe_kernel_check
+      changed_when: false
+      failed_when: false
+    - name: Set fact if HWE kernel is installed
+      set_fact:
+        hwe_installed: "{{ hwe_kernel_check.stdout | length > 0 }}"
 
     - name: Install kernel meta-package if Ubuntu w/ latest HWE enabled
       package:
         name: "{{ item }}"
         state: present
-      when: hwe.stat.exists and rpi_model == "none"
+      when: hwe_installed and rpi_model == "none"
       loop:
+        # to pull in linux-modules-extra during kernel updates
         - "linux-image-generic-hwe-{{ ansible_distribution_version }}"
         # to use zram immediately--when linux-image-generic does not match what is currently running
         - "linux-modules-extra-{{ ansible_kernel }}"
@@ -26,17 +32,17 @@
       package:
         name: "{{ item }}"
         state: present
-      when: not hwe.stat.exists and rpi_model == "none"
+      when: not hwe_installed and rpi_model == "none"
       loop:
         - linux-image-generic
-        - "linux-image-generic-{{ ansible_distribution_version }}"
-        - "linux-modules-extra-{{ ansible_kernel }}"  # to use zram immediately
+        # - "linux-image-generic-{{ ansible_distribution_version }}"
+        - "linux-modules-extra-{{ ansible_kernel }}"
 
     - name: Install kernel meta-package if Ubuntu Raspberry Pi
       package:
         name: "{{ item }}"
         state: present
-      when: not hwe.stat.exists and rpi_model != "none"
+      when: rpi_model != "none"
       loop:
         - "linux-raspi"
         - "linux-modules-extra-raspi"  # to use zram immediately
