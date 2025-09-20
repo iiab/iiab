@@ -1,0 +1,192 @@
+- name: Record (initial) disk space used
+  shell: df -B1 --output=used / | tail -1
+  register: df1
+
+
+- name: add zram module to Ubuntu
+  when: is_ubuntu
+  ignore_errors: yes
+  block:
+    - name: Check for HWE kernel installation
+      shell: dpkg-query -W -f='${Package}\n' 'linux-image-generic-hwe*' 2>/dev/null | grep '^linux-image-generic-hwe'
+      register: hwe_kernel_check
+      changed_when: false
+      ignore_errors: true
+    - name: Set fact if HWE kernel is installed
+      set_fact:
+        hwe_installed: "{{ hwe_kernel_check.rc == 0 }}"
+
+    - name: Install kernel meta-package if Ubuntu w/ latest HWE enabled
+      package:
+        name: "{{ item }}"
+        state: present
+      when: hwe_installed and rpi_model == "none"
+      loop:
+        # to pull in linux-modules-extra during kernel updates
+        - "linux-image-generic-hwe-{{ ansible_distribution_version }}"
+        # to use zram immediately--when linux-image-generic does not match what is currently running
+        - "linux-modules-extra-{{ ansible_kernel }}"
+
+    - name: Install kernel meta-package if Ubuntu LTS kernel
+      package:
+        name: "{{ item }}"
+        state: present
+      when: not hwe_installed and rpi_model == "none"
+      loop:
+        - linux-image-generic
+        # - "linux-image-generic-{{ ansible_distribution_version }}"
+        - "linux-modules-extra-{{ ansible_kernel }}"
+
+    - name: Install kernel meta-package if Ubuntu Raspberry Pi
+      package:
+        name: "{{ item }}"
+        state: present
+      when: rpi_model != "none"
+      loop:
+        - "linux-raspi"
+        - "linux-modules-extra-raspi"  # to use zram immediately
+        # - "linux-modules-extra-raspi-{{ ansible_kernel }}"
+
+- name: add zram module to other Debian
+  when: not is_ubuntu
+  ignore_errors: yes
+  block:
+    - name: Install kernel meta-package
+      package:
+        name: "{{ item }}"
+        state: present
+      when: rpi_model == "none"
+      loop:
+        - linux-image-generic
+        - "linux-image-{{ ansible_kernel }}"  # for immediate use, should already exist tho!
+
+    - name: Install kernel meta-package if Raspberry Pi OS
+      package:
+        name: "{{ item }}"
+        state: present
+      when: rpi_model != "none"
+      loop:
+        - "raspberrypi-kernel"
+
+
+
+- name: Log modprobe
+  block:
+    - name: Rebuild module dependency map
+      command: depmod -a
+      become: true
+      ignore_errors: true
+
+    - name: Try loading zram module
+      command: modprobe zram
+      become: true
+      register: modprobe_result
+      ignore_errors: true
+      changed_when: false
+
+    - name: Show zram module status
+      command: lsmod | grep zram
+      become: true
+      ignore_errors: true
+      register: lsmod_result
+      changed_when: false
+
+    - name: Show active swaps
+      command: cat /proc/swaps
+      become: true
+      register: swaps_result
+      changed_when: false
+
+    - name: Log zram modprobe and lsmod output
+      debug:
+        msg: |
+          modprobe: {{ modprobe_result.rc }} {{ modprobe_result.stdout }} {{ modprobe_result.stderr }}
+          lsmod:
+          {{ lsmod_result.stdout }}
+          /proc/swaps:
+          {{ swaps_result.stdout }}
+
+
+
+- name: Install systemd-zram-generator
+  package:
+    name: systemd-zram-generator
+    state: present
+
+- name: Start systemd-zram-generator
+  systemd:
+    daemon_reexec: true  # trigger /lib/systemd/system-generators/zram-generator
+    daemon_reload: true  # should not be needed given above; testing
+    name: systemd-zram-setup@zram0.service
+    state: started
+
+
+
+- name: Log modprobe again
+  block:
+    - name: Rebuild module dependency map
+      command: depmod -a
+      become: true
+      ignore_errors: true
+
+    - name: Try loading zram module
+      command: modprobe zram
+      become: true
+      register: modprobe_result
+      ignore_errors: true
+      changed_when: false
+
+    - name: Show zram module status
+      command: lsmod | grep zram
+      become: true
+      ignore_errors: true
+      register: lsmod_result
+      changed_when: false
+
+    - name: Show active swaps
+      command: cat /proc/swaps
+      become: true
+      register: swaps_result
+      changed_when: false
+
+    - name: Log zram modprobe and lsmod output
+      debug:
+        msg: |
+          modprobe: {{ modprobe_result.rc }} {{ modprobe_result.stdout }} {{ modprobe_result.stderr }}
+          lsmod:
+          {{ lsmod_result.stdout }}
+          /proc/swaps:
+          {{ swaps_result.stdout }}
+
+
+
+- name: Configure zram sysctl parameters
+  sysctl:
+    name: "{{ item.name }}"
+    value: "{{ item.value }}"
+  with_items:
+    # https://docs.kernel.org/admin-guide/sysctl/vm.html#swappiness
+    - { name: "vm.swappiness", value: "120" }
+    #- { name: "vm.watermark_boost_factor", value: "0" }
+    #- { name: "vm.watermark_scale_factor", value: "125" }
+    #- { name: "vm.defrag_mode", value: "1" }
+    #- { name: "vm.extfrag_threshold", value: "350" }
+    #- { name: "vm.page-cluster", value: "0" }
+
+
+# RECORD zram AS INSTALLED
+
+- name: Record (final) disk space used
+  shell: df -B1 --output=used / | tail -1
+  register: df2
+
+- name: Add 'zram_disk_usage = {{ df2.stdout | int - df1.stdout | int }}' to {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+    section: zram
+    option: zram_disk_usage
+    value: "{{ df2.stdout | int - df1.stdout | int }}"
+
+- name: "Set 'zram_installed: True'"
+  set_fact:
+    zram_installed: True
