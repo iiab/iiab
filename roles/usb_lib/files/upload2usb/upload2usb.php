@@ -35,8 +35,18 @@ function getTargetUSBDriveLocation () {
              ];
              throw new RuntimeException(json_encode($exception_data));
          } else {
-             // At this point, we know there is only 1 USB drive inserted and it is not double mounted; return the path to it
-             return trim($rmv_usb_paths) . "/"; 
+               //look for second mountpoint
+               $second_mount = shell_exec('mount | grep udisks');
+               if (!empty($second_mount)) {
+                   $exception_data = [
+                     'usb_count' => -1,
+                     'exception_msg' => 'Double Mounted. <br/><br/>'
+               ];
+               //shell_exec('umount $second_mount ');
+               throw new RuntimeException(json_encode($exception_data));
+             }
+
+             return $rmv_usb_path . "/";
          }
 }
 
