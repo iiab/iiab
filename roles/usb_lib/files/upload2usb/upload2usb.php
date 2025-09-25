@@ -45,6 +45,20 @@ function getTargetUSBDriveLocation () {
              ];
              throw new RuntimeException(json_encode($exception_data));
          } else {
+               //look for second mountpoint
+               $second_mount = shell_exec('mount | grep udisks');
+               if (!empty($second_mount)) {
+                   $mnt_point = ($second_mount);
+                   //$mnt_point = array_values(trim(str_replace(" ", " ," , $second_mount)));
+                   //shell_exec('umount $mnt_point');
+                   $exception_data = [
+                     'usb_count' => -1,
+                     'exception_msg' => "Double Mounting of $mnt_point. <br/><br/>"
+               ];
+
+               throw new RuntimeException(json_encode($exception_data));
+             }
+
              return $rmv_usb_path . "/";
          }
 }
