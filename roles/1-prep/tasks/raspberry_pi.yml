@@ -22,25 +22,30 @@
   when: rtc_id is defined and rtc_id != "none" and is_ubuntu    # CLARIF: Ubuntu runs increasingly well on RPi hardware, starting in 2020 especially
 
 
-- name: 'Install packages: fake-hwclock, dphys-swapfile'
+- name: 'Install package: fake-hwclock'
   package:
     name:
       - fake-hwclock      # 2021-03-15: Missing on Ubuntu etc.  RasPiOS installs this regardless -- to save/restore system clock on machines w/o working RTC (above).
-      - dphys-swapfile    # 2021-03-15: Missing on Ubuntu etc.  RasPiOS installs this regardless -- to autogenerate and use a swap file (below).
     state: present
+
+- name: 'Install package: dphys-swapfile'
+  package:
+      - dphys-swapfile    # 2021-03-15: Missing on Ubuntu etc.  RasPiOS uses zram now -- to autogenerate and use a swap file (below).
+  when: os_ver != "raspbian-13"
 
 - name: Increase swap file size (to CONF_SWAPSIZE={{ pi_swap_file_size }} in /etc/dphys-swapfile) as kalite pip download fails
   lineinfile:
     path: "{{ etc_path }}/dphys-swapfile"
     regexp: "^CONF_SWAPSIZE"
     line: "CONF_SWAPSIZE={{ pi_swap_file_size }}"
+  when: os_ver != "raspbian-13"
 
 - name: Restart swap service "dphys-swapfile"
   #command: /etc/init.d/dphys-swapfile restart
   systemd:    # Had been...a rare/legacy service that was NOT systemd
     name: dphys-swapfile
     state: restarted
-
+  when: os_ver != "raspbian-13"
 
 #- name: Enable bluetooth in /boot/firmware/syscfg.txt on Ubuntu (needs reboot)
 #  lineinfile:
