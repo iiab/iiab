@@ -18,11 +18,13 @@ set_exception_handler(function (Throwable $exception) {
 //return the first removable USB drive location
 function getTargetUSBDriveLocation () {
 
-         // Get the count of storage mounted at /media, and error if there is <>1 otherwise return upload path
+         // Get the path of the first mounted storage
+	 $rmv_usb_path = trim(shell_exec('lsblk -no MOUNTPOINT | grep "^/media"'));
 
-         $rmv_usb_path_count = shell_exec('lsblk --output NAME,TRAN,RM,MOUNTPOINT --pairs | cut -d " " -f 4 | grep "^MOUNTPOINT=\"/media" | wc -l');
+         // Get the count of storage mounted at /media, and error if there is <>1 or media is double mounted
+         $rmv_usb_path_count = shell_exec('lsblk -no MOUNTPOINTS | grep -c "^/media"'); 
 
-         if ($rmv_usb_path_count == 0) {
+         if ($rmv_usb_path_count == 0 || empty($rmv_usb_path)) {
              $exception_data = [
                'usb_count' => 0,
                'exception_msg' => '0 USB sticks found. <br/><br/>'
@@ -31,22 +33,12 @@ function getTargetUSBDriveLocation () {
          } elseif ($rmv_usb_path_count > 1) {
              $exception_data = [
                'usb_count' => $rmv_usb_path_count,
-               'exception_msg' => 'More than 1 USB stick installed. <br/><br/>'
+               'exception_msg' => 'There is more than 1 USB stick inserted or the USB stick is double mounted. <br/><br/>'
              ];
              throw new RuntimeException(json_encode($exception_data));
          }
 
-         $rmv_usb_path = trim(str_replace('"', '', shell_exec('lsblk --output NAME,TRAN,RM,MOUNTPOINT --pairs | cut -d " " -f 4 | grep "^MOUNTPOINT=\"/media" | cut -d "=" -f 2')));
-
-         if (empty($rmv_usb_path)) {
-             $exception_data = [
-               'usb_count' => -1, 
-               'exception_msg' => 'Not able to find USB stick. <br/><br/>'
-             ];
-             throw new RuntimeException(json_encode($exception_data));
-         } else {
-             return $rmv_usb_path . "/";
-         }
+         return $rmv_usb_path . "/";
 }
 
 //returns folder path where file will be stored, if create_folder_p = 1, it will create the folder if it doesn't exist
