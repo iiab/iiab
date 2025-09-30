@@ -64,35 +64,30 @@
 # --- CLI and FPM Limits Increased
 #
 
-- name: "Enact 'nginx_high_php_limits: False' in */php.ini for LIGHTWEIGHT use of Matomo/Nextcloud/PBX/WordPress (allow file size up to 100MB, max_input_vars = 1000)"
+- name: "Enact 'nginx_high_php_limits: False' in */php.ini for medium-sized uploads"
   loop:
-    - fpm
-    - cli
+    - { conf: fpm, regexp: '^upload_max_filesize', line: 'upload_max_filesize = 100M  ; default is 2M' }
+    - { conf: cli, regexp: '^upload_max_filesize', line: 'upload_max_filesize = 100M  ; default is 2M' }
+    - { conf: fpm, regexp: '^post_max_size', line: 'post_max_size = 100M  ; default is 8M' }
+    - { conf: cli, regexp: '^post_max_size', line: 'post_max_size = 100M  ; default is 8M' }
   lineinfile:
-    path: /etc/php/{{ php_version }}/{{ item }}/php.ini
-    regexp: "{{ php_item.regexp }}"
-    line: "{{ php_item.line }}"
-  loop_control:
-    loop_var: php_item
-  with_items:
-    - { regexp: '^upload_max_filesize', line: 'upload_max_filesize = 100M    ; default is 2M' }
-    - { regexp: '^post_max_size', line: 'post_max_size = 100M    ; default is 8M' }
+    path: /etc/php/{{ php_version }}/{{ item.conf }}/php.ini
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
   when: not nginx_high_php_limits and not moodle_install and not nextcloud_install
 
-- name: "Enact 'nginx_high_php_limits: True' in */php.ini for Moodle/Nextcloud or INTENSIVE use of Matomo/PBX/WordPress (allow file size up to 10GB, max_input_vars = 5000 for Moodle)"
+- name: "Enact 'nginx_high_php_limits: True' in */php.ini for large-sized uploads"
   loop:
-    - fpm
-    - cli
+    - { conf: fpm, regexp: '^upload_max_filesize', line: 'upload_max_filesize = 10G  ; default is 2M' }
+    - { conf: cli, regexp: '^upload_max_filesize', line: 'upload_max_filesize = 10G  ; default is 2M' }
+    - { conf: fpm, regexp: '^post_max_size', line: 'post_max_size = 10G  ; default is 8M' }
+    - { conf: cli, regexp: '^post_max_size', line: 'post_max_size = 10G  ; default is 8M' }
+    - { conf: fpm, regexp: '^max_input_vars', line: 'max_input_vars = 5000  ; default is 1000 / Moodle 3.11+ requires 5000+ with PHP 8+' }
+    - { conf: cli, regexp: '^max_input_vars', line: 'max_input_vars = 5000  ; default is 1000 / Moodle 3.11+ requires 5000+ with PHP 8+' }
   lineinfile:
-    path: /etc/php/{{ php_version }}/{{ item }}/php.ini
-    regexp: "{{ php_item.regexp }}"
-    line: "{{ php_item.line }}"
-  loop_control:
-    loop_var: php_item
-  with_items:
-    - { regexp: '^upload_max_filesize', line: 'upload_max_filesize = 10G    ; default is 2M' }
-    - { regexp: '^post_max_size', line: 'post_max_size = 10G    ; default is 8M' }
-    - { regexp: '^max_input_vars', line: 'max_input_vars = 5000    ; default is 1000 / Moodle 3.11+ requires 5000+ with PHP 8+' }
+    path: /etc/php/{{ php_version }}/{{ item.conf }}/php.ini
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
   when: nginx_high_php_limits or moodle_install or nextcloud_install
 
 #
