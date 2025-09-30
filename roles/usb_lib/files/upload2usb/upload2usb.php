@@ -15,30 +15,28 @@ set_exception_handler(function (Throwable $exception) {
     include ("error.php");
 });
 
-//return the first removable USB drive location
+//return the first removable USB media location
 function getTargetUSBDriveLocation () {
 
-         // Get the path of the first mounted storage
-	 $rmv_usb_path = trim(shell_exec('lsblk -no MOUNTPOINT | grep "^/media"'));
+         // Get paths to all mounted storage and count of mounted storage
+         $rmv_usb_paths = shell_exec('lsblk -no MOUNTPOINTS | grep "^/media/"');
+         $rmv_usb_paths_count = substr_count($rmv_usb_paths, "\n"); 
 
-         // Get the count of storage mounted at /media, and error if there is <>1 or media is double mounted
-         $rmv_usb_path_count = shell_exec('lsblk -no MOUNTPOINTS | grep -c "^/media"'); 
-
-         if ($rmv_usb_path_count == 0 || empty($rmv_usb_path)) {
+         if ($rmv_usb_paths_count == 0) {
              $exception_data = [
                'usb_count' => 0,
-               'exception_msg' => '0 USB sticks found. <br/><br/>'
+               'exception_msg' => '0 USB drives found. <br/><br/>'
              ];
              throw new RuntimeException(json_encode($exception_data));
-         } elseif ($rmv_usb_path_count > 1) {
+         } elseif ($rmv_usb_paths_count > 1) {
              $exception_data = [
-               'usb_count' => $rmv_usb_path_count,
-               'exception_msg' => 'There is more than 1 USB stick inserted or the USB stick is double mounted. <br/><br/>'
+               'usb_count' => $rmv_usb_paths_count,
+               'exception_msg' => 'There is more than 1 USB drive inserted or the USB drive is double mounted. <br/><br/>'
              ];
              throw new RuntimeException(json_encode($exception_data));
+         } else {
+             return trim($rmv_usb_paths) . "/";
          }
-
-         return $rmv_usb_path . "/";
 }
 
 //returns folder path where file will be stored, if create_folder_p = 1, it will create the folder if it doesn't exist
