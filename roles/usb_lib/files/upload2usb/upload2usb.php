@@ -15,7 +15,7 @@ set_exception_handler(function (Throwable $exception) {
     include ("error.php");
 });
 
-// if there is one USB drive, return the path to it, otherwise act on the exception
+// If there is one USB drive and it is not double mounted, return the path to it, otherwise act on the exception
 function getTargetUSBDriveLocation () {
 
          // Enumerate /media/ mountpoints and count them
@@ -35,7 +35,7 @@ function getTargetUSBDriveLocation () {
              ];
              throw new RuntimeException(json_encode($exception_data));
          } else {
-             // at this point, we know there is only 1 USB drive inserted and it is not double mounted; return the path to it
+             // At this point, we know there is only 1 USB drive inserted and it is not double mounted; return the path to it
              return trim($rmv_usb_paths) . "/"; 
          }
 }
