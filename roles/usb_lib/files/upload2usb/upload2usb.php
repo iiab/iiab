@@ -15,10 +15,10 @@ set_exception_handler(function (Throwable $exception) {
     include ("error.php");
 });
 
-//return the first removable USB media location
+// if there is one USB drive, return the path to it, otherwise act on the exception
 function getTargetUSBDriveLocation () {
 
-         // Get paths to all mounted storage and count of mounted storage
+         // Enumerate /media/ mountpoints and count them
          $rmv_usb_paths = shell_exec('lsblk -no MOUNTPOINTS | grep "^/media/"');
          $rmv_usb_paths_count = substr_count($rmv_usb_paths, "\n"); 
 
@@ -35,7 +35,8 @@ function getTargetUSBDriveLocation () {
              ];
              throw new RuntimeException(json_encode($exception_data));
          } else {
-             return trim($rmv_usb_paths) . "/";
+             // at this point, we know there is only 1 USB drive inserted and it is not double mounted; return the path to it
+             return trim($rmv_usb_paths) . "/"; 
          }
 }
 
