@@ -15,37 +15,28 @@ set_exception_handler(function (Throwable $exception) {
     include ("error.php");
 });
 
-//return the first removable USB drive location
+// If there is one USB drive and it is not double mounted, return the path to it, otherwise act on the exception
 function getTargetUSBDriveLocation () {
 
-         // Get the count of storage mounted at /media, and error if there is <>1 otherwise return upload path
+         // Enumerate /media/ mountpoints and count them
+         $rmv_usb_paths = shell_exec('lsblk -no MOUNTPOINTS | grep "^/media/"');
+         $rmv_usb_paths_count = substr_count($rmv_usb_paths, "\n"); 
 
-         $rmv_usb_path_count = shell_exec('lsblk --output NAME,TRAN,RM,MOUNTPOINT --pairs | cut -d " " -f 4 | grep "^MOUNTPOINT=\"/media" | wc -l');
-
-         if ($rmv_usb_path_count == 0) {
+         if ($rmv_usb_paths_count == 0) {
              $exception_data = [
                'usb_count' => 0,
-               'exception_msg' => '0 USB sticks found. <br/><br/>'
+               'exception_msg' => '0 USB drives found. <br/><br/>'
              ];
              throw new RuntimeException(json_encode($exception_data));
-         } elseif ($rmv_usb_path_count > 1) {
+         } elseif ($rmv_usb_paths_count > 1) {
              $exception_data = [
-               'usb_count' => $rmv_usb_path_count,
-               'exception_msg' => 'More than 1 USB stick installed. <br/><br/>'
-             ];
-             throw new RuntimeException(json_encode($exception_data));
-         }
-
-         $rmv_usb_path = trim(str_replace('"', '', shell_exec('lsblk --output NAME,TRAN,RM,MOUNTPOINT --pairs | cut -d " " -f 4 | grep "^MOUNTPOINT=\"/media" | cut -d "=" -f 2')));
-
-         if (empty($rmv_usb_path)) {
-             $exception_data = [
-               'usb_count' => -1, 
-               'exception_msg' => 'Not able to find USB stick. <br/><br/>'
+               'usb_count' => $rmv_usb_paths_count,
+               'exception_msg' => 'There is more than 1 USB drive inserted or the USB drive is double mounted. <br/><br/>'
              ];
              throw new RuntimeException(json_encode($exception_data));
          } else {
-             return $rmv_usb_path . "/";
+             // At this point, we know there is only 1 USB drive inserted and it is not double mounted; return the path to it
+             return trim($rmv_usb_paths) . "/"; 
          }
 }
 
