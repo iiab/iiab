@@ -32,14 +32,14 @@ function getTargetUSBDriveLocation () {
              throw new RuntimeException(json_encode($exception_data));
          } elseif ($rmv_usb_paths_count > 1) {
              //look for second mountpoint
-             $second_mount = shell_exec('mount | grep udisks |  cut -d " " -f 3');
+             $second_mount = shell_exec('mount | grep udisks | cut -d " " -f 3');
              if (!empty($second_mount)) {
                  // should test for usbbooted machines and exclude /
                  $mnt_point = ($second_mount);
                  shell_exec('pumount $second_mount');
                }
 
-             $second_mount2 = shell_exec('mount | grep udisks |  cut -d " " -f 3');
+             $second_mount2 = shell_exec('mount | grep udisks | cut -d " " -f 3');
              if (!empty($second_mount2)) {
                  $exception_data = [
                    'usb_count' => -1,
