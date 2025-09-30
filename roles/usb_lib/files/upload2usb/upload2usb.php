@@ -40,8 +40,9 @@ function getTargetUSBDriveLocation () {
                //look for second mountpoint
                $second_mount = shell_exec('mount | grep udisks |  cut -d " " -f 3');
                if (!empty($second_mount)) {
+                   // should test for usbbooted machines and exclude /
                    $mnt_point = ($second_mount);
-                   shell_exec('umount $second_mount');
+                   shell_exec('pumount $second_mount');
                }
 
                $second_mount2 = shell_exec('mount | grep udisks |  cut -d " " -f 3');
