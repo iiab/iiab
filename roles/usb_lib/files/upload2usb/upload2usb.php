@@ -10,7 +10,7 @@ set_exception_handler(function (Throwable $exception) {
     $exception_details = json_decode($exception->getMessage(), true);
     $usb_count = $exception_details['usb_count'];
     $exception_msg = $exception_details['exception_msg'];
-    
+
     // Always include error.php for upload2usb directory requests
     include ("error.php");
 });
@@ -19,8 +19,10 @@ set_exception_handler(function (Throwable $exception) {
 function getTargetUSBDriveLocation () {
 
          // Enumerate /media/ mountpoints and count them
-         $rmv_usb_paths = shell_exec('lsblk -no MOUNTPOINTS | grep "^/media/"');
-         $rmv_usb_paths_count = substr_count($rmv_usb_paths, "\n"); 
+         //$rmv_usb_paths = shell_exec('lsblk -no MOUNTPOINTS | grep "^/media/"');
+         // Enumerate /library/www/html/local_content/ to see what usbmount mounted and count them
+         $rmv_usb_paths = shell_exec('ls /library/www/html/local_content/');
+         $rmv_usb_paths_count = substr_count($rmv_usb_paths, "\n");
 
          if ($rmv_usb_paths_count == 0) {
              $exception_data = [
@@ -31,7 +33,7 @@ function getTargetUSBDriveLocation () {
          } elseif ($rmv_usb_paths_count > 1) {
              $exception_data = [
                'usb_count' => $rmv_usb_paths_count,
-               'exception_msg' => 'There is more than 1 USB drive inserted or the USB drive is double mounted. <br/><br/>'
+               'exception_msg' => 'There is more than 1 USB drive inserted. <br/><br/>'
              ];
              throw new RuntimeException(json_encode($exception_data));
          } else {
@@ -54,6 +56,7 @@ function getTargetUSBDriveLocation () {
 
              }
 
+             // At this point, we know there is only 1 USB drive inserted and it is not double mounted; return the path to it
              return $rmv_usb_path . "/";
          }
 }
