@@ -31,34 +31,30 @@ function getTargetUSBDriveLocation () {
              ];
              throw new RuntimeException(json_encode($exception_data));
          } elseif ($rmv_usb_paths_count > 1) {
+             //look for second mountpoint
+             $second_mount = shell_exec('mount | grep udisks |  cut -d " " -f 3');
+             if (!empty($second_mount)) {
+                 // should test for usbbooted machines and exclude /
+                 $mnt_point = ($second_mount);
+                 shell_exec('pumount $second_mount');
+               }
+
+             $second_mount2 = shell_exec('mount | grep udisks |  cut -d " " -f 3');
+             if (!empty($second_mount2)) {
+                 $exception_data = [
+                   'usb_count' => -1,
+                   'exception_msg' => "Double Mounting at $second_mount2 attempted fix failed. <br/><br/>"
+               ];
+               } else {
              $exception_data = [
                'usb_count' => $rmv_usb_paths_count,
                'exception_msg' => 'There is more than 1 USB drive inserted. <br/><br/>'
              ];
+             }
              throw new RuntimeException(json_encode($exception_data));
          } else {
-               //look for second mountpoint
-               $second_mount = shell_exec('mount | grep udisks |  cut -d " " -f 3');
-               if (!empty($second_mount)) {
-                   // should test for usbbooted machines and exclude /
-                   $mnt_point = ($second_mount);
-                   shell_exec('pumount $second_mount');
-               }
-
-               $second_mount2 = shell_exec('mount | grep udisks |  cut -d " " -f 3');
-               if (!empty($second_mount2)) {
-                   $exception_data = [
-                     'usb_count' => -1,
-                     'exception_msg' => "Double Mounting at $second_mount2 attempted fix failed. <br/><br/>"
-               ];
-               }
-
-               throw new RuntimeException(json_encode($exception_data));
-
-             }
-
              // At this point, we know there is only 1 USB drive inserted and it is not double mounted; return the path to it
-             return $rmv_usb_path . "/";
+             return trim($rmv_usb_paths) . "/";
          }
 }
 
@@ -72,10 +68,10 @@ function getTargetFolderPath ($create_folder_p) {
          if (!file_exists($target_folder_path) && $create_folder_p) {
 
              $exception_data = [
-               'usb_count' => -1, 
+               'usb_count' => -1,
                'exception_msg' => "Not able to create upload directory. <br/>Make sure 'usb_lib_writable_sticks' is set to 'True'. <br/><br/>"
              ];
-	 
+
              mkdir($target_folder_path, 0777) or throw new RuntimeException(json_encode($exception_data));
          }
          return $target_folder_path;
