@@ -59,62 +59,40 @@
 # regular operation it uses:     .../fpm/php.ini
 # And in the past it used:       .../apache2/php.ini
 
-
-- name: "Enact 'nginx_high_php_limits: False' in /etc/php/{{ php_version }}/fpm/php.ini for LIGHTWEIGHT use of Matomo/Nextcloud/PBX/WordPress (allow file size up to 100MB, 100s timeouts, with 2 PHP system defaults: memory_limit = 128M, max_input_vars = 1000)"
+- name: "Enact 'nginx_high_php_limits: False' in */php.ini for medium-sized workloads"
+  loop:
+    # upload size limits
+    - { conf: fpm, regexp: '^upload_max_filesize', line: 'upload_max_filesize = 100M    ; default is 2M' }
+    - { conf: cli, regexp: '^upload_max_filesize', line: 'upload_max_filesize = 100M    ; default is 2M' }
+    - { conf: fpm, regexp: '^post_max_size', line: 'post_max_size = 100M    ; default is 8M' }
+    - { conf: cli, regexp: '^post_max_size', line: 'post_max_size = 100M    ; default is 8M' }
+    # time and memory limits
+    - { conf: fpm, regexp: '^max_execution_time', line: 'max_execution_time = 100    ; default is 30' }
+    - { conf: fpm, regexp: '^max_input_time', line: 'max_input_time = 100    ; default is 60' }
+    - { conf: fpm, regexp: '^memory_limit', line: 'memory_limit = 128M    ; default is 128M / Nextcloud requests 512M' }
   lineinfile:
-    path: /etc/php/{{ php_version }}/fpm/php.ini    # COMPARE /etc/php/{{ php_version }}/cli/php.ini AND /etc/php/{{ php_version }}/apache2/php.ini
+    path: /etc/php/{{ php_version }}/{{ item.conf }}/php.ini
     regexp: "{{ item.regexp }}"
     line: "{{ item.line }}"
-  with_items:
-    - { regexp: '^upload_max_filesize', line: 'upload_max_filesize = 100M    ; default is 2M' }
-    - { regexp: '^post_max_size', line: 'post_max_size = 100M    ; default is 8M' }
-    - { regexp: '^max_execution_time', line: 'max_execution_time = 100    ; default is 30' }
-    - { regexp: '^max_input_time', line: 'max_input_time = 100    ; default is 60' }
-    - { regexp: '^memory_limit', line: 'memory_limit = 128M    ; default is 128M / Nextcloud requests 512M' }
-    - { regexp: '^max_input_vars', line: 'max_input_vars = 1000    ; default is 1000 / Moodle 3.11+ requires 5000+ with PHP 8+' }
   when: not nginx_high_php_limits and not moodle_install and not nextcloud_install
 
-- name: "Enact 'nginx_high_php_limits: False' in /etc/php/{{ php_version }}/cli/php.ini for LIGHTWEIGHT use of Matomo/Nextcloud/PBX/WordPress (allow file size up to 100MB, 100s timeouts, with 2 PHP system defaults: memory_limit = 128M, max_input_vars = 1000)"
+- name: "Enact 'nginx_high_php_limits: True' in */php.ini for large-sized workloads"
+  loop:
+    # upload size limits
+    - { conf: fpm, regexp: '^upload_max_filesize', line: 'upload_max_filesize = 10G    ; default is 2M' }
+    - { conf: cli, regexp: '^upload_max_filesize', line: 'upload_max_filesize = 10G    ; default is 2M' }
+    - { conf: fpm, regexp: '^post_max_size', line: 'post_max_size = 10G    ; default is 8M' }
+    - { conf: cli, regexp: '^post_max_size', line: 'post_max_size = 10G    ; default is 8M' }
+    - { conf: fpm, regexp: '^max_input_vars', line: 'max_input_vars = 5000    ; default is 1000 / Moodle 3.11+ requires 5000+ with PHP 8+' }
+    - { conf: cli, regexp: '^max_input_vars', line: 'max_input_vars = 5000    ; default is 1000 / Moodle 3.11+ requires 5000+ with PHP 8+' }
+    # time and memory limits
+    - { conf: fpm, regexp: '^max_execution_time', line: 'max_execution_time = 3600    ; default is 30' }
+    - { conf: fpm, regexp: '^max_input_time', line: 'max_input_time = 3600    ; default is 60' }
+    - { conf: fpm, regexp: '^memory_limit', line: 'memory_limit = 512M    ; default is 128M / Nextcloud requests 512M' }
   lineinfile:
-    path: /etc/php/{{ php_version }}/cli/php.ini    # COMPARE /etc/php/{{ php_version }}/fpm/php.ini AND /etc/php/{{ php_version }}/apache2/php.ini
+    path: /etc/php/{{ php_version }}/{{ item.conf }}/php.ini
     regexp: "{{ item.regexp }}"
     line: "{{ item.line }}"
-  with_items:
-    - { regexp: '^upload_max_filesize', line: 'upload_max_filesize = 100M    ; default is 2M' }
-    - { regexp: '^post_max_size', line: 'post_max_size = 100M    ; default is 8M' }
-    - { regexp: '^max_execution_time', line: 'max_execution_time = 100    ; default is 30' }
-    - { regexp: '^max_input_time', line: 'max_input_time = 100    ; default is 60' }
-    - { regexp: '^memory_limit', line: 'memory_limit = 128M    ; default is -1 (i.e. no limit) / Nextcloud requests 512M' }
-    - { regexp: '^max_input_vars', line: 'max_input_vars = 1000    ; default is 1000 / Moodle 3.11+ requires 5000+ with PHP 8+' }
-  when: not nginx_high_php_limits and not moodle_install and not nextcloud_install
-
-
-- name: "Enact 'nginx_high_php_limits: True' in /etc/php/{{ php_version }}/fpm/php.ini for Moodle/Nextcloud or INTENSIVE use of Matomo/PBX/WordPress (allow file size up to 10000MB, 300s timeouts, memory_limit = 512M for Nextcloud, max_input_vars = 5000 for Moodle)"
-  lineinfile:
-    path: /etc/php/{{ php_version }}/fpm/php.ini    # COMPARE /etc/php/{{ php_version }}/cli/php.ini AND /etc/php/{{ php_version }}/apache2/php.ini
-    regexp: "{{ item.regexp }}"
-    line: "{{ item.line }}"
-  with_items:
-    - { regexp: '^upload_max_filesize', line: 'upload_max_filesize = 10000M    ; default is 2M' }
-    - { regexp: '^post_max_size', line: 'post_max_size = 10000M    ; default is 8M' }
-    - { regexp: '^max_execution_time', line: 'max_execution_time = 300    ; default is 30' }
-    - { regexp: '^max_input_time', line: 'max_input_time = 300    ; default is 60' }
-    - { regexp: '^memory_limit', line: 'memory_limit = 512M    ; default is 128M / Nextcloud requests 512M' }
-    - { regexp: '^max_input_vars', line: 'max_input_vars = 5000    ; default is 1000 / Moodle 3.11+ requires 5000+ with PHP 8+' }
-  when: nginx_high_php_limits or moodle_install or nextcloud_install
-
-- name: "Enact 'nginx_high_php_limits: True' in /etc/php/{{ php_version }}/cli/php.ini for Moodle/Nextcloud or INTENSIVE use of Matomo/PBX/WordPress (allow file size up to 10000MB, 300s timeouts, memory_limit = 512M for Nextcloud, max_input_vars = 5000 for Moodle)"
-  lineinfile:
-    path: /etc/php/{{ php_version }}/cli/php.ini    # COMPARE /etc/php/{{ php_version }}/fpm/php.ini AND /etc/php/{{ php_version }}/apache2/php.ini
-    regexp: "{{ item.regexp }}"
-    line: "{{ item.line }}"
-  with_items:
-    - { regexp: '^upload_max_filesize', line: 'upload_max_filesize = 10000M    ; default is 2M' }
-    - { regexp: '^post_max_size', line: 'post_max_size = 10000M    ; default is 8M' }
-    - { regexp: '^max_execution_time', line: 'max_execution_time = 300    ; default is 30' }
-    - { regexp: '^max_input_time', line: 'max_input_time = 300    ; default is 60' }
-    - { regexp: '^memory_limit', line: 'memory_limit = 512M    ; default is -1 (i.e. no limit) / Nextcloud requests 512M' }
-    - { regexp: '^max_input_vars', line: 'max_input_vars = 5000    ; default is 1000 / Moodle 3.11+ requires 5000+ with PHP 8+' }
   when: nginx_high_php_limits or moodle_install or nextcloud_install
 
 
