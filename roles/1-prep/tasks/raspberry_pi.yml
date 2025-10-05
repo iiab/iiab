@@ -25,24 +25,50 @@
   command: apt-mark manual systemd-zram-generator
   ignore_errors: true
 
-- name: 'Install packages: fake-hwclock, dphys-swapfile'
+- name: 'Install package: fake-hwclock'
   package:
-    name:
-      - fake-hwclock      # 2021-03-15: Missing on Ubuntu etc.  RasPiOS installs this regardless -- to save/restore system clock on machines w/o working RTC (above).
-      - dphys-swapfile    # 2021-03-15: Missing on Ubuntu etc.  RasPiOS installs this regardless -- to autogenerate and use a swap file (below).
+    name: fake-hwclock    # 2021-03-15: Missing on Ubuntu etc.  RasPiOS installs this regardless -- to save/restore system clock on machines w/o working RTC (above).
     state: present
 
-- name: Increase swap file size (to CONF_SWAPSIZE={{ pi_swap_file_size }} in /etc/dphys-swapfile) as kalite pip download fails
-  lineinfile:
-    path: "{{ etc_path }}/dphys-swapfile"
-    regexp: "^CONF_SWAPSIZE"
-    line: "CONF_SWAPSIZE={{ pi_swap_file_size }}"
 
-- name: Restart swap service "dphys-swapfile"
-  #command: /etc/init.d/dphys-swapfile restart
-  systemd:    # Had been...a rare/legacy service that was NOT systemd
-    name: dphys-swapfile
-    state: restarted
+- name: Configure rpi-swap's /etc/rpi/swap.conf, if RasPiOS >= 13 -- ENACTED ON REBOOT
+  when: is_raspbian and os_ver is version('raspbian-13', '>=')
+  block:
+    - name: Set Mechanism=swapfile -- overriding default Mechanism=auto (i.e. Mechanism=zram+file) -- in future might Mechanism=zram+file coexist with the large swap file we need?
+      ini_file:
+        path: /etc/rpi/swap.conf
+        section: Main
+        option: Mechanism
+        value: swapfile
+        no_extra_spaces: true
+
+    - name: Increase swap file size (to FixedSizeMiB={{ pi_swap_file_size }}) -- e.g. to avoid kiwix-serve fails on Raspberry Pi Zero 2 W, with large ZIM files
+      ini_file:
+        path: /etc/rpi/swap.conf
+        section: File
+        option: FixedSizeMiB
+        value: "{{ pi_swap_file_size }}"
+        no_extra_spaces: true
+
+- name: Install and configure dphys-swapfile, if RasPiOS <= 12
+  when: is_raspbian and os_ver is version('raspbian-12', '<=')
+  block:
+    - name: 'Install package: dphys-swapfile'
+      package:
+        name: dphys-swapfile    # 2021-03-15: Missing on Ubuntu etc.  RasPiOS uses zram now -- to autogenerate and use a swap file (below).
+        state: present
+
+    - name: Increase swap file size (to CONF_SWAPSIZE={{ pi_swap_file_size }} in /etc/dphys-swapfile) -- e.g. kalite pip download failed
+      lineinfile:
+        path: "{{ etc_path }}/dphys-swapfile"
+        regexp: "^CONF_SWAPSIZE"
+        line: "CONF_SWAPSIZE={{ pi_swap_file_size }}"
+
+    - name: Restart swap service "dphys-swapfile"
+      #command: /etc/init.d/dphys-swapfile restart
+      systemd:    # Had been...a rare/legacy service that was NOT systemd
+        name: dphys-swapfile
+        state: restarted
 
 
 #- name: Enable bluetooth in /boot/firmware/syscfg.txt on Ubuntu (needs reboot)
