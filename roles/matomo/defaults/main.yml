@@ -3,6 +3,8 @@
 
 # All above are set in: github.com/iiab/iiab/blob/master/vars/default_vars.yml
 # If nec, change them by editing /etc/iiab/local_vars.yml prior to installing!
+is_proot: >-
+  {{ 'proot-distro' in (ansible_kernel | default('') | lower) }}
 
 matomo_dl_url: https://builds.matomo.org/matomo.tar.gz
 matomo_path: "{{ doc_base }}"    # e.g. /library/www
@@ -12,7 +14,20 @@ matomo_db_user: Admin
 matomo_db_pass: changeme
 
 #matomo_host_url: http://{{ ansible_default_ipv4.address }}
-matomo_host_url: http://{{ iiab_hostname }}.{{ iiab_domain }}    # e.g. http://box.lan
+#matomo_host_url: http://{{ iiab_hostname }}.{{ iiab_domain }}    # e.g. http://box.lan
+matomo_host: >-
+  {{
+    (ansible_default_ipv4.address | default('127.0.0.1'))
+    if is_proot
+    else (iiab_hostname ~ '.' ~ iiab_domain)
+  }}
+matomo_port_suffix: >-
+  {{
+    (':' ~ (nginx_port | int))
+    if ((nginx_port | default(80) | int) != 80)
+    else ''
+  }}
+matomo_host_url: "{{ 'http://' ~ matomo_host ~ matomo_port_suffix  }}"
 matomo_full_url: "{{ matomo_host_url }}/matomo/"
 
 matomo_cronjob: "sudo python3 {{ matomo_path }}/matomo/misc/log-analytics/import_logs.py --url={{ matomo_full_url }} --idsite=1 --recorders=4 --enable-http-errors --enable-http-redirects --enable-static --enable-bots /var/log/nginx/access.log"
