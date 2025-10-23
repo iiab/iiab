@@ -58,6 +58,15 @@
   community.mysql.mysql_db:
     name: "{{ matomo_db_name }}"
     #login_unix_socket: /var/run/mysqld/mysqld.sock
+  when: "'proot-distro' not in (ansible_kernel | default('') | lower)"
+
+- name: Create MariaDB Database for Matomo (proot)
+  become: true
+  community.mysql.mysql_db:
+    name: "{{ matomo_db_name }}"
+    login_unix_socket: /var/run/mysqld/mysqld.sock
+    check_implicit_admin: true
+  when: "'proot-distro' in (ansible_kernel | default('') | lower)"
 
 - name: Add Admin User to MariaDB Database
   community.mysql.mysql_user:
@@ -112,7 +121,7 @@
 - debug:
     var: matomo_system_check
 
-- name: Matomo Database Setup
+- name: Matomo Database Setup (normal via socket)
   uri:
     url: "{{ matomo_full_url }}index.php?action=databaseSetup"
     method: POST
@@ -127,6 +136,27 @@
     body_format: form-urlencoded
     status_code: 302
   #register: matomo_database_setup
+  when: "'proot-distro' not in (ansible_kernel | default('') | lower)"
+
+- name: Matomo Database Setup (proot via TCP)
+  uri:
+    url: "{{ matomo_full_url }}index.php?action=databaseSetup"
+    method: POST
+    headers:
+      Cookie: "{{ matomo_session_cookie }}"
+    body:
+      host: "127.0.0.1"
+      port: 3306
+      username: "{{ matomo_db_user }}"
+      password: "{{ matomo_db_pass }}"
+      dbname: "{{ matomo_db_name }}"
+      tables_prefix: "matomo_"
+      adapter: "PDO\\MYSQL"
+    body_format: form-urlencoded
+    status_code: [200, 302]
+    follow_redirects: all
+    return_content: true
+  when: "'proot-distro' in (ansible_kernel | default('') | lower)"
 
 - name: Matomo Table Creation
   uri:
