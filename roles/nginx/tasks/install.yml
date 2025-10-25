@@ -2,6 +2,9 @@
   shell: df -B1 --output=used / | tail -1
   register: df1
 
+- name: Detect proot/Termux environment
+  set_fact:
+    is_proot: {{ 'proot-distro' in (ansible_kernel | default('') | lower) }}
 
 - name: Stop & Disable '{{ apache_service }}' systemd service, in case it exists
   systemd:
@@ -21,6 +24,22 @@
       - uwsgi-plugin-python3    # these 2 packages on demand (not every IIAB needs these).
     state: present
 
+- name: Ensure nginx is running (proot minimal)
+  shell: |
+    pgrep -x nginx >/dev/null 2>&1 || \
+      nohup nginx >/tmp/nginx.log 2>&1 &
+  args: { executable: /bin/bash }
+  when: is_proot
+
+- name: Ensure php-fpm is running (proot minimal)
+  shell: |
+    if pgrep -f '(^|/)(php-fpm8\.4|php-fpm)( |$)' >/dev/null 2>&1; then
+      exit 0
+    fi
+    nohup "$(command -v php-fpm{{ php_version }} || command -v php-fpm8.4 || command -v php-fpm)" \
+      >/tmp/php-fpm.log 2>&1 &
+  args: { executable: /bin/bash }
+  when: is_proot
 
 # 2021-08-07: Legacy from roles/httpd/tasks/install.yml
 
@@ -67,6 +86,7 @@
   systemd:
     name: "php{{ php_version }}-fpm"
     state: restarted
+  when: not is_proot
 
 
 # RECORD NGINX AS INSTALLED

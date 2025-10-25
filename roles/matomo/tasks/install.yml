@@ -213,6 +213,26 @@
     follow_redirects: all
     return_content: true
   register: matomo_table_creation
+  failed_when: false
+  retries: 3
+  delay: 5
+  until: matomo_table_creation.status in [200, 302]
+
+- name: Dump web/db logs (proot) if tablesCreation did not succeed
+  shell: |
+    echo '=== /var/log/nginx/error.log ==='
+    [ -f /var/log/nginx/error.log ] && tail -n 200 /var/log/nginx/error.log || echo '(no file)'
+    echo '=== /tmp/php-fpm.log ==='
+    [ -f /tmp/php-fpm.log ] && tail -n 200 /tmp/php-fpm.log || echo '(no file)'
+    echo '=== /tmp/mariadb.log ==='
+    [ -f /tmp/mariadb.log ] && tail -n 200 /tmp/mariadb.log || echo '(no file)'
+  register: matomo_web_logs
+  changed_when: false
+  when: is_proot and (matomo_table_creation.status | default(-1)) not in [200, 302]
+
+- debug:
+    var: matomo_web_logs.stdout
+  when: is_proot and (matomo_table_creation.status | default(-1)) not in [200, 302]
 
 - name: Set a variable for the MATOMO_SESSID cookie
   set_fact:
