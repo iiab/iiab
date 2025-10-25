@@ -47,26 +47,52 @@
   include_tasks: roles/www_options/tasks/php-settings.yml
   when: php_settings_done is undefined
 
+- name: Detect proot/Termux environment
+  set_fact:
+    is_proot: >-
+      {{ 'proot-distro' in (ansible_kernel | default('') | lower)
+         or (ansible_env.ANDROID_ROOT | default('') | length > 0) }}
 
-- name: Start MariaDB
+- name: Start MariaDB (systemd; non-proot)
   #action: service name=mysql state=started
   systemd:
     name: "{{ mysql_service }}"
     state: started
+  when: not is_proot
+
+- block:
+    - name: Ensure mysqld socket dir (proot)
+      file:
+        path: /run/mysqld
+        state: directory
+        owner: mysql
+        group: mysql
+        mode: "0755"
+
+    - name: Start MariaDB with mariadbd-safe if not running (proot)
+      shell: |
+        pgrep -f '(^|/)(mariadbd|mysqld)( |$)' || \
+        nohup mariadbd-safe \
+          --user=mysql \
+          --socket=/run/mysqld/mysqld.sock \
+          --datadir=/var/lib/mysql \
+          --pid-file=/run/mysqld/mysqld.pid \
+          --bind-address=127.0.0.1 \
+          --skip-name-resolve \
+          >/tmp/mariadb.log 2>&1 &
+
+    - name: Wait for MariaDB TCP (proot)
+      wait_for:
+        host: 127.0.0.1
+        port: 3306
+        timeout: 40
+  when: is_proot
 
 - name: Create MariaDB Database for Matomo
   community.mysql.mysql_db:
     name: "{{ matomo_db_name }}"
     #login_unix_socket: /var/run/mysqld/mysqld.sock
-  when: "'proot-distro' not in (ansible_kernel | default('') | lower)"
-
-- name: Create MariaDB Database for Matomo (proot)
-  become: true
-  community.mysql.mysql_db:
-    name: "{{ matomo_db_name }}"
-    login_unix_socket: /var/run/mysqld/mysqld.sock
-    check_implicit_admin: true
-  when: "'proot-distro' in (ansible_kernel | default('') | lower)"
+  when: not is_proot
 
 - name: Add Admin User to MariaDB Database
   community.mysql.mysql_user:
@@ -75,6 +101,23 @@
     update_password: on_create    # OR SHOULD './runrole --reinstall matomo' FORCE A COMPLETELY CLEAN INSTALL?
     priv: "{{ matomo_db_name }}.*:ALL"
     #login_unix_socket: /var/run/mysqld/mysqld.sock
+  when: not is_proot
+
+- name: Ensure DB and Admin users for localhost and 127.0.0.1 (proot, via socket CLI)
+  shell: |
+    mariadb -S /run/mysqld/mysqld.sock -uroot <<'SQL'
+    CREATE DATABASE IF NOT EXISTS `{{ matomo_db_name }}`
+      CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
+    CREATE USER IF NOT EXISTS '{{ matomo_db_user }}'@'localhost' IDENTIFIED BY '{{ matomo_db_pass }}';
+    CREATE USER IF NOT EXISTS '{{ matomo_db_user }}'@'127.0.0.1' IDENTIFIED BY '{{ matomo_db_pass }}';
+    GRANT ALL PRIVILEGES ON `{{ matomo_db_name }}`.* TO '{{ matomo_db_user }}'@'localhost';
+    GRANT ALL PRIVILEGES ON `{{ matomo_db_name }}`.* TO '{{ matomo_db_user }}'@'127.0.0.1';
+    FLUSH PRIVILEGES;
+    SQL
+  args: { executable: /bin/bash }
+  register: _db_users_proot
+  changed_when: false
+  when: is_proot
 
 - name: Download and Extract Matomo (~3 min)
   unarchive:
@@ -107,6 +150,11 @@
   loop_control:
     loop_var: cookie
 
+- name: FAIL if MATOMO_SESSID was not obtained (required for installation)
+  fail:
+    msg: "MATOMO_SESSID was not obtained; without a session, the installer falls back to defaults (localhost/socket)."
+  when: matomo_session_cookie is not defined
+
 - name: Get Matomo System Check
   uri:
     url: "{{ matomo_full_url }}index.php?action=systemCheck"
@@ -121,32 +169,30 @@
 - debug:
     var: matomo_system_check
 
-- name: Matomo Database Setup (normal via socket)
-  uri:
-    url: "{{ matomo_full_url }}index.php?action=databaseSetup"
-    method: POST
-    headers:
-      Cookie: "{{ matomo_session_cookie }}"
-    body:
-      username: "{{ matomo_db_user }}"
-      password: "{{ matomo_db_pass }}"
-      dbname: "{{ matomo_db_name }}"
-      tables_prefix: "matomo_"
-      adapter: "PDO\\MYSQL"
-    body_format: form-urlencoded
-    status_code: 302
-  #register: matomo_database_setup
-  when: "'proot-distro' not in (ansible_kernel | default('') | lower)"
+- name: TCP smoke-test (SELECT 1) using Admin over 127.0.0.1:3306 (proot)
+  shell: |
+    mysql --protocol=TCP -h127.0.0.1 -P3306 \
+      -u "{{ matomo_db_user }}" -p"{{ matomo_db_pass }}" -e "SELECT 1;"
+  register: _mysql_smoke
+  changed_when: false
+  failed_when: _mysql_smoke.rc != 0
+  no_log: true
+  when: is_proot
 
-- name: Matomo Database Setup (proot via TCP)
+- name: Matomo Database Setup
   uri:
     url: "{{ matomo_full_url }}index.php?action=databaseSetup"
     method: POST
     headers:
       Cookie: "{{ matomo_session_cookie }}"
     body:
-      host: "127.0.0.1"
-      port: 3306
+      # TCP fields only in proot:
+      host: "{{ '127.0.0.1' if is_proot else omit }}"
+      port: "{{ 3306 if is_proot else omit }}"
+      unix_socket: "{{ '' if is_proot else omit }}"
+      charset: "{{ 'utf8mb4' if is_proot else omit }}"
+      type: "{{ 'InnoDB' if is_proot else omit }}"
+      # Common fields:
       username: "{{ matomo_db_user }}"
       password: "{{ matomo_db_pass }}"
       dbname: "{{ matomo_db_name }}"
@@ -155,14 +201,17 @@
     body_format: form-urlencoded
     status_code: [200, 302]
     follow_redirects: all
-    return_content: true
-  when: "'proot-distro' in (ansible_kernel | default('') | lower)"
+  #register: matomo_database_setup
 
 - name: Matomo Table Creation
   uri:
     url: "{{ matomo_full_url }}index.php?action=tablesCreation&module=Installation"
     method: GET
-    status_code: 200
+    headers:
+      Cookie: "{{ matomo_session_cookie }}"
+    status_code: [200, 302]
+    follow_redirects: all
+    return_content: true
   register: matomo_table_creation
 
 - name: Set a variable for the MATOMO_SESSID cookie
