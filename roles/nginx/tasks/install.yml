@@ -2,10 +2,6 @@
   shell: df -B1 --output=used / | tail -1
   register: df1
 
-- name: Detect proot/Termux environment
-  set_fact:
-    is_proot: "{{ ('proot-distro' in (ansible_kernel | default('') | lower))
-                 or ((ansible_env.ANDROID_ROOT | default('')) | length > 0) | bool }}"
 
 - name: Stop & Disable '{{ apache_service }}' systemd service, in case it exists
   systemd:
@@ -30,7 +26,7 @@
     pgrep -x nginx >/dev/null 2>&1 || \
       nohup nginx >/tmp/nginx.log 2>&1 &
   args: { executable: /bin/bash }
-  when: is_proot
+  when: is_proot | bool
 
 - name: Ensure php-fpm is running (proot minimal)
   shell: |
@@ -40,7 +36,7 @@
     nohup "$(command -v php-fpm{{ php_version }} || command -v php-fpm8.4 || command -v php-fpm)" \
       >/tmp/php-fpm.log 2>&1 &
   args: { executable: /bin/bash }
-  when: is_proot
+  when: is_proot | bool
 
 # 2021-08-07: Legacy from roles/httpd/tasks/install.yml
 
@@ -87,7 +83,7 @@
   systemd:
     name: "php{{ php_version }}-fpm"
     state: restarted
-  when: not is_proot
+  when: not (is_proot | bool)
 
 
 # RECORD NGINX AS INSTALLED

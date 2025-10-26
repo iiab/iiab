@@ -47,19 +47,16 @@
   include_tasks: roles/www_options/tasks/php-settings.yml
   when: php_settings_done is undefined
 
-- name: Detect proot/Termux environment
-  set_fact:
-    is_proot: "{{ ('proot-distro' in (ansible_kernel | default('') | lower))
-                 or ((ansible_env.ANDROID_ROOT | default('')) | length > 0) | bool }}"
-
 - name: Start MariaDB (systemd; non-proot)
   #action: service name=mysql state=started
   systemd:
     name: "{{ mysql_service }}"
     state: started
-  when: not is_proot
+  when: not (is_proot | bool)
 
-- block:
+- name: Start MariaDB in proot (mariadbd-safe)
+  when: is_proot | bool
+  block:
     - name: Ensure mysqld socket dir (proot)
       file:
         path: /run/mysqld
@@ -85,13 +82,12 @@
         host: 127.0.0.1
         port: 3306
         timeout: 40
-  when: is_proot
 
 - name: Create MariaDB Database for Matomo
   community.mysql.mysql_db:
     name: "{{ matomo_db_name }}"
     #login_unix_socket: /var/run/mysqld/mysqld.sock
-  when: not is_proot
+  when: not (is_proot | bool)
 
 - name: Add Admin User to MariaDB Database
   community.mysql.mysql_user:
@@ -100,7 +96,7 @@
     update_password: on_create    # OR SHOULD './runrole --reinstall matomo' FORCE A COMPLETELY CLEAN INSTALL?
     priv: "{{ matomo_db_name }}.*:ALL"
     #login_unix_socket: /var/run/mysqld/mysqld.sock
-  when: not is_proot
+  when: not (is_proot | bool)
 
 - name: Ensure DB and Admin users for localhost and 127.0.0.1 (proot, via socket CLI)
   shell: |
@@ -116,7 +112,7 @@
   args: { executable: /bin/bash }
   register: _db_users_proot
   changed_when: false
-  when: is_proot
+  when: is_proot | bool
 
 - name: Download and Extract Matomo (~3 min)
   unarchive:
@@ -176,7 +172,7 @@
   changed_when: false
   failed_when: _mysql_smoke.rc != 0
   no_log: true
-  when: is_proot
+  when: is_proot | bool
 
 - name: Matomo Database Setup
   uri:
@@ -227,11 +223,15 @@
     [ -f /tmp/mariadb.log ] && tail -n 200 /tmp/mariadb.log || echo '(no file)'
   register: matomo_web_logs
   changed_when: false
-  when: is_proot and (matomo_table_creation.status | default(-1)) not in [200, 302]
+  when:
+    - is_proot | bool
+    - (matomo_table_creation.status | default(-1)) not in [200, 302]
 
 - debug:
     var: matomo_web_logs.stdout
-  when: is_proot and (matomo_table_creation.status | default(-1)) not in [200, 302]
+  when:
+    - is_proot | bool
+    - (matomo_table_creation.status | default(-1)) not in [200, 302]
 
 - name: Set a variable for the MATOMO_SESSID cookie
   set_fact:
