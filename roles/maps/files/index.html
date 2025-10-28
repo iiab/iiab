@@ -32,7 +32,7 @@
                     }[styleChooser.value][highDef]
                     console.log("setting to", mb.mapstyle)
 
-                    addSearch() // The above will reset the map so we have to add search again. This also covers page load.
+                    addControls() // The above will reset the map so we have to add search again. This also covers page load.
                 }
 
                 // HEAD request just to see if the high def pmtiles file is there
@@ -54,30 +54,33 @@
                 };
                 http.send();
 
+                class MapsDotBlackGlobeControl extends maplibregl.GlobeControl {
+                    onAdd(map) {
+                        // Depends on GlobeControl using `_toggleProjection` internally in this
+                        // way, which might change in a different version of maplibregl:
+                        // https://github.com/maplibre/maplibre-gl-js/blob/93634b011a147666a62887bc61bffd351fa9971d/src/ui/control/globe_control.ts
+                        //
+                        // The reason we are doing this is that maps.black has its own wrapper for
+                        // projection, among other aspects of the map. Rather than directly accessing the
+                        // underlying map object to change the projection (as maplibregl.GlobeControl
+                        // does), we will overload this method to use maps.black's wrapper.
+                        //
+                        // TODO implement this in a less hacky way, maybe. like maybe from scratch?
+                        this._toggleProjection = () => {
+                            // Not ideal to use the global `mb` but the alternative would be contrived and probably more error prone
+                            mb.globe = !mb.globe
+
+                            // Changing "features" of mb such as globe seems to rebuild the map, and in
+                            // the process dumping all of the controls we added. So, we have to add them
+                            // again.
+                            addControls()
+                        }
+
+                        return super.onAdd(map)
+                    }
+                }
+
                 const mb = document.getElementsByTagName("maps-black")[0];
-
-                // Set the map attributes according to the initial state of
-                // the inputs (which seem to survive reloads. which may
-                // actually be convenient, so I don't want to unset them on
-                // load).
-                //
-                // Also set map attributes on change of those inputs.
-
-                // For each feature checkbox:
-                // (NOTE: there were more than 1 before, there may be more again in the future):
-                ["globe"].map(feature => {
-                    const checkbox = document.getElementById(feature)
-
-                    // set the map feature according to the initial state of
-                    // the checkbox
-                    mb[feature] = checkbox.checked
-
-                    // set the map features on checkbox change
-                    checkbox.addEventListener('change', function() {
-                        mb[feature] = this.checked
-                        addSearch() // The above will reset the map so we have to add search again
-                    })
-                });
 
                 // set the mapstyle on dropdown change
                 styleChooser.addEventListener('change', setStyle)
@@ -158,10 +161,10 @@
                     },
                     popup: true,
                 })
-                let addSearchTimeout = null
-                function addSearch() {
+                let addControlsTimeout = null
+                function addControls() {
                     // Whether we're setting a new timeout or actually adding the search, make sure no further timeouts are looming.
-                    clearTimeout(addSearchTimeout)
+                    clearTimeout(addControlsTimeout)
                     if (geocoder._map) {
                       // Neither add a map nor set a timer
                       return
@@ -169,7 +172,7 @@
 
                     // TODO use a maps-dot-black "on add map" callback instead, if such a thing exists.
                     // The problem is that at on creation, mb doesn't immediately contain a map.
-                    if (mb.map && mb.map.loaded()) {
+                    if (mb.map && mb.map.style) { // NOTE mb.map.loaded() becomes true much later than mb.map.style. mb.map.style seems to be sufficient.
                         // sigh. deal with sneaking the style sheets into a "Shadow DOM" here. Thankfully this somehow isn't an issue with javascript.
                         // https://stackoverflow.com/questions/79736280/importing-a-css-stylesheet-into-a-webcomponent-with-shadow-dom-in-firefox/79744809#79744809
                         // TODO - See if I can do this in a more direct way. I only need the geocoder css as part of this shadow DOM. Also I probably don't need the
@@ -180,17 +183,20 @@
                         myStyles.replace(stylesheetText)
                         mb.shadowRoot.adoptedStyleSheets = [...mb.shadowRoot.adoptedStyleSheets, myStyles]
 
-                        mb.map.addControl(geocoder);
+                        mb.map.addControl(geocoder, 'top-left');
+                        mb.map.addControl(new maplibregl.ScaleControl());
+                        mb.map.addControl(new MapsDotBlackGlobeControl(), 'top-right');
+                        // NOTE Navigation control is added via `navigationcontrol` attribute on the maps-black tag
                     } else {
                         // For now try periodically until it's ready.
-                        addSearchTimeout = setTimeout(addSearch, 100)
+                        addControlsTimeout = setTimeout(addControls, 100)
                     }
                 }
             });
         </script>
     </head>
     <body>
-        <maps-black style="height:90vh" loader="pmtiles"></maps-black>
+        <maps-black style="height:90vh" loader="pmtiles" navigationcontrol="true"></maps-black>
         <span class="styleSelection">
             <label class="styleswitchwrapper">Map style <select class="styleswitch" id="styleswitch">
                 <option value="light">Light</option>
@@ -198,9 +204,6 @@
                 <option value="satellite">Satellite</option>
                 <option value="hybrid">Hybrid map/satellite</option>
             </select></label>
-        </span>
-        <span id="set-features">
-            <label>Globe <input id="globe" type="checkbox"></label>
         </span>
         <script src="maplibre-gl-geocoder.min.js"></script>
         <link
