@@ -47,6 +47,10 @@
   include_tasks: roles/www_options/tasks/php-settings.yml
   when: php_settings_done is undefined
 
+- name: "Restart php-fpm service for (proot)"
+  include_tasks: roles/proot_services/tasks/restart_phpfpm.yml
+  when: is_proot
+
 - name: Start MariaDB (systemd; non-proot)
   #action: service name=mysql state=started
   systemd:
@@ -93,21 +97,47 @@
 - name: Ensure DB and Admin users for localhost and 127.0.0.1 (proot, via socket CLI)
   shell: |
     mariadb -S '{{ mariadb_run_dir }}/mysqld.sock' -uroot <<'SQL'
-    DELETE FROM mysql.global_priv WHERE User='root' AND Host='127.0.0.1';
     CREATE DATABASE IF NOT EXISTS `{{ matomo_db_name }}`
       CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
-    CREATE USER IF NOT EXISTS '{{ matomo_db_user }}'@'localhost' IDENTIFIED BY '{{ matomo_db_pass }}';
-    CREATE USER IF NOT EXISTS '{{ matomo_db_user }}'@'127.0.0.1' IDENTIFIED BY '{{ matomo_db_pass }}';
-    GRANT ALL PRIVILEGES ON `{{ matomo_db_name }}`.* TO '{{ matomo_db_user }}'@'localhost';
-    GRANT ALL PRIVILEGES ON `{{ matomo_db_name }}`.* TO '{{ matomo_db_user }}'@'127.0.0.1';
-    FLUSH PRIVILEGES;
+    INSERT INTO mysql.global_priv (Host,User,Priv)
+    VALUES ('127.0.0.1','{{ matomo_db_user }}',
+            JSON_OBJECT('plugin','mysql_native_password',
+                        'authentication_string', PASSWORD('{{ matomo_db_pass }}')))
+    ON DUPLICATE KEY UPDATE
+      Priv = JSON_SET(Priv,
+                      '$.plugin','mysql_native_password',
+                      '$.authentication_string', PASSWORD('{{ matomo_db_pass }}'));
+    INSERT INTO mysql.db
+      (Host,Db,User,
+       Select_priv,Insert_priv,Update_priv,Delete_priv,
+       Create_priv,Drop_priv,Index_priv,Alter_priv,
+       Create_tmp_table_priv,Lock_tables_priv,
+       Create_view_priv,Show_view_priv,
+       Create_routine_priv,Alter_routine_priv,Execute_priv,
+       Event_priv,Trigger_priv,References_priv,Grant_priv)
+    VALUES
+      ('127.0.0.1','{{ matomo_db_name }}','{{ matomo_db_user }}',
+       'Y','Y','Y','Y',
+       'Y','Y','Y','Y',
+       'Y','Y',
+       'Y','Y',
+       'Y','Y','Y',
+       'Y','Y','Y','N')
+    ON DUPLICATE KEY UPDATE
+       Select_priv='Y',Insert_priv='Y',Update_priv='Y',Delete_priv='Y',
+       Create_priv='Y',Drop_priv='Y',Index_priv='Y',Alter_priv='Y',
+       Create_tmp_table_priv='Y',Lock_tables_priv='Y',
+       Create_view_priv='Y',Show_view_priv='Y',
+       Create_routine_priv='Y',Alter_routine_priv='Y',Execute_priv='Y',
+       Event_priv='Y',Trigger_priv='Y',References_priv='Y',Grant_priv='N';
+    DELETE FROM mysql.global_priv WHERE User='root' AND Host='127.0.0.1';
     SQL
   args: { executable: /bin/bash }
   register: _db_users_proot
   changed_when: false
   when: is_proot
 
-- name: Stop skip-grant MariaDB
+- name: Stop skip-grant MariaDB (proot)
   shell: |
     pkill -f '(^|/)(mariadbd|mysqld)(\s|$)' || true
     pkill -f mariadbd-safe || true
@@ -118,7 +148,7 @@
 
 - name: Start MariaDB (safe wrapper, TCP)
   block:
-    - name: Start mariadbd-safe (PRoot)
+    - name: Start mariadbd-safe (proot)
       shell: |
         nohup mariadbd-safe \
           --datadir={{ mariadb_datadir }} \
@@ -129,7 +159,7 @@
         sleep 1
       args: { executable: /bin/bash }
 
-    - name: Wait for MariaDB TCP
+    - name: Wait for MariaDB TCP (proot)
       wait_for:
         host: "{{ tcp_host }}"
         port: "{{ tcp_port }}"
