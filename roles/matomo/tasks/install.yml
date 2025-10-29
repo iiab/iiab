@@ -58,6 +58,15 @@
     state: started
   when: not is_proot
 
+- name: Stop any running MariaDB before skip-grant (proot)
+  shell: |
+    pkill -f '(^|/)(mariadbd|mysqld)(\s|$)' || true
+    pkill -f mariadbd-safe || true
+  args: { executable: /bin/bash }
+  changed_when: false
+  failed_when: false
+  when: is_proot
+
 - name: Start MariaDB in proot (mariadbd-safe)
   when: is_proot
   block:
@@ -94,9 +103,9 @@
     #login_unix_socket: /var/run/mysqld/mysqld.sock
   when: not is_proot
 
-- name: Ensure DB and Admin users for localhost and 127.0.0.1 (proot, via socket CLI)
+- name: Ensure DB and Admin users for localhost and 127.0.0.1 (proot, via TCP)
   shell: |
-    mariadb -S '{{ mariadb_run_dir }}/mysqld.sock' -uroot <<'SQL'
+    mariadb --protocol=TCP -h{{ tcp_host }} -P{{ tcp_port }} -uroot <<'SQL'
     CREATE DATABASE IF NOT EXISTS `{{ matomo_db_name }}`
       CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
     INSERT INTO mysql.global_priv (Host,User,Priv)
