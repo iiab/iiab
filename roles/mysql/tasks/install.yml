@@ -69,6 +69,65 @@
 #    - 127.0.0.1
 #    - ::1
 
+- name: Start MariaDB setup in proot (mariadbd-safe)
+  block:
+    - name: Ensure mysqld socket dir (proot)
+      file:
+        path: "{{ mariadb_run_dir }}"
+        state: directory
+        owner: mysql
+        group: mysql
+        mode: "0755"
+
+    - name: Ensure MariaDB log dir (proot)
+      file:
+        path: "{{ mariadb_log_dir }}"
+        state: directory
+        owner: mysql
+        group: mysql
+        mode: "0755"
+
+    - name: Ensure MariaDB log file (proot)
+      file:
+        path: "{{ mariadb_log_file }}"
+        state: touch
+        owner: mysql
+        group: mysql
+        mode: "0644"
+
+    - name: Write TCP-only /etc/mysql/mariadb.cnf (proot)
+      copy:
+        dest: /etc/mysql/mariadb.cnf
+        mode: "0644"
+        content: |
+          [client]
+          protocol = TCP
+          host     = 127.0.0.1
+          port     = 3306
+
+          [mysqld]
+          bind-address   = 127.0.0.1
+          port           = 3306
+          skip-networking= 0
+          pid-file       = /run/mysqld/mysqld.pid
+          socket         = /run/mysqld/mysqld.sock
+
+          !includedir /etc/mysql/mariadb.conf.d
+          !includedir /etc/mysql/conf.d
+
+    - name: Initialize datadir if missing (proot)
+      command: >
+        mariadb-install-db --user=mysql
+        --datadir={{ mariadb_datadir }}
+        --skip-test-db
+      args:
+        creates: "{{ mariadb_datadir }}/mysql"
+  vars:
+    mariadb_run_dir: "/run/mysqld"
+    mariadb_log_dir: "/var/log/mysql"
+    mariadb_log_file: "{{ mariadb_log_dir }}/mariadb.log"
+  when: is_proot
+
 
 # RECORD MySQL AS INSTALLED
 

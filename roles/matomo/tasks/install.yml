@@ -57,31 +57,23 @@
 - name: Start MariaDB in proot (mariadbd-safe)
   when: is_proot
   block:
-    - name: Ensure mysqld socket dir (proot)
-      file:
-        path: /run/mysqld
-        state: directory
-        owner: mysql
-        group: mysql
-        mode: "0755"
-
-    - name: Start MariaDB with mariadbd-safe if not running (proot)
+    - name: Start MariaDB in skip-grant-tables (TCP)
       shell: |
-        pgrep -f '(^|/)(mariadbd|mysqld)( |$)' || \
         nohup mariadbd-safe \
-          --user=mysql \
-          --socket=/run/mysqld/mysqld.sock \
-          --datadir=/var/lib/mysql \
-          --pid-file=/run/mysqld/mysqld.pid \
-          --bind-address=127.0.0.1 \
-          --skip-name-resolve \
-          >/tmp/mariadb.log 2>&1 &
+          --datadir={{ mariadb_datadir }} \
+          --pid-file={{ mariadb_run_dir }}/mysqld.pid \
+          --socket={{ mariadb_run_dir }}/mysqld.sock \
+          --port={{ tcp_port }} --bind-address={{ tcp_host }} \
+          --skip-networking=0 --skip-grant-tables >>"{{ mariadb_log_file }}" 2>&1 &
+        sleep 2
+      args: { executable: /bin/bash }
 
     - name: Wait for MariaDB TCP (proot)
       wait_for:
-        host: 127.0.0.1
-        port: 3306
-        timeout: 40
+        host: "{{ tcp_host }}"
+        port: "{{ tcp_port }}"
+        state: started
+        timeout: 30
 
 - name: Create MariaDB Database for Matomo
   community.mysql.mysql_db:
@@ -100,7 +92,8 @@
 
 - name: Ensure DB and Admin users for localhost and 127.0.0.1 (proot, via socket CLI)
   shell: |
-    mariadb -S /run/mysqld/mysqld.sock -uroot <<'SQL'
+    mariadb -S '{{ mariadb_run_dir }}/mysqld.sock' -uroot <<'SQL'
+    DELETE FROM mysql.global_priv WHERE User='root' AND Host='127.0.0.1';
     CREATE DATABASE IF NOT EXISTS `{{ matomo_db_name }}`
       CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
     CREATE USER IF NOT EXISTS '{{ matomo_db_user }}'@'localhost' IDENTIFIED BY '{{ matomo_db_pass }}';
@@ -112,6 +105,36 @@
   args: { executable: /bin/bash }
   register: _db_users_proot
   changed_when: false
+  when: is_proot
+
+- name: Stop skip-grant MariaDB
+  shell: |
+    pkill -f '(^|/)(mariadbd|mysqld)(\s|$)' || true
+    pkill -f mariadbd-safe || true
+  args: { executable: /bin/bash }
+  changed_when: false
+  failed_when: false
+  when: is_proot
+
+- name: Start MariaDB (safe wrapper, TCP)
+  block:
+    - name: Start mariadbd-safe (PRoot)
+      shell: |
+        nohup mariadbd-safe \
+          --datadir={{ mariadb_datadir }} \
+          --pid-file={{ mariadb_run_dir }}/mysqld.pid \
+          --socket={{ mariadb_run_dir }}/mysqld.sock \
+          --port={{ tcp_port }} --bind-address={{ tcp_host }} \
+          --skip-networking=0 >>"{{ mariadb_log_file }}" 2>&1 &
+        sleep 1
+      args: { executable: /bin/bash }
+
+    - name: Wait for MariaDB TCP
+      wait_for:
+        host: "{{ tcp_host }}"
+        port: "{{ tcp_port }}"
+        state: started
+        timeout: 30
   when: is_proot
 
 - name: Download and Extract Matomo (~3 min)
@@ -164,16 +187,6 @@
 - debug:
     var: matomo_system_check
 
-- name: TCP smoke-test (SELECT 1) using Admin over 127.0.0.1:3306 (proot)
-  shell: |
-    mysql --protocol=TCP -h127.0.0.1 -P3306 \
-      -u "{{ matomo_db_user }}" -p"{{ matomo_db_pass }}" -e "SELECT 1;"
-  register: _mysql_smoke
-  changed_when: false
-  failed_when: _mysql_smoke.rc != 0
-  no_log: true
-  when: is_proot
-
 - name: Matomo Database Setup
   uri:
     url: "{{ matomo_full_url }}index.php?action=databaseSetup"
@@ -182,8 +195,8 @@
       Cookie: "{{ matomo_session_cookie }}"
     body:
       # TCP fields only in proot:
-      host: "{{ '127.0.0.1' if is_proot else omit }}"
-      port: "{{ 3306 if is_proot else omit }}"
+      host: "{{ tcp_host if is_proot else omit }}"
+      port: "{{ tcp_port if is_proot else omit }}"
       unix_socket: "{{ '' if is_proot else omit }}"
       charset: "{{ 'utf8mb4' if is_proot else omit }}"
       type: "{{ 'InnoDB' if is_proot else omit }}"
@@ -212,26 +225,6 @@
   retries: 3
   delay: 5
   until: matomo_table_creation.status in [200, 302]
-
-- name: Dump web/db logs (proot) if tablesCreation did not succeed
-  shell: |
-    echo '=== /var/log/nginx/error.log ==='
-    [ -f /var/log/nginx/error.log ] && tail -n 200 /var/log/nginx/error.log || echo '(no file)'
-    echo '=== /tmp/php-fpm.log ==='
-    [ -f /tmp/php-fpm.log ] && tail -n 200 /tmp/php-fpm.log || echo '(no file)'
-    echo '=== /tmp/mariadb.log ==='
-    [ -f /tmp/mariadb.log ] && tail -n 200 /tmp/mariadb.log || echo '(no file)'
-  register: matomo_web_logs
-  changed_when: false
-  when:
-    - is_proot
-    - (matomo_table_creation.status | default(-1)) not in [200, 302]
-
-- debug:
-    var: matomo_web_logs.stdout
-  when:
-    - is_proot
-    - (matomo_table_creation.status | default(-1)) not in [200, 302]
 
 - name: Set a variable for the MATOMO_SESSID cookie
   set_fact:
