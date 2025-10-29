@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" style="height:100vh;">
     <head>
         <meta charset='utf-8'>
 
@@ -8,18 +8,24 @@
 
         <script src="maps.black-component.js" type="module"></script>
         <script>
+            // globally scoped function, for access from select tag's onchange handler.
+            // TODO This code layout sucks, should clean it.
+            let setStyle = null
+
+            // we want style choice to survive the map reset that happens when a maps.black
+            // feature or style changes, so we rely on this instead of the select tag value
+            let mapStyleChoice = "natural"
             window.addEventListener("load", () => {
-                const styleChooser = document.getElementById("styleswitch")
-                let highDef = null // unset until we know whether we have the high def map
-                function setStyle() {
+                let highRes = null // unset until we know whether we have the high def map
+                function _setStyle() {
                     mb.mapstyle = {
-                        light: {
+                        natural: {
                             true:  "openstreetmap-openmaptiles/maputnik/liberty",
                             false: "naturalearth-openmaptiles/maputnik/liberty",
                         },
-                        dark:  {
-                            true:  "openstreetmap-openmaptiles/cartodb/dark-matter",
-                            false: "naturalearth-openmaptiles/cartodb/dark-matter",
+                        political:  {
+                            true:  "openstreetmap-openmaptiles/openmaptiles/basic",
+                            false: undefined, // We will hide this option for naturalearth since it's not great for political maps - TODO Extract a low res openstreetmap for political map.
                         },
                         hybrid:  {
                             true:  "openstreetmap-openmaptiles/maps.black/hybrid-2023",
@@ -29,11 +35,12 @@
                             true:  "raster/s2maps/2023",
                             false: "raster/s2maps/2023", // we'll have a smaller satellite file with the same name in this case
                         },
-                    }[styleChooser.value][highDef]
-                    console.log("setting to", mb.mapstyle)
+                    }[mapStyleChoice][highRes]
+                    console.log("setting to", mapStyleChoice, "i.e.", mb.mapstyle)
 
                     addControls() // The above will reset the map so we have to add search again. This also covers page load.
                 }
+                setStyle = _setStyle
 
                 // HEAD request just to see if the high def pmtiles file is there
                 var http = new XMLHttpRequest();
@@ -42,7 +49,7 @@
                     if (this.readyState == this.DONE) {
                         // If we get a 200 it means the high def pmtiles file
                         // exists.
-                        highDef = this.status === 200
+                        highRes = this.status === 200
 
                         // Set the mapstyle as soon as we know whether it
                         // should be high def. This will probably be the
@@ -53,6 +60,55 @@
                     }
                 };
                 http.send();
+
+                class MapsDotBlackStyleControl {
+                    onAdd(map) {
+                        this._map = map;
+                        this._container = document.createElement('div');
+                        this._container.className = 'maplibregl-ctrl maplibregl-ctrl-group';
+
+                        const naturalSelected = mapStyleChoice === "natural" ? `selected="selected"` : ""
+                        const politicalSelected = mapStyleChoice === "political" ? `selected="selected"` : ""
+                        const satelliteSelected = mapStyleChoice === "satellite" ? `selected="selected"` : ""
+                        const hybridSelected = mapStyleChoice === "hybrid" ? `selected="selected"` : ""
+
+                        // For now don't include political for low res because naturalearth doesn't have great political options zoomed out
+                        const maybePolitical = highRes ? `<option value="political" ${politicalSelected}>&#x1F3F3;</option>` : "";
+
+                        // Keep in mind that maps.black destroys and creates this every time we change the map style or features.
+                        // This makes it a little complicated to add handlers. So for now, I inline it.
+                        //
+                        // appearance: none - get rid of the little arrow from the dropdown
+                        // border: none - get rid of the standard select tag border
+                        // outline: none - don't highlight it after using (noticed on Chromium)
+                        // border-radius is done here, but border as such is done by maplibregl-ctrl-group
+                        // height and width experimentally match the Globe control
+                        // padding and font size are a balance:
+                        // * Make icons big enough (I'd like to make them a little bigger)
+                        // * Make icons nicely centered
+                        // * Make room for the "+" I'm cramming into the Hybrid option
+                        // * TODO - Just get some images for this part and make it consistent
+                        this._container.innerHTML = `
+                            <select
+                              class="styleswitch"
+                              id="styleswitch"
+                              onchange="mapStyleChoice = this.value; setStyle()"
+                              style="background: white; padding-top:2px; padding-left:5px; border: none; outline: none; appearance: none; font-size: 13px; border-radius: 5px; height: 29px; width: 29px;"
+                            >
+                                <option value="natural" ${naturalSelected}>&#x1F33F;</option>
+                                ${maybePolitical}
+                                <option value="satellite" ${satelliteSelected}>&#x1F4E1;</option>
+                                <option value="hybrid" ${hybridSelected}>&#x1F4E1;+</option>
+                            </select>
+                        `
+                        return this._container;
+                    }
+
+                    onRemove() {
+                        this._container.parentNode.removeChild(this._container);
+                        this._map = undefined;
+                    }
+                }
 
                 class MapsDotBlackGlobeControl extends maplibregl.GlobeControl {
                     onAdd(map) {
@@ -70,9 +126,9 @@
                             // Not ideal to use the global `mb` but the alternative would be contrived and probably more error prone
                             mb.globe = !mb.globe
 
-                            // Changing "features" of mb such as globe seems to rebuild the map, and in
-                            // the process dumping all of the controls we added. So, we have to add them
-                            // again.
+                            // Changing "features" of mb such as globe, or "mapstyle", seems to cause maps.black to
+                            //  rebuild the map, and inthe process dumping all of the controls we added. So, we have
+                            // to add them again.
                             addControls()
                         }
 
@@ -83,7 +139,6 @@
                 const mb = document.getElementsByTagName("maps-black")[0];
 
                 // set the mapstyle on dropdown change
-                styleChooser.addEventListener('change', setStyle)
 
                 // https://maplibre.org/maplibre-gl-js/docs/examples/geocode-with-nominatim/
                 const nominatimGeocoderApi = {
@@ -186,6 +241,7 @@
                         mb.map.addControl(geocoder, 'top-left');
                         mb.map.addControl(new maplibregl.ScaleControl());
                         mb.map.addControl(new MapsDotBlackGlobeControl(), 'top-right');
+                        mb.map.addControl(new MapsDotBlackStyleControl(), 'top-right');
                         // NOTE Navigation control is added via `navigationcontrol` attribute on the maps-black tag
                     } else {
                         // For now try periodically until it's ready.
@@ -195,16 +251,8 @@
             });
         </script>
     </head>
-    <body>
-        <maps-black style="height:90vh" loader="pmtiles" navigationcontrol="true"></maps-black>
-        <span class="styleSelection">
-            <label class="styleswitchwrapper">Map style <select class="styleswitch" id="styleswitch">
-                <option value="light">Light</option>
-                <option value="dark">Dark</option>
-                <option value="satellite">Satellite</option>
-                <option value="hybrid">Hybrid map/satellite</option>
-            </select></label>
-        </span>
+    <body style="height:calc(100% - 10px); margin: 5px; padding: 0;">
+        <maps-black style="height:100%" loader="pmtiles" navigationcontrol="true"></maps-black>
         <script src="maplibre-gl-geocoder.min.js"></script>
         <link
             rel="stylesheet"
