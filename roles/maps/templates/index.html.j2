@@ -12,11 +12,12 @@
             // TODO This code layout sucks, should clean it.
             let setStyle = null
 
+            let osmTiles = "{{ maps_vector_quality }}".includes("osm")
+
             // we want style choice to survive the map reset that happens when a maps.black
             // feature or style changes, so we rely on this instead of the select tag value
             let mapStyleChoice = "natural"
             window.addEventListener("load", () => {
-                let osmTiles = null // unset until we know whether we have the osm tiles
                 function _setStyle() {
                     mb.mapstyle = {
                         // Has nicely colored regions, and buildings
@@ -44,25 +45,7 @@
                     addControls() // The above will reset the map so we have to add search again. This also covers page load.
                 }
                 setStyle = _setStyle
-
-                // HEAD request just to see if the osm pmtiles file is there
-                var http = new XMLHttpRequest();
-                http.open('HEAD', "openstreetmap-openmaptiles.pmtiles");
-                http.onreadystatechange = function() {
-                    if (this.readyState == this.DONE) {
-                        // If we get a 200 it means the osm pmtiles file
-                        // exists.
-                        osmTiles = this.status === 200
-
-                        // Set the mapstyle as soon as we know whether it
-                        // should be osm. This will probably be the
-                        // initial state of the dropdown, since this will
-                        // probably finish before the user has a chance to
-                        // change the dropdown.
-                        setStyle()
-                    }
-                };
-                http.send();
+                setTimeout(setStyle) // TODO run this without the timeout. it requires rearranging a bunch of code so I don't want to do it now.
 
                 class MapsDotBlackStyleControl {
                     onAdd(map) {
@@ -219,11 +202,12 @@
                     },
                     popup: true,
                 })
+                const scaleControl = new maplibregl.ScaleControl()
                 let addControlsTimeout = null
                 function addControls() {
                     // Whether we're setting a new timeout or actually adding the search, make sure no further timeouts are looming.
                     clearTimeout(addControlsTimeout)
-                    if (geocoder._map) {
+                    if (scaleControl._map) {
                       // Neither add a map nor set a timer
                       return
                     }
@@ -241,8 +225,13 @@
                         myStyles.replace(stylesheetText)
                         mb.shadowRoot.adoptedStyleSheets = [...mb.shadowRoot.adoptedStyleSheets, myStyles]
 
-                        mb.map.addControl(geocoder, 'top-left');
-                        mb.map.addControl(new maplibregl.ScaleControl());
+                        if ("{{ maps_search_engine }}" === "nominatim") {
+                          mb.map.addControl(geocoder, 'top-left');
+                        }
+                        mb.map.addControl(scaleControl);
+
+                        // TODO - instantiate these above along with the geocoder and ScaleControl. Though it
+                        // may require some reworking of the code that assumes it gets torn down and rebuilt.
                         mb.map.addControl(new MapsDotBlackGlobeControl(), 'top-right');
                         mb.map.addControl(new MapsDotBlackStyleControl(), 'top-right');
                         // NOTE Navigation control is added via `navigationcontrol` attribute on the maps-black tag
