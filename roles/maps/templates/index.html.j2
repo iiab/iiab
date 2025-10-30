@@ -42,7 +42,7 @@
                     }[mapStyleChoice][osmTiles]
                     console.log("setting to", mapStyleChoice, "i.e.", mb.mapstyle)
 
-                    addControls() // The above will reset the map so we have to add search again. This also covers page load.
+                    setUpMap() // The above will reset the map so we have to add controls and other things again. This also covers initial page load.
                 }
                 setStyle = _setStyle
                 setTimeout(setStyle) // TODO run this without the timeout. it requires rearranging a bunch of code so I don't want to do it now.
@@ -115,7 +115,7 @@
                             // Changing "features" of mb such as globe, or "mapstyle", seems to cause maps.black to
                             //  rebuild the map, and inthe process dumping all of the controls we added. So, we have
                             // to add them again.
-                            addControls()
+                            setUpMap()
                         }
 
                         return super.onAdd(map)
@@ -123,8 +123,6 @@
                 }
 
                 const mb = document.getElementsByTagName("maps-black")[0];
-
-                // set the mapstyle on dropdown change
 
                 // https://maplibre.org/maplibre-gl-js/docs/examples/geocode-with-nominatim/
                 const nominatimGeocoderApi = {
@@ -203,12 +201,55 @@
                     popup: true,
                 })
                 const scaleControl = new maplibregl.ScaleControl()
-                let addControlsTimeout = null
-                function addControls() {
+                let setUpMapTimeout = null
+                function setMaxZoom() {
+                    // Set the maximum zoom according to what's required by the shrunken pmtiles
+                    // files we may be serving up. The styles are designed around the full pmtiles
+                    // files, so we stop the user for reaching those unintended states.
+
+                    if (["natural", "political"].includes(mapStyleChoice)) {
+                        // both maps_vector_quality "ne" and "osm-full" let you zoom in all the way,
+                        // even if there's not much to look at in the former.
+                        if ("{{ maps_vector_quality }}" === "osm-z9" ) {
+                            // For vector, it seems like we can actually zoom in to almost 10 before
+                            // the map disappears
+                            mb.map.setMaxZoom(9.9)
+                            mb.zoom = Math.min(mb.zoom, 9.9)
+                        }
+                    }
+                    if (["satellite"].includes(mapStyleChoice)) {
+                        // For whatever reason, this is the actual maximum zoom before satellite has issues.
+                        // We set the maximum here, and zoom out to here if you switch to here from another
+                        // style.
+                        //
+                        // * If we allow zooming in further than this, it looks blurry.
+                        // * If we switch to satellite from another style while at a higher zoom level than
+                        //   this, it won't show up at all until the user zooms out to this level.
+                        // * If we're zoomed in this far and start scrolling around, eventually we'll find
+                        //   areas where the satellite won't show up.
+                        mb.map.setMaxZoom({{ maps_sat_zoom }} - 0.6)
+                        mb.zoom = Math.min(mb.zoom, {{ maps_sat_zoom }} - 0.6)
+                    }
+                    if (["hybrid"].includes(mapStyleChoice)) {
+                        if ("{{ maps_vector_quality }}" === "osm-z9" ) {
+                            // I could do Math.min, but I think that so long as there's something to look
+                            // at, let the user try to look at it, even if it's a little glitchy.
+                            mb.map.setMaxZoom(Math.max(9.9, {{ maps_sat_zoom }} + 0.9))
+                        } else {
+                            mb.map.setMaxZoom({{ maps_sat_zoom }} + 0.9)
+                        }
+                        // However, as with the "satellite" stile, for the satellite to show up on map load
+                        // (including switching from another style), it needs to be bound by the satellite's
+                        // maximum zoom. (Though, if the satellite has higher zoom available than the vector,
+                        // this is overly cautious. But this is not worth complicating for a minor inconvenience).
+                        mb.zoom = Math.min(mb.zoom, {{ maps_sat_zoom }} - 0.6)
+                    }
+                }
+                function setUpMap() {
                     // Whether we're setting a new timeout or actually adding the search, make sure no further timeouts are looming.
-                    clearTimeout(addControlsTimeout)
+                    clearTimeout(setUpMapTimeout)
                     if (scaleControl._map) {
-                      // Neither add a map nor set a timer
+                      // We are already set up. Neither set up again, nor set a timer
                       return
                     }
 
@@ -226,7 +267,7 @@
                         mb.shadowRoot.adoptedStyleSheets = [...mb.shadowRoot.adoptedStyleSheets, myStyles]
 
                         if ("{{ maps_search_engine }}" === "nominatim") {
-                          mb.map.addControl(geocoder, 'top-left');
+                            mb.map.addControl(geocoder, 'top-left');
                         }
                         mb.map.addControl(scaleControl);
 
@@ -235,9 +276,11 @@
                         mb.map.addControl(new MapsDotBlackGlobeControl(), 'top-right');
                         mb.map.addControl(new MapsDotBlackStyleControl(), 'top-right');
                         // NOTE Navigation control is added via `navigationcontrol` attribute on the maps-black tag
+
+                        setMaxZoom()
                     } else {
                         // For now try periodically until it's ready.
-                        addControlsTimeout = setTimeout(addControls, 100)
+                        setUpMapTimeout = setTimeout(setUpMap, 100)
                     }
                 }
             });
