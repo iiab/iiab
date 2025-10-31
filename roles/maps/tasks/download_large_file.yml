@@ -1,0 +1,57 @@
+# This is an attempt at a "smart" downloader of large files. It behaves the way
+# I was hoping ansible's `get_url` would behave in the first place:
+#
+# * Download the file to a temp file
+# * Get the sha256sum of the temp file
+# * If the sha256sum is not what is expected, throw an error
+# * Rename the temp file to the destination path
+# * Save the sha256sum to a separate file (with extension .sha256)
+#
+# On subsequent runs, the usual behavior will be that it sees the saved
+# sha256sum file, it matches the expected sha256sum, and it skips. (This is
+# the logical equivalent of calculating the sha256sum on the actual downloaded
+# file, but much faster for large files).
+#
+# However, if we need to update the sha256sum for whatever reason, it will see
+# that the sha256sum does not match, and it runs the download process again.
+#
+# NOTE Already downloaded files show up as "skipped" instead of "ok".  I could
+# fix this but we'll move to the download manager in due time anyway.
+# TODO - files should be owned by www-data
+
+- name: "Check previous sha256sum, if any, for {{ item.src_url }})"
+  shell: |
+    set -euo pipefail
+
+    cat {{ dest_sha256_path }} || echo "nope"
+  args:
+    executable: /bin/bash
+  register: current_sha256sum
+  vars:
+    # Where the file's sha256sum is saved
+    dest_sha256_path: "{{ dest_base_path }}/{{ item.filename }}.sha256"
+
+- name: "Download {{ item.src_url }}"
+  # Do `wget -c` in hopes of continuing incomplete downloads on the temp file.
+  # However, if the hash doesn't match afterwards, delete the temp file.
+  # I'm not sure if the `echo` statements will do anything useful for debugging.
+  shell: |
+    set -euo pipefail
+
+    wget -c "{{ item.src_url }}" -O "{{ dest_tmp_path }}" -T "{{ download_timeout }}" || (echo "download failed"; exit 1)
+    sha256sum "{{ dest_tmp_path }}" | grep "{{ item.sha256sum }}" || (echo "sha256sum mismatch!"; rm "{{ dest_tmp_path }}"; exit 1)
+    chmod 644 "{{ dest_tmp_path }}"
+    mv "{{ dest_tmp_path }}" "{{ dest_path }}"
+    echo {{ item.sha256sum }} > {{ dest_sha256_path }}
+  args:
+    executable: /bin/bash
+  when: current_sha256sum.stdout_lines.0 != item.sha256sum
+  vars:
+    # Where the file eventually goes
+    dest_path: "{{ dest_base_path }}/{{ item.filename }}"
+
+    # Where the file goes as it's being downloaded
+    dest_tmp_path: "/library/downloads/maps/{{ item.filename }}"
+
+    # Where the file's sha256sum goes, which indicates the contents of the current file
+    dest_sha256_path: "{{ dest_base_path }}/{{ item.filename }}.sha256"

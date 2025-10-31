@@ -1,0 +1,44 @@
+- name: Assert that "maps_install is sameas true" (boolean not string etc)
+  assert:
+    that: maps_install is sameas true
+    fail_msg: "PLEASE SET 'maps_install: True' e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+
+- name: Assert that "maps_enabled | type_debug == 'bool'" (boolean not string etc)
+  assert:
+    that: maps_enabled | type_debug == 'bool'
+    fail_msg: "PLEASE GIVE VARIABLE 'maps_enabled' A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+
+
+- block:
+
+    - name: Install maps.black if 'maps_installed' not defined, e.g. in {{ iiab_state_file }}    # /etc/iiab/iiab_state.yml
+      include_tasks: install.yml
+      when: maps_installed is undefined
+
+    - name: Enable/Disable/Reload NGINX for maps.black, if nginx_enabled
+      include_tasks: nginx.yml
+
+    - name: Add 'maps' variable values to {{ iiab_ini_file }}
+      ini_file:
+        path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+        section: maps
+        option: "{{ item.option }}"
+        value: "{{ item.value | string }}"
+      with_items:
+        - option: name
+          value: Maps
+        - option: description
+          value: 'OpenStreetMap streets, satellite imagery, and search.'
+        - option: maps_install
+          value: "{{ maps_install }}"
+        - option: maps_enabled
+          value: "{{ maps_enabled }}"
+
+  rescue:
+
+    - name: 'SEE ERROR ABOVE (skip_role_on_error: {{ skip_role_on_error }})'
+      fail:
+        msg: ""
+      when: not skip_role_on_error
