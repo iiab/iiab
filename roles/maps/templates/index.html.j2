@@ -12,12 +12,15 @@
             // TODO This code layout sucks, should clean it.
             let setStyle = null
 
-            let osmTiles = "{{ maps_vector_quality }}".includes("osm")
-
             // we want style choice to survive the map reset that happens when a maps.black
             // feature or style changes, so we rely on this instead of the select tag value
-            let mapStyleChoice = "natural"
+            let mapStyleChoice
+
+            let osmTiles = "{{ maps_vector_quality }}".includes("osm")
+
             window.addEventListener("load", () => {
+                const mb = document.getElementsByTagName("maps-black")[0];
+
                 function _setStyle() {
                     mb.mapstyle = {
                         // Has nicely colored regions, and buildings
@@ -45,6 +48,8 @@
                     setUpMap() // The above will reset the map so we have to add controls and other things again. This also covers initial page load.
                 }
                 setStyle = _setStyle
+
+                readHash()
                 setTimeout(setStyle) // TODO run this without the timeout. it requires rearranging a bunch of code so I don't want to do it now.
 
                 class MapsDotBlackStyleControl {
@@ -121,8 +126,6 @@
                         return super.onAdd(map)
                     }
                 }
-
-                const mb = document.getElementsByTagName("maps-black")[0];
 
                 // https://maplibre.org/maplibre-gl-js/docs/examples/geocode-with-nominatim/
                 const nominatimGeocoderApi = {
@@ -245,6 +248,18 @@
                         mb.zoom = Math.min(mb.zoom, {{ maps_sat_zoom }} - 0.6)
                     }
                 }
+                function setHash() {
+                    window.location.hash = `${mb.lat}/${mb.lon}/${mb.pitch}/${mb.bearing}/${mb.zoom}/${mapStyleChoice}`
+                }
+                function readHash() {
+                    [mb.lat, mb.lon, mb.pitch, mb.bearing, mb.zoom, mapStyleChoice] = window.location.hash.slice(1).split('/')
+                    mb.lat = mb.lat || 0
+                    mb.lon = mb.lon || 0
+                    mb.pitch = mb.lat || 0
+                    mb.bearing = mb.bearing || 0
+                    mb.zoom = mb.zoom || 0
+                    mapStyleChoice = mapStyleChoice || "natural"
+                }
                 function setUpMap() {
                     // Whether we're setting a new timeout or actually adding the search, make sure no further timeouts are looming.
                     clearTimeout(setUpMapTimeout)
@@ -278,6 +293,9 @@
                         // NOTE Navigation control is added via `navigationcontrol` attribute on the maps-black tag
 
                         setMaxZoom()
+
+                        mb.map.off('moveend', setHash) // in case it's already there from the previous refresh
+                        mb.map.on('moveend', setHash)
                     } else {
                         // For now try periodically until it's ready.
                         setUpMapTimeout = setTimeout(setUpMap, 100)
