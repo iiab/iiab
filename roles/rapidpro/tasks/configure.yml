@@ -1,0 +1,150 @@
+---
+# This file will contain all the configuration tasks for RapidPro.
+
+- name: Create PostgreSQL user
+  postgresql_user:
+    name: "{{ db_user }}"
+    password: "{{ db_pass }}"
+  become: yes
+  become_user: postgres
+
+- name: Create PostgreSQL database
+  postgresql_db:
+    name: "{{ db_name }}"
+    owner: "{{ db_user }}"
+  become: yes
+  become_user: postgres
+
+- name: Enable PostgreSQL extensions
+  postgresql_ext:
+    name: "{{ item }}"
+    db: "{{ db_name }}"
+  loop:
+    - postgis
+    - postgis_topology
+    - hstore
+    - "uuid-ossp"
+  become: yes
+  become_user: postgres
+
+- name: Configure RapidPro settings
+  template:
+    src: settings.py.j2
+    dest: "{{ rapidpro_dir }}/temba/settings.py"
+  become: yes
+
+- name: Run database migrations
+  shell: |
+    export PATH="/home/{{ rapidpro_user }}/.local/bin:$PATH"
+    poetry run python manage.py migrate
+  args:
+    chdir: "{{ rapidpro_dir }}"
+  become: yes
+
+  become: yes
+
+- name: Install Gunicorn
+  shell: |
+    export PATH="/home/{{ rapidpro_user }}/.local/bin:$PATH"
+    poetry run pip install gunicorn
+  args:
+    chdir: "{{ rapidpro_dir }}"
+  become: yes
+
+- name: Collect static files
+  shell: |
+    export PATH="/home/{{ rapidpro_user }}/.local/bin:$PATH"
+    poetry run python manage.py collectstatic --noinput
+  args:
+    chdir: "{{ rapidpro_dir }}"
+  become: yes
+
+- name: Get poetry environment path
+  shell: |
+    export PATH="/home/{{ rapidpro_user }}/.local/bin:$PATH"
+    poetry env info --path
+  args:
+    chdir: "{{ rapidpro_dir }}"
+  register: poetry_env
+  become: yes
+
+- name: Create Gunicorn systemd service
+  template:
+    src: rapidpro-gunicorn.service.j2
+    dest: /etc/systemd/system/rapidpro-gunicorn.service
+  vars:
+    poetry_env_path: "{{ poetry_env.stdout }}"
+  become: yes
+
+- name: Manage Nginx server block for appliance mode
+  block:
+    - name: Create Nginx server block for appliance mode
+      template:
+        src: rapidpro-nginx.conf.j2
+        dest: /etc/nginx/conf.d/rapidpro.conf
+      when: rapidpro_appliance_mode
+      become: yes
+
+    - name: Remove Nginx server block for appliance mode
+      file:
+        path: /etc/nginx/conf.d/rapidpro.conf
+        state: absent
+      when: not rapidpro_appliance_mode
+      become: yes
+
+- name: Manage Gunicorn service
+  systemd:
+    name: rapidpro-gunicorn
+    state: "{{ 'started' if rapidpro_enabled else 'stopped' }}"
+    enabled: "{{ rapidpro_enabled }}"
+    daemon_reload: yes
+  become: yes
+
+- name: Restart Nginx
+  systemd:
+    name: nginx
+    state: restarted
+  become: yes
+
+- name: Create spool directories
+  file:
+    path: "{{ rapidpro_dir }}/spool/{{ item }}"
+    state: directory
+    owner: "{{ rapidpro_user }}"
+    group: "{{ rapidpro_user }}"
+  loop:
+    - mailroom
+    - courier
+  become: yes
+
+- name: Check for valkey-server service
+  stat:
+    path: /lib/systemd/system/valkey-server.service
+  register: valkey_service
+
+- name: Set valkey service name
+  set_fact:
+    valkey_service_name: "{{ 'valkey-server.service' if valkey_service.stat.exists else 'redis-server.service' }}"
+
+- name: Create Mailroom systemd service
+  template:
+    src: rapidpro-mailroom.service.j2
+    dest: /etc/systemd/system/rapidpro-mailroom.service
+  become: yes
+
+- name: Create Courier systemd service
+  template:
+    src: rapidpro-courier.service.j2
+    dest: /etc/systemd/system/rapidpro-courier.service
+  become: yes
+
+- name: Manage Go services
+  systemd:
+    name: "{{ item }}"
+    state: "{{ 'started' if rapidpro_enabled else 'stopped' }}"
+    enabled: "{{ rapidpro_enabled }}"
+    daemon_reload: yes
+  loop:
+    - rapidpro-mailroom
+    - rapidpro-courier
+  become: yes

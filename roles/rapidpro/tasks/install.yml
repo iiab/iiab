@@ -1,0 +1,145 @@
+---
+# This file will contain all the installation tasks for RapidPro.
+
+- name: Update apt cache
+  apt:
+    update_cache: yes
+  become: yes
+
+- name: Install essential build tools and libraries
+  apt:
+    name:
+      - git
+      - build-essential
+      - libpq-dev
+      - python3-dev
+      - libgdal-dev
+      - ffmpeg
+    state: present
+  become: yes
+
+- name: Install PostgreSQL and PostGIS
+  apt:
+    name:
+      - postgresql
+      - postgis
+    state: present
+  become: yes
+
+- name: Install Valkey/Redis
+  block:
+    - name: Try installing valkey-server
+      apt:
+        name: valkey-server
+        state: present
+      become: yes
+  rescue:
+    - name: Fallback to redis-server
+      apt:
+        name: redis-server
+        state: present
+      become: yes
+
+- name: Install Python build dependencies
+  apt:
+    name:
+      - make
+      - libssl-dev
+      - zlib1g-dev
+      - libbz2-dev
+      - libreadline-dev
+      - libsqlite3-dev
+      - wget
+      - curl
+      - llvm
+      - libncurses5-dev
+      - libncursesw5-dev
+      - xz-utils
+      - tk-dev
+      - libffi-dev
+      - liblzma-dev
+      - python3-openssl
+    state: present
+  become: yes
+
+- name: Include nodejs role
+  include_role:
+    name: nodejs
+
+- name: Clone RapidPro repository
+  git:
+    repo: 'https://github.com/nyaruka/rapidpro.git'
+    dest: "{{ rapidpro_dir }}"
+  become: yes
+
+- name: Set ownership of project directory
+  file:
+    path: "{{ rapidpro_dir }}"
+    state: directory
+    owner: "{{ rapidpro_user }}"
+    group: "www-data"
+    recurse: yes
+  become: yes
+
+
+- name: Install Poetry
+  shell: |
+    curl -sSL https://install.python-poetry.org | python3 -
+  args:
+    creates: "/home/{{ rapidpro_user }}/.local/bin/poetry"
+  become: yes
+
+- name: Install Python dependencies with Poetry
+  shell: |
+    export PATH="/home/{{ rapidpro_user }}/.local/bin:$PATH"
+    poetry env use system
+    poetry install --no-root
+  args:
+    chdir: "{{ rapidpro_dir }}"
+  become: yes
+
+- name: Install yarn
+  npm:
+    name: yarn
+    global: yes
+  become: yes
+
+- name: Install JavaScript dependencies
+  yarn:
+    path: "{{ rapidpro_dir }}"
+  become: yes
+
+- name: Install global JS tools (less)
+  yarn:
+    name: less
+    global: yes
+  become: yes
+
+- name: Build CSS assets
+  shell: |
+    yarn tw-build
+  args:
+    chdir: "{{ rapidpro_dir }}"
+  become: yes
+
+- name: Set mailroom and courier architecture
+  set_fact:
+    rapidpro_go_arch: "{{ 'amd64' if ansible_architecture == 'x86_64' else 'arm64' }}"
+
+- name: Install Mailroom
+  unarchive:
+    src: "https://github.com/nyaruka/mailroom/releases/download/v10.2.0/mailroom_10.2.0_linux_{{ rapidpro_go_arch }}.tar.gz"
+    dest: "/usr/local/bin/"
+    remote_src: yes
+    extra_opts: [--strip-components=1]
+    creates: /usr/local/bin/rapidpro-mailroom
+  become: yes
+
+- name: Install Courier
+  unarchive:
+    src: "https://github.com/nyaruka/courier/releases/download/v10.2.0/courier_10.2.0_linux_{{ rapidpro_go_arch }}.tar.gz"
+    dest: "/usr/local/bin/"
+    remote_src: yes
+    extra_opts: [--strip-components=1]
+    creates: /usr/local/bin/rapidpro-courier
+  become: yes
