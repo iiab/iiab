@@ -1,4 +1,4 @@
-# RapidPro Ansible Role for IIAB
+# RapidPro Ansible Role for IIAB (WIP)
 
 This Ansible role installs and configures RapidPro within an IIAB (Internet-in-a-Box) environment.
 
