@@ -19,9 +19,53 @@
 
             let osmTiles = "{{ maps_vector_quality }}".includes("osm")
 
-            window.addEventListener("load", () => {
-                const mb = document.getElementsByTagName("maps-black")[0];
+            // set immediately after the tag is defined
+            let mb = null
 
+            // Defining these hash get/set functions outside of the window load because we
+            // need to run some of it earlier. Again, the overall code layout sucks and we
+            // should reorganize it.
+            function setHash() {
+                // Prevent some absurd precision. This may even be too much.
+                const lat = Math.round(mb.lat * 1000000) / 1000000
+                const lon = Math.round(mb.lon * 1000000) / 1000000
+                const pitch = Math.round(mb.pitch * 1000) / 1000
+                const bearing = Math.round(mb.bearing * 1000) / 1000
+                const zoom = Math.round(mb.zoom * 100) / 100
+                const globe = mb.globe ? 'g' : 'm' // [g]lobe : [m]ercator (i.e. flat)
+                window.location.hash = `${lat}/${lon}/${pitch}/${bearing}/${zoom}/${globe}/${mapStyleChoice}`
+            }
+
+            // Why two different functions for reading the URL hash?
+            //
+            // The mb orientation params seem to need to be set *before* window load, or else an
+            // intermittent 404 in a resource (pmtiles, even js? just watch the console) will
+            // (somehow) cause mb to freak out or something, defaulting to zero values for all
+            // of them. Calling `readHash()` early on seems to be close enough to setting the html tag
+            // parameters on <maps-black> I guess? Which it seems to hold onto more robustly.
+            //
+            // Strangely, if we set the `globe` parameter here, it seems to make `mb.globe = ...`
+            // not work later on, which makes the `GlobeControl` no longer work. So, we call
+            // `readHashGlobe()` after window load.
+            //
+            // We already handle `mapStyleChoice` in our own funny way so it doesn't really matter
+            // when it's set.
+            function readHash() {
+                const [lat, lon, pitch, bearing, zoom, globe, _mapStyleChoice] = window.location.hash.slice(1).split('/')
+                mb.lat = lat || 0
+                mb.lon = lon || 0
+                mb.pitch = pitch || 0
+                mb.bearing = bearing || 0
+                mb.zoom = zoom || 0
+
+                mapStyleChoice = _mapStyleChoice || "natural"
+            }
+            function readHashGlobe() {
+                const [lat, lon, pitch, bearing, zoom, globe, _mapStyleChoice] = window.location.hash.slice(1).split('/')
+                mb.globe = globe === 'g'
+            }
+
+            window.addEventListener("load", () => {
                 function _setStyle() {
                     mb.mapstyle = {
                         // Has nicely colored regions, and buildings
@@ -50,7 +94,7 @@
                 }
                 setStyle = _setStyle
 
-                readHash()
+                readHashGlobe()
                 setTimeout(setStyle) // TODO run this without the timeout. it requires rearranging a bunch of code so I don't want to do it now.
 
                 class MapsDotBlackStyleControl {
@@ -249,27 +293,6 @@
                         mb.zoom = Math.min(mb.zoom, {{ maps_sat_zoom }} - 0.6)
                     }
                 }
-                function setHash() {
-                    // Prevent some absurd precision. This may even be too much.
-                    const lat = Math.round(mb.lat * 1000000) / 1000000
-                    const lon = Math.round(mb.lon * 1000000) / 1000000
-                    const pitch = Math.round(mb.pitch * 1000) / 1000
-                    const bearing = Math.round(mb.bearing * 1000) / 1000
-                    const zoom = Math.round(mb.zoom * 100) / 100
-                    const globe = mb.globe ? 'g' : 'm' // [g]lobe : [m]ercator (i.e. flat)
-                    window.location.hash = `${lat}/${lon}/${pitch}/${bearing}/${zoom}/${globe}/${mapStyleChoice}`
-                }
-                function readHash() {
-                    const [lat, lon, pitch, bearing, zoom, globe, _mapStyleChoice] = window.location.hash.slice(1).split('/')
-                    mb.lat = lat || 0
-                    mb.lon = lon || 0
-                    mb.pitch = pitch || 0
-                    mb.bearing = bearing || 0
-                    mb.zoom = zoom || 0
-                    mb.globe = globe === 'g'
-
-                    mapStyleChoice = _mapStyleChoice || "natural"
-                }
                 function setUpMap() {
                     // Whether we're setting a new timeout or actually adding the search, make sure no further timeouts are looming.
                     clearTimeout(setUpMapTimeout)
@@ -304,7 +327,12 @@
 
                         setMaxZoom()
 
-                        mb.map.off('moveend', setHash) // in case it's already there from the previous refresh
+                        // The call to this function (`setUpMap`) may have been triggered by a globe or style change.
+                        // That should be reflected in the hash:
+                        setHash()
+
+                        // Future changes in orientation should also be reflected in the hash:
+                        mb.map.off('moveend', setHash) // unsetting first, in case it's already there from a previous refresh
                         mb.map.on('moveend', setHash)
                     } else {
                         // For now try periodically until it's ready.
@@ -316,6 +344,10 @@
     </head>
     <body style="height:calc(100% - 10px); margin: 5px; padding: 0;">
         <maps-black style="height:100%" loader="pmtiles" navigationcontrol="true"></maps-black>
+        <script>
+          mb = document.getElementsByTagName("maps-black")[0];
+          readHash()
+        </script>
         <script src="maplibre-gl-geocoder.min.js"></script>
         <link
             rel="stylesheet"
