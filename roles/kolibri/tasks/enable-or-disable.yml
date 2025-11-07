@@ -4,15 +4,39 @@
     daemon_reload: yes
     enabled: yes
     state: started
-  when: kolibri_enabled
+  when:
+    - kolibri_enabled
+    - not is_proot
+
+- name: Verify Kolibri status (proot)
+  command: kolibri status
+  environment:
+    KOLIBRI_HOME: "{{ kolibri_home }}"
+  register: kolibri_status
+  changed_when: false
+  failed_when: false
+  when:
+    - kolibri_enabled
+    - is_proot
+
+- name: Start Kolibri if not running (proot)
+  command: kolibri start
+  environment:
+    KOLIBRI_HOME: "{{ kolibri_home }}"
+    KOLIBRI_HTTP_PORT: "{{ kolibri_http_port }}"
+  when:
+    - kolibri_enabled
+    - is_proot
+    - kolibri_status.rc != 0
 
 - name: Disable & Stop 'kolibri' systemd service, if not kolibri_enabled
   systemd:
     name: kolibri
     enabled: no
     state: stopped
-  when: not kolibri_enabled
-
+  when:
+    - not kolibri_enabled
+    - not is_proot
 
 - name: Enable http://box{{ kolibri_url }} via NGINX, by installing {{ nginx_conf_dir }}/kolibri-nginx.conf from template    # http://box/kolibri
   template:
