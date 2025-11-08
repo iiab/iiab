@@ -46,12 +46,26 @@
   become_user: "{{ iiab_admin_user }}"
 
 
+
+
 - name: Collect static files
   shell: |
     export PATH="/home/{{ iiab_admin_user }}/.local/bin:$PATH"
     poetry run python manage.py collectstatic --noinput
   args:
     chdir: "{{ rapidpro_dir }}"
+  become: yes
+  become_user: "{{ iiab_admin_user }}"
+
+
+
+- name: Get poetry environment path
+  shell: |
+    export PATH="/home/{{ iiab_admin_user }}/.local/bin:$PATH"
+    poetry env info --path
+  args:
+    chdir: "{{ rapidpro_dir }}"
+  register: poetry_env
   become: yes
   become_user: "{{ iiab_admin_user }}"
 
@@ -64,30 +78,20 @@
     mode: "0755"
   become: yes
 
-- name: Execute create_superuser.py to create admin user
+- name: Create admin user
   shell: |
-    export DJANGO_SUPERUSER_USERNAME="{{ admin_username | default('admin') }}"
+    export PATH="/home/{{ iiab_admin_user }}/.local/bin:$PATH"
     export DJANGO_SUPERUSER_EMAIL="{{ admin_email | default('admin@example.com') }}"
     export DJANGO_SUPERUSER_PASSWORD="{{ admin_password | default('changeme') }}"
-    {{ poetry_env.stdout }}/bin/python {{ rapidpro_dir }}/create_superuser.py
+    poetry run python manage.py shell < create_superuser.py
   args:
     chdir: "{{ rapidpro_dir }}"
   become: yes
   become_user: "{{ iiab_admin_user }}"
   environment:
     DJANGO_SETTINGS_MODULE: temba.settings
-  changed_when: "'created successfully' in create_superuser_output.stdout"
+  changed_when: "'Superuser created successfully!' in create_superuser_output.stdout"
   register: create_superuser_output
-
-- name: Get poetry environment path
-  shell: |
-    export PATH="/home/{{ iiab_admin_user }}/.local/bin:$PATH"
-    poetry env info --path
-  args:
-    chdir: "{{ rapidpro_dir }}"
-  register: poetry_env
-  become: yes
-  become_user: "{{ iiab_admin_user }}"
 
 - name: Create gunicorn run directory
   file:
