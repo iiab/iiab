@@ -1,0 +1,39 @@
+- name: Enable & Restart RapidPro services, if rapidpro_enabled
+  systemd:
+    name: "{{ item }}"
+    daemon_reload: yes
+    enabled: yes
+    state: restarted
+  loop:
+    - rapidpro-gunicorn
+    - rapidpro-mailroom
+    - rapidpro-courier
+  when: rapidpro_enabled
+
+- name: Disable & Stop RapidPro services, if not rapidpro_enabled
+  systemd:
+    name: "{{ item }}"
+    enabled: no
+    state: stopped
+  loop:
+    - rapidpro-gunicorn
+    - rapidpro-mailroom
+    - rapidpro-courier
+  when: not rapidpro_enabled
+
+- name: Enable http://box{{ rapidpro_url }} via NGINX, by installing {{ nginx_conf_dir }}/rapidpro-nginx.conf from template
+  template:
+    src: rapidpro-nginx.conf.j2
+    dest: "{{ nginx_conf_dir }}/rapidpro-nginx.conf"
+  when: rapidpro_enabled
+
+- name: Disable http://box{{ rapidpro_url }} via NGINX, by removing {{ nginx_conf_dir }}/rapidpro-nginx.conf
+  file:
+    path: "{{ nginx_conf_dir }}/rapidpro-nginx.conf"
+    state: absent
+  when: not rapidpro_enabled
+
+- name: Restart 'nginx' systemd service
+  systemd:
+    name: nginx
+    state: restarted

@@ -1,47 +1,52 @@
-# RapidPro Ansible Role for IIAB (WIP)
+==============
+RapidPro README
+==============
 
-This Ansible role installs and configures RapidPro within an IIAB (Internet-in-a-Box) environment.
+This Ansible role installs `RapidPro <https://rapidpro.io/>`_ within `Internet-in-a-Box (IIAB) <https://internet-in-a-box.org/>`_. RapidPro is an open-source platform that allows you to visually build interactive messaging applications.
 
-## Features
+Using It
+--------
 
-- Automates the installation of RapidPro and its dependencies (PostgreSQL, Valkey/Redis, Python, Node.js).
-- Configures RapidPro for production use with Gunicorn and Nginx.
-- Installs and configures Mailroom and Courier Go services.
-- Provides flexible control over installation, service status, and "appliance mode" via Ansible variables.
+If enabled and with the default settings, RapidPro should be accessible at: http://box/rp
 
-## Requirements
+Log in to RapidPro with::
 
-This role depends on the following IIAB roles:
+  Username: admin@box.lan
+  Password: changeme
 
-- `nginx`
-- `postgresql`
+Configuration Parameters
+------------------------
 
-These roles are typically installed as part of the standard IIAB setup.
+Please look in `/opt/iiab/iiab/roles/rapidpro/defaults/main.yml <defaults/main.yml>`_ for the default values of the various install parameters.  Everything in this README assumes the default values.
 
-## Role Variables
+To enable the role, add the following to `/etc/iiab/local_vars.yml <http://faq.iiab.io/What_is_local_vars.yml_and_how_do_I_customize_it%3F>`_::
 
-## Usage
+  rapidpro_install: true
 
-1.  **Enable the role:** Add the following to `/etc/iiab/local_vars.yml`:
+To disable the services while still having the role installed, add the following to `/etc/iiab/local_vars.yml`::
 
-    ```yaml
-    rapidpro_install: true
-    ```
+  rapidpro_enabled: false
 
-2.  **(Optional) Enable Appliance Mode:** To make RapidPro the default application, add the following to `/etc/iiab/local_vars.yml`:
+*Feel free to override any of the above, by copying the relevant line from /opt/iiab/iiab/roles/rapidpro/defaults/main.yml to /etc/iiab/local_vars.yml (then run* ``cd /opt/iiab/iiab`` *followed by* ``./runrole rapidpro`` *per IIAB's general guidelines at http://FAQ.IIAB.IO).*
 
-    ```yaml
-    rapidpro_appliance_mode: true
-    ```
+Troubleshooting
+---------------
 
-3.  **(Optional) Disable Services:** To install RapidPro but keep the services disabled, add the following to `/etc/iiab/local_vars.yml`:
+If you encounter issues, you can check the logs for the gunicorn and nginx services:
 
-    ```yaml
-    rapidpro_enabled: false
-    ```
+.. code-block:: bash
 
-4.  **Run the playbook:** Execute the main IIAB playbook (e.g., `iiab-install`) or run the `rapidpro` role individually:
+  sudo journalctl -u rapidpro-gunicorn
+  sudo journalctl -u nginx
 
-    ```bash
-    ./runrole rapidpro
-    ```
+You can also try restarting the services:
+
+.. code-block:: bash
+
+  sudo systemctl restart rapidpro-gunicorn
+  sudo systemctl restart nginx
+
+Known Issues
+------------
+
+* There are no known issues at this time.
