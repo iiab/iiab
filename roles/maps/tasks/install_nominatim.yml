@@ -1,0 +1,110 @@
+# TODO - sqlite mode "only available for the python frontend" does that mean no gunicorn or what?
+
+- name: Install packages for nominatim
+  apt:
+    name:
+      # for general
+      - pkg-config
+      - libicu-dev
+      - virtualenv
+
+      # for sqlite backend
+      - sqlite3
+      - libsqlite3-mod-spatialite
+
+      # I actually just need libspatialite, but the package has a different
+      # name in different OS distros/versions. However libspatialite-dev seems
+      # to be consistent, and has libspatialite as a dependency.
+      - libspatialite-dev
+
+    state: present
+
+- name: Create nominatim user
+  user:
+    name: "{{ nominatim_user }}"
+    state: present
+    shell: /bin/bash
+    create_home: no
+    home: "{{ nominatim_home }}"
+
+- name: Create nominatium home and webserver directories with desired permissions
+  file:
+    path: "{{ nominatim_home }}/nominatim-project"
+    state: directory
+    mode: '0755'
+    owner: "{{ nominatim_user }}"
+
+- name: Download nominatim database
+  include_tasks: download_large_file.yml
+  vars:
+    dest_base_path: "{{ maps_data_root }}"
+  with_items: "{{ nominatim_data[maps_search_full] }}"
+
+- name: Select nominatim database
+  file:
+    src: "{{ maps_data_root }}/{{ nominatim_data[maps_search_full].filename }}"
+    dest: "{{ maps_data_root }}/{{ nominatim_db_symlink_name }}"
+    state: link
+
+# Hacking with a shell script for now.
+#
+# NOTE: Even though we don't use psql, for now nominatim imports psycopg
+# at some point so we need it
+#
+- name: Set up nominatim
+  shell: |
+    echo "making virtualenv"
+    ls {{ nominatim_venv }}/bin || virtualenv {{ nominatim_venv }}
+
+    echo "installing aiosqlite"
+    {{ nominatim_venv }}/bin/pip install aiosqlite
+
+    echo "installing psycopg"
+    {{ nominatim_venv }}/bin/pip install psycopg[binary]
+
+    echo "installing nominatim-db"
+    {{ nominatim_venv }}/bin/pip install nominatim-db
+
+    echo "installing other stuff"
+    {{ nominatim_venv }}/bin/pip install falcon uvicorn gunicorn nominatim-api
+  become: yes
+  become_user: "{{ nominatim_user }}"
+
+- name: Install nominatim.service for systemd
+  template:
+    src: nominatim.service.j2
+    dest: "/etc/systemd/system/nominatim.service"
+
+- name: Install nominatim.socket for systemd
+  template:
+    src: nominatim.socket.j2
+    dest: "/etc/systemd/system/nominatim.socket"
+
+- name: Make nominatim conf directory (0755 by default)
+  file:
+    path: "/etc/systemd/system/nominatim.service.d"
+    state: directory
+    # mode: 0755
+
+- name: Make nominatim log directory (0755 by default)
+  file:
+    path: "/var/log/nominatim"
+    state: directory
+    # mode: 0755
+    owner: "www-data"
+
+# Set environmental variables for nominatim.
+- name: Install nominatim-env.conf for systemd
+  template:
+    src: nominatim-env.conf.j2
+    dest: "/etc/systemd/system/nominatim.service.d/nominatim-env.conf"
+
+# Hacking with a shell script for now.
+# TODO - put this in a proper service restart thingie later like nginx
+- name: Start up nominatim
+  shell: |
+    systemctl daemon-reload
+    systemctl enable nominatim.socket
+    systemctl start nominatim.socket
+    systemctl enable nominatim.service
+    systemctl restart nominatim.service

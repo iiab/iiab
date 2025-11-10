@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset='utf-8'>
+        <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+
+        <style>
+            html, body {
+                height: 100%;
+                width: 100%;
+                margin: 0px;
+                padding: 0px;
+
+                /* This preventns scrollbars if content overflows. It also has the side effect of
+                   disabling "swipe down to reload" on mobile browsers. Maybe that's for the best
+                   for users actually, even though it's annoying as a developer. This will be
+                   especially useful when we switch to one finger scroll. */
+                overflow: hidden;
+            }
+            maps-black {
+                height: 100%;
+                width: 100%;
+                position: absolute;
+                top: 0;
+                left: 0;
+            }
+        </style>
+
+        <link rel='stylesheet' href='maplibre-gl.css' />
+        <script src='maplibre-gl.js'></script>
+
+        <script src="maps.black-component.js" type="module"></script>
+        <script>
+            // globally scoped function, for access from select tag's onchange handler.
+            // TODO This code layout sucks, should clean it.
+            let setStyle = null
+
+            // we want style choice to survive the map reset that happens when a maps.black
+            // feature or style changes, so we rely on this instead of the select tag value
+            let mapStyleChoice
+
+            let osmTiles = "{{ maps_vector_quality }}".includes("osm")
+
+            // set immediately after the tag is defined
+            let mb = null
+
+            // Defining these hash get/set functions outside of the window load because we
+            // need to run some of it earlier. Again, the overall code layout sucks and we
+            // should reorganize it.
+            function setHash() {
+                // Prevent some absurd precision. This may even be too much.
+                const lat = Math.round(mb.lat * 1000000) / 1000000
+                const lon = Math.round(mb.lon * 1000000) / 1000000
+                const pitch = Math.round(mb.pitch * 1000) / 1000
+                const bearing = Math.round(mb.bearing * 1000) / 1000
+                const zoom = Math.round(mb.zoom * 100) / 100
+                const globe = mb.globe ? 'g' : 'm' // [g]lobe : [m]ercator (i.e. flat)
+                window.location.hash = `${lat}/${lon}/${pitch}/${bearing}/${zoom}/${globe}/${mapStyleChoice}`
+            }
+
+            // Why two different functions for reading the URL hash?
+            //
+            // The mb orientation params seem to need to be set *before* window load, or else an
+            // intermittent 404 in a resource (pmtiles, even js? just watch the console) will
+            // (somehow) cause mb to freak out or something, defaulting to zero values for all
+            // of them. Calling `readHash()` early on seems to be close enough to setting the html tag
+            // parameters on <maps-black> I guess? Which it seems to hold onto more robustly.
+            //
+            // Strangely, if we set the `globe` parameter here, it seems to make `mb.globe = ...`
+            // not work later on, which makes the `GlobeControl` no longer work. So, we call
+            // `readHashGlobe()` after window load.
+            //
+            // We already handle `mapStyleChoice` in our own funny way so it doesn't really matter
+            // when it's set.
+            function readHash() {
+                const [lat, lon, pitch, bearing, zoom, globe, _mapStyleChoice] = window.location.hash.slice(1).split('/')
+                mb.lat = lat || 0
+                mb.lon = lon || 0
+                mb.pitch = pitch || 0
+                mb.bearing = bearing || 0
+                mb.zoom = zoom || 0
+
+                mapStyleChoice = _mapStyleChoice || "natural"
+            }
+            function readHashGlobe() {
+                const [lat, lon, pitch, bearing, zoom, globe, _mapStyleChoice] = window.location.hash.slice(1).split('/')
+                mb.globe = globe === 'g'
+            }
+
+            window.addEventListener("load", () => {
+                function _setStyle() {
+                    mb.mapstyle = {
+                        // Has nicely colored regions, and buildings
+                        natural: {
+                            true:  "openstreetmap-openmaptiles/maputnik/liberty",
+                            false: "naturalearth-openmaptiles/maputnik/liberty",
+                        },
+                        // Has more clearly defined political boundaries
+                        // TODO - find something like this with buildings too?
+                        political:  {
+                            true:  "openstreetmap-openmaptiles/openmaptiles/basic",
+                            false: undefined, // We will hide this option for naturalearth since it's not great for political maps - TODO Extract a low res osm for political map.
+                        },
+                        hybrid:  {
+                            true:  "openstreetmap-openmaptiles/maps.black/hybrid-2023",
+                            false: "naturalearth-openmaptiles/maps.black/hybrid-2023", // we'll have a smaller satellite file with the same name in this case
+                        },
+                        satellite:  {
+                            true:  "raster/s2maps/2023",
+                            false: "raster/s2maps/2023", // we'll have a smaller satellite file with the same name in this case
+                        },
+                    }[mapStyleChoice][osmTiles]
+                    console.log("setting to", mapStyleChoice, "i.e.", mb.mapstyle)
+
+                    setUpMap() // The above will reset the map so we have to add controls and other things again. This also covers initial page load.
+                }
+                setStyle = _setStyle
+
+                readHashGlobe()
+                setTimeout(setStyle) // TODO run this without the timeout. it requires rearranging a bunch of code so I don't want to do it now.
+
+                class MapsDotBlackStyleControl {
+                    onAdd(map) {
+                        this._map = map;
+                        this._container = document.createElement('div');
+                        this._container.className = 'maplibregl-ctrl maplibregl-ctrl-group';
+
+                        const naturalSelected = mapStyleChoice === "natural" ? `selected="selected"` : ""
+                        const politicalSelected = mapStyleChoice === "political" ? `selected="selected"` : ""
+                        const satelliteSelected = mapStyleChoice === "satellite" ? `selected="selected"` : ""
+                        const hybridSelected = mapStyleChoice === "hybrid" ? `selected="selected"` : ""
+
+                        // For now don't include political for naturalearth because it doesn't have great political options zoomed out
+                        const maybePolitical = osmTiles ? `<option title="Political Map" value="political" ${politicalSelected}>&#x1F3F3;</option>` : "";
+
+                        // Keep in mind that maps.black destroys and creates this every time we change the map style or features.
+                        // This makes it a little complicated to add handlers. So for now, I inline it.
+                        //
+                        // appearance: none - get rid of the little arrow from the dropdown
+                        // border: none - get rid of the standard select tag border
+                        // outline: none - don't highlight it after using (noticed on Chromium)
+                        // border-radius is done here, but border as such is done by maplibregl-ctrl-group
+                        // height and width experimentally match the Globe control
+                        // padding and font size are a balance:
+                        // * Make icons big enough (I'd like to make them a little bigger)
+                        // * Make icons nicely centered
+                        // * Make room for the "+" I'm cramming into the Hybrid option
+                        // * TODO - Just get some images for this part and make it consistent
+
+                        this._container.innerHTML = `
+                            <select
+                              class="styleswitch"
+                              id="styleswitch"
+                              onchange="mapStyleChoice = this.value; setStyle()"
+                              title="Select Map Style"
+                              style="background: white; padding-top:2px; padding-left:5px; border: none; outline: none; appearance: none; font-size: 13px; border-radius: 5px; height: 29px; width: 29px;"
+                            >
+                                <option title="Natural Map" value="natural" ${naturalSelected}>&#x1F33F;</option>
+                                ${maybePolitical}
+                                <option title="Satellite" value="satellite" ${satelliteSelected}>&#x1F4E1;</option>
+                                <option title="Satellite + Map" value="hybrid" ${hybridSelected}>&#x1F4E1;+</option>
+                            </select>
+                        `
+                        return this._container;
+                    }
+
+                    onRemove() {
+                        this._container.parentNode.removeChild(this._container);
+                        this._map = undefined;
+                    }
+                }
+
+                class MapsDotBlackGlobeControl extends maplibregl.GlobeControl {
+                    onAdd(map) {
+                        // Depends on GlobeControl using `_toggleProjection` internally in this
+                        // way, which might change in a different version of maplibregl:
+                        // https://github.com/maplibre/maplibre-gl-js/blob/93634b011a147666a62887bc61bffd351fa9971d/src/ui/control/globe_control.ts
+                        //
+                        // The reason we are doing this is that maps.black has its own wrapper for
+                        // projection, among other aspects of the map. Rather than directly accessing the
+                        // underlying map object to change the projection (as maplibregl.GlobeControl
+                        // does), we will overload this method to use maps.black's wrapper.
+                        //
+                        // TODO implement this in a less hacky way, maybe. like maybe from scratch?
+                        this._toggleProjection = () => {
+                            // Not ideal to use the global `mb` but the alternative would be contrived and probably more error prone
+                            mb.globe = !mb.globe
+
+                            // Changing "features" of mb such as globe, or "mapstyle", seems to cause maps.black to
+                            //  rebuild the map, and inthe process dumping all of the controls we added. So, we have
+                            // to add them again.
+                            setUpMap()
+                        }
+
+                        return super.onAdd(map)
+                    }
+                }
+
+                // https://maplibre.org/maplibre-gl-js/docs/examples/geocode-with-nominatim/
+                const nominatimGeocoderApi = {
+                    // TODO reverse geocode
+                    forwardGeocode: async (config) => {
+                        const features = [];
+                        try {
+                            const request = `/nominatim/search?q=${
+                                config.query
+                            }&format=geojson&polygon_geojson=1&addressdetails=1&extratags=1`;
+                            const response = await fetch(request);
+                            const geojson = await response.json();
+                            for (const feature of geojson.features) {
+                                const center = [
+                                    feature.bbox[0] + (feature.bbox[2] - feature.bbox[0]) / 2,
+                                    feature.bbox[1] + (feature.bbox[3] - feature.bbox[1]) / 2,
+                                ];
+                                const point = {
+                                    type: 'Feature',
+                                    geometry: {
+                                        type: 'Point',
+                                        coordinates: center
+                                    },
+                                    place_name: feature.properties.display_name,
+                                    properties: feature.properties,
+                                    text: feature.properties.display_name,
+                                    place_type: ['place'],
+                                    extratags: feature.properties.extratags,
+                                    center,
+
+                                    // TODO When you click on a search result in the list, it sets the view around that *specific* result's *bbox* specified here.
+                                    // On the other hand, hitting Enter in the search input sets the view around *all* of the result *markers* (with maximum zoom of 10).
+                                    // Ideally, it would set the view around *all* of the result *bboxes*, I think. So let's figure that out.
+                                    bbox: feature.bbox,
+                                };
+                                features.push(point);
+                            }
+                            // Just show borders for all results, for demo purposes for now.
+                            // Cut off at 5 because that's the number of markers that get shown.
+                            // TODO - have it only show the border when you actually click on a search result.
+                            showSearchResultBorder(geojson.features.slice(0, 5))
+                        } catch (e) {
+                            console.error(`Failed to forwardGeocode with error: ${e}`);
+                        }
+
+                        return {
+                            features
+                        };
+                    }
+                };
+
+                function showSearchResultBorder(searchResult) {
+                    const source = mb.map.getSource('search-result')
+                    if (source) {
+                        // TODO - can we do source.updateData(searchResult) instead ???
+                        mb.map.removeLayer('search-result-polygons')
+                        mb.map.removeLayer('search-result-outline')
+                        mb.map.removeSource('search-result')
+                    }
+                    mb.map.addSource('search-result', {
+                      type: 'geojson',
+                      data: {type: 'FeatureCollection', features: searchResult}
+                    });
+                    mb.map.addLayer({id: "search-result-polygons", type: "fill", source: 'search-result', layout:{}, paint: {'fill-color': '#FF4444', 'fill-opacity': 0.2}})
+                    mb.map.addLayer({id: "search-result-outline", type: "line", source: 'search-result', layout:{}, paint: {'line-color': '#FF4444', 'line-width': 2}})
+                }
+
+                // have to use MAX_ZOOM in a couple different places to cover a couple different scenarios, it seems
+                const MAX_ZOOM = 10;
+                const geocoder = new MaplibreGeocoder(nominatimGeocoderApi, {
+                    maplibregl,
+                    zoom: MAX_ZOOM,
+                    flyTo: {
+                        maxZoom: MAX_ZOOM,
+                    },
+                    popup: true,
+                })
+                const scaleControl = new maplibregl.ScaleControl()
+                let setUpMapTimeout = null
+                function setMaxZoom() {
+                    // Set the maximum zoom according to what's required by the shrunken pmtiles
+                    // files we may be serving up. The styles are designed around the full pmtiles
+                    // files, so we stop the user for reaching those unintended states.
+
+                    if (["natural", "political"].includes(mapStyleChoice)) {
+                        // both maps_vector_quality "ne" and "osm-full" let you zoom in all the way,
+                        // even if there's not much to look at in the former.
+                        if ("{{ maps_vector_quality }}" === "osm-z9" ) {
+                            // For vector, it seems like we can actually zoom in to almost 10 before
+                            // the map disappears
+                            mb.map.setMaxZoom(9.9)
+                            mb.zoom = Math.min(mb.zoom, 9.9)
+                        }
+                    }
+                    if (["satellite"].includes(mapStyleChoice)) {
+                        // For whatever reason, this is the actual maximum zoom before satellite has issues.
+                        // We set the maximum here, and zoom out to here if you switch to here from another
+                        // style.
+                        //
+                        // * If we allow zooming in further than this, it looks blurry.
+                        // * If we switch to satellite from another style while at a higher zoom level than
+                        //   this, it won't show up at all until the user zooms out to this level.
+                        // * If we're zoomed in this far and start scrolling around, eventually we'll find
+                        //   areas where the satellite won't show up.
+                        mb.map.setMaxZoom({{ maps_sat_zoom }} - 0.6)
+                        mb.zoom = Math.min(mb.zoom, {{ maps_sat_zoom }} - 0.6)
+                    }
+                    if (["hybrid"].includes(mapStyleChoice)) {
+                        if ("{{ maps_vector_quality }}" === "osm-z9" ) {
+                            // I could do Math.min, but I think that so long as there's something to look
+                            // at, let the user try to look at it, even if it's a little glitchy.
+                            mb.map.setMaxZoom(Math.max(9.9, {{ maps_sat_zoom }} + 0.9))
+                        } else {
+                            mb.map.setMaxZoom({{ maps_sat_zoom }} + 0.9)
+                        }
+                        // However, as with the "satellite" stile, for the satellite to show up on map load
+                        // (including switching from another style), it needs to be bound by the satellite's
+                        // maximum zoom. (Though, if the satellite has higher zoom available than the vector,
+                        // this is overly cautious. But this is not worth complicating for a minor inconvenience).
+                        mb.zoom = Math.min(mb.zoom, {{ maps_sat_zoom }} - 0.6)
+                    }
+                }
+                function setUpMap() {
+                    // Whether we're setting a new timeout or actually adding the search, make sure no further timeouts are looming.
+                    clearTimeout(setUpMapTimeout)
+                    if (scaleControl._map) {
+                      // We are already set up. Neither set up again, nor set a timer
+                      return
+                    }
+
+                    // TODO use a maps-dot-black "on add map" callback instead, if such a thing exists.
+                    // The problem is that at on creation, mb doesn't immediately contain a map.
+                    if (mb.map && mb.map.style) { // NOTE mb.map.loaded() becomes true much later than mb.map.style. mb.map.style seems to be sufficient.
+                        // sigh. deal with sneaking the style sheets into a "Shadow DOM" here. Thankfully this somehow isn't an issue with javascript.
+                        // https://stackoverflow.com/questions/79736280/importing-a-css-stylesheet-into-a-webcomponent-with-shadow-dom-in-firefox/79744809#79744809
+                        // TODO - See if I can do this in a more direct way. I only need the geocoder css as part of this shadow DOM. Also I probably don't need the
+                        // other maplibre css, that's probably already included in maps.black.
+                        const mapLibreGlCSS = [...document.styleSheets].find((styleSheet) => (styleSheet.href || "").split('/').pop() === 'maplibre-gl-geocoder.css');
+                        const stylesheetText = [...mapLibreGlCSS.cssRules].reduce((accumulator, rule) => accumulator + rule.cssText, '');
+                        const myStyles = new CSSStyleSheet()
+                        myStyles.replace(stylesheetText)
+                        mb.shadowRoot.adoptedStyleSheets = [...mb.shadowRoot.adoptedStyleSheets, myStyles]
+
+                        if ("{{ maps_search_engine }}" === "nominatim") {
+                            mb.map.addControl(geocoder, 'top-left');
+                        }
+                        mb.map.addControl(scaleControl);
+
+                        // TODO - instantiate these above along with the geocoder and ScaleControl. Though it
+                        // may require some reworking of the code that assumes it gets torn down and rebuilt.
+                        mb.map.addControl(new MapsDotBlackGlobeControl(), 'top-right');
+                        mb.map.addControl(new MapsDotBlackStyleControl(), 'top-right');
+                        // NOTE Navigation control is added via `navigationcontrol` attribute on the maps-black tag
+
+                        setMaxZoom()
+
+                        // The call to this function (`setUpMap`) may have been triggered by a globe or style change.
+                        // That should be reflected in the hash:
+                        setHash()
+
+                        // Future changes in orientation should also be reflected in the hash:
+                        mb.map.off('moveend', setHash) // unsetting first, in case it's already there from a previous refresh
+                        mb.map.on('moveend', setHash)
+                    } else {
+                        // For now try periodically until it's ready.
+                        setUpMapTimeout = setTimeout(setUpMap, 100)
+                    }
+                }
+            });
+        </script>
+    </head>
+    <body>
+        <maps-black loader="pmtiles" navigationcontrol="true"></maps-black>
+        <script>
+          mb = document.getElementsByTagName("maps-black")[0];
+          readHash()
+        </script>
+        <script src="maplibre-gl-geocoder.min.js"></script>
+        <link
+            rel="stylesheet"
+            href="maplibre-gl-geocoder.css"
+        />
+    </body>
+</html>

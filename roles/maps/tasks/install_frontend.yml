@@ -1,0 +1,74 @@
+- name: Make serving directory (0755 by default)
+  file:
+    path: "{{ maps_serve_path }}"
+    state: directory
+    # mode: 0755
+
+- name: Make index file
+  template:
+    src: index.html.j2
+    dest: "{{ maps_serve_path }}/index.html"
+
+### maps.black ###
+
+- name: Download all the basic maps.black javascript and styles (0644)
+  get_url:
+    url: "{{ maps_dot_black_small_assets_url }}/{{ item.filename }}"
+    dest: "{{ maps_serve_path }}"
+    checksum: "sha256:{{ item.sha256sum }}"
+    mode: "0644"
+    timeout: "{{ download_timeout }}"
+  with_items: "{{ maps_dot_black_js_and_styles }}"
+
+- name: Download common tiles
+  include_tasks: download_large_file.yml
+  vars:
+    dest_base_path: "{{ maps_serve_path }}"
+  with_items: "{{ maps_dot_black_common_tiles }}"
+
+- name: "Make sure maps_vector_quality has a valid value"
+  assert:
+    that: maps_dot_black_vector_tiles[maps_vector_quality] is defined
+    fail_msg: "Error: maps_vector_quality is set to an invalid value. See `maps_dot_black_vector_tiles` in https://github.com/iiab/iiab/blob/master/roles/maps/defaults/main.yml for valid values."
+    quiet: yes
+
+- name: Download vector tiles
+  include_tasks: download_large_file.yml
+  vars:
+    dest_base_path: "{{ maps_serve_path }}"
+    item: "{{ maps_dot_black_vector_tiles[maps_vector_quality] }}"
+
+- name: Select vector tiles
+  file:
+    src: "{{ maps_serve_path }}/{{ maps_dot_black_vector_tiles[maps_vector_quality].filename }}"
+    dest: "{{ maps_serve_path }}/{{ maps_dot_black_vector_symlink_name }}"
+    state: link
+
+- name: "Make sure maps_sat_zoom has a valid value"
+  assert:
+    that: maps_dot_black_satellite_tiles[maps_sat_zoom] is defined
+    fail_msg: "Error: maps_sat_zoom is set to an invalid value. See `maps_dot_black_satellite_tiles` in https://github.com/iiab/iiab/blob/master/roles/maps/defaults/main.yml for valid values."
+    quiet: yes
+
+- name: Download satellite tiles
+  include_tasks: download_large_file.yml
+  vars:
+    dest_base_path: "{{ maps_serve_path }}"
+    item: "{{ maps_dot_black_satellite_tiles[maps_sat_zoom] }}"
+
+- name: Select satellite tiles
+  file:
+    src: "{{ maps_serve_path }}/{{ maps_dot_black_satellite_tiles[maps_sat_zoom].filename }}"
+    dest: "{{ maps_serve_path }}/{{ maps_dot_black_satellite_symlink_name }}"
+    state: link
+
+### maplibre search ###
+
+- name: Download all the basic maplibre javascript and styles (0644)
+  get_url:
+    url: "{{ unpkg_url }}/{{ item.filename }}"
+    dest: "{{ maps_serve_path }}"
+    checksum: "sha256:{{ item.sha256sum }}"
+    mode: "0644"
+    timeout: "{{ download_timeout }}"
+  with_items: "{{ maplibre_search_js_and_styles }}"
