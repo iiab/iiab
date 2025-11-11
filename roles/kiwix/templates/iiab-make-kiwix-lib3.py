@@ -52,10 +52,14 @@ def main():
     zim_files, zim_versions = iiab.get_zim_list(zim_path)
 
     # Remove zims not in file system from library.xml
-    remove_list_str = ""
-    for item in path_to_id_map:
-        if item not in zim_files:
-            iiab.rem_libr_xml(path_to_id_map[item], kiwix_library_xml)
+    # remove_list_str = ""
+    try:
+        for item in path_to_id_map:
+            if item not in zim_files:
+                iiab.rem_libr_xml(path_to_id_map[item], kiwix_library_xml)
+    except:
+        print("Failed to remove missing zims from library.xml")
+        sys.exit(1)
 
     # Add zims from file system that are not in library.xml
     for item in zim_files:
