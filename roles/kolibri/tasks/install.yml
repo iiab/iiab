@@ -190,6 +190,30 @@
 #   become_user: "{{ kolibri_user }}"
 #   when: kolibri_provision
 
+# Prevents django's get_localzone_name query breaks the task, feeding the right value.
+- name: Setup dummy getprop to set tzlocal (proot)
+  copy:
+    dest: /usr/local/bin/getprop
+    mode: '0755'
+    content: |
+      #!/bin/sh
+      key="$1"
+      if [ "$key" = "persist.sys.timezone" ]; then
+        tz=""
+        if [ -r /etc/timezone ]; then
+          tz="$(head -n1 /etc/timezone | tr -d ' \t\r')"
+        fi
+        if [ -z "$tz" ] && [ -n "$TZ" ]; then
+          tz="$TZ"
+        fi
+      # Fallback to UTC
+        [ -z "$tz" ] && tz="UTC"
+        printf '%s\n' "$tz"
+        exit 0
+      fi
+      exit 0
+  when: is_proot
+
 # Run "kolibri manage help provisiondevice" to see CLI options, e.g.:
 #   --facility_settings FACILITY_SETTINGS
 #                         JSON file containing facility settings
