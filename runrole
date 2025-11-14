@@ -3,7 +3,9 @@
 DEFAULT_VARS_FILE=/opt/iiab/iiab/vars/default_vars.yml
 LOCAL_VARS_FILE=/etc/iiab/local_vars.yml
 IIAB_STATE_FILE=/etc/iiab/iiab_state.yml
-ROLE_VAR=""
+#ROLE_NAME=""           # Don't initialize this
+#ROLE_VAR=""            # No need to initialize this
+#ANSIBLE_LOG_PATH=""    # Don't initialize this
 INSTALL=false
 ENABLED=false
 REINSTALL=false
@@ -19,19 +21,38 @@ if [ ! -f $PLAYBOOK ]; then
     exit 1
 fi
 
-if [ $# -eq 0 ] || [ "$2" == "--reinstall" ] || [ "$3" == "--reinstall" ]; then
+# https://stackoverflow.com/questions/192249/how-do-i-parse-command-line-arguments-in-bash/14203146#14203146
+while [[ $# -gt 0 ]]; do
+    case $1 in    # if-else would do the job, but case statement allows for future changes...
+        --reinstall)
+            ARGS="$ARGS\"reinstall\":True,"    # Needs boolean not string so use JSON list
+            REINSTALL=true
+            ;;
+        *)
+            if [ ! -v ROLE_NAME ]; then    # Test whether var is not yet set
+                ROLE_NAME="$1"
+            elif [ ! -v ANSIBLE_LOG_PATH ]; then
+                export ANSIBLE_LOG_PATH="$1"
+            else
+                echo "Too many argunments (ROLE_NAME and ANSIBLE_LOG_PATH already specified!)"
+                exit 1
+            fi
+            ;;
+    esac
+    shift
+done
+
+if [ -v ANSIBLE_LOG_PATH ]; then
+    export ANSIBLE_LOG_PATH="$CWD/iiab-debug.log"    # Default log file location
+fi
+
+if [ ! -v ROLE_NAME ]; then    # Test whether var is STILL not set!
     echo "Usage: ./runrole <name of role>"
-    echo "Usage: ./runrole --reinstall <name of role>"
+    echo "Usage: ./runrole <name of role> --reinstall"
     echo
     echo "Optional 2nd parameter is full PATH/FILENAME for logging."
     echo "If omitted, <current directory>/iiab-debug.log is used."
-    exit 0
-fi
-
-if [ "$1" == "--reinstall" ]; then
-    ARGS="$ARGS\"reinstall\":True,"    # Needs boolean not string so use JSON list
-    REINSTALL=true
-    shift
+    exit 1
 fi
 
 
@@ -61,7 +82,7 @@ if [ ! -f  $IIAB_STATE_FILE ]; then    # touch $IIAB_STATE_FILE
 EOF
 fi
 
-if ! [[ $(command -v ansible) ]]; then
+if ! command -v ansible > /dev/null; then
     echo -e "\n\e[1mPlease install Ansible, by running:\n\nsudo /opt/iiab/iiab/scripts/ansible\e[0m\n"
     exit 1
 fi
@@ -70,13 +91,15 @@ mkdir -p /etc/ansible/facts.d
 cp scripts/local_facts.fact /etc/ansible/facts.d/local_facts.fact
 
 
-ROLE_VAR=$1    # Ansible role name & var name sometimes differ :/
-if [ $1 == "calibre-web" ]; then 
+# Ansible role name & var name sometimes differ :/
+if [ $ROLE_NAME == "calibre-web" ]; then
     ROLE_VAR=calibreweb
-elif [ $1 == "httpd" ]; then
-    ROLE_VAR=apache
-elif [ $1 == "osm-vector-maps" ]; then
+#elif [ $ROLE_NAME == "httpd" ]; then
+#    ROLE_VAR=apache
+elif [ $ROLE_NAME == "osm-vector-maps" ]; then    # TO BE REMOVED in 2026/2027
     ROLE_VAR=osm_vector_maps
+else
+    ROLE_VAR="$ROLE_NAME"
 fi
 
 echo
@@ -126,13 +149,7 @@ if ! $INSTALL; then
 fi
 
 
-if [ $# -eq 2 ]; then
-   export ANSIBLE_LOG_PATH="$2"
-else
-   export ANSIBLE_LOG_PATH="$CWD/iiab-debug.log"
-fi
-
-ARGS="$ARGS\"role_to_run\":\"$1\"}"    # $1 works like \"$1\" if str type validated
+ARGS="$ARGS\"role_to_run\":\"$ROLE_NAME\"}"    # $ROLE_NAME works like \"$ROLE_NAME\" if str type validated
 CMD="ansible-playbook -i $INVENTORY $PLAYBOOK --connection=local $ARGS"
 echo -e "\e[1mbash will now run this, adding single quotes around the {...} curly braces:\e[0m\n\n$CMD\n"
 ansible -m setup -i $INVENTORY localhost --connection=local | grep python
