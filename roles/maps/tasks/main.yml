@@ -10,6 +10,49 @@
     fail_msg: "PLEASE GIVE VARIABLE 'maps_enabled' A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
     quiet: yes
 
+########################################################################
+# (proot only) Tmp task while maps development completes, delete at that point
+# https://github.com/iiab/iiab/pull/4120#issuecomment-3505435210
+
+- name: Check if /etc/iiab/local_vars.yml exists (proot)
+  ansible.builtin.stat:
+    path: /etc/iiab/local_vars.yml
+  register: iiab_local_vars
+  when: is_proot
+
+- name: WARNING - /etc/iiab/local_vars.yml not found (proot)
+  ansible.builtin.debug:
+    msg: |
+      ----------------------------------------------------------------
+      |  /etc/iiab/local_vars.yml not found!                         │
+      │ temporary changes to enable new maps might have not applied. │
+      ----------------------------------------------------------------
+  when:
+    - not iiab_local_vars.stat.exists
+    - is_proot
+
+- name: Patch local_vars settings to enable new maps (proot)
+  ansible.builtin.replace:
+    path: /etc/iiab/local_vars.yml
+    regexp: '^(\s*{{ item.key }}\s*:\s*).*?(\s*#.*)?$'
+    replace: '\1{{ item.value }}\2'
+    backup: yes
+  loop:
+    - { key: 'osm_vector_maps_install',      value: 'False' }
+    - { key: 'osm_vector_maps_enabled',      value: 'False' }
+    - { key: 'maps_from_internet_archive',   value: 'False' }
+    - { key: 'maps_install',                 value: 'True' }
+    - { key: 'maps_enabled',                 value: 'True' }
+    - { key: 'maps_vector_quality',          value: '"osm-z9"' }
+    - { key: 'maps_sat_zoom',                value: '9' }
+    - { key: 'maps_search_engine',           value: '""' }
+    - { key: 'maps_search_full',             value: 'False' }
+  when:
+    - iiab_local_vars.stat.exists
+    - is_proot
+
+# End of proot tmp change.
+########################################################################
 
 - block:
 
