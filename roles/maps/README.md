@@ -1,6 +1,6 @@
 # How do I try IIAB's new maps as of 2025-11-14?
 
-1. If you want **~170 MB** = 85MB vector + 85MB satellite, set these variables in [/etc/iiab/local_vars.yml](https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it?) before installing IIAB software:
+1. If you want **~170 MB** = 85 MB vector + 85 MB satellite, set these variables in [/etc/iiab/local_vars.yml](https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it?) before installing IIAB software:
 
    ```
    osm_vector_maps_install: False
