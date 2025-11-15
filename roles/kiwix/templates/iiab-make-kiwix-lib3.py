@@ -59,6 +59,7 @@ def main():
                 iiab.rem_libr_xml(path_to_id_map[item], kiwix_library_xml)
     except:
         print("Failed to remove missing zims from library.xml")
+        print("As a workaround, try running with -f to force rebuild of library.xml")
         sys.exit(1)
 
     # Add zims from file system that are not in library.xml
