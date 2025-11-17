@@ -1,55 +1,44 @@
 # roles/proot_services/tasks/restart_phpfpm.yml
-- name: Restart php-fpm (proot, no systemd) + wait for socket
+- name: Restart php-fpm (proot)
   ansible.builtin.shell: |
-    # Detect binary
-    PHPFPM="$(command -v php-fpm{{ php_version }} || command -v php-fpm8.4 || command -v php-fpm || true)"
+    set -e
+
+    # Pick a php-fpm binary (prefer versioned, then generic)
+    PHPFPM="$(command -v php-fpm{{ php_version }} || command -v php-fpm || true)"
     if [ -z "$PHPFPM" ]; then
-      echo "[php-fpm] binario no encontrado" >&2
+      echo "[php-fpm] binary not found" >&2
       exit 1
     fi
 
-    # Resolve conf dir & files
-    CONF_DIR="/etc/php/{{ php_version }}/fpm"
-    [ -d "$CONF_DIR" ] || CONF_DIR="$(dirname "$("$PHPFPM" -i 2>/dev/null | awk -F': ' '/^Loaded Configuration File/{print $2}')" )"
-    [ -d "$CONF_DIR" ] || CONF_DIR="/etc/php/{{ php_version }}/fpm"
-    CONF="$CONF_DIR/php-fpm.conf"
+    # Minimal config & socket paths (Debian/Ubuntu defaults)
+    CONF="/etc/php/{{ php_version }}/fpm/php-fpm.conf"
     [ -f "$CONF" ] || CONF="/etc/php-fpm.conf"
-
-    # Test config (does not daemonize)
-    "$PHPFPM" -y "$CONF" -t >/tmp/php-fpm.test 2>&1 || {
-      echo "[php-fpm] prueba de configuración falló:"
-      cat /tmp/php-fpm.test
-      exit 1
-    }
-
-    # Find pool socket
-    POOL="$CONF_DIR/pool.d/www.conf"
-    if [ -f "$POOL" ]; then
-      SOCK="$(awk -F= '/^[[:space:]]*listen[[:space:]]*=/{gsub(/[[:space:]]/,"",$2); print $2}' "$POOL" | tail -n1)"
-    fi
-    [ -n "${SOCK:-}" ] || SOCK="/run/php/php{{ php_version }}-fpm.sock"
+    SOCK="/run/php/php{{ php_version }}-fpm.sock"
     mkdir -p "$(dirname "$SOCK")" /var/log/php
 
-    # Stop previous master (pattern exacto del título del proceso)
-    if pgrep -f '^php-fpm: master process' >/dev/null 2>&1; then
-      pkill -TERM -f '^php-fpm: master process' || true
-      for i in $(seq 1 25); do pgrep -f '^php-fpm: master process' >/dev/null || break; sleep 0.2; done
-    fi
+    # Stop any existing php-fpm quickly (ignore errors if not running)
+    pkill -TERM php-fpm >/dev/null 2>&1 || true
+    sleep 0.5
+    pkill -KILL php-fpm >/dev/null 2>&1 || true
 
-    # Start (daemonize con -D) y esperar socket
+    # Remove stale socket (if master died and left it behind)
+    rm -f "$SOCK" || true
+
+    # Start daemonized and wait for the socket to appear
     "$PHPFPM" -y "$CONF" -D >>/var/log/php/fpm-restarts.log 2>&1 || {
-      echo "[php-fpm] no pudo iniciar — log:"
+      echo "[php-fpm] failed to start — last log:"
+      tail -n 100 /var/log/php/fpm-restarts.log || true
+      exit 1
+    }
+
+    for i in $(seq 1 40); do [ -S "$SOCK" ] && break; sleep 0.25; done
+    [ -S "$SOCK" ] || {
+      echo "[php-fpm] socket not found at $SOCK — last log:"
       tail -n 120 /var/log/php/fpm-restarts.log || true
       exit 1
     }
-    for i in $(seq 1 40); do [ -S "$SOCK" ] && break; sleep 0.25; done
-    if [ ! -S "$SOCK" ]; then
-      echo "[php-fpm] socket no apareció en $SOCK — último log:"
-      tail -n 120 /var/log/php/fpm-restarts.log || true
-      exit 1
-    fi
 
-    echo "[php-fpm] ok | bin=$PHPFPM conf=$CONF sock=$SOCK"
+    echo "[php-fpm] OK | bin=$PHPFPM conf=$CONF sock=$SOCK"
   args:
     executable: /bin/bash
   register: php_fpm_restart
