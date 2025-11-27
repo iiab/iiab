@@ -1,0 +1,44 @@
+- name: Assert that "code_install is sameas true" (boolean not string etc)
+  assert:
+    that: code_install is sameas true
+    fail_msg: "PLEASE SET 'code_install: True' e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+
+- name: Assert that "code_enabled | type_debug == 'bool'" (boolean not string etc)
+  assert:
+    that: code_enabled | type_debug == 'bool'
+    fail_msg: "PLEASE GIVE VARIABLE 'code_enabled' A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+
+
+- block:
+
+    - name: Install COTG if 'code_installed' not defined, e.g. in {{ iiab_state_file }}    # /etc/iiab/iiab_state.yml
+      include_tasks: install.yml
+      when: code_installed is undefined
+
+    - name: Enable/Disable/Reload NGINX for code, if nginx_enabled
+      include_tasks: nginx.yml
+
+    - name: Add 'code' variable values to {{ iiab_ini_file }}
+      ini_file:
+        path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+        section: code
+        option: "{{ item.option }}"
+        value: "{{ item.value | string }}"
+      with_items:
+        - option: name
+          value: Code On The Go
+        - option: description
+          value: 'Code On The Go, local APK distribution site.'
+        - option: code_install
+          value: "{{ code_install }}"
+        - option: code_enabled
+          value: "{{ code_enabled }}"
+
+  rescue:
+
+    - name: 'SEE ERROR ABOVE (skip_role_on_error: {{ skip_role_on_error }})'
+      fail:
+        msg: ""
+      when: not skip_role_on_error
