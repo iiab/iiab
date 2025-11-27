@@ -233,6 +233,42 @@
     KOLIBRI_HOME: "{{ kolibri_home }}"     # 2023-03-27: Required!
     #KOLIBRI_USER: "{{ kolibri_user }}"    # 2023-03-27: Not nec due to /etc/kolibri/username ?
 
+# Patch kolibri to prevent failure due Android restrictions
+- name: Verify patch file is available in the right path
+  ansible.builtin.stat:
+    path: "{{ kolibri_patch_path }}"
+  register: patch_stat
+  when: is_proot
+
+- name: Fail if it isn't available
+  ansible.builtin.fail:
+    msg: "No {{ kolibri_patch_path }} file was found on host"
+  when:
+    - not patch_stat.stat.exists
+    - is_proot
+
+- name: Test for patch already applied (reverse dry-run)
+  ansible.builtin.shell: |
+    set -euo pipefail
+    patch --dry-run -p1 -R < "{{ kolibri_patch_path }}" >/dev/null \
+      && echo APPLIED || echo NOT_APPLIED
+  args:
+    executable: /bin/bash
+  register: patch_state
+  changed_when: false
+  failed_when: false
+  when: is_proot
+
+- name: Apply patch only if not applied
+  ansible.builtin.shell: |
+    patch -p1 < "{{ kolibri_patch_path }}"
+  args:
+    executable: /bin/bash
+  when:
+    - patch_state.stdout.strip() == "NOT_APPLIED"
+    - is_proot
+  register: patch_apply
+  changed_when: true
 
 # 2023-03-25: Likely overkill (let's strongly consider removing this stanza?)
 # Certainly, setting owner (recursively) is advised when moving /library/kolibri :
