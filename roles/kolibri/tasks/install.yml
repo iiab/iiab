@@ -234,7 +234,7 @@
     #KOLIBRI_USER: "{{ kolibri_user }}"    # 2023-03-27: Not nec due to /etc/kolibri/username ?
 
 # Patch kolibri to prevent failure due Android restrictions
-- name: Verify patch file is available in the right path
+- name: Verify patch file is available in the right path (proot)
   ansible.builtin.stat:
     path: "{{ kolibri_patch_path }}"
   register: patch_stat
@@ -247,7 +247,7 @@
     - not patch_stat.stat.exists
     - is_proot
 
-- name: Test for patch already applied (reverse dry-run)
+- name: Test for patch already applied via reverse dry-run (proot)
   ansible.builtin.shell: |
     set -euo pipefail
     patch --dry-run -p1 -d / -R < "{{ kolibri_patch_path }}" >/dev/null \
@@ -259,7 +259,7 @@
   failed_when: false
   when: is_proot
 
-- name: Apply patch only if not applied
+- name: Apply patch only if not applied (proot)
   ansible.builtin.shell: |
     patch -p1 -d / < "{{ kolibri_patch_path }}"
   args:
@@ -270,12 +270,21 @@
   register: patch_apply
   changed_when: true
 
-- name: Disable Zeroconf at options.ini
+- name: Disable Zeroconf at options.ini (proot)
   ini_file:
     dest: "{{ kolibri_home }}/options.ini"
     section: "Deployment"
     option: "ZEROCONF_ENABLED"
     value: "False"
+    create: true
+  when: is_proot
+
+- name: Set custom http_port at options.ini (proot)
+  ini_file:
+    dest: "{{ kolibri_home }}/options.ini"
+    section: "Deployment"
+    option: "HTTP_PORT"
+    value: "{{ kolibri_http_port }}"
     create: true
   when: is_proot
 
