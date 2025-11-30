@@ -1,0 +1,78 @@
+#!/bin/sh
+# Very simple proot-distro service manager (pdsm)
+
+PDSM_DIR="/usr/local/pdsm"
+export PDSM_DIR
+AVAIL="$PDSM_DIR/services-available"
+ENABL="$PDSM_DIR/services-enabled"
+
+# Debug support: `pdsm -x start nginx` or `PDSM_DEBUG=1 pdsm start nginx`
+if [ "${1:-}" = "-x" ]; then
+    PDSM_DEBUG=1
+    shift
+fi
+
+# Enable shell tracing when debug is on
+[ "${PDSM_DEBUG:-0}" = 1 ] && set -x
+
+usage() {
+  echo "Usage: pdsm {enable|disable|start|stop|restart|status|list} [service]" >&2
+  exit 1
+}
+
+cmd="$1"
+name="$2"
+
+[ -d "$AVAIL" ] || mkdir -p "$AVAIL"
+[ -d "$ENABL" ] || mkdir -p "$ENABL"
+
+case "$cmd" in
+  list)
+    echo "Available:"
+    ls "$AVAIL"
+    echo
+    echo "Enabled:"
+    ls "$ENABL"
+    ;;
+
+  enable)
+    [ -n "$name" ] || usage
+    if [ ! -x "$AVAIL/$name" ]; then
+      echo "Service '$name' not found in $AVAIL" >&2
+      exit 1
+    fi
+    ln -sf "../services-available/$name" "$ENABL/$name"
+    echo "Enabled $name"
+    ;;
+
+  disable)
+    [ -n "$name" ] || usage
+    rm -f "$ENABL/$name"
+    echo "Disabled $name"
+    ;;
+
+  start|stop|restart|status)
+    # If no service name: apply to all enabled
+    if [ -z "$name" ]; then
+      for svc in "$ENABL"/*; do
+        [ -x "$svc" ] || continue
+        "$svc" "$cmd"
+      done
+    else
+      if [ -x "$ENABL/$name" ]; then
+        "$ENABL/$name" "$cmd"
+      elif [ -x "$AVAIL/$name" ]; then
+        # Allow direct start of an available service not enabled
+        "$AVAIL/$name" "$cmd"
+      else
+        echo "Service '$name' not found" >&2
+        exit 1
+      fi
+    fi
+    ;;
+
+  *)
+    usage
+    ;;
+esac
+
