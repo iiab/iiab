@@ -6,22 +6,17 @@ case $- in
     *)  return ;;
 esac
 
-PSM_DIR="/usr/local/pdsm"
-ENABL="$PSM_DIR/services-enabled"
-PDSM_LOCK="$PSM_DIR/.psm-services.started"
-
-# If lock exists, no nothing.
-if [ -f "$PDSM_LOCK" ]; then
-    return
-fi
-
-# Create lock before starting anything.
-: >"$PDSM_LOCK"
+PDSM_BIN="/usr/local/bin/pdsm"
+PDSM_DIR="/usr/local/pdsm"
+ENABL="$PDSM_DIR/services-enabled"
+PDSM_LOG="/tmp/pdsm-startup.log"
 
 if [ -d "$ENABL" ]; then
   for svc in "$ENABL"/*; do
     [ -x "$svc" ] || continue
-    "$svc" start
+    "$svc" start >>"$PDSM_LOG" 2>&1
   done
 fi
 
+# Initial session status check.
+[ -f "$PDSM_BIN" ] ; "$PDSM_BIN" status
