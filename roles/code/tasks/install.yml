@@ -1,3 +1,8 @@
+- name: Record (initial) disk space used
+  shell: df -B1 --output=used / | tail -1
+  register: df1
+
+
 - name: Make code directories available
   ansible.builtin.file:
     path: "{{ item }}"
@@ -41,3 +46,27 @@
     - es
 
 - include_tasks: install_apkfile.yml
+
+
+# RECORD CODE AS INSTALLED
+
+- name: Record (final) disk space used
+  shell: df -B1 --output=used / | tail -1
+  register: df2
+
+- name: Add 'code_disk_usage = {{ df2.stdout | int - df1.stdout | int }}' to {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+    section: code
+    option: code_disk_usage
+    value: "{{ df2.stdout | int - df1.stdout | int }}"
+
+- name: "Set 'code_installed: True'"
+  set_fact:
+    code_installed: True
+
+- name: "Add 'code_installed: True' to {{ iiab_state_file }}"
+  lineinfile:
+    path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
+    regexp: '^code_installed'
+    line: 'code_installed: True'
