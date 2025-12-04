@@ -85,32 +85,44 @@ echo "> Please note that custom changes will be overwritten <"
 
 # Install profile.d script
 
-if [ ! -f "${SRC_ETC_PROFILE_D}/pdsm.sh" ]; then
-    log "Installing profile script to ${DEST_PROFILE_D}/pdsm.sh"
-else
-    log "Updating profile script to latest version."
-fi
+if [ -f "${SRC_ETC_PROFILE_D}/pdsm.sh" ]; then
+    if [ ! -f "${DEST_PROFILE_D}/pdsm.sh" ]; then
+        log "Installing profile script to ${DEST_PROFILE_D}/pdsm.sh"
+    else
+        log "Updating profile script to latest version."
+    fi
     install -m 0644 "${SRC_ETC_PROFILE_D}/pdsm.sh" "${DEST_PROFILE_D}/pdsm.sh"
+else
+    log "Warning: No profile file exists, nothing installed."
+fi
 
 # Install /usr/local/bin/pdsm
 
-if [ ! -f "${SRC_USR_LOCAL_BIN}/pdsm" ]; then
-    log "Installing binary to ${DEST_BIN}/pdsm"
-else
-    log "Updating binary to ${DEST_BIN}/pdsm"
-fi
+if [ -f "${SRC_ETC_PROFILE_D}/pdsm.sh" ]; then
+    if [ ! -f "${DEST_BIN}/pdsm" ]; then
+        log "Installing binary to ${DEST_BIN}/pdsm"
+    else
+        log "Updating binary to ${DEST_BIN}/pdsm"
+    fi
     install -m 0755 "${SRC_USR_LOCAL_BIN}/pdsm" "${DEST_BIN}/pdsm"
+else
+    log "Warning: No bin script exists, nothing installed."
+fi
 
 # Install /usr/local/pdsm/lib/pdsm-common.sh
 
-if [ ! -f "${SRC_USR_LOCAL_PDSM}/lib/pdsm-common.sh" ]; then
-    log "Installing common library to ${DEST_PDSM_LIB}/pdsm-common.sh"
-else
-    log "Updating common library to ${DEST_PDSM_LIB}/pdsm-common.sh"
-fi
+if [ -f "${SRC_USR_LOCAL_PDSM}/lib/pdsm-common.sh" ]; then
+    if [ ! -f "${DEST_PDSM_LIB}/pdsm-common.sh" ]; then
+        log "Installing common library to ${DEST_PDSM_LIB}/pdsm-common.sh"
+    else
+        log "Updating common library to ${DEST_PDSM_LIB}/pdsm-common.sh"
+    fi
     install -m 0644 \
         "${SRC_USR_LOCAL_PDSM}/lib/pdsm-common.sh" \
         "${DEST_PDSM_LIB}/pdsm-common.sh"
+else
+    log "Warning: No lib file exists, nothing installed."
+fi
 
 # Install services-available
     log "Installing services-available to ${DEST_PDSM_SAVAIL}/"
@@ -118,9 +130,9 @@ for srv in $(find "${SRC_USR_LOCAL_PDSM}"/services-available -type f);
 do
   service="$(echo $srv|xargs basename)"
   if [ ! -f "$srv" ]; then
-      echo "  > Installing $service service to ${DEST_PDSM_SAVAIL}/"
+      echo "  > Installing $service service to ${DEST_PDSM_SAVAIL}/$service"
   else
-      echo "  > Updating $service service to ${DEST_PDSM_SAVAIL}/"
+      echo "  > Updating $service service to ${DEST_PDSM_SAVAIL}/$service"
   fi
     install -m 0755 "$srv" "${DEST_PDSM_SAVAIL}"/
 done

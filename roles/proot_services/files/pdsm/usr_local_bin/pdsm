@@ -16,7 +16,7 @@ fi
 [ "${PDSM_DEBUG:-0}" = 1 ] && set -x
 
 usage() {
-  echo "Usage: pdsm {enable|disable|start|stop|restart|status|list} [service]" >&2
+  echo "Usage: pdsm {enable-all|enable|disable|start|stop|restart|status|list} [service]" >&2
   exit 1
 }
 
@@ -28,27 +28,56 @@ name="$2"
 
 case "$cmd" in
   list)
-    echo "Available:"
+    echo "[pdsm] available:"
     ls "$AVAIL"
     echo
-    echo "Enabled:"
+    echo "[pdsm] enabled:"
     ls "$ENABL"
     ;;
 
   enable)
     [ -n "$name" ] || usage
     if [ ! -x "$AVAIL/$name" ]; then
-      echo "Service '$name' not found in $AVAIL" >&2
+      echo "[pdsm] service '$name' not found in $AVAIL" >&2
       exit 1
     fi
     ln -sf "../services-available/$name" "$ENABL/$name"
-    echo "Enabled $name"
+    echo "[pdsm] enabled $name"
+    ;;
+
+  enable-all)
+    # Enable all the available services making symlinks to services-enabled
+    for svc in "$AVAIL"/*; do
+      [ -f "$svc" ] || continue  # solo archivos regulares
+
+      base="$(basename "$svc")"
+      dest="$ENABL/$base"
+
+      if [ -e "$dest" ]; then
+        echo "[pdsm] $base already enabled"
+        continue
+      fi
+
+      ln -s "$svc" "$dest"
+      echo "[pdsm] enabled $base"
+    done
     ;;
 
   disable)
     [ -n "$name" ] || usage
+
+    if [ ! -f "$AVAIL/$name" ]; then
+      echo "[pdsm] service '$name' not found in $AVAIL" >&2
+      exit 1
+    fi
+
+    if [ ! -e "$ENABL/$name" ]; then
+      echo "[pdsm] service '$name' is not enabled"
+      exit 0
+    fi
+
     rm -f "$ENABL/$name"
-    echo "Disabled $name"
+    echo "[pdsm] disabled $name"
     ;;
 
   start|stop|restart|status)
@@ -65,7 +94,7 @@ case "$cmd" in
         # Allow direct start of an available service not enabled
         "$AVAIL/$name" "$cmd"
       else
-        echo "Service '$name' not found" >&2
+        echo "[pdsm] service '$name' not found in $AVAIL" >&2
         exit 1
       fi
     fi
