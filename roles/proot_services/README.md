@@ -11,14 +11,21 @@ Usage: pdsm {enable-all|enable|disable|start|stop|restart|status|list} [service]
 ```
 
 ### Examples
+
+- pdsm list
+
 ```
 root@localhost:~# pdsm list
 [pdsm] available:
 calibre-web  kiwix  kolibri  nginx
 
 [pdsm] enabled:
+nginx
+```
 
+- pdsm enable-all
 
+```
 root@localhost:~# pdsm enable-all
 [pdsm] enabled calibre-web
 [pdsm] enabled kiwix
@@ -32,7 +39,11 @@ calibre-web  kiwix  kolibri  nginx
 
 [pdsm] enabled:
 calibre-web  kiwix  kolibri  nginx
+```
 
+- pdsm restart (service)
+
+```
 root@localhost:~# pdsm restart calibre-web
 [pdsm:calibre-web] stopping...
 [pdsm:calibre-web] starting...
@@ -55,7 +66,7 @@ root@localhost:~#
 
 Note: The amount of services running cuncurrently is defined by the number of child processes allowed, whether via Developer Settings UI (Android 15+) or adb commands (Android 12 - 14).
 
-If not setup propely, services will be stoped by 
+If not setup propely, services will be stoped by the Phantom Process Killer ([learn more...](https://github.com/agnostic-apollo/Android-Docs/blob/master/en/docs/apps/processes/phantom-cached-and-empty-processes.md)).
 
 ## Structure
 
