@@ -233,6 +233,54 @@
     KOLIBRI_HOME: "{{ kolibri_home }}"     # 2023-03-27: Required!
     #KOLIBRI_USER: "{{ kolibri_user }}"    # 2023-03-27: Not nec due to /etc/kolibri/username ?
 
+- name: Patch kolibri to prevent failure due Android restrictions (proot)
+  when: is_proot
+  block:
+    - name: Verify patch file is available in the right path (proot)
+      ansible.builtin.stat:
+        path: "{{ kolibri_patch_path }}"
+      register: patch_stat
+
+    - name: Fail if it isn't available
+      ansible.builtin.fail:
+        msg: "No {{ kolibri_patch_path }} file was found on host"
+      when: not patch_stat.stat.exists
+
+    - name: Test for patch already applied via reverse dry-run (proot)
+      ansible.builtin.shell: |
+        set -euo pipefail
+        patch --dry-run -p1 -d / -R < "{{ kolibri_patch_path }}" >/dev/null \
+          && echo APPLIED || echo NOT_APPLIED
+      args:
+        executable: /bin/bash
+      register: patch_state
+      changed_when: false
+      failed_when: false
+
+    - name: Apply patch only if not applied (proot)
+      ansible.builtin.shell: |
+        patch -p1 -d / < "{{ kolibri_patch_path }}"
+      args:
+        executable: /bin/bash
+      when: patch_state.stdout.strip() == "NOT_APPLIED"
+      register: patch_apply
+      changed_when: true
+
+    - name: Disable Zeroconf at options.ini (proot)
+      ansible.builtin.ini_file:
+        dest: "{{ kolibri_home }}/options.ini"
+        section: "Deployment"
+        option: "ZEROCONF_ENABLED"
+        value: "False"
+        create: true
+
+    - name: Set custom http_port at options.ini (proot)
+      ansible.builtin.ini_file:
+        dest: "{{ kolibri_home }}/options.ini"
+        section: "Deployment"
+        option: "HTTP_PORT"
+        value: "{{ kolibri_http_port }}"
+        create: true
 
 # 2023-03-25: Likely overkill (let's strongly consider removing this stanza?)
 # Certainly, setting owner (recursively) is advised when moving /library/kolibri :
