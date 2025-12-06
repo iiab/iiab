@@ -1,0 +1,75 @@
+#!/bin/sh
+# Simple PDSM service wrapper for Calibre-Web
+
+SERVICE_NAME="calibre-web"
+CPS_FILE="cps.py"
+PDSM_COMMON="/usr/local/pdsm/lib/pdsm-common.sh"
+[ -r "$PDSM_COMMON" ] && . "$PDSM_COMMON"
+
+PYTHON_BIN="/usr/local/calibre-web-py3/bin/python3"
+APP_PATH="/usr/local/calibre-web-py3/cps.py"
+APP_DB_PATH="/library/calibre-web/config/app.db"
+LOG_DIR="/var/log"
+LOG_FILE="$LOG_DIR/calibre-web.log"
+
+running() {
+  # NOTE: if `ps aux | grep $CPS_FILE` shows nothing, this should fail too.
+  pgrep -f $APP_PATH >/dev/null 2>&1
+}
+
+start() {
+  if running; then
+    echo "[pdsm:$SERVICE_NAME] already running"
+    return 0
+  fi
+
+  # Ensure nginx is up as a requirement
+  require_service "nginx"
+
+  echo "[pdsm:$SERVICE_NAME] starting..."
+  # Start Calibre-Web in background
+  "$PYTHON_BIN" "$APP_PATH" -p "$APP_DB_PATH" >>"$LOG_FILE" 2>&1 &
+}
+
+stop() {
+  if ! running; then
+    echo "[pdsm:$SERVICE_NAME] already stopped"
+    return 0
+  fi
+
+  echo "[pdsm:$SERVICE_NAME] stopping..."
+  # Kill any Calibre-Web process by its script path
+  pkill -f "$APP_PATH" >/dev/null 2>&1 || true
+
+  # Small wait loop to really ensure it's gone
+  for i in 1 2 3 4 5; do
+    if ! running; then
+      break
+    fi
+    sleep 0.3
+  done
+}
+
+status() {
+  if running; then
+    echo "[pdsm:$SERVICE_NAME] running"
+    return 0
+  fi
+  echo "[pdsm:$SERVICE_NAME] not running"
+  return 3
+}
+
+case "$1" in
+  start|stop|status)
+    "$1"
+    ;;
+  restart)
+    stop
+    start
+    ;;
+  *)
+    echo "Usage: $0 {start|stop|restart|status}" >&2
+    exit 1
+    ;;
+esac
+

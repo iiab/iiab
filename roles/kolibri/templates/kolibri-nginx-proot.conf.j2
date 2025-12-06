@@ -1,0 +1,57 @@
+# Doing a proxy on unconventional ports requires to expand the 
+# configuration to prevent leaving items out
+
+# Normalize /kolibri -> /kolibri/
+location = {{ kolibri_url_without_slash }} { return 301 {{ kolibri_url }}; }
+
+# Optional: normalize /learn -> /kolibri/learn/ (nice UX for direct hits)
+location = /learn   { return 301 {{ kolibri_url }}learn/; }
+
+# Root-level i18n prefixes (e.g., /en or /en/redirectuser/) -> send under /kolibri/...
+location ~* "^/([a-z]{2}(?:-[a-z]{2})?)$"  { return 301 {{ kolibri_url_without_slash }}$uri/; }
+location ~* "^/([a-z]{2}(?:-[a-z]{2})?)/"  { return 301 {{ kolibri_url_without_slash }}$uri; }
+
+# Single proxy block for root endpoints that Kolibri expects:
+# /api, /static, /content, /device, /learn  (no redirects to preserve methods)
+location ~ ^/(api|static|content|device|learn)/ {
+    proxy_http_version 1.1;
+
+    proxy_set_header Host               $http_host;
+    proxy_set_header X-Forwarded-Host   $http_host;
+    proxy_set_header X-Forwarded-Proto  $scheme;
+    proxy_set_header X-Forwarded-Port   $server_port;
+    proxy_set_header X-Forwarded-For    $proxy_add_x_forwarded_for;
+
+    # Tell backend it's mounted under /kolibri (SCRIPT_NAME semantics)
+    proxy_set_header X-Script-Name      {{ kolibri_url_without_slash }};
+    proxy_set_header X-Forwarded-Prefix {{ kolibri_url_without_slash }};
+
+    # Keep absolute redirects under /kolibri
+    proxy_redirect  ~^/(.*)$               {{ kolibri_url }}$1;
+    proxy_redirect  http://127.0.0.1:8009/ {{ kolibri_url }};
+
+    # NO trailing slash: preserve original URI (/api|/static|/content|/device|/learn)
+    proxy_pass http://127.0.0.1:8009;
+}
+
+# Main proxy: Kolibri under /kolibri/
+location ^~ {{ kolibri_url }} {
+    proxy_http_version 1.1;
+
+    proxy_set_header Host               $http_host;
+    proxy_set_header X-Forwarded-Host   $http_host;
+    proxy_set_header X-Forwarded-Proto  $scheme;
+    proxy_set_header X-Forwarded-Port   $server_port;
+    proxy_set_header X-Forwarded-For    $proxy_add_x_forwarded_for;
+
+    # Tell backend about the mount prefix
+    proxy_set_header X-Script-Name      {{ kolibri_url_without_slash }};
+    proxy_set_header X-Forwarded-Prefix {{ kolibri_url_without_slash }};
+
+    # Keep absolute redirects under /kolibri
+    proxy_redirect  ~^/(.*)$               {{ kolibri_url }}$1;
+    proxy_redirect  http://127.0.0.1:8009/ {{ kolibri_url }};
+
+    # WITH trailing slash to strip the /kolibri prefix
+    proxy_pass http://127.0.0.1:8009/;
+}

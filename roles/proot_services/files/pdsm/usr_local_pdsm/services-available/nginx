@@ -1,0 +1,74 @@
+#!/bin/sh
+# /usr/local/pdsm/services-available/nginx
+# Very simple nginx wrapper for PDSM (proot-distro service manager)
+
+SERVICE_NAME="nginx"
+PDSM_COMMON="/usr/local/pdsm/lib/pdsm-common.sh"
+[ -r "$PDSM_COMMON" ] && . "$PDSM_COMMON"
+NGINX_PIDFILE="/run/nginx.pid"
+
+running() {
+  # NOTE: use process id to identify service is running.
+  [ -s "$NGINX_PIDFILE" ] || return 1
+
+  pid="$(cat "$NGINX_PIDFILE" 2>/dev/null || echo '')"
+  [ -n "$pid" ] || return 1
+
+  kill -0 "$pid" 2>/dev/null
+}
+
+start() {
+  if running; then
+    echo "[pdsm:$SERVICE_NAME] already running"
+    return 0
+  fi
+
+  echo "[pdsm:$SERVICE_NAME] starting..."
+  # Use default nginx config; adjust -c if you use a custom file
+  nginx || {
+    echo "[pdsm:$SERVICE_NAME] failed to start" >&2
+    return 1
+  }
+}
+
+stop() {
+  if ! running; then
+    echo "[pdsm:$SERVICE_NAME] already stopped"
+    return 0
+  fi
+
+  echo "[pdsm:$SERVICE_NAME] stopping..."
+  # Try graceful stop first, then fall back to pkill
+  nginx -s quit 2>/dev/null || pkill -x nginx || true
+
+  # Small wait loop to really ensure it's gone
+  for i in 1 2 3 4 5; do
+    if ! running; then
+      break
+    fi
+    sleep 0.3
+  done
+}
+
+status() {
+  if running; then
+    echo "[pdsm:$SERVICE_NAME] running"
+    return 0
+  fi
+  echo "[pdsm:$SERVICE_NAME] not running"
+  return 3
+}
+
+case "$1" in
+  start|stop|status)
+    "$1"
+    ;;
+  restart)
+    stop
+    start
+    ;;
+  *)
+    echo "Usage: $0 {start|stop|restart|status}" >&2
+    exit 1
+    ;;
+esac

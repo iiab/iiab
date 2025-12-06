@@ -1,0 +1,43 @@
+This patch is necessary on,
+
+* Android 15 - yes
+* Android 14 - untested
+* Android 13 - untested
+* Android 12 - no
+* Android 11 - untested
+* Andoird 10 - untested
+
+we might apply it at all proot-distro installations regardles.
+
+diff --git a/usr/lib/python3/dist-packages/kolibri/utils/server.py b/usr/lib/python3/dist-packages/kolibri/utils/server.py
+index ca040ab..9fa39ba 100644
+--- a/usr/lib/python3/dist-packages/kolibri/utils/server.py
++++ b/usr/lib/python3/dist-packages/kolibri/utils/server.py
+@@ -1126,14 +1126,24 @@ def _get_local_ips():
+     However, we still exclude known dummy Windows 169.254.*.* addresses as these are not useful for the user to see.
+     :return: a list of IP addresses
+     """
+-    return list(
++    import logging
++    try:
++        adapters = ifaddr.get_adapters()
++    except (PermissionError, OSError) as e:
++        logging.getLogger(__name__).warning(
++            "ifaddr.get_adapters() failed (%r); falling back to 0.0.0.0", e
++        )
++        return ["0.0.0.0"]
++
++    addrs = list(
+         set(
+             addr.ip
+-            for iface in ifaddr.get_adapters()
++            for iface in adapters
+             for addr in iface.ips
+-            if addr.is_IPv4 and not addr.ip.startswith("169.254")
++            if getattr(addr, "is_IPv4", False) and isinstance(addr.ip, str) and not addr.ip.startswith("169.254")
+         )
+     )
++    return addrs or ["127.0.0.1"]
+ 
+ 
+ def get_urls(listen_port=None):
