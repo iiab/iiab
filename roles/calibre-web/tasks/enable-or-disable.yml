@@ -6,28 +6,42 @@
     state: restarted
   when: calibreweb_enabled
 
-- name: Start Calibre-Web (proot)
-  shell: >
-    nohup {{ calibreweb_venv_py }}
-    {{ calibreweb_exec_path }}
-    -p {{ calibreweb_config }}/{{ calibreweb_settings_database }}
-    >> {{ calibreweb_log }} 2>&1 &
-  args:
-    executable: /bin/bash
-  register: calibreweb_start
+- name: Enable & Restart 'calibre-web' via pdsm (proot)
   when:
+    - calibre_enabled
     - is_proot
+  block:
+    - name: Enable 'calibre-web' via pdsm (proot)
+      ansible.builtin.command: >
+        pdsm enable calibre-web
 
-- debug:
-    var: calibreweb_start
+    - name: Restart 'calibre-web' via pdsm (proot)
+      ansible.builtin.command: >
+        pdsm restart calibre-web
 
 - name: Disable & Stop 'calibre-web' systemd service, if not calibreweb_enabled
   systemd:
     name: calibre-web
     enabled: no
     state: stopped
-  when: not calibreweb_enabled
+  when:
+    - not calibreweb_enabled
+    - not is_proot
 
+- name: Disable & Stop 'calibre-web' via pdsm (proot)
+  when:
+    - not calibreweb_enabled
+    - is_proot
+  block:
+    - name: Stop 'calibre-web' via pdsm (proot)
+      ansible.builtin.command: >
+        pdsm stop calibre-web
+      register: pdsm_stop
+      changed_when: "'already stopped' not in pdsm_stop.stdout"
+
+    - name: Disable 'calibre-web' via pdsm (proot)
+      ansible.builtin.command: >
+        pdsm disable calibre-web
 
 # TO DO: restore http://box/libros & http://box/livres etc, alongside English (#2195)
 # RELATED: https://github.com/janeczku/calibre-web/wiki/Setup-Reverse-Proxy
@@ -67,7 +81,7 @@
     state: restarted
   when: not is_proot
 
-
-- name: (Re)Start nginx (proot), if nginx_enabled
-  include_tasks: roles/proot_services/tasks/restart_nginx.yml
+- name: Restart 'nginx' via pdsm (proot)
+  ansible.builtin.command: >
+    pdsm restart nginx
   when: is_proot
