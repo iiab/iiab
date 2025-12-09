@@ -47,46 +47,26 @@
   include_tasks: roles/www_options/tasks/php-settings.yml
   when: php_settings_done is undefined
 
-- name: "Restart php-fpm service for (proot)"
-  include_tasks: roles/proot_services/tasks/restart_phpfpm.yml
+- name: Start 'php-fpm' via pdsm (proot)
+  ansible.builtin.command: >
+    pdsm start php-fpm
+  register: pdsm_start
+  changed_when: "'already running' not in pdsm_start.stdout"
   when: is_proot
 
-- name: Start MariaDB (systemd; non-proot)
+- name: Start MariaDB
   #action: service name=mysql state=started
   systemd:
     name: "{{ mysql_service }}"
     state: started
   when: not is_proot
 
-- name: Stop any running MariaDB before skip-grant (proot)
-  shell: |
-    pkill -f '(^|/)(mariadbd|mysqld)(\s|$)' || true
-    pkill -f mariadbd-safe || true
-  args: { executable: /bin/bash }
-  changed_when: false
-  failed_when: false
+- name: Start 'mariadb' via pdsm (proot)
+  ansible.builtin.command: >
+    pdsm start mariadb
+  register: pdsm_start
+  changed_when: "'already running' not in pdsm_start.stdout"
   when: is_proot
-
-- name: Start MariaDB in proot (mariadbd-safe)
-  when: is_proot
-  block:
-    - name: Start MariaDB in skip-grant-tables (TCP)
-      shell: |
-        nohup mariadbd-safe \
-          --datadir={{ mariadb_datadir }} \
-          --pid-file={{ mariadb_run_dir }}/mysqld.pid \
-          --socket={{ mariadb_run_dir }}/mysqld.sock \
-          --port={{ tcp_port }} --bind-address={{ tcp_host }} \
-          --skip-networking=0 --skip-grant-tables >>"{{ mariadb_log_file }}" 2>&1 &
-        sleep 2
-      args: { executable: /bin/bash }
-
-    - name: Wait for MariaDB TCP (proot)
-      wait_for:
-        host: "{{ tcp_host }}"
-        port: "{{ tcp_port }}"
-        state: started
-        timeout: 30
 
 - name: Create MariaDB Database for Matomo
   community.mysql.mysql_db:
@@ -103,78 +83,31 @@
     #login_unix_socket: /var/run/mysqld/mysqld.sock
   when: not is_proot
 
-- name: Ensure DB and Admin users for localhost and 127.0.0.1 (proot, via TCP)
-  shell: |
-    mariadb --protocol=TCP -h{{ tcp_host }} -P{{ tcp_port }} -uroot <<'SQL'
-    CREATE DATABASE IF NOT EXISTS `{{ matomo_db_name }}`
-      CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
-    INSERT INTO mysql.global_priv (Host,User,Priv)
-    VALUES ('127.0.0.1','{{ matomo_db_user }}',
-            JSON_OBJECT('plugin','mysql_native_password',
-                        'authentication_string', PASSWORD('{{ matomo_db_pass }}')))
-    ON DUPLICATE KEY UPDATE
-      Priv = JSON_SET(Priv,
-                      '$.plugin','mysql_native_password',
-                      '$.authentication_string', PASSWORD('{{ matomo_db_pass }}'));
-    INSERT INTO mysql.db
-      (Host,Db,User,
-       Select_priv,Insert_priv,Update_priv,Delete_priv,
-       Create_priv,Drop_priv,Index_priv,Alter_priv,
-       Create_tmp_table_priv,Lock_tables_priv,
-       Create_view_priv,Show_view_priv,
-       Create_routine_priv,Alter_routine_priv,Execute_priv,
-       Event_priv,Trigger_priv,References_priv,Grant_priv)
-    VALUES
-      ('127.0.0.1','{{ matomo_db_name }}','{{ matomo_db_user }}',
-       'Y','Y','Y','Y',
-       'Y','Y','Y','Y',
-       'Y','Y',
-       'Y','Y',
-       'Y','Y','Y',
-       'Y','Y','Y','N')
-    ON DUPLICATE KEY UPDATE
-       Select_priv='Y',Insert_priv='Y',Update_priv='Y',Delete_priv='Y',
-       Create_priv='Y',Drop_priv='Y',Index_priv='Y',Alter_priv='Y',
-       Create_tmp_table_priv='Y',Lock_tables_priv='Y',
-       Create_view_priv='Y',Show_view_priv='Y',
-       Create_routine_priv='Y',Alter_routine_priv='Y',Execute_priv='Y',
-       Event_priv='Y',Trigger_priv='Y',References_priv='Y',Grant_priv='N';
-    DELETE FROM mysql.global_priv WHERE User='root' AND Host='127.0.0.1';
-    SQL
-  args: { executable: /bin/bash }
-  register: _db_users_proot
-  changed_when: false
-  when: is_proot
-
-- name: Stop skip-grant MariaDB (proot)
-  shell: |
-    pkill -f '(^|/)(mariadbd|mysqld)(\s|$)' || true
-    pkill -f mariadbd-safe || true
-  args: { executable: /bin/bash }
-  changed_when: false
-  failed_when: false
-  when: is_proot
-
-- name: Start MariaDB (safe wrapper, TCP)
+- name: Prepare MariaDB database and user on (proot)
   when: is_proot
   block:
-    - name: Start mariadbd-safe (proot)
-      shell: |
-        nohup mariadbd-safe \
-          --datadir={{ mariadb_datadir }} \
-          --pid-file={{ mariadb_run_dir }}/mysqld.pid \
-          --socket={{ mariadb_run_dir }}/mysqld.sock \
-          --port={{ tcp_port }} --bind-address={{ tcp_host }} \
-          --skip-networking=0 >>"{{ mariadb_log_file }}" 2>&1 &
-        sleep 1
-      args: { executable: /bin/bash }
+    - name: Create MariaDB Database for Matomo (both normal and proot)
+      community.mysql.mysql_db:
+        name: "{{ matomo_db_name }}"
+        state: present
+        encoding: utf8mb4
+        collation: utf8mb4_general_ci
+        login_unix_socket: "{{ mariadb_run_dir }}/mysqld.sock"
+        check_implicit_admin: true
 
-    - name: Wait for MariaDB TCP (proot)
-      wait_for:
-        host: "{{ tcp_host }}"
-        port: "{{ tcp_port }}"
-        state: started
-        timeout: 30
+    - name: Ensure Matomo DB user exists for localhost and 127.0.0.1 (both)
+      community.mysql.mysql_user:
+        name: "{{ matomo_db_user }}"
+        host: "{{ item }}"
+        password: "{{ matomo_db_pass }}"
+        update_password: on_create
+        priv: "{{ matomo_db_name }}.*:ALL"
+        plugin: mysql_native_password
+        login_unix_socket: "{{ mariadb_run_dir }}/mysqld.sock"
+        check_implicit_admin: true
+      loop:
+        - localhost
+        - 127.0.0.1
 
 - name: Download and Extract Matomo (~3 min)
   unarchive:
@@ -206,11 +139,6 @@
   loop: "{{ matomo_welcome.cookies | dict2items }}"
   loop_control:
     loop_var: cookie
-
-- name: FAIL if MATOMO_SESSID was not obtained (required for installation)
-  fail:
-    msg: "MATOMO_SESSID was not obtained; without a session, the installer falls back to defaults (localhost/socket)."
-  when: matomo_session_cookie is not defined
 
 - name: Get Matomo System Check
   uri:
