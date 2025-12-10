@@ -1,10 +1,11 @@
 #!/bin/sh
 # /usr/local/pdsm/services-available/php-fpm
-# Simple php-fpm wrapper for PDSM (proot-distro service manager)
+# Simple PDSM service wrapper for php-fpm
 
-SERVICE_NAME="php-fpm"
 PDSM_COMMON="/usr/local/pdsm/lib/pdsm-common.sh"
 [ -r "$PDSM_COMMON" ] && . "$PDSM_COMMON"
+
+SERVICE_NAME="php-fpm"
 
 PHP_FPM_BIN="/usr/sbin/php-fpm${PHP_FPM_VERSION}"
 PHP_FPM_CONF="/etc/php/${PHP_FPM_VERSION}/fpm/php-fpm.conf"
@@ -52,12 +53,17 @@ stop() {
     kill -QUIT "$pid" 2>/dev/null || kill "$pid" 2>/dev/null || true
   fi
 
-  for i in 1 2 3 4 5; do
+  # Wait a little to ensure everything stopped
+  for i in $(seq 1 "$PDSM_START_TIMEOUT"); do
     if ! running; then
-      break
+      echo "[pdsm:$SERVICE_NAME] stopped"
+      return 0
     fi
-    sleep 0.3
+    sleep 1
   done
+
+  echo "[pdsm:$SERVICE_NAME] did not fully stop" >&2
+  return 1
 }
 
 status() {

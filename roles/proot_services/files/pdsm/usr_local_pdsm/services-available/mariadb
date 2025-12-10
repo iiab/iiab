@@ -2,23 +2,25 @@
 # /usr/local/pdsm/services-available/mariadb
 # Simple PDSM service wrapper for MariaDB
 
-SERVICE_NAME="mariadb"
 PDSM_COMMON="/usr/local/pdsm/lib/pdsm-common.sh"
 [ -r "$PDSM_COMMON" ] && . "$PDSM_COMMON"
+
+SERVICE_NAME="mariadb"
+PDSM_START_TIMEOUT=30
 
 MARIADB_DATA_DIR="/var/lib/mysql"
 MARIADB_RUN_DIR="/run/mysqld"
 MARIADB_SOCKET="$MARIADB_RUN_DIR/mysqld.sock"
+MARIADB_PIDFILE="$MARIADB_RUN_DIR/mysqld.pid"
 MARIADB_LOG="/var/log/mysql/mariadb.log"
 MARIADB_BIN="/usr/sbin/mariadbd"
 
-# If needed on future implementation.
-MARIADB_PIDFILE="$MARIADB_RUN_DIR/mysqld.pid"
-
 running() {
-  # Consider MariaDB "running" if the socket exists AND there's a mariadbd process.
-  [ -S "$MARIADB_SOCKET" ] || return 1
-  pgrep -x mariadbd >/dev/null 2>&1
+  # Use pid to test process running
+  [ -s "$MARIADB_PIDFILE" ] || return 1
+  pid="$(cat "$MARIADB_PIDFILE" 2>/dev/null || echo '')"
+  [ -n "$pid" ] || return 1
+  kill -0 "$pid" 2>/dev/null
 }
 
 start() {
@@ -46,7 +48,7 @@ start() {
     >>"$MARIADB_LOG" 2>&1 &
 
   # Small wait loop so 'start' only returns when it's actually alive
-  for i in 1 2 3 4 5; do
+  for i in $(seq 1 "$PDSM_START_TIMEOUT"); do
     if running; then
       echo "[pdsm:$SERVICE_NAME] started"
       return 0
@@ -76,7 +78,7 @@ stop() {
   pgrep -x mariadbd >/dev/null 2>&1 && pkill -x mariadbd || true
 
   # Wait a little to ensure everything stopped
-  for i in 1 2 3 4 5; do
+  for i in $(seq 1 "$PDSM_START_TIMEOUT"); do
     if ! running; then
       echo "[pdsm:$SERVICE_NAME] stopped"
       return 0

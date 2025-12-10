@@ -2,11 +2,12 @@
 # /usr/local/pdsm/services-available/kiwix
 # Simple PDSM service wrapper for kiwix-serve
 
-SERVICE_NAME="kiwix"
-SERVICE_DAEMON_NAME="kiwix-serve"
 PDSM_COMMON="/usr/local/pdsm/lib/pdsm-common.sh"
 [ -r "$PDSM_COMMON" ] && . "$PDSM_COMMON"
 
+SERVICE_NAME="kiwix"
+
+SERVICE_DAEMON_NAME="kiwix-serve"
 KIWIX_BIN="/opt/iiab/kiwix/bin/kiwix-serve"
 KIWIX_PORT="3000"
 KIWIX_LIBRARY="/library/zims/library.xml"
@@ -36,6 +37,18 @@ start() {
     --library "$KIWIX_LIBRARY" \
     --urlRootLocation="$KIWIX_URL_ROOT" \
     --threads "$KIWIX_THREADS"
+
+  # Small wait loop so 'start' only returns when it's actually alive
+  for i in $(seq 1 "$PDSM_START_TIMEOUT"); do
+    if running; then
+      echo "[pdsm:$SERVICE_NAME] started"
+      return 0
+    fi
+    sleep 1
+  done
+
+  echo "[pdsm:$SERVICE_NAME] failed to start (check $MARIADB_LOG)" >&2
+  return 1
 }
 
 stop() {
@@ -48,13 +61,17 @@ stop() {
   # No official "stop" command, so we fallback to pkill
   pkill -f "$SERVICE_DAEMON_NAME" >/dev/null 2>&1 || true
 
-  # Small wait loop to really ensure it's gone
-  for i in 1 2 3 4 5; do
+  # Wait a little to ensure everything stopped
+  for i in $(seq 1 "$PDSM_START_TIMEOUT"); do
     if ! running; then
-      break
+      echo "[pdsm:$SERVICE_NAME] stopped"
+      return 0
     fi
-    sleep 0.3
+    sleep 1
   done
+
+  echo "[pdsm:$SERVICE_NAME] did not fully stop" >&2
+  return 1
 }
 
 status() {

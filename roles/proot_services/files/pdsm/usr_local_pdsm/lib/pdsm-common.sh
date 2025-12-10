@@ -4,8 +4,11 @@
 # Base dir comes from environment (exported by pdsm), fallback to default.
 PDSM_DIR="${PDSM_DIR:-/usr/local/pdsm}"
 AVAIL_DIR="$PDSM_DIR/services-available"
-
+# Define pdsm targeted php-fpm version.
 PHP_FPM_VERSION=8.4
+# Define a generic start time to all services.
+: "${PDSM_START_TIMEOUT:=15}"
+
 # Debug helper: only prints when PDSM_DEBUG=1
 _pdsm_log() {
   [ "${PDSM_DEBUG:-0}" = 1 ] && echo "[pdsm] $*" >&2

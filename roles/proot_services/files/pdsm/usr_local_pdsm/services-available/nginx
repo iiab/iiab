@@ -2,9 +2,11 @@
 # /usr/local/pdsm/services-available/nginx
 # Simple PDSM service wrapper for nginx
 
-SERVICE_NAME="nginx"
 PDSM_COMMON="/usr/local/pdsm/lib/pdsm-common.sh"
 [ -r "$PDSM_COMMON" ] && . "$PDSM_COMMON"
+
+SERVICE_NAME="nginx"
+
 NGINX_PIDFILE="/run/nginx.pid"
 
 running() {
@@ -41,13 +43,17 @@ stop() {
   # Try graceful stop first, then fall back to pkill
   nginx -s quit 2>/dev/null || pkill -x nginx || true
 
-  # Small wait loop to really ensure it's gone
-  for i in 1 2 3 4 5; do
+  # Wait a little to ensure everything stopped
+  for i in $(seq 1 "$PDSM_START_TIMEOUT"); do
     if ! running; then
-      break
+      echo "[pdsm:$SERVICE_NAME] stopped"
+      return 0
     fi
-    sleep 0.3
+    sleep 1
   done
+
+  echo "[pdsm:$SERVICE_NAME] did not fully stop" >&2
+  return 1
 }
 
 status() {

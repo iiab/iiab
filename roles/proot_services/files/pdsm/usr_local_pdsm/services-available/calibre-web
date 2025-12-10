@@ -1,12 +1,12 @@
 #!/bin/sh
 # /usr/local/pdsm/services-available/calibre-web
 # Simple PDSM service wrapper for Calibre-Web
-
-SERVICE_NAME="calibre-web"
-CPS_FILE="cps.py"
 PDSM_COMMON="/usr/local/pdsm/lib/pdsm-common.sh"
 [ -r "$PDSM_COMMON" ] && . "$PDSM_COMMON"
 
+SERVICE_NAME="calibre-web"
+
+CPS_FILE="cps.py"
 PYTHON_BIN="/usr/local/calibre-web-py3/bin/python3"
 APP_PATH="/usr/local/calibre-web-py3/cps.py"
 APP_DB_PATH="/library/calibre-web/config/app.db"
@@ -30,6 +30,15 @@ start() {
   echo "[pdsm:$SERVICE_NAME] starting..."
   # Start Calibre-Web in background
   "$PYTHON_BIN" "$APP_PATH" -p "$APP_DB_PATH" >>"$LOG_FILE" 2>&1 &
+
+  # Small wait loop so 'start' only returns when it's actually alive
+  for i in $(seq 1 "$PDSM_START_TIMEOUT"); do
+    if running; then
+      echo "[pdsm:$SERVICE_NAME] started"
+      return 0
+    fi
+    sleep 1
+  done
 }
 
 stop() {
@@ -38,17 +47,17 @@ stop() {
     return 0
   fi
 
-  echo "[pdsm:$SERVICE_NAME] stopping..."
-  # Kill any Calibre-Web process by its script path
-  pkill -f "$APP_PATH" >/dev/null 2>&1 || true
-
-  # Small wait loop to really ensure it's gone
-  for i in 1 2 3 4 5; do
+  # Wait a little to ensure everything stopped
+  for i in $(seq 1 "$PDSM_START_TIMEOUT"); do
     if ! running; then
-      break
+      echo "[pdsm:$SERVICE_NAME] stopped"
+      return 0
     fi
-    sleep 0.3
+    sleep 1
   done
+
+  echo "[pdsm:$SERVICE_NAME] did not fully stop" >&2
+  return 1
 }
 
 status() {
