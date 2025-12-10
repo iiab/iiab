@@ -5,6 +5,7 @@
 PDSM_DIR="${PDSM_DIR:-/usr/local/pdsm}"
 AVAIL_DIR="$PDSM_DIR/services-available"
 
+PHP_FPM_VERSION=8.4
 # Debug helper: only prints when PDSM_DEBUG=1
 _pdsm_log() {
   [ "${PDSM_DEBUG:-0}" = 1 ] && echo "[pdsm] $*" >&2
