@@ -40,24 +40,27 @@
 
 - name: "Download {{ iiab_map_host_url }}/{{ item }} via .meta4 file"
   # cd to the temp directory so that the aria2c file, meta4 file, torrent file,
-  # and data file all end up there.
+  # and data file all end up there. Delete any possible remnants of previous
+  # attempts to download the file before, to avoid errors due to renaming
+  # (appending .1, etc)
   shell: |
     set -euo pipefail
 
     cd /library/downloads/maps/
+
+    rm -f {{ item }}*
+
     wget "{{ iiab_map_host_url }}/{{ item }}.meta4"
     wget "{{ iiab_map_host_url }}/{{ item }}.torrent"
 
-    aria2c --metalink-file="{{ item }}".meta4" --connect-timeout="{{ download_timeout }}"
+    aria2c --metalink-file="{{ item }}.meta4" --connect-timeout="{{ download_timeout }}"
     chmod 644 "{{ item }}"
     mv "{{ item }}" "{{ dest_path }}"
 
-    rm "{{ item }}".meta4
-    rm "{{ item }}".torrent
-    rm "{{ item }}".aria2
+    rm -f {{ item }}*
   args:
     executable: /bin/bash
-  creates: "{{ dest_path }}"
+    creates: "{{ dest_path }}"
   vars:
     # Where the file eventually goes
     dest_path: "{{ dest_base_path }}/{{ item }}"
