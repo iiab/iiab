@@ -13,17 +13,20 @@
       #- python3-pymysql                # For Ansible modules {mysql_db, mysql_user} in Ansible collection community.mysql -- used in MySQL roles {mediawiki, nextcloud, wordpress} and possibly {elgg, pbx}
     state: present
 
-- name: Ensure MariaDB dirs exist with correct ownership (proot)
+- name: Ensure PHP MySQL extensions (mysqli, pdo_mysql) are enabled
+  ansible.builtin.command: phpenmod mysqli pdo_mysql
+  register: php_mysql_exts
+  changed_when: false
+  failed_when: php_mysql_exts.rc != 0
+  when: is_proot
+
+- name: Ensure MariaDB log dir exists (proot)
   ansible.builtin.file:
-    path: "{{ item.path }}"
+    path: "{{ mariadb_log_dir }}"
     state: directory
-    owner: "{{ item.owner }}"
-    group: "{{ item.group }}"
-    mode: "{{ item.mode }}"
-    recurse: "{{ item.recurse | default(false) }}"
-  loop:
-    - { path: "{{ mariadb_datadir }}", owner: "mysql", group: "mysql", mode: "0700", recurse: true }
-    - { path: "{{ mariadb_log_dir }}", owner: "mysql", group: "mysql", mode: "0755" }
+    owner: mysql
+    group: mysql
+    mode: "0755"
   when: is_proot
 
 - name: pip install 'PyMySQL' into venv /usr/local/ansible -- for Ansible modules {mysql_db, mysql_user} in Ansible collection community.mysql -- used in roles {mediawiki, nextcloud, wordpress, matomo, pbx}
