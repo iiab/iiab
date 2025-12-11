@@ -13,12 +13,18 @@
       #- python3-pymysql                # For Ansible modules {mysql_db, mysql_user} in Ansible collection community.mysql -- used in MySQL roles {mediawiki, nextcloud, wordpress} and possibly {elgg, pbx}
     state: present
 
-- name: Ensure PHP MySQL extensions (mysqli, pdo_mysql) are enabled
-  ansible.builtin.command: phpenmod mysqli pdo_mysql
-  register: php_mysql_exts
-  changed_when: false
-  failed_when: php_mysql_exts.rc != 0
+- name: Ensure PHP MySQL extensions are enabled in php-fpm
   when: is_proot
+  block:
+    - name: Setup PHP MySQL extension (mysqli, pdo_mysql)
+      ansible.builtin.command: phpenmod mysqli pdo_mysql
+      register: php_mysql_exts
+      changed_when: false
+      failed_when: php_mysql_exts.rc != 0
+
+    - name: Restart 'php-fpm' via pdsm (proot)
+      ansible.builtin.command: >
+        pdsm restart php-fpm
 
 - name: Ensure MariaDB log dir exists (proot)
   ansible.builtin.file:
