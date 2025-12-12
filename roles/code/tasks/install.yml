@@ -17,12 +17,34 @@
     src: static/
     dest: "{{ code_data_root_static }}"
 
+- name: "Ensure code_apk_release_name is set (autodetect latest armv8a APK if empty)"
+  when: code_apk_release_name | length == 0
+  block:
+
+    - name: "Fetch APK index page from {{ adfa_code_download_url }}/"
+      ansible.builtin.uri:
+        url: "{{ adfa_code_download_url }}/"
+        return_content: true
+      register: apk_index
+
+    - name: "Extract latest armv8a APK filename from index"
+      ansible.builtin.set_fact:
+        code_apk_release_name: >-
+          {{
+            apk_index.content
+            | regex_findall(code_apk_pattern)
+            | unique
+            | sort
+            | last
+          }}
+
+    - name: "Show resolved APK release name"
+      ansible.builtin.debug:
+        var: code_apk_release_name
+
 - name: Get CodeOnTheGo version number
-  ansible.builtin.shell: >
-    curl -s https://appdevforall.org/apk_repo/ |
-    sed -nE 's/.*CodeOnTheGo-release([0-9.]+)\.apk.*/\1/p'
-  register: cotg_version_raw
-  changed_when: false
+  ansible.builtin.set_fact:
+    cotg_version: "{{ code_apk_release_name | regex_search('CodeOnTheGo-release([0-9.]+)', '\\1') }}"
 
 - name: Make index.html file
   ansible.builtin.template:
