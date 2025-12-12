@@ -26,11 +26,11 @@
   systemd:
     name: iiab-clone-wifi
     state: restarted
-  when: wifi_up_down and can_be_ap and ansible_ap0 is undefined
+  when: wifi_up_down and can_be_ap and ansible_facts.ap0 is undefined
 
 - name: Waiting {{ hostapd_wait }} seconds for network to stabilize for ap0
   shell: sleep {{ hostapd_wait }}
-  when: ansible_ap0 is undefined
+  when: ansible_facts.ap0 is undefined
 
 - name: Restart hostapd when WiFi is present but not when using WiFi as gateway
   systemd:
@@ -95,8 +95,8 @@
 #  shell: netplan apply
 #  when: not no_net_restart and is_ubuntu and netplan.stdout.find("yaml") != -1
 
-- name: Waiting {{ hostapd_wait }} seconds for network to stabilize (dnsmasq will fail if br0 isn't in a 'up' state!)
-  shell: sleep {{ hostapd_wait }}
+#- name: Waiting {{ hostapd_wait }} seconds for network to stabilize (dnsmasq will fail if br0 isn't in a 'up' state!)
+#  shell: sleep {{ hostapd_wait }}
 
 - name: Run /usr/bin/iiab-gen-iptables
   command: /usr/bin/iiab-gen-iptables
@@ -115,12 +115,13 @@
 
 #systemd-networkd should have br0 available if hostapd was started and Appliance lacks br0
 #keep an eye on legacy wifi installs where br0 is present but not 'online' with an ip address
-#due to hostapd didn't go to a carrier state. All others should get dnsmasq restarted
-- name: Restarting dnsmasq
-  systemd:
-    name: dnsmasq
-    state: restarted
-  when: not no_net_restart and iiab_network_mode != "Appliance"
+#due to hostapd didn't go to a carrier state. /etc/networkd-dispatcher/routable.d/dnsmasq.sh
+#starts dnsmasq when br0 appears
+#- name: Restarting dnsmasq
+#  systemd:
+#    name: dnsmasq
+#    state: restarted
+#  when: not no_net_restart and iiab_network_mode != "Appliance"
   #dnsmasq_enabled and ((not no_net_restart or (is_ubuntu and wifi_up_down)) or (iiab_stage|int == 9))
   #when: (not no_net_restart or (is_ubuntu and wifi_up_down)) or (iiab_stage|int == 9)
   #when: (not no_net_restart or (is_ubuntu_20 and wifi_up_down)) or (iiab_stage|int == 9)
