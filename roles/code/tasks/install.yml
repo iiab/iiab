@@ -21,9 +21,9 @@
   when: code_apk_release_name is undefined
   block:
 
-    - name: Fetch APK index page from {{ adfa_code_download_url }}/
+    - name: Fetch APK index page from {{ code_download_url }}/
       uri:
-        url: "{{ adfa_code_download_url }}/"
+        url: "{{ code_download_url }}/"
         return_content: true
       register: apk_index
       failed_when: apk_index.status != 200 and apk_index.status != 403
@@ -36,7 +36,7 @@
     - name: Warn about 403 APK index
       fail:
         msg: |
-          The 'code' role could not access: {{ adfa_code_download_url }}/ (HTTP 403). CDN is likely blocking datacenter IPs.
+          The 'code' role could not access: {{ code_download_url }}/ (HTTP 403). CDN is likely blocking datacenter IPs.
 
           ================ CODE ROLE WARNING ================
           The 'code' role hit a CDN 403 (APK index query blocked).
@@ -62,11 +62,10 @@
 
     - name: Extract latest armv8a APK filename from index
       set_fact:
-        code_apk_release_name: >-
+        code_apk_64bit_filename: >-
           {{
             apk_index.content
-            | regex_findall(code_apk_pattern)
-            | unique
+            | regex_findall(code_apk_64bit_pattern)
             | sort
             | last
           }}
@@ -75,6 +74,17 @@
     - name: "Show resolved APK release name"
       debug:
         var: code_apk_release_name
+      when: code_blocked_by_cdn is undefined
+
+    - name: Extract latest armv7a APK filename from index
+      set_fact:
+        code_apk_32bit_filename: >-
+          {{
+            apk_index.content
+            | regex_findall(code_apk_32bit_pattern)
+            | sort
+            | last
+          }}
       when: code_blocked_by_cdn is undefined
 
 - name: Get CodeOnTheGo version number
