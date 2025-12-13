@@ -26,10 +26,12 @@
         url: "{{ adfa_code_download_url }}/"
         return_content: true
       register: apk_index
-      failed_when: >
-        apk_index.status is defined
-        and apk_index.status != 200
-        and apk_index.status != 403
+      failed_when: apk_index.status != 200 and apk_index.status != 403
+
+    - name: Mark 'code' role as blocked by CDN
+      set_fact:
+        code_blocked_by_cdn: true
+      when: apk_index.status == 403
 
     - name: Warn about 403 APK index
       fail:
@@ -50,18 +52,13 @@
 
           Continuing IIAB without CodeOnTheGo APK content...
           ===================================================
-      when: apk_index.status == 403
+      when: code_blocked_by_cdn
       ignore_errors: yes
 
     - name: Warn about APK index 403 blocking
       pause:
         seconds: 20
-      when: apk_index.status == 403
-
-    - name: Mark 'code' role as blocked by CDN
-      set_fact:
-        code_blocked_by_cdn: true
-      when: apk_index.status == 403
+      when: code_blocked_by_cdn
 
     - name: Extract latest armv8a APK filename from index
       set_fact:
@@ -73,7 +70,7 @@
             | sort
             | last
           }}
-      when: code_blocked_by_cdn is undefined
+      when: not code_blocked_by_cdn
 
     - name: "Show resolved APK release name"
       debug:
