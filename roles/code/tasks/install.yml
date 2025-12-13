@@ -4,7 +4,7 @@
 
 
 - name: "Make code directories available"
-  ansible.builtin.file:
+  file:
     path: "{{ item }}"
     state: directory
     mode: "0755"
@@ -13,7 +13,7 @@
     - "{{ code_serve_path }}"
 
 - name: "Copy static assets"
-  ansible.builtin.copy:
+  copy:
     src: static/
     dest: "{{ code_data_root_static }}"
 
@@ -22,7 +22,7 @@
   block:
 
     - name: "Fetch APK index page from {{ adfa_code_download_url }}/"
-      ansible.builtin.uri:
+      uri:
         url: "{{ adfa_code_download_url }}/"
         return_content: true
       register: apk_index
@@ -53,17 +53,17 @@
       ignore_errors: yes
 
     - name: "Warn about APK index 403 blocking"
-      ansible.builtin.pause:
+      pause:
         seconds: 20
       when: apk_index.status == 403
 
     - name: "Mark 'code' role as blocked by CDN"
-      ansible.builtin.set_fact:
+      set_fact:
         code_blocked_by_cdn: true
       when: apk_index.status == 403
 
     - name: "Extract latest armv8a APK filename from index"
-      ansible.builtin.set_fact:
+      set_fact:
         code_apk_release_name: >-
           {{
             apk_index.content
@@ -75,17 +75,17 @@
       when: code_blocked_by_cdn is undefined
 
     - name: "Show resolved APK release name"
-      ansible.builtin.debug:
+      debug:
         var: code_apk_release_name
       when: not code_blocked_by_cdn
 
 - name: "Get CodeOnTheGo version number"
-  ansible.builtin.set_fact:
+  set_fact:
     cotg_version: "{{ code_apk_release_name | regex_search('CodeOnTheGo-release([0-9.]+)', '\\1') }}"
   when: code_blocked_by_cdn is undefined
 
 - name: "Make index.html file"
-  ansible.builtin.template:
+  template:
     src: "index.html.j2"
     dest: "{{ code_serve_path }}/index.html"
     mode: "0644"
@@ -97,7 +97,7 @@
     mode: "0755"
 
 - name: "Render localized Markdown content files"
-  ansible.builtin.template:
+  template:
     src: "content/{{ item }}.md.j2"
     dest: "{{ code_data_root_content }}/{{ item }}.md"
     mode: "0644"
@@ -107,9 +107,11 @@
   when: code_blocked_by_cdn is undefined
 
 - name: "Continue APK install tasks when no 403 blocking"
-  ansible.builtin.include_tasks: install_apkfile.yml
+  include_tasks: install_apkfile.yml
   when: code_blocked_by_cdn is undefined
 
+- name: "Setup 'code' nginx conf file"
+  include_tasks: nginx.yml
 
 # RECORD CODE AS INSTALLED
 
