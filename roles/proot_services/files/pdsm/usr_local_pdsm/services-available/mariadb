@@ -1,0 +1,114 @@
+#!/bin/sh
+# /usr/local/pdsm/services-available/mariadb
+# Simple PDSM service wrapper for MariaDB
+
+PDSM_COMMON="/usr/local/pdsm/lib/pdsm-common.sh"
+[ -r "$PDSM_COMMON" ] && . "$PDSM_COMMON"
+
+SERVICE_NAME="mariadb"
+PDSM_START_TIMEOUT=30
+
+MARIADB_DATA_DIR="/var/lib/mysql"
+MARIADB_RUN_DIR="/run/mysqld"
+MARIADB_SOCKET="$MARIADB_RUN_DIR/mysqld.sock"
+MARIADB_PIDFILE="$MARIADB_RUN_DIR/mysqld.pid"
+MARIADB_LOG="/var/log/mysql/mariadb.log"
+MARIADB_BIN="/usr/sbin/mariadbd"
+
+running() {
+  # Use pid to test process running
+  [ -s "$MARIADB_PIDFILE" ] || return 1
+  pid="$(cat "$MARIADB_PIDFILE" 2>/dev/null || echo '')"
+  [ -n "$pid" ] || return 1
+  kill -0 "$pid" 2>/dev/null
+}
+
+start() {
+  if running; then
+    echo "[pdsm:$SERVICE_NAME] already running"
+    return 0
+  fi
+
+  echo "[pdsm:$SERVICE_NAME] starting..."
+
+  # Ensure run dir exists with proper owner
+  mkdir -p "$MARIADB_RUN_DIR"
+  chown mysql:mysql "$MARIADB_RUN_DIR" 2>/dev/null || true
+
+  # Start MariaDB in background, as lab test confirm.
+  nohup "$MARIADB_BIN" \
+    --user=mysql \
+    --datadir="$MARIADB_DATA_DIR" \
+    --socket="$MARIADB_SOCKET" \
+    --port=3306 \
+    --bind-address=127.0.0.1 \
+    --skip-networking=0 \
+    --pid-file="$MARIADB_PIDFILE" \
+    --log-error="$MARIADB_LOG" \
+    >>"$MARIADB_LOG" 2>&1 &
+
+  # Small wait loop so 'start' only returns when it's actually alive
+  for i in $(seq 1 "$PDSM_START_TIMEOUT"); do
+    if running; then
+      echo "[pdsm:$SERVICE_NAME] started"
+      return 0
+    fi
+    sleep 1
+  done
+
+  echo "[pdsm:$SERVICE_NAME] failed to start (check $MARIADB_LOG)" >&2
+  return 1
+}
+
+stop() {
+  if ! running; then
+    echo "[pdsm:$SERVICE_NAME] already stopped"
+    return 0
+  fi
+
+  echo "[pdsm:$SERVICE_NAME] stopping..."
+
+  # Try a clean shutdown via unix socket first
+  if command -v mariadb >/dev/null 2>&1; then
+    mariadb --protocol=socket --socket="$MARIADB_SOCKET" -e 'SHUTDOWN;' \
+      >/dev/null 2>&1 || true
+  fi
+
+  # Fallback: kill the daemon if still present
+  pgrep -x mariadbd >/dev/null 2>&1 && pkill -x mariadbd || true
+
+  # Wait a little to ensure everything stopped
+  for i in $(seq 1 "$PDSM_START_TIMEOUT"); do
+    if ! running; then
+      echo "[pdsm:$SERVICE_NAME] stopped"
+      return 0
+    fi
+    sleep 1
+  done
+
+  echo "[pdsm:$SERVICE_NAME] did not fully stop" >&2
+  return 1
+}
+
+status() {
+  if running; then
+    echo "[pdsm:$SERVICE_NAME] running"
+    return 0
+  fi
+  echo "[pdsm:$SERVICE_NAME] not running"
+  return 3
+}
+
+case "$1" in
+  start|stop|status)
+    "$1"
+    ;;
+  restart)
+    stop
+    start
+    ;;
+  *)
+    echo "Usage: $0 {start|stop|restart|status}" >&2
+    exit 1
+    ;;
+esac
