@@ -3,7 +3,7 @@
   register: df1
 
 
-- name: "Make code directories available"
+- name: Make code directories available
   file:
     path: "{{ item }}"
     state: directory
@@ -12,16 +12,16 @@
     - "{{ code_data_root }}"
     - "{{ code_serve_path }}"
 
-- name: "Copy static assets"
+- name: Copy static assets
   copy:
     src: static/
     dest: "{{ code_data_root_static }}"
 
-- name: "Ensure code_apk_release_name is set (autodetect latest armv8a APK if empty)"
+- name: Ensure code_apk_release_name is set (autodetect latest armv8a APK if empty)
   when: code_apk_release_name is undefined
   block:
 
-    - name: "Fetch APK index page from {{ adfa_code_download_url }}/"
+    - name: Fetch APK index page from {{ adfa_code_download_url }}/
       uri:
         url: "{{ adfa_code_download_url }}/"
         return_content: true
@@ -31,17 +31,18 @@
         and apk_index.status != 200
         and apk_index.status != 403
 
-    - name: "Warn about {{ apk_index.status }} APK index"
+    - name: Warn about 403 APK index
       fail:
         msg: |
-          The 'code' role could not access: {{ adfa_code_download_url }}/ (HTTP {{ apk_index.status }}). CDN is likely blocking datacenter IPs; see pause banner below.
-          ================ CODE ROLE WARNING ================
-          The 'code' role hit a CDN {{ apk_index.status }} (APK index query blocked).
+          The 'code' role could not access: {{ adfa_code_download_url }}/ (HTTP 403). CDN is likely blocking datacenter IPs; see pause banner below.
 
-          HTTP status: {{ apk_index.status }}
+          ================ CODE ROLE WARNING ================
+          The 'code' role hit a CDN 403 (APK index query blocked).
+
+          HTTP status: 403
           This likely means the APK store is behind some CDN and
           blocking datacenter IP ranges, so non-interactive curl/Ansible
-          requests get a {{ apk_index.status }} "Just a moment..." page.
+          requests get a 403 "Just a moment..." page.
 
           GitHub issues/PRs related:
           - https://github.com/iiab/iiab/issues/4174
@@ -52,17 +53,17 @@
       when: apk_index.status == 403
       ignore_errors: yes
 
-    - name: "Warn about APK index 403 blocking"
+    - name: Warn about APK index 403 blocking
       pause:
         seconds: 20
       when: apk_index.status == 403
 
-    - name: "Mark 'code' role as blocked by CDN"
+    - name: Mark 'code' role as blocked by CDN
       set_fact:
         code_blocked_by_cdn: true
       when: apk_index.status == 403
 
-    - name: "Extract latest armv8a APK filename from index"
+    - name: Extract latest armv8a APK filename from index
       set_fact:
         code_apk_release_name: >-
           {{
@@ -79,24 +80,24 @@
         var: code_apk_release_name
       when: not code_blocked_by_cdn
 
-- name: "Get CodeOnTheGo version number"
+- name: Get CodeOnTheGo version number
   set_fact:
     cotg_version: "{{ code_apk_release_name | regex_search('CodeOnTheGo-release([0-9.]+)', '\\1') }}"
   when: code_blocked_by_cdn is undefined
 
-- name: "Make index.html file"
+- name: Make index.html file
   template:
     src: "index.html.j2"
     dest: "{{ code_serve_path }}/index.html"
     mode: "0644"
 
-- name: "Make content directory"
+- name: Make content directory
   file:
     path: "{{ code_data_root_content }}"
     state: directory
     mode: "0755"
 
-- name: "Render localized Markdown content files"
+- name: Render localized Markdown content files
   template:
     src: "content/{{ item }}.md.j2"
     dest: "{{ code_data_root_content }}/{{ item }}.md"
@@ -106,32 +107,32 @@
     - es
   when: code_blocked_by_cdn is undefined
 
-- name: "Continue APK install tasks when no 403 blocking"
+- name: Continue APK install tasks when no 403 blocking
   include_tasks: install_apkfile.yml
   when: code_blocked_by_cdn is undefined
 
-- name: "Setup 'code' nginx conf file"
+- name: Setup 'code' nginx conf file
   include_tasks: nginx.yml
 
 # RECORD CODE AS INSTALLED
 
-- name: "Record (final) disk space used"
+- name: Record (final) disk space used
   shell: df -B1 --output=used / | tail -1
   register: df2
 
-- name: "Add 'code_disk_usage = {{ df2.stdout | int - df1.stdout | int }}' to {{ iiab_ini_file }}"
+- name: Add 'code_disk_usage = {{ df2.stdout | int - df1.stdout | int }}' to {{ iiab_ini_file }}
   ini_file:
     path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
     section: code
     option: code_disk_usage
     value: "{{ df2.stdout | int - df1.stdout | int }}"
 
-- name: "Set 'code_installed: True'"
+- name: Set 'code_installed: True'
   set_fact:
     code_installed: True
   when: code_blocked_by_cdn is undefined
 
-- name: "Add 'code_installed: True' to {{ iiab_state_file }}"
+- name: Add 'code_installed: True' to {{ iiab_state_file }}
   lineinfile:
     path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
     regexp: '^code_installed'
