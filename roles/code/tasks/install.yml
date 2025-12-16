@@ -4,7 +4,7 @@
 
 
 - name: Make code directories available
-  ansible.builtin.file:
+  file:
     path: "{{ item }}"
     state: directory
     mode: "0755"
@@ -13,39 +13,112 @@
     - "{{ code_serve_path }}"
 
 - name: Copy static assets
-  ansible.builtin.copy:
+  copy:
     src: static/
     dest: "{{ code_data_root_static }}"
 
+- name: Ensure code_apk_release_name is set (autodetect latest armv8a APK if empty)
+  when: code_apk_release_name is undefined
+  block:
+
+    - name: Fetch APK index page from {{ code_download_url }}/
+      uri:
+        url: "{{ code_download_url }}/"
+        return_content: true
+      register: apk_index
+      failed_when: apk_index.status != 200 and apk_index.status != 403
+
+    - name: Mark 'code' role as blocked by CDN
+      set_fact:
+        code_blocked_by_cdn: true
+      when: apk_index.status == 403
+
+    - name: Warn about 403 APK index
+      fail:
+        msg: |
+          The 'code' role could not access: {{ code_download_url }}/ (HTTP 403). CDN is likely blocking datacenter IPs.
+
+          ================ CODE ROLE WARNING ================
+          The 'code' role hit a CDN 403 (APK index query blocked).
+
+          HTTP status: 403
+          This likely means the APK store is behind some CDN and
+          blocking datacenter IP ranges, so non-interactive curl/Ansible
+          requests get a 403 "Just a moment..." page.
+
+          GitHub issues/PRs related:
+          - https://github.com/iiab/iiab/issues/4174
+          - https://github.com/iiab/iiab/pull/4176
+
+          Continuing IIAB without CodeOnTheGo APK content...
+          ===================================================
+      when: code_blocked_by_cdn is defined
+      ignore_errors: yes
+
+    - name: Warn about APK index 403 blocking
+      pause:
+        seconds: 20
+      when: code_blocked_by_cdn is defined
+
+    - name: Extract latest armv8a APK filename from index
+      set_fact:
+        code_apk_64bit_filename: >-
+          {{
+            apk_index.content
+            | regex_findall(code_apk_64bit_pattern)
+            | sort
+            | last
+          }}
+      when: code_blocked_by_cdn is undefined
+
+    - name: Extract latest armv7a APK filename from index
+      set_fact:
+        code_apk_32bit_filename: >-
+          {{
+            apk_index.content
+            | regex_findall(code_apk_32bit_pattern)
+            | sort
+            | last
+          }}
+      when: code_blocked_by_cdn is undefined
+
 - name: Get CodeOnTheGo version number
-  ansible.builtin.shell: >
-    curl -s https://appdevforall.org/apk_repo/ |
-    sed -nE 's/.*CodeOnTheGo-release([0-9.]+)\.apk.*/\1/p'
-  register: cotg_version_raw
-  changed_when: false
+  set_fact:
+    cotg_version: "{{ code_apk_64bit_filename | regex_search('CodeOnTheGo-release([0-9.]+)', '\\1') }}"
+  when: code_blocked_by_cdn is undefined
+
+- name: "Show resolved APK release name"
+  debug:
+    var: cotg_version
+  when: code_blocked_by_cdn is undefined
 
 - name: Make index.html file
-  ansible.builtin.template:
+  template:
     src: "index.html.j2"
     dest: "{{ code_serve_path }}/index.html"
     mode: "0644"
+  when: code_blocked_by_cdn is undefined
 
 - name: Make content directory
   file:
     path: "{{ code_data_root_content }}"
     state: directory
     mode: "0755"
+  when: code_blocked_by_cdn is undefined
 
 - name: Render localized Markdown content files
-  ansible.builtin.template:
+  template:
     src: "content/{{ item }}.md.j2"
     dest: "{{ code_data_root_content }}/{{ item }}.md"
     mode: "0644"
   loop:
     - en
     - es
+  when: code_blocked_by_cdn is undefined
 
-- include_tasks: install_apkfile.yml
+- name: Continue APK install tasks when no 403 blocking
+  include_tasks: install_apkfile.yml
+  when: code_blocked_by_cdn is undefined
 
 
 # RECORD CODE AS INSTALLED
@@ -64,9 +137,11 @@
 - name: "Set 'code_installed: True'"
   set_fact:
     code_installed: True
+  when: code_blocked_by_cdn is undefined
 
 - name: "Add 'code_installed: True' to {{ iiab_state_file }}"
   lineinfile:
     path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
     regexp: '^code_installed'
     line: 'code_installed: True'
+  when: code_blocked_by_cdn is undefined
