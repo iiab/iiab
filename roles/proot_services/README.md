@@ -1,6 +1,71 @@
+# Internet in a Box on Android
+
+Internet in a Box on Android benefits from the ubiquity of Android smartphones in all the world to reach new communities around the world.
+
+This effort is on it's launching stage so only a limited of apps are supported.
+
+- Caliber-Web
+- Kiwix
+- Kolibri
+- Maps
+- Matomo
+
+The default port for the web server is **8085**, for example:
+
+     http://localhost:8085/maps
+
+## Installation
+
+1) You are required to install **Termux**
+
+- https://github.com/termux/termux-app/releases/
+
+2) Enable **Developer Mode** on Android.
+
+3) Remove / increase app child processes limit to run IIAB.
+
+- Android 15+  
+    On Android 15 and later, it is possible to disable this restriction throught the UI on one *Developer Mode* setting called:
+    - `Disable child process restriction`  (English) or
+    - `Desactivar restricciones de procesos secundarios` (Spanish)
+
+- Android 12-14  
+  Since version 12 and until 14, Android added a new feature to limit child processes (PPK), there is no UI interface to modify such feature. Then it requires to be modified via ADB commands, ti can be done via:
+
+    - using a PC to check current PPK value & increase Phantom Process Killer from current value (e.g. 32) to 256+
+
+    ```
+    adb shell "dumpsys activity settings | grep -i phantom" && \
+    adb shell "device_config put activity_manager max_phantom_processes 256"  && \
+    adb shell "dumpsys activity settings | grep -i phantom"
+    ```
+
+    - or whitin the same device by using **[Shizuku](https://github.com/RikkaApps/Shizuku/releases/)** check the documentation for how to acomplish it.  
+
+    ```
+    dumpsys activity settings | grep -i phantom && \
+    device_config put activity_manager max_phantom_processes 256  && \
+    dumpsys activity settings | grep -i phantom
+    ```
+
+4) Prepare termux-app, use the following command from the termux terminal.
+
+```
+curl -s https://github.com/iiab/iiab/blob/master/roles/proot_servirces/0_termux-setup.sh | bash
+```
+
+5) Install the android local_vars and run the installer in order to install the current setup.
+```
+curl -s https://github.com/iiab/iiab/blob/master/roles/proot_servirces/1_iiab-on-android.sh | bash
+```
+
+If the installer completes you have finished the installation process. Try to monse
+Any issue please help us by opening an [issue](https://github.com/iiab/iiab/issues).
+
+
 # PRoot Services or proot-distro service manager(pdsm)
 
-`pdsm` is a simple service implementation to manage services closely to what you would expect from a systemd like fashion on a Debian / Debian based distro.
+`pdsm` is a simple custom service implementation to manage services on a systemd like fashion on a Debian / Debian based distro on the Android port of IIAB.
 
 ## Usage
 
@@ -75,20 +140,22 @@ As this is a custom implementation it's set on /usr/local and current tree of th
 ```
 pdsm/
 ├── etc_profile.d
-│   └── pdsm.sh
+│   └── pdsm.sh
 ├── pdsm-installer.sh
 ├── usr_local_bin
-│   └── pdsm
+│   └── pdsm
 └── usr_local_pdsm
     ├── lib
-    │   └── pdsm-common.sh
+    │   └── pdsm-common.sh
     └── services-available
         ├── calibre-web
         ├── kiwix
         ├── kolibri
-        └── nginx
+        ├── mariadb
+        ├── nginx
+        └── php-fpm
 
-6 directories, 8 files
+6 directories, 10 files
 ```
 
 The installer sets the package in place, on the required directories,

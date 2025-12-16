@@ -1,13 +1,14 @@
 #!/bin/sh
+# /usr/local/pdsm/services-available/kolibri
 # Simple PDSM service wrapper for Kolibri
 
-SERVICE_NAME="kolibri"
 PDSM_COMMON="/usr/local/pdsm/lib/pdsm-common.sh"
 [ -r "$PDSM_COMMON" ] && . "$PDSM_COMMON"
 
+SERVICE_NAME="kolibri"
+
 # Adjust KOLIBRI_HOME to match your IIAB/Termux/proot layout
 export KOLIBRI_HOME="/library/kolibri/"
-
 KOLIBRI_BIN="$(command -v kolibri || echo kolibri)"
 
 running() {
@@ -26,6 +27,15 @@ start() {
   require_service "nginx"
 
   "$KOLIBRI_BIN" start
+
+  # Small wait loop so 'start' only returns when it's actually alive
+  for i in $(seq 1 "$PDSM_START_TIMEOUT"); do
+    if running; then
+      echo "[pdsm:$SERVICE_NAME] started"
+      return 0
+    fi
+    sleep 1
+  done
 }
 
 stop() {
@@ -37,6 +47,18 @@ stop() {
   echo "[pdsm:$SERVICE_NAME] stopping..."
   # Kolibri already knows how to stop gracefully
   "$KOLIBRI_BIN" stop || true
+
+  # Wait a little to ensure everything stopped
+  for i in $(seq 1 "$PDSM_START_TIMEOUT"); do
+    if ! running; then
+      echo "[pdsm:$SERVICE_NAME] stopped"
+      return 0
+    fi
+    sleep 1
+  done
+
+  echo "[pdsm:$SERVICE_NAME] did not fully stop" >&2
+  return 1
 }
 
 status() {

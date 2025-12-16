@@ -13,6 +13,28 @@
       #- python3-pymysql                # For Ansible modules {mysql_db, mysql_user} in Ansible collection community.mysql -- used in MySQL roles {mediawiki, nextcloud, wordpress} and possibly {elgg, pbx}
     state: present
 
+- name: Ensure PHP MySQL extensions are enabled in php-fpm
+  when: is_proot
+  block:
+    - name: Setup PHP MySQL extension (mysqli, pdo_mysql)
+      ansible.builtin.command: phpenmod mysqli pdo_mysql
+      register: php_mysql_exts
+      changed_when: false
+      failed_when: php_mysql_exts.rc != 0
+
+    - name: Restart 'php-fpm' via pdsm (proot)
+      ansible.builtin.command: >
+        pdsm restart php-fpm
+
+- name: Ensure MariaDB log dir exists (proot)
+  ansible.builtin.file:
+    path: "{{ mariadb_log_dir }}"
+    state: directory
+    owner: mysql
+    group: mysql
+    mode: "0755"
+  when: is_proot
+
 - name: pip install 'PyMySQL' into venv /usr/local/ansible -- for Ansible modules {mysql_db, mysql_user} in Ansible collection community.mysql -- used in roles {mediawiki, nextcloud, wordpress, matomo, pbx}
   pip:
     name: PyMySQL
@@ -35,6 +57,11 @@
     daemon_reload: yes
     name: "{{ mysql_service }}"
     state: restarted
+  when: not is_proot
+
+- name: Restart 'mysql' via pdsm (proot)
+  ansible.builtin.command: >
+    pdsm restart mariadb
   when: is_proot
 
 - name: "Install /root/.my.cnf file from template -- used to contain root password credential, prior to 2020-08-24: https://github.com/iiab/iiab/pull/2488"
@@ -69,66 +96,6 @@
 #  with_items:
 #    - 127.0.0.1
 #    - ::1
-
-- name: Start MariaDB setup in proot (mariadbd-safe)
-  vars:
-    mariadb_run_dir: "/run/mysqld"
-    mariadb_log_dir: "/var/log/mysql"
-    mariadb_log_file: "{{ mariadb_log_dir }}/mariadb.log"
-  when: is_proot
-  block:
-    - name: Ensure mysqld socket dir (proot)
-      file:
-        path: "{{ mariadb_run_dir }}"
-        state: directory
-        owner: mysql
-        group: mysql
-        mode: "0755"
-
-    - name: Ensure MariaDB log dir (proot)
-      file:
-        path: "{{ mariadb_log_dir }}"
-        state: directory
-        owner: mysql
-        group: mysql
-        mode: "0755"
-
-    - name: Ensure MariaDB log file (proot)
-      file:
-        path: "{{ mariadb_log_file }}"
-        state: touch
-        owner: mysql
-        group: mysql
-        mode: "0644"
-
-    - name: Write TCP-only /etc/mysql/mariadb.cnf (proot)
-      copy:
-        dest: /etc/mysql/mariadb.cnf
-        mode: "0644"
-        content: |
-          [client]
-          protocol = TCP
-          host     = 127.0.0.1
-          port     = 3306
-
-          [mysqld]
-          bind-address   = 127.0.0.1
-          port           = 3306
-          skip-networking= 0
-          pid-file       = /run/mysqld/mysqld.pid
-          socket         = /run/mysqld/mysqld.sock
-
-          !includedir /etc/mysql/mariadb.conf.d
-          !includedir /etc/mysql/conf.d
-
-    - name: Initialize datadir if missing (proot)
-      command: >
-        mariadb-install-db --user=mysql
-        --datadir={{ mariadb_datadir }}
-        --skip-test-db
-      args:
-        creates: "{{ mariadb_datadir }}/mysql"
-
 
 # RECORD MySQL AS INSTALLED
 

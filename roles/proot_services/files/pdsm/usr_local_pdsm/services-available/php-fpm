@@ -1,21 +1,26 @@
 #!/bin/sh
-# /usr/local/pdsm/services-available/calibre-web
-# Simple PDSM service wrapper for Calibre-Web
+# /usr/local/pdsm/services-available/php-fpm
+# Simple PDSM service wrapper for php-fpm
+
 PDSM_COMMON="/usr/local/pdsm/lib/pdsm-common.sh"
 [ -r "$PDSM_COMMON" ] && . "$PDSM_COMMON"
 
-SERVICE_NAME="calibre-web"
+SERVICE_NAME="php-fpm"
 
-CPS_FILE="cps.py"
-PYTHON_BIN="/usr/local/calibre-web-py3/bin/python3"
-APP_PATH="/usr/local/calibre-web-py3/cps.py"
-APP_DB_PATH="/library/calibre-web/config/app.db"
-LOG_DIR="/var/log"
-LOG_FILE="$LOG_DIR/calibre-web.log"
+PHP_FPM_BIN="/usr/sbin/php-fpm${PHP_FPM_VERSION}"
+PHP_FPM_CONF="/etc/php/${PHP_FPM_VERSION}/fpm/php-fpm.conf"
+PHP_FPM_PIDFILE="/run/php/php${PHP_FPM_VERSION}-fpm.pid"
+
+[ -f "$PHP_FPM_BIN" ] || echo "No binary for php-fph"
 
 running() {
-  # NOTE: if `ps aux | grep $CPS_FILE` shows nothing, this should fail too.
-  pgrep -f $APP_PATH >/dev/null 2>&1
+  # NOTE: use process id to identify service is running.
+  [ -s "$PHP_FPM_PIDFILE" ] || return 1
+
+  pid="$(cat "$PHP_FPM_PIDFILE" 2>/dev/null || echo '')"
+  [ -n "$pid" ] || return 1
+
+  kill -0 "$pid" 2>/dev/null
 }
 
 start() {
@@ -24,12 +29,11 @@ start() {
     return 0
   fi
 
-  # Ensure nginx is up as a requirement
-  require_service "nginx"
-
   echo "[pdsm:$SERVICE_NAME] starting..."
-  # Start Calibre-Web in background
-  "$PYTHON_BIN" "$APP_PATH" -p "$APP_DB_PATH" >>"$LOG_FILE" 2>&1 &
+
+  mkdir -p /run/php
+
+  "$PHP_FPM_BIN" --fpm-config "$PHP_FPM_CONF"
 
   # Small wait loop so 'start' only returns when it's actually alive
   for i in $(seq 1 "$PDSM_START_TIMEOUT"); do
@@ -39,12 +43,23 @@ start() {
     fi
     sleep 1
   done
+
+  echo "[pdsm:$SERVICE_NAME] failed to start" >&2
+  return 1
 }
 
 stop() {
   if ! running; then
     echo "[pdsm:$SERVICE_NAME] already stopped"
     return 0
+  fi
+
+  echo "[pdsm:$SERVICE_NAME] stopping..."
+
+  pid="$(cat "$PHP_FPM_PIDFILE" 2>/dev/null || echo '')"
+
+  if [ -n "$pid" ]; then
+    kill -QUIT "$pid" 2>/dev/null || kill "$pid" 2>/dev/null || true
   fi
 
   # Wait a little to ensure everything stopped
@@ -82,4 +97,3 @@ case "$1" in
     exit 1
     ;;
 esac
-
