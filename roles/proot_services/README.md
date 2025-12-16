@@ -53,14 +53,21 @@ The default port for the web server is **8085**, for example:
 ```
 curl -s https://github.com/iiab/iiab/blob/master/roles/proot_servirces/0_termux-setup.sh | bash
 ```
+Once complete please enter the debian environment to continue the installation:
+
+```
+proot-distro login debian
+```
 
 5) Install the android local_vars and run the installer in order to install the current setup.
+
+Once on the proot-distro environment you can install IIAB running the following script.
 ```
 curl -s https://github.com/iiab/iiab/blob/master/roles/proot_servirces/1_iiab-on-android.sh | bash
 ```
 
-If the installer completes you have finished the installation process. Try to monse
-Any issue please help us by opening an [issue](https://github.com/iiab/iiab/issues).
+If the installer completes correclty you have finished the installation process.  
+If you find any error or issue, please help us by opening an [issue](https://github.com/iiab/iiab/issues) to track it and get it fixed in the shortest time possible.
 
 
 # PRoot Services or proot-distro service manager(pdsm)

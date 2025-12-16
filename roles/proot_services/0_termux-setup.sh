@@ -111,7 +111,8 @@ IIAB_ANDROID_SCRIPT="$HOME/iiab-on-android.sh"
 curl -sL "$IIAB_ANDROID_URL" > "$IIAB_ANDROID_SCRIPT"
 chmod +x "$IIAB_ANDROID_SCRIPT"
 
-echo "[DEBIAN] Done. You can now run: $IIAB_ANDROID_SCRIPT"
+echo "[DEBIAN] Done. You can now run: $IIAB_ANDROID_SCRIPT once at the debian environment."
 EOF
 
 info "All done. proot-distro is ready and iiab-on-android.sh can be executed within debian."
+info "To continue login into debian: proot-distro login debian"
