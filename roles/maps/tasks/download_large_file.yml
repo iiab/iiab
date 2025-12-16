@@ -35,33 +35,59 @@
 #
 # TODO - files should be owned by www-data
 
-- name: "Download {{ iiab_map_host_url }}/{{ item }} via .meta4 file"
-  # cd to the temp directory so that the aria2c file, data file, and (perhaps
-  # eventually) torrent file all end up there.
-  shell: |
-    set -euo pipefail
+- block:
+  - name: "Fetching file size for {{ iiab_map_host_url }}/{{ item }} via .meta4 file"
+    shell: |
+      import sys, xmltodict, requests, os
 
-    cd /library/downloads/maps/
+      if os.path.exists("{{ dest_path }}"):
+        sys.exit(0)
 
-    aria2c \
-        --connect-timeout="{{ download_timeout }}" \
-        --log-level=warn \
-        --console-log-level=warn \
-        --summary-interval=0 \
-        --show-console-readout=false \
-        --download-result=hide \
-        --follow-metalink=mem \
-        --max-connection-per-server=4 \
-        --file-allocation=falloc \
-        --enable-http-pipelining=true \
-        --seed-time=0 \
-        "{{ iiab_map_host_url }}/{{ item }}.meta4"
+      size = int(xmltodict.parse(
+        requests.get("{{ iiab_map_host_url }}/{{ item }}.meta4").content
+      )['metalink']['file']['size'])
+      KiB = 1024
+      MiB = KiB * 1024
+      GiB = MiB * 1024
 
-    chmod 644 "{{ item }}"
-    mv "{{ item }}" "{{ dest_path }}"
-  args:
-    executable: /bin/bash
-    creates: "{{ dest_path }}"
+      if size < MiB:
+        size_disp = str(round(size / KiB, 2)) + ' KiB'
+      elif size < GiB:
+        size_disp = str(round(size / MiB, 2)) + ' MiB'
+      else:
+        size_disp = str(round(size / GiB, 2)) + ' GiB'
+      print(' (' + size_disp + ')')
+    args:
+      executable: /usr/bin/python3
+    register: download_file_size
+
+  - name: "Download {{ iiab_map_host_url }}/{{ item }}{{ download_file_size.stdout_lines.0 | default('')}} via .meta4 file"
+    # cd to the temp directory so that the aria2c file, data file, and (perhaps
+    # eventually) torrent file all end up there.
+    shell: |
+      set -euo pipefail
+
+      cd /library/downloads/maps/
+
+      aria2c \
+          --connect-timeout="{{ download_timeout }}" \
+          --log-level=warn \
+          --console-log-level=warn \
+          --summary-interval=0 \
+          --show-console-readout=false \
+          --download-result=hide \
+          --follow-metalink=mem \
+          --max-connection-per-server=4 \
+          --file-allocation=falloc \
+          --enable-http-pipelining=true \
+          --seed-time=0 \
+          "{{ iiab_map_host_url }}/{{ item }}.meta4"
+
+      chmod 644 "{{ item }}"
+      mv "{{ item }}" "{{ dest_path }}"
+    args:
+      executable: /bin/bash
+      creates: "{{ dest_path }}"
   vars:
     # Where the file eventually goes
     dest_path: "{{ dest_base_path }}/{{ item }}"
