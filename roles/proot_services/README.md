@@ -20,17 +20,17 @@ The default port for the web server is **8085**, for example:
 
 - https://github.com/termux/termux-app/releases/
 
-2) Enable **Developer Mode** on Android.
+2) Enable **Developer Options** on Android.
 
-3) Remove / increase app child processes limit to run IIAB.
+3) Remove / increase app child processes limit to install and run IIAB.
 
-- Android 15+  
-    On Android 15 and later, it is possible to disable this restriction throught the UI on one *Developer Mode* setting called:
+- Android 14+  
+    On Android 14 and later, it is possible to disable this restriction throught the UI on one *Developer options* setting called:
     - `Disable child process restriction`  (English) or
     - `Desactivar restricciones de procesos secundarios` (Spanish)
 
-- Android 12-14  
-  Since version 12 and until 14, Android added a new feature to limit child processes (PPK), there is no UI interface to modify such feature. Then it requires to be modified via ADB commands, ti can be done via:
+- Android 12-13  
+  Since version 12+ Android added a new feature to limit child processes (PPK), there is no UI interface to modify such feature on 12 or 13. Then it requires to be modified via ADB commands, it can be done via:
 
     - using a PC to check current PPK value & increase Phantom Process Killer from current value (e.g. 32) to 256+
 
@@ -69,8 +69,25 @@ curl -s https://github.com/iiab/iiab/blob/master/roles/proot_servirces/1_iiab-on
 If the installer completes correclty you have finished the installation process.  
 If you find any error or issue, please help us by opening an [issue](https://github.com/iiab/iiab/issues) to track it and get it fixed in the shortest time possible.
 
+## Removal
 
-# PRoot Services or proot-distro service manager(pdsm)
+If you want to remove the installation and remove all the related apps on it please follow the next steps.
+
+1) Remove the IIAB installation running on `proot-distro` by running:
+
+  ```
+  proot-distro remove debian
+  ```
+
+Please note that **all the content on that IIAB installation gets deleted by excecuting this command**. Backup your content properly if you want to install later on.
+
+2) Remove / Uninstall Termux app
+
+3) If applicable, Remove / Uninstall Shizuku app (Android 12/13)
+
+4) Disable Developer options.
+
+# proot-distro service manager (pdsm)
 
 `pdsm` is a simple custom service implementation to manage services on a systemd like fashion on a Debian / Debian based distro on the Android port of IIAB.
 
@@ -78,9 +95,25 @@ If you find any error or issue, please help us by opening an [issue](https://git
 
 `pdsm` has a simple straight forward structure.
 
+Starting a service is not the same as enable it. By *enabling* it, the service will start on every future session, *start* only will start on current session. Out of caution, only a handfull of services are actually enabled by default.
+
 ```
-Usage: pdsm {enable-all|enable|disable|start|stop|restart|status|list} [service]
+Usage: pdsm {enable-all|enable|disable|start|start-all|stop|restart|status|list} [service]
 ```
+
+**TLDR;**
+
+If you want to start all services at once, you can do it by:
+
+```
+pdsm start-all
+```
+
+If you want to enable all services at once, you can do it by:
+```
+pdsm enable-all
+```
+
 
 ### Examples
 
@@ -136,7 +169,7 @@ THIS IS A SECURITY RISK - please run 'sudo passwd iiab-admin' to change it.
 root@localhost:~#
 ```
 
-Note: The amount of services running cuncurrently is defined by the number of child processes allowed, whether via Developer Settings UI (Android 15+) or adb commands (Android 12 - 14).
+**Note**: The amount of services running cuncurrently is defined by the number of child processes allowed, whether via Developer Settings UI (Android 14+) or adb commands (Android 12 - 13).
 
 If not setup propely, services will be stoped by the Phantom Process Killer ([learn more...](https://github.com/agnostic-apollo/Android-Docs/blob/master/en/docs/apps/processes/phantom-cached-and-empty-processes.md)).
 
