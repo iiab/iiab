@@ -4,7 +4,7 @@
 maps_dot_black_small_assets_url: https://v1.maps.black
 maps_dot_black_tiles_url: https://maps.black
 unpkg_url: https://unpkg.com
-iiab_map_host_url: https://iiab.switnet.org/maps/0
+iiab_map_host_url: https://iiab.switnet.org/maps/1
 
 # TODO I wonder if it should go under /library/maps/vector_tiles and symlink from the www directory.
 # That way it would be near the search data. It would be easier to find everything.
@@ -16,8 +16,21 @@ nominatim_home: /srv/nominatim
 nominatim_num_workers_procs: 1 # 4 seems to freeze it up if I make too many requests. But, maybe 1 is too few. Also, optimal on Pi Zero may be lower.
 nominatim_venv: "{{ nominatim_home }}/nominatim-venv"
 
-# TODO host our own assets and tiles? Because they may get updated which will break our checksums.
-# TODO s/filename/remotesubpath?
+# `maps_data_date` is for data that changes all the time (osm vector data,
+#     search [eventually!])
+# `maps_slow_data_date` is for big data that changes rarely if ever (satellite,
+#     natural earth, terrain, search [for now!])
+#
+# It sucks to have up-to-date files with different dates, but the alternative
+# is to force the user to download the same satellite file over and over every
+# time the vector data changes. This is why we have the "slow" designation.
+# Some of it may never change. Some of it, like search, will probably start
+# changing much faster once we're ready for it. We can even decide on multiple
+# date designations down the line. I just want one "slow" date to set all of
+# these items *for now*.
+#
+maps_data_date: 2025-12-10
+maps_slow_data_date: 2025-12-10
 
 # Basic maps.black javascript and styles
 maps_dot_black_js_and_styles:
@@ -53,14 +66,14 @@ maplibre_search_js_and_styles:
     filename: "@maplibre/maplibre-gl-geocoder@1.5.0/dist/maplibre-gl-geocoder.css"
     sha256sum: 9fc78e63cbec12058daefb460f630d203a23f209cac8e19a84d0b257e8325fc3
 
-maps_dot_black_common_tiles:
-  # Mostly colors, topography, etc. 58M
-  - name: naturalearth6-NE2_HR_SR_W_DR-WEBP.pmtiles
-    filename: naturalearth6-NE2_HR_SR_W_DR-WEBP.pmtiles
-    src_url: "{{ maps_dot_black_tiles_url }}/naturalearth6-NE2_HR_SR_W_DR-WEBP.pmtiles"
-    sha256sum: 22b44759a3f4c7f6a6c7abdcc3dd48786ebbb96f9b3479e6692083e25021207b
+maps_dot_black_naturalearth6_symlink_name: "naturalearth6-NE2_HR_SR_W_DR-WEBP.pmtiles"
 
-maps_dot_black_vector_symlink_name: openstreetmap-openmaptiles.pmtiles
+# Mostly colors, topography, etc. 58M
+maps_dot_black_naturalearth6_tiles: "naturalearth6-NE2_HR_SR_W_DR-WEBP.{{ maps_slow_data_date }}.full.pmtiles"
+
+# Two different symlinks because the front end could requset openstreetmap or naturalearth
+maps_dot_black_osm_symlink_name: openstreetmap-openmaptiles.pmtiles
+maps_dot_black_ne_symlink_name: naturalearth-openmaptiles.pmtiles
 
 # File size circa Sept 2025
 # TODO - hopefully before this is merged, we'll get rid of "ne" (naturalearth)
@@ -70,83 +83,46 @@ maps_dot_black_vector_tiles:
   # "high res" full osm, including 3d buildings. 78GiB as of Oct 2025
   # (TODO does this include colors and topography? Or is it used along with naturalearth6 above in most styles?)
   # maps_vector_quality = "osm-full"
-  osm-full:
-    name: openstreetmap-openmaptiles-full.pmtiles
-    filename: openstreetmap-openmaptiles-full.pmtiles # NOTE - saves as different filename than the source URL to make room for the symlink
-    src_url: "{{ iiab_map_host_url }}/openstreetmap-openmaptiles.pmtiles"
-    sha256sum: 95b90ef180b15f6496d01f7437a9ed058d2a1b61ac5dba32f43790010acba77c
+  osm-full: "openstreetmap-openmaptiles.{{ maps_data_date }}.full.pmtiles"
 
   # "medium res" osm, up to zoom level 9 (original file has 14). 1.9GiB as of Oct 2025
   # (TODO does this include colors and topography? Or is it used along with naturalearth6 above in most styles?)
   # maps_vector_quality = "osm-z9"
-  osm-z9:
-    name: openstreetmap-openmaptiles-zoom_0-09.pmtiles
-    filename: openstreetmap-openmaptiles-zoom_0-09.pmtiles
-    src_url: "{{ iiab_map_host_url }}/openstreetmap-openmaptiles-zoom_0-09.pmtiles"
-    sha256sum: 32fc190bd9009c54b8fc826e215ea4a73ee34de4bbac500cf4fe56eee4f12bdc
+  osm-z9: "openstreetmap-openmaptiles.{{ maps_data_date }}.zoom_0-09.pmtiles"
 
   # "low res" - mostly borders, rivers, country names, large roads. 85MB
   # maps_vector_quality = "ne"
-  ne: # for "Natural Earth"
-    name: naturalearth-openmaptiles.pmtiles
-    filename: naturalearth-openmaptiles.pmtiles
-    src_url: "{{ maps_dot_black_tiles_url }}/naturalearth-openmaptiles.pmtiles"
-    sha256sum: 5ff72ad4944fe64188802d45d5ee88c8c819c94d3b21eba8fae7b19a92a1cc3b
+  # (ne = "Natural Earth")
+  ne: "naturalearth-openmaptiles.{{ maps_slow_data_date }}.full.pmtiles"
 
 maps_dot_black_satellite_symlink_name: s2maps-sentinel2-2023.pmtiles
 
 maps_dot_black_satellite_tiles:
   # Low quality satellite, up to zoom level 7 (original file has 13), 85MiB
   # maps_sat_zoom = 7
-  7:
-    name: s2maps-sentinel2-2023-zoom_0-07.pmtiles
-    filename: s2maps-sentinel2-2023-zoom_0-07.pmtiles
-    src_url: "{{ iiab_map_host_url }}/s2maps-sentinel2-2023-zoom_0-07.pmtiles"
-    sha256sum: a97e35ac88e7e99bf467eef921f5af9955844ecf74f399eec4bdb36f37108f4f
+  7: "s2maps-sentinel2-2023.{{ maps_slow_data_date }}.zoom_0-07.pmtiles"
 
   # Moderately high quality satellite, up to zoom level 9 (original file has 13), 1.2GiB
   # maps_sat_zoom = 9
-  9:
-    name: s2maps-sentinel2-2023-zoom_0-09.pmtiles
-    filename: s2maps-sentinel2-2023-zoom_0-09.pmtiles
-    src_url: "{{ iiab_map_host_url }}/s2maps-sentinel2-2023-zoom_0-09.pmtiles"
-    sha256sum: 544cec6533aca91a504ee274ea3dc64c39cc401b464f6470dd3e7bf2e55a3943
+  9: "s2maps-sentinel2-2023.{{ maps_slow_data_date }}.zoom_0-09.pmtiles"
 
   # Pretty high quality satellite, up to zoom level 11 (original file has 13), 21GiB
   # maps_sat_zoom = 11
-  11:
-    name: s2maps-sentinel2-2023-zoom_0-11.pmtiles
-    filename: s2maps-sentinel2-2023-zoom_0-11.pmtiles
-    src_url: "{{ iiab_map_host_url }}/s2maps-sentinel2-2023-zoom_0-11.pmtiles"
-    sha256sum: e7215559fcbfb48a0d45452931f6e258834eeb2d8a6acc927a7e4b49b8fb0116
+  11: "s2maps-sentinel2-2023.{{ maps_slow_data_date }}.zoom_0-11.pmtiles"
 
   # Pretty high quality satellite, up to zoom level 12 (original file has 13), 80GiB
   # maps_sat_zoom = 12
-  12:
-    name: s2maps-sentinel2-2023-zoom_0-12.pmtiles
-    filename: s2maps-sentinel2-2023-zoom_0-12.pmtiles
-    src_url: "{{ iiab_map_host_url }}/s2maps-sentinel2-2023-zoom_0-12.pmtiles"
-    sha256sum: 81aa6eb7ed64714e8bc58596bcb1e1c0cf345cb211a78ccf1fd3145466b97c83
+  12: "s2maps-sentinel2-2023.{{ maps_slow_data_date }}.zoom_0-12.pmtiles"
 
-nominatim_db_symlink_name: mydb.sqlite
-nominatim_db_basic_name: mydb.basic.sqlite
-nominatim_db_full_name: mydb.full.sqlite
+nominatim_db_symlink_name: nominatim.sqlite
 
 nominatim_data:
   # Basic nominatim database
   # maps_search_full = False
-  False:
-    name: "{{ nominatim_db_basic_name }}"
-    filename: "{{ nominatim_db_basic_name }}"
-    src_url: "{{ iiab_map_host_url }}/{{ nominatim_db_basic_name }}"
+  False: "nominatim.{{ maps_slow_data_date }}.basic.sqlite"
     # California admin+natural for now. TODO make a small worldwide one. (unless we go to the frontend-only one)
     # TODO - Make a basic small whole-world map, at least as good as previous maps
-    sha256sum: 4c87584c9f8e58fdf9072257d7f25605132ef613a1aa1e922525d52b9be7a8e2
 
   # Full nominatim database
   # maps_search_full = True
-  True:
-    name: "{{ nominatim_db_full_name }}"
-    filename: "{{ nominatim_db_full_name }}"
-    src_url: "{{ iiab_map_host_url }}/{{ nominatim_db_full_name }}"
-    sha256sum: bb9e95c644298aca3154bf6436939bbb305511dde4563d2a1743916e819864fc
+  True: "nominatim.{{ maps_slow_data_date }}.full.sqlite"
