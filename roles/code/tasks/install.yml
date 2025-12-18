@@ -21,12 +21,12 @@
   when: code_apk_release_name is undefined
   block:
 
-    - name: Fetch APK index page from {{ code_download_url }}/
+    - name: Fetch APK index page from {{ code_fetch_apk_url }}/
       uri:
-        url: "{{ code_download_url }}/"
+        url: "{{ code_fetch_apk_url }}/"
         return_content: true
       register: apk_index
-      failed_when: apk_index.status != 200 and apk_index.status != 403
+      failed_when: apk_index.status not in [200, 403, 404]
 
     - name: Mark 'code' role as blocked by CDN
       set_fact:
@@ -68,6 +68,7 @@
             | regex_findall(code_apk_64bit_pattern)
             | sort
             | last
+            | default('')
           }}
       when: code_blocked_by_cdn is undefined
 
@@ -79,12 +80,19 @@
             | regex_findall(code_apk_32bit_pattern)
             | sort
             | last
+            | default('')
           }}
       when: code_blocked_by_cdn is undefined
 
+    - name: Fail if no apk is found on fetched page.
+      fail:
+        msg: Could not find expected APK link in page. (Status = {{ apk_index.status }})
+      when: code_apk_64bit_filename | length == 0
+      #ignore_errors: yes
+
 - name: Get CodeOnTheGo version number
   set_fact:
-    cotg_version: "{{ code_apk_64bit_filename | regex_search('CodeOnTheGo-release([0-9.]+)', '\\1') }}"
+    cotg_version: "{{ (code_apk_64bit_filename | regex_findall('CodeOnTheGo-release([0-9]+(?:\\.[0-9]+)*)') | first) }}"
   when: code_blocked_by_cdn is undefined
 
 - name: "Show resolved APK release name"
