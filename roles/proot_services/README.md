@@ -30,23 +30,10 @@ The default port for the web server is **8085**, for example:
     - `Desactivar restricciones de procesos secundarios` (Spanish)
 
 - Android 12-13  
-  Since version 12+ Android added a new feature to limit child processes (PPK), there is no UI interface to modify such feature on 12 or 13. Then it requires to be modified via ADB commands, it can be done via:
+  Since version 12+ Android added a new feature to limit child processes (PPK), there is no UI interface to modify such feature on 12 or 13. Then it requires to be modified via ADB commands on a remote device, or whitin the same device by using **[Shizuku](https://github.com/RikkaApps/Shizuku/releases/)**.
 
-    - using a PC to check current PPK value & increase Phantom Process Killer from current value (e.g. 32) to 256+
-
-    ```
-    adb shell "dumpsys activity settings | grep -i phantom" && \
-    adb shell "device_config put activity_manager max_phantom_processes 256"  && \
-    adb shell "dumpsys activity settings | grep -i phantom"
-    ```
-
-    - or whitin the same device by using **[Shizuku](https://github.com/RikkaApps/Shizuku/releases/)** check the documentation for how to acomplish it.  
-
-    ```
-    dumpsys activity settings | grep -i phantom && \
-    device_config put activity_manager max_phantom_processes 256  && \
-    dumpsys activity settings | grep -i phantom
-    ```
+    Shizuko is a 3 step process **Pair**, **Run** and **Export**.
+    Please check the video (WIP) tutorial for a more interactive explantaion, once exporte the `0_termux_setup.sh` script will deal witht he PPK workaround setup.
 
 4) Prepare termux-app, use the following command from the termux terminal.
 
@@ -68,6 +55,66 @@ curl -s https://github.com/iiab/iiab/blob/master/roles/proot_servirces/1_iiab-on
 
 If the installer completes correclty you have finished the installation process.  
 If you find any error or issue, please help us by opening an [issue](https://github.com/iiab/iiab/issues) to track it and get it fixed in the shortest time possible.
+
+## Remote Access
+
+Even when using the phone keyboard and screen are very practical when on the move, being able to access the proot-distro
+environment from a PC or Laptop, will be very usefull when trying to debug an issue. You can use the WiFi connection, or even 
+stablish the native Android Hotspot from your phone if there is no wireless lan available.
+
+Get your phone IP by using the `ifconfig` on termux or looking at the About device > Status window.
+
+### ssh
+In order to access de IIAB install, the default way to do it is to access -Termux-, the cli on you phone from you computer via ssh, 
+you can accomplish that by 
+
+1) Setup ssh credentials (on termux, not proot-distro.)
+
+The fastest way to ssh into your device is to set a password to your termux user. On termux (not proot-distro) type:
+
+```
+passwd
+```
+
+and set the password.
+
+Security can be improved followind the standard ssh keys setup on `~/.ssh/authorized_keys` file.
+
+2) starting the ssh service from termux (not proot-distro).
+
+You need to start ssh in order to use it,
+```
+sshd
+```
+
+the sshd service can be automized to start at termux launch (see [termux-services](https://wiki.termux.com/wiki/Termux-services)), 
+we would recommend that you only set it up, once you've improved the login security using ssh keys.
+
+3) access your Android phone,
+
+Once on your laptop / PC, connected to the same network that your Android phone, and having the phone IP (e.g.: 192.168.10.100)
+
+Use the following command:
+
+```
+ssh -p 8022 192.168.10.100
+```
+
+You are not required to use an specific user, and you might have noticed that you require to use port 8022.  
+
+Since Android is running without root permissions, then ssh can't use lower ports, due to this restriction we 
+use port 8085 for the webserver / nginx as a workaround for the lack of port 80.
+
+### Login IIAB environment
+
+Once on ssh session at you remote device, you can log into proot-distro to actually access and run the IIAB applications, 
+just like at the installation you login using,
+
+```
+proot-distro login debian
+```
+
+There you'll be on a debian shell with access to the IIAB tools via CLI.
 
 ## Removal
 
