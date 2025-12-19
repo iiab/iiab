@@ -35,33 +35,89 @@
 #
 # TODO - files should be owned by www-data
 
-- name: "Download {{ iiab_map_host_url }}/{{ item }} via .meta4 file"
-  # cd to the temp directory so that the aria2c file, data file, and (perhaps
-  # eventually) torrent file all end up there.
-  shell: |
-    set -euo pipefail
+- block:
+    - name: "Fetching file size for {{ iiab_map_host_url }}/{{ item }} via .meta4 file"
+      shell: |
+        import sys, xmltodict, requests, os
 
-    cd /library/downloads/maps/
+        if os.path.exists("{{ dest_path }}"):
+          sys.exit(0)
 
-    aria2c \
-        --connect-timeout="{{ download_timeout }}" \
-        --log-level=warn \
-        --console-log-level=warn \
-        --summary-interval=0 \
-        --show-console-readout=false \
-        --download-result=hide \
-        --follow-metalink=mem \
-        --max-connection-per-server=4 \
-        --file-allocation=falloc \
-        --enable-http-pipelining=true \
-        --seed-time=0 \
-        "{{ iiab_map_host_url }}/{{ item }}.meta4"
+        size = int(xmltodict.parse(
+          requests.get("{{ iiab_map_host_url }}/{{ item }}.meta4").content
+        )['metalink']['file']['size'])
+        KiB = 1024
+        MiB = KiB * 1024
+        GiB = MiB * 1024
 
-    chmod 644 "{{ item }}"
-    mv "{{ item }}" "{{ dest_path }}"
-  args:
-    executable: /bin/bash
-    creates: "{{ dest_path }}"
-  vars:
-    # Where the file eventually goes
-    dest_path: "{{ dest_base_path }}/{{ item }}"
+        if size < MiB:
+          size_disp = str(round(size / KiB, 2)) + ' KiB'
+        elif size < GiB:
+          size_disp = str(round(size / MiB, 2)) + ' MiB'
+        else:
+          size_disp = str(round(size / GiB, 2)) + ' GiB'
+        print(' (' + size_disp + ') To check progress, run: "tail {{ working_dir }}/{{ log_file }}"')
+      args:
+        executable: /usr/bin/python3
+      vars:
+        # Where the file eventually goes
+        dest_path: "{{ dest_base_path }}/{{ item }}"
+
+        log_file: "{{ item }}.log"
+        working_dir: "/library/downloads/maps"
+      register: download_file_size
+
+    - name: "Download {{ item }}{{ download_file_size.stdout_lines.0 | default(' (done)')}}"
+      # cd to the temp directory so that the aria2c file, data file, and (perhaps
+      # eventually) torrent file all end up there.
+      shell: |
+        set -euo pipefail
+
+        cd {{ working_dir }}
+
+        echo "Starting download..." > "{{ log_file }}"
+        aria2c \
+            --connect-timeout="{{ download_timeout }}" \
+            --log-level=warn \
+            --console-log-level=warn \
+            --summary-interval=60 \
+            --download-result=hide \
+            --follow-metalink=mem \
+            --max-connection-per-server=4 \
+            --file-allocation=falloc \
+            --show-console-readout=false \
+            --enable-http-pipelining=true \
+            --seed-time=0 \
+            "{{ iiab_map_host_url }}/{{ item }}.meta4" \
+            >> "{{ log_file }}"
+
+        chmod 644 "{{ item }}"
+        mv "{{ item }}" "{{ dest_path }}"
+        rm "{{ log_file }}"
+      args:
+        executable: /bin/bash
+        creates: "{{ dest_path }}"
+      vars:
+        # Where the file eventually goes
+        dest_path: "{{ dest_base_path }}/{{ item }}"
+
+        log_file: "{{ item }}.log"
+        working_dir: "/library/downloads/maps"
+  rescue:
+    # We output summaries to a log file for the user's benefit,
+    # but all of the errors necessarily show up there as well.
+    # Here, we parse out the error message, ignoring almost all of
+    # the summary lines, which could be a lot.
+    # Finally, we exit 1 so Ansible shows this error.
+    - name: "Error downloading {{ item }}"
+      shell: |
+        set -euo pipefail
+
+        cd {{ working_dir }}
+
+        echo "aria2c error:" 1>&2
+        tac "{{ log_file }}" | sed '/'"Download Progress Summary as of"'/q' | tac 1>&2
+        exit 1
+      vars:
+        log_file: "{{ item }}.log"
+        working_dir: "/library/downloads/maps"
