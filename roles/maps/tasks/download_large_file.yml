@@ -35,7 +35,20 @@
 #
 # TODO - files should be owned by www-data
 
-- block:
+
+- vars:
+    # Where the file eventually goes
+    dest_path: "{{ dest_base_path }}/{{ item }}"
+
+    # Use md5sum to generate the log file name:
+    # * Name has short, consistent length. The "to check progress..." message
+    #   fits within 80 characters on terminal (at least in the current
+    #   ansible version) in case users have small screens.
+    # * If the user mis-copies, it's less likely to do anything destructive.
+    log_file: "{{ item | hash('md5') }}.log"
+    working_dir: "/library/downloads/maps"
+
+  block:
     - name: "Fetching file size for {{ iiab_map_host_url }}/{{ item }} via .meta4 file"
       shell: |
         import sys, xmltodict, requests, os
@@ -59,17 +72,6 @@
         print('(' + size_disp + ') To check download progress see above.')
       args:
         executable: /usr/bin/python3
-      vars:
-        # Where the file eventually goes
-        dest_path: "{{ dest_base_path }}/{{ item }}"
-
-        # Use md5sum to generate the log file name:
-        # * Name has short, consistent length. The "to check progress..." message
-        #   fits within 80 characters on terminal (at least in the current
-        #   ansible version) in case users have small screens.
-        # * If the user mis-copies, it's less likely to do anything destructive.
-        log_file: "{{ item | hash('md5') }}.log"
-        working_dir: "/library/downloads/maps"
 
       # The existence of console output in download_file_details
       # implies that the download should happen.
@@ -85,9 +87,6 @@
           - "   tail {{ working_dir }}/{{ log_file }}  "
           - ""
           - ""
-      vars:
-        log_file: "{{ item | hash('md5') }}.log"
-        working_dir: "/library/downloads/maps"
       # If the file already exists (and thus no download will happen) the above
       # task should exit before any console output.
       when: download_file_details.stdout_lines|length != 0
@@ -124,12 +123,7 @@
       args:
         executable: /bin/bash
         creates: "{{ dest_path }}"
-      vars:
-        # Where the file eventually goes
-        dest_path: "{{ dest_base_path }}/{{ item }}"
 
-        log_file: "{{ item | hash('md5') }}.log"
-        working_dir: "/library/downloads/maps"
   rescue:
     # We output summaries to a log file for the user's benefit,
     # but all of the errors necessarily show up there as well.
@@ -145,6 +139,3 @@
         echo "aria2c error:" 1>&2
         tac "{{ log_file }}" | sed '/'"Download Progress Summary as of"'/q' | tac 1>&2
         exit 1
-      vars:
-        log_file: "{{ item | hash('md5') }}.log"
-        working_dir: "/library/downloads/maps"
