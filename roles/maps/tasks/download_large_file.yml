@@ -69,10 +69,11 @@
         #   ansible version) in case users have small screens.
         # * If the user mis-copies, it's less likely to do anything destructive.
         log_file: "{{ item|hash('md5') }}.log"
-
         working_dir: "/library/downloads/maps"
 
-      register: download_file_size
+      # The existence of console output in download_file_details
+      # implies that the download should happen.
+      register: download_file_details
 
     # Put in some space to make it easier to read by implementers.
     - debug:
@@ -89,9 +90,9 @@
         working_dir: "/library/downloads/maps"
       # If the file already exists (and thus no download will happen) the above
       # task should exit before any console output.
-      when: download_file_size.stdout_lines|length != 0
+      when: download_file_details.stdout_lines|length != 0
 
-    - name: "Download {{ item }} {{ download_file_size.stdout_lines.0 | default('(done)')}}"
+    - name: "Download {{ item }} {{ download_file_details.stdout_lines.0 | default('(done)')}}"
       # cd to the temp directory so that the aria2c file, data file, and (perhaps
       # eventually) torrent file all end up there.
       shell: |
@@ -99,7 +100,9 @@
 
         cd {{ working_dir }}
 
-        echo "Starting download..." > "{{ log_file }}"
+        date > "{{ log_file }}"
+        echo "Starting (or continuing) download for {{ item }}..." >> "{{ log_file }}"
+        echo >> "{{ log_file }}"
         aria2c \
             --connect-timeout="{{ download_timeout }}" \
             --log-level=warn \
