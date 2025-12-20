@@ -31,7 +31,7 @@
 
 * https://github.com/iiab/iiab/blob/master/roles/maps/defaults/main.yml
 * [PR #4120](https://github.com/iiab/iiab/pull/4120)
-* Map files as of 2025-12-10: https://iiab.switnet.org/maps/1/
+* Map data files as of 2025-12-10: https://iiab.switnet.org/maps/1/
 * IIAB integration thanks to [Dan Krol](https://github.com/orblivion)
 
 # Extra attributions:
