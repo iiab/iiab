@@ -29,6 +29,28 @@ To configure your map, set the following variables (for the option your choose!)
    maps_sat_zoom: 12
    ```
 
+## Can I try out search (which is still experimental)?
+
+This is not recommended for very low power devices such as Pi Zero 2W at this time, though this might change.
+
+As of this writing, search includes only administrative regions and natural features.
+
+1. If you want **~640 MB** "small" (only California, as of this writing) search:
+
+
+   ```
+   maps_search_engine: "nominatim"
+   maps_search_full: False
+   ```
+
+1. If you want **~67 GB** "full" (planet-wide) search :
+
+
+   ```
+   maps_search_engine: "nominatim"
+   maps_search_full: True
+   ```
+
 # Installation Tips
 
 For these large file downloads:
