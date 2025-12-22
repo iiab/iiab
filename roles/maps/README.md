@@ -29,6 +29,13 @@ To configure your map, set the following variables (for the option your choose!)
    maps_sat_zoom: 12
    ```
 
+# Installation Tips
+
+For these large file downloads:
+
+* If there is an interruption and you need to run it again, it should resume where it left off.
+* If you want to see download progress, read the ansible output for instructions.
+
 # Further options & detail:
 
 * https://github.com/iiab/iiab/blob/master/roles/maps/defaults/main.yml
