@@ -35,22 +35,22 @@ To add terrain files, you can set this optional setting. You may find that when 
 
 1. If you want **~980MB** terrain maps (up to zoom 7), include:
    ```
-   maps_ter_zoom: 7
+   maps_terrain_zoom: 7
    ```
 
 2. If you want **~6.4GB** terrain maps (up to zoom 8), include:
    ```
-   maps_ter_zoom: 8
+   maps_terrain_zoom: 8
    ```
 
 3. If you want **~29GB** terrain maps (up to zoom 9), include:
    ```
-   maps_ter_zoom: 9
+   maps_terrain_zoom: 9
    ```
 
 4. If you want **~106GB** terrain maps (up to zoom 10), include:
    ```
-   maps_ter_zoom: 10
+   maps_terrain_zoom: 10
    ```
 
 ## Can I try out search (which is still experimental)?
