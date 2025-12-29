@@ -28,23 +28,56 @@
       register: apk_index
       failed_when: apk_index.status not in [200, 403, 404]
 
+    - name: Initialize APK index body
+      set_fact:
+        apk_index_body: "{{ apk_index.content | default('') }}"
+
+    - name: Detect whether APK links exist in index body
+      set_fact:
+        apk_index_has_apk: "{{ apk_index_body is search(code_apk_64bit_pattern) }}"
+
+    - name: Fetch APK index via WP JSON endpoint (fallback if no APK links found)
+      uri:
+        url: "{{ code_fetch_apk_url_json }}"
+        method: GET
+        return_content: true
+        headers:
+          Accept: "application/json"
+      register: apk_index_json
+      failed_when: false
+      changed_when: false
+      when: not apk_index_has_apk
+
+    - name: Update APK index body from JSON fallback (if used)
+      set_fact:
+        apk_index_body: "{{ (apk_index_json.json.content.rendered | default(apk_index_body, true)) }}"
+      when:
+        - apk_index_json is defined
+        - (apk_index_json.status | default(0)) == 200
+        - apk_index_json.json.content.rendered is defined
+
+    - name: Re-check whether APK links exist in (final) index body
+      set_fact:
+        apk_index_has_apk: "{{ apk_index_body is search(code_apk_64bit_pattern) }}"
+
     - name: Mark 'code' role as blocked by CDN
       set_fact:
         code_blocked_by_cdn: true
-      when: apk_index.status == 403
+      when: apk_index.status == 403 or (apk_index_has_apk is defined and (not apk_index_has_apk))
 
     - name: Warn about 403 APK index
       fail:
         msg: |
-          The 'code' role could not access: {{ code_download_url }}/ (HTTP 403). CDN is likely blocking datacenter IPs.
+          The 'code' role could not parse expected APK links from: {{ code_fetch_apk_url }}/ (HTTP {{ apk_index.status }}).
+          CDN/WAF is likely blocking or challenging datacenter IPs (sometimes with HTTP 200).
 
           ================ CODE ROLE WARNING ================
-          The 'code' role hit a CDN 403 (APK index query blocked).
+          The 'code' role hit CDN/WAF blocking (APK index query blocked/challenged).
 
-          HTTP status: 403
+          HTTP status: {{ apk_index.status }}
           This likely means the APK store is behind some CDN and
           blocking datacenter IP ranges, so non-interactive curl/Ansible
-          requests get a 403 "Just a moment..." page.
+          requests can get a 403 or even a 200 "challenge" / non-content page.
 
           GitHub issues/PRs related:
           - https://github.com/iiab/iiab/issues/4174
@@ -64,7 +97,7 @@
       set_fact:
         code_apk_64bit_filename: >-
           {{
-            apk_index.content
+            apk_index_body
             | regex_findall(code_apk_64bit_pattern)
             | sort
             | last
@@ -76,7 +109,7 @@
       set_fact:
         code_apk_32bit_filename: >-
           {{
-            apk_index.content
+            apk_index_body
             | regex_findall(code_apk_32bit_pattern)
             | sort
             | last
@@ -87,8 +120,7 @@
     - name: Fail if no apk is found on fetched page.
       fail:
         msg: Could not find expected APK link in page. (Status = {{ apk_index.status }})
-      when: code_apk_64bit_filename | length == 0
-      #ignore_errors: yes
+      when: code_blocked_by_cdn is undefined and (code_apk_64bit_filename | length == 0)
 
 - name: Get CodeOnTheGo version number
   set_fact:
