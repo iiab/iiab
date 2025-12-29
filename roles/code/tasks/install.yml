@@ -46,13 +46,19 @@
       register: apk_index_json
       failed_when: false
       changed_when: false
-      when: apk_index.status in [200, 404] and (not apk_index_has_apk)
+      when: not apk_index_has_apk
 
     - name: Update APK index body from JSON fallback (if used)
       set_fact:
-        apk_index_body: "{{ apk_index_json.content | default(apk_index_body, true) }}"
-        apk_index_has_apk: "{{ apk_index_json.content | default('') is search(code_apk_64bit_pattern) }}"
-      when: apk_index_json is defined
+        apk_index_body: "{{ (apk_index_json.json.content.rendered | default(apk_index_body, true)) }}"
+      when:
+        - apk_index_json is defined
+        - (apk_index_json.status | default(0)) == 200
+        - apk_index_json.json.content.rendered is defined
+
+    - name: Re-check whether APK links exist in (final) index body
+      set_fact:
+        apk_index_has_apk: "{{ apk_index_body is search(code_apk_64bit_pattern) }}"
 
     - name: Mark 'code' role as blocked by CDN
       set_fact:
