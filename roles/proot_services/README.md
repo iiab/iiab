@@ -35,7 +35,7 @@ The default port for the web server is **8085**, for example:
 4) Prepare Termux-app, use the following command from the Termux terminal.
 
    ```
-   curl -s https://github.com/iiab/iiab/blob/master/roles/proot_servirces/0_Termux-setup.sh | bash
+   curl -s https://github.com/iiab/iiab/blob/master/roles/proot_services/0_Termux-setup.sh | bash
    ```
 
    Once complete please enter the debian environment to continue the installation:
@@ -49,7 +49,7 @@ The default port for the web server is **8085**, for example:
    Once on the proot-distro environment you can install IIAB running the following script:
 
    ```
-   curl -s https://github.com/iiab/iiab/blob/master/roles/proot_servirces/1_iiab-on-android.sh | bash
+   curl -s https://github.com/iiab/iiab/blob/master/roles/proot_services/1_iiab-on-android.sh | bash
    ```
 
    If the installer completes correclty you have finished the installation process.
