@@ -30,12 +30,12 @@ The default port for the web server is **8085**, for example:
 
    - Android 12 and 13 added a ["Phantom Process Killer" (PPK)](https://github.com/agnostic-apollo/Android-Docs/blob/master/en/docs/apps/processes/phantom-cached-and-empty-processes.md) feature to limit child processes, but there is no UI interface to disable this behavior (on Android 12 and 13).  Instead, you can disable it using ADB commands issued from a remote device, or within the device itself by using **[Shizuku](https://github.com/RikkaApps/Shizuku/releases/)**.
 
-     Shizuko is a 3 step process **Pair**, **Run** and **Export**.  Please check the video (WIP) tutorial for a more interactive explantaion, once exporte the `0_Termux_setup.sh` script will deal witht he PPK workaround setup.
+     Shizuko is a 3 step process **Pair**, **Run** and **Export**.  Please check the video (WIP) tutorial for a more interactive explantaion, once exporte the `0_termux_setup.sh` script will deal witht he PPK workaround setup.
 
 4) Prepare Termux-app, use the following command from the Termux terminal.
 
    ```
-   curl -s https://github.com/iiab/iiab/blob/master/roles/proot_services/0_Termux-setup.sh | bash
+   curl -s https://raw.githubusercontent.com/iiab/iiab/refs/heads/master/roles/proot_services/0_termux-setup.sh | bash
    ```
 
    Once complete please enter the debian environment to continue the installation:
@@ -49,7 +49,7 @@ The default port for the web server is **8085**, for example:
    Once on the proot-distro environment you can install IIAB running the following script:
 
    ```
-   curl -s https://github.com/iiab/iiab/blob/master/roles/proot_services/1_iiab-on-android.sh | bash
+   curl -s https://raw.githubusercontent.com/iiab/iiab/refs/heads/master/roles/proot_services/1_iiab-on-android.sh | bash
    ```
 
    If the installer completes correclty you have finished the installation process.
