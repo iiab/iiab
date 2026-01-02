@@ -36,4 +36,3 @@ require_service() {
   _pdsm_log "starting required service: $svc ($script start)"
   "$script" start
 }
-
