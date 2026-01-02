@@ -1,0 +1,86 @@
+#!/bin/sh
+# /usr/local/pdsm/services-available/kolibri
+# Simple PDSM service wrapper for Kolibri
+
+PDSM_COMMON="/usr/local/pdsm/lib/pdsm-common.sh"
+[ -r "$PDSM_COMMON" ] && . "$PDSM_COMMON"
+
+SERVICE_NAME="kolibri"
+
+# Adjust KOLIBRI_HOME to match your IIAB/Termux/proot layout
+export KOLIBRI_HOME="/library/kolibri/"
+KOLIBRI_BIN="$(command -v kolibri || echo kolibri)"
+
+running() {
+  # NOTE: actually use kolibri status to check if it's running.
+  "$KOLIBRI_BIN" status >/dev/null 2>&1
+}
+
+start() {
+  if running; then
+    echo "[pdsm:$SERVICE_NAME] already running"
+    return 0
+  fi
+
+  echo "[pdsm:$SERVICE_NAME] starting..."
+  # Ensure nginx is up as a requirement
+  require_service "nginx"
+
+  "$KOLIBRI_BIN" start
+
+  # Small wait loop so 'start' only returns when it's actually alive
+  for i in $(seq 1 "$PDSM_START_TIMEOUT"); do
+    if running; then
+      echo "[pdsm:$SERVICE_NAME] started"
+      return 0
+    fi
+    sleep 1
+  done
+}
+
+stop() {
+  if ! running; then
+    echo "[pdsm:$SERVICE_NAME] already stopped"
+    return 0
+  fi
+
+  echo "[pdsm:$SERVICE_NAME] stopping..."
+  # Kolibri already knows how to stop gracefully
+  "$KOLIBRI_BIN" stop || true
+
+  # Wait a little to ensure everything stopped
+  for i in $(seq 1 "$PDSM_START_TIMEOUT"); do
+    if ! running; then
+      echo "[pdsm:$SERVICE_NAME] stopped"
+      return 0
+    fi
+    sleep 1
+  done
+
+  echo "[pdsm:$SERVICE_NAME] did not fully stop" >&2
+  return 1
+}
+
+status() {
+  if "$KOLIBRI_BIN" status >/dev/null 2>&1; then
+    echo "[pdsm:$SERVICE_NAME] running"
+    exit 0
+  else
+    echo "[pdsm:$SERVICE_NAME] not running"
+    exit 1
+  fi
+}
+
+case "$1" in
+  start|stop|status)
+    "$1"
+    ;;
+  restart)
+    stop
+    start
+    ;;
+  *)
+    echo "Usage: $0 {start|stop|restart|status}" >&2
+    exit 1
+    ;;
+esac

@@ -1,0 +1,114 @@
+#!/bin/sh
+# Very simple proot-distro service manager (pdsm)
+
+PDSM_DIR="/usr/local/pdsm"
+export PDSM_DIR
+AVAIL="$PDSM_DIR/services-available"
+ENABL="$PDSM_DIR/services-enabled"
+
+# Debug support: `pdsm -x start nginx` or `PDSM_DEBUG=1 pdsm start nginx`
+if [ "${1:-}" = "-x" ]; then
+    PDSM_DEBUG=1
+    shift
+fi
+
+# Enable shell tracing when debug is on
+[ "${PDSM_DEBUG:-0}" = 1 ] && set -x
+
+usage() {
+  echo "Usage: pdsm {enable-all|enable|disable|start|stop|restart|status|list} [service]" >&2
+  exit 1
+}
+
+cmd="$1"
+name="$2"
+
+[ -d "$AVAIL" ] || mkdir -p "$AVAIL"
+[ -d "$ENABL" ] || mkdir -p "$ENABL"
+
+case "$cmd" in
+  list)
+    echo "[pdsm] available:"
+    ls "$AVAIL"
+    echo
+    echo "[pdsm] enabled:"
+    ls "$ENABL"
+    ;;
+
+  enable)
+    [ -n "$name" ] || usage
+    if [ ! -x "$AVAIL/$name" ]; then
+      echo "[pdsm] service '$name' not found in $AVAIL" >&2
+      exit 1
+    fi
+    ln -sf "../services-available/$name" "$ENABL/$name"
+    echo "[pdsm] enabled $name"
+    ;;
+
+  enable-all)
+    # Enable all the available services making symlinks to services-enabled
+    for svc in "$AVAIL"/*; do
+      [ -f "$svc" ] || continue  # solo archivos regulares
+
+      base="$(basename "$svc")"
+      dest="$ENABL/$base"
+
+      if [ -e "$dest" ]; then
+        echo "[pdsm] $base already enabled"
+        continue
+      fi
+
+      ln -s "$svc" "$dest"
+      echo "[pdsm] enabled $base"
+    done
+    ;;
+
+  start-all)
+    # Start all available services, regardless of whether they are enabled
+    for svc in "$AVAIL"/*; do
+      [ -x "$svc" ] || continue  # only executable service wrappers
+      "$svc" start
+    done
+    ;;
+
+  disable)
+    [ -n "$name" ] || usage
+
+    if [ ! -f "$AVAIL/$name" ]; then
+      echo "[pdsm] service '$name' not found in $AVAIL" >&2
+      exit 1
+    fi
+
+    if [ ! -e "$ENABL/$name" ]; then
+      echo "[pdsm] service '$name' is not enabled"
+      exit 0
+    fi
+
+    rm -f "$ENABL/$name"
+    echo "[pdsm] disabled $name"
+    ;;
+
+  start|stop|restart|status)
+    # If no service name: apply to all enabled
+    if [ -z "$name" ]; then
+      for svc in "$ENABL"/*; do
+        [ -x "$svc" ] || continue
+        "$svc" "$cmd"
+      done
+    else
+      if [ -x "$ENABL/$name" ]; then
+        "$ENABL/$name" "$cmd"
+      elif [ -x "$AVAIL/$name" ]; then
+        # Allow direct start of an available service not enabled
+        "$AVAIL/$name" "$cmd"
+      else
+        echo "[pdsm] service '$name' not found in $AVAIL" >&2
+        exit 1
+      fi
+    fi
+    ;;
+
+  *)
+    usage
+    ;;
+esac

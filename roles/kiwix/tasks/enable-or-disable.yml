@@ -3,6 +3,7 @@
     name: kiwix-serve
     enabled: no
     state: stopped
+  when: not is_proot
 
 - name: Run /usr/bin/iiab-make-kiwix-lib to update {{ kiwix_library_xml }}    # /library/zims/library.xml
   command: /usr/bin/iiab-make-kiwix-lib
@@ -14,7 +15,22 @@
     name: kiwix-serve
     enabled: yes
     state: started
-  when: kiwix_enabled
+  when:
+    - kiwix_enabled
+    - not is_proot
+
+- name: Enable & ensure 'kiwix' service via pdsm (proot) is running
+  when:
+    - kiwix_enabled
+    - is_proot
+  block:
+    - name: Enable 'kiwix' via pdsm (proot)
+      command: pdsm enable kiwix
+
+    - name: Start 'kiwix' via pdsm (proot)
+      command: pdsm start kiwix
+      register: pdsm_start
+      changed_when: "'already running' not in pdsm_start.stdout"
 
 
 # In the past kiwix-serve did not stay running, so we'd been doing this hourly.

@@ -1,6 +1,7 @@
 ---
 - hosts: all
   become: yes
+  gather_facts: false
 
   vars_files:
     - roles/0-init/defaults/main.yml
@@ -9,6 +10,42 @@
     #- vars/{{ ansible_local.local_facts.os_ver }}.yml
     - /etc/iiab/local_vars.yml
     - /etc/iiab/iiab_state.yml
+
+  pre_tasks:
+    - name: Gather facts (normal)
+      setup:
+        gather_subset:
+          - 'all'
+      when: not is_proot
+
+    - name: Gather minimal facts (proot)
+      setup:
+        gather_subset:
+          - 'all'
+          - '!hardware'
+          - '!network'
+      when: is_proot
+
+    - name: Compute memory and swap facts when hardware subset is missing
+      when: ansible_swaptotal_mb is not defined or ansible_memtotal_mb is not defined
+      block:
+        - name: Read memtotal and swaptotal from /proc/meminfo
+          shell: |
+            awk '
+              /MemTotal:/ {mem=int($2/1024)}
+              /SwapTotal:/ {swap=int($2/1024)}
+              END {
+                if (swap == "") swap = 0
+                print mem, swap
+              }
+            ' /proc/meminfo
+          register: memswap
+          changed_when: false
+
+        - name: Set fallback memtotal and swaptotal facts
+          set_fact:
+            ansible_memtotal_mb: "{{ memswap.stdout.split()[0] }}"
+            ansible_swaptotal_mb: "{{ memswap.stdout.split()[1] }}"
 
   tasks:
     - name: 0-init

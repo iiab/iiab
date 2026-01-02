@@ -1,0 +1,73 @@
+---
+# roles/pdsm_services/tasks/main.yml
+
+- name: Record (initial) disk space used
+  shell: df -B1 --output=used / | tail -1
+  register: df1
+
+- name: Install PDSM services on proot
+  when: is_proot
+  block:
+    - name: Ensure base PDSM dirs exist
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: "0755"
+      loop:
+        - /usr/local/pdsm
+        - /usr/local/pdsm/lib
+        - /usr/local/pdsm/services-available
+        - /usr/local/pdsm/services-enabled
+
+    - name: Install pdsm profile script (/etc/profile.d/pdsm.sh)
+      copy:
+        src: "pdsm/etc_profile.d/pdsm.sh"
+        dest: "/etc/profile.d/pdsm.sh"
+        mode: "0644"
+
+    - name: Install pdsm CLI (/usr/local/bin/pdsm)
+      copy:
+        src: "pdsm/usr_local_bin/pdsm"
+        dest: "/usr/local/bin/pdsm"
+        mode: "0755"
+
+    - name: Install pdsm common library
+      copy:
+        src: "pdsm/usr_local_pdsm/lib/pdsm-common.sh"
+        dest: "/usr/local/pdsm/lib/pdsm-common.sh"
+        mode: "0644"
+
+    - name: Install pdsm service scripts into services-available
+      copy:
+        src: "pdsm/usr_local_pdsm/services-available/{{ item }}"
+        dest: "/usr/local/pdsm/services-available/{{ item }}"
+        mode: "0755"
+      loop: "{{ pdsm_installed_services }}"
+
+    - name: Enable pdsm default services, not all services are necessarily enabled
+      shell: "pdsm enable {{ item }}" # initially only nginx
+      loop: "{{ pdsm_enabled_services }}" # leave loop if anything other than nginx gets by default
+
+
+    # RECORD PROOT_SERVICES AS INSTALLED
+
+    - name: Record (final) disk space used
+      shell: df -B1 --output=used / | tail -1
+      register: df2
+
+    - name: Add 'proot_services_disk_usage = {{ df2.stdout | int - df1.stdout | int }}' to {{ iiab_ini_file }}
+      ini_file:
+        path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+        section: proot_services
+        option: proot_services_disk_usage
+        value: "{{ df2.stdout | int - df1.stdout | int }}"
+
+    - name: "Set 'proot_services_installed: True'"
+      set_fact:
+        proot_services_installed: True
+
+    - name: "Add 'proot_services_installed: True' to {{ iiab_state_file }}"
+      lineinfile:
+        path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
+        regexp: '^proot_services_installed'
+        line: 'proot_services_installed: True'

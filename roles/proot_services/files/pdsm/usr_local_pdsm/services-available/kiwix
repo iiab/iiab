@@ -1,0 +1,98 @@
+#!/bin/sh
+# /usr/local/pdsm/services-available/kiwix
+# Simple PDSM service wrapper for kiwix-serve
+
+PDSM_COMMON="/usr/local/pdsm/lib/pdsm-common.sh"
+[ -r "$PDSM_COMMON" ] && . "$PDSM_COMMON"
+
+SERVICE_NAME="kiwix"
+
+SERVICE_DAEMON_NAME="kiwix-serve"
+KIWIX_BIN="/opt/iiab/kiwix/bin/kiwix-serve"
+KIWIX_PORT="3000"
+KIWIX_LIBRARY="/library/zims/library.xml"
+KIWIX_URL_ROOT="/kiwix/"
+KIWIX_THREADS="4"
+
+running() {
+  # NOTE: if `ps aux | grep $SERVICE_NAME` shows nothing, this should fail too.
+  pgrep -x "$SERVICE_DAEMON_NAME" >/dev/null 2>&1
+}
+
+start() {
+  if running; then
+    echo "[pdsm:$SERVICE_NAME] already running"
+    return 0
+  fi
+
+  # Ensure nginx is up as a requirement
+  require_service "nginx"
+
+  echo "[pdsm:$SERVICE_NAME] starting..."
+  # --daemon will background kiwix-serve by itself
+  "$KIWIX_BIN" \
+    --daemon \
+    --port "$KIWIX_PORT" \
+    --nolibrarybutton \
+    --library "$KIWIX_LIBRARY" \
+    --urlRootLocation="$KIWIX_URL_ROOT" \
+    --threads "$KIWIX_THREADS"
+
+  # Small wait loop so 'start' only returns when it's actually alive
+  for i in $(seq 1 "$PDSM_START_TIMEOUT"); do
+    if running; then
+      echo "[pdsm:$SERVICE_NAME] started"
+      return 0
+    fi
+    sleep 1
+  done
+
+  echo "[pdsm:$SERVICE_NAME] failed to start" >&2
+  return 1
+}
+
+stop() {
+  if ! running; then
+    echo "[pdsm:$SERVICE_NAME] already stopped"
+    return 0
+  fi
+
+  echo "[pdsm:$SERVICE_NAME] stopping..."
+  # No official "stop" command, so we fallback to pkill
+  pkill -f "$SERVICE_DAEMON_NAME" >/dev/null 2>&1 || true
+
+  # Wait a little to ensure everything stopped
+  for i in $(seq 1 "$PDSM_START_TIMEOUT"); do
+    if ! running; then
+      echo "[pdsm:$SERVICE_NAME] stopped"
+      return 0
+    fi
+    sleep 1
+  done
+
+  echo "[pdsm:$SERVICE_NAME] did not fully stop" >&2
+  return 1
+}
+
+status() {
+  if running; then
+    echo "[pdsm:$SERVICE_NAME] running"
+    return 0
+  fi
+  echo "[pdsm:$SERVICE_NAME] not running"
+  return 3
+}
+
+case "$1" in
+  start|stop|status)
+    "$1"
+    ;;
+  restart)
+    stop
+    start
+    ;;
+  *)
+    echo "Usage: $0 {start|stop|restart|status}" >&2
+    exit 1
+    ;;
+esac

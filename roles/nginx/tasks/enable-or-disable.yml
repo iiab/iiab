@@ -32,11 +32,40 @@
     daemon_reload: yes
     enabled: yes
     state: restarted
-  when: nginx_enabled
+  when:
+    - nginx_enabled
+    - not is_proot
+
+- name: Enable & Restart 'nginx' via pdsm (proot)
+  when:
+    - nginx_enabled
+    - is_proot
+  block:
+    - name: Enable 'nginx' via pdsm (proot)
+      command: pdsm enable nginx
+
+    - name: Restart 'nginx' via pdsm (proot)
+      command: pdsm restart nginx
+
 
 - name: Disable & Stop 'nginx' systemd service, if not nginx_enabled
   systemd:
     name: nginx
     enabled: no
     state: stopped
-  when: not nginx_enabled
+  when:
+    - not nginx_enabled
+    - not is_proot
+
+- name: Disable & Stop 'nginx' via pdsm (proot), if not nginx_enabled
+  when:
+    - not nginx_enabled
+    - is_proot
+  block:
+    - name: Stop 'nginx' via pdsm (proot)
+      command: pdsm stop nginx
+      register: pdsm_stop
+      changed_when: "'already stopped' not in pdsm_stop.stdout"
+
+    - name: Disable 'nginx' via pdsm (proot)
+      command: pdsm disable nginx
