@@ -28,7 +28,7 @@ The default port for the web server is **8085**, for example:
      - `Disable child process restriction` (English) or
      - `Desactivar restricciones de procesos secundarios` (Spanish)
 
-   - Android 12 and 13 added a new feature to limit child processes (PPK???), but there is no UI interface to disable this behavior (on Android 12 and 13).  Instead, you can disable it using ADB commands issued from a remote device, or within the device itself by using **[Shizuku](https://github.com/RikkaApps/Shizuku/releases/)**.
+   - Android 12 and 13 added a ["Phantom Process Killer" (PPK)](https://github.com/agnostic-apollo/Android-Docs/blob/master/en/docs/apps/processes/phantom-cached-and-empty-processes.md) feature to limit child processes, but there is no UI interface to disable this behavior (on Android 12 and 13).  Instead, you can disable it using ADB commands issued from a remote device, or within the device itself by using **[Shizuku](https://github.com/RikkaApps/Shizuku/releases/)**.
 
      Shizuko is a 3 step process **Pair**, **Run** and **Export**.  Please check the video (WIP) tutorial for a more interactive explantaion, once exporte the `0_Termux_setup.sh` script will deal witht he PPK workaround setup.
 
@@ -216,7 +216,7 @@ pdsm enable-all
 
 **Note**: The amount of services running cuncurrently is defined by the number of child processes allowed, whether via Developer Settings UI (Android 14+) or adb commands (Android 12 - 13).
 
-If not setup propely, services will be stoped by the Phantom Process Killer ([learn more...](https://github.com/agnostic-apollo/Android-Docs/blob/master/en/docs/apps/processes/phantom-cached-and-empty-processes.md)).
+If not setup propely, services will be stopped by the Phantom Process Killer ([learn more](https://github.com/agnostic-apollo/Android-Docs/blob/master/en/docs/apps/processes/phantom-cached-and-empty-processes.md)).
 
 ## Structure
 
