@@ -39,7 +39,7 @@ http://localhost:8085/maps
 
    * Android 12 and 13 added a ["Phantom Process Killer" (PPK)](https://github.com/agnostic-apollo/Android-Docs/blob/master/en/docs/apps/processes/phantom-cached-and-empty-processes.md) feature to limit child processes, but there is no UI option to disable this behavior on those versions. Instead, you can disable it using ADB commands issued from a remote device, or locally on the device using **[Shizuku](https://github.com/RikkaApps/Shizuku/releases/)**.
 
-     Shizuku is a 3-step process: **Pair**, **Run**, and **Export**. Please check the (WIP) video tutorial for a more interactive explanation. Once exported, the `0_termux_setup.sh` script will handle the PPK workaround setup.
+     Shizuku is a 3-step process: **Pair**, **Run**, and **Export**. Please check this (WIP) [video tutorial](https://ark.switnet.org/tmp/termux-shizuku-a12-setup_light.mp4) for a more interactive explanation. Once exported, the `0_termux_setup.sh` script (just below) will handle the PPK workaround setup.
 
 4. Prepare the Termux app by running the following command from the Termux terminal:
 
