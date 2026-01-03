@@ -1,0 +1,36 @@
+- name: Set up tile extraction working dir
+  file:
+    state: directory
+    path: "{{ tile_extract.working_dir }}"
+
+- name: Set up pmtiles unarchiving dir
+  file:
+    state: directory
+    path: "{{ tile_extract.pmtiles_archive_tmp_dir }}"
+
+- name: Download pmtiles archive
+  get_url:
+    url: "{{ tile_extract.pmtiles_src_url }}"
+    dest: "{{ tile_extract.pmtiles_archive_tmp_file }}"
+    checksum: "sha256:{{ tile_extract.pmtiles_sha256sum }}"
+    mode: "0644"
+    timeout: "{{ download_timeout }}"
+
+- name: Unarchive pmtiles archive
+  unarchive:
+    src: "{{ tile_extract.pmtiles_archive_tmp_file }}"
+    dest: "{{ tile_extract.pmtiles_archive_tmp_dir }}"
+    remote_src: yes
+    creates: "{{ tile_extract.pmtiles_archive_tmp_dir }}/pmtiles"
+
+- name: Copy pmtiles executable into working dir
+  # We cp instead of mv because we want the above command to not repeat unnecessarily.
+  command: "cp {{ tile_extract.pmtiles_archive_tmp_dir }}/pmtiles {{ tile_extract.working_dir }}"
+  args:
+    creates: "{{ tile_extract.working_dir }}/pmtiles"
+
+- name: Install our tile extraction script
+  template:
+    src: "tile-extract.py.j2"
+    dest: "{{ tile_extract.working_dir }}/tile-extract.py"
+    mode: "0755"

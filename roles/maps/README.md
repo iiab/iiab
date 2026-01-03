@@ -93,5 +93,6 @@ For these large file downloads:
   * https://github.com/maps-black/maps.black#readme
   * https://github.com/maplibre/maplibre-gl-js
   * https://github.com/maplibre/maplibre-gl-geocoder?tab=ISC-1-ov-file#readme
+  * https://github.com/watergis/maplibre-gl-terradraw
 * Search (for now): https://github.com/osm-search/Nominatim?tab=GPL-3.0-1-ov-file#readme
 * Other credits: https://github.com/iiab/iiab/blob/master/roles/www_base/files/html/html/credits.html
