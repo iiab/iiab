@@ -34,7 +34,7 @@ http://localhost:8085/maps
 
    * On Android 14 and later, it is possible to disable this restriction using Android Settings, in **Developer Options**, with this setting:
 
-     * `Disable child process restriction` (English), or
+     * `Disable child process restrictions` (English), or
      * `Desactivar restricciones de procesos secundarios` (Spanish)
 
    * Android 12 and 13 added a ["Phantom Process Killer" (PPK)](https://github.com/agnostic-apollo/Android-Docs/blob/master/en/docs/apps/processes/phantom-cached-and-empty-processes.md) feature to limit child processes, but there is no UI option to disable this behavior on those versions. Instead, you can disable it using ADB commands issued from a remote device, or locally on the device using **[Shizuku](https://github.com/RikkaApps/Shizuku/releases/)**.
