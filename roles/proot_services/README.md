@@ -20,7 +20,7 @@ http://localhost:8085/maps
 
 1. Install **Termux**:
 
-   * OPTION 1: Directly install Termux, using a recent .apk file: [https://github.com/Termux/Termux-app/releases/](https://github.com/Termux/Termux-app/releases/) ("universal" .apk file GENERALLY BEST)
+   * OPTION 1: Directly install Termux, using a recent `.apk` file: [https://github.com/Termux/Termux-app/releases/](https://github.com/Termux/Termux-app/releases/) ("universal" `.apk` file GENERALLY BEST)
    * OPTION 2: Install Termux from the [F-Droid app store](https://f-droid.org/packages/com.termux/) (no Google account needed)
    * OPTION 3: Install Termux from the [Google Play Store](https://play.google.com/store/apps/details?id=com.termux) (often problematic, avoid if possible)
 
@@ -59,8 +59,64 @@ http://localhost:8085/maps
    curl https://raw.githubusercontent.com/iiab/iiab/refs/heads/master/roles/proot_services/1_iiab-on-android.sh | bash
    ```
 
-   If the installer completes successfully, the installation process is finished.
-   If you encounter an error or problem, please open an [issue](https://github.com/iiab/iiab/issues) so we can help you (and others) as quickly as possible.
+   If the installer completes successfully, the installation process is finished. And you'll see a text box reading:
+
+   > INTERNET-IN-A-BOX (IIAB) SOFTWARE INSTALL IS COMPLETE
+
+## Test your IIAB install
+
+Test your IIAB install by running the `pdsm` command as follows: ([learn more](https://github.com/iiab/iiab/tree/master/roles/proot_services#proot-distro-service-manager-pdsm))
+
+```
+pdsm start-all
+```
+
+Then check that your IIAB Apps are working (using a browser on your Android device) by visiting these URLs:
+
+| App                    | URL                                                            |
+|------------------------|----------------------------------------------------------------|
+| Calibre-Web            | [http://localhost:8085/books](http://localhost:8085/books)     |
+| Kiwix (for ZIM files!) | [http://localhost:8085/kiwix](http://localhost:8085/kiwix)     |
+| Kolibri                | [http://localhost:8085/kolibri](http://localhost:8085/kolibri) |
+| IIAB Maps              | [http://localhost:8085/maps](http://localhost:8085/maps)       |
+| Matomo                 | [http://localhost:8085/matomo](http://localhost:8085/matomo)   |
+
+If you encounter an error or problem, please open an [issue](https://github.com/iiab/iiab/issues) so we can help you (and others) as quickly as possible.
+
+### Add a ZIM file
+
+1. Browse to website: [download.kiwix.org/zim](https://download.kiwix.org/zim/)
+2. Pick a `.zim` file (ZIM file) and copy its full URL, for example:
+
+   ``` 
+   https://download.kiwix.org/zim/wikipedia/wikipedia_en_100_maxi_2025-10.zim
+   ```
+
+3. Open Android's Termux app, and then run:
+
+   ```
+   proot-distro login debian
+   ```
+
+4. Enter the folder where IIAB stores ZIM files:
+
+   ```
+   cd /library/zims/content/
+   ```
+
+5. Download the ZIM file, using the URL you chose above, for example:
+
+   ```
+   wget https://download.kiwix.org/zim/wikipedia/wikipedia_en_100_maxi_2025-10.zim
+   ```
+
+6. Once the download is complete, re-index your IIAB's ZIM files: (so the new ZIM file appears for users, on page http://localhost:8085/kiwix)
+
+   ```
+   iiab-make-kiwix-lib
+   ```
+
+   TIP: Repeat this last step whenever removing or adding new ZIM files from `/library/zims/content/`
 
 ## Remote Access
 
