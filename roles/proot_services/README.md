@@ -70,21 +70,25 @@ Get your phone’s IP address by running `ifconfig` in Termux or by checking **A
 
 ### SSH
 
-To log in to IIAB by accessing **Termux** (the command-line interface on your phone) from your computer via SSH, follow these steps:
+To log in to IIAB on Android from your computer, follow these SSH (command-line interface) instructions:
 
 1. Set up SSH credentials (on Termux, not PRoot Distro).
 
-   The fastest way to SSH into your device is to set a password for your Termux user. In Termux (not PRoot Distro), run:
+   The fastest way to SSH into your Android phone (or tablet) is to set a password for its Termux user. In Termux (not PRoot Distro), run:
 
    ```
    passwd
    ```
 
-   Security can be improved by using standard SSH key-based authentication via the `~/.ssh/authorized_keys` file.
+   To determine the Termux username, run:
 
-2. Start the SSH service from Termux (not PRoot Distro).
+   ```
+   whoami
+   ```
 
-   Start the SSH daemon with:
+   Optionally, security can be improved by using standard SSH key-based authentication via the `~/.ssh/authorized_keys` file.
+
+2. Start the SSH service from Termux: (not PRoot Distro)
 
    ```
    sshd
@@ -92,7 +96,7 @@ To log in to IIAB by accessing **Termux** (the command-line interface on your ph
 
    The `sshd` service can be automated to start when Termux launches (see [Termux-services](https://wiki.Termux.com/wiki/Termux-services)). We recommend doing this only after improving login security using SSH keys.
 
-3. Access your Android phone.
+3. SSH to your Android phone.
 
    From your laptop or PC, connected to the same network as your Android phone, and knowing the phone’s IP address (e.g., `192.168.10.100`), run:
 
