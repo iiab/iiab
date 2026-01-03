@@ -51,9 +51,7 @@ http://localhost:8085/maps
    proot-distro login debian
    ```
 
-5. Install `local_vars_android.yml` to [`/etc/iiab/local_vars.yml`](https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it?) and run the IIAB installer to install the current setup.
-
-   Once inside the PRoot Distro environment, install IIAB by running:
+5. Run the `1_iiab-on-android.sh` script which (a) installs `local_vars_android.yml` to [`/etc/iiab/local_vars.yml`](https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it?) and (b) runs the IIAB installer:
 
    ```
    curl https://raw.githubusercontent.com/iiab/iiab/refs/heads/master/roles/proot_services/1_iiab-on-android.sh | bash
