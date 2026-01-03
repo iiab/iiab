@@ -1,5 +1,7 @@
 The following applies to `maps.black.js` in this directory.
 
+See also for dependencies: https://github.com/iiab/maps.black?tab=readme-ov-file#licensing
+
 ---
 
 MIT License
