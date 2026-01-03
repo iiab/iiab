@@ -28,7 +28,7 @@ http://localhost:8085/maps
 
 2. Enable **Developer Options** on Android:
 
-   *  **Settings > About Phone**, find the Build Number, and tap it seven times rapidly.
+   * In **Settings > About phone** (sometimes in **Software information**), find the **Build number**, and tap it seven times rapidly!
 
 3. Remove or increase the app child process limit to install and run IIAB:
 
