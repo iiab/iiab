@@ -20,7 +20,7 @@ http://localhost:8085/maps
 
 1. Install **Termux**:
 
-   * OPTION 1: Directly install Termux, using a recent .apk file: [https://github.com/Termux/Termux-app/releases/](https://github.com/Termux/Termux-app/releases/) ("universal" .apk file GENERALLY BEST)
+   * OPTION 1: Directly install Termux, using a recent `.apk` file: [https://github.com/Termux/Termux-app/releases/](https://github.com/Termux/Termux-app/releases/) ("universal" `.apk` file GENERALLY BEST)
    * OPTION 2: Install Termux from the [F-Droid app store](https://f-droid.org/packages/com.termux/) (no Google account needed)
    * OPTION 3: Install Termux from the [Google Play Store](https://play.google.com/store/apps/details?id=com.termux) (often problematic, avoid if possible)
 
@@ -63,52 +63,60 @@ http://localhost:8085/maps
 
    > INTERNET-IN-A-BOX (IIAB) SOFTWARE INSTALL IS COMPLETE
 
+## Test your IIAB install
 
-## Initial test and steps.
+Test your IIAB install by running the `pdsm` command as follows: ([learn more](https://github.com/iiab/iiab/tree/master/roles/proot_services#proot-distro-service-manager-pdsm))
 
-   In order to test the working installation please try the following `pdsm` command ([learn more](https://github.com/iiab/iiab/tree/master/roles/proot_services#proot-distro-service-manager-pdsm)),
+```
+pdsm start-all
+```
+
+Then check that your IIAB Apps are working (using a browser on your Android device) by visiting these URLs:
+
+| App                    | URL                                                            |
+|------------------------|----------------------------------------------------------------|
+| Calibre-Web            | [http://localhost:8085/books](http://localhost:8085/books)     |
+| Kiwix (for ZIM files!) | [http://localhost:8085/kiwix](http://localhost:8085/kiwix)     |
+| Kolibri                | [http://localhost:8085/kolibri](http://localhost:8085/kolibri) |
+| IIAB Maps              | [http://localhost:8085/maps](http://localhost:8085/maps)       |
+| Matomo                 | [http://localhost:8085/matomo](http://localhost:8085/matomo)   |
+
+If you encounter an error or problem, please open an [issue](https://github.com/iiab/iiab/issues) so we can help you (and others) as quickly as possible.
+
+### Add a ZIM file
+
+1. Browse to website: [download.kiwix.org/zim](https://download.kiwix.org/zim/)
+2. Pick a `.zim` file (ZIM file) and copy its full URL, for example:
+
+   ``` 
+   https://download.kiwix.org/zim/wikipedia/wikipedia_en_100_maxi_2025-10.zim
+   ```
+
+3. Open Android's Termux app, and then run:
 
    ```
-   pdsm start-all
+   proot-distro login debian
    ```
 
-   Then please check any of the following urls to confirm they are working,
-
-
-| App           | URL                                                            |
-|---------------|----------------------------------------------------------------|
-| calibre-web   | [http://localhost:8085/books](http://localhost:8085/books)     |
-| kiwix         | [http://localhost:8085/kiwix](http://localhost:8085/kiwix)     |
-| kolibri       | [http://localhost:8085/kolibri](http://localhost:8085/kolibri) |
-| maps          | [http://localhost:8085/maps](http://localhost:8085/maps)       |
-| matomo        | [http://localhost:8085/matomo](http://localhost:8085/matomo)   |
-
-
-   If you encounter an error or problem, please open an [issue](https://github.com/iiab/iiab/issues) so we can help you (and others) as quickly as possible.
-
-### Adding a ZIM file via CLI (command-line interface)
-
-1. From your browser visit [download.kiwix.org/zim](https://download.kiwix.org/zim/)
-2. Pick a ZIM file and copy the full link (e.g.: [https://download.kiwix.org/zim/wikipedia/wikipedia_en_100_2025-10.zim](https://download.kiwix.org/zim/wikipedia/wikipedia_en_100_2025-10.zim))
-3. Back in the proot-distro shell, access the library ZIM content folder
+4. Enter the library ZIM content folder:
 
     ```
     cd /library/zims/content/
     ```
 
-4. Download the ZIM file previously selected using wget and the url previously copied,
+5. Download the ZIM file previously selected using `wget` and the URL previously copied, for example:
 
     ```
-    wget https://download.kiwix.org/zim/wikipedia/wikipedia_en_100_2025-10.zim
+    wget https://download.kiwix.org/zim/wikipedia/wikipedia_en_100_maxi_2025-10.zim
     ```
 
-5. Once the download is complete, run the kiwix library indexer, so the new ZIM file is added to the interface.
+6. Once the download is complete, run the kiwix library indexer, so the new ZIM file is added to the interface:
 
     ```
     iiab-make-kiwix-lib
     ```
 
-    Repeat this step when removing or adding new ZIM files from `/library/zims/content/`
+    TIP: Repeat this last step when removing or adding new ZIM files from `/library/zims/content/`
 
 ## Remote Access
 
