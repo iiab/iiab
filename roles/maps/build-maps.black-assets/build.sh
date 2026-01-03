@@ -11,7 +11,7 @@ sudo apt install -y nodejs
 
 git clone https://github.com/iiab/maps.black
 cd maps.black
-git checkout 12205728ceb0672682381088c6c1e7ad05fdc4f5
+git checkout c1baf6d07f181ff62f9c272060056640dbec9c7f
 cd client
 
 npm ci

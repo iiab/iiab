@@ -45,6 +45,35 @@
             let mb = null
             let shouldSetDefaultView = false
 
+            // One namespace for all changes
+            iiabMapsDotBlackPatch = {
+                getMaxZoomTerrariumPmtiles: () => {
+                    if ("{{ maps_terrain_zoom  }}" !== "none") {
+                        return {{ maps_terrain_zoom }}
+                    }
+
+                    // It seems that maps.black sets this up whether or not it
+                    // sees the terrain file, so we'll give it some valid value
+                    return 1
+                },
+                getMaxZoomS2maps: () => {
+                    return {{ maps_satellite_zoom }}
+                },
+                getMaxZoomOSM: () => {
+                    switch ("{{ maps_vector_quality }}") {
+                        case 'osm-z9':
+                            return 9
+                        case 'osm-full':
+                            return 14
+                        default:
+                            // It seems that maps.black sets this up whether or not "ne"
+                            // (naturalearth) is selected (perhaps due to a timing issue).
+                            // So, we'll give it some valid value.
+                            return 1
+                    }
+                },
+            }
+
             // Defining these hash get/set functions outside of the window load because we
             // need to run some of it earlier. Again, the overall code layout sucks and we
             // should reorganize it.
@@ -324,49 +353,6 @@
                 })
                 const scaleControl = new maplibregl.ScaleControl()
                 let setUpMapTimeout = null
-                function setMaxZoom() {
-                    // Set the maximum zoom according to what's required by the shrunken pmtiles
-                    // files we may be serving up. The styles are designed around the full pmtiles
-                    // files, so we stop the user for reaching those unintended states.
-
-                    if (["natural", "political"].includes(mapStyleChoice)) {
-                        // both maps_vector_quality "ne" and "osm-full" let you zoom in all the way,
-                        // even if there's not much to look at in the former.
-                        if ("{{ maps_vector_quality }}" === "osm-z9" ) {
-                            // For vector, it seems like we can actually zoom in to almost 10 before
-                            // the map disappears
-                            mb.map.setMaxZoom(9.9)
-                            mb.zoom = Math.min(mb.zoom, 9.9)
-                        }
-                    }
-                    if (["satellite"].includes(mapStyleChoice)) {
-                        // For whatever reason, this is the actual maximum zoom before satellite has issues.
-                        // We set the maximum here, and zoom out to here if you switch to here from another
-                        // style.
-                        //
-                        // * If we allow zooming in further than this, it looks blurry.
-                        // * If we switch to satellite from another style while at a higher zoom level than
-                        //   this, it won't show up at all until the user zooms out to this level.
-                        // * If we're zoomed in this far and start scrolling around, eventually we'll find
-                        //   areas where the satellite won't show up.
-                        mb.map.setMaxZoom({{ maps_satellite_zoom }} - 0.6)
-                        mb.zoom = Math.min(mb.zoom, {{ maps_satellite_zoom }} - 0.6)
-                    }
-                    if (["hybrid"].includes(mapStyleChoice)) {
-                        if ("{{ maps_vector_quality }}" === "osm-z9" ) {
-                            // I could do Math.min, but I think that so long as there's something to look
-                            // at, let the user try to look at it, even if it's a little glitchy.
-                            mb.map.setMaxZoom(Math.max(9.9, {{ maps_satellite_zoom }} + 0.9))
-                        } else {
-                            mb.map.setMaxZoom({{ maps_satellite_zoom }} + 0.9)
-                        }
-                        // However, as with the "satellite" stile, for the satellite to show up on map load
-                        // (including switching from another style), it needs to be bound by the satellite's
-                        // maximum zoom. (Though, if the satellite has higher zoom available than the vector,
-                        // this is overly cautious. But this is not worth complicating for a minor inconvenience).
-                        mb.zoom = Math.min(mb.zoom, {{ maps_satellite_zoom }} - 0.6)
-                    }
-                }
                 function setUpMap() {
                     // Whether we're setting a new timeout or actually adding the search, make sure no further timeouts are looming.
                     clearTimeout(setUpMapTimeout)
@@ -401,8 +387,6 @@
                         }
                         mb.map.addControl(new MapsDotBlackStyleControl(), 'top-right');
                         // NOTE Navigation control is added via `navigationcontrol` attribute on the maps-black tag
-
-                        setMaxZoom()
 
                         // The call to this function (`setUpMap`) may have been triggered by a globe, terrain, or style change.
                         // That should be reflected in the hash:

@@ -29,7 +29,7 @@ To configure your map, set the following variables (for the option your choose!)
    maps_satellite_zoom: 12
    ```
 
-## What about terrain? (which is still experimental)?
+## What about terrain?
 
 To add terrain files, you can set this optional setting. You may find that when looking at mountains, high quality satellite imagery may compensate for low quality terrain, and vice versa.
 
