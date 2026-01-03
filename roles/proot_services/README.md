@@ -21,6 +21,8 @@ http://localhost:8085/maps
 1. Install **Termux**:
 
    * [https://github.com/Termux/Termux-app/releases/](https://github.com/Termux/Termux-app/releases/)
+  
+   * Or, installing **Termux** directly from the [Google Play Store](https://play.google.com/store/apps/details?id=com.termux) should work!
 
 2. Enable **Developer Options** on Android:
 
