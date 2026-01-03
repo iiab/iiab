@@ -110,7 +110,7 @@ Once you have an SSH session on your remote device, log into PRoot Distro to acc
 proot-distro login debian
 ```
 
-You will then be in a Debian shell with access to the IIAB CLI tools.
+You will then be in a Debian shell with access to the IIAB CLI (command-line interface) tools.
 
 ## Removal
 
