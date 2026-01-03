@@ -55,8 +55,9 @@
                 const pitch = Math.round(mb.pitch * 1000) / 1000
                 const bearing = Math.round(mb.bearing * 1000) / 1000
                 const zoom = Math.round(mb.zoom * 100) / 100
-                const globe = mb.globe ? 'g' : 'm' // [g]lobe : [m]ercator (i.e. flat)
-                window.location.hash = `${lat}/${lon}/${pitch}/${bearing}/${zoom}/${globe}/${mapStyleChoice}`
+                const globe = mb.globe ? 'g' : 'm' // [g]lobe : [m]ercator (i.e. like a paper map)
+                const terrain = mb.terrain ? 't' : 'f' // [t]errain : [f]lat (i.e. no mountains)
+                window.location.hash = `${lat}/${lon}/${pitch}/${bearing}/${zoom}/${globe}/${terrain}/${mapStyleChoice}`
             }
 
             // Why two different functions for reading the URL hash?
@@ -69,12 +70,12 @@
             //
             // Strangely, if we set the `globe` parameter here, it seems to make `mb.globe = ...`
             // not work later on, which makes the `GlobeControl` no longer work. So, we call
-            // `readHashGlobe()` after window load.
+            // `readHashGlobe()` after window load. We'll do the same for terrain for uniformity.
             //
             // We already handle `mapStyleChoice` in our own funny way so it doesn't really matter
             // when it's set.
             function readHash() {
-                const [lat, lon, pitch, bearing, zoom, globe, _mapStyleChoice] = window.location.hash.slice(1).split('/')
+                const [lat, lon, pitch, bearing, zoom, globe, terrain, _mapStyleChoice] = window.location.hash.slice(1).split('/')
 
                 // Set this whether or not we have the hash, unlike the other parameters.
                 // We still need to set a default here.
@@ -91,9 +92,10 @@
                     shouldSetDefaultView = true
                 }
             }
-            function readHashGlobe() {
-                const [lat, lon, pitch, bearing, zoom, globe, _mapStyleChoice] = window.location.hash.slice(1).split('/')
+            function readHashGlobeAndTerrain() {
+                const [lat, lon, pitch, bearing, zoom, globe, terrain, _mapStyleChoice] = window.location.hash.slice(1).split('/')
                 mb.globe = globe === 'g'
+                mb.terrain = mb.hillshade = terrain === 't' // contour lines is another thing that uses terrain maps, which we can consider
             }
 
             function setDefaultView() {
@@ -136,7 +138,7 @@
                 }
                 setStyle = _setStyle
 
-                readHashGlobe()
+                readHashGlobeAndTerrain()
                 setTimeout(setStyle) // TODO run this without the timeout. it requires rearranging a bunch of code so I don't want to do it now.
 
                 class MapsDotBlackStyleControl {
@@ -207,8 +209,36 @@
                             mb.globe = !mb.globe
 
                             // Changing "features" of mb such as globe, or "mapstyle", seems to cause maps.black to
-                            //  rebuild the map, and inthe process dumping all of the controls we added. So, we have
-                            // to add them again.
+                            //  rebuild the map, and in the process dumping all of the controls we added. So, we have
+                            // to add them again. (On the bright side, it means we don't need to toggle the highlighted
+                            // state of the button since that's set on control creation.)
+                            setUpMap()
+                        }
+
+                        return super.onAdd(map)
+                    }
+                }
+
+                class MapsDotBlackTerrainControl extends maplibregl.TerrainControl {
+                    onAdd(map) {
+                        // Depends on TerrainControl using `_toggleTerrain` internally in this
+                        // way, which might change in a different version of maplibregl:
+                        // https://github.com/maplibre/maplibre-gl-js/blob/b457ca945cf746a75ecb5412a2165142faa159c0/src/ui/control/terrain_control.ts
+                        //
+                        // The reason we are doing this is that maps.black has its own wrapper for
+                        // terrain, among other aspects of the map. Rather than directly accessing the
+                        // underlying map object to change the terrain (as maplibregl.TerrainControl
+                        // does), we will overload this method to use maps.black's wrapper.
+                        //
+                        // TODO implement this in a less hacky way, maybe. like maybe from scratch?
+                        this._toggleTerrain = () => {
+                            // Not ideal to use the global `mb` but the alternative would be contrived and probably more error prone
+                            mb.terrain = mb.hillshade = !mb.terrain
+
+                            // Changing "features" of mb such as terrain, or "mapstyle", seems to cause maps.black to
+                            //  rebuild the map, and in the process dumping all of the controls we added. So, we have
+                            // to add them again. (On the bright side, it means we don't need to toggle the highlighted
+                            // state of the button since that's set on control creation.)
                             setUpMap()
                         }
 
@@ -319,22 +349,22 @@
                         //   this, it won't show up at all until the user zooms out to this level.
                         // * If we're zoomed in this far and start scrolling around, eventually we'll find
                         //   areas where the satellite won't show up.
-                        mb.map.setMaxZoom({{ maps_sat_zoom }} - 0.6)
-                        mb.zoom = Math.min(mb.zoom, {{ maps_sat_zoom }} - 0.6)
+                        mb.map.setMaxZoom({{ maps_satellite_zoom }} - 0.6)
+                        mb.zoom = Math.min(mb.zoom, {{ maps_satellite_zoom }} - 0.6)
                     }
                     if (["hybrid"].includes(mapStyleChoice)) {
                         if ("{{ maps_vector_quality }}" === "osm-z9" ) {
                             // I could do Math.min, but I think that so long as there's something to look
                             // at, let the user try to look at it, even if it's a little glitchy.
-                            mb.map.setMaxZoom(Math.max(9.9, {{ maps_sat_zoom }} + 0.9))
+                            mb.map.setMaxZoom(Math.max(9.9, {{ maps_satellite_zoom }} + 0.9))
                         } else {
-                            mb.map.setMaxZoom({{ maps_sat_zoom }} + 0.9)
+                            mb.map.setMaxZoom({{ maps_satellite_zoom }} + 0.9)
                         }
                         // However, as with the "satellite" stile, for the satellite to show up on map load
                         // (including switching from another style), it needs to be bound by the satellite's
                         // maximum zoom. (Though, if the satellite has higher zoom available than the vector,
                         // this is overly cautious. But this is not worth complicating for a minor inconvenience).
-                        mb.zoom = Math.min(mb.zoom, {{ maps_sat_zoom }} - 0.6)
+                        mb.zoom = Math.min(mb.zoom, {{ maps_satellite_zoom }} - 0.6)
                     }
                 }
                 function setUpMap() {
@@ -366,12 +396,15 @@
                         // TODO - instantiate these above along with the geocoder and ScaleControl. Though it
                         // may require some reworking of the code that assumes it gets torn down and rebuilt.
                         mb.map.addControl(new MapsDotBlackGlobeControl(), 'top-right');
+                        if ("{{ maps_terrain_zoom  }}" !== "none") {
+                            mb.map.addControl(new MapsDotBlackTerrainControl(), 'top-right');
+                        }
                         mb.map.addControl(new MapsDotBlackStyleControl(), 'top-right');
                         // NOTE Navigation control is added via `navigationcontrol` attribute on the maps-black tag
 
                         setMaxZoom()
 
-                        // The call to this function (`setUpMap`) may have been triggered by a globe or style change.
+                        // The call to this function (`setUpMap`) may have been triggered by a globe, terrain, or style change.
                         // That should be reflected in the hash:
                         setHash()
 

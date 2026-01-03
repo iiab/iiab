@@ -170,7 +170,13 @@
     daemon_reload: yes
     name: kolibri
     state: stopped
+  when: not is_proot
 
+- name: Stop 'kolibri' via pdsm (proot), for Kolibri provisioning
+  command: pdsm stop kolibri
+  register: pdsm_stop
+  changed_when: "'already stopped' not in pdsm_stop.stdout"
+  when: is_proot
 
 # 2019-10-01: Should no longer be nec, thanks to /etc/kolibri/daemon.conf
 #             containing KOLIBRI_HOME="/library/kolibri" (above)
@@ -189,6 +195,30 @@
 #   become_user: "{{ kolibri_user }}"
 #   when: kolibri_provision
 
+# Prevents django's get_localzone_name query breaks the task, feeding the right value.
+- name: Setup dummy getprop to set tzlocal (proot)
+  copy:
+    dest: /usr/local/bin/getprop
+    mode: '0755'
+    content: |
+      #!/bin/sh
+      key="$1"
+      if [ "$key" = "persist.sys.timezone" ]; then
+        tz=""
+        if [ -r /etc/timezone ]; then
+          tz="$(head -n1 /etc/timezone | tr -d ' \t\r')"
+        fi
+        if [ -z "$tz" ] && [ -n "$TZ" ]; then
+          tz="$TZ"
+        fi
+      # Fallback to UTC
+        [ -z "$tz" ] && tz="UTC"
+        printf '%s\n' "$tz"
+        exit 0
+      fi
+      exit 0
+  when: is_proot
+
 # Run "kolibri manage help provisiondevice" to see CLI options, e.g.:
 #   --facility_settings FACILITY_SETTINGS
 #                         JSON file containing facility settings
@@ -201,12 +231,62 @@
     --preset "{{ kolibri_preset }}" --language_id "{{ kolibri_language }}"
     #--preset "{{ kolibri_preset }}" --language_id "{{ kolibri_language }}" --verbosity 0 --noinput
   ignore_errors: yes
-  become: yes
+  become: "{{ not is_proot }}"
   become_user: "{{ kolibri_user }}"
   when: kolibri_provision
   environment:
     KOLIBRI_HOME: "{{ kolibri_home }}"     # 2023-03-27: Required!
     #KOLIBRI_USER: "{{ kolibri_user }}"    # 2023-03-27: Not nec due to /etc/kolibri/username ?
+
+
+- name: Patch Kolibri to prevent failure due to Android restrictions (proot)
+  when: is_proot
+  block:
+    - name: Verify patch file is available in the right path (proot)
+      stat:
+        path: "{{ kolibri_patch_path }}"
+      register: patch_stat
+
+    - name: Fail if it isn't available
+      fail:
+        msg: "No {{ kolibri_patch_path }} file was found on host"
+      when: not patch_stat.stat.exists
+
+    - name: Test for patch already applied via reverse dry-run (proot)
+      shell: |
+        set -euo pipefail
+        patch --dry-run -p1 -d / -R < "{{ kolibri_patch_path }}" >/dev/null \
+          && echo APPLIED || echo NOT_APPLIED
+      args:
+        executable: /bin/bash
+      register: patch_state
+      changed_when: false
+      failed_when: false
+
+    - name: Apply patch only if not applied (proot)
+      shell: |
+        patch -p1 -d / < "{{ kolibri_patch_path }}"
+      args:
+        executable: /bin/bash
+      when: patch_state.stdout.strip() == "NOT_APPLIED"
+      register: patch_apply
+      changed_when: true
+
+    - name: Disable Zeroconf at options.ini (proot)
+      ini_file:
+        dest: "{{ kolibri_home }}/options.ini"
+        section: "Deployment"
+        option: "ZEROCONF_ENABLED"
+        value: "False"
+        create: true
+
+    - name: Set custom http_port at options.ini (proot)
+      ini_file:
+        dest: "{{ kolibri_home }}/options.ini"
+        section: "Deployment"
+        option: "HTTP_PORT"
+        value: "{{ kolibri_http_port }}"
+        create: true
 
 
 # 2023-03-25: Likely overkill (let's strongly consider removing this stanza?)

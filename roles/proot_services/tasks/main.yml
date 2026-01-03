@@ -1,0 +1,45 @@
+- name: Assert that "proot_services_install is sameas true" (boolean not string etc)
+  assert:
+    that: proot_services_install is sameas true
+    fail_msg: "PLEASE SET 'proot_services_install: True' e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+
+- name: Assert that "proot_services_enabled | type_debug == 'bool'" (boolean not string etc)
+  assert:
+    that: proot_services_enabled | type_debug == 'bool'
+    fail_msg: "PLEASE GIVE VARIABLE 'proot_services_enabled' A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+
+- name: Run main proot_services role on proot only.
+  when: is_proot
+  block:
+
+    - name: Install proot_services (pdsm) if 'proot_services_installed' not defined, e.g. in {{ iiab_state_file }}    # /etc/iiab/iiab_state.yml
+      include_tasks: install.yml
+      when: proot_services_installed is undefined and is_proot
+
+    - name: Enable/Disable/Reload NGINX for proot_services, if nginx_enabled
+      include_tasks: nginx.yml
+
+    - name: Add 'proot_services' variable values to {{ iiab_ini_file }}
+      ini_file:
+        path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+        section: proot_services
+        option: "{{ item.option }}"
+        value: "{{ item.value | string }}"
+      with_items:
+        - option: name
+          value: proot_services
+        - option: description
+          value: 'pdsm, proot-distro service manager for Android'
+        - option: proot_services_install
+          value: "{{ proot_services_install }}"
+        - option: proot_services_enabled
+          value: "{{ proot_services_enabled }}"
+
+  rescue:
+
+    - name: 'SEE ERROR ABOVE (skip_role_on_error: {{ skip_role_on_error }})'
+      fail:
+        msg: ""
+      when: not skip_role_on_error

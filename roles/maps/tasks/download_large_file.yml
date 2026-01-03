@@ -1,57 +1,142 @@
-# This is an attempt at a "smart" downloader of large files. It behaves the way
-# I was hoping ansible's `get_url` would behave in the first place:
+# This will download large files using aria2c and meta4 files, and possibly
+# torrent files.
 #
-# * Download the file to a temp file
-# * Get the sha256sum of the temp file
-# * If the sha256sum is not what is expected, throw an error
-# * Rename the temp file to the destination path
-# * Save the sha256sum to a separate file (with extension .sha256)
+# There are a few concerns for downloading such files which we may or may not be
+# addressing at this time:
 #
-# On subsequent runs, the usual behavior will be that it sees the saved
-# sha256sum file, it matches the expected sha256sum, and it skips. (This is
-# the logical equivalent of calculating the sha256sum on the actual downloaded
-# file, but much faster for large files).
+# Efficiency for implementers:
 #
-# However, if we need to update the sha256sum for whatever reason, it will see
-# that the sha256sum does not match, and it runs the download process again.
+# * We will work toward supporting torrents, which may be faster than http.
+# * aria2c will hopefully perform checksums in-memory (even if via disk cache)
+#   during download. This will be faster than a full checksum after download,
+#   which definitely requires disk read for large files.
+# * Once files are fully downloaded and moved out of the temp directory, they
+#   will not be downloaded on subsequent role runs. (This relates to "Updating
+#   data" below)
 #
-# NOTE Already downloaded files show up as "skipped" instead of "ok".  I could
-# fix this but we'll move to the download manager in due time anyway.
+# Integrity: aria2 will perform a sha256 checksum on each downloaded chunk of
+# the file.
+#
+# Security: If there is a security concern down the line, we can provide PGP
+# signatures for the meta4 and/or torrent files.
+#
+# Consistent versions: Data file versions may correspond to each other (e.g.
+# vector map "extracts" should ideally match the low-res world map). This can
+# be handled by putting a date in the file names of the data files. The date
+# can be committed to the repository. However, at this time this concern is
+# handled upstream of this file.
+#
+# Updating data: As of Dec 2025 this concern is out of scope. We assume that
+# users will either figure it out on their own, or reinstall IIAB from scratch.
+# That said, assuming we have dates in file names, this may be supported de
+# facto, but we will not go out of our way to free up room by deleting the
+# outdated files. (Perhaps adding automatic deletion will not be so hard once
+# the time comes)
+#
 # TODO - files should be owned by www-data
 
-- name: "Check previous sha256sum, if any, for {{ item.src_url }})"
-  shell: |
-    set -euo pipefail
 
-    cat {{ dest_sha256_path }} || echo "nope"
-  args:
-    executable: /bin/bash
-  register: current_sha256sum
-  vars:
-    # Where the file's sha256sum is saved
-    dest_sha256_path: "{{ dest_base_path }}/{{ item.filename }}.sha256"
-
-- name: "Download {{ item.src_url }}"
-  # Do `wget -c` in hopes of continuing incomplete downloads on the temp file.
-  # However, if the hash doesn't match afterwards, delete the temp file.
-  # I'm not sure if the `echo` statements will do anything useful for debugging.
-  shell: |
-    set -euo pipefail
-
-    wget -c "{{ item.src_url }}" -O "{{ dest_tmp_path }}" -T "{{ download_timeout }}" || (echo "download failed"; exit 1)
-    sha256sum "{{ dest_tmp_path }}" | grep "{{ item.sha256sum }}" || (echo "sha256sum mismatch!"; rm "{{ dest_tmp_path }}"; exit 1)
-    chmod 644 "{{ dest_tmp_path }}"
-    mv "{{ dest_tmp_path }}" "{{ dest_path }}"
-    echo {{ item.sha256sum }} > {{ dest_sha256_path }}
-  args:
-    executable: /bin/bash
-  when: current_sha256sum.stdout_lines.0 != item.sha256sum
-  vars:
+- vars:
     # Where the file eventually goes
-    dest_path: "{{ dest_base_path }}/{{ item.filename }}"
+    dest_path: "{{ dest_base_path }}/{{ item }}"
 
-    # Where the file goes as it's being downloaded
-    dest_tmp_path: "/library/downloads/maps/{{ item.filename }}"
+    # Use md5sum to generate the log file name:
+    # * Name has short, consistent length. The "to check progress..." message
+    #   fits within 80 characters on terminal (at least in the current
+    #   ansible version) in case users have small screens.
+    # * If the user mis-copies, it's less likely to do anything destructive.
+    log_file: "{{ item | hash('md5') }}.log"
+    working_dir: "/library/downloads/maps"
 
-    # Where the file's sha256sum goes, which indicates the contents of the current file
-    dest_sha256_path: "{{ dest_base_path }}/{{ item.filename }}.sha256"
+  block:
+    - name: "Fetching file size for {{ iiab_map_host_url }}/{{ item }} via .meta4 file"
+      shell: |
+        import sys, xmltodict, requests, os
+
+        if os.path.exists("{{ dest_path }}"):
+          sys.exit(0)
+
+        size = int(xmltodict.parse(
+          requests.get("{{ iiab_map_host_url }}/{{ item }}.meta4").content
+        )['metalink']['file']['size'])
+        KiB = 1024
+        MiB = KiB * 1024
+        GiB = MiB * 1024
+
+        if size < MiB:
+          size_disp = str(round(size / KiB, 2)) + ' KiB'
+        elif size < GiB:
+          size_disp = str(round(size / MiB, 2)) + ' MiB'
+        else:
+          size_disp = str(round(size / GiB, 2)) + ' GiB'
+        print('(' + size_disp + ') To check download progress, see previous step (above).')
+      args:
+        executable: /usr/bin/python3
+
+      # The existence of console output in download_file_details
+      # implies that the download should happen.
+      register: download_file_details
+
+    # Put in some space to make it easier to read by implementers.
+    - debug:
+        msg:
+          - ""
+          - ""
+          - "   To check download progress, run:       "
+          - ""
+          - "   tail {{ working_dir }}/{{ log_file }}  "
+          - ""
+          - ""
+      # If the file already exists (and thus no download will happen) the above
+      # task should exit before any console output.
+      when: download_file_details.stdout_lines|length != 0
+
+    - name: "Download {{ item }} {{ download_file_details.stdout_lines.0 | default('(done)')}}"
+      # cd to the temp directory so that the aria2c file, data file, and (perhaps
+      # eventually) torrent file all end up there.
+      shell: |
+        set -euo pipefail
+
+        cd {{ working_dir }}
+
+        date > "{{ log_file }}"
+        echo "Downloading {{ item }}..." >> "{{ log_file }}"
+        echo >> "{{ log_file }}"
+        aria2c \
+            --async-dns=false \
+            --connect-timeout="{{ download_timeout }}" \
+            --log-level=warn \
+            --console-log-level=warn \
+            --summary-interval=60 \
+            --download-result=hide \
+            --follow-metalink=mem \
+            --max-connection-per-server=4 \
+            --file-allocation=falloc \
+            --show-console-readout=false \
+            --enable-http-pipelining=true \
+            --seed-time=0 \
+            "{{ iiab_map_host_url }}/{{ item }}.meta4" \
+            >> "{{ log_file }}"
+
+        chmod 644 "{{ item }}"
+        mv "{{ item }}" "{{ dest_path }}"
+        rm "{{ log_file }}"
+      args:
+        executable: /bin/bash
+        creates: "{{ dest_path }}"
+
+  rescue:
+    # We output summaries to a log file for the user's benefit,
+    # but all of the errors necessarily show up there as well.
+    # Here, we parse out the error message, ignoring almost all of
+    # the summary lines, which could be a lot.
+    # Finally, we exit 1 so Ansible shows this error.
+    - name: "Error downloading {{ item }}"
+      shell: |
+        set -euo pipefail
+
+        cd {{ working_dir }}
+
+        echo "aria2c error:" 1>&2
+        tac "{{ log_file }}" | sed '/'"Download Progress Summary as of"'/q' | tac 1>&2
+        exit 1

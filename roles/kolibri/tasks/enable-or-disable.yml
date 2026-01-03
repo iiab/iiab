@@ -4,19 +4,50 @@
     daemon_reload: yes
     enabled: yes
     state: started
-  when: kolibri_enabled
+  when:
+    - kolibri_enabled
+    - not is_proot
+
+- name: Enable & Start 'kolibri' service via pdsm (proot), if kolibri_enabled
+  when:
+    - kolibri_enabled
+    - is_proot
+  block:
+    - name: Enable 'kolibri' via pdsm (proot)
+      command: pdsm enable kolibri
+
+    - name: Start 'kolibri' via pdsm (proot)
+      command: pdsm start kolibri
+      register: pdsm_start
+      changed_when: "'already running' not in pdsm_start.stdout"
+
 
 - name: Disable & Stop 'kolibri' systemd service, if not kolibri_enabled
   systemd:
     name: kolibri
     enabled: no
     state: stopped
-  when: not kolibri_enabled
+  when:
+    - not kolibri_enabled
+    - not is_proot
+
+- name: Disable & Stop 'kolibri' via pdsm (proot), if not kolibri_enabled
+  when:
+    - not kolibri_enabled
+    - is_proot
+  block:
+    - name: Stop 'kolibri' via pdsm (proot)
+      command: pdsm stop kolibri
+      register: pdsm_stop
+      changed_when: "'already stopped' not in pdsm_stop.stdout"
+
+    - name: Disable 'kolibri' via pdsm (proot)
+      command: pdsm disable kolibri
 
 
 - name: Enable http://box{{ kolibri_url }} via NGINX, by installing {{ nginx_conf_dir }}/kolibri-nginx.conf from template    # http://box/kolibri
   template:
-    src: kolibri-nginx.conf.j2
+    src: "{{ kolibri_nginx_template }}"
     dest: "{{ nginx_conf_dir }}/kolibri-nginx.conf"    # /etc/nginx/conf.d
   when: kolibri_enabled
 
@@ -30,3 +61,8 @@
   systemd:
     name: nginx
     state: restarted
+  when: not is_proot
+
+- name: Restart 'nginx' via pdsm (proot)
+  command: pdsm restart nginx
+  when: is_proot

@@ -47,17 +47,30 @@
   include_tasks: roles/www_options/tasks/php-settings.yml
   when: php_settings_done is undefined
 
+- name: Start 'php-fpm' via pdsm (proot)
+  command: pdsm start php-fpm
+  register: pdsm_start
+  changed_when: "'already running' not in pdsm_start.stdout"
+  when: is_proot
 
 - name: Start MariaDB
   #action: service name=mysql state=started
   systemd:
     name: "{{ mysql_service }}"
     state: started
+  when: not is_proot
+
+- name: Start 'mariadb' via pdsm (proot)
+  command: pdsm start mariadb
+  register: pdsm_start
+  changed_when: "'already running' not in pdsm_start.stdout"
+  when: is_proot
 
 - name: Create MariaDB Database for Matomo
   community.mysql.mysql_db:
     name: "{{ matomo_db_name }}"
     #login_unix_socket: /var/run/mysqld/mysqld.sock
+  when: not is_proot
 
 - name: Add Admin User to MariaDB Database
   community.mysql.mysql_user:
@@ -66,6 +79,33 @@
     update_password: on_create    # OR SHOULD './runrole --reinstall matomo' FORCE A COMPLETELY CLEAN INSTALL?
     priv: "{{ matomo_db_name }}.*:ALL"
     #login_unix_socket: /var/run/mysqld/mysqld.sock
+  when: not is_proot
+
+- name: Prepare MariaDB database and user on (proot)
+  when: is_proot
+  block:
+    - name: Create MariaDB Database for Matomo (proot)
+      community.mysql.mysql_db:
+        name: "{{ matomo_db_name }}"
+        state: present
+        encoding: utf8mb4
+        collation: utf8mb4_general_ci
+        login_unix_socket: "{{ mariadb_run_dir }}/mysqld.sock"
+        check_implicit_admin: true
+
+    - name: Ensure Matomo DB user exists for localhost and 127.0.0.1 (proot)
+      community.mysql.mysql_user:
+        name: "{{ matomo_db_user }}"
+        host: "{{ item }}"
+        password: "{{ matomo_db_pass }}"
+        update_password: on_create
+        priv: "{{ matomo_db_name }}.*:ALL"
+        plugin: mysql_native_password
+        login_unix_socket: "{{ mariadb_run_dir }}/mysqld.sock"
+        check_implicit_admin: true
+      loop:
+        - localhost
+        - "{{ tcp_host }}"
 
 - name: Download and Extract Matomo (~3 min)
   unarchive:
@@ -119,21 +159,37 @@
     headers:
       Cookie: "{{ matomo_session_cookie }}"
     body:
+      # TCP fields only in proot:
+      host: "{{ tcp_host if is_proot else omit }}"
+      port: "{{ tcp_port if is_proot else omit }}"
+      unix_socket: "{{ '' if is_proot else omit }}"
+      charset: "{{ 'utf8mb4' if is_proot else omit }}"
+      type: "{{ 'InnoDB' if is_proot else omit }}"
+      # Common fields:
       username: "{{ matomo_db_user }}"
       password: "{{ matomo_db_pass }}"
       dbname: "{{ matomo_db_name }}"
       tables_prefix: "matomo_"
       adapter: "PDO\\MYSQL"
     body_format: form-urlencoded
-    status_code: 302
+    status_code: [200, 302]
+    follow_redirects: all
   #register: matomo_database_setup
 
 - name: Matomo Table Creation
   uri:
     url: "{{ matomo_full_url }}index.php?action=tablesCreation&module=Installation"
     method: GET
-    status_code: 200
+    headers:
+      Cookie: "{{ matomo_session_cookie }}"
+    status_code: [200, 302]
+    follow_redirects: all
+    return_content: true
   register: matomo_table_creation
+  failed_when: false
+  retries: 3
+  delay: 5
+  until: matomo_table_creation.status in [200, 302]
 
 - name: Set a variable for the MATOMO_SESSID cookie
   set_fact:

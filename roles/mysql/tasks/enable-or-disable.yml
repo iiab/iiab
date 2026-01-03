@@ -4,7 +4,25 @@
     daemon_reload: yes
     state: started
     enabled: yes
-  when: mysql_enabled
+  when:
+    - mysql_enabled
+    - not is_proot
+
+- name: Enable & Start 'mysql' service via pdsm (proot)
+  when:
+    - mysql_enabled
+    - is_proot
+  block:
+    - name: Enable 'mariadb' via pdsm (proot)
+      command: pdsm enable mariadb
+      register: pdsm_enable
+      changed_when: "'already enabled' not in pdsm_enable.stdout"
+
+    - name: Start 'mariadb' via pdsm (proot)
+      command: pdsm start mariadb
+      register: pdsm_start
+      changed_when: "'already running' not in pdsm_start.stdout"
+
 
 # We had to start MySQL in order to configure it, now turn if off if not enabled
 - name: Disable & Stop MySQL ({{ mysql_service }}) systemd service, if not mysql_enabled
@@ -12,4 +30,19 @@
     name: "{{ mysql_service }}"
     enabled: no
     state: stopped
-  when: not mysql_enabled
+  when:
+    - not mysql_enabled
+    - not is_proot
+
+- name: Disable & Stop 'mysql' via pdsm (proot), if not mysql_enabled
+  when:
+    - not mysql_enabled
+    - is_proot
+  block:
+    - name: Stop 'mariadb' via pdsm (proot)
+      command: pdsm stop mariadb
+      register: pdsm_stop
+      changed_when: "'already stopped' not in pdsm_stop.stdout"
+
+    - name: Disable 'mariadb' via pdsm (proot)
+      command: pdsm disable mariadb

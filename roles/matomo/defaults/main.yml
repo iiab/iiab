@@ -12,7 +12,27 @@ matomo_db_user: Admin
 matomo_db_pass: changeme
 
 #matomo_host_url: http://{{ ansible_default_ipv4.address }}
-matomo_host_url: http://{{ iiab_hostname }}.{{ iiab_domain }}    # e.g. http://box.lan
+#matomo_host_url: http://{{ iiab_hostname }}.{{ iiab_domain }}    # e.g. http://box.lan
+matomo_host: >-
+  {{
+    (ansible_default_ipv4.address | default('127.0.0.1'))
+    if is_proot
+    else (iiab_hostname ~ '.' ~ iiab_domain)
+  }}
+matomo_port_suffix: >-
+  {{
+    (':' ~ (nginx_port | int))
+    if ((nginx_port | default(80) | int) != 80)
+    else ''
+  }}
+matomo_host_url: "{{ 'http://' ~ matomo_host ~ matomo_port_suffix  }}"
 matomo_full_url: "{{ matomo_host_url }}/matomo/"
 
 matomo_cronjob: "sudo python3 {{ matomo_path }}/matomo/misc/log-analytics/import_logs.py --url={{ matomo_full_url }} --idsite=1 --recorders=4 --enable-http-errors --enable-http-redirects --enable-static --enable-bots /var/log/nginx/access.log"
+
+# proot - tcp connection
+proot_nginx_timeout: 180
+tcp_host: "127.0.0.1"
+tcp_port: 3306
+mariadb_run_dir: "/run/mysqld"
+mariadb_log_dir: "/var/log/mysql"

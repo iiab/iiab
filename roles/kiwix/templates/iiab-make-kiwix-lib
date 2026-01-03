@@ -1,39 +1,58 @@
 #!/bin/bash
 
-LOCK_PATH=/run/lock/kiwix
-mkdir -p $LOCK_PATH
+KIWIXLIB="{{ kiwix_library_xml }}"
+TMP="${KIWIXLIB}.tmp"
 
-WAITLOCK="$LOCK_PATH/make-kiwix-lib-wait.LCK";
-RUNLOCK="$LOCK_PATH/kiwix-lib-access.LCK";
-KIWIXLIB={{ kiwix_library_xml }}
+LOCK_PATH="/run/lock/kiwix"
+LOCK_DIR="${LOCK_PATH}/make-kiwix-lib.lockdir"
+mkdir -p "$LOCK_PATH"
 
-exec 200>$WAITLOCK;
-exec 201>$RUNLOCK;
+kiwix_stop() {
+    if command -v pdsm >/dev/null 2>&1; then
+        pdsm stop kiwix
+    else
+        systemctl stop kiwix-serve
+    fi
+}
+kiwix_start() {
+    if command -v pdsm >/dev/null 2>&1; then
+        pdsm restart kiwix
+    else
+        systemctl start kiwix-serve
+    fi
+}
 
-if flock -n -e 200; then :
-  echo 'Waiting to run iiab-make-kiwix-lib.py'
-  # wait for up to 5 min
-  flock -x -w 300 201
-  flock -u 200 # unlock queue
-  echo "Now running iiab-make-kiwix-lib.py"
-  # write to {{ kiwix_library_xml }}.tmp to minimize kiwix down
-  # zim map could be out of sync for a few seconds
-  # using new version that does deltas
-  if [ -f $KIWIXLIB ]; then
-    cp $KIWIXLIB $KIWIXLIB.tmp
-    /usr/bin/iiab-make-kiwix-lib.py $@
-  else
-    /usr/bin/iiab-make-kiwix-lib.py -f # force rebuild of library.xml
+# Acquire lockdir (wait up to 5 min; auto-clear if stale >10 min)
+start_ts=$(date +%s)
+while ! mkdir "$LOCK_DIR" 2>/dev/null; do
+  now=$(date +%s)
+  lock_mtime=$(stat -c %Y "$LOCK_DIR" 2>/dev/null || echo "$now")
+  if (( now - lock_mtime > 600 )); then
+    rm -rf "$LOCK_DIR" 2>/dev/null || true
+    continue
   fi
-  /usr/bin/systemctl stop kiwix-serve
-  if [ -f $KIWIXLIB ]; then
-    rm $KIWIXLIB
+  if (( now - start_ts > 300 )); then
+    echo "Timeout waiting for lock: $LOCK_DIR" >&2
+    exit 1
   fi
-  mv $KIWIXLIB.tmp $KIWIXLIB
-  /usr/bin/systemctl start kiwix-serve
+  sleep 2
+done
+trap 'rmdir "$LOCK_DIR" 2>/dev/null || true' EXIT
+
+echo "Now running iiab-make-kiwix-lib.py"
+if [ -f "$KIWIXLIB" ]; then
+  /usr/bin/iiab-make-kiwix-lib.py "$@"
 else
-  echo "Can't get wait lock for iiab-make-kiwix-lib.py";
-  exit 1;
+  /usr/bin/iiab-make-kiwix-lib.py -f
 fi
-echo 'Finished making Kiwix library.xml'
+
+# Promote tmp -> final (Kiwix reads library.xml, not library.xml.tmp)
+if [ -s "$TMP" ]; then
+  kiwix_stop
+  mv -f "$TMP" "$KIWIXLIB"
+  kiwix_start
+else
+  echo "WARNING: expected tmp not found or empty: $TMP" >&2
+fi
+echo "Finished making Kiwix library.xml"
 exit 0
