@@ -24,7 +24,7 @@ http://localhost:8085/maps
    * OPTION 2: Install Termux from the [F-Droid app store](https://f-droid.org/packages/com.termux/) (no Google account needed!)
    * OPTION 3: Install Termux from the [Google Play Store](https://play.google.com/store/apps/details?id=com.termux).
 
-   Warning: If you use either app store above, please bear in mind that Termux developers' advice against mixing Termux app / plugins from different stores.
+   Warning: If you use either app store above, please bear in mind Termux developers' advice against mixing Termux app / plugins from different stores.
 
 2. Enable **Developer Options** on Android:
 
