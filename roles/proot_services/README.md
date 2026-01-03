@@ -4,165 +4,163 @@ Internet-in-a-Box (IIAB) on Android means that millions of people worldwide can 
 
 As of January 2026, these IIAB Apps are supported:
 
-- Caliber-Web
-- Kiwix
-- Kolibri
-- Maps
-- Matomo
+* Calibre-Web
+* Kiwix
+* Kolibri
+* Maps
+* Matomo
 
 The default port for the web server is **8085**, for example:
 
-    http://localhost:8085/maps
+```
+http://localhost:8085/maps
+```
 
 ## Installation
 
-1) Install **Termux**:
+1. Install **Termux**:
 
-   - https://github.com/Termux/Termux-app/releases/
+   * [https://github.com/Termux/Termux-app/releases/](https://github.com/Termux/Termux-app/releases/)
 
-2) Enable **Developer Options** on Android.
+2. Enable **Developer Options** on Android:
 
-3) Remove / increase app child processes limit to install and run IIAB.
+   *  **Settings > About Phone**, find the Build Number, and tap it seven times rapidly.
 
-   - On Android 14 and later, it is possible to disable this restriction using Android's Settings, in a *Developer options* setting called:
-     - `Disable child process restriction` (English) or
-     - `Desactivar restricciones de procesos secundarios` (Spanish)
+3. Remove or increase the app child process limit to install and run IIAB:
 
-   - Android 12 and 13 added a ["Phantom Process Killer" (PPK)](https://github.com/agnostic-apollo/Android-Docs/blob/master/en/docs/apps/processes/phantom-cached-and-empty-processes.md) feature to limit child processes, but there is no UI interface to disable this behavior (on Android 12 and 13).  Instead, you can disable it using ADB commands issued from a remote device, or within the device itself by using **[Shizuku](https://github.com/RikkaApps/Shizuku/releases/)**.
+   * On Android 14 and later, it is possible to disable this restriction using Android Settings, in **Developer Options**, with this setting:
 
-     Shizuko is a 3 step process **Pair**, **Run** and **Export**.  Please check the video (WIP) tutorial for a more interactive explantaion, once exporte the `0_termux_setup.sh` script will deal witht he PPK workaround setup.
+     * `Disable child process restriction` (English), or
+     * `Desactivar restricciones de procesos secundarios` (Spanish)
 
-4) Prepare Termux-app, use the following command from the Termux terminal.
+   * Android 12 and 13 added a ["Phantom Process Killer" (PPK)](https://github.com/agnostic-apollo/Android-Docs/blob/master/en/docs/apps/processes/phantom-cached-and-empty-processes.md) feature to limit child processes, but there is no UI option to disable this behavior on those versions. Instead, you can disable it using ADB commands issued from a remote device, or locally on the device using **[Shizuku](https://github.com/RikkaApps/Shizuku/releases/)**.
+
+     Shizuku is a 3-step process: **Pair**, **Run**, and **Export**. Please check the (WIP) video tutorial for a more interactive explanation. Once exported, the `0_termux_setup.sh` script will handle the PPK workaround setup.
+
+4. Prepare the Termux app by running the following command from the Termux terminal:
 
    ```
-   curl -s https://raw.githubusercontent.com/iiab/iiab/refs/heads/master/roles/proot_services/0_termux-setup.sh | bash
+   curl https://raw.githubusercontent.com/iiab/iiab/refs/heads/master/roles/proot_services/0_termux-setup.sh | bash
    ```
 
-   Once complete please enter the debian environment to continue the installation:
+   Once complete, enter the Debian environment to continue the installation:
 
    ```
    proot-distro login debian
    ```
 
-5) Install local_vars_android.yml to /etc/iiab/local_vars.yml and run IIAB's installer in order to install the current setup.
+5. Install `local_vars_android.yml` to [`/etc/iiab/local_vars.yml`](https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it?) and run the IIAB installer to install the current setup.
 
-   Once on the proot-distro environment you can install IIAB running the following script:
+   Once inside the PRoot Distro environment, install IIAB by running:
 
    ```
-   curl -s https://raw.githubusercontent.com/iiab/iiab/refs/heads/master/roles/proot_services/1_iiab-on-android.sh | bash
+   curl https://raw.githubusercontent.com/iiab/iiab/refs/heads/master/roles/proot_services/1_iiab-on-android.sh | bash
    ```
 
-   If the installer completes correclty you have finished the installation process.
-   If you run into an error or problem, please open an [issue](https://github.com/iiab/iiab/issues) so we can help you and others, as quickly as possible.
+   If the installer completes successfully, the installation process is finished.
+   If you encounter an error or problem, please open an [issue](https://github.com/iiab/iiab/issues) so we can help you (and others) as quickly as possible.
 
 ## Remote Access
 
-Even while using the phone keyboard and screen is very practical when on the move, being able to access the proot-distro
-environment from a PC or Laptop will be very useful when trying to debug an issue.  You can use the Wi-Fi connection, or even 
-establish the native Android Hotspot from your phone if there is no wireless LAN available.
+While using the phone keyboard and screen is practical when on the move, accessing the PRoot Distro environment from a PC or laptop is very useful for debugging. You can use an existing Wi-Fi connection or enable the native Android hotspot if no wireless LAN is available.
 
-Get your phone IP by using the `ifconfig` on Termux or looking at the About device > Status window.
+Get your phone’s IP address by running `ifconfig` in Termux or by checking **About device → Status** in Android settings.
 
-### ssh
+### SSH
 
-In order to access de IIAB install, the default way to do it is to access **Termux**, the CLI (command-line interface) on you phone from you computer via ssh, 
-you can accomplish that by...
+To log in to IIAB by accessing **Termux** (the command-line interface on your phone) from your computer via SSH, follow these steps:
 
-1) Setup ssh credentials (on Termux, not proot-distro).
+1. Set up SSH credentials (on Termux, not PRoot Distro).
 
-   The fastest way to ssh into your device is to set a password to your Termux user. On Termux (not proot-distro) type:
+   The fastest way to SSH into your device is to set a password for your Termux user. In Termux (not PRoot Distro), run:
 
    ```
    passwd
    ```
 
-   and set the password.
+   Security can be improved by using standard SSH key-based authentication via the `~/.ssh/authorized_keys` file.
 
-   Security can be improved following the standard ssh keys setup on `~/.ssh/authorized_keys` file.
+2. Start the SSH service from Termux (not PRoot Distro).
 
-2) Starting the ssh service from Termux (not proot-distro).
-
-   You need to start ssh in order to use it,
+   Start the SSH daemon with:
 
    ```
    sshd
    ```
 
-   The sshd service can be automized to start at Termux launch (see [Termux-services](https://wiki.Termux.com/wiki/Termux-services)), 
-   we would recommend that you only set it up, once you've improved the login security using ssh keys.
+   The `sshd` service can be automated to start when Termux launches (see [Termux-services](https://wiki.Termux.com/wiki/Termux-services)). We recommend doing this only after improving login security using SSH keys.
 
-3) Access your Android phone:
+3. Access your Android phone.
 
-   Once on your laptop / PC, connected to the same network that your Android phone, and having the phone IP (e.g.: 192.168.10.100)
-
-   Use the following command:
+   From your laptop or PC, connected to the same network as your Android phone, and knowing the phone’s IP address (e.g., `192.168.10.100`), run:
 
    ```
    ssh -p 8022 192.168.10.100
    ```
 
-   You are not required to use an specific user, and you might have noticed that you require to use port 8022.  
+   No specific username is required. Note that port **8022** is used for SSH.
 
-   Since Android is running without root permissions, then ssh can't use lower ports, due to this restriction we use port 8085 for the webserver / nginx as a workaround for the lack of port 80.
+   Since Android runs without root permissions, SSH cannot use lower-numbered ports. For the same reason, the IIAB web server (nginx) uses port **8085** instead of port 80.
 
-### Login IIAB environment
+### Log in to the IIAB environment
 
-Once on ssh session at you remote device, you can log into proot-distro to actually access and run the IIAB applications, just like at the installation you login using,
+Once you have an SSH session on your remote device, log into PRoot Distro to access and run the IIAB applications, just as during installation:
 
 ```
 proot-distro login debian
 ```
 
-There you'll be on a debian shell with access to the IIAB tools via CLI.
+You will then be in a Debian shell with access to the IIAB CLI tools.
 
 ## Removal
 
-If you want to remove the installation and remove all the related apps on it please follow the next steps.
+If you want to remove the installation and all related apps, follow these steps:
 
-1) Remove the IIAB installation running on `proot-distro` by running:
+1. Remove the IIAB installation running in PRoot Distro:
 
    ```
    proot-distro remove debian
    ```
 
-   Please note that **all the content on that IIAB installation gets deleted by excecuting this command**. Backup your content properly if you want to install later on.
+   **Note:** All content in that IIAB installation will be deleted when executing this command. Back up your content first if you plan to reinstall later.
 
-2) Remove / Uninstall Termux app
+2. Remove / uninstall the Termux app.
 
-3) If applicable, Remove / Uninstall Shizuku app (Android 12/13)
+3. If applicable, remove / uninstall the Shizuku app (Android 12/13).
 
-4) Disable Developer options.
+4. Disable Developer Options.
 
-# proot-distro service manager (pdsm)
+# PRoot Distro service manager (pdsm)
 
-`pdsm` is a simple custom service implementation to manage services on a systemd like fashion on a Debian / Debian based distro on the Android port of IIAB.
+`pdsm` is a simple custom service manager that provides systemd-like service management for Debian (or Debian-based) distributions in the Android port of IIAB.
 
 ## Usage
 
-`pdsm` has a simple straight forward structure.
+`pdsm` has a simple, straightforward structure.
 
-Starting a service is not the same as enable it. By *enabling* it, the service will start on every future session, *start* only will start on current session. Out of caution, only a handfull of services are actually enabled by default.
+Starting a service is not the same as enabling it. **Enabling** a service means it will start in every future session, while **starting** a service only affects the current session. Out of caution, only a handful of services are enabled by default.
 
 ```
 Usage: pdsm {enable-all|enable|disable|start|start-all|stop|restart|status|list} [service]
 ```
 
-**TLDR**
+**TL;DR**
 
-If you want to start all services at once, you can do it by:
+To start all services at once:
 
 ```
 pdsm start-all
 ```
 
-If you want to enable all services at once, you can do it by:
+To enable all services at once:
+
 ```
 pdsm enable-all
 ```
 
 ### Examples
 
-- pdsm list
+* `pdsm list`
 
   ```
   root@localhost:~# pdsm list
@@ -173,7 +171,7 @@ pdsm enable-all
   nginx
   ```
 
-- pdsm enable-all
+* `pdsm enable-all`
 
   ```
   root@localhost:~# pdsm enable-all
@@ -191,7 +189,7 @@ pdsm enable-all
   calibre-web  kiwix  kolibri  nginx
   ```
 
-- pdsm restart (service)
+* `pdsm restart <service>`
 
   ```
   root@localhost:~# pdsm restart calibre-web
@@ -199,7 +197,7 @@ pdsm enable-all
   [pdsm:calibre-web] starting...
   ```
 
-  Note: Out of caution due the Android resource consumption policies enabling a service doesn't automatically start it, but will start it on the following, equivalent to _"booting"_ which is, session login:
+  **Note:** Due to Android resource consumption policies, enabling a service does not automatically start it. Instead, it will start on the next session login (equivalent to “booting”):
 
   ```
   ~ $ proot-distro login debian
@@ -214,24 +212,24 @@ pdsm enable-all
   root@localhost:~#
   ```
 
-**Note**: The amount of services running cuncurrently is defined by the number of child processes allowed, whether via Developer Settings UI (Android 14+) or adb commands (Android 12 - 13).
+**Note:** The number of services that can run concurrently is defined by the number of allowed child processes, either via the Developer Settings UI (Android 14+) or via ADB commands (Android 12–13).
 
-If not setup propely, services will be stopped by the Phantom Process Killer ([learn more](https://github.com/agnostic-apollo/Android-Docs/blob/master/en/docs/apps/processes/phantom-cached-and-empty-processes.md)).
+If not set up properly, services may be stopped by the Phantom Process Killer ([learn more](https://github.com/agnostic-apollo/Android-Docs/blob/master/en/docs/apps/processes/phantom-cached-and-empty-processes.md)).
 
 ## Structure
 
-As this is a custom implementation, it's set in `/usr/local` and the current tree of the package can be seen as follows:
+Since this is a custom implementation, it is installed under `/usr/local`. The current package tree looks like this:
 
 ```
 pdsm/
 ├── etc_profile.d
-│   └── pdsm.sh
+│   └── pdsm.sh
 ├── pdsm-installer.sh
 ├── usr_local_bin
-│   └── pdsm
+│   └── pdsm
 └── usr_local_pdsm
     ├── lib
-    │   └── pdsm-common.sh
+    │   └── pdsm-common.sh
     └── services-available
         ├── calibre-web
         ├── kiwix
@@ -243,14 +241,15 @@ pdsm/
 6 directories, 10 files
 ```
 
-The installer sets the package in place, on the required directories,
+The installer places files in the required directories:
 
-- /etc/profile.d
-- /usr/local/bin/
-- /usr/local/pdsm
-  - /usr/local/pdsm/lib
-  - /usr/local/pdsm/services
+* `/etc/profile.d`
+* `/usr/local/bin`
+* `/usr/local/pdsm`
+
+  * `/usr/local/pdsm/lib`
+  * `/usr/local/pdsm/services`
 
 ## Future services
 
-The service list should increase as needed by the supported apps on IIAB on Android / PRoot-Distro environment.
+The service list will expand as needed to support additional IIAB Apps on Android in the PRoot Distro environment.
