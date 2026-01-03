@@ -174,6 +174,7 @@ step_termux_base() {
     coreutils \
     grep \
     sed \
+    openssh \
     proot \
     proot-distro || true
 
