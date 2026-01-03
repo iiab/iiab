@@ -100,23 +100,23 @@ If you encounter an error or problem, please open an [issue](https://github.com/
 
 4. Enter the folder where IIAB stores ZIM files:
 
-    ```
-    cd /library/zims/content/
-    ```
+   ```
+   cd /library/zims/content/
+   ```
 
 5. Download the ZIM file, using the URL you chose above, for example:
 
-    ```
-    wget https://download.kiwix.org/zim/wikipedia/wikipedia_en_100_maxi_2025-10.zim
-    ```
+   ```
+   wget https://download.kiwix.org/zim/wikipedia/wikipedia_en_100_maxi_2025-10.zim
+   ```
 
 6. Once the download is complete, re-index your IIAB's ZIM files: (so the new ZIM file appears for users, on page http://localhost:8085/kiwix)
 
-    ```
-    iiab-make-kiwix-lib
-    ```
+   ```
+   iiab-make-kiwix-lib
+   ```
 
-    TIP: Repeat this last step whenever removing or adding new ZIM files from `/library/zims/content/`
+   TIP: Repeat this last step whenever removing or adding new ZIM files from `/library/zims/content/`
 
 ## Remote Access
 
