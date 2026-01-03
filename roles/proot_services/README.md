@@ -128,7 +128,7 @@ If you want to remove the installation and all related apps, follow these steps:
 
 2. Remove / uninstall the Termux app.
 
-3. If applicable, remove / uninstall the Shizuku app (Android 12/13).
+3. If applicable, remove / uninstall the Shizuku app (Android 12–13).
 
 4. Disable Developer Options.
 
