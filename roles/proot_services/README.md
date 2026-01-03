@@ -22,7 +22,9 @@ http://localhost:8085/maps
 
    * [https://github.com/Termux/Termux-app/releases/](https://github.com/Termux/Termux-app/releases/)
   
-   * Or, installing **Termux** directly from the [Google Play Store](https://play.google.com/store/apps/details?id=com.termux) should work!
+By using an app store please have in mind that Termux Developers advice against mixing Termux app / plugins from different stores. You can find Termux apps on both:
+* [F-Droid](https://f-droid.org/packages/com.termux/), no Google account needed.
+* or from the [Google Play Store](https://play.google.com/store/apps/details?id=com.termux)
 
 2. Enable **Developer Options** on Android:
 
