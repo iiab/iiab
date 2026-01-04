@@ -21,7 +21,7 @@ fi
 #-----------------------------
 # Config
 #-----------------------------
-LOCAL_VARS="https://raw.githubusercontent.com/iiab/iiab/refs/heads/master/vars/local_vars_android.yml"
+LOCAL_VARS="https://raw.githubusercontent.com/deldesir/iiab/refs/heads/master/vars/local_vars_android.yml"
 PR="4122"
 OWNER="iiab"
 REPO="iiab"
