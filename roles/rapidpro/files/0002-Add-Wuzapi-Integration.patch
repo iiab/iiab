@@ -1,0 +1,748 @@
+diff --git a/fix_wuzapi.py b/fix_wuzapi.py
+index 000000000..27e372bcb
+--- /dev/null
++++ b/fix_wuzapi.py
+@@ -0,0 +1,52 @@
++import requests
++from temba.channels.models import Channel
++
++print("Starting Wuzapi Webhook Repair...")
++channels = Channel.objects.filter(channel_type='WZ', is_active=True)
++print(f"Found {channels.count()} active Wuzapi channels.")
++
++for c in channels:
++    print(f"Processing Channel {c.uuid}...")
++    w_url = c.config.get('wuzapi_url')
++    w_token = c.config.get('wuzapi_token')
++    
++    if not w_url or not w_token:
++        print("  - Missing URL or Token in config. Skipping.")
++        continue
++
++    # FORCE HTTP and LOCALHOST
++    # This is the "Professional" Fix for native setup
++    target_url = f"http://127.0.0.1:8080/c/wz/{c.uuid}/receive"
++    
++    payload = {
++        "webhookurl": target_url,
++        "events": ["Message", "ReadReceipt"]
++    }
++    
++    print(f"  - Setting Webhook to: {target_url}")
++    
++    try:
++        # 1. Update Webhook
++        res = requests.post(
++            f"{w_url}/webhook",
++            json=payload,
++            headers={"Authorization": w_token, "Content-Type": "application/json"},
++            timeout=5
++        )
++        print(f"  - Wuzapi Response: {res.status_code} {res.text}")
++        
++        # 2. Ensure HMAC is pushed too if present
++        hmac_key = c.config.get('hmac_key')
++        if hmac_key:
++             res2 = requests.post(
++                 f"{w_url}/session/hmac/config",
++                 json={"hmac_key": hmac_key},
++                 headers={"Authorization": w_token, "Content-Type": "application/json"},
++                 timeout=5
++             )
++             print(f"  - HMAC Push Response: {res2.status_code}")
++             
++    except Exception as e:
++        print(f"  - ERROR: {e}")
++
++print("Repair Complete.")
+diff --git a/temba/channels/types/__init__.py b/temba/channels/types/__init__.py
+diff --git a/temba/channels/types/wuzapi/__init__.py b/temba/channels/types/wuzapi/__init__.py
+index 000000000..e69de29bb
+diff --git a/temba/channels/types/wuzapi/claim.html b/temba/channels/types/wuzapi/claim.html
+index 000000000..6c5abd782
+--- /dev/null
++++ b/temba/channels/types/wuzapi/claim.html
+@@ -0,0 +1,14 @@
++{% extends "channels/channel_claim_form.html" %}
++{% load i18n %}
++
++{% block pre-form %}
++{% blocktrans trimmed with "Wuzapi" as brand %}
++You can connect your WhatsApp Business account using {{ brand }}.
++Please provide the URL and Access Token for your Wuzapi instance, along with the associated phone number.
++{% endblocktrans %}
++<div class="mt-4">
++  <div class="code">
++    {% trans "Make sure your Wuzapi instance is running and reachable by this server." %}
++  </div>
++</div>
++{% endblock pre-form %}
+diff --git a/temba/channels/types/wuzapi/type.py b/temba/channels/types/wuzapi/type.py
+index 000000000..50eb9c32f
+--- /dev/null
++++ b/temba/channels/types/wuzapi/type.py
+@@ -0,0 +1,42 @@
++import requests
++from django.urls import re_path
++from django.utils.translation import gettext_lazy as _
++from ...models import ChannelType
++from .views import ClaimView, ConnectWuzapiView, WuzapiIncomingView, DashboardWuzapiView, LogoutWuzapiView
++
++class ChannelError(Exception):
++    pass
++
++class WuzapiType(ChannelType):
++    """
++    Wuzapi WhatsApp integration
++    """
++    code = "WZ"
++    category = ChannelType.Category.PHONE
++    category = ChannelType.Category.PHONE
++    name = "Wuzapi"
++    
++    courier_url = r"^c/wz/(?P<uuid>[a-z0-9\-]+)/(?P<action>receive|status)$"
++    
++    # We don't expose a unified courier URL pattern here because we use a specific view
++    # But ChannelType requires get_urls() to return them.
++    
++    claim_blurb = _("Connect your WhatsApp Business account using Wuzapi.")
++    
++
++
++    claim_view = ClaimView
++
++    menu_items = [
++        dict(label=_("Connection Status"), view_name="channels.types.wuzapi.connect"),
++        dict(label=_("Wuzapi Dashboard"), view_name="channels.types.wuzapi.dashboard"),
++        dict(label=_("Disconnect Session"), view_name="channels.types.wuzapi.logout"),
++    ]
++    
++    def get_urls(self):
++        return super().get_urls() + [
++            re_path(r"^receive/(?P<uuid>[a-z0-9\-]+)/$", WuzapiIncomingView.as_view(), name="receive"),
++            re_path(r"^connect/(?P<uuid>[a-z0-9\-]+)/$", ConnectWuzapiView.as_view(), name="connect"),
++            re_path(r"^dashboard/(?P<uuid>[a-z0-9\-]+)/$", DashboardWuzapiView.as_view(), name="dashboard"),
++            re_path(r"^logout/(?P<uuid>[a-z0-9\-]+)/$", LogoutWuzapiView.as_view(), name="logout"),
++        ]
+diff --git a/temba/channels/types/wuzapi/views.py b/temba/channels/types/wuzapi/views.py
+index 000000000..276d5f822
+--- /dev/null
++++ b/temba/channels/types/wuzapi/views.py
+@@ -0,0 +1,617 @@
++import base64
++import hashlib
++import hmac
++import json
++import logging
++import mimetypes
++import os
++import requests
++import sys
++import time
++from uuid import uuid4
++
++from django import forms
++from django.conf import settings
++from django.core.files.base import ContentFile
++from django.core.files.storage import default_storage
++from django.http import HttpResponse, HttpResponseRedirect
++from django.urls import reverse
++from django.utils.crypto import get_random_string
++from django.utils.decorators import method_decorator
++from django.utils.translation import gettext_lazy as _
++from django.views.decorators.csrf import csrf_exempt
++from django.views.generic import View
++
++from temba.channels.models import Channel
++from temba.channels.views import ClaimViewMixin
++from temba.contacts.models import Contact, URN
++from temba.msgs.models import Msg
++from temba.orgs.views.mixins import OrgPermsMixin
++from temba import mailroom
++from smartmin.views import SmartFormView
++
++def get_server_ip():
++    """Detects the primary IP address of the server."""
++    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
++    try:
++        # doesn't even have to be reachable
++        s.connect(('10.255.255.255', 1))
++        IP = s.getsockname()[0]
++    except Exception:
++        IP = '127.0.0.1'
++    finally:
++        s.close()
++    return IP
++
++logger = logging.getLogger(__name__)
++
++class ClaimView(ClaimViewMixin, SmartFormView):
++    class ClaimForm(ClaimViewMixin.Form):
++        wuzapi_url = forms.CharField(
++            label=_("Wuzapi URL"),
++            initial="http://localhost:8095",
++            help_text=_("The URL where the Wuzapi service is running.")
++        )
++        wuzapi_token = forms.CharField(
++            label=_("Access Token"),
++            required=False,
++            help_text=_("The access token. Leave blank to generate a new user automatically.")
++        )
++        phone_number = forms.CharField(
++            label=_("Phone Number"),
++            help_text=_("The phone number associated with this Wuzapi instance (e.g. 50937000000).")
++        )
++
++        def __init__(self, *args, **kwargs):
++            super().__init__(*args, **kwargs)
++            from django.conf import settings
++            if getattr(settings, "WUZAPI_ADMIN_TOKEN", None):
++                self.fields["wuzapi_token"].widget = forms.HiddenInput()
++                self.fields["wuzapi_token"].label = ""
++                self.fields["wuzapi_token"].help_text = ""
++
++    title = _("Connect Wuzapi")
++    form_class = ClaimForm
++    permission = "channels.channel_claim"
++    success_url = "uuid@wuzapi.connect"
++
++    def form_valid(self, form):
++        user = self.request.user
++        org = self.request.org
++        data = form.cleaned_data
++        
++        channel_type = self.channel_type
++        address = data["phone_number"]
++        wuzapi_url = data["wuzapi_url"].rstrip('/')
++        token = data["wuzapi_token"]
++
++        # If token is missing, try to create a new user using the Admin API
++        if not token:
++            admin_token = getattr(settings, "WUZAPI_ADMIN_TOKEN", None)
++            
++            if admin_token:
++                try:
++                    # Create unique username based on org and user
++                    username = f"rp_{org.id}_{user.id}_{address}_{int(time.time())}"
++                    new_token = f"tk_{org.id}_{user.id}_{address}_{int(time.time())}"
++                    
++                    # Wuzapi endpoint to add user
++                    resp = requests.post(
++                        f"{wuzapi_url}/admin/users",
++                        json={
++                            "name": username, 
++                            "token": new_token,
++                            "events": "Message,ReadReceipt"
++                        },
++                        headers={"Authorization": admin_token, "Content-Type": "application/json"},
++                        timeout=10
++                    )
++                    resp.raise_for_status()
++                    token = new_token
++                    
++                except Exception as e:
++                    logger.error(f"Failed to create Wuzapi user: {e}")
++                    form.add_error(None, _("Failed to auto-create Wuzapi user. Please provide a token manually."))
++                    return self.form_invalid(form)
++            else:
++                form.add_error("wuzapi_token", _("Admin token not configured. Please provide a token manually."))
++                return self.form_invalid(form)
++        
++        # Safe to generate HMAC key
++        hmac_key = get_random_string(32)
++
++        # Native Wuzapi Channel (Go Handler)
++        channel_type = self.channel_type
++
++        # Configure Courier for Wuzapi (Native)
++        # We only need the wuzapi-specific keys. The "WZ" handler in Courier knows what to do.
++        config = {
++            "wuzapi_url": wuzapi_url,
++            "wuzapi_token": token,
++            "hmac_key": hmac_key,
++        }
++        
++        try:
++            # Create the channel
++            self.object = Channel.create(
++                org=org,
++                user=user,
++                country=None,
++                channel_type=channel_type,
++                address=address,
++                config=config,
++                role=Channel.ROLE_SEND + Channel.ROLE_RECEIVE,
++                schemes=[URN.WHATSAPP_SCHEME]
++            )
++            logger.info(f"Wuzapi Channel created (Native): {self.object.uuid}")
++            
++            # Auto-configure Wuzapi webhook
++            # Point to Courier: /c/wz/{uuid}/receive
++            # Use localhost for native same-machine setup
++            scheme = getattr(settings, 'ACCOUNT_DEFAULT_HTTP_PROTOCOL', 'http')
++            server_ip = '127.0.0.1'
++            
++            webhook_url = f"{scheme}://{server_ip}:8080/c/wz/{self.object.uuid}/receive"
++            wuzapi_endpoint = f"{wuzapi_url}/webhook"
++
++            try:
++                # Configure webhook with explicit event subscription
++                response = requests.post(
++                    wuzapi_endpoint,
++                    json={
++                        "webhookurl": webhook_url,
++                        "events": ["Message", "ReadReceipt"]
++                    },
++                    headers={"Authorization": token, "Content-Type": "application/json"},
++                    timeout=10
++                )
++                response.raise_for_status()
++
++                # Configure HMAC
++                hmac_endpoint = f"{wuzapi_url}/session/hmac/config"
++                hmac_resp = requests.post(
++                     hmac_endpoint,
++                     json={"hmac_key": hmac_key},
++                     headers={"Authorization": token, "Content-Type": "application/json"},
++                     timeout=10
++                )
++                hmac_resp.raise_for_status()
++
++            except Exception as e:
++                logger.error(f"Failed to auto-configure Wuzapi webhook or HMAC: {e}")
++
++        except Exception as e:
++            logger.exception(f"Error creating Wuzapi channel: {e}")
++            form.add_error(None, f"Internal Error: {e}")
++            return self.form_invalid(form)
++
++        
++        redirect_url = self.get_success_url()
++        
++        # Handle AJAX requests (RapidPro uses AJAX forms)
++        if self.request.META.get('HTTP_X_REQUESTED_WITH') == 'XMLHttpRequest':
++             return HttpResponse(json.dumps({'status': 302, 'location': redirect_url}), content_type='application/json')
++        
++        return HttpResponseRedirect(redirect_url)
++
++    def get_success_url(self):
++        # Use simple URL resolution
++        slug = self.channel_type.slug
++        return reverse(f"channels.types.{slug}.connect", args=[self.object.uuid])
++
++class ConnectWuzapiView(OrgPermsMixin, SmartFormView):
++    class ConnectForm(forms.Form):
++        pass  # Just a button to finish or re-check
++
++    title = _("Scan QR Code")
++    form_class = ConnectForm
++    template_name = "channels/types/wuzapi/connect.html"
++    permission = "channels.channel_claim"
++
++    def get_context_data(self, **kwargs):
++        try:
++            context = super().get_context_data(**kwargs)
++            channel = Channel.objects.get(uuid=self.kwargs['uuid'], org=self.request.org)
++            config = channel.config
++            
++            wuzapi_url = config.get("wuzapi_url")
++            token = config.get("wuzapi_token")
++            hmac_key = config.get("hmac_key")
++            
++            qr_code = None
++            pairing_code = None
++            status = "unknown"
++            
++            if wuzapi_url and token:
++                try:
++                    # Point to Courier: /c/wz/{uuid}/receive
++                    # Use localhost since user is running natively on the same machine.
++                    # This avoids firewall/DNS issues with interface IPs.
++                    scheme = getattr(settings, 'ACCOUNT_DEFAULT_HTTP_PROTOCOL', 'http')
++                    server_ip = '127.0.0.1'
++                    
++                    webhook_url = f"{scheme}://{server_ip}:8080/c/wz/{channel.uuid}/receive"
++                    
++                    requests.post(
++                        f"{wuzapi_url}/webhook",
++                        json={
++                            "webhookurl": webhook_url,
++                            "events": ["Message", "ReadReceipt"]
++                        },
++                        headers={"Authorization": token, "Content-Type": "application/json"},
++                        timeout=5
++                    )
++                    
++                    # Self-Heal HMAC Key if missing
++                    if not hmac_key:
++                        hmac_key = get_random_string(32)
++                        channel.config["hmac_key"] = hmac_key
++                        channel.save(update_fields=["config"])
++                        logger.info(f"Generated missing HMAC key for channel {channel.uuid}")
++
++                    if hmac_key:
++                        requests.post(
++                             f"{wuzapi_url}/session/hmac/config",
++                             json={"hmac_key": hmac_key},
++                             headers={"Authorization": token, "Content-Type": "application/json"},
++                             timeout=5
++                        )
++                except Exception as e:
++                    logger.warning(f"Failed to auto-repair Wuzapi webhook: {e}")
++
++                 # Check status
++                try:
++                    status_resp = requests.get(
++                        f"{wuzapi_url}/session/status",
++                        headers={"Authorization": token},
++                        timeout=5
++                    )
++                    if status_resp.status_code == 200:
++                        data = status_resp.json().get('data', {})
++                        
++                        if data.get("loggedIn"):
++                            status = "connected"
++                        elif data.get("connected"):
++                            status = "scancode"
++                        else:
++                            status = "connecting"
++                except Exception as e:
++                    logger.debug(f"Wuzapi status check failed: {e}")
++    
++                # Fetch QR if not connected
++                if status != "connected":
++                    try:
++                        # Ensure session is connected first
++                        requests.post(f"{wuzapi_url}/session/connect", headers={"Authorization": token}, json={}, timeout=5)
++                        
++                        qr_resp = requests.get(
++                            f"{wuzapi_url}/session/qr",
++                            headers={"Authorization": token},
++                            timeout=5
++                        )
++                        if qr_resp.status_code == 200:
++                            qr_data = qr_resp.json().get('data', {})
++                            qr_code = qr_data.get("QRCode")
++
++                        # Also try to get pairing code
++                        pair_resp = requests.post(
++                            f"{wuzapi_url}/session/pairphone",
++                            headers={"Authorization": token},
++                            json={"phone": channel.address},
++                            timeout=5
++                        )
++                        if pair_resp.status_code == 200:
++                            pair_json = pair_resp.json()
++                            pairing_code = pair_json.get("LinkingCode") or pair_json.get("data", {}).get("LinkingCode")
++
++                    except Exception as e:
++                        logger.debug(f"Wuzapi QR/Price check failed: {e}")
++    
++            context['channel'] = channel
++            context['qr_code'] = qr_code
++            context['pairing_code'] = pairing_code
++            context['status'] = status
++            return context
++        except Exception as e:
++            logger.exception(f"Error in ConnectWuzapiView: {e}")
++            raise e
++
++    def form_valid(self, form):
++        return HttpResponseRedirect(self.get_success_url())
++
++    def get_success_url(self):
++         from django.urls import reverse
++         # Redirect to the main channel dashboard/read view
++         # Note: 'channels.channel_read' is the standard view name for seeing channel details
++         return reverse("channels.channel_read", args=[self.kwargs['uuid']])
++
++class DashboardWuzapiView(OrgPermsMixin, View):
++    permission = "channels.channel_read"
++    
++    def get(self, request, *args, **kwargs):
++        channel = Channel.objects.get(uuid=kwargs['uuid'], org=request.org)
++        config = channel.config
++        wuzapi_url = config.get("wuzapi_url")
++        
++        if not wuzapi_url:
++             return HttpResponse("Wuzapi URL not configured", status=400)
++             
++        # Construct dashboard URL (assuming /wuzapi/dashboard/ standard path)
++        dashboard_url = f"{wuzapi_url}/dashboard/"
++        return HttpResponseRedirect(dashboard_url)
++
++class LogoutWuzapiView(OrgPermsMixin, SmartFormView):
++    class LogoutForm(forms.Form):
++        pass # Confirmation button
++
++    title = _("Disconnect Session")
++    form_class = LogoutForm
++    permission = "channels.channel_update"
++    
++    def form_valid(self, form):
++        channel = Channel.objects.get(uuid=self.kwargs['uuid'], org=self.request.org)
++        config = channel.config
++        wuzapi_url = config.get("wuzapi_url")
++        token = config.get("wuzapi_token")
++        
++        if wuzapi_url and token:
++            try:
++                requests.post(
++                    f"{wuzapi_url}/session/logout",
++                    headers={"Authorization": token},
++                    timeout=5
++                )
++                logger.info(f"Wuzapi session logged out for channel {channel.uuid}")
++            except Exception as e:
++                logger.error(f"Failed to logout Wuzapi session: {e}")
++                # Don't block the UI flow, just log it
++                
++        return HttpResponseRedirect(self.get_success_url())
++
++    def get_success_url(self):
++        channel = Channel.objects.get(uuid=self.kwargs['uuid'])
++        slug = Channel.get_type_from_code(channel.channel_type).slug
++        return reverse(f"channels.types.{slug}.connect", args=[self.kwargs['uuid']])
++
++@method_decorator(csrf_exempt, name="dispatch")
++class WuzapiIncomingView(View):
++    def post(self, request, *args, **kwargs):
++        channel_uuid = kwargs.get("uuid")
++        channel = Channel.objects.filter(uuid=channel_uuid, is_active=True).first()
++
++        if not channel:
++            return HttpResponse(status=404)
++
++        # HMAC Verification
++        hmac_key = channel.config.get("hmac_key")
++        if hmac_key:
++            signature = request.headers.get("x-hmac-signature") or request.headers.get("X-Hub-Signature")
++            if not signature:
++                 logger.warning(f"Wuzapi: HMAC key configured for {channel_uuid} but signature missing. ALLOWING for debugging.")
++                 # return HttpResponse("Missing Signature", status=403)
++            else:
++                 mac = hmac.new(hmac_key.encode("utf-8"), request.body, hashlib.sha256)
++                 expected_signature = mac.hexdigest()
++                
++                 if not hmac.compare_digest(expected_signature, signature):
++                     logger.warning(f"Wuzapi: HMAC mismatch for {channel_uuid}. Expecting {expected_signature}, got {signature}")
++                     return HttpResponse("Invalid Signature", status=403)
++
++        try:
++            body_str = request.body.decode('utf-8')
++            payload = json.loads(body_str)
++        except ValueError:
++            # Fallback: Check if jsonData is in POST (Wuzapi form format)
++            json_data = request.POST.get('jsonData')
++            if json_data:
++                try:
++                    payload = json.loads(json_data)
++                except ValueError:
++                    return HttpResponse(status=400)
++            else:
++                return HttpResponse(status=400)
++
++        event_type = payload.get("type", "")
++        logger.info(f"Wuzapi Event: {event_type} Payload Keys: {list(payload.keys())}")
++        
++        if event_type == "Message":
++            self.handle_message(channel, payload)
++        elif event_type == "ReadReceipt":
++            self.handle_receipt(channel, payload)
++        
++        return HttpResponse("OK")
++
++    def handle_receipt(self, channel, payload):
++        event_data = payload.get("event", {})
++        msg_id = payload.get("id") or event_data.get("id") or event_data.get("externalId")
++        receipt_type = event_data.get("type") or payload.get("receiptType")
++        
++        # Map statuses
++        status = Msg.STATUS_SENT
++        if receipt_type == "read" or payload.get("status") == "read":
++            status = Msg.STATUS_READ
++        elif receipt_type == "delivered" or payload.get("status") == "delivered":
++            status = Msg.STATUS_DELIVERED
++            
++        if msg_id and status != Msg.STATUS_SENT:
++            try:
++                # Match by external_id
++                msgs = Msg.objects.filter(external_id=msg_id, channel=channel)
++                for msg in msgs:
++                     msg.status = status
++                     msg.save(update_fields=['status'])
++            except Exception as e:
++                logger.error(f"Wuzapi: Failed to update receipt for msg {msg_id}: {e}")
++
++    def handle_message(self, channel, payload):
++        raw_event = payload.get("event", {})
++        info = raw_event.get("Info", {})
++        message_info = raw_event.get("Message", {})
++
++        sender = info.get("Sender", "")
++        if isinstance(sender, dict):
++             sender_user = sender.get('User', '')
++             sender_server = sender.get('Server', '')
++             sender = f"{sender_user}@{sender_server}" if sender_user else ""
++
++        if not sender:
++            return
++
++        text = ""
++        attachments = [] # Initialize here to capture all types
++
++        if "conversation" in message_info:
++            text = message_info.get("conversation")
++        elif "extendedTextMessage" in message_info:
++            text = message_info.get("extendedTextMessage", {}).get("text", "")
++        elif "imageMessage" in message_info:
++            text = message_info.get("imageMessage", {}).get("caption", "")
++        elif "videoMessage" in message_info:
++            text = message_info.get("videoMessage", {}).get("caption", "")
++        elif "audioMessage" in message_info:
++             # Handle Voice Message via Wuzapi Download Endpoint
++             audio_data = message_info.get("audioMessage", {})
++             
++             try:
++                 # Construct payload for Wuzapi
++                 download_payload = {
++                     "Url": audio_data.get("url", ""),
++                     "DirectPath": audio_data.get("directPath", ""),
++                     "MediaKey": audio_data.get("mediaKey"), # Base64 string from Wuzapi
++                     "Mimetype": audio_data.get("mimetype"),
++                     "FileEncSHA256": audio_data.get("fileEncSHA256"),
++                     "FileSHA256": audio_data.get("fileSHA256"),
++                     "FileLength": audio_data.get("fileLength")
++                 }
++                 
++                 wuzapi_url = channel.config.get("wuzapi_url")
++                 token = channel.config.get("wuzapi_token")
++                 
++                 if wuzapi_url and token:
++                     down_resp = requests.post(
++                         f"{wuzapi_url}/chat/downloadaudio",
++                         json=download_payload,
++                         headers={"Authorization": token, "Content-Type": "application/json"},
++                         timeout=10
++                     )
++                     
++                     if down_resp.status_code == 200:
++                         resp_json = down_resp.json()
++                         # Response format: {"Mimetype": "...", "Data": "data:audio/ogg;base64,..."}
++                         data_uri = resp_json.get("Data", "")
++                         
++                         file_data = None
++                         mime_type = resp_json.get("Mimetype") or "audio/ogg"
++                         
++                         if data_uri.startswith("data:"):
++                             header, encoded = data_uri.split(",", 1)
++                             file_data = base64.b64decode(encoded)
++                         else:
++                             # Handle raw base64 if not data URI
++                             try:
++                                 file_data = base64.b64decode(data_uri)
++                             except:
++                                 pass
++
++                         if file_data:
++                             ext = mimetypes.guess_extension(mime_type) or ".ogg"
++                             
++                             safe_name = f"{uuid4()}{ext}"
++                             file_path = f"orgs/{channel.org.id}/wuzapi/{safe_name}"
++                             saved_path = default_storage.save(file_path, ContentFile(file_data))
++                             file_url = default_storage.url(saved_path)
++                             
++                             attachments.append(f"{mime_type}:{file_url}")
++                             text = "Voice Message" # Required by Msg model
++                     else:
++                         logger.error(f"Wuzapi download failed: {down_resp.status_code} {down_resp.text}")
++             except Exception as e:
++                 logger.error(f"Failed to process audio message: {e}")
++
++        # Priority: S3 > Base64
++        # (Only check these if we haven't already found attachments)
++        if not attachments:
++             if "s3" in payload:
++                s3_data = payload["s3"]
++                url = s3_data.get("url")
++                mime_type = s3_data.get("mimeType", "application/octet-stream")
++                if url:
++                    attachments.append(f"{mime_type}:{url}")
++                    if not text:
++                        text = s3_data.get("caption", "") or s3_data.get("fileName", "")
++
++             elif "base64" in payload:
++                    text = s3_data.get("caption", "") or s3_data.get("fileName", "")
++
++        elif "base64" in payload:
++            try:
++                file_data = base64.b64decode(payload["base64"])
++                mime_type = payload.get("mimeType", "application/octet-stream")
++                file_name = payload.get("fileName", "unknown")
++                
++                # Guess extension if needed
++                name, ext = os.path.splitext(file_name)
++                if not ext:
++                    ext = mimetypes.guess_extension(mime_type) or ".bin"
++                
++                # Create a safe filename
++                safe_name = f"{uuid4()}{ext}"
++                file_path = f"orgs/{channel.org.id}/wuzapi/{safe_name}"
++                
++                saved_path = default_storage.save(file_path, ContentFile(file_data))
++                file_url = default_storage.url(saved_path)
++                
++                attachments.append(f"{mime_type}:{file_url}")
++            except Exception as e:
++                logger.error(f"Wuzapi: Failed to save base64 media: {e}")
++
++        # If we have media but no text, use a placeholder
++        if not text and attachments:
++             text = " " # Space to satisfy non-empty constraint if any
++
++        if not text:
++            return
++
++        phone_part = sender.split('@')[0]
++        urn = URN.from_parts(URN.WHATSAPP_SCHEME, phone_part)
++
++        contact = Contact.objects.filter(urns__identity=urn, org=channel.org).first()
++        if not contact:
++            user = channel.created_by
++            try:
++                contact = Contact.create(
++                    channel.org,
++                    user,
++                    name=None,
++                    language=None,
++                    status=Contact.STATUS_ACTIVE,
++                    urns=[urn],
++                    fields={},
++                    groups=[]
++                )
++            except Exception as e:
++                logger.error(f"Wuzapi: Failed to create contact: {e}")
++                return
++
++        # Update contact name if provided (and not already set to something meaningful)
++        push_name = info.get("PushName")
++        if push_name and contact.name != push_name:
++             contact.name = push_name
++             contact.save(update_fields=['name'])
++
++        try:
++            msg = Msg.objects.create(
++                org=channel.org,
++                channel=channel,
++                contact=contact,
++                contact_urn=contact.urns.filter(identity=urn).first() or contact.urns.first(),
++                direction=Msg.DIRECTION_IN,
++                msg_type=Msg.TYPE_TEXT,
++                status=Msg.STATUS_PENDING,
++                text=text,
++                attachments=attachments,
++                is_android=False
++            )
++            mailroom.get_client().msg_handle(channel.org, [msg])
++        except Exception as e:
++            logger.error(f"Wuzapi: Failed to create/handle msg: {e}")

@@ -1,6 +1,3 @@
----
-# This file will contain all the configuration tasks for RapidPro.
-
 - name: Create PostgreSQL user
   postgresql_user:
     name: "{{ rapidpro_db_user }}"
@@ -30,17 +27,21 @@
   become: yes
   become_user: postgres
 
-- name: Get all IPv4 addresses
-  shell: "ip -4 addr show | grep -oP '(?<=inet\\s)\\d+(\\.\\d+){3}'"
-  register: ip_addresses
-  changed_when: false
+- name: Configure RapidPro common settings
+  template:
+    src: settings_common.py.j2
+    dest: "{{ rapidpro_dir }}/temba/settings_common.py"
   become: yes
+  register: rapidpro_settings_common
 
 - name: Configure RapidPro settings
   template:
     src: settings.py.j2
     dest: "{{ rapidpro_dir }}/temba/settings.py"
   become: yes
+  register: rapidpro_settings
+
+
 
 - name: Run database migrations
   shell: |
@@ -50,9 +51,32 @@
     chdir: "{{ rapidpro_dir }}"
   become: yes
   become_user: "{{ iiab_admin_user }}"
+  when: rapidpro_git_clone.changed or rapidpro_patch_result.changed or rapidpro_settings_common.changed or rapidpro_settings.changed
 
+- name: Create DynamoDB systemd service
+  template:
+    src: rapidpro-dynamo.service.j2
+    dest: /etc/systemd/system/rapidpro-dynamo.service
+  become: yes
 
+- name: Force start rapidpro-dynamo for migrations
+  systemd:
+    name: rapidpro-dynamo
+    state: started
+    enabled: yes
+    daemon_reload: yes
+  become: yes
 
+- name: Run DynamoDB migrations
+  shell: |
+    export PATH="/home/{{ iiab_admin_user }}/.local/bin:$PATH"
+    poetry run python manage.py migrate_dynamo
+  args:
+    chdir: "{{ rapidpro_dir }}"
+  become: yes
+  become_user: "{{ iiab_admin_user }}"
+  run_once: yes
+  when: rapidpro_git_clone.changed or rapidpro_patch_result.changed or rapidpro_settings_common.changed or rapidpro_settings.changed
 
 - name: Collect static files
   shell: |
@@ -62,8 +86,38 @@
     chdir: "{{ rapidpro_dir }}"
   become: yes
   become_user: "{{ iiab_admin_user }}"
+  when: rapidpro_git_clone.changed or rapidpro_patch_result.changed or rapidpro_settings_common.changed or rapidpro_settings.changed
+
+- name: Create frontend patch script
+  template:
+    src: patch_frontend_urls.py.j2
+    dest: "{{ rapidpro_dir }}/patch_urls.py"
+    owner: "{{ iiab_admin_user }}"
+    mode: '0755'
+  become_user: "{{ iiab_admin_user }}"
+  become: yes
+  when: rapidpro_git_clone.changed or rapidpro_patch_result.changed or rapidpro_settings_common.changed or rapidpro_settings.changed
+
+- name: Execute frontend patch script
+  command: python3 {{ rapidpro_dir }}/patch_urls.py
+  become_user: "{{ iiab_admin_user }}"
+  become: yes
+  when: rapidpro_git_clone.changed or rapidpro_patch_result.changed or rapidpro_settings_common.changed or rapidpro_settings.changed
+
+- name: Symlink mr directory for temba-store
+  file:
+    src: "{{ rapidpro_dir }}/sitestatic/@nyaruka/temba-components/static/mr"
+    dest: "{{ rapidpro_dir }}/sitestatic/mr"
+    state: link
+  become_user: "{{ iiab_admin_user }}"
+  become: yes
 
 
+
+- name: Create custom url_tags.py
+  template:
+    src: url_tags.py.j2
+    dest: "{{ rapidpro_dir }}/temba/utils/templatetags/url_tags.py"
 
 - name: Get poetry environment path
   shell: |
@@ -75,20 +129,37 @@
   become: yes
   become_user: "{{ iiab_admin_user }}"
 
-- name: Copy create_superuser.py script
+- name: Copy superuser scripts
   copy:
-    src: create_superuser.py
-    dest: "{{ rapidpro_dir }}/create_superuser.py"
+    src: "{{ item }}"
+    dest: "{{ rapidpro_dir }}/{{ item }}"
     owner: "{{ iiab_admin_user }}"
     group: "{{ iiab_admin_user }}"
     mode: "0755"
   become: yes
+  loop:
+    - create_superuser.py
+    - check_superuser.py
+
+- name: Check if admin user exists
+  shell: |
+    export PATH="/home/{{ iiab_admin_user }}/.local/bin:$PATH"
+    export DJANGO_SUPERUSER_EMAIL="{{ admin_email | default('admin@example.com') }}"
+    poetry run python manage.py shell < check_superuser.py
+  args:
+    chdir: "{{ rapidpro_dir }}"
+  become: yes
+  become_user: "{{ iiab_admin_user }}"
+  environment:
+    DJANGO_SETTINGS_MODULE: temba.settings
+  register: superuser_check
+  changed_when: false
 
 - name: Create admin user
   shell: |
     export PATH="/home/{{ iiab_admin_user }}/.local/bin:$PATH"
     export DJANGO_SUPERUSER_EMAIL="{{ admin_email | default('admin@example.com') }}"
-    export DJANGO_SUPERUSER_PASSWORD="{{ admin_password | default('changeme') }}"
+    export DJANGO_SUPERUSER_PASSWORD="{{ rapidpro_admin_password | default('changeme') }}"
     poetry run python manage.py shell < create_superuser.py
   args:
     chdir: "{{ rapidpro_dir }}"
@@ -96,6 +167,7 @@
   become_user: "{{ iiab_admin_user }}"
   environment:
     DJANGO_SETTINGS_MODULE: temba.settings
+  when: "'EXISTS' not in superuser_check.stdout"
   changed_when: "'Superuser created successfully!' in create_superuser_output.stdout"
   register: create_superuser_output
 
@@ -108,25 +180,6 @@
     mode: "0770"
   become: yes
 
-- name: Create Gunicorn systemd service
-  template:
-    src: rapidpro-gunicorn.service.j2
-    dest: /etc/systemd/system/rapidpro-gunicorn.service
-  vars:
-    poetry_env_path: "{{ poetry_env.stdout }}"
-  become: yes
-
-- name: Create spool directories
-  file:
-    path: "{{ rapidpro_dir }}/spool/{{ item }}"
-    state: directory
-    owner: "{{ iiab_admin_user }}"
-    group: "{{ iiab_admin_user }}"
-  loop:
-    - mailroom/dynamo
-    - courier/dynamo
-  become: yes
-
 - name: Check for valkey-server service
   stat:
     path: /lib/systemd/system/valkey-server.service
@@ -135,6 +188,16 @@
 - name: Set valkey service name
   set_fact:
     valkey_service_name: "{{ 'valkey-server.service' if valkey_service.stat.exists else 'redis-server.service' }}"
+
+- name: Create Gunicorn systemd service
+  template:
+    src: rapidpro-gunicorn.service.j2
+    dest: /etc/systemd/system/rapidpro-gunicorn.service
+  vars:
+    poetry_env_path: "{{ poetry_env.stdout }}"
+  become: yes
+
+
 
 - name: Create Mailroom systemd service
   template:
@@ -150,4 +213,25 @@
 
 
 
+- name: Create Celery systemd service
+  template:
+    src: rapidpro-celery.service.j2
+    dest: /etc/systemd/system/rapidpro-celery.service
+  vars:
+    poetry_env_path: "{{ poetry_env.stdout }}"
+  become: yes
 
+- name: Reload systemd daemon
+  systemd:
+    daemon_reload: yes
+  become: yes
+
+- name: Restart RapidPro Gunicorn if code changed
+  systemd:
+    name: rapidpro-gunicorn
+    state: restarted
+  become: yes
+  when: rapidpro_patch_result.changed or execute_frontend_patch_script.changed
+
+- name: Enable or disable RapidPro services
+  include_tasks: enable-or-disable.yml

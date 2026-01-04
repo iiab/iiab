@@ -1,0 +1,700 @@
+diff --git a/static/brands/rapidpro/less/style.less b/static/brands/rapidpro/less/style.less
+index 62b5e7b3f..428839903
+--- a/static/brands/rapidpro/less/style.less
++++ b/static/brands/rapidpro/less/style.less
+@@ -1,6 +1,6 @@
+ #splash {
+   margin-top: -30px;
+-  background: url('/sitestatic/brands/rapidpro/splash.jpg') 0px 0px !important;
++  background: url('../splash.jpg') 0px 0px !important;
+   background-size: cover !important;
+   width: 100%;
+   height: 0px;
+diff --git a/static/js/frame.js b/static/js/frame.js
+index 4766639b8..b3fdf7317
+--- a/static/js/frame.js
++++ b/static/js/frame.js
+@@ -1,6 +1,6 @@
+ var pendingRequests = [];
+ 
+-const OMIT_ORG_URLS = ['/staff/', '/org/choose/'];
++const OMIT_ORG_URLS = [window.URLS.staff_org_list, window.URLS.orgs_org_choose];
+ 
+ function onSpload(fn) {
+   var container = document.querySelector('.spa-container');
+@@ -481,7 +481,7 @@ function showModax(header, endpoint, modaxOptions) {
+ }
+ 
+ function handleWorkspaceChanged(orgId) {
+-  posterize(`/org/choose/?organization=${orgId}`);
++  posterize(`${window.URLS.orgs_org_choose}?organization=${orgId}`);
+ }
+ 
+ document.addEventListener('temba-redirected', function (event) {
+@@ -533,7 +533,7 @@ document.addEventListener('DOMContentLoaded', function () {
+         evt.stopPropagation();
+         evt.preventDefault();
+ 
+-        if (url.indexOf('/org/service') > -1) {
++        if (url.indexOf(window.URLS.staff_org_service) > -1) {
+           formEle.submit();
+         } else {
+           spaPost(url, { postData: new FormData(formEle) });
+@@ -599,7 +599,7 @@ function formatContact(item) {
+ function handleNewWorkspaceClicked(evt) {
+   var modal = getModax();
+   modal.header = 'New Workspace';
+-  modal.setAttribute('endpoint', '/org/create');
++  modal.setAttribute('endpoint', window.URLS.orgs_org_create);
+   modal.open = true;
+ 
+   evt.preventDefault();
+diff --git a/temba/api/v2/views.py b/temba/api/v2/views.py
+index 17c85d28e..99ff81684
+--- a/temba/api/v2/views.py
++++ b/temba/api/v2/views.py
+@@ -9,7 +9,9 @@ from rest_framework.response import Response
+ from rest_framework.reverse import reverse
+ from smartmin.views import SmartTemplateView
+ 
++from django.conf import settings
+ from django.db.models import OuterRef, Prefetch, Q
++from django.utils.safestring import mark_safe
+ from django.utils.translation import gettext_lazy as _
+ 
+ from temba.archives.models import Archive
+@@ -146,6 +148,18 @@ class ExplorerView(OrgPermsMixin, SmartTemplateView):
+             UsersEndpoint.get_read_explorer(),
+             WorkspaceEndpoint.get_read_explorer(),
+         ]
++
++        # Ensure all endpoints have the correct script prefix
++        prefix = getattr(settings, "FORCE_SCRIPT_NAME", None)
++        if prefix:
++             prefix = prefix.rstrip("/")
++             for endpoint in context["endpoints"]:
++                 if endpoint.get("url") and not endpoint["url"].startswith(prefix):
++                     if endpoint["url"].startswith("/"):
++                         endpoint["url"] = f"{prefix}{endpoint['url']}"
++                     else:
++                         endpoint["url"] = f"{prefix}/{endpoint['url']}"
++
+         return context
+ 
+ 
+@@ -270,6 +284,19 @@ class RootView(BaseEndpoint):
+ 
+     permission_classes = (SSLPermission,)
+ 
++    def get_view_description(self, html=False):
++        description = super().get_view_description(html)
++        prefix = getattr(settings, "FORCE_SCRIPT_NAME", None)
++        if prefix:
++             clean_prefix = prefix.rstrip('/')
++             description = description.replace('href="/api/v2/', f'href="{clean_prefix}/api/v2/')
++             description = description.replace('>/api/v2/', f'>{clean_prefix}/api/v2/')
++             description = description.replace('"/api/v2/', f'"{clean_prefix}/api/v2/')
++        
++        if html:
++            return mark_safe(description)
++        return description
++
+     def get_view_name(self):
+         return self.request.branding["name"] + " API v2"
+ 
+diff --git a/temba/archives/migrations/0031_delete_rolled_up.py b/temba/archives/migrations/0031_delete_rolled_up.py
+index 2da902294..046c2fa43
+--- a/temba/archives/migrations/0031_delete_rolled_up.py
++++ b/temba/archives/migrations/0031_delete_rolled_up.py
+@@ -8,7 +8,11 @@ from django.db import migrations
+ 
+ def delete_rolled_up_archives(apps, schema_editor):
+     Archive = apps.get_model("archives", "Archive")
+-    s3_client = storages["archives"].connection.meta.client
++    try:
++        s3_client = storages["archives"].connection.meta.client
++    except AttributeError:
++        print("Skipping rolled up archive deletion (not on S3)")
++        return
+ 
+     purged_rollups = Archive.objects.filter(needs_deletion=False).exclude(rollup=None)
+ 
+diff --git a/temba/channels/types/android/views.py b/temba/channels/types/android/views.py
+index 2dbbe7412..a9320bf3a
+--- a/temba/channels/types/android/views.py
++++ b/temba/channels/types/android/views.py
+@@ -100,6 +100,9 @@ class ClaimView(ClaimViewMixin, SmartFormView):
+         claim_channel(org, self.object, self.form.cleaned_data["phone_number"])
+ 
+         # trigger a sync
+-        mailroom.get_client().android_sync(self.object)
++        try:
++            mailroom.get_client().android_sync(self.object)
++        except Exception:
++            pass
+ 
+         return super().form_valid(form)
+diff --git a/temba/formax.py b/temba/formax.py
+index 7a3a05906..1833632ea
+--- a/temba/formax.py
++++ b/temba/formax.py
+@@ -1,4 +1,6 @@
+ import logging
++
++from django.conf import settings
+ import time
+ 
+ from django.http import HttpResponseRedirect
+@@ -46,7 +48,16 @@ class Formax:
+         self.org = self.request.org
+ 
+     def add_section(self, name, url, icon, action="formax", button="Save", nobutton=False, dependents=None, wide=False):
+-        resolver = resolve(url)
++        # ensure we strip the script prefix if present because resolve expects a path relative to the root
++        script_prefix = getattr(settings, "FORCE_SCRIPT_NAME", "/")
++        if script_prefix and script_prefix != "/" and url.startswith(script_prefix):
++             resolve_url = url[len(script_prefix):]
++             if not resolve_url.startswith("/"):
++                 resolve_url = "/" + resolve_url
++        else:
++             resolve_url = url
++
++        resolver = resolve(resolve_url)
+         self.request.META["HTTP_X_FORMAX"] = 1
+         self.request.META["HTTP_X_FORMAX_ACTION"] = action
+ 
+diff --git a/temba/notifications/types/builtin.py b/temba/notifications/types/builtin.py
+index 680b0da66..3a28ccf4b
+--- a/temba/notifications/types/builtin.py
++++ b/temba/notifications/types/builtin.py
+@@ -105,7 +105,7 @@ class TicketsOpenedNotificationType(NotificationType):
+     slug = "tickets:opened"
+ 
+     def get_target_url(self, notification) -> str:
+-        return "/ticket/unassigned/"
++        return reverse("tickets.ticket_folder", kwargs={"folder": "unassigned", "status": "open"})
+ 
+ 
+ class TicketActivityNotificationType(NotificationType):
+@@ -116,7 +116,7 @@ class TicketActivityNotificationType(NotificationType):
+     slug = "tickets:activity"
+ 
+     def get_target_url(self, notification) -> str:
+-        return "/ticket/mine/"
++        return reverse("tickets.ticket_folder", kwargs={"folder": "mine", "status": "open"})
+ 
+ 
+ class UserEmailNotificationType(NotificationType):
+diff --git a/temba/orgs/models.py b/temba/orgs/models.py
+index 5c18a3ade..79bb5f917
+--- a/temba/orgs/models.py
++++ b/temba/orgs/models.py
+@@ -1591,11 +1591,14 @@ class Export(TembaUUIDMixin, models.Model):
+         """
+ 
+         filename = self._get_download_filename()
+-        url = default_storage.url(
+-            self.path,
+-            parameters=dict(ResponseContentDisposition=f"attachment;filename={filename}"),
+-            http_method="GET",
+-        )
++        try:
++            url = default_storage.url(
++                self.path,
++                parameters=dict(ResponseContentDisposition=f"attachment;filename={filename}"),
++                http_method="GET",
++            )
++        except TypeError:
++            url = default_storage.url(self.path)
+ 
+         return url
+ 
+diff --git a/temba/orgs/views/views.py b/temba/orgs/views/views.py
+index cfedd1b2e..13e4bc564
+--- a/temba/orgs/views/views.py
++++ b/temba/orgs/views/views.py
+@@ -23,7 +23,7 @@ from django.contrib.auth.password_validation import validate_password
+ from django.core.exceptions import ValidationError
+ from django.db.models import F, Prefetch, Q
+ from django.db.models.functions import Lower
+-from django.http import HttpResponseRedirect, JsonResponse
++from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
+ from django.shortcuts import get_object_or_404
+ from django.urls import reverse, reverse_lazy
+ from django.utils import timezone
+@@ -604,7 +604,7 @@ class OrgCRUDL(SmartCRUDL):
+                                 menu_id="logout",
+                                 name=_("Sign Out"),
+                                 icon="logout",
+-                                href="/accounts/logout/",
++                                href=f"{(settings.FORCE_SCRIPT_NAME or '').rstrip('/')}/accounts/logout/",
+                                 posterize=True,
+                             ),
+                             self.create_space(),
+@@ -1408,7 +1408,7 @@ class OrgCRUDL(SmartCRUDL):
+ 
+     class Workspace(SpaMixin, FormaxMixin, ContextMenuMixin, InferOrgMixin, OrgPermsMixin, SmartReadView):
+         title = _("Workspace")
+-        menu_path = "/settings/workspace"
++        menu_path = "/org/workspace"
+ 
+         def derive_formax_sections(self, formax, context):
+             if self.has_org_perm("orgs.org_edit"):
+@@ -1743,14 +1743,24 @@ class ExportCRUDL(SmartCRUDL):
+ 
+     class Download(SpaMixin, ContextMenuMixin, OrgObjPermsMixin, SmartReadView):
+         slug_url_kwarg = "uuid"
+-        menu_path = "/settings/workspace"
++        menu_path = "/org/workspace"
+         title = _("Export")
+ 
+         def get(self, request, *args, **kwargs):
+             if str_to_bool(request.GET.get("raw", 0)):
+                 export = self.get_object()
+ 
+-                return HttpResponseRedirect(export.get_raw_url())
++                url = export.get_raw_url()
++
++                # if our URL doesn't have the content disposition set (local storage), we can set it ourselves
++                # using X-Accel-Redirect
++                if "ResponseContentDisposition" not in url:
++                    response = HttpResponse()
++                    response["X-Accel-Redirect"] = url
++                    response["Content-Disposition"] = f'attachment; filename="{export._get_download_filename()}"'
++                    return response
++
++                return HttpResponseRedirect(url)
+ 
+             return super().get(request, *args, **kwargs)
+ 
+diff --git a/temba/tickets/views.py b/temba/tickets/views.py
+index ce4aa0a92..fb7faab70
+--- a/temba/tickets/views.py
++++ b/temba/tickets/views.py
+@@ -184,7 +184,7 @@ class TicketCRUDL(SmartCRUDL):
+                         "name": folder.name,
+                         "icon": folder.get_icon(counts[folder.slug]),
+                         "count": counts[folder.slug],
+-                        "href": f"/ticket/{folder.slug}/open/",
++                        "href": f"{(settings.FORCE_SCRIPT_NAME or '').rstrip('/')}/ticket/{folder.slug}/open/",
+                     }
+                 )
+ 
+@@ -228,7 +228,7 @@ class TicketCRUDL(SmartCRUDL):
+                         "name": topic.name,
+                         "icon": "topic",
+                         "count": counts[topic],
+-                        "href": f"/ticket/{topic.uuid}/open/",
++                        "href": f"{(settings.FORCE_SCRIPT_NAME or '').rstrip('/')}/ticket/{topic.uuid}/open/",
+                     }
+                 )
+ 
+diff --git a/temba/utils/management/commands/migrate_dynamo.py b/temba/utils/management/commands/migrate_dynamo.py
+index ad1e2f541..f149e5aef
+--- a/temba/utils/management/commands/migrate_dynamo.py
++++ b/temba/utils/management/commands/migrate_dynamo.py
+@@ -77,7 +77,10 @@ class Command(BaseCommand):
+             self.stdout.write(self.style.SUCCESS(" OK"))
+ 
+             if ttlSpec:
+-                self.client.meta.client.update_time_to_live(TableName=real_name, TimeToLiveSpecification=ttlSpec)
++                try:
++                    self.client.meta.client.update_time_to_live(TableName=real_name, TimeToLiveSpecification=ttlSpec)
++                except Exception:
++                    self.stdout.write(f"Skipping TTL for {real_name} (not supported by backend)")
+ 
+                 self.stdout.write(f"Updated TTL for {real_name}")
+         else:
+diff --git a/temba/utils/templatetags/url_tags.py b/temba/utils/templatetags/url_tags.py
+index 000000000..fb23e682f
+--- /dev/null
++++ b/temba/utils/templatetags/url_tags.py
+@@ -0,0 +1,96 @@
++from django import template
++from django.urls import reverse
++from django.conf import settings
++from django.utils.safestring import mark_safe
++import json
++
++register = template.Library()
++
++@register.simple_tag
++def get_urls():
++    urls = {
++        "root": getattr(settings, "FORCE_SCRIPT_NAME", "/"),
++        "api_internal_notifications": reverse("api.internal.notifications"),
++        "api_internal_orgs": reverse("api.internal.orgs"),
++        
++        # API v2 (for frontend fetch calls & frame.html attributes)
++        "api_v2_campaigns": reverse("api.v2.campaigns"),
++        "api_v2_campaign_events": reverse("api.v2.campaign_events"),
++        "api_v2_contacts": reverse("api.v2.contacts"),
++        "api_v2_fields": reverse("api.v2.fields"),
++        "api_v2_globals": reverse("api.v2.globals"),
++        "api_v2_groups": reverse("api.v2.groups"),
++        "api_v2_users": reverse("api.v2.users"),
++        "api_v2_workspace": reverse("api.v2.workspace"),
++        "api_internal_shortcuts": reverse("api.internal.shortcuts"),
++        
++        # Orgs
++        "orgs_org_workspace": reverse("orgs.org_workspace"),
++        "orgs_org_choose": reverse("orgs.org_choose"),
++        "orgs_org_create": reverse("orgs.org_create"),
++        "orgs_org_list": reverse("orgs.org_list"),
++        "orgs_user_list": reverse("orgs.user_list"),
++        "orgs_invitation_list": reverse("orgs.invitation_list"),
++        "orgs_invitation_create": reverse("orgs.invitation_create"),
++        "orgs_invitation_delete": reverse("orgs.invitation_delete", args=[0]).replace("/0/", "/%s/"),
++        "orgs_org_languages": reverse("orgs.org_languages"),
++        "orgs_org_menu": reverse("orgs.org_menu"),
++        
++        # Staff
++        "staff_org_list": reverse("staff.org_list"),
++        "staff_org_service": reverse("staff.org_service"),
++        "staff_user_list": reverse("staff.user_list"),
++        
++        # Contacts
++        "contacts_contact_list": reverse("contacts.contact_list"),
++        "contacts_contact_create": reverse("contacts.contact_create"),
++        "contacts_contactgroup_create": reverse("contacts.contactgroup_create"),
++        "contacts_contactfield_list": reverse("contacts.contactfield_list"),
++        
++        # Messages
++        "msgs_msg_inbox": reverse("msgs.msg_inbox"),
++        "msgs_broadcast_list": reverse("msgs.broadcast_list"),
++        "msgs_broadcast_create": reverse("msgs.broadcast_create"),
++        "msgs_label_create": reverse("msgs.label_create"),
++        
++        # Flows
++        "flows_flow_list": reverse("flows.flow_list"),
++        "flows_flowlabel_create": reverse("flows.flowlabel_create"),
++        
++        # Triggers
++        "triggers_trigger_list": reverse("triggers.trigger_list"),
++        "triggers_trigger_menu": reverse("triggers.trigger_menu"),
++        "triggers_trigger_create": reverse("triggers.trigger_create_keyword"), # Default to keyword
++        
++        # Tickets
++        "tickets_ticket_list": reverse("tickets.ticket_list"),
++        "tickets_ticket_menu": reverse("tickets.ticket_menu"),
++        
++        # Flows
++        "flows_flow_list": reverse("flows.flow_list"),
++        "flows_flow_menu": reverse("flows.flow_menu"),
++        
++        # Tickets
++        "tickets_ticket_list": reverse("tickets.ticket_list"),
++        # tickets.ticket_folder requires 2 args (folder, status). Replaced with %s for JS.
++        "tickets_ticket_folder": reverse("tickets.ticket_folder", args=["mine", "open"]).replace("mine", "%s").replace("open", "%s"),
++        
++        # Campaigns
++        "campaigns_campaign_list": reverse("campaigns.campaign_list"),
++        
++        # Public
++        "public_public_index": reverse("public.public_index"),
++        
++        # Django I18n
++        "django_js_cat": reverse("django.views.i18n.javascript_catalog"),
++    }
++    # Prepend subpath to all URLs
++    subpath = getattr(settings, "FORCE_SCRIPT_NAME", "")
++    if subpath and subpath != "/":
++        if subpath.endswith("/"):
++            subpath = subpath[:-1]
++        for k, v in urls.items():
++            if isinstance(v, str) and v.startswith("/") and not v.startswith(subpath):
++                urls[k] = subpath + v
++
++    return mark_safe(json.dumps(urls))
+diff --git a/templates/allauth/layouts/entrance.html b/templates/allauth/layouts/entrance.html
+index faf642dc0..0286c030b
+--- a/templates/allauth/layouts/entrance.html
++++ b/templates/allauth/layouts/entrance.html
+@@ -33,7 +33,7 @@
+       margin-bottom: 0;
+     }
+ 
+-    form[action="/accounts/login/"] button[type="submit"],
++    form[action="{% url 'account_login' %}"] button[type="submit"],
+     form[action="/accounts/2fa/authenticate/"] button[type="submit"] {
+       display: block;
+       width: 100%;
+diff --git a/templates/flows/flow_editor.html b/templates/flows/flow_editor.html
+index 7aafce942..acfd46178
+--- a/templates/flows/flow_editor.html
++++ b/templates/flows/flow_editor.html
+@@ -1,5 +1,5 @@
+ {% extends "smartmin/base.html" %}
+-{% load temba i18n %}
++{% load temba i18n url_tags %}
+ 
+ {% block title %}
+   <div class="flex">
+@@ -20,6 +20,9 @@
+ {% endblock title %}
+ {% block extra-style %}
+   {{ block.super }}
++  <script>
++    window.URLS = {% get_urls %};
++  </script>
+   <style type="text/css">
+     .mobile-notice {
+       padding: 1em;
+@@ -131,10 +134,13 @@
+ {% endblock extra-style %}
+ {% block extra-script %}
+   {{ block.super }}
++  <script>
++    window.URLS = {% get_urls %};
++  </script>
+   <script type="text/javascript">
+-    var base = '/flow/assets/{{object.org.id}}/' + new Date().getTime() + '/';
+-    var api = '/api/v2/';
+-    var internal = '/api/internal/';
++    var base = window.URLS.root + 'flow/assets/{{object.org.id}}/' + new Date().getTime() + '/';
++    var api = window.URLS.root + 'api/v2/';
++    var internal = window.URLS.root + 'api/internal/';
+     var flowType = '{{ object.engine_type }}';
+ 
+     function handleEditorLoaded() {
+@@ -165,8 +171,8 @@
+     var simulateResume = null;
+ 
+     if (canSimulate) {
+-      simulateStart = '/flow/simulate/{{object.uuid}}/';
+-      simulateResume = '/flow/simulate/{{object.uuid}}/';
++      simulateStart = window.URLS.root + 'flow/simulate/{{object.uuid}}/';
++      simulateResume = window.URLS.root + 'flow/simulate/{{object.uuid}}/';
+     }
+ 
+     var config = {
+@@ -199,16 +205,16 @@
+         globals: api + 'globals.json',
+         users: api + 'users.json',
+         topics: api + 'topics.json',
+-        llms: '/api/internal/llms.json',
+-        editor: '/flow/editor',
+-        revisions: '/flow/revisions/{{object.uuid}}/',
+-        recents: '/flow/recent_contacts/{{object.uuid}}/',
++        llms: window.URLS.root + 'api/internal/llms.json',
++        editor: window.URLS.root + 'flow/editor',
++        revisions: window.URLS.root + 'flow/revisions/{{object.uuid}}/',
++        recents: window.URLS.root + 'flow/recent_contacts/{{object.uuid}}/',
+         attachments: '{% url "msgs.media_upload" %}',
+         languages: base + 'language',
+-        activity: '/flow/activity/{{object.uuid}}/',
+-        recipients: '/contact/omnibox?v=2&types=gc',
+-        contacts: '/contact/omnibox?v=2&types=c',
+-        contact: '/contact/read/',
++        activity: window.URLS.root + 'flow/activity/{{object.uuid}}/',
++        recipients: window.URLS.root + 'contact/omnibox?v=2&types=gc',
++        contacts: window.URLS.root + 'contact/omnibox?v=2&types=c',
++        contact: window.URLS.root + 'contact/read/',
+         simulateStart: simulateStart,
+         simulateResume: simulateResume,
+       }
+@@ -247,6 +253,9 @@
+     </temba-start-progress>
+   {% endif %}
+   {{ block.super }}
++  <script>
++    window.URLS = {% get_urls %};
++  </script>
+ {% endblock page-header %}
+ {% block content %}
+   <temba-modax header="Send Message" id="send-message-modal">
+diff --git a/templates/frame.html b/templates/frame.html
+index 2b8171207..c1e1fbd18
+--- a/templates/frame.html
++++ b/templates/frame.html
+@@ -1,5 +1,5 @@
+ <!DOCTYPE HTML>
+-{% load humanize i18n smartmin sms compress static %}
++{% load humanize i18n smartmin sms compress static url_tags %}
+ 
+ {% block html-tag %}
+   <html lang="{{ LANGUAGE_CODE }}">
+@@ -32,6 +32,9 @@
+     {% compress js %}
+       <script src="{{ STATIC_URL }}js/utils.js"></script>
+     {% endcompress %}
++    <script>
++      window.URLS = {% get_urls %};
++    </script>
+     <script type="text/javascript">
+       function isMobile() {
+         return window.innerWidth < 600;
+@@ -109,7 +112,7 @@
+       });
+ 
+       document.addEventListener("temba-workspace-settings", function(event) {
+-        spaGet('/org/workspace');
++        spaGet(window.URLS.orgs_org_workspace);
+         var menu = document.querySelector('temba-menu');
+         if (menu) {
+           menu.click();
+@@ -133,7 +136,7 @@
+     {% for script in flow_editor_scripts %}<script type="text/javascript" src="{{script}}"></script>{% endfor %}
+     {% for style in flow_editor_styles %}<link rel="stylesheet" href="{{ style }}" type="text/css">{% endfor %}
+     {% block favico %}
+-      <link type="image/ico" rel="shortcut icon" href="{{ STATIC_URL }}images/favicon.ico">
++      <link type="image/ico" rel="shortcut icon" href="{{ STATIC_URL }}favicon.ico">
+     {% endblock favico %}
+     {% block styles %}
+       <link rel="stylesheet"
+@@ -161,22 +164,25 @@
+     <body class="bg-gradient" id="pageBody">
+       {% if COMPONENTS_DEV_MODE %}
+         <script type="module">
+-          import '/out-tsc/temba-modules.js';
++          import '{{ STATIC_URL }}out-tsc/temba-modules.js';
+         </script>
+       {% else %}
+         {% compress js %}
+           <script src="{% static '@nyaruka/temba-components/dist/temba-components.js' %}"></script>
+         {% endcompress %}
++    <script>
++      window.URLS = {% get_urls %};
++    </script>
+       {% endif %}
+       {% if user_org %}
+-        <temba-store {% if org_perms.globals.global_list %}globals="/api/v2/globals.json"{% endif %}
+-                     completion="/mr/docs/{{ LANGUAGE_CODE }}/editor.json"
+-                     languages="/org/languages/"
+-                     fields="/api/v2/fields.json"
+-                     groups="/api/v2/groups.json"
+-                     workspace="/api/v2/workspace.json"
+-                     shortcuts="/api/internal/shortcuts.json"
+-                     users="/api/v2/users.json">
++        <temba-store {% if org_perms.globals.global_list %}globals="{% url 'api.v2.globals' %}"{% endif %}
++                     completion="{% static 'mr/docs/' %}{{ LANGUAGE_CODE }}/editor.json"
++                     languages="{% url 'orgs.org_languages' %}"
++                     fields="{% url 'api.v2.fields' %}"
++                     groups="{% url 'api.v2.groups' %}"
++                     workspace="{% url 'api.v2.workspace' %}"
++                     shortcuts="{% url 'api.internal.shortcuts' %}"
++                     users="{% url 'api.v2.users' %}">
+         </temba-store>
+       {% else %}
+         <temba-store>
+diff --git a/templates/locations/adminboundary_alias.html b/templates/locations/adminboundary_alias.html
+index 2b6f8a012..56b1a0cd8
+--- a/templates/locations/adminboundary_alias.html
++++ b/templates/locations/adminboundary_alias.html
+@@ -26,5 +26,5 @@
+       regions, aliases.
+     {% endblocktrans %}
+   </div>
+-  <alias-editor endpoint="/adminboundary/" osmid="{{ object.osm_id }}"></alias-editor>
++  <alias-editor endpoint="{% url 'public.public_index' %}adminboundary/" osmid="{{ object.osm_id }}"></alias-editor>
+ {% endblock content %}
+diff --git a/templates/orgs/org_join.html b/templates/orgs/org_join.html
+index 3b1882e50..28e435da1
+--- a/templates/orgs/org_join.html
++++ b/templates/orgs/org_join.html
+@@ -16,7 +16,7 @@
+     {% endblocktrans %}
+   </div>
+   <form method="post"
+-        action="/accounts/login/?next={% url 'orgs.org_join_accept' invitation.secret %}"
++        action="{% url 'account_login' %}?next={% url 'orgs.org_join_accept' invitation.secret %}"
+         class="mt-6"
+         id="login-form">
+     <fieldset>
+diff --git a/templates/public/public_frame.html b/templates/public/public_frame.html
+index aaa748c72..f86951bcb
+--- a/templates/public/public_frame.html
++++ b/templates/public/public_frame.html
+@@ -6,7 +6,7 @@
+       <div class="flex-grow"></div>
+       <div class="w-128">
+         <div class="mb-6 w-64 mt-12">
+-          <a href="/">
++          <a href="{% url 'public.public_index' %}">
+             <img src="{{ STATIC_URL }}images/logo-dark.svg">
+           </a>
+         </div>
+diff --git a/templates/public/public_index.html b/templates/public/public_index.html
+index a5df1551b..7760338fd
+--- a/templates/public/public_index.html
++++ b/templates/public/public_index.html
+@@ -4,7 +4,7 @@
+   <div class="text-xl font-normal mb-2 mt-6">Getting Started</div>
+   <div class="mb-2">
+     To get started, visit the  <a href="http://rapidpro.github.io/rapidpro/docs/development/">developer documentation</a>.
+-    Once you've created an account in your development database, you can login <a href="/accounts/login">here</a>.
++    Once you've created an account in your development database, you can login <a href="{% url 'account_login' %}">here</a>.
+   </div>
+   <div class="mb-2">
+     If you still have questions, please search the history on the <a href="https://groups.google.com/g/rapidpro-dev">developer list</a> to see if your question has been asked before.
+diff --git a/templates/tickets/ticket_list.html b/templates/tickets/ticket_list.html
+index 0219685b2..20ae34ddd
+--- a/templates/tickets/ticket_list.html
++++ b/templates/tickets/ticket_list.html
+@@ -247,7 +247,7 @@
+       }
+ 
+       // if we have auto selecting, dont clear the chat
+-      var ticketsEndpoint = `/ticket/folder/${folder}/${status}/${initialTicket || ''}`;
++      var ticketsEndpoint = `/rp/ticket/folder/${folder}/${status}/${initialTicket || ''}`;
+       if (ticketsEndpoint != tickets.endpoint) {
+         if (!tickets.nextSelection) {
+           chat.contact = null;
+@@ -364,7 +364,7 @@
+       updateTicketList();
+ 
+       var path = `${folder}/${status}/${ticketUUID || ''}`;
+-      var show = `/ticket/${path}`;
++      var show = `/rp/ticket/${path}`;
+ 
+       if (!show.endsWith("/")) {
+         show += "/";
+@@ -390,7 +390,7 @@
+     function handleNameClicked() {
+       var chat = document.querySelector("temba-contact-chat");
+       if (chat.contact) {
+-        var url = "/contact/read/" + chat.contact + "/";
++        var url = window.URLS.root + "contact/read/" + chat.contact + "/";
+         if (typeof spaGet !== 'undefined') {
+           spaGet(url);
+         } else {
+@@ -400,7 +400,7 @@
+     }
+ 
+     function handleFieldSearch(evt) {
+-      var url = "/contact/?search=" + encodeURIComponent(evt.detail.key) + "+%3D+" + encodeURIComponent("\"" + evt.detail.value + "\"")
++      var url = window.URLS.root + "contact/?search=" + encodeURIComponent(evt.detail.key) + "+%3D+" + encodeURIComponent("\"" + evt.detail.value + "\"")
+       if (typeof spaGet !== 'undefined') {
+         spaGet(url)
+       } else {
+@@ -448,7 +448,7 @@
+             if (folder == 'unassigned') {
+               focusNext = ticket.uuid;
+               folder = 'mine';
+-              menu.setFocusedItem('ticket/mine');
++              menu.setFocusedItem('/rp/ticket/mine');
+               updateTicketList();
+             }
+             messageSent = false;
+@@ -485,7 +485,7 @@
+       const options = {
+         onSubmit: "contactUpdated()"
+       }
+-      showModax("{{_('Interrupt Contact')|escapejs}}", "/contact/interrupt/" + event.detail.contact.uuid + "/", options);
++      showModax("{{_('Interrupt Contact')|escapejs}}", window.URLS.root + "contact/interrupt/" + event.detail.contact.uuid + "/", options);
+     }
+ 
+     function contactUpdated() {
+diff --git a/templates/triggers/trigger_list.html b/templates/triggers/trigger_list.html
+index 93b80c62a..59d1204ac
+--- a/templates/triggers/trigger_list.html
++++ b/templates/triggers/trigger_list.html
+@@ -109,7 +109,7 @@
+       event.preventDefault();
+       event.stopPropagation();
+       var modal = document.querySelector("#update-trigger");
+-      modal.endpoint = '/trigger/update/' + id + '/';
++      modal.endpoint = window.URLS.root + 'trigger/update/' + id + '/';
+       modal.header = '{{ _("Update Trigger")|escapejs }}';
+       modal.open = true;
+     }

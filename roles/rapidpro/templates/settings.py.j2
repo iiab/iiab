@@ -1,16 +1,43 @@
+import os
+import logging
+
+logger = logging.getLogger(__name__)
+
+# Ensure exceptions are logged
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+        },
+    },
+    "loggers": {
+        "django.request": {
+            "handlers": ["console"],
+            "level": "ERROR",
+            "propagate": True,
+        },
+    },
+}
+
 # ----------------------------------------------------------------------------------
-# RapidPro settings file for IIAB Appliance mode.
+# RapidPro settings file for IIAB
 # ----------------------------------------------------------------------------------
 
 from .settings_common import *  # noqa
 
-# Appliance mode is not for debugging
+# Disable debug mode for production
 DEBUG = False
 
 
 
 # The hostname of the IIAB box
-ALLOWED_HOSTS = ["{{ ansible_hostname }}", "box.lan"] + {{ ip_addresses.stdout_lines }}
+ALLOWED_HOSTS = ["{{ ansible_hostname }}", "box.lan"] + {{ ansible_all_ipv4_addresses }}
+
+HOSTNAME = "{{ ansible_hostname }}"
+BRAND["domain"] = "{{ ansible_hostname }}"
+BRAND["hosts"] = ["{{ ansible_hostname }}", "box.lan", "127.0.0.1"] + {{ ansible_all_ipv4_addresses }}
 
 # ----------------------------------------------------------------------------------
 # Databases
@@ -20,10 +47,10 @@ DATABASES = {
         "ENGINE": "django.contrib.gis.db.backends.postgis",
         "NAME": "{{ rapidpro_db_name }}",
         "USER": "{{ rapidpro_db_user }}",
-        "PASSWORD": "{{ rapidpro_db_pass }}",
-        "HOST": "localhost",
+        "PASSWORD": "{{ rapidpro_db_pass }}"
     }
 }
+DATABASES["readonly"] = DATABASES["default"]
 
 # ----------------------------------------------------------------------------------
 # Caching
@@ -50,6 +77,7 @@ CELERY_TASK_ALWAYS_EAGER = False
 # ----------------------------------------------------------------------------------
 # Local filesystem storage
 # ----------------------------------------------------------------------------------
+# Use local file storage for media (exports, etc) instead of S3
 STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
     "archives": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
@@ -57,10 +85,16 @@ STORAGES = {
     "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
 }
 
+# Ensure new files (exports) are readable by Nginx
+FILE_UPLOAD_PERMISSIONS = 0o644
+FILE_UPLOAD_DIRECTORY_PERMISSIONS = 0o755
 
-FORCE_SCRIPT_NAME = "/rp/"
-STATIC_URL = "/rp/static/"
-MEDIA_URL = "/rp/media/"
+FORCE_SCRIPT_NAME = "{{ rapidpro_url if rapidpro_url.endswith('/') else rapidpro_url + '/' }}"
+STATIC_URL = "{{ rapidpro_url if rapidpro_url.endswith('/') else rapidpro_url + '/' }}static/"
+MEDIA_URL = "{{ rapidpro_url if rapidpro_url.endswith('/') else rapidpro_url + '/' }}media/"
+LOGIN_URL = "{{ rapidpro_url if rapidpro_url.endswith('/') else rapidpro_url + '/' }}accounts/login/"
+LOGIN_REDIRECT_URL = "{{ rapidpro_url if rapidpro_url.endswith('/') else rapidpro_url + '/' }}org/choose/"
+ACCOUNT_LOGOUT_REDIRECT_URL = "{{ rapidpro_url if rapidpro_url.endswith('/') else rapidpro_url + '/' }}"
 
 # ----------------------------------------------------------------------------------
 # Email

@@ -1,0 +1,129 @@
+import os
+
+TARGET_DIR = "{{ rapidpro_dir }}/sitestatic"
+SUBPATH = "{{ rapidpro_url }}"
+if SUBPATH == "/":
+    SUBPATH = ""
+elif SUBPATH.endswith("/"):
+    SUBPATH = SUBPATH[:-1]
+
+def patch_file(filepath):
+    try:
+        with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+            content = f.read()
+        
+        new_content = content
+        replacements = [
+            ("'/api/v2/", "(window.URLS.root || '/') + 'api/v2/"),
+            ('"/api/v2/', '(window.URLS.root || "/") + "api/v2/'),
+            ("'/api/internal/", "(window.URLS.root || '/') + 'api/internal/"),
+            ('"/api/internal/', '(window.URLS.root || "/") + "api/internal/'),
+            ("'/api/v1/", "(window.URLS.root || '/') + 'api/v1/"),
+            ('"/api/v1/', '(window.URLS.root || "/") + "api/v1/'),
+            ("url: '/api/", "url: (window.URLS.root || '/') + 'api/"),
+            ('url: "/api/', 'url: (window.URLS.root || "/") + "api/'),
+            # Fix hardcoded frontend paths (Tickets, etc) using static subpath
+            ("/ticket/", f"{SUBPATH}/ticket/"),
+            ("'/ticket/", f"'{SUBPATH}/ticket/"),
+            ("/org/", f"{SUBPATH}/org/"),
+            ("'/org/", f"'{SUBPATH}/org/"),
+            # Additional paths for missing 404s
+            ("/contact/", f"{SUBPATH}/contact/"),
+            ("'/contact/", f"'{SUBPATH}/contact/"),
+            ('"/contact/', f'"{SUBPATH}/contact/'),
+            ("`/contact/", f"`{SUBPATH}/contact/"),
+            
+            ("/flow/", f"{SUBPATH}/flow/"),
+            ("'/flow/", f"'{SUBPATH}/flow/"),
+            ('"/flow/', f'"{SUBPATH}/flow/'),
+            ("`/flow/", f"`{SUBPATH}/flow/"),
+            
+            ("/msg/", f"{SUBPATH}/msg/"),
+            ("'/msg/", f"'{SUBPATH}/msg/"),
+            ('"/msg/', f'"{SUBPATH}/msg/'),
+            ("`/msg/", f"`{SUBPATH}/msg/"),
+
+            # Specific fix for relative ticket paths (e.g. in TembaList.ts)
+            ("'ticket/", f"'{SUBPATH}/ticket/"),
+            ('"ticket/', f'"{SUBPATH}/ticket/'),
+            ("`ticket/", f"`{SUBPATH}/ticket/"),
+            ("`ticket/", f"`{SUBPATH}/ticket/"),
+
+
+            # Fix hardcoded frontend paths (Tickets, etc) using static subpath
+            ("/ticket/", f"{SUBPATH}/ticket/"),
+            ("'/ticket/", f"'{SUBPATH}/ticket/"),
+            ('"/ticket/', f'"{SUBPATH}/ticket/'),
+            ("`/ticket/", f"`{SUBPATH}/ticket/"),
+
+            ("/org/", f"{SUBPATH}/org/"),
+            ("'/org/", f"'{SUBPATH}/org/"),
+            ('"/org/', f'"{SUBPATH}/org/'),
+            ("`/org/", f"`{SUBPATH}/org/"),
+        ]
+        import re
+        
+        # Ensure SUBPATH has no trailing slash for lookbehind
+        # e.g. /rp/ -> /rp
+        subpath_clean = SUBPATH.rstrip('/')
+        
+        for pattern, replacement in replacements:
+ 
+            
+            # Escape pattern just in case
+            pattern_esc = re.escape(pattern)
+            if pattern.startswith('/') and not pattern.startswith('//'):
+                 # Unquoted path: Needs lookbehind
+                 if subpath_clean:
+                     regex_pattern = f"(?<!{re.escape(subpath_clean)}){pattern_esc}"
+                     new_content = re.sub(regex_pattern, replacement, new_content)
+                 else:
+                     new_content = new_content.replace(pattern, replacement)
+            else:
+                 # Quoted/Contextual path: Safe to replace, provided we don't have overlaps.
+                 new_content = new_content.replace(pattern, replacement)
+                 
+                 
+        # Cleanup double prefixes if any occurred (safety net)
+        double_prefix_slash = f"{SUBPATH}/{SUBPATH.lstrip('/')}"
+        double_prefix_noslash = f"{SUBPATH}{SUBPATH.lstrip('/')}"
+        
+        # We need to be careful. /rp//rp/ vs /rp/rp/
+        if double_prefix_slash in new_content:
+             new_content = new_content.replace(double_prefix_slash, f"{SUBPATH}/")
+        if double_prefix_noslash in new_content:
+             new_content = new_content.replace(double_prefix_noslash, SUBPATH)
+
+        if new_content != content:
+            print(f"Patching {filepath}")
+            with open(filepath, "w", encoding="utf-8") as f:
+                f.write(new_content)
+                
+    except Exception as e:
+        print(f"Error patching {filepath}: {e}")
+        
+if __name__ == "__main__":
+    if not os.path.exists(TARGET_DIR):
+        print(f"Target directory {TARGET_DIR} does not exist.")
+    else:
+        print(f"Scanning {TARGET_DIR} for JS files to patch...")
+        for root, dirs, files in os.walk(TARGET_DIR):
+            for name in files:
+                # Remove stale compressed files to force Nginx to serve patched JS
+                if name.endswith(".gz") or name.endswith(".br"):
+                    try:
+                        os.remove(os.path.join(root, name))
+                    except Exception:
+                        pass
+                    continue
+                    
+                if name.endswith(".js") and "jquery" not in name:
+                    patch_file(os.path.join(root, name))
+                    
+        # Also patch specific templates that have hardcoded URLs
+        TEMPLATES_DIR = "{{ rapidpro_dir }}/templates"
+        TICKET_LIST = os.path.join(TEMPLATES_DIR, "tickets/ticket_list.html")
+        if os.path.exists(TICKET_LIST):
+            patch_file(TICKET_LIST)
+            
+        print("Patching complete.")

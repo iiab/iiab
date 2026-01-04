@@ -1,20 +1,54 @@
-location = /rp {
-    return 301 /rp/;
+location = {{ rapidpro_url }} {
+    return 301 {{ rapidpro_url }}/;
 }
 
-location /rp/static/ {
-    alias /opt/iiab/rapidpro/sitestatic/;
+location {{ rapidpro_url }}/static/ {
+    alias {{ rapidpro_dir }}/sitestatic/;
 }
 
-location /rp/media/ {
-    alias /opt/iiab/rapidpro/media/;
+location {{ rapidpro_url }}/media/ {
+    alias {{ rapidpro_dir }}/media/;
 }
 
-location /rp/ {
-    rewrite /rp/(.*) /$1 break;
+
+
+# Forward /api/ requests to RapidPro (for clients ignoring subpath)
+location /api/ {
+    rewrite ^/api/(.*)$ {{ rapidpro_url if rapidpro_url.endswith('/') else rapidpro_url + '/' }}api/$1 break;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $scheme;
     proxy_set_header Host $http_host;
+    proxy_set_header SCRIPT_NAME {{ rapidpro_url }};
+    proxy_pass http://unix:/run/rapidpro/gunicorn.sock;
+}
+
+# Forward /relayers/ requests (Android App Registration/Sync)
+location /relayers/ {
+    rewrite ^/relayers/(.*)$ {{ rapidpro_url if rapidpro_url.endswith('/') else rapidpro_url + '/' }}relayers/$1 break;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Host $http_host;
+    proxy_set_header SCRIPT_NAME {{ rapidpro_url }};
+    proxy_pass http://unix:/run/rapidpro/gunicorn.sock;
+}
+
+# Forward /android/ requests (APK checks)
+location /android/ {
+    rewrite ^/android/(.*)$ {{ rapidpro_url if rapidpro_url.endswith('/') else rapidpro_url + '/' }}android/$1 break;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Host $http_host;
+    proxy_set_header SCRIPT_NAME {{ rapidpro_url }};
+    proxy_pass http://unix:/run/rapidpro/gunicorn.sock;
+}
+
+
+
+location {{ rapidpro_url }}/ {
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Host $http_host;
+    proxy_set_header SCRIPT_NAME {{ rapidpro_url }};
     proxy_redirect off;
-    proxy_pass http://unix:/opt/iiab/rapidpro/run/gunicorn.sock;
+    proxy_pass http://unix:/run/rapidpro/gunicorn.sock;
 }

@@ -1,52 +1,54 @@
-==============
-RapidPro README
-==============
+RapidPro Role
+=============
 
-This Ansible role installs `RapidPro <https://rapidpro.io/>`_ within `Internet-in-a-Box (IIAB) <https://internet-in-a-box.org/>`_. RapidPro is an open-source platform that allows you to visually build interactive messaging applications.
+This role installs and configures RapidPro, a platform for building and managing mobile-based services.
 
-Using It
---------
-
-If enabled and with the default settings, RapidPro should be accessible at: http://box/rp
-
-Log in to RapidPro with::
-
-  Username: admin@box.lan
-  Password: changeme
-
-Configuration Parameters
-------------------------
-
-Please look in `/opt/iiab/iiab/roles/rapidpro/defaults/main.yml <defaults/main.yml>`_ for the default values of the various install parameters.  Everything in this README assumes the default values.
-
-To enable the role, add the following to `/etc/iiab/local_vars.yml <http://faq.iiab.io/What_is_local_vars.yml_and_how_do_I_customize_it%3F>`_::
-
-  rapidpro_install: true
-
-To disable the services while still having the role installed, add the following to `/etc/iiab/local_vars.yml`::
-
-  rapidpro_enabled: false
-
-*Feel free to override any of the above, by copying the relevant line from /opt/iiab/iiab/roles/rapidpro/defaults/main.yml to /etc/iiab/local_vars.yml (then run* ``cd /opt/iiab/iiab`` *followed by* ``./runrole rapidpro`` *per IIAB's general guidelines at http://FAQ.IIAB.IO).*
-
-Troubleshooting
----------------
-
-If you encounter issues, you can check the logs for the gunicorn and nginx services:
-
-.. code-block:: bash
-
-  sudo journalctl -u rapidpro-gunicorn
-  sudo journalctl -u nginx
-
-You can also try restarting the services:
-
-.. code-block:: bash
-
-  sudo systemctl restart rapidpro-gunicorn
-  sudo systemctl restart nginx
-
-Known Issues
+Requirements
 ------------
 
-* There are no known issues at this time.
+This role requires the following:
+
+*   Debian/Ubuntu-based system
+*   PostgreSQL
+*   Nginx
+*   Redis or Valkey
+
+These dependencies are automatically installed by this role.
+
+Role Variables
+--------------
+
+*   ``rapidpro_install``: Set to ``True`` to install RapidPro. Default is ``True``.
+*   ``rapidpro_enabled``: Set to ``True`` to enable and start the RapidPro services. Default is ``True``.
+*   ``rapidpro_db_name``: The name of the PostgreSQL database for RapidPro. Default is ``temba``.
+*   ``rapidpro_db_user``: The PostgreSQL user for the RapidPro database. Default is ``temba``.
+*   ``rapidpro_db_pass``: **MANDATORY**. The password for the PostgreSQL user. Must be set in ``local_vars.yml``.
+*   ``admin_email``: The email address for the RapidPro admin user. Default is ``admin@box.lan``.
+*   ``rapidpro_admin_password``: **MANDATORY**. The password for the RapidPro admin user. Must be set in ``local_vars.yml``.
+*   ``rapidpro_secret_key``: **MANDATORY**. The Django SECRET_KEY. Must be set in ``local_vars.yml``.
+*   ``rapidpro_url``: The URL path for RapidPro. Default is ``/rp``.
+
+Security Notice
+---------------
+
+**CRITICAL**: This role does not provide default passwords for security reasons. You **MUST** define the following variables in ``/etc/iiab/local_vars.yml`` before installation:
+
+.. code-block:: yaml
+
+    rapidpro_db_pass: "your_secure_db_password"
+    rapidpro_admin_password: "your_secure_admin_password"
+    rapidpro_secret_key: "your_long_random_secret_key"
+    wuzapi_admintoken: "your_secure_admin_token"  # Required for Wuzapi integration
+
+Usage
+-----
+
+To install and enable RapidPro, add the configuration above to your ``/etc/iiab/local_vars.yml`` and run the installer:
+
+.. code-block:: bash
+
+    ./runrole rapidpro wuzapi
+
+Then run the IIAB installer.
+
+After installation, RapidPro will be available at ``http://box.lan/rp``.

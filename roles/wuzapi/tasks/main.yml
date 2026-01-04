@@ -1,0 +1,60 @@
+---
+- name: Install build dependencies
+  apt:
+    name:
+      - golang
+      - git
+      - make
+      - ffmpeg
+      - sqlite3
+      - libsqlite3-dev
+    state: present
+  become: yes
+
+- name: Create Wuzapi directory
+  file:
+    path: "{{ wuzapi_dir }}"
+    state: directory
+- name: Set Wuzapi architecture
+  set_fact:
+    wuzapi_go_arch: "{{ 'amd64' if ansible_architecture == 'x86_64' else 'arm64' }}"
+
+- name: Install Wuzapi Binary from Release
+  get_url:
+    url: "https://github.com/deldesir/wuzapi/releases/download/v1.0.0/wuzapi-linux-{{ wuzapi_go_arch }}"
+    dest: "{{ wuzapi_dir }}/wuzapi"
+    mode: '0755'
+    force: yes
+  become: yes
+  notify: restart wuzapi
+
+- name: Install Wuzapi systemd service
+  template:
+    src: wuzapi.service.j2
+    dest: /etc/systemd/system/wuzapi.service
+  become: yes
+  notify: restart wuzapi
+
+- name: Enable and start Wuzapi service
+  systemd:
+    name: wuzapi
+    state: started
+    enabled: yes
+    daemon_reload: yes
+  become: yes
+
+- name: Configure Nginx for Wuzapi
+  template:
+    src: wuzapi-nginx.conf.j2
+    dest: /etc/nginx/conf.d/wuzapi.conf
+  become: yes
+  notify: reload nginx
+
+- name: Mark wuzapi as installed
+  lineinfile:
+    path: /etc/iiab/iiab_state.yml
+    line: "wuzapi_installed: True"
+    create: yes
+  become: yes
+
+

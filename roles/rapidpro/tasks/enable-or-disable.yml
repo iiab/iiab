@@ -1,43 +1,21 @@
-- name: Enable & Restart RapidPro services, if rapidpro_enabled
+---
+- name: Manage Gunicorn service
   systemd:
-    name: "{{ item }}"
+    name: rapidpro-gunicorn
+    state: "{{ 'started' if rapidpro_enabled else 'stopped' }}"
+    enabled: "{{ rapidpro_enabled }}"
     daemon_reload: yes
-    enabled: yes
-    state: restarted
-  loop:
-    - rapidpro-gunicorn
-    - rapidpro-mailroom
-    - rapidpro-courier
-  when: rapidpro_enabled
+  become: yes
 
-- name: Disable & Stop RapidPro services, if not rapidpro_enabled
+- name: Manage Go services
   systemd:
     name: "{{ item }}"
-    enabled: no
-    state: stopped
+    state: "{{ 'started' if rapidpro_enabled else 'stopped' }}"
+    enabled: "{{ rapidpro_enabled }}"
+    daemon_reload: yes
   loop:
-    - rapidpro-gunicorn
     - rapidpro-mailroom
     - rapidpro-courier
-  when: not rapidpro_enabled
-
-- name: Debug rapidpro_enabled
-  debug:
-    var: rapidpro_enabled
-
-- name: Enable http://box{{ rapidpro_url }} via NGINX, by installing {{ nginx_conf_dir }}/rapidpro-nginx.conf from template
-  template:
-    src: rapidpro-nginx.conf.j2
-    dest: "{{ nginx_conf_dir }}/rapidpro-nginx.conf"
-  when: rapidpro_enabled
-
-- name: Disable http://box{{ rapidpro_url }} via NGINX, by removing {{ nginx_conf_dir }}/rapidpro-nginx.conf
-  file:
-    path: "{{ nginx_conf_dir }}/rapidpro-nginx.conf"
-    state: absent
-  when: not rapidpro_enabled
-
-- name: Restart 'nginx' systemd service
-  systemd:
-    name: nginx
-    state: restarted
+    - rapidpro-dynamo
+    - rapidpro-celery
+  become: yes

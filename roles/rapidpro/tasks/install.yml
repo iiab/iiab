@@ -1,6 +1,47 @@
 ---
 # This file will contain all the installation tasks for RapidPro.
 
+- name: Include Wuzapi role
+  include_role:
+    name: wuzapi
+  when: wuzapi_install | default(true)
+
+- name: Drop RapidPro database if requested
+  block:
+    - name: Stop RapidPro services before DB drop
+      service:
+        name: "{{ item }}"
+        state: stopped
+      with_items:
+        - rapidpro-gunicorn
+        - rapidpro-courier
+        - rapidpro-mailroom
+        - rapidpro-dynamo
+        - rapidpro-celery
+      ignore_errors: yes
+      become: yes
+
+    - name: Terminate all connections to the 'temba' database
+      postgresql_query:
+        query: "SELECT pg_terminate_backend(pg_stat_activity.pid) FROM pg_stat_activity WHERE pg_stat_activity.datname = '{{ rapidpro_db_name }}' AND pid <> pg_backend_pid();"
+      become: yes
+      become_user: postgres
+
+    - name: Drop RapidPro PostgreSQL database
+      postgresql_db:
+        name: "{{ rapidpro_db_name }}"
+        state: absent
+      become: yes
+      become_user: postgres
+
+    - name: Drop RapidPro PostgreSQL user
+      postgresql_user:
+        name: "{{ rapidpro_db_user }}"
+        state: absent
+      become: yes
+      become_user: postgres
+  when: rapidpro_force_drop_db | default(false)
+
 - name: Uninstall RapidPro if reinstalling
   block:
     - name: Get poetry environment path
@@ -20,7 +61,7 @@
         path: "{{ poetry_env.stdout }}"
         state: absent
       become: yes
-      become_user: "{{ iiab_admin_user }}"
+      become_user: root
       when: poetry_env.stdout != ""
 
     - name: Remove RapidPro directory
@@ -29,21 +70,6 @@
         state: absent
       become: yes
   when: reinstall is defined and reinstall
-
-
-
-- name: Include nginx role
-  include_role:
-    name: nginx
-
-- name: "Set 'postgresql_install: True' and 'postgresql_enabled: True'"
-  set_fact:
-    postgresql_install: True
-    postgresql_enabled: True
-
-- name: Include postgresql role
-  include_role:
-    name: postgresql
 
 - name: Install essential build tools and libraries
   apt:
@@ -54,10 +80,10 @@
       - python3-dev
       - libgdal-dev
       - ffmpeg
+      - postgis
+      - golang-go
     state: present
   become: yes
-
-
 
 - name: Install Valkey/Redis
   block:
@@ -104,24 +130,19 @@
   include_role:
     name: nodejs
 
-- name: Check if rapidpro directory exists
-  stat:
-    path: "{{ rapidpro_dir }}"
-  register: rapidpro_dir_stat
+- name: Add rapidpro directory to git safe directories
+  command: git config --global --add safe.directory {{ rapidpro_dir }}
+  become: yes
+  changed_when: false
 
-- name: Clone RapidPro repository
+- name: Clone/update RapidPro repository
   git:
-    repo: 'https://github.com/nyaruka/rapidpro.git'
+    repo: 'https://github.com/deldesir/rapidpro.git'
     dest: "{{ rapidpro_dir }}"
+    force: yes
+    version: main
   become: yes
-  when: not rapidpro_dir_stat.stat.exists
-
-- name: Allow Python 3.13 in pyproject.toml
-  replace:
-    path: "{{ rapidpro_dir }}/pyproject.toml"
-    regexp: 'requires-python = ">=3.12,<3.13"'
-    replace: 'requires-python = ">=3.12,<3.14"'
-  become: yes
+  register: rapidpro_git_clone
 
 - name: Set ownership of project directory
   file:
@@ -133,21 +154,15 @@
     recurse: yes
   become: yes
 
-- name: Check if patch can be applied
-  command: git apply --check {{ role_path }}/files/0001-Fix-hardcoded-URLs.patch
-  args:
-    chdir: "{{ rapidpro_dir }}"
-  register: patch_check
-  changed_when: false
-  failed_when: false
+- name: "Allow Python version in pyproject.toml"
+  replace:
+    path: "{{ rapidpro_dir }}/pyproject.toml"
+    regexp: 'requires-python = ">=3.12,<3.13"'
+    replace: 'requires-python = ">=3.12,<3.{{ (ansible_python_version.split(''.'')[1] | int) + 1 }}"'
   become: yes
 
-- name: Apply patch for subpath deployment
-  command: git apply {{ role_path }}/files/0001-Fix-hardcoded-URLs.patch
-  args:
-    chdir: "{{ rapidpro_dir }}"
-  when: patch_check.rc == 0
-  become: yes
+# Patches removed as they are integrated into deldesir/rapidpro fork
+
 
 
 - name: Install Poetry
@@ -158,9 +173,19 @@
   become: yes
   become_user: "{{ iiab_admin_user }}"
 
+- name: Fix permissions on Poetry cache
+  file:
+    path: "/home/{{ iiab_admin_user }}/.cache/pypoetry"
+    owner: "{{ iiab_admin_user }}"
+    group: "{{ iiab_admin_user }}"
+    recurse: yes
+  become: yes
+
 - name: Install Python dependencies with Poetry
   shell: |
     export PATH="/home/{{ iiab_admin_user }}/.local/bin:$PATH"
+    poetry env remove --all
+    poetry env use $(which python3)
     poetry lock
     poetry install
   args:
@@ -174,10 +199,17 @@
     global: yes
   become: yes
 
+- name: Install dynalite
+  npm:
+    name: dynalite
+    global: yes
+  become: yes
+
 - name: Install JavaScript dependencies
   yarn:
     path: "{{ rapidpro_dir }}"
   become: yes
+  register: rapidpro_yarn_install
 
 - name: Install global JS tools (less)
   yarn:
@@ -191,35 +223,75 @@
   args:
     chdir: "{{ rapidpro_dir }}"
   become: yes
+  when: rapidpro_git_clone.changed or rapidpro_patch_result.changed or rapidpro_yarn_install.changed
 
-- name: Set mailroom and courier architecture
+- name: Restore RapidPro Directory Ownership (after root build steps)
+  file:
+    path: "{{ rapidpro_dir }}"
+    owner: "{{ iiab_admin_user }}"
+    group: "{{ iiab_admin_user }}"
+    recurse: yes
+  become: yes
+  when: rapidpro_git_clone.changed or rapidpro_patch_result.changed or rapidpro_yarn_install.changed
+
+- name: Allow Nginx traversal of RapidPro directory (Professional Fix)
+  file:
+    path: "{{ rapidpro_dir }}"
+    mode: '0751'
+    state: directory
+  become: yes
+
+- name: "Set mailroom and courier architecture"
   set_fact:
     rapidpro_go_arch: "{{ 'amd64' if ansible_architecture == 'x86_64' else 'arm64' }}"
 
-- name: Download Mailroom
+- name: Cleanup Go Builds (Pre-flight)
+  file:
+    path: "{{ item }}"
+    state: absent
+  with_items:
+    - /tmp/mailroom
+    - /tmp/courier
+  become: yes
+
+- name: Create Disk-based Go Build Directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0777'
+  with_items:
+    - /var/tmp/rapidpro_go_build/gocache
+    - /var/tmp/rapidpro_go_build/gopath
+    - /var/tmp/rapidpro_go_build/tmp
+  become: yes
+
+- name: Install Mailroom Binary from Release
   get_url:
-    url: "https://github.com/nyaruka/mailroom/releases/download/v10.2.0/mailroom_10.2.0_linux_{{ rapidpro_go_arch }}.tar.gz"
-    dest: /tmp/mailroom.tar.gz
+    url: "https://github.com/deldesir/mailroom/releases/download/v1.0.0/mailroom-linux-{{ rapidpro_go_arch }}"
+    dest: /usr/local/bin/mailroom
+    mode: '0755'
+    force: yes
   become: yes
 
-- name: Install Mailroom
-  unarchive:
-    src: /tmp/mailroom.tar.gz
-    dest: "/usr/local/bin/"
-    remote_src: no
-    extra_opts: [--strip-components=1]
-  become: yes
-
-- name: Download Courier
+- name: Install Courier Binary from Release
   get_url:
-    url: "https://github.com/nyaruka/courier/releases/download/v10.2.0/courier_10.2.0_linux_{{ rapidpro_go_arch }}.tar.gz"
-    dest: /tmp/courier.tar.gz
+    url: "https://github.com/deldesir/courier/releases/download/v10.4.0/courier-linux-{{ rapidpro_go_arch }}"
+    dest: /usr/local/bin/courier
+    mode: '0755'
+    force: yes
   become: yes
 
-- name: Install Courier
-  unarchive:
-    src: /tmp/courier.tar.gz
-    dest: "/usr/local/bin/"
-    remote_src: no
-    extra_opts: [--strip-components=1]
+- name: Cleanup Go Builds
+  file:
+    path: "{{ item }}"
+    state: absent
+  with_items:
+    - /tmp/mailroom
+    - /tmp/courier
+  become: yes
+
+- name: Cleanup Go Build Cache (Disk)
+  file:
+    path: /var/tmp/rapidpro_go_build
+    state: absent
   become: yes
