@@ -34,13 +34,28 @@ apt-get update
 # Install basic dependencies
 apt-get install -y curl \
                    python3 \
-                   sudo
+                   sudo \
+                   nano
 
 #-----------------------------
 # Setup Android-specific local vars
 #-----------------------------
 mkdir /etc/iiab
 curl -fsSL $LOCAL_VARS > /etc/iiab/local_vars.yml
+
+if [ "$IIAB_PAUSE_BEFORE_INSTALL" = "true" ]; then
+    echo ""
+    echo "=================================================================="
+    echo " PAUSED: IIAB_PAUSE_BEFORE_INSTALL=true"
+    echo "=================================================================="
+    echo " You can now edit the configuration file:"
+    echo "   nano /etc/iiab/local_vars.yml"
+    echo ""
+    echo " Open a new terminal session (or background this one) to edit."
+    echo " When you are ready to proceed with installation, press Enter."
+    echo "=================================================================="
+    read -p "Press Enter to continue..."
+fi
 
 #-----------------------------
 # Run complete Android build

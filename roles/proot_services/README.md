@@ -59,6 +59,13 @@ http://localhost:8085/maps
    curl https://raw.githubusercontent.com/deldesir/iiab/refs/heads/master/roles/proot_services/1_iiab-on-android.sh | bash
    ```
 
+   **Customizing Installation:**
+   If you want to edit `local_vars.yml` before the installation starts (e.g., to enable extra services), you can use the `IIAB_PAUSE_BEFORE_INSTALL` environment variable:
+   ```bash
+   curl https://raw.githubusercontent.com/deldesir/iiab/refs/heads/master/roles/proot_services/1_iiab-on-android.sh | IIAB_PAUSE_BEFORE_INSTALL=true bash
+   ```
+   The script will download the configuration and wait for you to edit `/etc/iiab/local_vars.yml` before proceeding.
+
    If the installer completes successfully, the installation process is finished. And you'll see a text box reading:
 
    > INTERNET-IN-A-BOX (IIAB) SOFTWARE INSTALL IS COMPLETE
