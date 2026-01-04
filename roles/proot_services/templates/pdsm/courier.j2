@@ -1,0 +1,124 @@
+#!/bin/sh
+# /usr/local/pdsm/services-available/courier
+# PDSM service wrapper for RapidPro Courier
+
+PDSM_COMMON="/usr/local/pdsm/lib/pdsm-common.sh"
+[ -r "$PDSM_COMMON" ] && . "$PDSM_COMMON"
+
+SERVICE_NAME="courier"
+PDSM_START_TIMEOUT=30
+
+PIDFILE="/run/rapidpro/courier.pid"
+LOGFILE="/var/log/rapidpro/courier.log"
+
+# Environment Variables from systemd
+export COURIER_DB="postgres://{{ rapidpro_db_user }}:{{ rapidpro_db_pass }}@localhost/{{ rapidpro_db_name }}?sslmode=disable"
+export COURIER_VALKEY="valkey://localhost:6379/0"
+export COURIER_SPOOL_DIR="{{ rapidpro_dir }}/spool/courier"
+export COURIER_DYNAMO_ENDPOINT="http://localhost:4567"
+export COURIER_S3_ENDPOINT="http://localhost:1"
+
+# Ensure dirs
+mkdir -p /run/rapidpro
+mkdir -p /var/log/rapidpro
+mkdir -p "$COURIER_SPOOL_DIR"
+chown {{ iiab_admin_user }}:{{ iiab_admin_user }} "$COURIER_SPOOL_DIR" 2>/dev/null || true
+
+running() {
+  [ -s "$PIDFILE" ] || return 1
+  pid="$(cat "$PIDFILE" 2>/dev/null || echo '')"
+  [ -n "$pid" ] || return 1
+  kill -0 "$pid" 2>/dev/null
+}
+
+start() {
+  if running; then
+    echo "[pdsm:$SERVICE_NAME] already running"
+    return 0
+  fi
+
+  echo "[pdsm:$SERVICE_NAME] starting..."
+  
+  export USER={{ iiab_admin_user }}
+  
+  # Go binary doesn't daemonize well without helper or nohup + pid management.
+  # We use shell black magic.
+  
+  (
+    # Run as target user?
+    # chroot/proot usually runs as root but maps to user? 
+    # For simplicity in pdsm, we often just run commands.
+    # But RapidPro usually expects a user.
+    # We will assume running as current user (root in proot) is fine OR rely on internal dropping?
+    # Actually, main pdsm scripts don't `su`.
+    # But systemd says `User={{ iiab_admin_user }}`.
+    # In Proot, `su` might not work well.
+    # We will run as is (root inside proot), but set env vars.
+    
+    cd {{ rapidpro_dir }}
+    nohup /usr/local/bin/courier >>"$LOGFILE" 2>&1 &
+    mkdir -p "$(dirname "$PIDFILE")"
+    echo $! > "$PIDFILE"
+  )
+
+  for i in $(seq 1 "$PDSM_START_TIMEOUT"); do
+    if running; then
+      echo "[pdsm:$SERVICE_NAME] started"
+      return 0
+    fi
+    sleep 1
+  done
+
+  echo "[pdsm:$SERVICE_NAME] failed to start" >&2
+  return 1
+}
+
+stop() {
+  if ! running; then
+    echo "[pdsm:$SERVICE_NAME] already stopped"
+    return 0
+  fi
+
+  echo "[pdsm:$SERVICE_NAME] stopping..."
+  
+  pid="$(cat "$PIDFILE" 2>/dev/null)"
+  if [ -n "$pid" ]; then
+    kill "$pid" 2>/dev/null || true
+    for i in $(seq 1 "$PDSM_START_TIMEOUT"); do
+      if ! running; then
+        echo "[pdsm:$SERVICE_NAME] stopped"
+        rm -f "$PIDFILE"
+        return 0
+      fi
+      sleep 1
+    done
+    kill -9 "$pid" 2>/dev/null || true
+    rm -f "$PIDFILE"
+  fi
+  
+  echo "[pdsm:$SERVICE_NAME] stopped (killed)"
+  return 0
+}
+
+status() {
+  if running; then
+    echo "[pdsm:$SERVICE_NAME] running"
+    return 0
+  fi
+  echo "[pdsm:$SERVICE_NAME] not running"
+  return 3
+}
+
+case "$1" in
+  start|stop|status)
+    "$1"
+    ;;
+  restart)
+    stop
+    start
+    ;;
+  *)
+    echo "Usage: $0 {start|stop|restart|status}" >&2
+    exit 1
+    ;;
+esac

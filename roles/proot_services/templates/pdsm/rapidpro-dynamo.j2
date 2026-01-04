@@ -1,0 +1,102 @@
+#!/bin/sh
+# /usr/local/pdsm/services-available/rapidpro-dynamo
+# PDSM service wrapper for RapidPro Dynalite
+
+PDSM_COMMON="/usr/local/pdsm/lib/pdsm-common.sh"
+[ -r "$PDSM_COMMON" ] && . "$PDSM_COMMON"
+
+SERVICE_NAME="rapidpro-dynamo"
+PDSM_START_TIMEOUT=30
+
+PIDFILE="/run/rapidpro/dynamo.pid"
+LOGFILE="/var/log/rapidpro/dynamo.log"
+
+mkdir -p /run/rapidpro
+mkdir -p /var/log/rapidpro
+mkdir -p {{ rapidpro_dir }}/dynamo
+chown {{ iiab_admin_user }}:{{ iiab_admin_user }} {{ rapidpro_dir }}/dynamo 2>/dev/null || true
+
+running() {
+  [ -s "$PIDFILE" ] || return 1
+  pid="$(cat "$PIDFILE" 2>/dev/null || echo '')"
+  [ -n "$pid" ] || return 1
+  kill -0 "$pid" 2>/dev/null
+}
+
+start() {
+  if running; then
+    echo "[pdsm:$SERVICE_NAME] already running"
+    return 0
+  fi
+
+  echo "[pdsm:$SERVICE_NAME] starting..."
+  export USER={{ iiab_admin_user }}
+  
+  (
+    # Dynalite is usually global npm package
+    nohup /usr/bin/dynalite --port 4567 --path {{ rapidpro_dir }}/dynamo >>"$LOGFILE" 2>&1 &
+    mkdir -p "$(dirname "$PIDFILE")"
+    echo $! > "$PIDFILE"
+  )
+
+  for i in $(seq 1 "$PDSM_START_TIMEOUT"); do
+    if running; then
+      echo "[pdsm:$SERVICE_NAME] started"
+      return 0
+    fi
+    sleep 1
+  done
+
+  echo "[pdsm:$SERVICE_NAME] failed to start" >&2
+  return 1
+}
+
+stop() {
+  if ! running; then
+    echo "[pdsm:$SERVICE_NAME] already stopped"
+    return 0
+  fi
+
+  echo "[pdsm:$SERVICE_NAME] stopping..."
+  
+  pid="$(cat "$PIDFILE" 2>/dev/null)"
+  if [ -n "$pid" ]; then
+    kill "$pid" 2>/dev/null || true
+    for i in $(seq 1 "$PDSM_START_TIMEOUT"); do
+      if ! running; then
+        echo "[pdsm:$SERVICE_NAME] stopped"
+        rm -f "$PIDFILE"
+        return 0
+      fi
+      sleep 1
+    done
+    kill -9 "$pid" 2>/dev/null || true
+    rm -f "$PIDFILE"
+  fi
+  
+  echo "[pdsm:$SERVICE_NAME] stopped (killed)"
+  return 0
+}
+
+status() {
+  if running; then
+    echo "[pdsm:$SERVICE_NAME] running"
+    return 0
+  fi
+  echo "[pdsm:$SERVICE_NAME] not running"
+  return 3
+}
+
+case "$1" in
+  start|stop|status)
+    "$1"
+    ;;
+  restart)
+    stop
+    start
+    ;;
+  *)
+    echo "Usage: $0 {start|stop|restart|status}" >&2
+    exit 1
+    ;;
+esac

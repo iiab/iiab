@@ -66,6 +66,7 @@
     enabled: yes
     daemon_reload: yes
   become: yes
+  when: ansible_service_mgr == 'systemd'
 
 - name: Run DynamoDB migrations
   shell: |
@@ -225,13 +226,19 @@
   systemd:
     daemon_reload: yes
   become: yes
+  when: ansible_service_mgr == 'systemd'
 
 - name: Restart RapidPro Gunicorn if code changed
   systemd:
     name: rapidpro-gunicorn
     state: restarted
   become: yes
-  when: rapidpro_patch_result.changed or execute_frontend_patch_script.changed
+  when: (rapidpro_patch_result.changed or execute_frontend_patch_script.changed) and ansible_service_mgr == 'systemd'
+
+- name: Restart RapidPro Gunicorn if code changed (Android)
+  shell: pdsm restart rapidpro-server
+  become: yes
+  when: (rapidpro_patch_result.changed or execute_frontend_patch_script.changed) and ansible_service_mgr != 'systemd'
 
 - name: Enable or disable RapidPro services
   include_tasks: enable-or-disable.yml

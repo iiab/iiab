@@ -1,0 +1,100 @@
+#!/bin/sh
+# /usr/local/pdsm/services-available/rapidpro-celery
+# PDSM service wrapper for RapidPro Celery Worker
+
+PDSM_COMMON="/usr/local/pdsm/lib/pdsm-common.sh"
+[ -r "$PDSM_COMMON" ] && . "$PDSM_COMMON"
+
+SERVICE_NAME="rapidpro-celery"
+PDSM_START_TIMEOUT=30
+
+RAPIDPRO_DIR="{{ rapidpro_dir }}"
+PIDFILE="/run/rapidpro/rapidpro-celery.pid"
+LOGFILE="/var/log/rapidpro/rapidpro-celery.log"
+
+running() {
+  [ -s "$PIDFILE" ] || return 1
+  pid="$(cat "$PIDFILE" 2>/dev/null || echo '')"
+  [ -n "$pid" ] || return 1
+  kill -0 "$pid" 2>/dev/null
+}
+
+start() {
+  if running; then
+    echo "[pdsm:$SERVICE_NAME] already running"
+    return 0
+  fi
+
+  echo "[pdsm:$SERVICE_NAME] starting..."
+  
+  cd "$RAPIDPRO_DIR" || return 1
+  export USER={{ iiab_admin_user }}
+  
+  # Run Celery Worker (Combined with Beat if configured, strictly mimicking .service)
+  # Service says: celery -A temba worker -l info -B
+  # We use --pidfile to manage it.
+  nohup {{ poetry_env_path }}/bin/celery -A temba worker -l info -B \
+    --pidfile="$PIDFILE" \
+    >>"$LOGFILE" 2>&1 &
+
+  for i in $(seq 1 "$PDSM_START_TIMEOUT"); do
+    if running; then
+      echo "[pdsm:$SERVICE_NAME] started"
+      return 0
+    fi
+    sleep 1
+  done
+
+  echo "[pdsm:$SERVICE_NAME] failed to start" >&2
+  return 1
+}
+
+stop() {
+  if ! running; then
+    echo "[pdsm:$SERVICE_NAME] already stopped"
+    return 0
+  fi
+
+  echo "[pdsm:$SERVICE_NAME] stopping..."
+  
+  pid="$(cat "$PIDFILE" 2>/dev/null)"
+  if [ -n "$pid" ]; then
+    kill "$pid" 2>/dev/null || true
+    for i in $(seq 1 "$PDSM_START_TIMEOUT"); do
+      if ! running; then
+        echo "[pdsm:$SERVICE_NAME] stopped"
+        rm -f "$PIDFILE"
+        return 0
+      fi
+      sleep 1
+    done
+    kill -9 "$pid" 2>/dev/null || true
+    rm -f "$PIDFILE"
+  fi
+  
+  echo "[pdsm:$SERVICE_NAME] stopped (killed)"
+  return 0
+}
+
+status() {
+  if running; then
+    echo "[pdsm:$SERVICE_NAME] running"
+    return 0
+  fi
+  echo "[pdsm:$SERVICE_NAME] not running"
+  return 3
+}
+
+case "$1" in
+  start|stop|status)
+    "$1"
+    ;;
+  restart)
+    stop
+    start
+    ;;
+  *)
+    echo "Usage: $0 {start|stop|restart|status}" >&2
+    exit 1
+    ;;
+esac

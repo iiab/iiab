@@ -44,7 +44,7 @@ http://localhost:8085/maps
 4. Prepare the Termux app by running the following command from the Termux terminal:
 
    ```
-   curl https://raw.githubusercontent.com/iiab/iiab/refs/heads/master/roles/proot_services/0_termux-setup.sh | bash
+   curl https://raw.githubusercontent.com/deldesir/iiab/refs/heads/master/roles/proot_services/0_termux-setup.sh | bash
    ```
 
    Once complete, enter the Debian environment to continue the installation:
@@ -56,7 +56,7 @@ http://localhost:8085/maps
 5. Run the `1_iiab-on-android.sh` script which (a) installs `local_vars_android.yml` to [`/etc/iiab/local_vars.yml`](https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it?) and (b) runs the IIAB installer:
 
    ```
-   curl https://raw.githubusercontent.com/iiab/iiab/refs/heads/master/roles/proot_services/1_iiab-on-android.sh | bash
+   curl https://raw.githubusercontent.com/deldesir/iiab/refs/heads/master/roles/proot_services/1_iiab-on-android.sh | bash
    ```
 
    If the installer completes successfully, the installation process is finished. And you'll see a text box reading:
@@ -65,7 +65,7 @@ http://localhost:8085/maps
 
 ## Test your IIAB install
 
-Test your IIAB install by running the `pdsm` command as follows: ([learn more](https://github.com/iiab/iiab/tree/master/roles/proot_services#proot-distro-service-manager-pdsm))
+Test your IIAB install by running the `pdsm` command as follows: ([learn more](https://github.com/deldesir/iiab/tree/master/roles/proot_services#proot-distro-service-manager-pdsm))
 
 ```
 pdsm start-all

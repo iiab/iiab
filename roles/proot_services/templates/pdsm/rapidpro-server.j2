@@ -1,0 +1,112 @@
+#!/bin/sh
+# /usr/local/pdsm/services-available/rapidpro-server
+# PDSM service wrapper for RapidPro Gunicorn Server
+
+PDSM_COMMON="/usr/local/pdsm/lib/pdsm-common.sh"
+[ -r "$PDSM_COMMON" ] && . "$PDSM_COMMON"
+
+SERVICE_NAME="rapidpro-server"
+PDSM_START_TIMEOUT=30
+
+RAPIDPRO_DIR="{{ rapidpro_dir }}"
+PIDFILE="/run/rapidpro/rapidpro-server.pid"
+LOGFILE="/var/log/rapidpro/rapidpro-server.log"
+
+# Ensure runtime directory exists
+mkdir -p /run/rapidpro
+mkdir -p /var/log/rapidpro
+
+running() {
+  [ -s "$PIDFILE" ] || return 1
+  pid="$(cat "$PIDFILE" 2>/dev/null || echo '')"
+  [ -n "$pid" ] || return 1
+  kill -0 "$pid" 2>/dev/null
+}
+
+start() {
+  if running; then
+    echo "[pdsm:$SERVICE_NAME] already running"
+    return 0
+  fi
+
+  echo "[pdsm:$SERVICE_NAME] starting..."
+  
+  # Run Gunicorn
+  cd "$RAPIDPRO_DIR" || return 1
+  export USER={{ iiab_admin_user }}
+  
+  # Command derived from systemd service
+  # We add -p PIDFILE manually
+  nohup {{ poetry_env_path }}/bin/gunicorn temba.wsgi:application \
+    --access-logfile "$LOGFILE" \
+    --error-logfile "$LOGFILE" \
+    --workers 3 \
+    --bind "unix:/run/rapidpro/gunicorn.sock" \
+    --forwarded-allow-ips="*" \
+    -p "$PIDFILE" \
+    >>"$LOGFILE" 2>&1 &
+
+  for i in $(seq 1 "$PDSM_START_TIMEOUT"); do
+    if running; then
+      echo "[pdsm:$SERVICE_NAME] started"
+      return 0
+    fi
+    sleep 1
+  done
+
+  echo "[pdsm:$SERVICE_NAME] failed to start" >&2
+  return 1
+}
+
+stop() {
+  if ! running; then
+    echo "[pdsm:$SERVICE_NAME] already stopped"
+    return 0
+  fi
+
+  echo "[pdsm:$SERVICE_NAME] stopping..."
+  
+  pid="$(cat "$PIDFILE" 2>/dev/null)"
+  if [ -n "$pid" ]; then
+    kill "$pid" 2>/dev/null || true
+    # Wait for it to die
+    for i in $(seq 1 "$PDSM_START_TIMEOUT"); do
+      if ! running; then
+        echo "[pdsm:$SERVICE_NAME] stopped"
+        rm -f "$PIDFILE"
+        return 0
+      fi
+      sleep 1
+    done
+    
+    # Force kill
+    kill -9 "$pid" 2>/dev/null || true
+    rm -f "$PIDFILE"
+  fi
+  
+  echo "[pdsm:$SERVICE_NAME] stopped (killed)"
+  return 0
+}
+
+status() {
+  if running; then
+    echo "[pdsm:$SERVICE_NAME] running"
+    return 0
+  fi
+  echo "[pdsm:$SERVICE_NAME] not running"
+  return 3
+}
+
+case "$1" in
+  start|stop|status)
+    "$1"
+    ;;
+  restart)
+    stop
+    start
+    ;;
+  *)
+    echo "Usage: $0 {start|stop|restart|status}" >&2
+    exit 1
+    ;;
+esac

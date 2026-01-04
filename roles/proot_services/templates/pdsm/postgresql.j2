@@ -1,0 +1,107 @@
+#!/bin/sh
+# /usr/local/pdsm/services-available/postgresql
+# PDSM service wrapper for PostgreSQL
+
+PDSM_COMMON="/usr/local/pdsm/lib/pdsm-common.sh"
+[ -r "$PDSM_COMMON" ] && . "$PDSM_COMMON"
+
+SERVICE_NAME="postgresql"
+PDSM_START_TIMEOUT=30
+
+PG_VERSION="15" # Default or detect? Assuming 15 or 16.
+PGDATA="/var/lib/postgresql/data"
+PIDFILE="$PGDATA/postmaster.pid"
+LOGFILE="/var/log/postgresql/postgresql.log"
+BIN_DIR="/usr/lib/postgresql/$PG_VERSION/bin" 
+# In many distros pg_ctl is in /usr/bin or /usr/lib/postgresql/X/bin
+# We will try path first
+
+if command -v pg_ctl >/dev/null 2>&1; then
+    PG_CTL="pg_ctl"
+elif [ -x "/usr/lib/postgresql/16/bin/pg_ctl" ]; then
+    PG_CTL="/usr/lib/postgresql/16/bin/pg_ctl"
+elif [ -x "/usr/lib/postgresql/15/bin/pg_ctl" ]; then
+    PG_CTL="/usr/lib/postgresql/15/bin/pg_ctl"
+elif [ -x "/usr/lib/postgresql/13/bin/pg_ctl" ]; then
+    PG_CTL="/usr/lib/postgresql/13/bin/pg_ctl"
+else
+    # Fallback to whatever is in path or error
+    PG_CTL="pg_ctl"
+fi
+
+mkdir -p /var/log/postgresql
+chown postgres:postgres /var/log/postgresql 2>/dev/null || true
+
+# Helper to init db if strict
+init_db_if_needed() {
+    if [ ! -d "$PGDATA" ] || [ -z "$(ls -A "$PGDATA")" ]; then
+        echo "[pdsm:$SERVICE_NAME] initializing database in $PGDATA..."
+        mkdir -p "$PGDATA"
+        chown postgres:postgres "$PGDATA"
+        su - postgres -c "$PG_CTL initdb -D $PGDATA" || return 1
+    fi
+    return 0
+}
+
+running() {
+    su - postgres -c "$PG_CTL status -D $PGDATA" >/dev/null 2>&1
+}
+
+start() {
+    if running; then
+        echo "[pdsm:$SERVICE_NAME] already running"
+        return 0
+    fi
+
+    echo "[pdsm:$SERVICE_NAME] starting..."
+    init_db_if_needed || { echo "[pdsm:$SERVICE_NAME] initdb failed"; return 1; }
+
+    su - postgres -c "$PG_CTL start -D $PGDATA -l $LOGFILE"
+
+    for i in $(seq 1 "$PDSM_START_TIMEOUT"); do
+        if running; then
+            echo "[pdsm:$SERVICE_NAME] started"
+            return 0
+        fi
+        sleep 1
+    done
+
+    echo "[pdsm:$SERVICE_NAME] failed to start" >&2
+    return 1
+}
+
+stop() {
+    if ! running; then
+        echo "[pdsm:$SERVICE_NAME] already stopped"
+        return 0
+    fi
+
+    echo "[pdsm:$SERVICE_NAME] stopping..."
+    su - postgres -c "$PG_CTL stop -D $PGDATA -m fast"
+
+    for i in $(seq 1 "$PDSM_START_TIMEOUT"); do
+        if ! running; then
+            echo "[pdsm:$SERVICE_NAME] stopped"
+            return 0
+        fi
+        sleep 1
+    done
+
+    echo "[pdsm:$SERVICE_NAME] did not fully stop" >&2
+    return 1
+}
+
+status() {
+    if running; then
+        echo "[pdsm:$SERVICE_NAME] running"
+        return 0
+    fi
+    echo "[pdsm:$SERVICE_NAME] not running"
+    return 3
+}
+
+case "$1" in
+    start|stop|status) "$1" ;;
+    restart) stop; start ;;
+    *) echo "Usage: $0 {start|stop|restart|status}" >&2; exit 1 ;;
+esac

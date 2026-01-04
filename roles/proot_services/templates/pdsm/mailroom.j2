@@ -1,0 +1,113 @@
+#!/bin/sh
+# /usr/local/pdsm/services-available/mailroom
+# PDSM service wrapper for RapidPro Mailroom
+
+PDSM_COMMON="/usr/local/pdsm/lib/pdsm-common.sh"
+[ -r "$PDSM_COMMON" ] && . "$PDSM_COMMON"
+
+SERVICE_NAME="mailroom"
+PDSM_START_TIMEOUT=30
+
+PIDFILE="/run/rapidpro/mailroom.pid"
+LOGFILE="/var/log/rapidpro/mailroom.log"
+
+export MAILROOM_DB="postgres://{{ rapidpro_db_user }}:{{ rapidpro_db_pass }}@localhost/{{ rapidpro_db_name }}?sslmode=disable"
+export MAILROOM_VALKEY="valkey://localhost:6379/0"
+export MAILROOM_SESSION_STORAGE="db"
+export MAILROOM_SPOOL_DIR="{{ rapidpro_dir }}/spool/mailroom"
+export AWS_ACCESS_KEY_ID="dummy"
+export AWS_SECRET_ACCESS_KEY="dummy"
+export AWS_REGION="us-east-1"
+export MAILROOM_DYNAMO_ENDPOINT="http://localhost:4567"
+export MAILROOM_S3_ENDPOINT="http://localhost:1"
+export MAILROOM_ELASTIC=""
+
+mkdir -p /run/rapidpro
+mkdir -p /var/log/rapidpro
+mkdir -p "$MAILROOM_SPOOL_DIR"
+chown {{ iiab_admin_user }}:{{ iiab_admin_user }} "$MAILROOM_SPOOL_DIR" 2>/dev/null || true
+
+running() {
+  [ -s "$PIDFILE" ] || return 1
+  pid="$(cat "$PIDFILE" 2>/dev/null || echo '')"
+  [ -n "$pid" ] || return 1
+  kill -0 "$pid" 2>/dev/null
+}
+
+start() {
+  if running; then
+    echo "[pdsm:$SERVICE_NAME] already running"
+    return 0
+  fi
+
+  echo "[pdsm:$SERVICE_NAME] starting..."
+  export USER={{ iiab_admin_user }}
+  
+  (
+    cd {{ rapidpro_dir }}
+    nohup /usr/local/bin/mailroom >>"$LOGFILE" 2>&1 &
+    mkdir -p "$(dirname "$PIDFILE")"
+    echo $! > "$PIDFILE"
+  )
+
+  for i in $(seq 1 "$PDSM_START_TIMEOUT"); do
+    if running; then
+      echo "[pdsm:$SERVICE_NAME] started"
+      return 0
+    fi
+    sleep 1
+  done
+
+  echo "[pdsm:$SERVICE_NAME] failed to start" >&2
+  return 1
+}
+
+stop() {
+  if ! running; then
+    echo "[pdsm:$SERVICE_NAME] already stopped"
+    return 0
+  fi
+
+  echo "[pdsm:$SERVICE_NAME] stopping..."
+  
+  pid="$(cat "$PIDFILE" 2>/dev/null)"
+  if [ -n "$pid" ]; then
+    kill "$pid" 2>/dev/null || true
+    for i in $(seq 1 "$PDSM_START_TIMEOUT"); do
+      if ! running; then
+        echo "[pdsm:$SERVICE_NAME] stopped"
+        rm -f "$PIDFILE"
+        return 0
+      fi
+      sleep 1
+    done
+    kill -9 "$pid" 2>/dev/null || true
+    rm -f "$PIDFILE"
+  fi
+  
+  echo "[pdsm:$SERVICE_NAME] stopped (killed)"
+  return 0
+}
+
+status() {
+  if running; then
+    echo "[pdsm:$SERVICE_NAME] running"
+    return 0
+  fi
+  echo "[pdsm:$SERVICE_NAME] not running"
+  return 3
+}
+
+case "$1" in
+  start|stop|status)
+    "$1"
+    ;;
+  restart)
+    stop
+    start
+    ;;
+  *)
+    echo "Usage: $0 {start|stop|restart|status}" >&2
+    exit 1
+    ;;
+esac

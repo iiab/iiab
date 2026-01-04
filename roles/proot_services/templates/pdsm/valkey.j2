@@ -1,0 +1,115 @@
+#!/bin/sh
+# /usr/local/pdsm/services-available/valkey
+# PDSM service wrapper for Valkey (accepts Redis as fallback)
+
+PDSM_COMMON="/usr/local/pdsm/lib/pdsm-common.sh"
+[ -r "$PDSM_COMMON" ] && . "$PDSM_COMMON"
+
+SERVICE_NAME="valkey"
+PDSM_START_TIMEOUT=30
+
+# Attempt to detect Valkey vs Redis
+if command -v valkey-server >/dev/null 2>&1; then
+    BIN="valkey-server"
+    USER="valkey"
+    CONF_FILE="/etc/valkey/valkey.conf"
+    PIDFILE="/run/valkey/valkey-server.pid"
+    LOGFILE="/var/log/valkey/valkey-server.log"
+    DIR="/var/lib/valkey"
+elif command -v redis-server >/dev/null 2>&1; then
+    BIN="redis-server"
+    USER="redis"
+    CONF_FILE="/etc/redis/redis.conf"
+    PIDFILE="/run/redis/redis-server.pid"
+    LOGFILE="/var/log/redis/redis-server.log"
+    DIR="/var/lib/redis"
+else
+    echo "[pdsm:$SERVICE_NAME] valkey-server or redis-server not found" >&2
+    exit 1
+fi
+
+mkdir -p "$(dirname "$PIDFILE")"
+mkdir -p "$(dirname "$LOGFILE")"
+mkdir -p "$DIR"
+chown "$USER":"$USER" "$(dirname "$PIDFILE")" "$(dirname "$LOGFILE")" "$DIR" 2>/dev/null || true
+
+running() {
+    [ -s "$PIDFILE" ] || return 1
+    pid="$(cat "$PIDFILE" 2>/dev/null || echo '')"
+    [ -n "$pid" ] || return 1
+    kill -0 "$pid" 2>/dev/null
+}
+
+start() {
+    if running; then
+        echo "[pdsm:$SERVICE_NAME] already running ($BIN)"
+        return 0
+    fi
+
+    echo "[pdsm:$SERVICE_NAME] starting $BIN..."
+
+    # Build command
+    CMD="$BIN"
+    [ -f "$CONF_FILE" ] && CMD="$CMD $CONF_FILE"
+    CMD="$CMD --daemonize yes --pidfile $PIDFILE --logfile $LOGFILE --dir $DIR"
+
+    # Execute as user
+    if id -u "$USER" >/dev/null 2>&1; then
+        su -s /bin/sh "$USER" -c "$CMD"
+    else
+        $CMD
+    fi
+
+    for i in $(seq 1 "$PDSM_START_TIMEOUT"); do
+        if running; then
+            echo "[pdsm:$SERVICE_NAME] started"
+            return 0
+        fi
+        sleep 1
+    done
+
+    echo "[pdsm:$SERVICE_NAME] failed to start" >&2
+    return 1
+}
+
+stop() {
+    if ! running; then
+        echo "[pdsm:$SERVICE_NAME] already stopped"
+        return 0
+    fi
+
+    echo "[pdsm:$SERVICE_NAME] stopping..."
+    
+    pid="$(cat "$PIDFILE" 2>/dev/null)"
+    if [ -n "$pid" ]; then
+        kill "$pid" 2>/dev/null || true
+        for i in $(seq 1 "$PDSM_START_TIMEOUT"); do
+            if ! running; then
+                echo "[pdsm:$SERVICE_NAME] stopped"
+                rm -f "$PIDFILE"
+                return 0
+            fi
+            sleep 1
+        done
+        kill -9 "$pid" 2>/dev/null || true
+        rm -f "$PIDFILE"
+    fi
+
+    echo "[pdsm:$SERVICE_NAME] did not fully stop" >&2
+    return 1
+}
+
+status() {
+    if running; then
+        echo "[pdsm:$SERVICE_NAME] running ($BIN)"
+        return 0
+    fi
+    echo "[pdsm:$SERVICE_NAME] not running"
+    return 3
+}
+
+case "$1" in
+    start|stop|status) "$1" ;;
+    restart) stop; start ;;
+    *) echo "Usage: $0 {start|stop|restart|status}" >&2; exit 1 ;;
+esac
