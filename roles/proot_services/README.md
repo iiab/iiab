@@ -124,7 +124,7 @@ If you encounter an error or problem, please open an [issue](https://github.com/
 
 While using the phone keyboard and screen is practical when on the move, accessing the PRoot Distro's Debian environment from a PC or laptop is very useful for debugging. You can use an existing Wi-Fi connection or enable the native Android hotspot if no wireless LAN is available.
 
-Before you begin, obtain your Android phone or tablet’s IP address by running `ifconfig` in Termux.  Or obtain the IP by checking **About device → Status** in Android settings.
+Before you begin, obtain your Android phone or tablet’s IP address by running `ifconfig` in Termux. Or obtain the IP by checking **About device → Status** in Android settings.
 
 ### SSH
 
@@ -136,7 +136,7 @@ To log in to IIAB on Android from your computer, follow these SSH command-line i
    exit
    ```
 
-2. The fastest way to SSH into your Android phone (or tablet) is to set a password for its Termux user. At Termux's high-level CLI, run:
+2. The fastest way to SSH into your Android phone (or tablet) is to set a password for its Termux user. At Termux's high-level CLI. run:
 
    ```
    passwd
@@ -150,7 +150,7 @@ To log in to IIAB on Android from your computer, follow these SSH command-line i
 
    Optionally, security can be improved by using standard SSH key-based authentication via the `~/.ssh/authorized_keys` file.
 
-4. Start the SSH service.  At Termux's high-level CLI, run:
+4. Start the SSH service. At Termux's high-level CLI, run:
 
    ```
    sshd
