@@ -47,7 +47,7 @@ http://localhost:8085/maps
    curl https://raw.githubusercontent.com/iiab/iiab/refs/heads/master/roles/proot_services/0_termux-setup.sh | bash
    ```
 
-   Once complete, enter the Debian environment to continue the installation:
+   Once complete, enter [PRoot Distro](https://wiki.termux.com/wiki/PRoot)'s Debian environment to continue the installation:
 
    ```
    proot-distro login debian
@@ -98,7 +98,7 @@ If you encounter an error or problem, please open an [issue](https://github.com/
    proot-distro login debian
    ```
 
-   EXPLANATION: Starting from Termux's high-level CLI (Command-Line Interface), you've "shelled into" PRoot Distro's low-level Debian CLI.
+   EXPLANATION: Starting from Termux's high-level CLI (Command-Line Interface), you've "shelled into" [PRoot Distro](https://wiki.termux.com/wiki/PRoot)'s low-level Debian CLI:
 
    ```
       +----------------------------------+
