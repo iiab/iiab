@@ -100,6 +100,27 @@ If you encounter an error or problem, please open an [issue](https://github.com/
 
    EXPLANATION: Starting from Termux's high-level CLI (Command-Line Interface), you've shelled into PRoot Distro's low-level Debian CLI.
 
++---------------------------------+
+| Android GUI (Apps, Settings)    |
++---------------+-----------------+
+                |
+                | Open
+                v
++---------------+-----------------+
+| Termux (Android CLI)            |
+|  $                              |
++---------------+-----------------+
+                |
+                | "login" to a lower environment layer with:
+                |   $ proot-distro login debian
+                v
++---------------+-----------------+
+| proot-distro: Debian (userspace)|
+|  debian root#                   |
+|  IIAB home(?)                   |
++---------------------------------+
+
+
 4. Enter the folder where IIAB stores ZIM files:
 
    ```
