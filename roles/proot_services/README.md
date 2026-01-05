@@ -98,28 +98,27 @@ If you encounter an error or problem, please open an [issue](https://github.com/
    proot-distro login debian
    ```
 
-   EXPLANATION: Starting from Termux's high-level CLI (Command-Line Interface), you've shelled into PRoot Distro's low-level Debian CLI.
+   EXPLANATION: Starting from Termux's high-level CLI (Command-Line Interface), you've "shelled into" PRoot Distro's low-level Debian CLI.
 
-+---------------------------------+
-| Android GUI (Apps, Settings)    |
-+---------------+-----------------+
-                |
-                | Open
-                v
-+---------------+-----------------+
-| Termux (Android CLI)            |
-|  $                              |
-+---------------+-----------------+
-                |
-                | "login" to a lower environment layer with:
-                |   $ proot-distro login debian
-                v
-+---------------+-----------------+
-| proot-distro: Debian (userspace)|
-|  debian root#                   |
-|  IIAB home(?)                   |
-+---------------------------------+
-
+   ```
+      +----------------------------------+
+      |   Android GUI (Apps, Settings)   |
+      +----------------+-----------------+
+                       |
+              open the | Termux app
+                       v
+      +----------------+-----------------+
+      |       Termux (Android CLI)       |
+      | $ proot-distro login debian      |
+      +----------------+-----------------+
+                       |
+      "shell into" the | low-level environment
+                       v
+      +----------------+-----------------+
+      | proot-distro: Debian (userspace) |
+      | debian root# cd /opt/iiab/iiab   |
+      +----------------------------------+
+   ```
 
 4. Enter the folder where IIAB stores ZIM files:
 
@@ -163,15 +162,9 @@ To log in to IIAB on Android from your computer, follow these SSH command-line i
    passwd
    ```
 
-3. To determine the Termux username, that SSH will require, run:
-
-   ```
-   whoami
-   ```
-
    Optionally, security can be improved by using standard SSH key-based authentication via the `~/.ssh/authorized_keys` file.
 
-4. Start the SSH service. At Termux's high-level CLI, run:
+3. Start the SSH service. At Termux's high-level CLI, run:
 
    ```
    sshd
@@ -179,7 +172,7 @@ To log in to IIAB on Android from your computer, follow these SSH command-line i
 
    The `sshd` service can be automated to start when Termux launches (see [Termux-services](https://wiki.Termux.com/wiki/Termux-services)). We recommend doing this only after improving login security using SSH keys.
 
-5. SSH to your Android phone.
+4. SSH to your Android phone.
 
    From your laptop or PC, connected to the same network as your Android phone, and knowing the phone’s IP address (for example, `192.168.10.100`), you would run:
 
@@ -187,9 +180,9 @@ To log in to IIAB on Android from your computer, follow these SSH command-line i
    ssh -p 8022 192.168.10.100
    ```
 
-   Use the username obtained by the `whoami` command above. Note that port **8022** is used for SSH.
+   A username is NOT needed!
 
-   Since Android runs without root permissions, SSH cannot use lower-numbered ports. For the same reason, the IIAB web server (nginx) uses port **8085** instead of port 80.
+   Note that port **8022** is used for SSH. Since Android runs without root permissions, SSH cannot use lower-numbered ports. (For the same reason, the IIAB web server [nginx] uses port **8085** instead of port 80.)
 
 ### Log in to the IIAB environment
 
