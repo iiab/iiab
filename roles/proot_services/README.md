@@ -98,6 +98,8 @@ If you encounter an error or problem, please open an [issue](https://github.com/
    proot-distro login debian
    ```
 
+   EXPLANATION: Starting from Termux's high-level CLI (Command-Line Interface), you've shelled into PRoot Distro's low-level Debian CLI.
+
 4. Enter the folder where IIAB stores ZIM files:
 
    ```
@@ -120,23 +122,27 @@ If you encounter an error or problem, please open an [issue](https://github.com/
 
 ## Remote Access
 
-While using the phone keyboard and screen is practical when on the move, accessing the PRoot Distro environment from a PC or laptop is very useful for debugging. You can use an existing Wi-Fi connection or enable the native Android hotspot if no wireless LAN is available.
+While using the phone keyboard and screen is practical when on the move, accessing the PRoot Distro's Debian environment from a PC or laptop is very useful for debugging. You can use an existing Wi-Fi connection or enable the native Android hotspot if no wireless LAN is available.
 
-Get your phone’s IP address by running `ifconfig` in Termux or by checking **About device → Status** in Android settings.
+Before you begin, obtain your Android phone or tablet’s IP address by running `ifconfig` in Termux.  Or obtain the IP by checking **About device → Status** in Android settings.
 
 ### SSH
 
-To log in to IIAB on Android from your computer, follow these SSH (command-line interface) instructions:
+To log in to IIAB on Android from your computer, follow these SSH command-line interface (CLI) instructions:
 
-1. Set up SSH credentials (on Termux, not PRoot Distro).
+1. On your Android phone or tablet, find your way to Termux's CLI. **If you earlier ran `proot-distro login debian` to get to PRoot Distro's low-level Debian CLI — you MUST step back up to Termux's high-level CLI — e.g. by running:**
 
-   The fastest way to SSH into your Android phone (or tablet) is to set a password for its Termux user. In Termux (not PRoot Distro), run:
+   ```
+   exit
+   ```
+
+2. The fastest way to SSH into your Android phone (or tablet) is to set a password for its Termux user. At Termux's high-level CLI, run:
 
    ```
    passwd
    ```
 
-   To determine the Termux username, run:
+3. To determine the Termux username, that SSH will require, run:
 
    ```
    whoami
@@ -144,7 +150,7 @@ To log in to IIAB on Android from your computer, follow these SSH (command-line 
 
    Optionally, security can be improved by using standard SSH key-based authentication via the `~/.ssh/authorized_keys` file.
 
-2. Start the SSH service from Termux: (not PRoot Distro)
+4. Start the SSH service.  At Termux's high-level CLI, run:
 
    ```
    sshd
@@ -152,15 +158,15 @@ To log in to IIAB on Android from your computer, follow these SSH (command-line 
 
    The `sshd` service can be automated to start when Termux launches (see [Termux-services](https://wiki.Termux.com/wiki/Termux-services)). We recommend doing this only after improving login security using SSH keys.
 
-3. SSH to your Android phone.
+5. SSH to your Android phone.
 
-   From your laptop or PC, connected to the same network as your Android phone, and knowing the phone’s IP address (e.g., `192.168.10.100`), run:
+   From your laptop or PC, connected to the same network as your Android phone, and knowing the phone’s IP address (for example, `192.168.10.100`), you would run:
 
    ```
    ssh -p 8022 192.168.10.100
    ```
 
-   No specific username is required. Note that port **8022** is used for SSH.
+   Use the username obtained by the `whoami` command above. Note that port **8022** is used for SSH.
 
    Since Android runs without root permissions, SSH cannot use lower-numbered ports. For the same reason, the IIAB web server (nginx) uses port **8085** instead of port 80.
 
