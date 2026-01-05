@@ -2,6 +2,7 @@
   postgresql_user:
     name: "{{ rapidpro_db_user }}"
     password: "{{ rapidpro_db_pass }}"
+    login_host: 127.0.0.1
   become: yes
   become_user: postgres
 
@@ -9,6 +10,7 @@
   postgresql_db:
     name: "{{ rapidpro_db_name }}"
     owner: "{{ rapidpro_db_user }}"
+    login_host: 127.0.0.1
   become: yes
   become_user: postgres
 
@@ -19,6 +21,7 @@
     name: "{{ item }}"
     db: "{{ rapidpro_db_name }}"
     login_db: postgres
+    login_host: 127.0.0.1
   loop:
     - postgis
     - postgis_topology
@@ -51,7 +54,7 @@
     chdir: "{{ rapidpro_dir }}"
   become: yes
   become_user: "{{ iiab_admin_user }}"
-  when: rapidpro_git_clone.changed or rapidpro_patch_result.changed or rapidpro_settings_common.changed or rapidpro_settings.changed
+  when: rapidpro_git_clone.changed or rapidpro_settings_common.changed or rapidpro_settings.changed
 
 - name: Create DynamoDB systemd service
   template:
@@ -68,6 +71,19 @@
   become: yes
   when: ansible_service_mgr == 'systemd'
 
+- name: Force start rapidpro-dynamo for migrations (Android)
+  shell: /usr/local/bin/pdsm start rapidpro-dynamo
+  become: yes
+  when: ansible_service_mgr != 'systemd'
+
+- name: Wait for DynamoDB to accept connections
+  wait_for:
+    port: 4567
+    host: 127.0.0.1
+    delay: 2
+    timeout: 60
+  when: rapidpro_git_clone.changed or rapidpro_settings_common.changed or rapidpro_settings.changed
+
 - name: Run DynamoDB migrations
   shell: |
     export PATH="/home/{{ iiab_admin_user }}/.local/bin:$PATH"
@@ -77,7 +93,7 @@
   become: yes
   become_user: "{{ iiab_admin_user }}"
   run_once: yes
-  when: rapidpro_git_clone.changed or rapidpro_patch_result.changed or rapidpro_settings_common.changed or rapidpro_settings.changed
+  when: rapidpro_git_clone.changed or rapidpro_settings_common.changed or rapidpro_settings.changed
 
 - name: Collect static files
   shell: |
@@ -87,7 +103,7 @@
     chdir: "{{ rapidpro_dir }}"
   become: yes
   become_user: "{{ iiab_admin_user }}"
-  when: rapidpro_git_clone.changed or rapidpro_patch_result.changed or rapidpro_settings_common.changed or rapidpro_settings.changed
+  when: rapidpro_git_clone.changed or rapidpro_settings_common.changed or rapidpro_settings.changed
 
 - name: Create frontend patch script
   template:
@@ -97,13 +113,14 @@
     mode: '0755'
   become_user: "{{ iiab_admin_user }}"
   become: yes
-  when: rapidpro_git_clone.changed or rapidpro_patch_result.changed or rapidpro_settings_common.changed or rapidpro_settings.changed
+  when: rapidpro_git_clone.changed or rapidpro_settings_common.changed or rapidpro_settings.changed
 
 - name: Execute frontend patch script
   command: python3 {{ rapidpro_dir }}/patch_urls.py
   become_user: "{{ iiab_admin_user }}"
   become: yes
-  when: rapidpro_git_clone.changed or rapidpro_patch_result.changed or rapidpro_settings_common.changed or rapidpro_settings.changed
+  register: execute_frontend_patch_script
+  when: rapidpro_git_clone.changed or rapidpro_settings_common.changed or rapidpro_settings.changed
 
 - name: Symlink mr directory for temba-store
   file:
@@ -233,12 +250,12 @@
     name: rapidpro-gunicorn
     state: restarted
   become: yes
-  when: (rapidpro_patch_result.changed or execute_frontend_patch_script.changed) and ansible_service_mgr == 'systemd'
+  when: execute_frontend_patch_script.changed and ansible_service_mgr == 'systemd'
 
 - name: Restart RapidPro Gunicorn if code changed (Android)
   shell: /usr/local/bin/pdsm restart rapidpro-server
   become: yes
-  when: (rapidpro_patch_result.changed or execute_frontend_patch_script.changed) and ansible_service_mgr != 'systemd'
+  when: execute_frontend_patch_script.changed and ansible_service_mgr != 'systemd'
 
 - name: Enable or disable RapidPro services
   include_tasks: enable-or-disable.yml

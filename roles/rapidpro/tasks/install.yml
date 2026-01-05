@@ -134,15 +134,10 @@
   become: yes
   register: rapidpro_git_clone
 
-- name: Set ownership of project directory
-  file:
-    path: "{{ rapidpro_dir }}"
-    state: directory
-    owner: "{{ iiab_admin_user }}"
-    group: "www-data"
-    mode: "0770"
-    recurse: yes
+- name: Set ownership of project directory (fast)
+  command: "chown -R {{ iiab_admin_user }}:www-data {{ rapidpro_dir }}"
   become: yes
+  changed_when: false
 
 - name: "Allow Python version in pyproject.toml"
   replace:
@@ -150,6 +145,24 @@
     regexp: 'requires-python = ">=3.12,<3.13"'
     replace: 'requires-python = ">=3.12,<3.{{ (ansible_python_version.split(''.'')[1] | int) + 1 }}"'
   become: yes
+
+- name: Add missing regex dependency
+  shell: |
+    export PATH="/home/{{ iiab_admin_user }}/.local/bin:$PATH"
+    poetry add regex
+  args:
+    chdir: "{{ rapidpro_dir }}"
+  become: yes
+  become_user: "{{ iiab_admin_user }}"
+
+- name: Add missing dependencies
+  shell: |
+    export PATH="/home/{{ iiab_admin_user }}/.local/bin:$PATH"
+    poetry add gunicorn celery
+  args:
+    chdir: "{{ rapidpro_dir }}"
+  become: yes
+  become_user: "{{ iiab_admin_user }}"
 
 # Patches removed as they are integrated into deldesir/rapidpro fork
 
@@ -163,13 +176,10 @@
   become: yes
   become_user: "{{ iiab_admin_user }}"
 
-- name: Fix permissions on Poetry cache
-  file:
-    path: "/home/{{ iiab_admin_user }}/.cache/pypoetry"
-    owner: "{{ iiab_admin_user }}"
-    group: "{{ iiab_admin_user }}"
-    recurse: yes
+- name: Fix permissions on Poetry cache (fast)
+  command: "chown -R {{ iiab_admin_user }}:{{ iiab_admin_user }} /home/{{ iiab_admin_user }}/.cache/pypoetry"
   become: yes
+  changed_when: false
 
 - name: Install Python dependencies with Poetry
   shell: |
@@ -177,7 +187,7 @@
     poetry env remove --all
     poetry env use $(which python3)
     poetry lock
-    poetry install
+    poetry install --without dev
   args:
     chdir: "{{ rapidpro_dir }}"
   become: yes
@@ -195,11 +205,14 @@
     global: yes
   become: yes
 
-- name: Install JavaScript dependencies
-  yarn:
-    path: "{{ rapidpro_dir }}"
+- name: Install JavaScript dependencies (with timeout)
+  shell: |
+    /usr/bin/yarn install --network-timeout 300000 --non-interactive
+  args:
+    chdir: "{{ rapidpro_dir }}"
   become: yes
   register: rapidpro_yarn_install
+  changed_when: false
 
 - name: Install global JS tools (less)
   yarn:
@@ -213,16 +226,12 @@
   args:
     chdir: "{{ rapidpro_dir }}"
   become: yes
-  when: rapidpro_git_clone.changed or rapidpro_patch_result.changed or rapidpro_yarn_install.changed
+  when: rapidpro_git_clone.changed or rapidpro_yarn_install.changed
 
 - name: Restore RapidPro Directory Ownership (after root build steps)
-  file:
-    path: "{{ rapidpro_dir }}"
-    owner: "{{ iiab_admin_user }}"
-    group: "{{ iiab_admin_user }}"
-    recurse: yes
+  command: "chown -R {{ iiab_admin_user }}:{{ iiab_admin_user }} {{ rapidpro_dir }}"
   become: yes
-  when: rapidpro_git_clone.changed or rapidpro_patch_result.changed or rapidpro_yarn_install.changed
+  when: rapidpro_git_clone.changed or rapidpro_yarn_install.changed
 
 - name: Allow Nginx traversal of RapidPro directory (Professional Fix)
   file:
@@ -263,6 +272,5 @@
     - postgresql
     - valkey
     - rapidpro-dynamo
-  failed_when: false
   become: yes
   when: ansible_service_mgr != 'systemd'

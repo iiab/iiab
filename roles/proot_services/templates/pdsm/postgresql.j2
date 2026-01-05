@@ -9,7 +9,7 @@ SERVICE_NAME="postgresql"
 PDSM_START_TIMEOUT=30
 
 PG_VERSION="15" # Default or detect? Assuming 15 or 16.
-PGDATA="/var/lib/postgresql/data"
+PGDATA="/library/pgsql-iiab"
 PIDFILE="$PGDATA/postmaster.pid"
 LOGFILE="/var/log/postgresql/postgresql.log"
 BIN_DIR="/usr/lib/postgresql/$PG_VERSION/bin" 
@@ -18,6 +18,8 @@ BIN_DIR="/usr/lib/postgresql/$PG_VERSION/bin"
 
 if command -v pg_ctl >/dev/null 2>&1; then
     PG_CTL="pg_ctl"
+elif [ -x "/usr/lib/postgresql/17/bin/pg_ctl" ]; then
+    PG_CTL="/usr/lib/postgresql/17/bin/pg_ctl"
 elif [ -x "/usr/lib/postgresql/16/bin/pg_ctl" ]; then
     PG_CTL="/usr/lib/postgresql/16/bin/pg_ctl"
 elif [ -x "/usr/lib/postgresql/15/bin/pg_ctl" ]; then
@@ -44,7 +46,13 @@ init_db_if_needed() {
 }
 
 running() {
-    su - postgres -c "$PG_CTL status -D $PGDATA" >/dev/null 2>&1
+    if [ -f "$PIDFILE" ]; then
+        PID=$(head -n 1 "$PIDFILE")
+        if kill -0 "$PID" 2>/dev/null; then
+            return 0
+        fi
+    fi
+    return 1
 }
 
 start() {
@@ -54,7 +62,30 @@ start() {
     fi
 
     echo "[pdsm:$SERVICE_NAME] starting..."
+    
+    # Self-Healing: Check for stale PID lock
+    if [ -f "$PIDFILE" ]; then
+        PID=$(head -n 1 "$PIDFILE")
+        if ! kill -0 "$PID" 2>/dev/null; then
+             echo "[pdsm:$SERVICE_NAME] Removing stale PID file (PID $PID not running)"
+             rm -f "$PIDFILE"
+        fi
+    fi
+
     init_db_if_needed || { echo "[pdsm:$SERVICE_NAME] initdb failed"; return 1; }
+
+    # Ensure reliable listening on TCP and fix PID location for Proot
+    if [ -f "$PGDATA/postgresql.conf" ]; then
+        # Force TCP listening
+        if ! grep -q "listen_addresses = '*'" "$PGDATA/postgresql.conf"; then
+            echo "listen_addresses = '*'" >> "$PGDATA/postgresql.conf"
+        fi
+        if ! grep -q "port = 5432" "$PGDATA/postgresql.conf"; then
+            echo "port = 5432" >> "$PGDATA/postgresql.conf"
+        fi
+        # Disable external_pid_file which puts pid in /run/postgresql (often invalid in Proot)
+        sed -i "s/^external_pid_file/#external_pid_file/" "$PGDATA/postgresql.conf"
+    fi
 
     su - postgres -c "$PG_CTL start -D $PGDATA -l $LOGFILE"
 

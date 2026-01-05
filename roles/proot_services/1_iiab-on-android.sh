@@ -41,8 +41,15 @@ apt-get install -y curl \
 #-----------------------------
 # Setup Android-specific local vars
 #-----------------------------
-mkdir /etc/iiab
-curl -fsSL $LOCAL_VARS > /etc/iiab/local_vars.yml
+mkdir -p /etc/iiab
+# Prefer local file if we are running from the repo
+if [ -f "vars/local_vars_android.yml" ]; then
+    cp vars/local_vars_android.yml /etc/iiab/local_vars.yml
+elif [ -f "/opt/iiab/iiab/vars/local_vars_android.yml" ]; then
+    cp /opt/iiab/iiab/vars/local_vars_android.yml /etc/iiab/local_vars.yml
+else
+    curl -fsSL $LOCAL_VARS > /etc/iiab/local_vars.yml
+fi
 
 if [ "$IIAB_PAUSE_BEFORE_INSTALL" = "true" ]; then
     echo ""

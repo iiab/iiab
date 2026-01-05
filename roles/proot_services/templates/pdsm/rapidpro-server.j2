@@ -34,17 +34,25 @@ start() {
   # Run Gunicorn
   cd "$RAPIDPRO_DIR" || return 1
   export USER={{ iiab_admin_user }}
+  export PATH="$PATH:/home/{{ iiab_admin_user }}/.local/bin"
   
-  # Command derived from systemd service
-  # We add -p PIDFILE manually
-  nohup {{ poetry_env_path }}/bin/gunicorn temba.wsgi:application \
+  # Dynamically find VENV (or hardcode if known, but let's be dynamic since we have poetry in path)
+  VENV_PATH=$(poetry env info --path 2>/dev/null)
+  
+  if [ -z "$VENV_PATH" ]; then
+      # Fallback to known path if poetry fails (speed hack)
+      VENV_PATH="/home/{{ iiab_admin_user }}/.cache/pypoetry/virtualenvs/temba-cUVkotcG-py3.13"
+  fi
+
+  # Direct binary execution (No poetry run overhead, No nohup issues)
+  "$VENV_PATH/bin/gunicorn" temba.wsgi:application \
     --access-logfile "$LOGFILE" \
     --error-logfile "$LOGFILE" \
     --workers 3 \
     --bind "unix:/run/rapidpro/gunicorn.sock" \
     --forwarded-allow-ips="*" \
     -p "$PIDFILE" \
-    >>"$LOGFILE" 2>&1 &
+    --daemon
 
   for i in $(seq 1 "$PDSM_START_TIMEOUT"); do
     if running; then
