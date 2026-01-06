@@ -23,8 +23,10 @@ mkdir -p "$(dirname "$LOGFILE")"
 running() {
   [ -s "$PIDFILE" ] || return 1
   pid="$(cat "$PIDFILE" 2>/dev/null || echo '')"
-  [ -n "$pid" ] || return 1
-  kill -0 "$pid" 2>/dev/null
+  [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null && return 0
+  
+  # Fallback: check if port is answering (handling Proot process visibility issues)
+  curl -I "http://127.0.0.1:$WUZAPI_PORT" -s -m 1 | grep -q "HTTP"
 }
 
 start() {
@@ -46,8 +48,11 @@ start() {
   # This is critical in Proot/Android where sockets linger
   fuser -k "$WUZAPI_PORT/tcp" >/dev/null 2>&1 || true
 
-  # Screen for persistence
-  # Atomic PID writing from inside the session
+  # Ensure PIDFILE directory is writable by the user
+  touch "$PIDFILE"
+  chown $USER "$PIDFILE"
+
+  # Screen for persistence with atomic PID write attempt
   screen -dmS "$SERVICE_NAME" su -s /bin/bash "$USER" -c "\
     echo \$\$ > \"$PIDFILE\"; \
     exec $BIN \
@@ -57,7 +62,7 @@ start() {
       -wadebug False \
       >>\"$LOGFILE\" 2>&1"
 
-  # Wait for PID file to appear
+  # Wait for PID file to contain something
   for i in $(seq 1 5); do
       [ -s "$PIDFILE" ] && break
       sleep 1
