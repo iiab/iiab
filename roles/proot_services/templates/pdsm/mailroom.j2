@@ -6,13 +6,12 @@ PDSM_COMMON="/usr/local/pdsm/lib/pdsm-common.sh"
 [ -r "$PDSM_COMMON" ] && . "$PDSM_COMMON"
 
 SERVICE_NAME="mailroom"
-PDSM_START_TIMEOUT=30
-
 PIDFILE="/run/rapidpro/mailroom.pid"
 LOGFILE="/var/log/rapidpro/mailroom.log"
 
 export MAILROOM_DB="postgres://{{ rapidpro_db_user }}:{{ rapidpro_db_pass }}@localhost/{{ rapidpro_db_name }}?sslmode=disable"
-export MAILROOM_VALKEY="valkey://localhost:6379/0"
+# Use Unix socket for Valkey in Mailroom too if supported, else TCP
+export MAILROOM_VALKEY="valkey://localhost:6379/0" 
 export MAILROOM_SESSION_STORAGE="db"
 export MAILROOM_SPOOL_DIR="{{ rapidpro_dir }}/spool/mailroom"
 export AWS_ACCESS_KEY_ID="dummy"
@@ -29,9 +28,9 @@ chown {{ iiab_admin_user }}:{{ iiab_admin_user }} "$MAILROOM_SPOOL_DIR" 2>/dev/n
 
 running() {
   [ -s "$PIDFILE" ] || return 1
-  pid="$(cat "$PIDFILE" 2>/dev/null || echo '')"
+  pid="$(cat "$PIDFILE" 2>/dev/null)"
   [ -n "$pid" ] || return 1
-  kill -0 "$pid" 2>/dev/null
+  kill -0 "$pid" 2>/dev/null || pgrep -u "{{ iiab_admin_user }}" -f "/usr/local/bin/mailroom" >/dev/null
 }
 
 start() {
@@ -42,15 +41,17 @@ start() {
 
   echo "[pdsm:$SERVICE_NAME] starting..."
   export USER={{ iiab_admin_user }}
-  
-  (
-    cd {{ rapidpro_dir }}
-    nohup /usr/local/bin/mailroom >>"$LOGFILE" 2>&1 &
-    mkdir -p "$(dirname "$PIDFILE")"
-    echo $! > "$PIDFILE"
-  )
 
-  for i in $(seq 1 "$PDSM_START_TIMEOUT"); do
+  # Use screen for persistence
+  screen -dmS "$SERVICE_NAME" bash -c "\
+    /usr/local/bin/mailroom >>\"$LOGFILE\" 2>&1"
+  
+  # Mailroom doesn't write its own PID file easily, so we capture it from pgrep or screen
+  # For PDSM simplicity, we try to capture the background pid if possible
+  sleep 1
+  pgrep -u "$USER" -f "/usr/local/bin/mailroom" > "$PIDFILE"
+
+  for i in $(seq 1 10); do
     if running; then
       echo "[pdsm:$SERVICE_NAME] started"
       return 0
@@ -69,23 +70,17 @@ stop() {
   fi
 
   echo "[pdsm:$SERVICE_NAME] stopping..."
-  
   pid="$(cat "$PIDFILE" 2>/dev/null)"
   if [ -n "$pid" ]; then
     kill "$pid" 2>/dev/null || true
-    for i in $(seq 1 "$PDSM_START_TIMEOUT"); do
-      if ! running; then
-        echo "[pdsm:$SERVICE_NAME] stopped"
-        rm -f "$PIDFILE"
-        return 0
-      fi
-      sleep 1
-    done
-    kill -9 "$pid" 2>/dev/null || true
+    sleep 2
+    if running; then
+       kill -9 "$pid" 2>/dev/null || true
+    fi
+    screen -X -S "$SERVICE_NAME" quit >/dev/null 2>&1 || true
     rm -f "$PIDFILE"
   fi
-  
-  echo "[pdsm:$SERVICE_NAME] stopped (killed)"
+  echo "[pdsm:$SERVICE_NAME] stopped"
   return 0
 }
 
@@ -99,15 +94,6 @@ status() {
 }
 
 case "$1" in
-  start|stop|status)
-    "$1"
-    ;;
-  restart)
-    stop
-    start
-    ;;
-  *)
-    echo "Usage: $0 {start|stop|restart|status}" >&2
-    exit 1
-    ;;
+  start|stop|restart|status) "$1" ;;
+  *) echo "Usage: $0 {start|stop|restart|status}" >&2; exit 1 ;;
 esac

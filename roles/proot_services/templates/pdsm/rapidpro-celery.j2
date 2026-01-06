@@ -1,22 +1,38 @@
 #!/bin/sh
 # /usr/local/pdsm/services-available/rapidpro-celery
-# PDSM service wrapper for RapidPro Celery Worker
+# Celery worker management for RapidPro
+# Refactored for VM Parity and Proot stability
 
 PDSM_COMMON="/usr/local/pdsm/lib/pdsm-common.sh"
 [ -r "$PDSM_COMMON" ] && . "$PDSM_COMMON"
 
 SERVICE_NAME="rapidpro-celery"
-PDSM_START_TIMEOUT=30
-
-RAPIDPRO_DIR="{{ rapidpro_dir }}"
-PIDFILE="/run/rapidpro/rapidpro-celery.pid"
+PIDFILE="/run/rapidpro/celery.pid"
 LOGFILE="/var/log/rapidpro/rapidpro-celery.log"
+RAPIDPRO_DIR="{{ rapidpro_dir }}"
+
+export USER="{{ iiab_admin_user }}"
+export DJANGO_SETTINGS_MODULE="temba.settings"
+export PYTHONUNBUFFERED="1"
+
+# Standardized Virtualenv Path logic for Proot
+VENV_BASE="/root/.cache/pypoetry/virtualenvs"
+if [ -d "$VENV_BASE/temba-cUVkotcG-py3.13" ]; then
+    VENV_PATH="$VENV_BASE/temba-cUVkotcG-py3.13"
+else
+    # Fallback to local user bin if poetry didn't use root cache
+    VENV_PATH="/home/{{ iiab_admin_user }}/.cache/pypoetry/virtualenvs/temba-cUVkotcG-py3.13"
+fi
+export PATH="$VENV_PATH/bin:$PATH"
+
+mkdir -p /run/rapidpro
+mkdir -p /var/log/rapidpro
 
 running() {
   [ -s "$PIDFILE" ] || return 1
-  pid="$(cat "$PIDFILE" 2>/dev/null || echo '')"
+  pid="$(cat "$PIDFILE" 2>/dev/null)"
   [ -n "$pid" ] || return 1
-  kill -0 "$pid" 2>/dev/null
+  kill -0 "$pid" 2>/dev/null || pgrep -u "$USER" -f "celery" >/dev/null
 }
 
 start() {
@@ -26,19 +42,14 @@ start() {
   fi
 
   echo "[pdsm:$SERVICE_NAME] starting..."
-  
   cd "$RAPIDPRO_DIR" || return 1
-  export USER={{ iiab_admin_user }}
-  export PATH="$PATH:/home/{{ iiab_admin_user }}/.local/bin"
-  
-  # Run Celery Worker (Combined with Beat if configured, strictly mimicking .service)
-  # Service says: celery -A temba worker -l info -B
-  # We use --pidfile to manage it.
-  nohup poetry run celery -A temba worker -l info -B \
-    --pidfile="$PIDFILE" \
-    >>"$LOGFILE" 2>&1 &
 
-  for i in $(seq 1 "$PDSM_START_TIMEOUT"); do
+  # Screen for persistence
+  screen -dmS "$SERVICE_NAME" bash -c "\
+    exec $VENV_PATH/bin/celery -A temba worker -l info -B \
+    --pidfile=\"$PIDFILE\" > \"$LOGFILE\" 2>&1"
+
+  for i in $(seq 1 10); do
     if running; then
       echo "[pdsm:$SERVICE_NAME] started"
       return 0
@@ -57,23 +68,18 @@ stop() {
   fi
 
   echo "[pdsm:$SERVICE_NAME] stopping..."
-  
   pid="$(cat "$PIDFILE" 2>/dev/null)"
   if [ -n "$pid" ]; then
     kill "$pid" 2>/dev/null || true
-    for i in $(seq 1 "$PDSM_START_TIMEOUT"); do
-      if ! running; then
-        echo "[pdsm:$SERVICE_NAME] stopped"
-        rm -f "$PIDFILE"
-        return 0
-      fi
-      sleep 1
-    done
-    kill -9 "$pid" 2>/dev/null || true
+    sleep 2
+    if running; then
+       kill -9 "$pid" 2>/dev/null || true
+    fi
+    # Force quit screen session
+    screen -X -S "$SERVICE_NAME" quit >/dev/null 2>&1 || true
     rm -f "$PIDFILE"
   fi
-  
-  echo "[pdsm:$SERVICE_NAME] stopped (killed)"
+  echo "[pdsm:$SERVICE_NAME] stopped"
   return 0
 }
 
@@ -87,15 +93,6 @@ status() {
 }
 
 case "$1" in
-  start|stop|status)
-    "$1"
-    ;;
-  restart)
-    stop
-    start
-    ;;
-  *)
-    echo "Usage: $0 {start|stop|restart|status}" >&2
-    exit 1
-    ;;
+  start|stop|restart|status) "$1" ;;
+  *) echo "Usage: $0 {start|stop|restart|status}" >&2; exit 1 ;;
 esac

@@ -1,18 +1,39 @@
 #!/bin/sh
 # /usr/local/pdsm/services-available/rapidpro-server
 # PDSM service wrapper for RapidPro Gunicorn Server
+# Refactored for VM-Parity and Robustness in Proot
 
 PDSM_COMMON="/usr/local/pdsm/lib/pdsm-common.sh"
 [ -r "$PDSM_COMMON" ] && . "$PDSM_COMMON"
 
 SERVICE_NAME="rapidpro-server"
-PDSM_START_TIMEOUT=30
+PDSM_START_TIMEOUT=60  # Increased for dependency waiting
 
 RAPIDPRO_DIR="{{ rapidpro_dir }}"
 PIDFILE="/run/rapidpro/rapidpro-server.pid"
 LOGFILE="/var/log/rapidpro/rapidpro-server.log"
+SOCKFILE="/run/rapidpro/gunicorn.sock"
 
-# Ensure runtime directory exists
+# Environment Variables (Match Systemd)
+export USER="{{ iiab_admin_user }}"
+export DJANGO_SETTINGS_MODULE="temba.settings"
+export PYTHONUNBUFFERED="1"
+
+# Absolute Path to Virtualenv (VM Parity)
+# We prioritize the py3.13 env if it exists, matching recent fixes
+VENV_BASE="/root/.cache/pypoetry/virtualenvs"
+if [ -d "$VENV_BASE/temba-cUVkotcG-py3.13" ]; then
+    VENV_PATH="$VENV_BASE/temba-cUVkotcG-py3.13"
+elif [ -d "$VENV_BASE/temba-cUVkotcG-py3.12" ]; then
+    VENV_PATH="$VENV_BASE/temba-cUVkotcG-py3.12"
+else
+    # Fallback to current user cache
+    VENV_PATH="/home/{{ iiab_admin_user }}/.cache/pypoetry/virtualenvs/temba-cUVkotcG-py3.13"
+fi
+
+# Explicitly add VENV bin to PATH (Vital for Gunicorn worker spawning)
+export PATH="$VENV_PATH/bin:$PATH"
+
 mkdir -p /run/rapidpro
 mkdir -p /var/log/rapidpro
 
@@ -20,7 +41,34 @@ running() {
   [ -s "$PIDFILE" ] || return 1
   pid="$(cat "$PIDFILE" 2>/dev/null || echo '')"
   [ -n "$pid" ] || return 1
-  kill -0 "$pid" 2>/dev/null
+  # Check if process is alive
+  kill -0 "$pid" 2>/dev/null || pgrep -u "$USER" -f "/usr/local/bin/gunicorn" >/dev/null
+}
+
+wait_for_resource() {
+    target="$1"
+    name="$2"
+    echo "[pdsm:$SERVICE_NAME] Waiting for $name ($target)..."
+    for i in $(seq 1 30); do
+    # Check if target is a file (Socket), Service (pdsm status), or TCP host:port
+        if [ -S "$target" ]; then
+            return 0
+        elif echo "$target" | grep -q "service:"; then
+             svc=${target##service:}
+             if /usr/local/bin/pdsm status "$svc" >/dev/null 2>&1; then
+                return 0
+             fi
+        elif echo "$target" | grep -q ":"; then
+             host=${target%%:*}
+             port=${target##*:}
+             if timeout 1 bash -c "cat < /dev/tcp/$host/$port" >/dev/null 2>&1; then
+                return 0
+             fi
+        fi
+        sleep 1
+    done
+    echo "[pdsm:$SERVICE_NAME] Timeout waiting for $name" >&2
+    return 1
 }
 
 start() {
@@ -29,35 +77,37 @@ start() {
     return 0
   fi
 
+  # Dependency Checks (VM "After=..." logic)
+  # Adapted for Proot: checking Unix Socket in /tmp (relocated for permissions)
+  wait_for_resource "/tmp/.s.PGSQL.5432" "PostgreSQL" || return 1
+  # Redis/Valkey check (Direct socket is most robust for Proot)
+  wait_for_resource "/tmp/valkey.sock" "Valkey/Redis" || return 1
+
   echo "[pdsm:$SERVICE_NAME] starting..."
   
-  # Run Gunicorn
   cd "$RAPIDPRO_DIR" || return 1
-  export USER={{ iiab_admin_user }}
-  export PATH="$PATH:/home/{{ iiab_admin_user }}/.local/bin"
-  
-  # Dynamically find VENV (or hardcode if known, but let's be dynamic since we have poetry in path)
-  VENV_PATH=$(poetry env info --path 2>/dev/null)
-  
-  if [ -z "$VENV_PATH" ]; then
-      # Fallback to known path if poetry fails (speed hack)
-      VENV_PATH="/home/{{ iiab_admin_user }}/.cache/pypoetry/virtualenvs/temba-cUVkotcG-py3.13"
-  fi
 
-  # Direct binary execution (No poetry run overhead, No nohup issues)
-  "$VENV_PATH/bin/gunicorn" temba.wsgi:application \
-    --access-logfile "$LOGFILE" \
-    --error-logfile "$LOGFILE" \
+  # Use 'screen' for robust persistence in Proot (SSH detachment safe)
+  # cleaning up any stale socket first
+  rm -f "$SOCKFILE"
+
+  screen -dmS rapidpro-server bash -c "\
+    exec \"$VENV_PATH/bin/gunicorn\" temba.wsgi:application \
+    --access-logfile \"$LOGFILE\" \
+    --error-logfile \"$LOGFILE\" \
     --workers 3 \
-    --bind "unix:/run/rapidpro/gunicorn.sock" \
-    --forwarded-allow-ips="*" \
-    -p "$PIDFILE" \
-    --daemon
+    --bind \"unix:$SOCKFILE\" \
+    --forwarded-allow-ips=\"*\" \
+    -p \"$PIDFILE\""
 
+  # Wait for startup
   for i in $(seq 1 "$PDSM_START_TIMEOUT"); do
     if running; then
-      echo "[pdsm:$SERVICE_NAME] started"
-      return 0
+        # Extra check: ensure socket exists
+        if [ -S "$SOCKFILE" ]; then
+            echo "[pdsm:$SERVICE_NAME] started"
+            return 0
+        fi
     fi
     sleep 1
   done
@@ -77,41 +127,46 @@ stop() {
   pid="$(cat "$PIDFILE" 2>/dev/null)"
   if [ -n "$pid" ]; then
     kill "$pid" 2>/dev/null || true
-    # Wait for it to die
-    for i in $(seq 1 "$PDSM_START_TIMEOUT"); do
+    for i in $(seq 1 10); do
       if ! running; then
-        echo "[pdsm:$SERVICE_NAME] stopped"
-        rm -f "$PIDFILE"
-        return 0
+        break
       fi
       sleep 1
     done
-    
-    # Force kill
-    kill -9 "$pid" 2>/dev/null || true
+    # Force cleanup
+    if running; then
+       kill -9 "$pid" 2>/dev/null || true
+    fi
+    # Cleanup screen session if it lingers
+    screen -X -S rapidpro-server quit >/dev/null 2>&1 || true
     rm -f "$PIDFILE"
+    rm -f "$SOCKFILE"
   fi
   
-  echo "[pdsm:$SERVICE_NAME] stopped (killed)"
+  echo "[pdsm:$SERVICE_NAME] stopped"
   return 0
 }
 
 status() {
   if running; then
-    echo "[pdsm:$SERVICE_NAME] running"
-    return 0
+    if [ -S "$SOCKFILE" ]; then
+        echo "[pdsm:$SERVICE_NAME] running"
+        return 0
+    else
+        echo "[pdsm:$SERVICE_NAME] running (but socket missing!)"
+        return 1 # Warning state
+    fi
   fi
   echo "[pdsm:$SERVICE_NAME] not running"
   return 3
 }
 
 case "$1" in
-  start|stop|status)
-    "$1"
-    ;;
-  restart)
-    stop
-    start
+  start|stop|restart|status)
+    case "$1" in
+       restart) stop; start ;;
+       *) "$1" ;;
+    esac
     ;;
   *)
     echo "Usage: $0 {start|stop|restart|status}" >&2

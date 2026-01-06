@@ -6,8 +6,6 @@ PDSM_COMMON="/usr/local/pdsm/lib/pdsm-common.sh"
 [ -r "$PDSM_COMMON" ] && . "$PDSM_COMMON"
 
 SERVICE_NAME="rapidpro-dynamo"
-PDSM_START_TIMEOUT=30
-
 PIDFILE="/run/rapidpro/dynamo.pid"
 LOGFILE="/var/log/rapidpro/dynamo.log"
 
@@ -18,9 +16,9 @@ chown {{ iiab_admin_user }}:{{ iiab_admin_user }} {{ rapidpro_dir }}/dynamo 2>/d
 
 running() {
   [ -s "$PIDFILE" ] || return 1
-  pid="$(cat "$PIDFILE" 2>/dev/null || echo '')"
+  pid="$(cat "$PIDFILE" 2>/dev/null)"
   [ -n "$pid" ] || return 1
-  kill -0 "$pid" 2>/dev/null
+  kill -0 "$pid" 2>/dev/null || pgrep -u "{{ iiab_admin_user }}" -f "dynalite" >/dev/null
 }
 
 start() {
@@ -31,15 +29,15 @@ start() {
 
   echo "[pdsm:$SERVICE_NAME] starting..."
   export USER={{ iiab_admin_user }}
-  
-  (
-    # Dynalite is usually global npm package
-    nohup /usr/bin/dynalite --port 4567 --path {{ rapidpro_dir }}/dynamo >>"$LOGFILE" 2>&1 &
-    mkdir -p "$(dirname "$PIDFILE")"
-    echo $! > "$PIDFILE"
-  )
 
-  for i in $(seq 1 "$PDSM_START_TIMEOUT"); do
+  # Use screen for persistence
+  screen -dmS "$SERVICE_NAME" bash -c "\
+    /usr/bin/dynalite --port 4567 --path {{ rapidpro_dir }}/dynamo >>\"$LOGFILE\" 2>&1"
+  
+  sleep 1
+  pgrep -u "$USER" -f "dynalite" > "$PIDFILE"
+
+  for i in $(seq 1 10); do
     if running; then
       echo "[pdsm:$SERVICE_NAME] started"
       return 0
@@ -58,23 +56,17 @@ stop() {
   fi
 
   echo "[pdsm:$SERVICE_NAME] stopping..."
-  
   pid="$(cat "$PIDFILE" 2>/dev/null)"
   if [ -n "$pid" ]; then
     kill "$pid" 2>/dev/null || true
-    for i in $(seq 1 "$PDSM_START_TIMEOUT"); do
-      if ! running; then
-        echo "[pdsm:$SERVICE_NAME] stopped"
-        rm -f "$PIDFILE"
-        return 0
-      fi
-      sleep 1
-    done
-    kill -9 "$pid" 2>/dev/null || true
+    sleep 2
+    if running; then
+       kill -9 "$pid" 2>/dev/null || true
+    fi
+    screen -X -S "$SERVICE_NAME" quit >/dev/null 2>&1 || true
     rm -f "$PIDFILE"
   fi
-  
-  echo "[pdsm:$SERVICE_NAME] stopped (killed)"
+  echo "[pdsm:$SERVICE_NAME] stopped"
   return 0
 }
 
@@ -88,15 +80,6 @@ status() {
 }
 
 case "$1" in
-  start|stop|status)
-    "$1"
-    ;;
-  restart)
-    stop
-    start
-    ;;
-  *)
-    echo "Usage: $0 {start|stop|restart|status}" >&2
-    exit 1
-    ;;
+  start|stop|restart|status) "$1" ;;
+  *) echo "Usage: $0 {start|stop|restart|status}" >&2; exit 1 ;;
 esac

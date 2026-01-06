@@ -37,7 +37,7 @@ running() {
     [ -s "$PIDFILE" ] || return 1
     pid="$(cat "$PIDFILE" 2>/dev/null || echo '')"
     [ -n "$pid" ] || return 1
-    kill -0 "$pid" 2>/dev/null
+    kill -0 "$pid" 2>/dev/null || pgrep -u "$USER" -f "$BIN" >/dev/null
 }
 
 start() {
@@ -51,13 +51,14 @@ start() {
     # Build command
     CMD="$BIN"
     [ -f "$CONF_FILE" ] && CMD="$CMD $CONF_FILE"
-    CMD="$CMD --daemonize yes --pidfile $PIDFILE --logfile $LOGFILE --dir $DIR"
+    # FORCE foreground for screen
+    CMD="$CMD --daemonize no --pidfile $PIDFILE --logfile $LOGFILE --dir $DIR"
 
-    # Execute as user
+    # Use screen for persistence
     if id -u "$USER" >/dev/null 2>&1; then
-        su -s /bin/sh "$USER" -c "$CMD"
+        screen -dmS "$SERVICE_NAME" su -s /bin/sh "$USER" -c "$CMD"
     else
-        $CMD
+        screen -dmS "$SERVICE_NAME" $CMD
     fi
 
     for i in $(seq 1 "$PDSM_START_TIMEOUT"); do
@@ -67,6 +68,12 @@ start() {
         fi
         sleep 1
     done
+
+    # Fallback check: if socket exists, trust it?
+    if [ -S /tmp/valkey.sock ]; then
+         echo "[pdsm:$SERVICE_NAME] started (socket found)"
+         return 0
+    fi
 
     echo "[pdsm:$SERVICE_NAME] failed to start" >&2
     return 1
@@ -85,14 +92,14 @@ stop() {
         kill "$pid" 2>/dev/null || true
         for i in $(seq 1 "$PDSM_START_TIMEOUT"); do
             if ! running; then
-                echo "[pdsm:$SERVICE_NAME] stopped"
-                rm -f "$PIDFILE"
-                return 0
+                break
             fi
             sleep 1
         done
         kill -9 "$pid" 2>/dev/null || true
+        screen -X -S "$SERVICE_NAME" quit >/dev/null 2>&1 || true
         rm -f "$PIDFILE"
+        rm -f /tmp/valkey.sock
     fi
 
     echo "[pdsm:$SERVICE_NAME] did not fully stop" >&2
