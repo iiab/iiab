@@ -15,13 +15,16 @@ export USER="{{ iiab_admin_user }}"
 export DJANGO_SETTINGS_MODULE="temba.settings"
 export PYTHONUNBUFFERED="1"
 
-# Standardized Virtualenv Path logic for Proot
+# Dynamic Virtualenv Discovery (Hash is path-dependent)
 VENV_BASE="/root/.cache/pypoetry/virtualenvs"
-if [ -d "$VENV_BASE/temba-cUVkotcG-py3.13" ]; then
-    VENV_PATH="$VENV_BASE/temba-cUVkotcG-py3.13"
-else
-    # Fallback to local user bin if poetry didn't use root cache
-    VENV_PATH="/home/{{ iiab_admin_user }}/.cache/pypoetry/virtualenvs/temba-cUVkotcG-py3.13"
+VENV_USER_BASE="/home/{{ iiab_admin_user }}/.cache/pypoetry/virtualenvs"
+
+# Find most recent temba venv with python 3.1*
+VENV_PATH=$(ls -dt "$VENV_BASE"/temba-*-py3.1* "$VENV_USER_BASE"/temba-*-py3.1* 2>/dev/null | head -n 1)
+
+if [ -z "$VENV_PATH" ]; then
+    echo "[pdsm:$SERVICE_NAME] ERROR: Could not find Poetry virtualenv for 'temba'" >&2
+    return 1
 fi
 export PATH="$VENV_PATH/bin:$PATH"
 

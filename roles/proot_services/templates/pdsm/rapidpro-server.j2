@@ -19,16 +19,16 @@ export USER="{{ iiab_admin_user }}"
 export DJANGO_SETTINGS_MODULE="temba.settings"
 export PYTHONUNBUFFERED="1"
 
-# Absolute Path to Virtualenv (VM Parity)
-# We prioritize the py3.13 env if it exists, matching recent fixes
+# Dynamic Virtualenv Discovery (Hash is path-dependent)
 VENV_BASE="/root/.cache/pypoetry/virtualenvs"
-if [ -d "$VENV_BASE/temba-cUVkotcG-py3.13" ]; then
-    VENV_PATH="$VENV_BASE/temba-cUVkotcG-py3.13"
-elif [ -d "$VENV_BASE/temba-cUVkotcG-py3.12" ]; then
-    VENV_PATH="$VENV_BASE/temba-cUVkotcG-py3.12"
-else
-    # Fallback to current user cache
-    VENV_PATH="/home/{{ iiab_admin_user }}/.cache/pypoetry/virtualenvs/temba-cUVkotcG-py3.13"
+VENV_USER_BASE="/home/{{ iiab_admin_user }}/.cache/pypoetry/virtualenvs"
+
+# Find most recent temba venv with python 3.13
+VENV_PATH=$(ls -dt "$VENV_BASE"/temba-*-py3.1* "$VENV_USER_BASE"/temba-*-py3.1* 2>/dev/null | head -n 1)
+
+if [ -z "$VENV_PATH" ]; then
+    echo "[pdsm:$SERVICE_NAME] ERROR: Could not find Poetry virtualenv for 'temba'" >&2
+    return 1
 fi
 
 # Explicitly add VENV bin to PATH (Vital for Gunicorn worker spawning)
@@ -88,8 +88,9 @@ start() {
   cd "$RAPIDPRO_DIR" || return 1
 
   # Use 'screen' for robust persistence in Proot (SSH detachment safe)
-  # cleaning up any stale socket first
+  # Proactively cleaning up any stale sockets (Proot /tmp is persistent!)
   rm -f "$SOCKFILE"
+  rm -f /tmp/valkey.sock # Ensure we don't block on a stale valkey socket reference
 
   screen -dmS rapidpro-server bash -c "\
     exec \"$VENV_PATH/bin/gunicorn\" temba.wsgi:application \
