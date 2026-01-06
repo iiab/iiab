@@ -18,6 +18,8 @@ http://localhost:8085/maps
 
 ## Installation
 
+Start with an Android 12-or-higher phone or tablet:
+
 1. Install **Termux**:
 
    * OPTION 1: Directly install Termux, using a recent `.apk` file: [https://github.com/Termux/Termux-app/releases/](https://github.com/Termux/Termux-app/releases/) ("universal" `.apk` file GENERALLY BEST)
