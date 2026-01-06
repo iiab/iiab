@@ -156,7 +156,7 @@ To log in to IIAB on Android from your computer, follow these SSH command-line i
    exit
    ```
 
-2. The fastest way to SSH into your Android phone (or tablet) is to set a password for its Termux user. At Termux's high-level CLI. run:
+2. The fastest way to SSH into your Android phone (or tablet) is to set a password for its Termux user. In Termux's high-level CLI, run:
 
    ```
    passwd
@@ -164,7 +164,7 @@ To log in to IIAB on Android from your computer, follow these SSH command-line i
 
    Optionally, security can be improved by using standard SSH key-based authentication via the `~/.ssh/authorized_keys` file.
 
-3. Start the SSH service. At Termux's high-level CLI, run:
+3. Start the SSH service. In Termux's high-level CLI, run:
 
    ```
    sshd
