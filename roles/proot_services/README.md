@@ -1,6 +1,6 @@
 # Internet-in-a-Box on Android
 
-Internet-in-a-Box (IIAB) on Android means that millions of people worldwide can build their own family libraries, inside their own phones.
+[Internet-in-a-Box (IIAB)](https://internet-in-a-box.org) on Android means that millions of people worldwide can build their own family libraries, inside their own phones.
 
 As of January 2026, these IIAB Apps are supported:
 
@@ -32,7 +32,7 @@ http://localhost:8085/maps
 
 3. Remove or increase the app child process limit to install and run IIAB:
 
-   * On Android 14 and later, it is possible to disable this restriction using Android Settings, in **Developer Options**, with this setting:
+   * On Android 14 and later, disable this restriction using Android Settings, in **Developer Options**, with this setting:
 
      * `Disable child process restrictions` (English), or
      * `Desactivar restricciones de procesos secundarios` (Spanish)
