@@ -196,7 +196,7 @@ You will then be in a Debian shell with access to the IIAB CLI (command-line int
 
 ## Removal
 
-If you want to remove the installation and all related apps, follow these steps:
+If you want to remove the IIAB installation and all associated apps, follow these steps:
 
 1. Remove the IIAB installation running in PRoot Distro:
 
