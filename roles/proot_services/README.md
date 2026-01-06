@@ -32,7 +32,7 @@ http://localhost:8085/maps
 
 3. Remove or increase the app child process limit to install and run IIAB:
 
-   * On Android 14 and later, disable this restriction using Android Settings, in **Developer Options**, with this setting:
+   * On Android 14 and later, disable this restriction using Android Settings, in **Developer Options**:
 
      * `Disable child process restrictions` (English), or
      * `Desactivar restricciones de procesos secundarios` (Spanish)
@@ -41,7 +41,7 @@ http://localhost:8085/maps
 
      Shizuku is a 3-step process: **Pair**, **Run**, and **Export**. Please check this (WIP) [video tutorial](https://ark.switnet.org/tmp/termux-shizuku-a12-setup_light.mp4) for a more interactive explanation. Once exported, the `0_termux_setup.sh` script (just below) will handle the PPK workaround setup.
 
-4. Prepare the Termux app by running the following command from the Termux terminal:
+4. Prepare the Termux app by running the following command from the Termux CLI (command-line interface):
 
    ```
    curl https://raw.githubusercontent.com/iiab/iiab/refs/heads/master/roles/proot_services/0_termux-setup.sh | bash
