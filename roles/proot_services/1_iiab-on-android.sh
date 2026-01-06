@@ -12,7 +12,7 @@ set -euo pipefail
 #-----------------------------
 # Safety checks
 #-----------------------------
-if [[ "$(id -u)" != "0" ]]; then
+if [ "$(id -u)" != "0" ]; then
     echo "This script should be run as root, which is the default in proot-distro"
     echo "Careful, maybe this script is not been executed on the right terminal?"
     exit 1
@@ -32,15 +32,14 @@ CURL="curl -fsSL --retry 5 --retry-connrefused --retry-delay 2"
 # Update package db + deps
 #-----------------------------
 apt-get update
-apt-get install -y curl \
-                   python3 \
-                   sudo \
-                   ca-certificates
+apt-get install -y ca-certificates \
+                   curl \
+                   sudo
 
 #-----------------------------
 # Setup Android-specific local vars
 #-----------------------------
-if [[ ! -d /etc/iiab ]]; then
+if [ ! -d /etc/iiab ]; then
     mkdir -p /etc/iiab
 fi
 
