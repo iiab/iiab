@@ -87,6 +87,8 @@ If you encounter an error or problem, please open an [issue](https://github.com/
 
 ### Add a ZIM file
 
+A copy of Wikipedia (in almost any language) can now be put on your Android phone or tablet! Here's how...
+
 1. Browse to website: [download.kiwix.org/zim](https://download.kiwix.org/zim/)
 2. Pick a `.zim` file (ZIM file) and copy its full URL, for example:
 
