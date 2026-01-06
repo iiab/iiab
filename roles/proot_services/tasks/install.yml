@@ -58,10 +58,24 @@
         - postgresql
         - valkey
         - rapidpro-dynamo
+        - rapidpro-watchdog
 
-    - name: Enable pdsm default services, not all services are necessarily enabled
-      shell: "/usr/local/bin/pdsm enable {{ item }}" # initially only nginx
-      loop: "{{ pdsm_enabled_services }}" # leave loop if anything other than nginx gets by default
+    - name: Enable pdsm services with ordered dependencies (Fixes startup race conditions)
+      file:
+        src: "../services-available/{{ item.name }}"
+        dest: "/usr/local/pdsm/services-enabled/{{ item.prio }}-{{ item.name }}"
+        state: link
+      loop:
+        - { name: 'valkey', prio: '00' }
+        - { name: 'postgresql', prio: '01' }
+        - { name: 'rapidpro-dynamo', prio: '05' }
+        - { name: 'nginx', prio: '10' }
+        - { name: 'rapidpro-server', prio: '20' }
+        - { name: 'rapidpro-celery', prio: '20' }
+        - { name: 'wuzapi', prio: '20' }
+        - { name: 'courier', prio: '30' }
+        - { name: 'mailroom', prio: '30' }
+        - { name: 'rapidpro-watchdog', prio: '99' }
 
 
     # RECORD PROOT_SERVICES AS INSTALLED
