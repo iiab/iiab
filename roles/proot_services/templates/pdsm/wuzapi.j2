@@ -43,19 +43,21 @@ start() {
   fi
 
   # Screen for persistence
+  # Atomic PID writing from inside the session
   screen -dmS "$SERVICE_NAME" su -s /bin/bash "$USER" -c "\
+    echo \$\$ > \"$PIDFILE\"; \
     exec $BIN \
       -port $WUZAPI_PORT \
       -admintoken \"$WUZAPI_ADMIN_TOKEN\" \
       -logtype json \
       -wadebug False \
-      > \"$LOGFILE\" 2>&1"
+      >>\"$LOGFILE\" 2>&1"
 
-  # Capture PID from screen? Or use wrapper.
-  # Getting PID of the exec-ed process inside screen is tricky race.
-  # Better: rely on pgrep -f "wuzapi" handles symlink resolution diffs.
-  sleep 1
-  pgrep -u "$USER" -f "wuzapi" > "$PIDFILE"
+  # Wait for PID file to appear
+  for i in $(seq 1 5); do
+      [ -s "$PIDFILE" ] && break
+      sleep 1
+  done
 
   for i in $(seq 1 "$PDSM_START_TIMEOUT"); do
     if running; then
