@@ -1,0 +1,53 @@
+#!/bin/sh
+# /usr/local/pdsm/services-available/rapidpro-watchdog
+# PDSM service that monitors other services and ensures they stay running
+
+PDSM_COMMON="/usr/local/pdsm/lib/pdsm-common.sh"
+[ -r "$PDSM_COMMON" ] && . "$PDSM_COMMON"
+
+SERVICE_NAME="rapidpro-watchdog"
+PIDFILE="/run/rapidpro/watchdog.pid"
+LOGFILE="/var/log/rapidpro/watchdog.log"
+CHECK_INTERVAL=300
+
+SERVICES="valkey postgresql rapidpro-server rapidpro-celery"
+
+running() {
+    [ -s "$PIDFILE" ] || return 1
+    pid="$(cat "$PIDFILE" 2>/dev/null)"
+    [ -n "$pid" ] || return 1
+    kill -0 "$pid" 2>/dev/null
+}
+
+start() {
+    if running; then echo "[pdsm:$SERVICE_NAME] already running"; return 0; fi
+    echo "[pdsm:$SERVICE_NAME] starting watchdog loop..."
+    screen -dmS "$SERVICE_NAME" bash -c "
+        echo \$\$ > \"$PIDFILE\"
+        while true; do
+            echo \"[\$(date)] Health check...\" >> \"$LOGFILE\"
+            for svc in $SERVICES; do
+                if ! /usr/local/bin/pdsm status \"\$svc\" >/dev/null 2>&1; then
+                    echo \"[\$(date)] [FAIL] \$svc - Restarting...\" >> \"$LOGFILE\"
+                    /usr/local/bin/pdsm start \"\$svc\" >> \"$LOGFILE\" 2>&1
+                fi
+            done
+            if [ -x /usr/sbin/logrotate ]; then
+                /usr/sbin/logrotate /etc/logrotate.d/rapidpro >> \"$LOGFILE\" 2>&1
+            fi
+            sleep $CHECK_INTERVAL
+        done
+    "
+    echo "[pdsm:$SERVICE_NAME] started"
+    return 0
+}
+
+stop() {
+    if ! running; then return 0; fi
+    pid="$(cat "$PIDFILE" 2>/dev/null)"
+    if [ -n "$pid" ]; then kill "$pid" 2>/dev/null || true; screen -X -S "$SERVICE_NAME" quit >/dev/null 2>&1 || true; rm -f "$PIDFILE"; fi
+    return 0
+}
+
+status() { if running; then echo "[pdsm:$SERVICE_NAME] running"; return 0; fi; echo "[pdsm:$SERVICE_NAME] not running"; return 3; }
+case "$1" in start|stop|restart|status) "$1" ;; *) echo "Usage: $0 {start|stop|restart|status}" >&2; exit 1 ;; esac
