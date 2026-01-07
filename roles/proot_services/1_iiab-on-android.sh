@@ -43,12 +43,16 @@ apt-get install -y curl \
 #-----------------------------
 mkdir -p /etc/iiab
 # Prefer local file if we are running from the repo
-if [ -f "vars/local_vars_android.yml" ]; then
-    cp vars/local_vars_android.yml /etc/iiab/local_vars.yml
-elif [ -f "/opt/iiab/iiab/vars/local_vars_android.yml" ]; then
-    cp /opt/iiab/iiab/vars/local_vars_android.yml /etc/iiab/local_vars.yml
+if [ ! -f /etc/iiab/local_vars.yml ]; then
+    if [ -f "vars/local_vars_android.yml" ]; then
+        cp vars/local_vars_android.yml /etc/iiab/local_vars.yml
+    elif [ -f "/opt/iiab/iiab/vars/local_vars_android.yml" ]; then
+        cp /opt/iiab/iiab/vars/local_vars_android.yml /etc/iiab/local_vars.yml
+    else
+        curl -fsSL $LOCAL_VARS > /etc/iiab/local_vars.yml
+    fi
 else
-    curl -fsSL $LOCAL_VARS > /etc/iiab/local_vars.yml
+    echo "   Preserving existing /etc/iiab/local_vars.yml"
 fi
 
 if [ "$IIAB_PAUSE_BEFORE_INSTALL" = "true" ]; then
