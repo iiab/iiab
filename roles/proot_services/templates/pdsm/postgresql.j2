@@ -35,7 +35,8 @@ if [ ! -x "$POSTGRES_BIN" ]; then
 fi
 
 mkdir -p /var/log/postgresql
-chown postgres:postgres /var/log/postgresql 2>/dev/null || true
+# Ensure postgres user owns the directory AND any existing log files to prevent startup crash
+chown -R postgres:postgres /var/log/postgresql 2>/dev/null || true
 
 # Helper to init db if strict
 init_db_if_needed() {
@@ -49,17 +50,23 @@ init_db_if_needed() {
 }
 
 running() {
-    # Check PID file existence and content
+    # 1. Primary Check: Screen Session (Most reliable in PRoot)
+    if screen -list | grep -q "\.$SERVICE_NAME"; then
+         return 0
+    fi
+
+    # 2. Secondary Check: PID File (For legacy or non-screen starts)
+    # BEWARE: PRoot PIDs are recycled aggressively. We must verify the process name.
     if [ -f "$PIDFILE" ]; then
         PID=$(head -n 1 "$PIDFILE")
         # Check if process is alive
         if kill -0 "$PID" 2>/dev/null; then
-            return 0
+            # Strict verification: Is it actually postgres?
+            # 'comm' usually returns 'postgres' or 'postgres: ...'
+            if ps -p "$PID" -o comm= 2>/dev/null | grep -q "postgres"; then
+                return 0
+            fi
         fi
-    fi
-    # Fallback: Check for screen session
-    if screen -list | grep -q "$SERVICE_NAME"; then
-         return 0
     fi
     return 1
 }
@@ -75,13 +82,9 @@ start() {
     # Proactively cleanup stale socket (Proot /tmp is persistent!)
     rm -f /tmp/.s.PGSQL.5432
     
-    # Self-Healing: Check for stale PID lock
+    # Self-Healing: Check for stale PID lock and clean it up
     if [ -f "$PIDFILE" ]; then
-        PID=$(head -n 1 "$PIDFILE")
-        if ! kill -0 "$PID" 2>/dev/null; then
-             echo "[pdsm:$SERVICE_NAME] Removing stale PID file (PID $PID not running)"
-             rm -f "$PIDFILE"
-        fi
+        rm -f "$PIDFILE"
     fi
 
     init_db_if_needed || { echo "[pdsm:$SERVICE_NAME] initdb failed"; return 1; }
@@ -108,13 +111,23 @@ start() {
     # We run 'postgres' directly in foreground inside screen
     screen -dmS "$SERVICE_NAME" su - postgres -c "$POSTGRES_BIN -D $PGDATA >> $LOGFILE 2>&1"
 
-    for i in $(seq 1 "$PDSM_START_TIMEOUT"); do
-        if running; then
-            echo "[pdsm:$SERVICE_NAME] started"
-            return 0
-        fi
+    # Stabilization Loop: Wait and Verify
+    # We wait up to 5 seconds to ensure the process doesn't crash immediately
+    for i in $(seq 1 5); do
         sleep 1
+        if ! running; then
+            echo "[pdsm:$SERVICE_NAME] failed to start (crashed immediately, check $LOGFILE)" >&2
+            # Cleanup screen if it somehow exists but running() failed (unlikely)
+            screen -X -S "$SERVICE_NAME" quit >/dev/null 2>&1 || true
+            return 1
+        fi
     done
+
+    # Final verification
+    if running; then
+        echo "[pdsm:$SERVICE_NAME] started"
+        return 0
+    fi
 
     echo "[pdsm:$SERVICE_NAME] failed to start" >&2
     return 1
