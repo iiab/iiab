@@ -183,6 +183,31 @@ step_termux_base() {
 }
 
 # -------------------------
+# Step 1.5: Fix DNS (Go binaries in Termux need /etc/resolv.conf)
+# -------------------------
+step_termux_dns_fix() {
+  local prefix="${PREFIX:-/data/data/com.termux/files/usr}"
+  local dns_file="$prefix/etc/resolv.conf"
+
+  # Ensure the directory exists (should exist from base install, but be safe)
+  if [[ ! -d "$(dirname "$dns_file")" ]]; then
+     mkdir -p "$(dirname "$dns_file")"
+  fi
+
+  # If file exists and has content, assume it's fine.
+  if [[ -s "$dns_file" ]]; then
+    # Optional: Check if it has a nameserver
+    if grep -q "^nameserver" "$dns_file"; then
+       return 0
+    fi
+  fi
+
+  log "Fixing missing DNS ($dns_file)..."
+  echo "nameserver 8.8.8.8" > "$dns_file"
+  ok "DNS configured (8.8.8.8)."
+}
+
+# -------------------------
 # Debian helpers (robust)
 # -------------------------
 debian_exists() {
@@ -411,6 +436,7 @@ main() {
   acquire_wakelock
   step_termux_repo_select_once
   step_termux_base
+  step_termux_dns_fix
 
   if [[ "$PPK_ONLY" -eq 1 ]]; then
     step_ppk_fix_android_12_13
