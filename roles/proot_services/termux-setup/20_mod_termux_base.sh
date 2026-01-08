@@ -52,7 +52,7 @@ step_termux_repo_select_once() {
     local ans="Y"
     printf "[iiab] Launch termux-change-repo now? [Y/n]: " > /dev/tty
     if ! read -r ans < /dev/tty; then
-      warn "No interactive TTY available; skipping mirror selection (run script directly to be prompted)."
+      warn "No interactive TTY available; skipping mirror selection (run 'termux-change-repo' directly to be prompted)."
       return 0
     fi
     ans="${ans:-Y}"
