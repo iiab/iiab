@@ -19,6 +19,7 @@ OUT_FILE="${PARENT_DIR}/0_termux-setup_v2.sh"
 TMP_FILE="${OUT_DIR}/.0_termux-setup_v2.tmp.$RANDOM$RANDOM"
 
 mkdir -p "$OUT_DIR"
+build_ts="$(date -Is)"
 
 # Load MODULES array
 # shellcheck source=/dev/null
@@ -38,17 +39,17 @@ cleanup_tmp() { rm -f -- "$TMP_FILE" 2>/dev/null || true; }
 trap cleanup_tmp EXIT
 
 # Bundle header
-{
-  echo '#!/data/data/com.termux/files/usr/bin/bash'
-  echo 'set -euo pipefail'
-  echo
-  echo '# -----------------------------------------------------------------------------'
-  echo '# GENERATED FILE: do not edit directly.'
-  echo '# Source modules: termux-setup/*.sh + manifest.sh'
-  echo '# Rebuild: (cd termux-setup && bash build_bundle.sh)'
-  echo '# -----------------------------------------------------------------------------'
-  echo
-} >"$TMP_FILE"
+cat  << EOF > "$TMP_FILE"
+#!/data/data/com.termux/files/usr/bin/bash
+set -euo pipefail
+
+# -----------------------------------------------------------------------------
+# GENERATED FILE: ${build_ts} - do not edit directly.
+# Source modules: termux-setup/*.sh + manifest.sh
+# Rebuild: (cd termux-setup && bash build_bundle.sh)
+# -----------------------------------------------------------------------------
+
+EOF
 
 # Append each module
 for mod in "${MODULES[@]}"; do
