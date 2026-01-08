@@ -1,0 +1,115 @@
+# shellcheck shell=bash
+# Module file (no shebang). Bundled by build_bundle.sh
+
+# Termux apt options (avoid conffile prompts)
+TERMUX_APT_OPTS=( "-y" "-o" "Dpkg::Options::=--force-confdef" "-o" "Dpkg::Options::=--force-confold" )
+termux_apt() { apt-get "${TERMUX_APT_OPTS[@]}" "$@"; }
+
+# -------------------------
+# Android info
+# -------------------------
+get_android_sdk()     { getprop ro.build.version.sdk 2>/dev/null || true; }
+get_android_release() { getprop ro.build.version.release 2>/dev/null || true; }
+ANDROID_SDK="$(get_android_sdk)"
+ANDROID_REL="$(get_android_release)"
+
+# -------------------------
+# Wakelock (Termux:API)
+# -------------------------
+WAKELOCK_HELD=0
+acquire_wakelock() {
+  if have termux-wake-lock; then
+    if termux-wake-lock; then
+      WAKELOCK_HELD=1
+      ok "Wakelock acquired (termux-wake-lock)."
+    else
+      warn "Failed to acquire wakelock (termux-wake-lock)."
+    fi
+  else
+    warn "termux-wake-lock not available. Install: pkg install termux-api + Termux:API app."
+  fi
+}
+release_wakelock() {
+  if [[ "$WAKELOCK_HELD" -eq 1 ]] && have termux-wake-unlock; then
+    termux-wake-unlock || true
+    ok "Wakelock released (termux-wake-unlock)."
+  fi
+}
+
+# -------------------------
+# One-time repo selector
+# -------------------------
+step_termux_repo_select_once() {
+  local stamp="$STATE_DIR/stamp.termux_repo_selected"
+  [[ -f "$stamp" ]] && return 0
+  if ! have termux-change-repo; then
+    warn "termux-change-repo not found; skipping mirror selection."
+    return 0
+  fi
+
+  if [[ -r /dev/tty ]]; then
+    printf "\n${YEL}[iiab] One-time setup:${RST} Select a nearby Termux repository mirror for faster downloads.\n" >&2
+    local ans="Y"
+    printf "[iiab] Launch termux-change-repo now? [Y/n]: " > /dev/tty
+    if ! read -r ans < /dev/tty; then
+      warn "No interactive TTY available; skipping mirror selection (run script directly to be prompted)."
+      return 0
+    fi
+    ans="${ans:-Y}"
+    if [[ "$ans" =~ ^[Yy]$ ]]; then
+      # Logging redirects stdout/stderr to pipes, which can break the UI.
+      # Run it using /dev/tty and the original console fds (3/4).
+      if [[ -r /dev/tty ]]; then
+        termux-change-repo </dev/tty >&3 2>&4 || true
+      else
+        termux-change-repo || true
+      fi
+      ok "Mirror selection completed (or skipped inside the UI)."
+    else
+      warn "Mirror selection skipped by user."
+    fi
+    date > "$stamp"
+    return 0
+  fi
+
+  warn "No /dev/tty available; skipping mirror selection."
+  return 0
+}
+
+# -------------------------
+# Baseline packages
+# -------------------------
+step_termux_base() {
+  local stamp="$STATE_DIR/stamp.termux_base"
+  if [[ -f "$stamp" ]]; then
+    ok "Termux baseline already prepared (stamp found)."
+    return 0
+  fi
+
+  log "Updating Termux packages (noninteractive) and installing baseline dependencies..."
+  export DEBIAN_FRONTEND=noninteractive
+  termux_apt update || true
+  termux_apt upgrade || true
+
+  termux_apt install \
+    ca-certificates \
+    curl \
+    coreutils \
+    grep \
+    sed \
+    gawk \
+    openssh \
+    proot proot-distro \
+    android-tools \
+    termux-api \
+    || true
+
+  if have proot-distro && \
+     have adb && have termux-notification && \
+     have termux-dialog; then
+    ok "Termux baseline ready."
+    date > "$stamp"
+  else
+    warn_red "Baseline incomplete (missing proot-distro/adb/termux-notification). Not stamping; rerun later."
+  fi
+}

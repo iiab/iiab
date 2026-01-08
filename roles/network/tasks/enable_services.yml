@@ -1,19 +1,32 @@
-- name: Install /etc/dnsmasq.d/iiab.conf from template, when dnsmasq_enabled and isn't Appliance
+# 2025-09-24, as 'systemctl status dnsmasq' showed this red error:
+#   Dropped protocol specifier '.dnsmasq' from 'lo.dnsmasq'. Using 'lo' (ifindex=1).
+#   Failed to set DNS configuration: Link lo is loopback device.
+# https://github.com/iiab/iiab/issues/4039#issuecomment-3331379838 -- resolved here by PR #4092
+- name: Set 'DNSMASQ_EXCEPT="lo"' in /etc/default/dnsmasq
+  lineinfile:
+    path: /etc/default/dnsmasq
+    regexp: '^DNSMASQ_EXCEPT='
+    line: 'DNSMASQ_EXCEPT="lo"'
+    state: present
+
+# no effect till started via systemd-dispatcher script
+- name: Install /etc/dnsmasq.d/iiab.conf from template
   template:
     src: network/dnsmasq.conf.j2
     dest: /etc/dnsmasq.d/iiab.conf
-  when: iiab_network_mode != "Appliance"
 
 - name: Install /etc/hosts.dnsmasq from template for /etc/dnsmasq.d/iiab.conf (instead of using /etc/hosts)
   template:
     src: network/hosts-dnsmasq.j2
     dest: /etc/hosts.dnsmasq
-  when: iiab_network_mode != "Appliance"
 
 - name: Update /etc/dnsmasq.d/dnsmasq-iiab for custom dns setting
   template:
-    src: network/dnsmasq-iiab
-    dest: /etc/dnsmasq.d/dnsmasq-iiab
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    mode: "{{ item.mode }}"
+  with_items:
+    - { src: 'roles/network/templates/network/dnsmasq-iiab', dest: '/etc/dnsmasq.d/dnsmasq-iiab', mode: '644' }
 
 ## Another way to skin the cat
 ##- name: Check if systemd service networkd-dispatcher is enabled
@@ -46,23 +59,6 @@
   #when: dnsmasq_install and dnsmasq_enabled and nd_enabled is defined and nd_enabled.stdout == "enabled" and nd_dir.stat.exists and nd_dir.stat.isdir and (iiab_network_mode != "Appliance")
   #when: dnsmasq_install and dnsmasq_enabled and systemd_out.status.UnitFileState == "enabled" and networkd_dir.stat.exists and networkd_dir.stat.isdir and (iiab_network_mode != "Appliance")
 
-# 2025-09-24, as 'systemctl status dnsmasq' showed this red error:
-#   Dropped protocol specifier '.dnsmasq' from 'lo.dnsmasq'. Using 'lo' (ifindex=1).
-#   Failed to set DNS configuration: Link lo is loopback device.
-# https://github.com/iiab/iiab/issues/4039#issuecomment-3331379838 -- resolved here by PR #4092
-- name: Set 'DNSMASQ_EXCEPT="lo"' in /etc/default/dnsmasq
-  lineinfile:
-    path: /etc/default/dnsmasq
-    regexp: '^DNSMASQ_EXCEPT='
-    line: 'DNSMASQ_EXCEPT="lo"'
-    state: present
-
-- name: Remove /etc/dnsmasq.d/iiab.conf, when not dnsmasq_enabled or is Appliance
-  file:
-    path: /etc/dnsmasq.d/iiab.conf
-    state: absent
-  when: not dnsmasq_enabled or iiab_network_mode == "Appliance"
-
 #- name: Enable iiab-dnsmasq systemd service, if dnsmasq_enabled
 #  systemd:
 #    name: iiab-dnsmasq
@@ -74,7 +70,6 @@
 #    name: iiab-dnsmasq
 #    enabled: no
 #  when: not dnsmasq_enabled
-
 
 - name: Mandate 'HTTPCACHE_ON=True' in {{ iiab_env_file }} - if squid_install [{{ squid_install }}] and squid_enabled [{{ squid_enabled }}]
   lineinfile:

@@ -1,9 +1,9 @@
 # Similar code block in roles/vnstat/tasks/install.yml
 - name: Do we have a gateway? If 'ip route' specifies a default route, Ansible parses details here...
   debug:
-    var: ansible_default_ipv4
+    var: ansible_facts.default_ipv4
 
-- name: "If above ansible_default_ipv4.gateway is defined, set WAN candidate 'discovered_wan_iface: {{ ansible_default_ipv4.alias }}' -- using ansible_default_ipv4.alias"
+- name: "If above ansible_default_ipv4.gateway is defined, set WAN candidate 'discovered_wan_iface: {{ ansible_facts.default_ipv4.alias }}' -- using ansible_default_ipv4.alias"
   set_fact:
     discovered_wan_iface: "{{ ansible_default_ipv4.alias }}"
   when:
@@ -38,7 +38,7 @@
   set_fact:
     iiab_wan_iface: "{{ discovered_wan_iface }}"
     device_gw: "{{ discovered_wan_iface }}"
-  when: ansible_default_ipv4.gateway is defined
+  when: ansible_facts.default_ipv4.gateway is defined
 
 # 2022-07-22: Moved to netplan.yml AND restart.yml (REMOVE DUPLICATE CODE LATER?!)
 # - name: Figure out netplan file name
@@ -47,20 +47,30 @@
 #   ignore_errors: True # pre 17.10 doesn't use netplan
 #   when: is_ubuntu
 
+- name: Check if /etc/netplan exists
+  stat:
+    path: /etc/netplan
+  register: netplan
+
+- name: Setting netplan results
+  set_fact:
+    has_netplan: True
+  when: netplan.stat.exists and netplan.stat.isdir
+
 - name: Setting dhcpcd_test results
   set_fact:
-    dhcpcd_result: "{{ ansible_local.local_facts.dhcpcd }}"
+    dhcpcd_result: "{{ ansible_facts.ansible_local.local_facts.dhcpcd }}"
 
 # 2022-07-22: Copied to netplan.yml (REMOVE DUPLICATE CODE LATER?!)
 - name: "Set 'systemd_networkd_active: True' if local_facts.systemd_networkd confirms"
   set_fact:
     systemd_networkd_active: True
-  when: ansible_local.local_facts.systemd_networkd == "enabled" or ansible_local.local_facts.systemd_networkd == "enabled-runtime"
+  when: ansible_facts.ansible_local.local_facts.systemd_networkd == "enabled" or ansible_facts.ansible_local.local_facts.systemd_networkd == "enabled-runtime"
 
 - name: Setting network_manager results
   set_fact:
     network_manager_active: True
-  when: 'ansible_local.local_facts.network_manager == "enabled"'
+  when: ansible_facts.ansible_local.local_facts.network_manager == "enabled"
 
 - name: Check /etc/network/interfaces for gateway
   shell: grep {{ device_gw }} /etc/network/interfaces | wc -l
@@ -305,6 +315,8 @@
       value: "{{ has_ifcfg_gw }}"
     - option: prior_gateway_device
       value: "{{ prior_gw_device }}"
+    - option: has_netplan
+      value: "{{ has_netplan }}"
     - option: dhcpcd_result
       value: "{{ dhcpcd_result }}"
     - option: network_manager_active

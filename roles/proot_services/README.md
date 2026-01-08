@@ -1,6 +1,6 @@
 # Internet-in-a-Box on Android
 
-Internet-in-a-Box (IIAB) on Android means that millions of people worldwide can build their own family libraries, inside their own phones.
+[Internet-in-a-Box (IIAB)](https://internet-in-a-box.org) on Android means that millions of people worldwide can build their own family libraries, inside their own phones.
 
 As of January 2026, these IIAB Apps are supported:
 
@@ -18,6 +18,8 @@ http://localhost:8085/maps
 
 ## Installation
 
+Start with an Android 12-or-higher phone or tablet:
+
 1. Install **Termux**:
 
    * OPTION 1: Directly install Termux, using a recent `.apk` file: [https://github.com/Termux/Termux-app/releases/](https://github.com/Termux/Termux-app/releases/) ("universal" `.apk` file GENERALLY BEST)
@@ -32,22 +34,22 @@ http://localhost:8085/maps
 
 3. Remove or increase the app child process limit to install and run IIAB:
 
-   * On Android 14 and later, it is possible to disable this restriction using Android Settings, in **Developer Options**, with this setting:
+   * On Android 14 and later, disable this restriction using Android Settings, in **Developer Options**:
 
      * `Disable child process restrictions` (English), or
      * `Desactivar restricciones de procesos secundarios` (Spanish)
 
-   * Android 12 and 13 added a ["Phantom Process Killer" (PPK)](https://github.com/agnostic-apollo/Android-Docs/blob/master/en/docs/apps/processes/phantom-cached-and-empty-processes.md) feature to limit child processes, but there is no UI option to disable this behavior on those versions. Instead, you can disable it using ADB commands issued from a remote device, or locally on the device using **[Shizuku](https://github.com/RikkaApps/Shizuku/releases/)**.
+   * Android 12 and 13 added a ["Phantom Process Killer" (PPK)](https://github.com/agnostic-apollo/Android-Docs/blob/master/en/docs/apps/processes/phantom-cached-and-empty-processes.md) feature to limit child processes, but there is no UI option to disable this behavior on those versions. Instead, you need to disable it using ADB commands issued from a remote device, or locally on the device using **[Shizuku](https://github.com/RikkaApps/Shizuku/releases/)**.
 
      Shizuku is a 3-step process: **Pair**, **Run**, and **Export**. Please check this (WIP) [video tutorial](https://ark.switnet.org/tmp/termux-shizuku-a12-setup_light.mp4) for a more interactive explanation. Once exported, the `0_termux_setup.sh` script (just below) will handle the PPK workaround setup.
 
-4. Prepare the Termux app by running the following command from the Termux terminal:
+4. Prepare the Termux app by running the following command from the Termux CLI (command-line interface):
 
    ```
    curl https://raw.githubusercontent.com/deldesir/iiab/refs/heads/master/roles/proot_services/0_termux-setup.sh | bash
    ```
 
-   Once complete, enter the Debian environment to continue the installation:
+   Once complete, enter [PRoot Distro](https://wiki.termux.com/wiki/PRoot)'s Debian environment to continue the installation:
 
    ```
    proot-distro login debian
@@ -92,6 +94,8 @@ If you encounter an error or problem, please open an [issue](https://github.com/
 
 ### Add a ZIM file
 
+A copy of Wikipedia (in almost any language) can now be put on your Android phone or tablet! Here's how...
+
 1. Browse to website: [download.kiwix.org/zim](https://download.kiwix.org/zim/)
 2. Pick a `.zim` file (ZIM file) and copy its full URL, for example:
 
@@ -103,6 +107,28 @@ If you encounter an error or problem, please open an [issue](https://github.com/
 
    ```
    proot-distro login debian
+   ```
+
+   EXPLANATION: Starting from Termux's high-level CLI (Command-Line Interface), you've "shelled into" [PRoot Distro](https://wiki.termux.com/wiki/PRoot)'s low-level Debian CLI:
+
+   ```
+      +----------------------------------+
+      |   Android GUI (Apps, Settings)   |
+      +----------------+-----------------+
+                       |
+              open the | Termux app
+                       v
+      +----------------+-----------------+
+      |       Termux (Android CLI)       |
+      | $ proot-distro login debian      |
+      +----------------+-----------------+
+                       |
+      "shell into" the | low-level environment
+                       v
+      +----------------+-----------------+
+      | proot-distro: Debian (userspace) |
+      | debian root# cd /opt/iiab/iiab   |
+      +----------------------------------+
    ```
 
 4. Enter the folder where IIAB stores ZIM files:
@@ -127,31 +153,29 @@ If you encounter an error or problem, please open an [issue](https://github.com/
 
 ## Remote Access
 
-While using the phone keyboard and screen is practical when on the move, accessing the PRoot Distro environment from a PC or laptop is very useful for debugging. You can use an existing Wi-Fi connection or enable the native Android hotspot if no wireless LAN is available.
+While using the phone keyboard and screen is practical when on the move, accessing the PRoot Distro's Debian environment from a PC or laptop is very useful for debugging. You can use an existing Wi-Fi connection or enable the native Android hotspot if no wireless LAN is available.
 
-Get your phone’s IP address by running `ifconfig` in Termux or by checking **About device → Status** in Android settings.
+Before you begin, obtain your Android phone or tablet’s IP address by running `ifconfig` in Termux. Or obtain the IP by checking **About device → Status** in Android settings.
 
 ### SSH
 
-To log in to IIAB on Android from your computer, follow these SSH (command-line interface) instructions:
+To log in to IIAB on Android from your computer, follow these SSH command-line interface (CLI) instructions:
 
-1. Set up SSH credentials (on Termux, not PRoot Distro).
+1. On your Android phone or tablet, find your way to Termux's CLI. **If you earlier ran `proot-distro login debian` to get to PRoot Distro's low-level Debian CLI — you MUST step back up to Termux's high-level CLI — e.g. by running:**
 
-   The fastest way to SSH into your Android phone (or tablet) is to set a password for its Termux user. In Termux (not PRoot Distro), run:
+   ```
+   exit
+   ```
+
+2. The fastest way to SSH into your Android phone (or tablet) is to set a password for its Termux user. In Termux's high-level CLI, run:
 
    ```
    passwd
    ```
 
-   To determine the Termux username, run:
-
-   ```
-   whoami
-   ```
-
    Optionally, security can be improved by using standard SSH key-based authentication via the `~/.ssh/authorized_keys` file.
 
-2. Start the SSH service from Termux: (not PRoot Distro)
+3. Start the SSH service. In Termux's high-level CLI, run:
 
    ```
    sshd
@@ -159,17 +183,17 @@ To log in to IIAB on Android from your computer, follow these SSH (command-line 
 
    The `sshd` service can be automated to start when Termux launches (see [Termux-services](https://wiki.Termux.com/wiki/Termux-services)). We recommend doing this only after improving login security using SSH keys.
 
-3. SSH to your Android phone.
+4. SSH to your Android phone.
 
-   From your laptop or PC, connected to the same network as your Android phone, and knowing the phone’s IP address (e.g., `192.168.10.100`), run:
+   From your laptop or PC, connected to the same network as your Android phone, and knowing the phone’s IP address (for example, `192.168.10.100`), you would run:
 
    ```
    ssh -p 8022 192.168.10.100
    ```
 
-   No specific username is required. Note that port **8022** is used for SSH.
+   A username is NOT needed!
 
-   Since Android runs without root permissions, SSH cannot use lower-numbered ports. For the same reason, the IIAB web server (nginx) uses port **8085** instead of port 80.
+   Note that port **8022** is used for SSH. Since Android runs without root permissions, SSH cannot use lower-numbered ports. (For the same reason, the IIAB web server [nginx] uses port **8085** instead of port 80.)
 
 ### Log in to the IIAB environment
 
@@ -183,7 +207,7 @@ You will then be in a Debian shell with access to the IIAB CLI (command-line int
 
 ## Removal
 
-If you want to remove the installation and all related apps, follow these steps:
+If you want to remove the IIAB installation and all associated apps, follow these steps:
 
 1. Remove the IIAB installation running in PRoot Distro:
 
