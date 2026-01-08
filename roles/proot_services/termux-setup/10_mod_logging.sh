@@ -6,16 +6,18 @@
 # -------------------------
 LOG_ENABLED=1
 LOG_FILE=""          # if empty, auto-generate under $LOG_DIR
-LOG_KEEP=20          # keep last N logs
+LOG_KEEP=3           # keep only the last 3 logs
 
-rotate_logs() {
+prune_old_logs() {
   [[ -d "${LOG_DIR:-}" ]] || return 0
-  local n=$((LOG_KEEP + 1))
+  local keep="${LOG_KEEP:-3}"
+  local i=0 f
   while IFS= read -r f; do
     [[ -n "${f:-}" ]] || continue
-    [[ -n "${LOG_FILE:-}" && "$f" == "$LOG_FILE" ]] && continue
+    i=$((i + 1))
+    (( i <= keep )) && continue
     rm -f -- "$f" 2>/dev/null || true
-  done < <(ls -1t "$LOG_DIR"/*.log 2>/dev/null | tail -n +"$n" || true)
+  done < <(ls -1t "$LOG_DIR"/*.log 2>/dev/null || true)
 }
 
 setup_logging() {
@@ -56,7 +58,7 @@ setup_logging() {
   # Best-effort: restrict log readability (may include debug/xtrace)
   chmod 600 "$LOG_FILE" 2>/dev/null || true
 
-  rotate_logs
+  prune_old_logs
 
   # Duplicate stdout/stderr to console + log (strip ANSI in log)
   exec \
