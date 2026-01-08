@@ -31,9 +31,15 @@ fi
 mkdir -p "$(dirname "$PIDFILE")"
 mkdir -p "$(dirname "$LOGFILE")"
 mkdir -p "$DIR"
-chown "$USER":"$USER" "$(dirname "$PIDFILE")" "$(dirname "$LOGFILE")" "$DIR" 2>/dev/null || true
+# Ensure user owns directories AND existing logs to prevent startup crash
+chown -R "$USER":"$USER" "$(dirname "$PIDFILE")" "$(dirname "$LOGFILE")" "$DIR" 2>/dev/null || true
 
 running() {
+    # 1. Check screen first (most reliable in PRoot)
+    if screen -list | grep -q "\.$SERVICE_NAME"; then
+        return 0
+    fi
+    # 2. Fallback to PID file
     [ -s "$PIDFILE" ] || return 1
     pid="$(cat "$PIDFILE" 2>/dev/null || echo '')"
     [ -n "$pid" ] || return 1
@@ -53,8 +59,8 @@ start() {
     # Build command
     CMD="$BIN"
     [ -f "$CONF_FILE" ] && CMD="$CMD $CONF_FILE"
-    # FORCE foreground for screen
-    CMD="$CMD --daemonize no --pidfile $PIDFILE --logfile $LOGFILE --dir $DIR"
+    # FORCE foreground for screen, and ENABLE UNIX SOCKET for Android apps
+    CMD="$CMD --daemonize no --pidfile $PIDFILE --logfile $LOGFILE --dir $DIR --unixsocket /tmp/valkey.sock --unixsocketperm 777"
 
     # Use screen for persistence
     if id -u "$USER" >/dev/null 2>&1; then
@@ -63,21 +69,28 @@ start() {
         screen -dmS "$SERVICE_NAME" $CMD
     fi
 
+    # Stabilization Verification Loop
     for i in $(seq 1 "$PDSM_START_TIMEOUT"); do
-        if running; then
-            echo "[pdsm:$SERVICE_NAME] started"
-            return 0
-        fi
+        # Sleep first to allow immediate crash to happen
         sleep 1
+        if running; then
+            # Verify process is truly stable (not just a zombie screen)
+            if [ -S /tmp/valkey.sock ]; then
+                 echo "[pdsm:$SERVICE_NAME] started (socket found)"
+                 return 0
+            fi
+            # If no socket yet, wait longer or trust screen if it persists
+             echo "[pdsm:$SERVICE_NAME] started"
+             return 0
+        else
+            if ! screen -list | grep -q "\.$SERVICE_NAME"; then
+                 echo "[pdsm:$SERVICE_NAME] failed (screen died)" >&2
+                 return 1
+            fi
+        fi
     done
 
-    # Fallback check: if socket exists, trust it?
-    if [ -S /tmp/valkey.sock ]; then
-         echo "[pdsm:$SERVICE_NAME] started (socket found)"
-         return 0
-    fi
-
-    echo "[pdsm:$SERVICE_NAME] failed to start" >&2
+    echo "[pdsm:$SERVICE_NAME] failed to start (timeout)" >&2
     return 1
 }
 
