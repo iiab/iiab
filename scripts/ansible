@@ -219,16 +219,21 @@ $APT_PATH/apt -y install python3-venv
 ensure_pip() {
     local venv="$1"
 
+    # Check for resume-retries support
+    local has_resume=$($venv/bin/python3 -m pip install --help | grep -q "resume-retries" && echo "yes" || echo "no")
+    if [ "$has_resume" == "yes" ]; then
+        return 0
+    fi
+
     for i in $(seq 1 3); do
+        # Attempt pip upgrade if flag is missing
+        echo "Missing --resume-retries. Attempting pip upgrade..."
+        $venv/bin/python3 -m pip install --upgrade pip
+
         # Check for resume-retries support
         local has_resume=$($venv/bin/python3 -m pip install --help | grep -q "resume-retries" && echo "yes" || echo "no")
-
-        # Attempt pip upgrade if flag is missing
-        if [ "$has_resume" == "no" ]; then
-            echo "Missing --resume-retries. Attempting pip upgrade..."
-            $venv/bin/python3 -m pip install --upgrade pip
-            # Re-check after upgrade attempt
-            has_resume=$($venv/bin/python3 -m pip install --help | grep -q "resume-retries" && echo "yes" || echo "no")
+        if [ "$has_resume" == "yes" ]; then
+            return 0
         fi
 
         echo "Attempt $i failed. Retrying in 2s..."
@@ -308,8 +313,10 @@ EOF
     # messes -- and obviating the need for these 2: (above, both commented out)
     # - 'apt -y install libffi-dev python3-dev'
     # - painstaking pinning of cryptography or cffi (etc) to older version #s
+
     ensure_pip /usr/local/ansible
     /usr/local/ansible/bin/python3 -m pip install --retries 10 --resume-retries 150 --prefer-binary --upgrade ansible-core
+
     echo -e "\nCreate symlinks /usr/local/bin/ansible* -> /usr/local/ansible/bin/ansible*"
     cd /usr/local/ansible/bin
     for bin in ansible*; do
