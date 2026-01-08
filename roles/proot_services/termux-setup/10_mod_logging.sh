@@ -33,13 +33,12 @@ setup_logging() {
     return 0
   fi
 
-  mkdir -p "$LOG_DIR" 2>/dev/null || true
+  mkdir -p "$LOG_DIR"
 
   if [[ -z "${LOG_FILE:-}" ]]; then
     LOG_FILE="${LOG_DIR}/0_termux-setupv2.$(date +%Y%m%d-%H%M%S).log"
   else
-    # Best-effort: ensure parent dir exists
-    mkdir -p "$(dirname -- "$LOG_FILE")" 2>/dev/null || true
+    mkdir -p "$(dirname -- "$LOG_FILE")"
   fi
 
   # Header (best-effort)
@@ -55,8 +54,7 @@ setup_logging() {
     echo "================================"
   } >>"$LOG_FILE" 2>/dev/null || true
 
-  # Best-effort: restrict log readability (may include debug/xtrace)
-  chmod 600 "$LOG_FILE" 2>/dev/null || true
+  chmod 600 "$LOG_FILE"
 
   prune_old_logs
 

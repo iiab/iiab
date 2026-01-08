@@ -79,8 +79,8 @@ done
 printf '\n' >>"$TMP_FILE"
 
 # Install bundle atomically
-chmod 700 "$TMP_FILE" 2>/dev/null || true
+chmod 700 "$TMP_FILE"
 mv -f -- "$TMP_FILE" "$OUT_FILE"
-chmod 700 "$OUT_FILE" 2>/dev/null || true
+chmod 700 "$OUT_FILE"
 
 echo "[ok] Wrote: $OUT_FILE"

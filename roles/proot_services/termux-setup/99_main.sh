@@ -13,7 +13,7 @@
 # NOTE: Core defaults live in 00_lib_common.sh to guarantee availability for all modules.
 
 # Ensure state directories exist (safe even if user overrides via environment).
-mkdir -p "$STATE_DIR" "$ADB_STATE_DIR" "$LOG_DIR" 2>/dev/null || true
+mkdir -p "$STATE_DIR" "$ADB_STATE_DIR" "$LOG_DIR"
 
 RESET_DEBIAN=0
 ONLY_CONNECT=0

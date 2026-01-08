@@ -37,7 +37,7 @@ adb_stamp_write() {
     echo "connect_port=${CONNECT_PORT:-}"
     echo "hostkey_fp=${fp}"
   } >"$ADB_PAIRED_STAMP" 2>/dev/null || true
-  chmod 600 "$ADB_PAIRED_STAMP" 2>/dev/null || true
+  chmod 600 "$ADB_PAIRED_STAMP"
 }
 
 adb_stamp_read_fp() {
