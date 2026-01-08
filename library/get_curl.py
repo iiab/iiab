@@ -30,8 +30,6 @@ def run_module():
     cmd = [
         "curl",
         "-fL",
-        "-C",
-        "-",
         "--connect-timeout",
         str(args['timeout']),
         "--retry",
@@ -44,7 +42,7 @@ def run_module():
     if is_dir:
         cmd.extend(["--output-dir", args['dest'], "-J", "-O"])
     else:
-        cmd.extend(["-o", args['dest']])
+        cmd.extend(["-C", "-", "-o", args['dest']])
 
     cmd.append(args['url'])
 
