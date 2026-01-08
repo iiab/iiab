@@ -20,13 +20,16 @@ export COURIER_S3_ENDPOINT="http://localhost:1"
 mkdir -p /run/rapidpro
 mkdir -p /var/log/rapidpro
 mkdir -p "$COURIER_SPOOL_DIR"
-chown {{ iiab_admin_user }}:{{ iiab_admin_user }} "$COURIER_SPOOL_DIR" 2>/dev/null || true
+chown -R {{ iiab_admin_user }}:{{ iiab_admin_user }} /var/log/rapidpro /run/rapidpro "$COURIER_SPOOL_DIR" 2>/dev/null || true
 
 running() {
+  if screen -list | grep -q "\.$SERVICE_NAME"; then
+      return 0
+  fi
   [ -s "$PIDFILE" ] || return 1
   pid="$(cat "$PIDFILE" 2>/dev/null)"
   [ -n "$pid" ] || return 1
-  kill -0 "$pid" 2>/dev/null || pgrep -u "{{ iiab_admin_user }}" -f "/usr/local/bin/courier" >/dev/null
+  kill -0 "$pid" 2>/dev/null
 }
 
 start() {
@@ -36,25 +39,32 @@ start() {
   fi
 
   echo "[pdsm:$SERVICE_NAME] starting..."
-  export USER={{ iiab_admin_user }}
+  
+  # Ensure log ownership
+  chown {{ iiab_admin_user }}:{{ iiab_admin_user }} "$LOGFILE" 2>/dev/null || true
 
-  # Use screen for persistence
-  screen -dmS "$SERVICE_NAME" bash -c "\
-    cd {{ rapidpro_dir }} && /usr/local/bin/courier >>\"$LOGFILE\" 2>&1"
+  # Use screen for persistence, run as correct user
+  screen -dmS "$SERVICE_NAME" su - {{ iiab_admin_user }} -c "\
+    export COURIER_DB=\"postgres://{{ rapidpro_db_user }}:{{ rapidpro_db_pass }}@localhost/{{ rapidpro_db_name }}?sslmode=disable\"; \
+    export COURIER_VALKEY=\"valkey://localhost:6379/0\"; \
+    export COURIER_SPOOL_DIR=\"{{ rapidpro_dir }}/spool/courier\"; \
+    export COURIER_DYNAMO_ENDPOINT=\"http://localhost:4567\"; \
+    export COURIER_S3_ENDPOINT=\"http://localhost:1\"; \
+    cd {{ rapidpro_dir }} && exec /usr/local/bin/courier >>\"$LOGFILE\" 2>&1"
   
   # Courier doesn't write its own PID file easily
-  sleep 1
-  pgrep -u "$USER" -f "/usr/local/bin/courier" > "$PIDFILE"
-
-  for i in $(seq 1 10); do
-    if running; then
-      echo "[pdsm:$SERVICE_NAME] started"
-      return 0
-    fi
-    sleep 1
+  for i in $(seq 1 5); do
+      sleep 1
+      if running; then
+          pgrep -u "{{ iiab_admin_user }}" -f "/usr/local/bin/courier" > "$PIDFILE" 2>/dev/null || true
+          echo "[pdsm:$SERVICE_NAME] started"
+          return 0
+      fi
   done
 
   echo "[pdsm:$SERVICE_NAME] failed to start" >&2
+  # Cleanup
+  screen -X -S "$SERVICE_NAME" quit >/dev/null 2>&1 || true
   return 1
 }
 

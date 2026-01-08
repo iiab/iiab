@@ -36,13 +36,17 @@ export PATH="$VENV_PATH/bin:$PATH"
 
 mkdir -p /run/rapidpro
 mkdir -p /var/log/rapidpro
+chown -R {{ iiab_admin_user }}:{{ iiab_admin_user }} /var/log/rapidpro /run/rapidpro 2>/dev/null || true
 
 running() {
+  if screen -list | grep -q "\.$SERVICE_NAME"; then
+      return 0
+  fi
   [ -s "$PIDFILE" ] || return 1
   pid="$(cat "$PIDFILE" 2>/dev/null || echo '')"
   [ -n "$pid" ] || return 1
   # Check if process is alive
-  kill -0 "$pid" 2>/dev/null || pgrep -u "$USER" -f "/usr/local/bin/gunicorn" >/dev/null
+  kill -0 "$pid" 2>/dev/null
 }
 
 wait_for_resource() {
@@ -85,14 +89,21 @@ start() {
 
   echo "[pdsm:$SERVICE_NAME] starting..."
   
+  # Ensure log ownership just in case
+  chown {{ iiab_admin_user }}:{{ iiab_admin_user }} "$LOGFILE" 2>/dev/null || true
+  
   cd "$RAPIDPRO_DIR" || return 1
 
   # Use 'screen' for robust persistence in Proot (SSH detachment safe)
   # Proactively cleaning up any stale sockets (Proot /tmp is persistent!)
   rm -f "$SOCKFILE"
 
-  screen -dmS rapidpro-server bash -c "\
-    exec \"$VENV_PATH/bin/gunicorn\" temba.wsgi:application \
+  # Run as correct user with su -
+  screen -dmS rapidpro-server su - {{ iiab_admin_user }} -c "\
+    export DJANGO_SETTINGS_MODULE=\"temba.settings\"; \
+    export PYTHONUNBUFFERED=\"1\"; \
+    export PATH=\"$VENV_PATH/bin:\$PATH\"; \
+    exec gunicorn temba.wsgi:application \
     --access-logfile \"$LOGFILE\" \
     --error-logfile \"$LOGFILE\" \
     --workers 1 \
@@ -103,7 +114,7 @@ start() {
   # Wait for startup
   for i in $(seq 1 "$PDSM_START_TIMEOUT"); do
     if running; then
-        # Extra check: ensure socket exists
+        # Extra check: ensure socket exists (give it a moment to appear)
         if [ -S "$SOCKFILE" ]; then
             echo "[pdsm:$SERVICE_NAME] started"
             return 0
@@ -113,6 +124,8 @@ start() {
   done
 
   echo "[pdsm:$SERVICE_NAME] failed to start" >&2
+  # Cleanup if failed
+  screen -X -S rapidpro-server quit >/dev/null 2>&1 || true
   return 1
 }
 

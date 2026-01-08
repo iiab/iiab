@@ -17,11 +17,16 @@ BIN="/usr/local/bin/wuzapi"
 : ${WUZAPI_PORT:=8095}
 : ${WUZAPI_ADMIN_TOKEN:="{{ wuzapi_admintoken | default('Y1234567890abcdefghijkl098765', true) }}"}
 
+# Ensure dirs
 mkdir -p "$(dirname "$PIDFILE")"
 mkdir -p "$(dirname "$LOGFILE")"
 
 running() {
+  if screen -list | grep -q "\.$SERVICE_NAME"; then
+      return 0
+  fi
   [ -s "$PIDFILE" ] || return 1
+  # ... existing check ...
   pid="$(cat "$PIDFILE" 2>/dev/null || echo '')"
   [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null && return 0
   
@@ -50,7 +55,8 @@ start() {
 
   # Ensure PIDFILE directory is writable by the user
   touch "$PIDFILE"
-  chown $USER "$PIDFILE"
+  # Ensure log ownership
+  chown -R $USER:$USER "$(dirname "$PIDFILE")" "$(dirname "$LOGFILE")" 2>/dev/null || true
 
   # Screen for persistence with atomic PID write attempt
   screen -dmS "$SERVICE_NAME" su -s /bin/bash "$USER" -c "\

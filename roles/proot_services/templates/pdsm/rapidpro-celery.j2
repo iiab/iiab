@@ -30,12 +30,16 @@ export PATH="$VENV_PATH/bin:$PATH"
 
 mkdir -p /run/rapidpro
 mkdir -p /var/log/rapidpro
+chown -R {{ iiab_admin_user }}:{{ iiab_admin_user }} /var/log/rapidpro /run/rapidpro 2>/dev/null || true
 
 running() {
+  if screen -list | grep -q "\.$SERVICE_NAME"; then
+      return 0
+  fi
   [ -s "$PIDFILE" ] || return 1
   pid="$(cat "$PIDFILE" 2>/dev/null)"
   [ -n "$pid" ] || return 1
-  kill -0 "$pid" 2>/dev/null || pgrep -u "$USER" -f "celery" >/dev/null
+  kill -0 "$pid" 2>/dev/null
 }
 
 start() {
@@ -45,11 +49,18 @@ start() {
   fi
 
   echo "[pdsm:$SERVICE_NAME] starting..."
+  
+  # Ensure log ownership
+  chown {{ iiab_admin_user }}:{{ iiab_admin_user }} "$LOGFILE" 2>/dev/null || true
+  
   cd "$RAPIDPRO_DIR" || return 1
 
-  # Screen for persistence
-  screen -dmS "$SERVICE_NAME" bash -c "\
-    exec $VENV_PATH/bin/celery -A temba worker -l info -B --concurrency=1 \
+  # Screen for persistence, run as correct user
+  screen -dmS "$SERVICE_NAME" su - {{ iiab_admin_user }} -c "\
+    export DJANGO_SETTINGS_MODULE=\"temba.settings\"; \
+    export PYTHONUNBUFFERED=\"1\"; \
+    export PATH=\"$VENV_PATH/bin:\$PATH\"; \
+    exec celery -A temba worker -l info -B --concurrency=1 \
     --pidfile=\"$PIDFILE\" > \"$LOGFILE\" 2>&1"
 
   for i in $(seq 1 10); do
@@ -61,6 +72,8 @@ start() {
   done
 
   echo "[pdsm:$SERVICE_NAME] failed to start" >&2
+  # Cleanup
+  screen -X -S "$SERVICE_NAME" quit >/dev/null 2>&1 || true
   return 1
 }
 
