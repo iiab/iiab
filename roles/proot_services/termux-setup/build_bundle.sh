@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # build_bundle.sh
-# Bundles modules listed in manifest.sh into ../0_termux-setup_v2.sh
+# Bundles modules listed in manifest.sh into ../0_termux-setup.sh
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$SCRIPT_DIR"
@@ -15,8 +15,8 @@ MOD_DIR="$ROOT_DIR"
 
 PARENT_DIR="$(cd -- "${ROOT_DIR}/.." && pwd)"
 OUT_DIR="${ROOT_DIR}/dist"
-OUT_FILE="${PARENT_DIR}/0_termux-setup_v2.sh"
-TMP_FILE="${OUT_DIR}/.0_termux-setup_v2.tmp.$RANDOM$RANDOM"
+OUT_FILE="${PARENT_DIR}/0_termux-setup.sh"
+TMP_FILE="${OUT_DIR}/.0_termux-setup.tmp.$RANDOM$RANDOM"
 
 mkdir -p "$OUT_DIR"
 build_ts="$(date -Is)"
