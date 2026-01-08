@@ -15,10 +15,13 @@ mkdir -p {{ rapidpro_dir }}/dynamo
 chown {{ iiab_admin_user }}:{{ iiab_admin_user }} {{ rapidpro_dir }}/dynamo 2>/dev/null || true
 
 running() {
+  if screen -list | grep -q "\.$SERVICE_NAME"; then
+      return 0
+  fi
   [ -s "$PIDFILE" ] || return 1
   pid="$(cat "$PIDFILE" 2>/dev/null)"
   [ -n "$pid" ] || return 1
-  kill -0 "$pid" 2>/dev/null || pgrep -u "{{ iiab_admin_user }}" -f "dynalite" >/dev/null
+  kill -0 "$pid" 2>/dev/null
 }
 
 start() {
@@ -28,24 +31,25 @@ start() {
   fi
 
   echo "[pdsm:$SERVICE_NAME] starting..."
-  export USER={{ iiab_admin_user }}
 
-  # Use screen for persistence
-  screen -dmS "$SERVICE_NAME" bash -c "\
+  # Use screen for persistence, run as correct user
+  screen -dmS "$SERVICE_NAME" su - {{ iiab_admin_user }} -c "\
     /usr/bin/dynalite --port 4567 --path {{ rapidpro_dir }}/dynamo >>\"$LOGFILE\" 2>&1"
   
-  sleep 1
-  pgrep -u "$USER" -f "dynalite" > "$PIDFILE"
-
-  for i in $(seq 1 10); do
-    if running; then
-      echo "[pdsm:$SERVICE_NAME] started"
-      return 0
-    fi
-    sleep 1
+  # Stabilization Loop
+  for i in $(seq 1 5); do
+      sleep 1
+      if running; then
+          # Try to grab PID if possible, though screen check is primary
+          pgrep -u "{{ iiab_admin_user }}" -f "dynalite" > "$PIDFILE" 2>/dev/null || true
+          echo "[pdsm:$SERVICE_NAME] started"
+          return 0
+      fi
   done
 
   echo "[pdsm:$SERVICE_NAME] failed to start" >&2
+  # Cleanup screen if it failed to stabilize
+  screen -X -S "$SERVICE_NAME" quit >/dev/null 2>&1 || true
   return 1
 }
 
