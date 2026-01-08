@@ -39,23 +39,34 @@ Start with an Android 12-or-higher phone or tablet:
      * `Disable child process restrictions` (English), or
      * `Desactivar restricciones de procesos secundarios` (Spanish)
 
-   * Android 12 and 13 added a ["Phantom Process Killer" (PPK)](https://github.com/agnostic-apollo/Android-Docs/blob/master/en/docs/apps/processes/phantom-cached-and-empty-processes.md) feature to limit child processes, but there is no UI option to disable this behavior on those versions. Instead, you need to disable it using ADB commands issued from a remote device, or locally on the device using **[Shizuku](https://github.com/RikkaApps/Shizuku/releases/)**.
+   * **Android 12 and 13:** The new installer (`0_termux-setup_v2.sh`) will attempt to automatically disable the ["Phantom Process Killer" (PPK)](https://github.com/agnostic-apollo/Android-Docs/blob/master/en/docs/apps/processes/phantom-cached-and-empty-processes.md) via Wireless Debugging.
+     
+     *Ensure "Wireless Debugging" is enabled in Developer Options before running the installer.*
 
-     Shizuku is a 3-step process: **Pair**, **Run**, and **Export**. Please check this (WIP) [video tutorial](https://ark.switnet.org/tmp/termux-shizuku-a12-setup_light.mp4) for a more interactive explanation. Once exported, the `0_termux_setup.sh` script (just below) will handle the PPK workaround setup.
+     (Fallback: If the script fails, you can use **[Shizuku](https://github.com/RikkaApps/Shizuku/releases/)** locally on the device).
 
-4. Prepare the Termux app by running the following command from the Termux CLI (command-line interface):
+4. Prepare Termux and Install Debian (using the new v2 suite):
+
+   Run the following command from the Termux CLI:
 
    ```
-   curl https://raw.githubusercontent.com/deldesir/iiab/refs/heads/master/roles/proot_services/0_termux-setup.sh | bash
+   curl https://raw.githubusercontent.com/deldesir/iiab/refs/heads/master/roles/proot_services/0_termux-setup_v2.sh | bash -s -- --all
    ```
 
-   Once complete, enter [PRoot Distro](https://wiki.termux.com/wiki/PRoot)'s Debian environment to continue the installation:
+   **What this does:**
+   * **Auto-Select Mirror**: Picks the fastest Termux repository.
+   * **Baseline Setup**: Installs `proot-distro`, `adb`, and dependencies.
+   * **Debian Install**: Bootstraps the Debian environment (with DNS fixes included).
+   * **ADB Pairing**: Automatically sets up Wireless Debugging (for PPK disable).
+
+   Once complete, enter [PRoot Distro](https://wiki.termux.com/wiki/PRoot)'s Debian environment:
 
    ```
    proot-distro login debian
    ```
 
 5. Run the `1_iiab-on-android.sh` script which (a) installs `local_vars_android.yml` to [`/etc/iiab/local_vars.yml`](https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it?) and (b) runs the IIAB installer:
+
 
    ```
    curl https://raw.githubusercontent.com/deldesir/iiab/refs/heads/master/roles/proot_services/1_iiab-on-android.sh | bash

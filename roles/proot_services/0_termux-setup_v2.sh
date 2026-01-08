@@ -308,6 +308,9 @@ step_debian_bootstrap_default() {
   set +e
   proot-distro login debian -- bash -lc '
     set -e
+    # Fix for Android/Termux DNS issues (missing resolv.conf)
+    echo "nameserver 8.8.8.8" > /etc/resolv.conf
+
     export DEBIAN_FRONTEND=noninteractive
     apt-get update
     apt-get -y -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold \
