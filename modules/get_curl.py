@@ -21,7 +21,10 @@ def run_module():
     # We rely on curl -J -O to determine the filename in the dest dir case
     is_dir = os.path.isdir(args['dest']) or args['dest'].endswith('/')
     if is_dir and not os.path.exists(args['dest']):
-        os.makedirs(args['dest'])
+        try:
+            os.makedirs(args['dest'])
+        except OSError as e:
+            module.fail_json(msg=f"Failed to create destination directory: {e}")
 
     # Check if file exists for idempotency (creates-like behavior)
     if not args['force'] and os.path.exists(args['dest']):
