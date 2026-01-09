@@ -18,7 +18,6 @@ def run_module():
     args = module.params
 
     # Handle directory-to-filename logic similar to get_url
-    # We rely on curl -J -O to determine the filename in the dest dir case
     is_dir = os.path.isdir(args['dest']) or args['dest'].endswith('/')
     if is_dir and not os.path.exists(args['dest']):
         try:
@@ -26,13 +25,10 @@ def run_module():
         except OSError as e:
             module.fail_json(msg=f"Failed to create destination directory: {e}")
 
-    # Check if file exists for idempotency (creates-like behavior)
-    if not args['force'] and os.path.exists(args['dest']):
-        module.exit_json(changed=False, msg="File already exists", dest=args['dest'])
-
     cmd = [
         "curl",
-        "-fL",
+        "--fail",
+        "--location",
         "--connect-timeout",
         str(args['timeout']),
         "--retry",
@@ -41,12 +37,10 @@ def run_module():
         "--retry-max-time",
         "1200",
     ]
-
     if is_dir:
-        cmd.extend(["--output-dir", args['dest'], "-J", "-O"])
+        cmd.extend(["--output-dir", args['dest'], "--remote-name", "--remote-header-name"])
     else:
-        cmd.extend(["-C", "-", "-o", args['dest']])
-
+        cmd.extend(["--continue-at=-", "--output", args['dest']])
     cmd.append(args['url'])
 
     if module.check_mode:
@@ -59,7 +53,7 @@ def run_module():
         if process.returncode != 0:
             module.fail_json(msg="curl failed", rc=process.returncode, stdout=stdout, stderr=stderr)
 
-        module.exit_json(changed=True, dest=args['dest'], rc=0)
+        module.exit_json(changed=True, dest=args['dest'], rc=process.returncode)
     except Exception as e:
         module.fail_json(msg=str(e))
 
