@@ -7,6 +7,7 @@ log()      { printf "${BLU}[iiab]${RST} %s\n" "$*"; }
 ok()       { printf "${GRN}[iiab]${RST} %s\n" "$*"; }
 warn()     { printf "${YEL}[iiab] WARNING:${RST} %s\n" "$*" >&2; }
 warn_red() { printf "${RED}${BOLD}[iiab] WARNING:${RST} %s\n" "$*" >&2; }
+indent()   { sed 's/^/ /'; }
 
 have() { command -v "$1" >/dev/null 2>&1; }
 need() { have "$1" || return 1; }

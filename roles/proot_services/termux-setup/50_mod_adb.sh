@@ -10,19 +10,10 @@ ADB_PAIRED_STAMP="${ADB_STATE_DIR}/stamp.adb_paired"
 
 adb_hostkey_fingerprint() {
   # Returns a stable fingerprint for THIS Termux install's adb host key.
+  # Defaulted to sha256 being available/confirmed in the baseline.
   local pub="${HOME}/.android/adbkey.pub"
   [[ -r "$pub" ]] || return 1
-  if have sha256sum; then
-    sha256sum "$pub" | awk '{print $1}'
-  elif have shasum; then
-    shasum -a 256 "$pub" | awk '{print $1}'
-  elif have openssl; then
-    openssl dgst -sha256 "$pub" 2>/dev/null | awk '{print $2}'
-  elif have md5sum; then
-    md5sum "$pub" | awk '{print $1}'
-  else
-    return 1
-  fi
+  sha256sum "$pub" | awk '{print $1}'
 }
 
 adb_stamp_write() {
@@ -37,7 +28,7 @@ adb_stamp_write() {
     echo "connect_port=${CONNECT_PORT:-}"
     echo "hostkey_fp=${fp}"
   } >"$ADB_PAIRED_STAMP" 2>/dev/null || true
-  chmod 600 "$ADB_PAIRED_STAMP" 2>/dev/null || true
+  chmod 600 "$ADB_PAIRED_STAMP"
 }
 
 adb_stamp_read_fp() {

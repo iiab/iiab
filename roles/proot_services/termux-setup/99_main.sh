@@ -13,8 +13,10 @@
 # NOTE: Core defaults live in 00_lib_common.sh to guarantee availability for all modules.
 
 # Ensure state directories exist (safe even if user overrides via environment).
-mkdir -p "$STATE_DIR" "$ADB_STATE_DIR" "$LOG_DIR" 2>/dev/null || true
+mkdir -p "$STATE_DIR" "$ADB_STATE_DIR" "$LOG_DIR"
 
+BASELINE_OK=0
+BASELINE_ERR=""
 RESET_DEBIAN=0
 ONLY_CONNECT=0
 
@@ -84,7 +86,7 @@ self_check() {
   if have proot-distro; then
     log " proot-distro: present"
     log " proot-distro list:"
-    proot-distro list 2>/dev/null | sed 's/^/ /' || true
+    proot-distro list 2>/dev/null | indent || true
     if debian_exists; then ok " Debian: present"; else warn " Debian: not present"; fi
   else
     warn " proot-distro: not present"
@@ -92,12 +94,12 @@ self_check() {
 
   if have adb; then
     log " adb: present"
-    adb devices -l 2>/dev/null | sed 's/^/ /' || true
+    adb devices -l 2>/dev/null | indent || true
     local serial
-#    renable in need for verbose output.
+#    re-enable in need for verbose output.
 #    if serial="$(adb_pick_loopback_serial 2>/dev/null)"; then
 #      log " adb shell id (first device):"
-#      adb -s "$serial" shell id 2>/dev/null | sed 's/^/ /' || true
+#      adb -s "$serial" shell id 2>/dev/null | indent || true
 #    fi
   else
     warn " adb: not present"
@@ -109,7 +111,21 @@ self_check() {
   if have termux-notification; then ok " Termux:API notifications: command present"; else warn " Termux:API notifications: missing"; fi
 }
 
+baseline_bail() {
+  warn_red "Cannot continue: Termux baseline is incomplete."
+  [[ -n "${BASELINE_ERR:-}" ]] && warn "Reason: ${BASELINE_ERR}"
+  baseline_bail_details || true
+  exit 1
+}
+
 final_advice() {
+  if [[ "${BASELINE_OK:-0}" -ne 1 ]]; then
+    warn_red "Baseline is not ready, so ADB prompts / Debian bootstrap may be unavailable."
+    [[ -n "${BASELINE_ERR:-}" ]] && warn "Reason: ${BASELINE_ERR}"
+    warn "Fix: check network + Termux repos, then re-run the script."
+    return 0
+  fi
+
   # 1) Android-related warnings (only meaningful if we attempted checks)
   local sdk="${CHECK_SDK:-${ANDROID_SDK:-}}"
   local adb_connected=0
@@ -288,24 +304,24 @@ main() {
   case "$MODE" in
     baseline)
       step_termux_repo_select_once
-      step_termux_base
+      step_termux_base || baseline_bail
       step_debian_bootstrap_default
       ;;
 
     with-adb)
       step_termux_repo_select_once
-      step_termux_base
+      step_termux_base || baseline_bail
       step_debian_bootstrap_default
       adb_pair_connect_if_needed
       ;;
 
     adb-only)
-      step_termux_base
+      step_termux_base || baseline_bail
       adb_pair_connect_if_needed
       ;;
 
     connect-only)
-      step_termux_base
+      step_termux_base || baseline_bail
       adb_pair_connect
       ;;
 
@@ -316,13 +332,13 @@ main() {
       ;;
 
     check)
-      step_termux_base
+      step_termux_base || baseline_bail
       check_readiness || true
       ;;
 
     all)
       step_termux_repo_select_once
-      step_termux_base
+      step_termux_base || baseline_bail
       step_debian_bootstrap_default
       adb_pair_connect_if_needed
 

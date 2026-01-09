@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # -----------------------------------------------------------------------------
-# GENERATED FILE: do not edit directly.
+# GENERATED FILE: 2026-01-08T19:20:20-05:00 - do not edit directly.
 # Source modules: termux-setup/*.sh + manifest.sh
 # Rebuild: (cd termux-setup && bash build_bundle.sh)
 # -----------------------------------------------------------------------------
@@ -18,6 +18,7 @@ log()      { printf "${BLU}[iiab]${RST} %s\n" "$*"; }
 ok()       { printf "${GRN}[iiab]${RST} %s\n" "$*"; }
 warn()     { printf "${YEL}[iiab] WARNING:${RST} %s\n" "$*" >&2; }
 warn_red() { printf "${RED}${BOLD}[iiab] WARNING:${RST} %s\n" "$*" >&2; }
+indent()   { sed 's/^/ /'; }
 
 have() { command -v "$1" >/dev/null 2>&1; }
 need() { have "$1" || return 1; }
@@ -50,16 +51,18 @@ DEBUG="${DEBUG:-0}"
 # -------------------------
 LOG_ENABLED=1
 LOG_FILE=""          # if empty, auto-generate under $LOG_DIR
-LOG_KEEP=20          # keep last N logs
+LOG_KEEP=3           # keep only the last 3 logs
 
-rotate_logs() {
+prune_old_logs() {
   [[ -d "${LOG_DIR:-}" ]] || return 0
-  local n=$((LOG_KEEP + 1))
+  local keep="${LOG_KEEP:-3}"
+  local i=0 f
   while IFS= read -r f; do
     [[ -n "${f:-}" ]] || continue
-    [[ -n "${LOG_FILE:-}" && "$f" == "$LOG_FILE" ]] && continue
+    i=$((i + 1))
+    (( i <= keep )) && continue
     rm -f -- "$f" 2>/dev/null || true
-  done < <(ls -1t "$LOG_DIR"/*.log 2>/dev/null | tail -n +"$n" || true)
+  done < <(ls -1t "$LOG_DIR"/*.log 2>/dev/null || true)
 }
 
 setup_logging() {
@@ -75,13 +78,12 @@ setup_logging() {
     return 0
   fi
 
-  mkdir -p "$LOG_DIR" 2>/dev/null || true
+  mkdir -p "$LOG_DIR"
 
   if [[ -z "${LOG_FILE:-}" ]]; then
     LOG_FILE="${LOG_DIR}/0_termux-setupv2.$(date +%Y%m%d-%H%M%S).log"
   else
-    # Best-effort: ensure parent dir exists
-    mkdir -p "$(dirname -- "$LOG_FILE")" 2>/dev/null || true
+    mkdir -p "$(dirname -- "$LOG_FILE")"
   fi
 
   # Header (best-effort)
@@ -97,10 +99,9 @@ setup_logging() {
     echo "================================"
   } >>"$LOG_FILE" 2>/dev/null || true
 
-  # Best-effort: restrict log readability (may include debug/xtrace)
-  chmod 600 "$LOG_FILE" 2>/dev/null || true
+  chmod 600 "$LOG_FILE"
 
-  rotate_logs
+  prune_old_logs
 
   # Duplicate stdout/stderr to console + log (strip ANSI in log)
   exec \
@@ -125,6 +126,35 @@ setup_logging() {
 # ---- BEGIN 20_mod_termux_base.sh ----
 # shellcheck shell=bash
 # Module file (no shebang). Bundled by build_bundle.sh
+
+# If baseline fails, store the last command that failed for better diagnostics.
+BASELINE_ERR=""
+
+baseline_prereqs_ok() {
+  have proot-distro && have adb && have termux-notification && have termux-dialog && have sha256sum
+}
+
+baseline_missing_prereqs() {
+  # Print missing prerequisites, one per line.
+  local missing=()
+  have proot-distro        || missing+=("proot-distro")
+  have adb                 || missing+=("adb")
+  have termux-notification || missing+=("termux-notification")
+  have termux-dialog       || missing+=("termux-dialog")
+  have sha256sum           || missing+=("sha256sum (coreutils)")
+
+  # Print as lines (caller can join if desired)
+  printf '%s\n' "${missing[@]}"
+}
+
+baseline_bail_details() {
+  warn "Baseline package installation failed (network / repo unreachable or packages missing)."
+  [[ -n "${BASELINE_ERR:-}" ]] && warn "Last failing command: ${BASELINE_ERR}"
+  local miss=()
+  mapfile -t miss < <(baseline_missing_prereqs || true)
+  ((${#miss[@]})) && warn "Missing prerequisites: ${miss[*]}"
+  warn "Not stamping; rerun later when prerequisites are available."
+}
 
 # Termux apt options (avoid conffile prompts)
 TERMUX_APT_OPTS=( "-y" "-o" "Dpkg::Options::=--force-confdef" "-o" "Dpkg::Options::=--force-confold" )
@@ -177,7 +207,7 @@ step_termux_repo_select_once() {
     local ans="Y"
     printf "[iiab] Launch termux-change-repo now? [Y/n]: " > /dev/tty
     if ! read -r ans < /dev/tty; then
-      warn "No interactive TTY available; skipping mirror selection (run script directly to be prompted)."
+      warn "No interactive TTY available; skipping mirror selection (run 'termux-change-repo' directly to be prompted)."
       return 0
     fi
     ans="${ans:-Y}"
@@ -206,17 +236,36 @@ step_termux_repo_select_once() {
 # -------------------------
 step_termux_base() {
   local stamp="$STATE_DIR/stamp.termux_base"
+
+  BASELINE_OK=0
+
+  # Even if we have a stamp, validate that core commands still exist.
   if [[ -f "$stamp" ]]; then
-    ok "Termux baseline already prepared (stamp found)."
-    return 0
+    if baseline_prereqs_ok; then
+      BASELINE_OK=1
+      ok "Termux baseline already prepared (stamp found)."
+      return 0
+    fi
+    warn "Baseline stamp found but prerequisites are missing; forcing reinstall."
+    rm -f "$stamp"
   fi
 
   log "Updating Termux packages (noninteractive) and installing baseline dependencies..."
   export DEBIAN_FRONTEND=noninteractive
-  termux_apt update || true
-  termux_apt upgrade || true
 
-  termux_apt install \
+  if ! termux_apt update; then
+    BASELINE_ERR="termux_apt update"
+    baseline_bail_details
+    return 1
+  fi
+
+  if ! termux_apt upgrade; then
+    BASELINE_ERR="termux_apt upgrade"
+    baseline_bail_details
+    return 1
+  fi
+
+  if ! termux_apt install \
     ca-certificates \
     curl \
     coreutils \
@@ -226,17 +275,23 @@ step_termux_base() {
     openssh \
     proot proot-distro \
     android-tools \
-    termux-api \
-    || true
+    termux-api
+  then
+    BASELINE_ERR="termux_apt install (baseline deps)"
+    baseline_bail_details
+    return 1
+  fi
 
-  if have proot-distro && \
-     have adb && have termux-notification && \
-     have termux-dialog; then
+  if baseline_prereqs_ok; then
+    BASELINE_OK=1
     ok "Termux baseline ready."
     date > "$stamp"
-  else
-    warn_red "Baseline incomplete (missing proot-distro/adb/termux-notification). Not stamping; rerun later."
+    return 0
   fi
+
+  BASELINE_ERR="post-install check (commands missing after install)"
+  baseline_bail_details
+  return 1
 }
 
 # ---- END 20_mod_termux_base.sh ----
@@ -476,19 +531,10 @@ ADB_PAIRED_STAMP="${ADB_STATE_DIR}/stamp.adb_paired"
 
 adb_hostkey_fingerprint() {
   # Returns a stable fingerprint for THIS Termux install's adb host key.
+  # Defaulted to sha256 being available/confirmed in the baseline.
   local pub="${HOME}/.android/adbkey.pub"
   [[ -r "$pub" ]] || return 1
-  if have sha256sum; then
-    sha256sum "$pub" | awk '{print $1}'
-  elif have shasum; then
-    shasum -a 256 "$pub" | awk '{print $1}'
-  elif have openssl; then
-    openssl dgst -sha256 "$pub" 2>/dev/null | awk '{print $2}'
-  elif have md5sum; then
-    md5sum "$pub" | awk '{print $1}'
-  else
-    return 1
-  fi
+  sha256sum "$pub" | awk '{print $1}'
 }
 
 adb_stamp_write() {
@@ -503,7 +549,7 @@ adb_stamp_write() {
     echo "connect_port=${CONNECT_PORT:-}"
     echo "hostkey_fp=${fp}"
   } >"$ADB_PAIRED_STAMP" 2>/dev/null || true
-  chmod 600 "$ADB_PAIRED_STAMP" 2>/dev/null || true
+  chmod 600 "$ADB_PAIRED_STAMP"
 }
 
 adb_stamp_read_fp() {
@@ -762,8 +808,8 @@ ppk_fix_via_adb() {
   ok "Using ADB device: $serial"
 
   log "Setting PPK: max_phantom_processes=256"
-  # Some Android versions may ignore/rename this; we don't hard-fail.
-  adb -s "$serial" shell sh -lc '
+# Some Android versions may ignore/rename this; we don't hard-fail.
+adb -s "$serial" shell sh -s <<'EOF' || true
     set -e
     # Persist device_config changes if supported
     if command -v device_config >/dev/null 2>&1; then
@@ -774,7 +820,7 @@ ppk_fix_via_adb() {
     else
       echo "device_config not found; skipping."
     fi
-  ' || true
+EOF
 
   ok "PPK set done (best effort)."
   return 0
@@ -953,8 +999,10 @@ self_check_android_flags() {
 # NOTE: Core defaults live in 00_lib_common.sh to guarantee availability for all modules.
 
 # Ensure state directories exist (safe even if user overrides via environment).
-mkdir -p "$STATE_DIR" "$ADB_STATE_DIR" "$LOG_DIR" 2>/dev/null || true
+mkdir -p "$STATE_DIR" "$ADB_STATE_DIR" "$LOG_DIR"
 
+BASELINE_OK=0
+BASELINE_ERR=""
 RESET_DEBIAN=0
 ONLY_CONNECT=0
 
@@ -1024,7 +1072,7 @@ self_check() {
   if have proot-distro; then
     log " proot-distro: present"
     log " proot-distro list:"
-    proot-distro list 2>/dev/null | sed 's/^/ /' || true
+    proot-distro list 2>/dev/null | indent || true
     if debian_exists; then ok " Debian: present"; else warn " Debian: not present"; fi
   else
     warn " proot-distro: not present"
@@ -1032,12 +1080,12 @@ self_check() {
 
   if have adb; then
     log " adb: present"
-    adb devices -l 2>/dev/null | sed 's/^/ /' || true
+    adb devices -l 2>/dev/null | indent || true
     local serial
-#    renable in need for verbose output.
+#    re-enable in need for verbose output.
 #    if serial="$(adb_pick_loopback_serial 2>/dev/null)"; then
 #      log " adb shell id (first device):"
-#      adb -s "$serial" shell id 2>/dev/null | sed 's/^/ /' || true
+#      adb -s "$serial" shell id 2>/dev/null | indent || true
 #    fi
   else
     warn " adb: not present"
@@ -1049,7 +1097,21 @@ self_check() {
   if have termux-notification; then ok " Termux:API notifications: command present"; else warn " Termux:API notifications: missing"; fi
 }
 
+baseline_bail() {
+  warn_red "Cannot continue: Termux baseline is incomplete."
+  [[ -n "${BASELINE_ERR:-}" ]] && warn "Reason: ${BASELINE_ERR}"
+  baseline_bail_details || true
+  exit 1
+}
+
 final_advice() {
+  if [[ "${BASELINE_OK:-0}" -ne 1 ]]; then
+    warn_red "Baseline is not ready, so ADB prompts / Debian bootstrap may be unavailable."
+    [[ -n "${BASELINE_ERR:-}" ]] && warn "Reason: ${BASELINE_ERR}"
+    warn "Fix: check network + Termux repos, then re-run the script."
+    return 0
+  fi
+
   # 1) Android-related warnings (only meaningful if we attempted checks)
   local sdk="${CHECK_SDK:-${ANDROID_SDK:-}}"
   local adb_connected=0
@@ -1228,24 +1290,24 @@ main() {
   case "$MODE" in
     baseline)
       step_termux_repo_select_once
-      step_termux_base
+      step_termux_base || baseline_bail
       step_debian_bootstrap_default
       ;;
 
     with-adb)
       step_termux_repo_select_once
-      step_termux_base
+      step_termux_base || baseline_bail
       step_debian_bootstrap_default
       adb_pair_connect_if_needed
       ;;
 
     adb-only)
-      step_termux_base
+      step_termux_base || baseline_bail
       adb_pair_connect_if_needed
       ;;
 
     connect-only)
-      step_termux_base
+      step_termux_base || baseline_bail
       adb_pair_connect
       ;;
 
@@ -1256,13 +1318,13 @@ main() {
       ;;
 
     check)
-      step_termux_base
+      step_termux_base || baseline_bail
       check_readiness || true
       ;;
 
     all)
       step_termux_repo_select_once
-      step_termux_base
+      step_termux_base || baseline_bail
       step_debian_bootstrap_default
       adb_pair_connect_if_needed
 

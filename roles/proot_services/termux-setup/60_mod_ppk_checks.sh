@@ -19,8 +19,8 @@ ppk_fix_via_adb() {
   ok "Using ADB device: $serial"
 
   log "Setting PPK: max_phantom_processes=256"
-  # Some Android versions may ignore/rename this; we don't hard-fail.
-  adb -s "$serial" shell sh -lc '
+# Some Android versions may ignore/rename this; we don't hard-fail.
+adb -s "$serial" shell sh -s <<'EOF' || true
     set -e
     # Persist device_config changes if supported
     if command -v device_config >/dev/null 2>&1; then
@@ -31,7 +31,7 @@ ppk_fix_via_adb() {
     else
       echo "device_config not found; skipping."
     fi
-  ' || true
+EOF
 
   ok "PPK set done (best effort)."
   return 0
