@@ -39,7 +39,7 @@ Start with an Android 12-or-higher phone or tablet:
      * `Disable child process restrictions` (English), or
      * `Desactivar restricciones de procesos secundarios` (Spanish)
 
-   * **Android 12 and 13:** The new installer (`0_termux-setup_v2.sh`) will attempt to automatically disable the ["Phantom Process Killer" (PPK)](https://github.com/agnostic-apollo/Android-Docs/blob/master/en/docs/apps/processes/phantom-cached-and-empty-processes.md) via Wireless Debugging.
+   * **Android 12 and 13:** The new installer (`0_termux-setup.sh`) will attempt to automatically disable the ["Phantom Process Killer" (PPK)](https://github.com/agnostic-apollo/Android-Docs/blob/master/en/docs/apps/processes/phantom-cached-and-empty-processes.md) via Wireless Debugging.
      
      *Ensure "Wireless Debugging" is enabled in Developer Options before running the installer.*
 
@@ -50,7 +50,7 @@ Start with an Android 12-or-higher phone or tablet:
    Run the following command from the Termux CLI:
 
    ```
-   curl https://raw.githubusercontent.com/deldesir/iiab/refs/heads/master/roles/proot_services/0_termux-setup_v2.sh | bash -s -- --all
+   curl https://raw.githubusercontent.com/deldesir/iiab/refs/heads/master/roles/proot_services/0_termux-setup.sh | bash -s -- --all
    ```
 
    **What this does:**
@@ -106,29 +106,6 @@ Then check that your IIAB Apps are working (using a browser on your Android devi
 | Matomo                 | [http://localhost:8085/matomo](http://localhost:8085/matomo)   |
 
 If you encounter an error or problem, please open an [issue](https://github.com/iiab/iiab/issues) so we can help you (and others) as quickly as possible.
-
-## Troubleshooting
-
-### "Address already in use" (EADDRINUSE)
-If a service (like `rapidpro-dynamo`) fails to start with this error, it means an old process is still holding the port.
-**Solution:**
-1.  Reboot your device (simplest), OR
-2.  Kill the zombie process in Termux: `pkill -9 -f dynalite` (or `node`, `python`, etc.)
-
-### Service "Binary missing"
-If `pdsm status` shows a service failed because of a missing binary (e.g., `wuzapi`), it usually means the installation didn't compile it successfully or the path is wrong.
-**Solution:**
-Re-run the installer to retry compilation:
-```bash
-cd /opt/iiab/iiab
-./iiab-install
-```
-
-### SSH "Permission denied" or Password issues
-By default, the Termux user has no password. Set one to make SSH easier:
-```bash
-passwd
-```
 
 ### Add a ZIM file
 
