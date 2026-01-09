@@ -59,6 +59,10 @@ Start with an Android 12-or-higher phone or tablet:
    * **Debian Install**: Bootstraps the Debian environment (with DNS fixes included).
    * **ADB Pairing**: Automatically sets up Wireless Debugging (for PPK disable).
 
+   **Important Note on Pairing:**
+   When the script asks for the pairing code, you must keep the "Pair with device" Settings screen open.
+   **Use Split Screen** to view both Termux and the Settings app simultaneously. Answering the Termux notification while switching apps will often fail because the pairing code changes when the Settings window closes.
+
    Once complete, enter [PRoot Distro](https://wiki.termux.com/wiki/PRoot)'s Debian environment:
 
    ```
@@ -102,6 +106,29 @@ Then check that your IIAB Apps are working (using a browser on your Android devi
 | Matomo                 | [http://localhost:8085/matomo](http://localhost:8085/matomo)   |
 
 If you encounter an error or problem, please open an [issue](https://github.com/iiab/iiab/issues) so we can help you (and others) as quickly as possible.
+
+## Troubleshooting
+
+### "Address already in use" (EADDRINUSE)
+If a service (like `rapidpro-dynamo`) fails to start with this error, it means an old process is still holding the port.
+**Solution:**
+1.  Reboot your device (simplest), OR
+2.  Kill the zombie process in Termux: `pkill -9 -f dynalite` (or `node`, `python`, etc.)
+
+### Service "Binary missing"
+If `pdsm status` shows a service failed because of a missing binary (e.g., `wuzapi`), it usually means the installation didn't compile it successfully or the path is wrong.
+**Solution:**
+Re-run the installer to retry compilation:
+```bash
+cd /opt/iiab/iiab
+./iiab-install
+```
+
+### SSH "Permission denied" or Password issues
+By default, the Termux user has no password. Set one to make SSH easier:
+```bash
+passwd
+```
 
 ### Add a ZIM file
 
