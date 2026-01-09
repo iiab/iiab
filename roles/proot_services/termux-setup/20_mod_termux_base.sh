@@ -9,16 +9,10 @@ baseline_prereqs_ok() {
 }
 
 baseline_missing_prereqs() {
-  # Print missing prerequisites, one per line.
-  local missing=()
-  have proot-distro        || missing+=("proot-distro")
-  have adb                 || missing+=("adb")
-  have termux-notification || missing+=("termux-notification")
-  have termux-dialog       || missing+=("termux-dialog")
-  have sha256sum           || missing+=("sha256sum (coreutils)")
-
-  # Print as lines (caller can join if desired)
-  printf '%s\n' "${missing[@]}"
+  for b in adb proot-distro termux-notification termux-dialog; do
+    have "$b" || echo "$b"
+  done
+  have sha256sum || echo "sha256sum (coreutils)"
 }
 
 baseline_bail_details() {
