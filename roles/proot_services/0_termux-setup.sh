@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # -----------------------------------------------------------------------------
-# GENERATED FILE: 2026-01-08T13:41:54-06:00 - do not edit directly.
+# GENERATED FILE: 2026-01-09T09:57:13-06:00 - do not edit directly.
 # Source modules: termux-setup/*.sh + manifest.sh
 # Rebuild: (cd termux-setup && bash build_bundle.sh)
 # -----------------------------------------------------------------------------
@@ -81,7 +81,7 @@ setup_logging() {
   mkdir -p "$LOG_DIR"
 
   if [[ -z "${LOG_FILE:-}" ]]; then
-    LOG_FILE="${LOG_DIR}/0_termux-setupv2.$(date +%Y%m%d-%H%M%S).log"
+    LOG_FILE="${LOG_DIR}/0_termux-setup.$(date +%Y%m%d-%H%M%S).log"
   else
     mkdir -p "$(dirname -- "$LOG_FILE")"
   fi
@@ -90,7 +90,7 @@ setup_logging() {
   local started
   started="$(date -Is 2>/dev/null || date 2>/dev/null || echo "?")"
   {
-    echo "=== iiab termux setup v2 log ==="
+    echo "=== iiab termux setup log ==="
     echo "Started: $started"
     echo "Script: $0"
     echo "Args: ${*:-}"
@@ -135,16 +135,10 @@ baseline_prereqs_ok() {
 }
 
 baseline_missing_prereqs() {
-  # Print missing prerequisites, one per line.
-  local missing=()
-  have proot-distro        || missing+=("proot-distro")
-  have adb                 || missing+=("adb")
-  have termux-notification || missing+=("termux-notification")
-  have termux-dialog       || missing+=("termux-dialog")
-  have sha256sum           || missing+=("sha256sum (coreutils)")
-
-  # Print as lines (caller can join if desired)
-  printf '%s\n' "${missing[@]}"
+  for b in adb proot-distro termux-notification termux-dialog; do
+    have "$b" || echo "$b"
+  done
+  have sha256sum || echo "sha256sum (coreutils)"
 }
 
 baseline_bail_details() {
@@ -984,7 +978,7 @@ self_check_android_flags() {
 # shellcheck shell=bash
 # Module file (no shebang). Bundled by build_bundle.sh
 
-# 0_termux-setupv2.sh
+# 0_termux-setup.sh
 # - Termux bootstrap (packages, wakelock)
 # - proot-distro + Debian bootstrap
 # - ADB wireless pair/connect via Termux:API notifications (no Shizuku)
@@ -1016,28 +1010,28 @@ CONNECT_PORT_FROM=""   # "", "flag", "positional"
 usage() {
   cat <<'EOF'
 Usage:
-  ./0_termux-setupv2.sh
+  ./0_termux-setup.sh
     -> Termux baseline + Debian bootstrap (idempotent). No ADB prompts.
 
-  ./0_termux-setupv2.sh --with-adb
+  ./0_termux-setup.sh --with-adb
     -> Termux baseline + Debian bootstrap + ADB pair/connect if needed (skips if already connected).
 
-  ./0_termux-setupv2.sh  --adb-only [--connect-port PORT]
+  ./0_termux-setup.sh  --adb-only [--connect-port PORT]
     -> Only ADB pair/connect if needed (no Debian; skips if already connected).
        Tip: --connect-port skips the CONNECT PORT prompt (you’ll still be asked for PAIR PORT + PAIR CODE).
 
-  ./0_termux-setupv2.sh --connect-only [CONNECT_PORT]
+  ./0_termux-setup.sh --connect-only [CONNECT_PORT]
     -> Connect-only (no pairing). Use this after the device was already paired before.
 
-  ./0_termux-setupv2.sh --ppk-only
+  ./0_termux-setup.sh --ppk-only
     -> Set PPK only: max_phantom_processes=256 (requires ADB already connected).
        Android 14-16 usually achieve this via "Disable child process restrictions" in Developer Options.
 
-  ./0_termux-setupv2.sh --check
+  ./0_termux-setup.sh --check
     -> Check readiness: developer options flag (if readable),
        (Android 14+) "Disable child process restrictions" proxy flag, and (Android 12-13) PPK effective value.
 
-  ./0_termux-setupv2.sh --all
+  ./0_termux-setup.sh --all
     -> baseline + Debian + ADB pair/connect if needed + (Android 12-13 only) apply --ppk + run --check.
 
   Optional:
@@ -1137,7 +1131,7 @@ final_advice() {
       else
         warn "Android 12-13: PPK value hasn't been verified (max_phantom_processes may be low, e.g. 32)."
         warn "Before starting the IIAB install, run the complete setup so it can apply/check PPK=256; otherwise the installation may fail:"
-        ok   "  ./0_termux-setupv2.sh --all"
+        ok   "  ./0_termux-setup.sh --all"
         return 0
       fi
     elif [[ "$sdk" =~ ^[0-9]+$ ]] && (( sdk >= 34 )); then
@@ -1166,7 +1160,7 @@ final_advice() {
             warn "Android 14+: child process restrictions haven't been verified (monitor flag unreadable/unknown)."
           fi
           warn "Before starting the IIAB install, run the complete setup (--all) so it can guide you to verify such setting; otherwise the installation may fail:"
-          ok   "  ./0_termux-setupv2.sh --all"
+          ok   "  ./0_termux-setup.sh --all"
           return 0
         fi
       fi
@@ -1341,7 +1335,7 @@ main() {
   esac
 
   self_check
-  ok "0_termux-setupv2.sh completed (mode=$MODE)."
+  ok "0_termux-setup.sh completed (mode=$MODE)."
   log "---- Mode list ----"
   log "Connect-only             --connect-only [PORT]"
   log "Pair+connect             --adb-only [--connect-port PORT]"
