@@ -1,7 +1,7 @@
 # termux-setup modules
 
 This project is maintained as multiple Bash "modules" that are bundled into a single script:
-`0_termux-setup_v2.sh` (the file served for: `curl ... | bash`).
+`0_termux-setup.sh` (the file served for: `curl ... | bash`).
 
 ## Rules
 

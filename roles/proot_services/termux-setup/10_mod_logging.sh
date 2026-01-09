@@ -36,7 +36,7 @@ setup_logging() {
   mkdir -p "$LOG_DIR"
 
   if [[ -z "${LOG_FILE:-}" ]]; then
-    LOG_FILE="${LOG_DIR}/0_termux-setupv2.$(date +%Y%m%d-%H%M%S).log"
+    LOG_FILE="${LOG_DIR}/0_termux-setup.$(date +%Y%m%d-%H%M%S).log"
   else
     mkdir -p "$(dirname -- "$LOG_FILE")"
   fi
@@ -45,7 +45,7 @@ setup_logging() {
   local started
   started="$(date -Is 2>/dev/null || date 2>/dev/null || echo "?")"
   {
-    echo "=== iiab termux setup v2 log ==="
+    echo "=== iiab termux setup log ==="
     echo "Started: $started"
     echo "Script: $0"
     echo "Args: ${*:-}"
