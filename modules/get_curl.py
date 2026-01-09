@@ -40,7 +40,8 @@ def run_module():
     if is_dir:
         cmd.extend(["--output-dir", args['dest'], "--remote-name", "--remote-header-name"])
     else:
-        cmd.extend(["--continue-at=-", "--output", args['dest']])
+        # -C - makes curl continue from partially downloaded files
+        cmd.extend(["-C", "-", "--output", args['dest']])
     cmd.append(args['url'])
 
     if module.check_mode:
