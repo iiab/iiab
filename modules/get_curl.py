@@ -10,7 +10,6 @@ def run_module():
     argument_spec = dict(
         url=dict(type='str', required=True),
         dest=dict(type='str', required=True),
-        force=dict(type='bool', default=True),
         timeout=dict(type='int', default=60),
         retries=dict(type='int', default=10),
     )
