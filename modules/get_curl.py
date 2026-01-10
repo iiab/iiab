@@ -30,20 +30,20 @@ def run_module():
     retries = module.params['retries']
     force = module.params['force']
 
-    dest_is_dir = os.path.isdir(dest) or dest.endswith('/')
-
-    if dest_is_dir and not os.path.exists(dest):
+    if dest.endswith('/'):
         try:
             os.makedirs(dest, exist_ok=True)
         except OSError as e:
             module.fail_json(msg=f"Failed to create final destination directory: {e}", dest=dest, url=url)
 
-    changed = False
+        dest_is_dir = True
+    else:
+        dest_is_dir = os.path.isdir(dest)
 
     if not dest_is_dir and os.path.exists(dest) and not force:
         # File exists and not forcing, just update attributes
         file_args = module.load_file_common_arguments(module.params, path=dest)
-        changed = module.set_fs_attributes_if_different(file_args, False)
+        changed = module.set_fs_attributes_if_different(file_args, changed=False)
         msg = "File already exists"
         if changed:
             msg += ", updated attributes"
@@ -103,7 +103,7 @@ def run_module():
         if dest_is_dir:
             # Find the downloaded file(s) in temp directory
             try:
-                downloaded_files = os.listdir(temp_path)
+                downloaded_files = [entry.path for entry in os.scandir(temp_path)]
                 if not downloaded_files:
                     module.fail_json(msg="No file was downloaded", dest=dest, url=url)
             except Exception as e:
@@ -127,7 +127,7 @@ def run_module():
 
                 # Set file attributes (mode, owner, group, etc.)
                 file_args = module.load_file_common_arguments(module.params, path=dest_file)
-                module.set_fs_attributes_if_different(file_args, changed)
+                module.set_fs_attributes_if_different(file_args, changed=True)
         except Exception as e:
             module.fail_json(msg=f"Failed to move file to destination: {to_native(e)}", dest=dest, url=url)
 
