@@ -103,37 +103,36 @@ def run_module():
         if dest_is_dir:
             # Find the downloaded file(s) in temp directory
             try:
-                downloaded_files = [entry.path for entry in os.scandir(temp_path)]
-                if not downloaded_files:
-                    module.fail_json(msg="No file was downloaded", dest=dest, url=url)
+                downloaded_file = [entry.path for entry in os.scandir(temp_path)]
             except Exception as e:
                 module.fail_json(
                     msg=f"Failed to locate downloaded file (temporary directory disappeared??): {to_native(e)}",
                     dest=dest,
                     url=url,
                 )
+
+            if not downloaded_file:
+                module.fail_json(msg="No file was downloaded", dest=dest, url=url)
+            if len(downloaded_file) > 1:
+                module.fail_json(msg="More than one file was downloaded", dest=dest, url=url)
+            downloaded_file = downloaded_file[0]
         else:
             if not os.path.exists(temp_path):
                 module.fail_json(msg="No file was downloaded", dest=dest, url=url)
-            downloaded_files = [temp_path]
+            downloaded_file = temp_path
 
         try:
-            for downloaded_file in downloaded_files:
-                dest_file = dest
-                if dest_is_dir:
-                    dest_file = os.path.join(dest, os.path.basename(downloaded_file))
+            if dest_is_dir:
+                dest = os.path.join(dest, os.path.basename(downloaded_file))
 
-                module.atomic_move(downloaded_file, dest_file)
+            module.atomic_move(downloaded_file, dest)
 
-                # Set file attributes (mode, owner, group, etc.)
-                file_args = module.load_file_common_arguments(module.params, path=dest_file)
-                module.set_fs_attributes_if_different(file_args, changed=True)
+            # Set file attributes (mode, owner, group, etc.)
+            file_args = module.load_file_common_arguments(module.params, path=dest)
+            module.set_fs_attributes_if_different(file_args, changed=True)
         except Exception as e:
             module.fail_json(msg=f"Failed to move file to destination: {to_native(e)}", dest=dest, url=url)
 
-        if dest_is_dir:
-            # set dest to first file downloaded for downstream use
-            dest = os.path.join(dest, os.path.basename(downloaded_files[0]))
         module.exit_json(msg="File downloaded successfully", dest=dest, url=url, changed=True)
     finally:
         with suppress(Exception):
