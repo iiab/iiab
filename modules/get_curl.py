@@ -131,6 +131,9 @@ def run_module():
         except Exception as e:
             module.fail_json(msg=f"Failed to move file to destination: {to_native(e)}", dest=dest, url=url)
 
+        if dest_is_dir:
+            # set dest to first file downloaded for downstream use
+            dest = os.path.join(dest, os.path.basename(downloaded_files[0]))
         module.exit_json(msg="File downloaded successfully", dest=dest, url=url, changed=True)
     finally:
         with suppress(Exception):
