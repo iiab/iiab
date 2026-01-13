@@ -26,7 +26,10 @@
         url: "{{ code_fetch_apk_url }}/"
         return_content: true
       register: apk_index
-      failed_when: apk_index.status not in [200, 403, 404]
+      retries: 5
+      delay: 5
+      until: apk_index.status is defined and apk_index.status in [200, 403, 404]
+      failed_when: apk_index.status is not defined or apk_index.status not in [200, 403, 404]
 
     - name: Initialize APK index body
       set_fact:
@@ -37,16 +40,25 @@
         apk_index_has_apk: "{{ apk_index_body is search(code_apk_64bit_pattern) }}"
 
     - name: Fetch APK index via WP JSON endpoint (fallback if no APK links found)
-      uri:
-        url: "{{ code_fetch_apk_url_json }}"
-        method: GET
-        return_content: true
-        headers:
-          Accept: "application/json"
-      register: apk_index_json
-      failed_when: false
-      changed_when: false
       when: not apk_index_has_apk
+      block:
+        - name: GET {{ code_fetch_apk_url_json }}
+          uri:
+            url: "{{ code_fetch_apk_url_json }}"
+            method: GET
+            return_content: true
+            headers:
+              Accept: "application/json"
+          register: apk_index_json
+          retries: 5
+          delay: 5
+          until: apk_index_json.status is defined
+          failed_when: false
+          changed_when: false
+      rescue:
+        - name: Record JSON endpoint fetch failure (continuing)
+          set_fact:
+            apk_index_json: {}
 
     - name: Update APK index body from JSON fallback (if used)
       set_fact:
@@ -76,7 +88,7 @@
 
           HTTP status: {{ apk_index.status }}
           This likely means the APK store is behind some CDN and
-          blocking datacenter IP ranges, so non-interactive curl/Ansible
+          blocking datacenter IP ranges, so non-interactive automated Ansible
           requests can get a 403 or even a 200 "challenge" / non-content page.
 
           GitHub issues/PRs related:
