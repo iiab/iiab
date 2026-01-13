@@ -31,6 +31,13 @@
 
         <script src="maps.black-component.js" type="module"></script>
         <script>
+            // constants based on ansible settings
+            const MAPS_VECTOR_QUALITY = "{{ maps_vector_quality }}"
+            const MAPS_VECTOR_IS_OSM = MAPS_VECTOR_QUALITY.includes("osm")
+            const MAPS_SATELLITE_ZOOM = {{ maps_satellite_zoom }} // so far just a number
+            const MAPS_TERRAIN_ZOOM = "{{ maps_terrain_zoom }}" === "none" ? null : {{ maps_terrain_zoom }} // a number if not null
+            const MAPS_SEARCH_ENGINE = "{{ maps_search_engine }}"
+
             // globally scoped function, for access from select tag's onchange handler.
             // TODO This code layout sucks, should clean it.
             let setStyle = null
@@ -39,8 +46,6 @@
             // feature or style changes, so we rely on this instead of the select tag value
             let mapStyleChoice
 
-            let osmTiles = "{{ maps_vector_quality }}".includes("osm")
-
             // set immediately after the tag is defined
             let mb = null
             let shouldSetDefaultView = false
@@ -48,19 +53,16 @@
             // One namespace for all changes
             iiabMapsDotBlackPatch = {
                 getMaxZoomTerrariumPmtiles: () => {
-                    if ("{{ maps_terrain_zoom  }}" !== "none") {
-                        return {{ maps_terrain_zoom }}
-                    }
-
                     // It seems that maps.black sets this up whether or not it
-                    // sees the terrain file, so we'll give it some valid value
-                    return 1
+                    // sees the terrain file, so we'll default to some valid value (1)
+
+                    return MAPS_TERRAIN_ZOOM || 1
                 },
                 getMaxZoomS2maps: () => {
-                    return {{ maps_satellite_zoom }}
+                    return MAPS_SATELLITE_ZOOM
                 },
                 getMaxZoomOSM: () => {
-                    switch ("{{ maps_vector_quality }}") {
+                    switch (MAPS_VECTOR_QUALITY) {
                         case 'osm-z9':
                             return 9
                         case 'osm-full':
@@ -160,7 +162,7 @@
                             true:  "raster/s2maps/2023",
                             false: "raster/s2maps/2023", // we'll have a smaller satellite file with the same name in this case
                         },
-                    }[mapStyleChoice][osmTiles]
+                    }[mapStyleChoice][MAPS_VECTOR_IS_OSM]
                     console.log("setting to", mapStyleChoice, "i.e.", mb.mapstyle)
 
                     setUpMap() // The above will reset the map so we have to add controls and other things again. This also covers initial page load.
@@ -182,7 +184,7 @@
                         const hybridSelected = mapStyleChoice === "hybrid" ? `selected="selected"` : ""
 
                         // For now don't include political for naturalearth because it doesn't have great political options zoomed out
-                        const maybePolitical = osmTiles ? `<option title="Political Map" value="political" ${politicalSelected}>&#x1F3F3;</option>` : "";
+                        const maybePolitical = MAPS_VECTOR_IS_OSM ? `<option title="Political Map" value="political" ${politicalSelected}>&#x1F3F3;</option>` : "";
 
                         // Keep in mind that maps.black destroys and creates this every time we change the map style or features.
                         // This makes it a little complicated to add handlers. So for now, I inline it.
@@ -374,7 +376,7 @@
                         myStyles.replace(stylesheetText)
                         mb.shadowRoot.adoptedStyleSheets = [...mb.shadowRoot.adoptedStyleSheets, myStyles]
 
-                        if ("{{ maps_search_engine }}" === "nominatim") {
+                        if (MAPS_SEARCH_ENGINE === "nominatim") {
                             mb.map.addControl(geocoder, 'top-left');
                         }
                         mb.map.addControl(scaleControl);
@@ -382,7 +384,7 @@
                         // TODO - instantiate these above along with the geocoder and ScaleControl. Though it
                         // may require some reworking of the code that assumes it gets torn down and rebuilt.
                         mb.map.addControl(new MapsDotBlackGlobeControl(), 'top-right');
-                        if ("{{ maps_terrain_zoom  }}" !== "none") {
+                        if (MAPS_TERRAIN_ZOOM) {
                             mb.map.addControl(new MapsDotBlackTerrainControl(), 'top-right');
                         }
                         mb.map.addControl(new MapsDotBlackStyleControl(), 'top-right');
