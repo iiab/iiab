@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # -----------------------------------------------------------------------------
-# GENERATED FILE: 2026-01-09T09:57:13-06:00 - do not edit directly.
+# GENERATED FILE: 2026-01-13T18:27:39-06:00 - do not edit directly.
 # Source modules: termux-setup/*.sh + manifest.sh
 # Rebuild: (cd termux-setup && bash build_bundle.sh)
 # -----------------------------------------------------------------------------
@@ -1159,8 +1159,8 @@ final_advice() {
           else
             warn "Android 14+: child process restrictions haven't been verified (monitor flag unreadable/unknown)."
           fi
-          warn "Before starting the IIAB install, run the complete setup (--all) so it can guide you to verify such setting; otherwise the installation may fail:"
-          ok   "  ./0_termux-setup.sh --all"
+          warn "For Android 14 and later, there is no strict need to connect to ADB, on the other hand:"
+          warn "Please make sure to set 'Disable child process restrictions' enabled; otherwise the installation may fail."
           return 0
         fi
       fi
@@ -1269,6 +1269,17 @@ validate_args() {
   fi
 }
 
+# Android 12-13 only (SDK 31-33): apply PPK tuning automatically
+attempt_auto_apply_ppk() {
+  local sdk="${ANDROID_SDK:-}"
+  if [[ "$sdk" =~ ^[0-9]+$ ]] && (( sdk >= 31 && sdk <= 33 )); then
+    log "Android SDK=${sdk} detected -> applying --ppk automatically (12-13 rule)."
+    ppk_fix_via_adb || true
+  else
+    log "Android SDK=${sdk:-?} -> skipping auto-PPK (only for Android 12-13)."
+  fi
+}
+
 # -------------------------
 # Main flows
 # -------------------------
@@ -1318,14 +1329,7 @@ main() {
       step_termux_base || baseline_bail
       step_debian_bootstrap_default
       adb_pair_connect_if_needed
-
-      # Android 12-13 only (SDK 31-33): apply PPK tuning automatically
-      if [[ "${ANDROID_SDK:-}" =~ ^[0-9]+$ ]] && (( ANDROID_SDK >= 31 && ANDROID_SDK <= 33 )); then
-        log "Android SDK=${ANDROID_SDK} detected -> applying --ppk automatically (12-13 rule)."
-        ppk_fix_via_adb || true
-      else
-        log "Android SDK=${ANDROID_SDK:-?} -> skipping auto-PPK (only for Android 12-13)."
-      fi
+      attempt_auto_apply_ppk
       check_readiness || true
       ;;
 
