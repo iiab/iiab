@@ -73,6 +73,40 @@ As of this writing, search includes only administrative regions and natural feat
    maps_search_full: True
    ```
 
+## Downloaded Regions (experimental, available once [#4223](https://github.com/iiab/iiab/pull/4223) is merged!)
+
+Downloaded Regions is a feature that allows you to have small regions at "full" quality vector, satellite and terrain, while still having a full world map at "low" quality.
+
+In order to turn it on, add the following setting:
+
+```
+maps_region_downloader: true
+```
+
+Now open your map. You will find a new button on the top left:
+
+![Download Button](README/download-button.png)
+
+If you click it, you'll enter a new "download" mode. You'll see your cursor change. You can draw a rectangle by clicking one corner and then the opposite corner (do not drag!).
+
+Once you do, you'll immediately see a popup:
+
+![Download Popup](README/download-popup.png)
+
+Follow the instructions on the popup to download your region. You can test it out by clicking on the new Downloaded Region by clicking the rectangle. You should be able to see everything at full quality (terrain up to zoom level 10).
+
+Once you're viewing your Downloaded Region, you can delete it by clicking the delete button, which will bring up another popup:
+
+![Delete Button](README/delete-button.png)
+
+Finally, once your Downloaded Regions are in place and you are ready to let others use your map, you can turn off the setting:
+
+```
+maps_region_downloader: false
+```
+
+...and run the `maps` role again. At this point, you will be able to view your Downloaded Regions, but the Download and Delete buttons will be gone.
+
 # Installation Tips
 
 For these large file downloads:
