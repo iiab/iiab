@@ -33,7 +33,9 @@ CURL="curl -fsSL --retry 5 --retry-connrefused --retry-delay 2"
 #-----------------------------
 apt-get update
 apt-get install -y ca-certificates \
+                   coreutils \
                    curl \
+                   e2fsprogs \
                    sudo
 
 #-----------------------------
