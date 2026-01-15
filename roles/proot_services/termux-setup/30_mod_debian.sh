@@ -66,7 +66,7 @@ step_debian_bootstrap_default() {
     export DEBIAN_FRONTEND=noninteractive
     apt-get update
     apt-get -y -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold \
-      install ca-certificates curl coreutils
+      install ca-certificates coreutils curl e2fsprogs sudo
   '
   rc=$?
   set -e
