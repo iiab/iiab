@@ -87,9 +87,11 @@ Now open your map. You will find a new button on the top left:
 
 ![Download Button](README/download-button.png)
 
-If you click it, you'll enter a new "download" mode. You'll see your cursor change. You can draw a rectangle by clicking one corner and then the opposite corner (do not drag!).
+If you click it, you'll enter a new "drawing" mode. You'll see your cursor change.
 
-Once you do, you'll immediately see a popup:
+Draw a rectangle that represents the region you want to download. To draw, click one corner of the rectangle and then the opposite corner. (Do not drag!).
+
+Once you have a rectangle, you'll immediately see a popup in the middle of it:
 
 ![Download Popup](README/download-popup.png)
 
