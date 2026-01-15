@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # -----------------------------------------------------------------------------
-# GENERATED FILE: 2026-01-13T18:27:39-06:00 - do not edit directly.
+# GENERATED FILE: 2026-01-15T02:41:31-06:00 - do not edit directly.
 # Source modules: termux-setup/*.sh + manifest.sh
 # Rebuild: (cd termux-setup && bash build_bundle.sh)
 # -----------------------------------------------------------------------------
@@ -360,7 +360,7 @@ step_debian_bootstrap_default() {
     export DEBIAN_FRONTEND=noninteractive
     apt-get update
     apt-get -y -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold \
-      install ca-certificates curl coreutils
+      install ca-certificates coreutils curl e2fsprogs sudo
   '
   rc=$?
   set -e
