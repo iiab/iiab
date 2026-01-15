@@ -33,22 +33,22 @@ To configure your map, set the following variables (for the option your choose!)
 
 To add terrain files, you can set this optional setting. You may find that when looking at mountains, high quality satellite imagery may compensate for low quality terrain, and vice versa.
 
-1. If you want **~980MB** terrain maps (up to zoom 7), include:
+1. If you want **~980 MB** terrain maps (up to zoom 7), include:
    ```
    maps_terrain_zoom: 7
    ```
 
-2. If you want **~6.4GB** terrain maps (up to zoom 8), include:
+2. If you want **~6.4 GB** terrain maps (up to zoom 8), include:
    ```
    maps_terrain_zoom: 8
    ```
 
-3. If you want **~29GB** terrain maps (up to zoom 9), include:
+3. If you want **~29 GB** terrain maps (up to zoom 9), include:
    ```
    maps_terrain_zoom: 9
    ```
 
-4. If you want **~106GB** terrain maps (up to zoom 10), include:
+4. If you want **~106 GB** terrain maps (up to zoom 10), include:
    ```
    maps_terrain_zoom: 10
    ```
