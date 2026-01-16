@@ -73,9 +73,9 @@ As of this writing, search includes only administrative regions and natural feat
    maps_search_full: True
    ```
 
-## Downloaded Regions (experimental, available once [#4223](https://github.com/iiab/iiab/pull/4223) is merged!)
+## Full Quality Regions (experimental, available once [#4223](https://github.com/iiab/iiab/pull/4223) is merged!)
 
-Downloaded Regions is a feature that allows you to have small regions at "full" quality vector, satellite and terrain, while still having a full world map at "low" quality.
+Full Quality Regions is a feature that allows you to have small regions at "full" quality vector, satellite and terrain, while still having a full world map at "low" quality.
 
 In order to turn it on, add the following setting:
 
@@ -95,19 +95,19 @@ Once you have a rectangle, you'll immediately see a popup in the middle of it:
 
 ![Download Popup](README/download-popup.png)
 
-Follow the instructions on the popup to download your region. You can test it out by clicking on the new Downloaded Region by clicking the rectangle. You should be able to see everything at full quality (terrain up to zoom level 10).
+Follow the instructions on the popup to download your region. You can test it out by clicking on the new Full Quality Region by clicking the rectangle. You should be able to see everything at full quality (terrain up to zoom level 10).
 
-Once you're viewing your Downloaded Region, you can delete it by clicking the delete button, which will bring up another popup:
+Once you're viewing your Full Quality Region, you can delete it by clicking the delete button, which will bring up another popup:
 
 ![Delete Button](README/delete-button.png)
 
-Finally, once your Downloaded Regions are in place and you are ready to let others use your map, you can turn off the setting:
+Finally, once your Full Quality Regions are in place and you are ready to let others use your map, you can turn off the setting:
 
 ```
 maps_region_downloader: false
 ```
 
-...and run the `maps` role again. At this point, you will be able to view your Downloaded Regions, but the Download and Delete buttons will be gone.
+...and run the `maps` role again. At this point, you will be able to view your Full Quality Regions, but the Download and Delete buttons will be gone.
 
 # Installation Tips
 
