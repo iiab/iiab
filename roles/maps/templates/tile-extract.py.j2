@@ -2,7 +2,8 @@
 
 import collections, json, glob, os, shutil, string, subprocess, sys
 
-HOSTING_DIR = "/library/www/osm/maps"
+HOSTING_DIR = "{{ maps_serve_path }}"
+REGIONS_JSON = os.path.join(HOSTING_DIR, "full-quality-regions.json")
 PMTILES = os.path.join(os.path.dirname(__file__), "pmtiles")
 
 # Helpers
@@ -73,7 +74,7 @@ def create_extract(extract_name, extract_box):
         shutil.move(files["tmp"], files["extract"])
 
 def check_for_existing_name(extract_name):
-    existing_extracts = json.loads(open("/library/www/osm/maps/full-quality-regions.json").read())
+    existing_extracts = json.loads(open(REGIONS_JSON).read())
     if extract_name in existing_extracts.keys():
         while True:
             response = input("Already have a full quality region called \"" + extract_name + "\". Overwrite it? y/n ")
@@ -90,7 +91,7 @@ def check_for_overlaps(new_box):
         float(n) for n in new_box.split(",")
     ]
 
-    existing_extracts = json.loads(open("/library/www/osm/maps/full-quality-regions.json").read())
+    existing_extracts = json.loads(open(REGIONS_JSON).read())
     for existing in existing_extracts.values():
         [long_1, lat_1, long_2, lat_2] = existing
         existing_min_long = min([long_1, long_2])
@@ -112,7 +113,7 @@ def update_extracts_json():
     extracts = {}
     extract_types = collections.defaultdict(set)
 
-    for extract in glob.glob("/library/www/osm/maps/*.full-region.*.pmtiles"):
+    for extract in glob.glob(os.path.join(HOSTING_DIR, "*.full-region.*.pmtiles")):
 
         match (os.path.basename(extract).split('.')):
             case [extract_type, _date, "full-region", name, "pmtiles"]:
@@ -139,7 +140,7 @@ def update_extracts_json():
     for name in extract_types:
         if extract_types[name] != {'s2maps-sentinel2-2023', 'terrarium', 'openstreetmap-openmaptiles'}:
             print ("Warning: don't have all three types of ptiles files for:", name, "Have:", extract_types[name])
-    open("/library/www/osm/maps/full-quality-regions.json", "w").write(json.dumps(extracts))
+    open(REGIONS_JSON, "w").write(json.dumps(extracts))
 
 if __name__ == "__main__":
     match sys.argv[1]:
