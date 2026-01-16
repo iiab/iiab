@@ -99,14 +99,30 @@ notify_ask_one() {
   done
 }
 
+normalize_port_5digits() {
+  # Accept either "12345" or strings that contain "...:12345" (e.g. "192.168.1.10:12345").
+  # We extract the last ':' segment (if any), strip non-digits, and require exactly 5 digits.
+  local raw="$1"
+  raw="${raw//[[:space:]]/}"
+
+  local tail="$raw"
+  if [[ "$raw" == *:* ]]; then
+    tail="${raw##*:}"
+  fi
+
+  # Strip any non-digits (handles cases like "IP:12345)" or "Port:12345")
+  tail="${tail//[^0-9]/}"
+  [[ "$tail" =~ ^[0-9]{5}$ ]] || return 1
+  printf '%s' "$tail"
+}
+
 ask_port_5digits() {
   # args: key title
-  local key="$1" title="$2" v=""
+  local key="$1" title="$2" v="" p=""
   while true; do
-    v="$(notify_ask_one "$key" "$title" "(5 digits)")" || return 1
-    v="${v//[[:space:]]/}"
-    [[ "$v" =~ ^[0-9]{5}$ ]] || continue
-    echo "$v"
+    v="$(notify_ask_one "$key" "$title" "(5 digits PORT or IP:PORT)")" || return 1
+    p="$(normalize_port_5digits "$v")" || continue
+    echo "$p"
     return 0
   done
 }
