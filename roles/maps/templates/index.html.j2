@@ -206,17 +206,17 @@
                 clearTimeout(showFQRegionOutlinesTimeout)
 
                 const styleLoaded = (mb && mb.map && mb.map.style && mb.map.style.loaded());
-                if (downloadedExtracts === null || !styleLoaded) {
+                if (downloadedFQRegions === null || !styleLoaded) {
                   showFQRegionOutlinesTimeout = setTimeout(showFQRegionOutlines, 300)
                   return
                 }
 
-                for (extractName_ in downloadedExtracts) {
-                    const extractName = extractName_ // fix variable capturing in callbacks below
-                    const extractId = "extract-" + extractName
-                    const [min_lon, min_lat, max_lon, max_lat] = downloadedExtracts[extractName]
+                for (regionName_ in downloadedFQRegions) {
+                    const regionName = regionName_ // fix variable capturing in callbacks below
+                    const regionId = "region-" + regionName
+                    const [min_lon, min_lat, max_lon, max_lat] = downloadedFQRegions[regionName]
 
-                    if (mb.map.getSource(extractId)) {
+                    if (mb.map.getSource(regionId)) {
                         // Looks like we already ran this. Quit without setting a timeout.
                         return
                     }
@@ -224,7 +224,7 @@
                     // Add the region outlines to the map. Make it visible and interactive.
                     //
                     // Create a "source" to define the rectangle, which we will use for layers below.
-                    mb.map.addSource(extractId, {
+                    mb.map.addSource(regionId, {
                         type: 'geojson',
                         data: {
                             type: 'Feature',
@@ -242,26 +242,26 @@
                     });
                     // Make a visible layer with the outline of the rectangle.
                     mb.map.addLayer({
-                        id: extractId + "~line", // using "~" as a separator because it can't be part of an extract name
+                        id: regionId + "~line", // using "~" as a separator because it can't be part of an extract name
                         type: "line",
-                        source: extractId,
+                        source: regionId,
                         layout:{},
                         paint: {'line-color': '#4444FF', 'line-width': 1},
                     })
                     // Add an invisible layer that we will check for click events on later.
                     mb.map.addLayer({
-                        id: extractId + "~click",
+                        id: regionId + "~click",
                         type: "fill",
-                        source: extractId,
+                        source: regionId,
                         layout:{},
                         paint: {'fill-color': '#4444FF', 'fill-opacity': 0},
                     })
-                    if (activeFQRegionName === extractName) {
+                    if (activeFQRegionName === regionName) {
                         // If we're looking at an extract, create a half-transparent black
                         // "blockout" area around the region, so it's clear what the focus is
                         //
                         // Create the source defining the MultiPolygon of the blockout area.
-                        mb.map.addSource(extractId + "~blockout", {
+                        mb.map.addSource(regionId + "~blockout", {
                             type: 'geojson',
                             data: {
                                 type: 'Feature',
@@ -299,20 +299,20 @@
                         });
                         // Add the blockout area as a visible layer.
                         mb.map.addLayer({
-                            id: extractId + "~blockout",
+                            id: regionId + "~blockout",
                             type: "fill",
-                            source: extractId + "~blockout",
+                            source: regionId + "~blockout",
                             layout:{},
                             paint: {'fill-color': '#000000', 'fill-opacity': 0.5},
                         })
                     }
                     // Make the region clickable via the above invisbile area.
                     // This brings the user from the full world map to a view of just the region.
-                    mb.map.on('click', extractId + "~click", e => {
-                        if (extractName === activeFQRegionName) {
+                    mb.map.on('click', regionId + "~click", e => {
+                        if (regionName === activeFQRegionName) {
                             return
                         }
-                        const [min_lon, min_lat, max_lon, max_lat] = downloadedExtracts[extractName]
+                        const [min_lon, min_lat, max_lon, max_lat] = downloadedFQRegions[regionName]
 
                         // First we kick off a zoom animation to a view focusing on the region.
                         mb.map.fitBounds([[min_lon, min_lat], [max_lon, max_lat]], {})
@@ -321,7 +321,7 @@
                         // (We don't have to worry about removing this handler. setStyle will refresh
                         // the map and wipe everthing.)
                         mb.map.on('moveend', () => {
-                            activeFQRegionName = extractName
+                            activeFQRegionName = regionName
                             setStyle()
                         })
                     })
@@ -340,7 +340,7 @@
                 }
             }
             let drawControl, terraDrawInstance
-            let downloadedExtracts = null;
+            let downloadedFQRegions = null;
             function setExtracts() {
                 return fetch('./extracts.json')
                     .then((response) => {
@@ -355,12 +355,12 @@
                         }
                     })
                     .then((json) => {
-                        downloadedExtracts = json;
+                        downloadedFQRegions = json;
                     });
             }
             setExtracts()
                 .then(() => {
-                    if (downloadedExtracts !== null && !!activeFQRegionName && !(activeFQRegionName in downloadedExtracts)) {
+                    if (downloadedFQRegions !== null && !!activeFQRegionName && !(activeFQRegionName in downloadedFQRegions)) {
                         // Real hack with `setTimeout`; I need to refactor `setStyle` and `setUpMap`.
                         // Setting it to a whole 1000 ms to avoid an intermittent console error.
                         // This is handling a somewhat uncommon case so I will just go with this non-ideal but easy approach.
@@ -368,7 +368,7 @@
                             // We seem to be pointing to a nonexistent extract.
                             // One very likely scenario for this is that the user deleted an extract and reloaded the page.
                             // Another hypothetical is that someone is looking at an old link, or maybe a link copied from another IIAB?
-                            // if downloadedExtracts is null (see if statement above), maybe there's some connection error, in which case let's not
+                            // if downloadedFQRegions is null (see if statement above), maybe there's some connection error, in which case let's not
                             // change the extract name. the user may reload and succeed.
                             activeFQRegionName = ""
                             setStyle()
@@ -471,7 +471,7 @@
                         this._container.className = 'maplibregl-ctrl maplibregl-ctrl-group';
                         this._container.style = 'cursor: pointer;'
                         this._container.onclick = () => {
-                            const [min_lon, min_lat, max_lon, max_lat] = downloadedExtracts[activeFQRegionName]
+                            const [min_lon, min_lat, max_lon, max_lat] = downloadedFQRegions[activeFQRegionName]
 
                             // First we kick off a zoom animation to a view focusing on the region, zoomed out a bit more than when we entered it.
                             mb.map.setMaxBounds() // untether us from the bounds first so we can zoom out further
@@ -519,7 +519,7 @@
                         this._container.className = 'maplibregl-ctrl maplibregl-ctrl-group';
                         this._container.style = 'cursor: pointer;'
                         this._container.onclick = () => {
-                            const [min_lon, min_lat, max_lon, max_lat] = downloadedExtracts[activeFQRegionName]
+                            const [min_lon, min_lat, max_lon, max_lat] = downloadedFQRegions[activeFQRegionName]
 
                             // Zoom out to view the region so that the delete popup is well placed
                             mb.map.fitBounds([[min_lon, min_lat], [max_lon, max_lat]], {maxDuration: 2000, speed: 5})
@@ -701,7 +701,7 @@
 
                 // separating this because it's just so much
                 function setUpFQRegionDownloader() {
-                    if (downloadedExtracts !== null && !!activeFQRegionName && (activeFQRegionName in downloadedExtracts)) {
+                    if (downloadedFQRegions !== null && !!activeFQRegionName && (activeFQRegionName in downloadedFQRegions)) {
                         mb.map.addControl(new DeleteExtractControl(), 'top-left');
                         return
                     }
@@ -928,12 +928,12 @@
                           setUpFQRegionDownloader()
                         }
 
-                        if (downloadedExtracts !== null && !!activeFQRegionName && (activeFQRegionName in downloadedExtracts)) {
+                        if (downloadedFQRegions !== null && !!activeFQRegionName && (activeFQRegionName in downloadedFQRegions)) {
                             mb.map.addControl(new DisableExtractControl(), 'top-left');
 
                             // We are looking at a full quality region. Let's prevent
                             // the user from straying far from it so they don't get lost.
-                            const [min_lon, min_lat, max_lon, max_lat] = downloadedExtracts[activeFQRegionName]
+                            const [min_lon, min_lat, max_lon, max_lat] = downloadedFQRegions[activeFQRegionName]
                             mb.map.setMaxBounds([[min_lon - 0.5, min_lat - 0.5], [max_lon + 0.5, max_lat + 0.5]], {})
                         }
 
