@@ -1,5 +1,11 @@
-> [!NOTE]  
-> If you are looking for instructions on how to install **Internet-in-a-Box on Android** please check [here](https://github.com/iiab/iiab-android/tree/main/README.md).
+## :world_map: IIAB on Android documentation map
+
+This README documents the **`proot_services` role** (PRoot service management - systemd replacement scripts).
+
+For the broader **"IIAB on Android"** overview and Android-side steps, see:
+
+- **Overview + install guide:** https://github.com/iiab/iiab-android/blob/main/README.md
+- **Termux setup details:** https://github.com/iiab/iiab-android/blob/main/termux-setup/README.md
 
 # PRoot Distro service manager (pdsm)
 
