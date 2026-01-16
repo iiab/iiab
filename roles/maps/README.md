@@ -1,4 +1,4 @@
-# How do I try IIAB's new maps as of 2025-12-22?
+# How do I try IIAB's new maps as of 2026-01-15?
 
 To configure your map, set the following variables (for the option your choose!) in [/etc/iiab/local_vars.yml](https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it?) before installing IIAB software:
 
@@ -33,29 +33,29 @@ To configure your map, set the following variables (for the option your choose!)
 
 To add terrain files, you can set this optional setting. You may find that when looking at mountains, high quality satellite imagery may compensate for low quality terrain, and vice versa.
 
-1. If you want **~980MB** terrain maps (up to zoom 7), include:
+1. If you want **~980 MB** terrain maps (up to zoom 7), include:
    ```
    maps_terrain_zoom: 7
    ```
 
-2. If you want **~6.4GB** terrain maps (up to zoom 8), include:
+2. If you want **~6.4 GB** terrain maps (up to zoom 8), include:
    ```
    maps_terrain_zoom: 8
    ```
 
-3. If you want **~29GB** terrain maps (up to zoom 9), include:
+3. If you want **~29 GB** terrain maps (up to zoom 9), include:
    ```
    maps_terrain_zoom: 9
    ```
 
-4. If you want **~106GB** terrain maps (up to zoom 10), include:
+4. If you want **~106 GB** terrain maps (up to zoom 10), include:
    ```
    maps_terrain_zoom: 10
    ```
 
 ## Can I try out search (which is still experimental)?
 
-This is not recommended for very low power devices such as Pi Zero 2 W at this time, though this might change.
+This is not recommended for very low-power devices such as Raspberry Pi [Zero 2 W](https://www.raspberrypi.com/products/raspberry-pi-zero-2-w/), though this might change.
 
 As of this writing, search includes only administrative regions and natural features.
 
@@ -72,6 +72,42 @@ As of this writing, search includes only administrative regions and natural feat
    maps_search_engine: "nominatim"
    maps_search_full: True
    ```
+
+## Downloaded Regions (experimental, available once [#4223](https://github.com/iiab/iiab/pull/4223) is merged!)
+
+Downloaded Regions is a feature that allows you to have small regions at "full" quality vector, satellite and terrain, while still having a full world map at "low" quality.
+
+In order to turn it on, add the following setting:
+
+```
+maps_region_downloader: true
+```
+
+Now open your map. You will find a new button on the top left:
+
+![Download Button](README/download-button.png)
+
+If you click it, you'll enter a new "drawing" mode. You'll see your cursor change.
+
+Draw a rectangle that represents the region you want to download. To draw, click one corner of the rectangle and then the opposite corner. (Do not drag!).
+
+Once you have a rectangle, you'll immediately see a pop-up in the middle of it:
+
+![Download Popup](README/download-popup.png)
+
+Follow the instructions on the pop-up to download your region. You can test it out by clicking on the new Downloaded Region by clicking the rectangle. You should be able to see everything at full quality (terrain up to zoom level 10).
+
+Once you're viewing your Downloaded Region, you can delete it by clicking the delete button, which will bring up another pop-up:
+
+![Delete Button](README/delete-button.png)
+
+Finally, once your Downloaded Regions are in place and you are ready to let others use your map, you can turn off the setting:
+
+```
+maps_region_downloader: false
+```
+
+...and run the `maps` role again. At this point, you will be able to view your Downloaded Regions, but the Download and Delete buttons will be gone.
 
 # Installation Tips
 
