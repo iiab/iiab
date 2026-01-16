@@ -9,13 +9,19 @@ PMTILES = os.path.join(os.path.dirname(__file__), "pmtiles")
 
 def validate_extract_name(extract_name):
     # Make sure the extract_name has only valid characters
-    assert set(extract_name) < set(string.ascii_letters + string.digits + "-_")
-    assert len(extract_name) > 0
-    assert len(extract_name) < 35
+    try:
+        assert set(extract_name) < set(string.ascii_letters + string.digits + "-_")
+        assert len(extract_name) > 0
+        assert len(extract_name) < 35
+    except AssertionError:
+        raise ValueError("extract_name has invalid length or characters: ", extract_name)
 
 def validate_extract_box(extract_box):
-    # `float` is just a parsing check.
-    assert len([float(n) for n in extract_box.split(",")]) == 4
+    try:
+        # `float` is just a parsing check.
+        assert len([float(n) for n in extract_box.split(",")]) == 4
+    except:
+        raise ValueError("extract_box is malformed: ", extract_box)
 
 def get_extract_files(extract_name):
     MAPS_DATA_DATE = "{{ maps_data_date }}"
@@ -58,9 +64,10 @@ def create_extract(extract_name, extract_box):
 
     # Extract them all successfully before moving them.
     for files in extract_files.values():
-        assert subprocess.run([
+        returncode = subprocess.run([
             PMTILES, "extract", files["source"], files["tmp"], "--bbox=" + extract_box
-        ]).returncode == 0
+        ]).returncode
+        assert returncode == 0, "pmtiles extract exited with returncode " + str(returncode)
 
     for files in extract_files.values():
         shutil.move(files["tmp"], files["extract"])
@@ -137,11 +144,11 @@ def update_extracts_json():
 if __name__ == "__main__":
     match sys.argv[1]:
         case "update-json":
-            assert len(sys.argv) == 2
+            assert len(sys.argv) == 2, "update-json takes no extra arguments"
             update_extracts_json()
 
         case "delete":
-            assert len(sys.argv) == 3
+            assert len(sys.argv) == 3, "delete takes one argument: extract_name"
             extract_name = sys.argv[2]
             validate_extract_name(extract_name)
 
@@ -149,7 +156,7 @@ if __name__ == "__main__":
             update_extracts_json()
 
         case "extract":
-            assert len(sys.argv) == 4
+            assert len(sys.argv) == 4, "extract takes two arguments: extract_name, extract_box"
             extract_box = sys.argv[3]
             extract_name = sys.argv[2]
             validate_extract_name(extract_name)
