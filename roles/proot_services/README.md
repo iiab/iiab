@@ -1,5 +1,5 @@
 > [!NOTE]  
-> If you are looking for instructions on how to install **Internet-in-a-Box on Android** please check [here](https://github.com/iiab/iiab-android/tree/main/README.md).
+> Looking for instructions to install **Internet-in-a-Box on Android**? [Check here!](https://github.com/iiab/iiab-android/tree/main/README.md)
 
 # PRoot Distro service manager (pdsm)
 
