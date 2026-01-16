@@ -58,7 +58,9 @@
             // we want style choice to survive the map reset that happens when a maps.black
             // feature or style changes, so we rely on this instead of the select tag value
             let mapStyleChoice
-            let activeExtractName // initial value set in readHash()
+
+            // Currently active Full Quality Region. "" means no region selected. Initial value set in readHash().
+            let activeFQRegionName
 
             // set immediately after the tag is defined
             let mb = null
@@ -68,7 +70,7 @@
             iiabMapsDotBlackPatch = {
                 getMaxZoomTerrariumPmtiles: () => {
                     // We have a full quality "extract". Let's make sure we can see full quality terrain.
-                    if (!!activeExtractName) {
+                    if (!!activeFQRegionName) {
                         return 10
                     }
 
@@ -79,7 +81,7 @@
                 },
                 getMaxZoomS2maps: () => {
                     // We have a full quality "extract". Let's make sure we can zoom all the way in.
-                    if (!!activeExtractName) {
+                    if (!!activeFQRegionName) {
                         return 13
                     }
 
@@ -87,7 +89,7 @@
                 },
                 getMaxZoomOSM: () => {
                     // We have a full quality "extract". Let's make sure we can zoom all the way in.
-                    if (!!activeExtractName) {
+                    if (!!activeFQRegionName) {
                         return 14
                     }
 
@@ -106,20 +108,20 @@
 
                 getPmtilesName: (baseName) => {
                     // baseName and fname won't include ".pmtiles". ".pmtiles" gets added by the calling function.
-                    if (!activeExtractName) {
+                    if (!activeFQRegionName) {
                         fname = baseName
                         console.log("not currently viewing an extract; pmtiles file name unchanged", fname)
                     } else if (baseName.startsWith("terrarium")) {
                         // terrarium actually starts with "terrarium-z0-z10".
                         // We chop off the z0-z10 to avoid confusing since we
                         // make lower zoom versions.
-                        fname = `terrarium.${MAPS_SLOW_DATA_DATE}.full-extract.` + activeExtractName
+                        fname = `terrarium.${MAPS_SLOW_DATA_DATE}.full-extract.` + activeFQRegionName
                         console.log("pmtiles file name with extract", fname)
                     } else if (baseName.startsWith("openstreetmap")) {
-                        fname = baseName + `.${MAPS_DATA_DATE}.full-extract.` + activeExtractName
+                        fname = baseName + `.${MAPS_DATA_DATE}.full-extract.` + activeFQRegionName
                         console.log("pmtiles file name with extract", fname)
                     } else if (baseName.startsWith("s2maps")) {
-                        fname = baseName + `.${MAPS_SLOW_DATA_DATE}.full-extract.` + activeExtractName
+                        fname = baseName + `.${MAPS_SLOW_DATA_DATE}.full-extract.` + activeFQRegionName
                         console.log("pmtiles file name with extract", fname)
                     } else {
                         fname = baseName
@@ -140,7 +142,7 @@
                 const zoom = Math.round(mb.zoom * 100) / 100
                 const globe = mb.globe ? 'g' : 'm' // [g]lobe : [m]ercator (i.e. like a paper map)
                 const terrain = mb.terrain ? 't' : 'f' // [t]errain : [f]lat (i.e. no mountains)
-                window.location.hash = `${lat}/${lon}/${pitch}/${bearing}/${zoom}/${globe}/${terrain}/${mapStyleChoice}/${activeExtractName}`
+                window.location.hash = `${lat}/${lon}/${pitch}/${bearing}/${zoom}/${globe}/${terrain}/${mapStyleChoice}/${activeFQRegionName}`
             }
 
             // Why two different functions for reading the URL hash?
@@ -158,13 +160,13 @@
             // We already handle `mapStyleChoice` in our own funny way so it doesn't really matter
             // when it's set.
             function readHash() {
-                const [lat, lon, pitch, bearing, zoom, globe, terrain, _mapStyleChoice, _activeExtractName] = window.location.hash.slice(1).split('/')
+                const [lat, lon, pitch, bearing, zoom, globe, terrain, _mapStyleChoice, _activeFQRegionName] = window.location.hash.slice(1).split('/')
 
-                activeExtractName = _activeExtractName || ""
+                activeFQRegionName = _activeFQRegionName || ""
 
                 if (["natural", "satellite"].includes(_mapStyleChoice)) {
                   mapStyleChoice = _mapStyleChoice
-                } else if (_mapStyleChoice === "political" && (MAPS_VECTOR_IS_OSM || !!activeExtractName)) {
+                } else if (_mapStyleChoice === "political" && (MAPS_VECTOR_IS_OSM || !!activeFQRegionName)) {
                   // Allow "political" if the world map allows it, or if we're on an extract
                   mapStyleChoice = _mapStyleChoice
                 } else {
@@ -188,7 +190,7 @@
                 mb.globe = globe === 'g'
 
                 // contour lines is another thing that uses terrain maps, which we can consider
-                mb.terrain = mb.hillshade = terrain === 't' && (MAPS_TERRAIN_ZOOM || !!activeExtractName)
+                mb.terrain = mb.hillshade = terrain === 't' && (MAPS_TERRAIN_ZOOM || !!activeFQRegionName)
             }
 
             // We need a timeout to wait for mb.map.style.loaded() to be true and
@@ -250,7 +252,7 @@
                         layout:{},
                         paint: {'fill-color': '#4444FF', 'fill-opacity': 0},
                     })
-                    if (activeExtractName === extractName) {
+                    if (activeFQRegionName === extractName) {
                         // If we're looking at an extract, create a half-transparent black
                         // "blockout" area around the region, so it's clear what the focus is
                         //
@@ -303,7 +305,7 @@
                     // Make the region clickable via the above invisbile area.
                     // This brings the user from the full world map to a view of just the region.
                     mb.map.on('click', extractId + "~click", e => {
-                        if (extractName === activeExtractName) {
+                        if (extractName === activeFQRegionName) {
                             return
                         }
                         const [min_lon, min_lat, max_lon, max_lat] = downloadedExtracts[extractName]
@@ -315,7 +317,7 @@
                         // (We don't have to worry about removing this handler. setStyle will refresh
                         // the map and wipe everthing.)
                         mb.map.on('moveend', () => {
-                            activeExtractName = extractName
+                            activeFQRegionName = extractName
                             setStyle()
                         })
                     })
@@ -354,7 +356,7 @@
             }
             setExtracts()
                 .then(() => {
-                    if (downloadedExtracts !== null && !!activeExtractName && !(activeExtractName in downloadedExtracts)) {
+                    if (downloadedExtracts !== null && !!activeFQRegionName && !(activeFQRegionName in downloadedExtracts)) {
                         // Real hack with `setTimeout`; I need to refactor `setStyle` and `setUpMap`.
                         // Setting it to a whole 1000 ms to avoid an intermittent console error.
                         // This is handling a somewhat uncommon case so I will just go with this non-ideal but easy approach.
@@ -364,7 +366,7 @@
                             // Another hypothetical is that someone is looking at an old link, or maybe a link copied from another IIAB?
                             // if downloadedExtracts is null (see if statement above), maybe there's some connection error, in which case let's not
                             // change the extract name. the user may reload and succeed.
-                            activeExtractName = ""
+                            activeFQRegionName = ""
                             setStyle()
                         }, 1000)
                     }
@@ -391,7 +393,7 @@
                             true:  "raster/s2maps/2023",
                             false: "raster/s2maps/2023", // we'll have a smaller satellite file with the same name in this case
                         },
-                    }[mapStyleChoice][MAPS_VECTOR_IS_OSM || !!activeExtractName]
+                    }[mapStyleChoice][MAPS_VECTOR_IS_OSM || !!activeFQRegionName]
                     console.log("setting to", mapStyleChoice, "i.e.", mb.mapstyle)
 
                     setUpMap() // The above will reset the map so we have to add controls and other things again. This also covers initial page load.
@@ -413,7 +415,7 @@
                         const hybridSelected = mapStyleChoice === "hybrid" ? `selected="selected"` : ""
 
                         // For now don't include political for naturalearth because it doesn't have great political options zoomed out
-                        const maybePolitical = (MAPS_VECTOR_IS_OSM || !!activeExtractName) ? `<option title="Political Map" value="political" ${politicalSelected}>&#x1F3F3;</option>` : "";
+                        const maybePolitical = (MAPS_VECTOR_IS_OSM || !!activeFQRegionName) ? `<option title="Political Map" value="political" ${politicalSelected}>&#x1F3F3;</option>` : "";
 
                         // Keep in mind that maps.black destroys and creates this every time we change the map style or features.
                         // This makes it a little complicated to add handlers. So for now, I inline it.
@@ -465,7 +467,7 @@
                         this._container.className = 'maplibregl-ctrl maplibregl-ctrl-group';
                         this._container.style = 'cursor: pointer;'
                         this._container.onclick = () => {
-                            const [min_lon, min_lat, max_lon, max_lat] = downloadedExtracts[activeExtractName]
+                            const [min_lon, min_lat, max_lon, max_lat] = downloadedExtracts[activeFQRegionName]
 
                             // First we kick off a zoom animation to a view focusing on the region, zoomed out a bit more than when we entered it.
                             mb.map.setMaxBounds() // untether us from the bounds first so we can zoom out further
@@ -479,12 +481,12 @@
                             // the map and wipe everthing.)
                             mb.map.on('moveend', () => {
                                 // Unset the extract, i.e. go back to the full-sized map
-                                activeExtractName = ""
+                                activeFQRegionName = ""
 
                                 // As we exit from an extract, we have to disable things that may not be available in the full map.
                                 // (This sucks and a better organization of the code would prevent this.)
-                                mb.terrain = mb.hillshade = mb.terrain && (MAPS_TERRAIN_ZOOM || !!activeExtractName)
-                                if (mapStyleChoice === "political" && !(MAPS_VECTOR_IS_OSM || !!activeExtractName)) {
+                                mb.terrain = mb.hillshade = mb.terrain && (MAPS_TERRAIN_ZOOM || !!activeFQRegionName)
+                                if (mapStyleChoice === "political" && !(MAPS_VECTOR_IS_OSM || !!activeFQRegionName)) {
                                   mapStyleChoice = "hybrid"
                                 }
 
@@ -513,7 +515,7 @@
                         this._container.className = 'maplibregl-ctrl maplibregl-ctrl-group';
                         this._container.style = 'cursor: pointer;'
                         this._container.onclick = () => {
-                            const [min_lon, min_lat, max_lon, max_lat] = downloadedExtracts[activeExtractName]
+                            const [min_lon, min_lat, max_lon, max_lat] = downloadedExtracts[activeFQRegionName]
 
                             // Zoom out to view the region so that the delete popup is well placed
                             mb.map.fitBounds([[min_lon, min_lat], [max_lon, max_lat]], {maxDuration: 2000, speed: 5})
@@ -523,7 +525,7 @@
                             ]
 
                             const deleteCommand = document.createElement('div');
-                            const deleteCommandString = `sudo {{ tile_extract.working_dir }}/tile-extract.py delete ${activeExtractName}`
+                            const deleteCommandString = `sudo {{ tile_extract.working_dir }}/tile-extract.py delete ${activeFQRegionName}`
                             deleteCommand.innerHTML = `<pre
                                   style="font-size:0.8em; background-color:#DDD; padding:1em; border-style:dashed; border-color:#FFF; border-width:2px; white-space: pre-wrap; word-wrap: break-word; line-height:1em;"
                                   onclick="window.getSelection().selectAllChildren(this)"
@@ -695,7 +697,7 @@
 
                 // separating this because it's just so much
                 function setUpRegionDownloader() {
-                    if (downloadedExtracts !== null && !!activeExtractName && (activeExtractName in downloadedExtracts)) {
+                    if (downloadedExtracts !== null && !!activeFQRegionName && (activeFQRegionName in downloadedExtracts)) {
                         mb.map.addControl(new DeleteExtractControl(), 'top-left');
                         return
                     }
@@ -922,17 +924,17 @@
                           setUpRegionDownloader()
                         }
 
-                        if (downloadedExtracts !== null && !!activeExtractName && (activeExtractName in downloadedExtracts)) {
+                        if (downloadedExtracts !== null && !!activeFQRegionName && (activeFQRegionName in downloadedExtracts)) {
                             mb.map.addControl(new DisableExtractControl(), 'top-left');
 
                             // We are looking at a full quality region extract. Let's prevent
                             // the user from straying far from it so they don't get lost.
-                            const [min_lon, min_lat, max_lon, max_lat] = downloadedExtracts[activeExtractName]
+                            const [min_lon, min_lat, max_lon, max_lat] = downloadedExtracts[activeFQRegionName]
                             mb.map.setMaxBounds([[min_lon - 0.5, min_lat - 0.5], [max_lon + 0.5, max_lat + 0.5]], {})
                         }
 
                         mb.map.addControl(new MapsDotBlackGlobeControl(), 'top-right');
-                        if (MAPS_TERRAIN_ZOOM || !!activeExtractName) {
+                        if (MAPS_TERRAIN_ZOOM || !!activeFQRegionName) {
                             mb.map.addControl(new MapsDotBlackTerrainControl(), 'top-right');
                         }
                         mb.map.addControl(new MapsDotBlackStyleControl(), 'top-right');
