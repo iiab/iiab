@@ -1,3 +1,6 @@
+> [!NOTE]  
+> Note: If you are looking for instructions on how to install **Internet-in-a-Box on Android** please check [here](https://github.com/iiab/iiab/tree/master/roles/proot_services/ANDROID.md).
+
 # PRoot Distro service manager (pdsm)
 
 `pdsm` is a simple custom service manager that provides systemd-like service management for Debian (or Debian-based) distributions in the Android port of IIAB.
