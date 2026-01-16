@@ -1,5 +1,5 @@
 > [!NOTE]  
-> Note: If you are looking for `proot_services` role details please check [here](https://github.com/iiab/iiab/tree/master/roles/proot_services).
+> If you are looking for `proot_services` role details please check [here](https://github.com/iiab/iiab/tree/master/roles/proot_services).
 
 # Internet-in-a-Box on Android
 
