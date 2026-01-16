@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # -----------------------------------------------------------------------------
-# GENERATED FILE: 2026-01-15T02:41:31-06:00 - do not edit directly.
+# GENERATED FILE: 2026-01-15T21:56:15-06:00 - do not edit directly.
 # Source modules: termux-setup/*.sh + manifest.sh
 # Rebuild: (cd termux-setup && bash build_bundle.sh)
 # -----------------------------------------------------------------------------
@@ -291,16 +291,16 @@ step_termux_base() {
 # ---- END 20_mod_termux_base.sh ----
 
 
-# ---- BEGIN 30_mod_debian.sh ----
+# ---- BEGIN 30_mod_iiab-debian.sh ----
 # shellcheck shell=bash
 # Module file (no shebang). Bundled by build_bundle.sh
 
 # -------------------------
-# Debian bootstrap
+# IIAB Debian bootstrap
 # -------------------------
-debian_exists() {
+iiab_exists() {
   have proot-distro || return 1
-  proot-distro login debian -- true >/dev/null 2>&1
+  proot-distro login iiab -- true >/dev/null 2>&1
 }
 
 ensure_proot_distro() {
@@ -310,52 +310,58 @@ ensure_proot_distro() {
   have proot-distro
 }
 
-proot_install_debian_safe() {
+proot_install_iiab_safe() {
   local out rc
   set +e
-  out="$(proot-distro install debian 2>&1)"
+  if ! proot-distro install --help 2>/dev/null | grep -q -- '--override-alias'; then
+    warn_red "proot-distro is too old (missing --override-alias). Please upgrade Termux packages and retry."
+    return 1
+  fi
+  out="$(proot-distro install --override-alias iiab debian 2>&1)"
   rc=$?
   set -e
   if [[ $rc -eq 0 ]]; then return 0; fi
   if echo "$out" | grep -qi "already installed"; then
-    warn "Debian is already installed; continuing."
+    warn "IIAB Debian is already installed; continuing."
     return 0
   fi
   printf "%s\n" "$out" >&2
   return $rc
 }
 
-step_debian_bootstrap_default() {
+step_iiab_bootstrap_default() {
   if ! ensure_proot_distro; then
-    warn "Unable to ensure proot-distro; skipping Debian bootstrap."
+    warn "Unable to ensure proot-distro; skipping IIAB Debian bootstrap."
     return 0
   fi
 
-  if [[ "$RESET_DEBIAN" -eq 1 ]]; then
-    warn "Reset requested: reinstalling Debian (clean environment)..."
+  if [[ "$RESET_IIAB" -eq 1 ]]; then
+    warn "Reset requested: reinstalling IIAB Debian (clean environment)..."
     if proot-distro help 2>/dev/null | grep -qE '\breset\b'; then
-      proot-distro reset debian || true
+      proot-distro reset iiab || true
+      # If reset was requested but iiab wasn't installed yet (or reset failed), ensure it's present.
+      iiab_exists || proot_install_iiab_safe || true
     else
-      if debian_exists; then proot-distro remove debian || true; fi
-      proot_install_debian_safe || true
+      if iiab_exists; then proot-distro remove iiab || true; fi
+      proot_install_iiab_safe || true
     fi
   else
-    if debian_exists; then
-      ok "Debian already present in proot-distro. Not reinstalling."
+    if iiab_exists; then
+      ok "IIAB Debian already present in proot-distro. Not reinstalling."
     else
-      log "Installing Debian (proot-distro install debian)..."
-      proot_install_debian_safe || true
+      log "Installing IIAB Debian (proot-distro install --override-alias iiab debian)..."
+      proot_install_iiab_safe || true
     fi
   fi
 
-  log "Installing minimal tools inside Debian (noninteractive)..."
-  if ! debian_exists; then
-    warn_red "Debian is not available in proot-distro (install may have failed). Rerun later."
+  log "Installing minimal tools inside IIAB Debian (noninteractive)..."
+  if ! iiab_exists; then
+    warn_red "IIAB Debian is not available in proot-distro (install may have failed). Rerun later."
     return 0
   fi
   local rc=0
   set +e
-  proot-distro login debian -- bash -lc '
+  proot-distro login iiab -- bash -lc '
     set -e
     export DEBIAN_FRONTEND=noninteractive
     apt-get update
@@ -365,14 +371,14 @@ step_debian_bootstrap_default() {
   rc=$?
   set -e
   if [[ $rc -eq 0 ]]; then
-    ok "Debian bootstrap complete."
+    ok "IIAB Debian bootstrap complete."
   else
-    warn_red "Debian bootstrap incomplete (inner apt-get failed, rc=$rc)."
-    warn "You can retry later with: proot-distro login debian"
+    warn_red "IIAB Debian bootstrap incomplete (inner apt-get failed, rc=$rc)."
+    warn "You can retry later with: proot-distro login iiab"
   fi
 }
 
-# ---- END 30_mod_debian.sh ----
+# ---- END 30_mod_iiab-debian.sh ----
 
 
 # ---- BEGIN 40_mod_termux_api.sh ----
@@ -477,14 +483,30 @@ notify_ask_one() {
   done
 }
 
+normalize_port_5digits() {
+  # Accept either "12345" or strings that contain "...:12345" (e.g. "192.168.1.10:12345").
+  # We extract the last ':' segment (if any), strip non-digits, and require exactly 5 digits.
+  local raw="$1"
+  raw="${raw//[[:space:]]/}"
+
+  local tail="$raw"
+  if [[ "$raw" == *:* ]]; then
+    tail="${raw##*:}"
+  fi
+
+  # Strip any non-digits (handles cases like "IP:12345)" or "Port:12345")
+  tail="${tail//[^0-9]/}"
+  [[ "$tail" =~ ^[0-9]{5}$ ]] || return 1
+  printf '%s' "$tail"
+}
+
 ask_port_5digits() {
   # args: key title
-  local key="$1" title="$2" v=""
+  local key="$1" title="$2" v="" p=""
   while true; do
-    v="$(notify_ask_one "$key" "$title" "(5 digits)")" || return 1
-    v="${v//[[:space:]]/}"
-    [[ "$v" =~ ^[0-9]{5}$ ]] || continue
-    echo "$v"
+    v="$(notify_ask_one "$key" "$title" "(5 digits PORT or IP:PORT)")" || return 1
+    p="$(normalize_port_5digits "$v")" || continue
+    echo "$p"
     return 0
   done
 }
@@ -980,7 +1002,7 @@ self_check_android_flags() {
 
 # 0_termux-setup.sh
 # - Termux bootstrap (packages, wakelock)
-# - proot-distro + Debian bootstrap
+# - proot-distro + IIAB Debian bootstrap
 # - ADB wireless pair/connect via Termux:API notifications (no Shizuku)
 # - Optional PPK / phantom-process tweaks (best-effort)
 
@@ -994,7 +1016,7 @@ mkdir -p "$STATE_DIR" "$ADB_STATE_DIR" "$LOG_DIR"
 
 BASELINE_OK=0
 BASELINE_ERR=""
-RESET_DEBIAN=0
+RESET_IIAB=0
 ONLY_CONNECT=0
 
 CHECK_NO_ADB=0
@@ -1011,13 +1033,13 @@ usage() {
   cat <<'EOF'
 Usage:
   ./0_termux-setup.sh
-    -> Termux baseline + Debian bootstrap (idempotent). No ADB prompts.
+    -> Termux baseline + IIAB Debian bootstrap (idempotent). No ADB prompts.
 
   ./0_termux-setup.sh --with-adb
-    -> Termux baseline + Debian bootstrap + ADB pair/connect if needed (skips if already connected).
+    -> Termux baseline + IIAB Debian bootstrap + ADB pair/connect if needed (skips if already connected).
 
   ./0_termux-setup.sh  --adb-only [--connect-port PORT]
-    -> Only ADB pair/connect if needed (no Debian; skips if already connected).
+    -> Only ADB pair/connect if needed (no IIAB Debian; skips if already connected).
        Tip: --connect-port skips the CONNECT PORT prompt (you’ll still be asked for PAIR PORT + PAIR CODE).
 
   ./0_termux-setup.sh --connect-only [CONNECT_PORT]
@@ -1032,12 +1054,12 @@ Usage:
        (Android 14+) "Disable child process restrictions" proxy flag, and (Android 12-13) PPK effective value.
 
   ./0_termux-setup.sh --all
-    -> baseline + Debian + ADB pair/connect if needed + (Android 12-13 only) apply --ppk + run --check.
+    -> baseline + IIAB Debian + ADB pair/connect if needed + (Android 12-13 only) apply --ppk + run --check.
 
   Optional:
     --connect-port 41313    (5 digits) Skip CONNECT PORT prompt used with --adb-only
     --timeout 180           Seconds to wait per prompt
-    --reset-debian          Reset (reinstall) Debian in proot-distro
+    --reset-iiab            Reset (reinstall) IIAB Debian in proot-distro
     --no-log                Disable logging
     --log-file /path/file   Write logs to a specific file
     --debug                 Extra logs
@@ -1064,7 +1086,7 @@ self_check() {
     log " proot-distro: present"
     log " proot-distro list:"
     proot-distro list 2>/dev/null | indent || true
-    if debian_exists; then ok " Debian: present"; else warn " Debian: not present"; fi
+    if iiab_exists; then ok " IIAB Debian: present"; else warn " IIAB Debian: not present"; fi
   else
     warn " proot-distro: not present"
   fi
@@ -1097,7 +1119,7 @@ baseline_bail() {
 
 final_advice() {
   if [[ "${BASELINE_OK:-0}" -ne 1 ]]; then
-    warn_red "Baseline is not ready, so ADB prompts / Debian bootstrap may be unavailable."
+    warn_red "Baseline is not ready, so ADB prompts / IIAB Debian bootstrap may be unavailable."
     [[ -n "${BASELINE_ERR:-}" ]] && warn "Reason: ${BASELINE_ERR}"
     warn "Fix: check network + Termux repos, then re-run the script."
     return 0
@@ -1186,13 +1208,14 @@ final_advice() {
     fi
   fi
 
-  # 2) Debian “next step” should only be shown for modes that actually bootstrap Debian
+  # 2) IIAB Debian "next step" should only be shown for modes that actually bootstrap IIAB
   case "$MODE" in
     baseline|with-adb|all)
-      if debian_exists; then
-        ok "Next: proot-distro login debian"
+      if iiab_exists; then
+        ok "Next: proot-distro login iiab"
       else
-        warn "Debian not present. Run: proot-distro install debian"
+        warn "IIAB Debian not present. Run:"
+        warn "  proot-distro install --override-alias iiab debian"
       fi
       ;;
     *)
@@ -1243,7 +1266,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     --timeout) TIMEOUT_SECS="${2:-180}"; shift 2 ;;
     --host) HOST="${2:-127.0.0.1}"; shift 2 ;;
-    --reset-debian|--clean-debian) RESET_DEBIAN=1; shift ;;
+    --reset-iiab|--clean-iiab) RESET_IIAB=1; shift ;;
     --no-log) LOG_ENABLED=0; shift ;;
     --log-file) LOG_FILE="${2:-}"; shift 2 ;;
     --debug) DEBUG=1; shift ;;
@@ -1293,13 +1316,13 @@ main() {
     baseline)
       step_termux_repo_select_once
       step_termux_base || baseline_bail
-      step_debian_bootstrap_default
+      step_iiab_bootstrap_default
       ;;
 
     with-adb)
       step_termux_repo_select_once
       step_termux_base || baseline_bail
-      step_debian_bootstrap_default
+      step_iiab_bootstrap_default
       adb_pair_connect_if_needed
       ;;
 
@@ -1314,7 +1337,7 @@ main() {
       ;;
 
     ppk-only)
-      # No baseline, no Debian. Requires adb already available + connected.
+      # No baseline, no IIAB Debian. Requires adb already available + connected.
       require_adb_connected || exit 1
       ppk_fix_via_adb || true
       ;;
@@ -1327,7 +1350,7 @@ main() {
     all)
       step_termux_repo_select_once
       step_termux_base || baseline_bail
-      step_debian_bootstrap_default
+      step_iiab_bootstrap_default
       adb_pair_connect_if_needed
       attempt_auto_apply_ppk
       check_readiness || true
@@ -1345,9 +1368,9 @@ main() {
   log "Pair+connect             --adb-only [--connect-port PORT]"
   log "Check                    --check"
   log "Apply PPK                --ppk-only"
-  log "Base+Debian+Pair+connect --with-adb"
+  log "Base+IIAB Debian+Pair+connect --with-adb"
   log "Full run                 --all"
-  log "Reset Debian             --reset-debian"
+  log "Reset IIAB Debian env    --reset-iiab"
   log "-------------------"
   final_advice
 }

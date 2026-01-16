@@ -2,11 +2,11 @@
 # Module file (no shebang). Bundled by build_bundle.sh
 
 # -------------------------
-# Debian bootstrap
+# IIAB Debian bootstrap
 # -------------------------
-debian_exists() {
+iiab_exists() {
   have proot-distro || return 1
-  proot-distro login debian -- true >/dev/null 2>&1
+  proot-distro login iiab -- true >/dev/null 2>&1
 }
 
 ensure_proot_distro() {
@@ -16,52 +16,58 @@ ensure_proot_distro() {
   have proot-distro
 }
 
-proot_install_debian_safe() {
+proot_install_iiab_safe() {
   local out rc
   set +e
-  out="$(proot-distro install debian 2>&1)"
+  if ! proot-distro install --help 2>/dev/null | grep -q -- '--override-alias'; then
+    warn_red "proot-distro is too old (missing --override-alias). Please upgrade Termux packages and retry."
+    return 1
+  fi
+  out="$(proot-distro install --override-alias iiab debian 2>&1)"
   rc=$?
   set -e
   if [[ $rc -eq 0 ]]; then return 0; fi
   if echo "$out" | grep -qi "already installed"; then
-    warn "Debian is already installed; continuing."
+    warn "IIAB Debian is already installed; continuing."
     return 0
   fi
   printf "%s\n" "$out" >&2
   return $rc
 }
 
-step_debian_bootstrap_default() {
+step_iiab_bootstrap_default() {
   if ! ensure_proot_distro; then
-    warn "Unable to ensure proot-distro; skipping Debian bootstrap."
+    warn "Unable to ensure proot-distro; skipping IIAB Debian bootstrap."
     return 0
   fi
 
-  if [[ "$RESET_DEBIAN" -eq 1 ]]; then
-    warn "Reset requested: reinstalling Debian (clean environment)..."
+  if [[ "$RESET_IIAB" -eq 1 ]]; then
+    warn "Reset requested: reinstalling IIAB Debian (clean environment)..."
     if proot-distro help 2>/dev/null | grep -qE '\breset\b'; then
-      proot-distro reset debian || true
+      proot-distro reset iiab || true
+      # If reset was requested but iiab wasn't installed yet (or reset failed), ensure it's present.
+      iiab_exists || proot_install_iiab_safe || true
     else
-      if debian_exists; then proot-distro remove debian || true; fi
-      proot_install_debian_safe || true
+      if iiab_exists; then proot-distro remove iiab || true; fi
+      proot_install_iiab_safe || true
     fi
   else
-    if debian_exists; then
-      ok "Debian already present in proot-distro. Not reinstalling."
+    if iiab_exists; then
+      ok "IIAB Debian already present in proot-distro. Not reinstalling."
     else
-      log "Installing Debian (proot-distro install debian)..."
-      proot_install_debian_safe || true
+      log "Installing IIAB Debian (proot-distro install --override-alias iiab debian)..."
+      proot_install_iiab_safe || true
     fi
   fi
 
-  log "Installing minimal tools inside Debian (noninteractive)..."
-  if ! debian_exists; then
-    warn_red "Debian is not available in proot-distro (install may have failed). Rerun later."
+  log "Installing minimal tools inside IIAB Debian (noninteractive)..."
+  if ! iiab_exists; then
+    warn_red "IIAB Debian is not available in proot-distro (install may have failed). Rerun later."
     return 0
   fi
   local rc=0
   set +e
-  proot-distro login debian -- bash -lc '
+  proot-distro login iiab -- bash -lc '
     set -e
     export DEBIAN_FRONTEND=noninteractive
     apt-get update
@@ -71,9 +77,9 @@ step_debian_bootstrap_default() {
   rc=$?
   set -e
   if [[ $rc -eq 0 ]]; then
-    ok "Debian bootstrap complete."
+    ok "IIAB Debian bootstrap complete."
   else
-    warn_red "Debian bootstrap incomplete (inner apt-get failed, rc=$rc)."
-    warn "You can retry later with: proot-distro login debian"
+    warn_red "IIAB Debian bootstrap incomplete (inner apt-get failed, rc=$rc)."
+    warn "You can retry later with: proot-distro login iiab"
   fi
 }

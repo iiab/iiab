@@ -3,7 +3,7 @@
 
 # 0_termux-setup.sh
 # - Termux bootstrap (packages, wakelock)
-# - proot-distro + Debian bootstrap
+# - proot-distro + IIAB Debian bootstrap
 # - ADB wireless pair/connect via Termux:API notifications (no Shizuku)
 # - Optional PPK / phantom-process tweaks (best-effort)
 
@@ -17,7 +17,7 @@ mkdir -p "$STATE_DIR" "$ADB_STATE_DIR" "$LOG_DIR"
 
 BASELINE_OK=0
 BASELINE_ERR=""
-RESET_DEBIAN=0
+RESET_IIAB=0
 ONLY_CONNECT=0
 
 CHECK_NO_ADB=0
@@ -34,13 +34,13 @@ usage() {
   cat <<'EOF'
 Usage:
   ./0_termux-setup.sh
-    -> Termux baseline + Debian bootstrap (idempotent). No ADB prompts.
+    -> Termux baseline + IIAB Debian bootstrap (idempotent). No ADB prompts.
 
   ./0_termux-setup.sh --with-adb
-    -> Termux baseline + Debian bootstrap + ADB pair/connect if needed (skips if already connected).
+    -> Termux baseline + IIAB Debian bootstrap + ADB pair/connect if needed (skips if already connected).
 
   ./0_termux-setup.sh  --adb-only [--connect-port PORT]
-    -> Only ADB pair/connect if needed (no Debian; skips if already connected).
+    -> Only ADB pair/connect if needed (no IIAB Debian; skips if already connected).
        Tip: --connect-port skips the CONNECT PORT prompt (you’ll still be asked for PAIR PORT + PAIR CODE).
 
   ./0_termux-setup.sh --connect-only [CONNECT_PORT]
@@ -55,12 +55,12 @@ Usage:
        (Android 14+) "Disable child process restrictions" proxy flag, and (Android 12-13) PPK effective value.
 
   ./0_termux-setup.sh --all
-    -> baseline + Debian + ADB pair/connect if needed + (Android 12-13 only) apply --ppk + run --check.
+    -> baseline + IIAB Debian + ADB pair/connect if needed + (Android 12-13 only) apply --ppk + run --check.
 
   Optional:
     --connect-port 41313    (5 digits) Skip CONNECT PORT prompt used with --adb-only
     --timeout 180           Seconds to wait per prompt
-    --reset-debian          Reset (reinstall) Debian in proot-distro
+    --reset-iiab            Reset (reinstall) IIAB Debian in proot-distro
     --no-log                Disable logging
     --log-file /path/file   Write logs to a specific file
     --debug                 Extra logs
@@ -87,7 +87,7 @@ self_check() {
     log " proot-distro: present"
     log " proot-distro list:"
     proot-distro list 2>/dev/null | indent || true
-    if debian_exists; then ok " Debian: present"; else warn " Debian: not present"; fi
+    if iiab_exists; then ok " IIAB Debian: present"; else warn " IIAB Debian: not present"; fi
   else
     warn " proot-distro: not present"
   fi
@@ -120,7 +120,7 @@ baseline_bail() {
 
 final_advice() {
   if [[ "${BASELINE_OK:-0}" -ne 1 ]]; then
-    warn_red "Baseline is not ready, so ADB prompts / Debian bootstrap may be unavailable."
+    warn_red "Baseline is not ready, so ADB prompts / IIAB Debian bootstrap may be unavailable."
     [[ -n "${BASELINE_ERR:-}" ]] && warn "Reason: ${BASELINE_ERR}"
     warn "Fix: check network + Termux repos, then re-run the script."
     return 0
@@ -209,13 +209,14 @@ final_advice() {
     fi
   fi
 
-  # 2) Debian “next step” should only be shown for modes that actually bootstrap Debian
+  # 2) IIAB Debian "next step" should only be shown for modes that actually bootstrap IIAB
   case "$MODE" in
     baseline|with-adb|all)
-      if debian_exists; then
-        ok "Next: proot-distro login debian"
+      if iiab_exists; then
+        ok "Next: proot-distro login iiab"
       else
-        warn "Debian not present. Run: proot-distro install debian"
+        warn "IIAB Debian not present. Run:"
+        warn "  proot-distro install --override-alias iiab debian"
       fi
       ;;
     *)
@@ -266,7 +267,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     --timeout) TIMEOUT_SECS="${2:-180}"; shift 2 ;;
     --host) HOST="${2:-127.0.0.1}"; shift 2 ;;
-    --reset-debian|--clean-debian) RESET_DEBIAN=1; shift ;;
+    --reset-iiab|--clean-iiab) RESET_IIAB=1; shift ;;
     --no-log) LOG_ENABLED=0; shift ;;
     --log-file) LOG_FILE="${2:-}"; shift 2 ;;
     --debug) DEBUG=1; shift ;;
@@ -316,13 +317,13 @@ main() {
     baseline)
       step_termux_repo_select_once
       step_termux_base || baseline_bail
-      step_debian_bootstrap_default
+      step_iiab_bootstrap_default
       ;;
 
     with-adb)
       step_termux_repo_select_once
       step_termux_base || baseline_bail
-      step_debian_bootstrap_default
+      step_iiab_bootstrap_default
       adb_pair_connect_if_needed
       ;;
 
@@ -337,7 +338,7 @@ main() {
       ;;
 
     ppk-only)
-      # No baseline, no Debian. Requires adb already available + connected.
+      # No baseline, no IIAB Debian. Requires adb already available + connected.
       require_adb_connected || exit 1
       ppk_fix_via_adb || true
       ;;
@@ -350,7 +351,7 @@ main() {
     all)
       step_termux_repo_select_once
       step_termux_base || baseline_bail
-      step_debian_bootstrap_default
+      step_iiab_bootstrap_default
       adb_pair_connect_if_needed
       attempt_auto_apply_ppk
       check_readiness || true
@@ -368,9 +369,9 @@ main() {
   log "Pair+connect             --adb-only [--connect-port PORT]"
   log "Check                    --check"
   log "Apply PPK                --ppk-only"
-  log "Base+Debian+Pair+connect --with-adb"
+  log "Base+IIAB Debian+Pair+connect --with-adb"
   log "Full run                 --all"
-  log "Reset Debian             --reset-debian"
+  log "Reset IIAB Debian env    --reset-iiab"
   log "-------------------"
   final_advice
 }
