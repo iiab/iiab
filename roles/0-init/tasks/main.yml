@@ -7,14 +7,14 @@
 
 # Higher-level purpose explained at the bottom of:
 # https://github.com/iiab/iiab/blob/master/vars/default_vars.yml
-- name: "Ansible just ran /etc/ansible/facts.d/local_facts.fact to set 15 vars -- here we extract 6 of those -- iiab_stage: {{ ansible_local.local_facts.stage }}, rpi_model: {{ ansible_local.local_facts.rpi_model }}, devicetree_model: {{ ansible_local.local_facts.devicetree_model }}, os_ver: {{ ansible_local.local_facts.os_ver }}, python_version: {{ ansible_local.local_facts.python_version }}, php_version: {{ ansible_local.local_facts.php_version }}"
+- name: "Ansible just ran /etc/ansible/facts.d/local_facts.fact to set 15 vars -- here we extract 6 of those -- iiab_stage: {{  ansible_facts.ansible_local.local_facts.stage }}, rpi_model: {{ ansible_facts.ansible_local.local_facts.rpi_model }}, devicetree_model: {{ ansible_facts.ansible_local.local_facts.devicetree_model }}, os_ver: {{ ansible_facts.ansible_local.local_facts.os_ver }}, python_version: {{ ansible_facts.ansible_local.local_facts.python_version }}, php_version: {{ ansible_facts.ansible_local.local_facts.php_version }}"
   set_fact:
-    iiab_stage: "{{ ansible_local.local_facts.stage }}"
-    rpi_model: "{{ ansible_local.local_facts.rpi_model }}"
-    devicetree_model: "{{ ansible_local.local_facts.devicetree_model }}"
-    os_ver: "{{ ansible_local.local_facts.os_ver }}"
-    python_version: "{{ ansible_local.local_facts.python_version }}"
-    php_version: "{{ ansible_local.local_facts.php_version }}"
+    iiab_stage: "{{ ansible_facts.ansible_local.local_facts.stage }}"
+    rpi_model: "{{ ansible_facts.ansible_local.local_facts.rpi_model }}"
+    devicetree_model: "{{ ansible_facts.ansible_local.local_facts.devicetree_model }}"
+    os_ver: "{{ ansible_facts.ansible_local.local_facts.os_ver }}"
+    python_version: "{{ ansible_facts.ansible_local.local_facts.python_version }}"
+    php_version: "{{ ansible_facts.ansible_local.local_facts.php_version }}"
 
 - name: "Set OS vars -- is_debian: {{ not 'ubuntu' in os_ver }}, is_trisquel: {{ 'trisquel' in os_ver }}, is_ubuntu: {{ 'ubuntu' in os_ver }}, is_linuxmint: {{ 'linuxmint' in os_ver }}, is_raspbian: {{ 'raspbian' in os_ver }}"
   set_fact:
@@ -79,6 +79,8 @@
     option: "{{ item.option }}"
     value: "{{ item.value | string }}"
   with_items:
+    - option: ansible_version
+      value: "{{ ansible_facts.ansible_local.local_facts.ansible_version }}"
     - option: iiab_stage
       value: "{{ iiab_stage }}"
     - option: iiab_base_ver
@@ -86,23 +88,17 @@
     - option: iiab_revision
       value: "{{ iiab_revision }}"
     - option: iiab_remote_url
-      value: "{{ ansible_local.local_facts.iiab_remote_url }}"
+      value: "{{ ansible_facts.ansible_local.local_facts.iiab_remote_url }}"
     - option: runtime_branch
-      value: "{{ ansible_local.local_facts.iiab_branch }}"
+      value: "{{ ansible_facts.ansible_local.local_facts.iiab_branch }}"
     - option: runtime_commit
-      value: "{{ ansible_local.local_facts.iiab_commit }}"
+      value: "{{ ansible_facts.ansible_local.local_facts.iiab_commit }}"
     - option: iiab_recent_tag
-      value: "{{ ansible_local.local_facts.iiab_recent_tag }}"
+      value: "{{ ansible_facts.ansible_local.local_facts.iiab_recent_tag }}"
     - option: runtime_date
-      value: "{{ ansible_date_time.iso8601 }}"
-    - option: ansible_version
-      value: "{{ ansible_local.local_facts.ansible_version }}"
+      value: "{{ ansible_facts.date_time.iso8601 }}"
     - option: kernel
-      value: "{{ ansible_kernel }}"
-    - option: memory_mb
-      value: "{{ ansible_memtotal_mb }}"
-    - option: swap_mb
-      value: "{{ ansible_swaptotal_mb }}"
+      value: "{{ ansible_facts.kernel }}"
     - option: rpi_model
       value: "{{ rpi_model }}"
     - option: devicetree_model
@@ -131,6 +127,32 @@
     #   value: "{{ etc_localtime.stdout }}"
     - option: FQDN_changed
       value: "{{ FQDN_changed }}"
+
+- name: Add 'runtime' default 'memory_mb' 'swap_mb' variable values to {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+    section: runtime
+    option: "{{ item.option }}"
+    value: "{{ item.value | string }}"
+  with_items:
+    - option: memory_mb
+      value: "{{ ansible_facts.memtotal_mb }}"
+    - option: swap_mb
+      value: "{{ ansible_facts.swaptotal_mb }}"
+  when: not is_proot
+
+- name: Add 'runtime' proot 'memory_mb' 'swap_mb' variable values to {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+    section: runtime
+    option: "{{ item.option }}"
+    value: "{{ item.value | string }}"
+  with_items:
+    - option: memory_mb
+      value: "{{ iiab_memtotal_mb }}"
+    - option: swap_mb
+      value: "{{ iiab_swaptotal_mb }}"
+  when: is_proot
 
 - name: Add 'runtime' variable 'is_VM' value if defined, to {{ iiab_ini_file }}
   ini_file:
