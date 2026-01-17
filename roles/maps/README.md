@@ -113,6 +113,10 @@ To delete a region, first make sure you are "inside" that region (instead of the
 
 When you click it, it will bring up another pop-up with instructions on how to delete the region.
 
+### Overlapping Regions
+
+At the moment, overlapping regions is not allowed. However, if you find that you want to expand a region, you can always delete it and download a larger one instead.
+
 ### Final Setup for Users
 
 Finally, once your Full Quality Regions are in place and you are ready to let others use your map, you can turn off the setting:
