@@ -22,7 +22,7 @@
     enabled: no
 
 
-- name: FreePBX - Install 24 packages = 7 (wget, git, unixodbc, sudo, net-tools, cron, sox) + 12 PHP dependencies (run 'php -m' or 'php -i' to verify PHP modules) + 5 for CDR ODBC (cmake, make, gcc, libssl-dev, unixodbc-dev)
+- name: FreePBX - Install 23 packages = 7 (wget, git, unixodbc, sudo, net-tools, cron, sox) + 11 PHP dependencies (run 'php -m' or 'php -i' to verify PHP modules) + 5 for CDR ODBC (cmake, make, gcc, libssl-dev, unixodbc-dev)
   package:
     name:
       - wget
@@ -40,7 +40,7 @@
       - php{{ php_version }}-fpm         # Likewise installed in nginx/tasks/install.yml
       # - php{{ php_version }}-gettext
       - php{{ php_version }}-gd          # Likewise installed in moodle/tasks/install.yml, nextcloud/tasks/install.yml
-      - php{{ php_version }}-imap
+      # - php{{ php_version }}-imap
       # - php{{ php_version }}-json      # See stanza just below
       - php{{ php_version }}-mbstring    # Likewise installed in mediawiki/tasks/install.yml, moodle/tasks/install.yml, nextcloud/tasks/install.yml, wordpress/tasks/install.yml
       # - python-mysqldb                 # https://github.com/Yannik/ansible-role-freepbx/blob/master/tasks/freepbx.yml#L33
@@ -55,6 +55,59 @@
       - libssl-dev
       - unixodbc-dev
     state: latest
+
+- name: FreePBX - Install php{{ php_version }}-imap
+  package:
+    name:
+      - php{{ php_version }}-imap
+  when: php_version is version('8.4', '<')
+
+# check see if imap is still required
+- name: FreePBX - Install imap via some other means
+  fail:
+    msg: 'FreePBX php{{ php_version }}-imap does not exist on PHP 8.3+ AS OF JAN 2026.  YOU ARE PROCEEDING ENTIRELY AT YOUR OWN RISK.'
+  when: php_version is version('8.4', '>=')
+  ignore_errors: yes
+
+- name: Install imap via pecl - WIP
+  block:
+    - name: FreePBX - Install php{{ php_version }}-dev
+      package:
+        name:
+          - php{{ php_version }}-dev
+          - libkrb5-dev
+
+    - name: apt install libc-client2007e_:2007f~dfsg-7.1 for Ubuntu
+      package:
+        name: libc-client2007e-dev
+      when: is_ubuntu
+
+    - name: apt install libc-client2007e_2007f~dfsg-7.1 for RasPiOS from debian
+      apt:
+        deb: "{{ item }}"
+      with_items:
+        - http://ftp.debian.org/debian/pool/main/u/uw-imap/mlock_2007f~dfsg-7+b1_arm64.deb
+        - http://ftp.debian.org/debian/pool/main/u/uw-imap/libc-client2007e_2007f~dfsg-7+b1_arm64.deb
+        - http://ftp.debian.org/debian/pool/main/u/uw-imap/libc-client2007e-dev_2007f~dfsg-7+b1_arm64.deb
+
+      when: is_raspbian or (is_debian and ansible_facts.architecture == "aarch64")
+
+    # re-runs fails if the extension is already compiled php8.4 uses 20240924
+    - name: Compile imap
+      command: pecl install imap
+      args:
+        creates: /lib/php/20240924/imap.so
+
+    - name: Enable imap.so in php.ini for fpm and cli
+      lineinfile:
+        path: "{{ item }}"
+        value: extension=imap.so
+      with_items:
+        - /etc/php/{{ php_version }}/fpm/php.ini
+        - /etc/php/{{ php_version }}/cli/php.ini
+
+  when: php_version is version('8.4', '>=')
+
 
 # For PHP >= 8.0: phpX.Y-json is baked into PHP itself.
 # For PHP <  8.0: phpX.Y-json auto-installed by phpX.Y-fpm AND phpX.Y-cli in 3-base-server's nginx/tasks/install.yml, as confirmed by: apt rdepends phpX.Y-json
