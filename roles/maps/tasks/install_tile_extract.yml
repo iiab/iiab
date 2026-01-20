@@ -1,0 +1,52 @@
+- name: Set up tile extraction working dir
+  file:
+    state: directory
+    path: "{{ tile_extract.working_dir }}"
+
+- name: Set up pmtiles unarchiving dir
+  file:
+    state: directory
+    path: "{{ tile_extract.pmtiles_archive_tmp_dir }}"
+
+- name: Run command 'dpkg --print-architecture' to identify OS architecture to get the correct build of pmtiles
+  command: dpkg --print-architecture
+  register: dpkg_arch
+
+- name: "Make sure we have a supported arch for pmtiles"
+  assert:
+    that: dpkg_arch.stdout == "amd64" or dpkg_arch.stdout == "arm64"
+    fail_msg: "Error: unsupported architecture for pmtiles: "
+    quiet: yes
+
+- name: Download pmtiles archive (amd64)
+  get_url:
+    url: "{{ tile_extract.pmtiles[dpkg_arch.stdout].src_url }}"
+    dest: "{{ tile_extract.pmtiles_archive_tmp_file }}"
+    checksum: "sha256:{{ tile_extract.pmtiles[dpkg_arch.stdout].sha256sum }}"
+    mode: "0644"
+    timeout: "{{ download_timeout }}"
+
+- name: Unarchive pmtiles archive
+  unarchive:
+    src: "{{ tile_extract.pmtiles_archive_tmp_file }}"
+    dest: "{{ tile_extract.pmtiles_archive_tmp_dir }}"
+    remote_src: yes
+
+- name: Copy pmtiles executable into working dir
+  copy:
+    src: "{{ tile_extract.pmtiles_archive_tmp_dir }}/pmtiles"
+    dest: "{{ tile_extract.working_dir }}/pmtiles"
+    mode: "0744"
+
+- name: Install our tile extraction script
+  template:
+    src: "tile-extract.py.j2"
+    dest: "{{ tile_extract.working_dir }}/tile-extract.py"
+    mode: "0755"
+
+- name: Initiate the extracts json
+  copy:
+    content: '{"regions": {}}'
+    dest: "{{ maps_serve_path }}/{{ tile_extract.info_file }}"
+    mode: "0644"
+    force: false

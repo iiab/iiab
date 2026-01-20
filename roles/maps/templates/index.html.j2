@@ -29,14 +29,27 @@
         <link rel='stylesheet' href='maplibre-gl.css' />
         <script src='maplibre-gl.js'></script>
 
+        <script src="maplibre-gl-geocoder.min.js"></script>
+        <link rel="stylesheet" href="maplibre-gl-geocoder.css"/>
+
+        <script src="maplibre-gl-terradraw.umd.js"></script>
+        <link rel="stylesheet" href="maplibre-gl-terradraw.css"/>
+
         <script src="maps.black-component.js" type="module"></script>
         <script>
-            // constants based on ansible settings
+
+            /****************
+             *    configs   *
+             ****************/
+
+            const MAPS_DATA_DATE = "{{ maps_data_date }}"
+            const MAPS_SLOW_DATA_DATE = "{{ maps_slow_data_date }}"
             const MAPS_VECTOR_QUALITY = "{{ maps_vector_quality }}"
             const MAPS_VECTOR_IS_OSM = MAPS_VECTOR_QUALITY.includes("osm")
             const MAPS_SATELLITE_ZOOM = {{ maps_satellite_zoom }} // so far just a number
             const MAPS_TERRAIN_ZOOM = "{{ maps_terrain_zoom }}" === "none" ? null : {{ maps_terrain_zoom }} // a number if not null
             const MAPS_SEARCH_ENGINE = "{{ maps_search_engine }}"
+            const MAPS_REGION_DOWNLOADER = "{{ maps_region_downloader }}" === "True"
 
             // globally scoped function, for access from select tag's onchange handler.
             // TODO This code layout sucks, should clean it.
@@ -46,6 +59,11 @@
             // feature or style changes, so we rely on this instead of the select tag value
             let mapStyleChoice
 
+            // Currently active full quality region.
+            // activeFQRegionName = "" means no region selected.
+            // Initial value set in readHash().
+            let activeFQRegionName
+
             // set immediately after the tag is defined
             let mb = null
             let shouldSetDefaultView = false
@@ -53,15 +71,30 @@
             // One namespace for all changes
             iiabMapsDotBlackPatch = {
                 getMaxZoomTerrariumPmtiles: () => {
+                    // We are looking at a full quality region. Let's make sure we can see full quality terrain.
+                    if (!!activeFQRegionName) {
+                        return 10
+                    }
+
                     // It seems that maps.black sets this up whether or not it
                     // sees the terrain file, so we'll default to some valid value (1)
 
                     return MAPS_TERRAIN_ZOOM || 1
                 },
                 getMaxZoomS2maps: () => {
+                    // We are looking at a full quality region. Let's make sure we can zoom all the way in.
+                    if (!!activeFQRegionName) {
+                        return 13
+                    }
+
                     return MAPS_SATELLITE_ZOOM
                 },
                 getMaxZoomOSM: () => {
+                    // We are looking at a full quality region. Let's make sure we can zoom all the way in.
+                    if (!!activeFQRegionName) {
+                        return 14
+                    }
+
                     switch (MAPS_VECTOR_QUALITY) {
                         case 'osm-z9':
                             return 9
@@ -74,8 +107,31 @@
                             return 1
                     }
                 },
-            }
 
+                getPmtilesName: (baseName) => {
+                    // baseName and fname won't include ".pmtiles". ".pmtiles" gets added by the calling function.
+                    if (!activeFQRegionName) {
+                        fname = baseName
+                        console.log("not currently viewing a Full Quality Region; pmtiles file name unchanged", fname)
+                    } else if (baseName.startsWith("terrarium")) {
+                        // terrarium actually starts with "terrarium-z0-z10".
+                        // We chop off the z0-z10 to avoid confusing since we
+                        // make lower zoom versions.
+                        fname = `terrarium.${MAPS_SLOW_DATA_DATE}.full-region.` + activeFQRegionName
+                        console.log("pmtiles file name for full quality region", fname)
+                    } else if (baseName.startsWith("openstreetmap")) {
+                        fname = baseName + `.${MAPS_DATA_DATE}.full-region.` + activeFQRegionName
+                        console.log("pmtiles file name for full quality region", fname)
+                    } else if (baseName.startsWith("s2maps")) {
+                        fname = baseName + `.${MAPS_SLOW_DATA_DATE}.full-region.` + activeFQRegionName
+                        console.log("pmtiles file name for full quality region", fname)
+                    } else {
+                        fname = baseName
+                        console.log("pmtiles file needs no change", fname)
+                    }
+                    return fname
+                },
+            }
             // Defining these hash get/set functions outside of the window load because we
             // need to run some of it earlier. Again, the overall code layout sucks and we
             // should reorganize it.
@@ -88,7 +144,7 @@
                 const zoom = Math.round(mb.zoom * 100) / 100
                 const globe = mb.globe ? 'g' : 'm' // [g]lobe : [m]ercator (i.e. like a paper map)
                 const terrain = mb.terrain ? 't' : 'f' // [t]errain : [f]lat (i.e. no mountains)
-                window.location.hash = `${lat}/${lon}/${pitch}/${bearing}/${zoom}/${globe}/${terrain}/${mapStyleChoice}`
+                window.location.hash = `${lat}/${lon}/${pitch}/${bearing}/${zoom}/${globe}/${terrain}/${mapStyleChoice}/${activeFQRegionName}`
             }
 
             // Why two different functions for reading the URL hash?
@@ -106,11 +162,19 @@
             // We already handle `mapStyleChoice` in our own funny way so it doesn't really matter
             // when it's set.
             function readHash() {
-                const [lat, lon, pitch, bearing, zoom, globe, terrain, _mapStyleChoice] = window.location.hash.slice(1).split('/')
+                const [lat, lon, pitch, bearing, zoom, globe, terrain, _mapStyleChoice, _activeFQRegionName] = window.location.hash.slice(1).split('/')
 
-                // Set this whether or not we have the hash, unlike the other parameters.
-                // We still need to set a default here.
-                mapStyleChoice = _mapStyleChoice || "hybrid"
+                activeFQRegionName = _activeFQRegionName || ""
+
+                if (["natural", "satellite"].includes(_mapStyleChoice)) {
+                  mapStyleChoice = _mapStyleChoice
+                } else if (_mapStyleChoice === "political" && (MAPS_VECTOR_IS_OSM || !!activeFQRegionName)) {
+                  // Allow "political" if the world map allows it, or if we're looking at a full quality region
+                  mapStyleChoice = _mapStyleChoice
+                } else {
+                  // We need to set a default here whether or not a hash was set or valid.
+                  mapStyleChoice = "hybrid"
+                }
 
                 if (window.location.hash) {
                     mb.lat = lat || 0
@@ -126,7 +190,150 @@
             function readHashGlobeAndTerrain() {
                 const [lat, lon, pitch, bearing, zoom, globe, terrain, _mapStyleChoice] = window.location.hash.slice(1).split('/')
                 mb.globe = globe === 'g'
-                mb.terrain = mb.hillshade = terrain === 't' // contour lines is another thing that uses terrain maps, which we can consider
+
+                // contour lines is another thing that uses terrain maps, which we can consider
+                mb.terrain = mb.hillshade = terrain === 't' && (MAPS_TERRAIN_ZOOM || !!activeFQRegionName)
+            }
+
+            // We need a timeout to wait for mb.map.style.loaded() to be true and
+            // for setFQRegions to conclude (the latter much less likely to come later)
+            let showFQRegionOutlinesTimeout = null
+
+            // Show the outlines of the full quality regions and make them interactive.
+            function showFQRegionOutlines() {
+                // Whether we're setting a new timeout, actually showing the full quality region
+                // outlines, or neither, make sure no further timeouts are looming.
+                clearTimeout(showFQRegionOutlinesTimeout)
+
+                const styleLoaded = (mb && mb.map && mb.map.style && mb.map.style.loaded());
+                if (downloadedFQRegions === null || !styleLoaded) {
+                  showFQRegionOutlinesTimeout = setTimeout(showFQRegionOutlines, 300)
+                  return
+                }
+
+                for (regionName_ in downloadedFQRegions) {
+                    const regionName = regionName_ // fix variable capturing in callbacks below
+                    const regionId = "region-" + regionName
+                    const [min_lon, min_lat, max_lon, max_lat] = downloadedFQRegions[regionName]
+
+                    if (mb.map.getSource(regionId)) {
+                        // Looks like we already ran this. Quit without setting a timeout.
+                        return
+                    }
+
+                    // Add the region outlines to the map. Make it visible and interactive.
+                    //
+                    // Create a "source" to define the rectangle, which we will use for layers below.
+                    mb.map.addSource(regionId, {
+                        type: 'geojson',
+                        data: {
+                            type: 'Feature',
+                            geometry: {
+                                type: 'Polygon',
+                                coordinates: [[
+                                    [min_lon, min_lat],
+                                    [min_lon, max_lat],
+                                    [max_lon, max_lat],
+                                    [max_lon, min_lat],
+                                    [min_lon, min_lat],
+                                ]],
+                            },
+                        },
+                    });
+                    // Make a visible layer with the outline of the rectangle.
+                    mb.map.addLayer({
+                        id: regionId + "~line", // using "~" as a separator because it can't be part of a region name
+                        type: "line",
+                        source: regionId,
+                        layout:{},
+                        paint: {'line-color': '#00FFFF', 'line-width': 5, 'line-opacity': 0.7},
+                    })
+                    // Make a visible layer with the outline of the rectangle.
+                    mb.map.addLayer({
+                        id: regionId + "~line-2", // using "~" as a separator because it can't be part of a region name
+                        type: "line",
+                        source: regionId,
+                        layout:{},
+                        paint: {'line-color': '#000000', 'line-width': 3, 'line-opacity': 0.7},
+                    })
+                    // Add an invisible layer that we will check for click events on later.
+                    mb.map.addLayer({
+                        id: regionId + "~click",
+                        type: "fill",
+                        source: regionId,
+                        layout:{},
+                        paint: {'fill-color': '#4444FF', 'fill-opacity': 0},
+                    })
+                    if (activeFQRegionName === regionName) {
+                        // If we're looking at a full quality region, create a half-transparent black
+                        // "blockout" area around the region, so it's clear what the focus is
+                        //
+                        // Create the source defining the MultiPolygon of the blockout area.
+                        mb.map.addSource(regionId + "~blockout", {
+                            type: 'geojson',
+                            data: {
+                                type: 'Feature',
+                                geometry: {
+                                    type: 'MultiPolygon',
+                                    // TODO - globe math instead of plain adding
+                                    // TODO - make this a polygon with a hole in it
+                                    coordinates: [[[
+                                        [min_lon - 10, max_lat],
+                                        [min_lon - 10, max_lat + 10],
+                                        [max_lon + 10, max_lat + 10],
+                                        [max_lon + 10, max_lat],
+                                        [min_lon - 10, max_lat],
+                                    ]], [[
+                                        [min_lon - 10, min_lat],
+                                        [min_lon - 10, min_lat - 10],
+                                        [max_lon + 10, min_lat - 10],
+                                        [max_lon + 10, min_lat],
+                                        [min_lon - 10, min_lat],
+                                    ]], [[
+                                        [min_lon, min_lat],
+                                        [min_lon, max_lat],
+                                        [min_lon - 10, max_lat],
+                                        [min_lon - 10, min_lat],
+                                        [min_lon, min_lat],
+                                    ]], [[
+                                        [max_lon + 10, min_lat],
+                                        [max_lon + 10, max_lat],
+                                        [max_lon, max_lat],
+                                        [max_lon, min_lat],
+                                        [max_lon + 10, min_lat],
+                                    ]]],
+                                },
+                            },
+                        });
+                        // Add the blockout area as a visible layer.
+                        mb.map.addLayer({
+                            id: regionId + "~blockout",
+                            type: "fill",
+                            source: regionId + "~blockout",
+                            layout:{},
+                            paint: {'fill-color': '#000000', 'fill-opacity': 0.5},
+                        })
+                    }
+                    // Make the region clickable via the above invisbile area.
+                    // This brings the user from the full world map to a view of just the region.
+                    mb.map.on('click', regionId + "~click", e => {
+                        if (regionName === activeFQRegionName) {
+                            return
+                        }
+                        const [min_lon, min_lat, max_lon, max_lat] = downloadedFQRegions[regionName]
+
+                        // First we kick off a zoom animation to a view focusing on the region.
+                        mb.map.fitBounds([[min_lon, min_lat], [max_lon, max_lat]], {})
+
+                        // Then we create a handler that gets called once the zoom animation is complete.
+                        // (We don't have to worry about removing this handler. setStyle will refresh
+                        // the map and wipe everthing.)
+                        mb.map.on('moveend', () => {
+                            activeFQRegionName = regionName
+                            setStyle()
+                        })
+                    })
+                }
             }
 
             function setDefaultView() {
@@ -140,6 +347,47 @@
                     shouldSetDefaultView = false
                 }
             }
+            let drawControl, terraDrawInstance
+            let downloadedFQRegions = null;
+            function setFQRegions() {
+                return fetch('{{ tile_extract.info_file }}')
+                    .then((response) => {
+                        if (response.status < 400) {
+                            return response.json()
+                        } else {
+                            // keep `downloadedFQRegions` null if it returns 400 or 500 range (though that might go straight to `.catch` anyway).
+                            console.error("Failed to load Full Quality Regions:", response.status, response.statusText)
+                            return null
+                        }
+                    })
+                    .catch((error) => {
+                        // Keep `downloadedFQRegions` at null if there is an error
+                        console.error("Failed to load Full Quality Regions:", error)
+                    })
+                    .then((json) => {
+                        // Keep `downloadedFQRegions` at null if the expected field is not there. Perhaps it returned < 400 but with empty data.
+                        if (json && json.regions) {
+                          downloadedFQRegions = json.regions;
+                        }
+                    });
+            }
+            setFQRegions()
+                .then(() => {
+                    if (downloadedFQRegions !== null && !!activeFQRegionName && !(activeFQRegionName in downloadedFQRegions)) {
+                        // Real hack with `setTimeout`; I need to refactor `setStyle` and `setUpMap`.
+                        // Setting it to a whole 1000 ms to avoid an intermittent console error.
+                        // This is handling a somewhat uncommon case so I will just go with this non-ideal but easy approach.
+                        setUpMapTimeout = setTimeout(() => {
+                            // The currently active Full Quality Region seems to be nonexistent.
+                            // One very likely scenario for this is that the user deleted a region by this name and reloaded the page.
+                            // Another hypothetical is that someone is looking at an old link, or maybe a link copied from another IIAB?
+                            // if downloadedFQRegions is null (see if statement above), maybe there's some connection error, in which case let's not
+                            // go back to the full-sized map. the user may reload the page and succeed.
+                            activeFQRegionName = ""
+                            setStyle()
+                        }, 1000)
+                    }
+                })
             window.addEventListener("load", () => {
                 function _setStyle() {
                     // The first level key is the `mapStyleChoice`, i.e. "natural", "political", etc, from the dropdown menu. (These are names specific to
@@ -168,7 +416,7 @@
                             true:  "raster/s2maps/2023",
                             false: "raster/s2maps/2023", // we'll have a smaller satellite file with the same name in this case
                         },
-                    }[mapStyleChoice][MAPS_VECTOR_IS_OSM]
+                    }[mapStyleChoice][MAPS_VECTOR_IS_OSM || !!activeFQRegionName]
                     console.log("setting to", mapStyleChoice, "i.e.", mb.mapstyle)
 
                     setUpMap() // The above will reset the map so we have to add controls and other things again. This also covers initial page load.
@@ -190,7 +438,7 @@
                         const hybridSelected = mapStyleChoice === "hybrid" ? `selected="selected"` : ""
 
                         // For now don't include political for naturalearth because it doesn't have great political options zoomed out
-                        const maybePolitical = MAPS_VECTOR_IS_OSM ? `<option title="Political Map" value="political" ${politicalSelected}>&#x1F3F3;</option>` : "";
+                        const maybePolitical = (MAPS_VECTOR_IS_OSM || !!activeFQRegionName) ? `<option title="Political Map" value="political" ${politicalSelected}>&#x1F3F3;</option>` : "";
 
                         // Keep in mind that maps.black destroys and creates this every time we change the map style or features.
                         // This makes it a little complicated to add handlers. So for now, I inline it.
@@ -221,6 +469,109 @@
                             </select>
                         `
                         return this._container;
+                    }
+
+                    onRemove() {
+                        this._container.parentNode.removeChild(this._container);
+                        this._map = undefined;
+                    }
+                }
+
+                // This button brings us back from a Full Quality Region to the full world map
+                class ReturnFromRegionControl {
+                    onAdd(map) {
+                        this._map = map;
+                        this._container = document.createElement('div');
+                        const button = document.createElement('button');
+                        button.type = "button"
+                        button.title = "Return to world map"
+                        button.innerHTML = "&#8617;&#65039;" // curved arrow
+                        this._container.appendChild(button)
+                        this._container.className = 'maplibregl-ctrl maplibregl-ctrl-group';
+                        this._container.style = 'cursor: pointer;'
+                        this._container.onclick = () => {
+                            const [min_lon, min_lat, max_lon, max_lat] = downloadedFQRegions[activeFQRegionName]
+
+                            // First we kick off a zoom animation to a view focusing on the region, zoomed out a bit more than when we entered it.
+                            mb.map.setMaxBounds() // untether us from the bounds first so we can zoom out further
+                            mb.map.fitBounds(
+                                [[min_lon - 0.5, min_lat - 0.5], [max_lon + 0.5, max_lat + 0.5]],
+                                {speed: 1.75}, // a little slower than the Delete button, but a little faster than the default
+                            )
+
+                            // Then we create a handler that gets called once the zoom animation is complete.
+                            // (We don't have to worry about removing this handler. setStyle will refresh
+                            // the map and wipe everthing.)
+                            mb.map.on('moveend', () => {
+                                // Unset the Full Quality Region, i.e. go back to the full-sized map
+                                activeFQRegionName = ""
+
+                                // As we exit from a Full Quality Region, we have to disable things that may not be available in the full-sized map.
+                                // (This sucks and a better organization of the code would prevent this.)
+                                mb.terrain = mb.hillshade = mb.terrain && (MAPS_TERRAIN_ZOOM || !!activeFQRegionName)
+                                if (mapStyleChoice === "political" && !(MAPS_VECTOR_IS_OSM || !!activeFQRegionName)) {
+                                  mapStyleChoice = "hybrid"
+                                }
+
+                                setStyle()
+                            })
+                        }
+                        return this._container
+                    }
+
+                    onRemove() {
+                        this._container.parentNode.removeChild(this._container);
+                        this._map = undefined;
+                    }
+                }
+
+                class DeleteFQRegionControl {
+                    onAdd(map) {
+
+                        this._map = map;
+                        this._container = document.createElement('div');
+                        const button = document.createElement('button');
+                        button.type = "button"
+                        button.title = "Delete this region"
+                        button.innerHTML = "&#128465;&#65039;" // wastebasket
+                        this._container.appendChild(button)
+                        this._container.className = 'maplibregl-ctrl maplibregl-ctrl-group';
+                        this._container.style = 'cursor: pointer;'
+                        this._container.onclick = () => {
+                            const [min_lon, min_lat, max_lon, max_lat] = downloadedFQRegions[activeFQRegionName]
+
+                            // Zoom out to view the region so that the delete popup is well placed
+                            mb.map.fitBounds([[min_lon, min_lat], [max_lon, max_lat]], {maxDuration: 2000, speed: 5})
+                            const center = [
+                                min_lon + (max_lon - min_lon) / 2,
+                                min_lat + (max_lat - min_lat) / 2,
+                            ]
+
+                            const deleteCommand = document.createElement('div');
+                            const deleteCommandString = `sudo {{ tile_extract.working_dir }}/tile-extract.py delete ${activeFQRegionName}`
+                            deleteCommand.innerHTML = `<pre
+                                  style="font-size:0.8em; background-color:#DDD; padding:1em; border-style:dashed; border-color:#FFF; border-width:2px; white-space: pre-wrap; word-wrap: break-word; line-height:1em;"
+                                  onclick="window.getSelection().selectAllChildren(this)"
+                              >${deleteCommandString}</pre>`
+
+                            const popupContainer = document.createElement('div');
+                            popupContainer.innerHTML = `
+                                <h1>Delete this region</h1>
+                                <ul>
+                                  <li>Click below to select text</li>
+                                  <li>Copy text</li>
+                                  <li>Paste and run in a terminal logged into your Internet in a Box</li>
+                                  <li>When it is done deleting, reload this page</li>
+                                </ul>
+                            `
+                            popupContainer.appendChild(deleteCommand)
+
+                            const deletePopup = new maplibregl.Popup()
+                                .setLngLat(center)
+                                .setDOMContent(popupContainer)
+                                .addTo(mb.map);
+                            }
+                        return this._container
                     }
 
                     onRemove() {
@@ -360,10 +711,213 @@
                     popup: true,
                 })
                 const scaleControl = new maplibregl.ScaleControl()
+                drawControl = new MaplibreTerradrawControl.MaplibreTerradrawControl({
+                    modes: [
+                        'rectangle',
+                    ],
+                    open: true,
+                });
+
+                // separating this because it's just so much
+                function setUpFQRegionDownloader() {
+                    if (downloadedFQRegions !== null && !!activeFQRegionName && (activeFQRegionName in downloadedFQRegions)) {
+                        mb.map.addControl(new DeleteFQRegionControl(), 'top-left');
+                        return
+                    }
+
+                    mb.map.addControl(drawControl, 'top-left');
+
+                    terraDrawInstance = drawControl.getTerraDrawInstance()
+                    const drawControlButton = drawControl
+                        .controlContainer
+                        .getElementsByClassName("maplibregl-terradraw-add-rectangle-button")[0]
+
+                    // Keep the rectangle functionality but change it to the download button.
+                    // From the perspective of a user of this app, this is a download tool.
+                    drawControlButton.classList.remove("maplibregl-terradraw-add-rectangle-button");
+                    drawControlButton.classList.add("maplibregl-terradraw-download-button");
+                    drawControlButton.title = "Select region for download"
+
+                    let downloadPopup = null
+                    function removePopup() {
+                        if (downloadPopup) {
+                            downloadPopup.remove()
+                            downloadPopup = null
+                        }
+                    }
+                    function removeOtherRectangles(id) {
+                        for (feature of drawControl.getFeatures().features) {
+                            if (feature.id !== id) {
+                                terraDrawInstance.removeFeatures([feature.id])
+                            }
+                        }
+                    }
+                    terraDrawInstance.on("change", (ids, type) => {
+                        if (type === "create") {
+                            // We're starting to create a new rectangle. Delete other rectangles on the map.
+                            // Not sure why ids would contain more than one, but at worst we'll
+                            // delete whatever extra stuff that might be there.
+                            removeOtherRectangles(ids[0])
+                            removePopup()
+                        }
+                    })
+                    terraDrawInstance.on("finish", (id, context) => {
+                        if (context.mode !== "rectangle" || context.action !== "draw") {
+                          // Confirm expected values. I don't know why it would be anything else
+                          // but I'm not totally familiar with terraDraw.
+                          return
+                        }
+
+                        // Remove any other rectangles. They *shouldn't* be here in the first place,
+                        // but again this system is unfamiliar so just in case I make sure we're in
+                        // a familiar state. And then, we select the remaining one which by
+                        // elimination should be the one we just finished.
+                        removeOtherRectangles(id)
+                        removePopup()
+
+                        // We assume that the library is doing its job and it's a rectangle
+                        const rectangle = drawControl.getFeatures().features[0]
+                        const shape = rectangle.geometry.coordinates[0]
+
+                        // A small note about the 180/-180 longitude border:
+                        //
+                        // I was initially afraid that this approach would lead to a bug if the selected region crossed
+                        // longitude of 180 (which is the same as -180). Let's say 170 on the west to -175 on the east.
+                        // Usually the western edge of the bounding box has the smallest longitude, but not when we are
+                        // crossing 180/-180.
+                        //
+                        // However, it seems as though this plugin accounts for that. If the current center of the
+                        // map *view* is to the west of 180/-180, then the longitudes of this bounding box would be
+                        // expressed as 170, 185. If the map view center is moved east of 180/-180, then longitudes of the
+                        // the bounding box would be expressed as -190, -175.
+                        //
+                        // Therefore, the min/max sorting should work as intended even if the bounding box straddles the
+                        // 180/-180 line. Furthermore, a lot of the downstream headaches with displaying regions go away.
+                        const lats = shape.map( ([lon, lat]) => lat)
+                        const lons = shape.map( ([lon, lat]) => lon)
+
+                        const min_lon = Math.min.apply(null, lons)
+                        const min_lat = Math.min.apply(null, lats)
+                        const max_lon = Math.max.apply(null, lons)
+                        const max_lat = Math.max.apply(null, lats)
+
+                        const center = [
+                            min_lon + (max_lon - min_lon) / 2,
+                            min_lat + (max_lat - min_lat) / 2,
+                        ]
+
+                        function popupButton(textContent, onclick) {
+                            const button = document.createElement('button')
+                            button.textContent = textContent
+                            button.onclick = onclick
+                            button.className = "maplibregl-ctrl maplibregl-ctrl-group" // happens to look good
+                            button.style = "padding-left: 5px;padding-right: 5px; margin: 5px; text-align: center; cursor: pointer;"
+                            return button
+                        }
+
+                        const backButton = popupButton("Back", () => {
+                            // show popupStart, hide popupFinish
+                            popupStart.style = ""
+                            popupFinish.style = "display: none;"
+                        })
+
+                        const doneButton = popupButton("Done", () => {
+                            terraDrawInstance.clear();
+                            removePopup();
+                        })
+                        const cancelButton = popupButton("Cancel", () => {
+                            terraDrawInstance.clear();
+                            removePopup();
+                        })
+
+                        const downloadCommand = document.createElement('div');
+                        downloadCommand.set = function(downloadName) {
+                            const downloadCommandString = `sudo {{ tile_extract.working_dir }}/tile-extract.py extract ${downloadName} ${min_lon},${min_lat},${max_lon},${max_lat}`
+                            this.innerHTML = `<pre
+                                style="font-size:0.8em; background-color:#DDD; padding:1em; border-style:dashed; border-color:#FFF; border-width:2px; white-space: pre-wrap; word-wrap: break-word; line-height:1em;"
+                                onclick="window.getSelection().selectAllChildren(this)"
+                            >${downloadCommandString}</pre>`
+                        }
+
+                        const downloadNameInput = document.createElement('input');
+                        downloadNameInput.style = "display: block; margin-bottom: 1em;"
+
+                        function updateName () {
+                            const cleanedName = downloadNameInput.value.slice(0, 35).toLowerCase().replace(/[^a-z0-9]+/g, "_")
+                            downloadNameInput.value = cleanedName
+                            downloadCommand.set(cleanedName)
+                            nextButton.set()
+                        }
+                        // be as annoying and cover as many bases as I can
+                        downloadNameInput.onkeydown = downloadNameInput.onpaste = downloadNameInput.onchange = updateName
+
+                        downloadNameInput.onkeyup = e => {
+                            updateName() // because onkeydown happens before the new value is actually set
+                            if (e.key === "Enter") {
+                                tryGoToNext()
+                            }
+                        }
+
+                        const popupStart = document.createElement('div');
+                        popupStart.innerHTML = `
+                            <h1>Download region</h1>
+                            <p>Choose a name for this <b>Full Quality Region</b> <i>(lower case letters, numbers, and _ only)</i>
+                            </p>
+                        `
+                        function tryGoToNext() {
+                            if (downloadNameInput.value.length > 0) {
+                                popupFinish.style = "" // show popupFinish
+                                popupStart.style = "display: none;"
+                                updateName() // for good measure. we want to avoid them inputting a destructive command!
+                            }
+                        }
+                        const nextButton = popupButton("", tryGoToNext)
+                        nextButton.set = function() {
+                            if (downloadNameInput.value.length > 0) {
+                                this.innerHTML = "Next"
+                            } else {
+                                this.innerHTML = "<span style='color: #888'>Next</span>"
+                            }
+                        }
+                        nextButton.set()
+
+                        popupStart.appendChild(downloadNameInput)
+                        popupStart.appendChild(nextButton)
+                        popupStart.appendChild(cancelButton)
+
+                        const popupFinish = document.createElement('div');
+                        popupFinish.style = "display: none;"
+                        popupFinish.innerHTML = `
+                            <h1>Download region</h1>
+                            <ul>
+                              <li>Click below to select text</li>
+                              <li>Copy text</li>
+                              <li>Paste and run in a terminal logged into your Internet in a Box</li>
+                              <li>When it is done downloading, reload this page</li>
+                            </ul>
+                        `
+                        popupFinish.appendChild(downloadCommand)
+                        popupFinish.appendChild(backButton)
+                        popupFinish.appendChild(doneButton)
+
+                        const popupContainer = document.createElement('div');
+                        popupContainer.appendChild(popupStart)
+                        popupContainer.appendChild(popupFinish)
+
+                        downloadPopup = new maplibregl.Popup({closeOnClick: false, closeButton: false})
+                            .setLngLat(center)
+                            .setDOMContent(popupContainer)
+                            .addTo(mb.map);
+                    })
+                }
+
+                // We need a timeout to wait for mb.map.style to be set
                 let setUpMapTimeout = null
                 function setUpMap() {
-                    // Whether we're setting a new timeout or actually adding the search, make sure no further timeouts are looming.
+                    // Whether we're setting a new timeout, actually setting up all this
+                    // stuff, or neither, make sure no further timeouts are looming.
                     clearTimeout(setUpMapTimeout)
+
                     if (scaleControl._map) {
                       // We are already set up. Neither set up again, nor set a timer
                       return
@@ -376,8 +930,10 @@
                         // https://stackoverflow.com/questions/79736280/importing-a-css-stylesheet-into-a-webcomponent-with-shadow-dom-in-firefox/79744809#79744809
                         // TODO - See if I can do this in a more direct way. I only need the geocoder css as part of this shadow DOM. Also I probably don't need the
                         // other maplibre css, that's probably already included in maps.black.
-                        const mapLibreGlCSS = [...document.styleSheets].find((styleSheet) => (styleSheet.href || "").split('/').pop() === 'maplibre-gl-geocoder.css');
-                        const stylesheetText = [...mapLibreGlCSS.cssRules].reduce((accumulator, rule) => accumulator + rule.cssText, '');
+
+                        const mapLibreGlGeocoderCSS = [...document.styleSheets].find((styleSheet) => (styleSheet.href || "").split('/').pop() === 'maplibre-gl-geocoder.css');
+                        const mapLibreGlTerradrawCSS = [...document.styleSheets].find((styleSheet) => (styleSheet.href || "").split('/').pop() === 'maplibre-gl-terradraw.css');
+                        const stylesheetText = [...mapLibreGlGeocoderCSS.cssRules, ...mapLibreGlTerradrawCSS.cssRules].reduce((accumulator, rule) => accumulator + rule.cssText, '');
                         const myStyles = new CSSStyleSheet()
                         myStyles.replace(stylesheetText)
                         mb.shadowRoot.adoptedStyleSheets = [...mb.shadowRoot.adoptedStyleSheets, myStyles]
@@ -387,10 +943,21 @@
                         }
                         mb.map.addControl(scaleControl);
 
-                        // TODO - instantiate these above along with the geocoder and ScaleControl. Though it
-                        // may require some reworking of the code that assumes it gets torn down and rebuilt.
+                        if (MAPS_REGION_DOWNLOADER) {
+                          setUpFQRegionDownloader()
+                        }
+
+                        if (downloadedFQRegions !== null && !!activeFQRegionName && (activeFQRegionName in downloadedFQRegions)) {
+                            mb.map.addControl(new ReturnFromRegionControl(), 'top-left');
+
+                            // We are looking at a full quality region. Let's prevent
+                            // the user from straying far from it so they don't get lost.
+                            const [min_lon, min_lat, max_lon, max_lat] = downloadedFQRegions[activeFQRegionName]
+                            mb.map.setMaxBounds([[min_lon - 0.5, min_lat - 0.5], [max_lon + 0.5, max_lat + 0.5]], {})
+                        }
+
                         mb.map.addControl(new MapsDotBlackGlobeControl(), 'top-right');
-                        if (MAPS_TERRAIN_ZOOM) {
+                        if (MAPS_TERRAIN_ZOOM || !!activeFQRegionName) {
                             mb.map.addControl(new MapsDotBlackTerrainControl(), 'top-right');
                         }
                         mb.map.addControl(new MapsDotBlackStyleControl(), 'top-right');
@@ -403,6 +970,11 @@
                         // Future changes in orientation should also be reflected in the hash:
                         mb.map.off('moveend', setHash) // unsetting first, in case it's already there from a previous refresh
                         mb.map.on('moveend', setHash)
+
+                        // Any time we set up the map, we should make a point to show the full quality region outlines as well.
+                        // This depends both on mb.map.style.loaded() and also for the fetch to have returned.
+                        // Thus, it'll be on its own timer loop. We just need to make sure to kick it off here.
+                        showFQRegionOutlines()
 
                         setDefaultView()
                     } else {
@@ -420,10 +992,5 @@
           mb = document.getElementsByTagName("maps-black")[0];
           readHash()
         </script>
-        <script src="maplibre-gl-geocoder.min.js"></script>
-        <link
-            rel="stylesheet"
-            href="maplibre-gl-geocoder.css"
-        />
     </body>
 </html>

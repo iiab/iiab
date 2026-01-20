@@ -1,0 +1,177 @@
+#!/usr/bin/python3
+
+import collections, json, glob, os, shutil, string, subprocess, sys
+
+HOSTING_DIR = "{{ maps_serve_path }}"
+EXTRACTS_JSON = os.path.join(HOSTING_DIR, "{{ tile_extract.info_file }}")
+PMTILES = os.path.join(os.path.dirname(__file__), "pmtiles")
+
+# Helpers
+
+def validate_extract_name(extract_name):
+    # Make sure the extract_name has only valid characters
+    try:
+        assert set(extract_name) < set(string.ascii_letters + string.digits + "-_")
+        assert len(extract_name) > 0
+        assert len(extract_name) < 35
+    except AssertionError:
+        raise ValueError("extract_name has invalid length or characters: ", extract_name)
+
+def validate_extract_box(extract_box):
+    try:
+        # `float` is just a parsing check.
+        assert len([float(n) for n in extract_box.split(",")]) == 4
+    except Exception:
+        raise ValueError("extract_box is malformed: ", extract_box)
+
+def get_extract_files(extract_name):
+    MAPS_DATA_DATE = "{{ maps_data_date }}"
+    MAPS_SLOW_DATA_DATE = "{{ maps_slow_data_date }}"
+    TMP_DIR = "/library/downloads/maps"
+
+    tmp_file = lambda base: os.path.join(TMP_DIR, f"{base}.full-region.{extract_name}.pmtiles")
+    extract_file = lambda base: os.path.join(HOSTING_DIR, f"{base}.full-region.{extract_name}.pmtiles")
+
+    return {
+        "vector": {
+            "source": f"https://iiab.switnet.org/maps/1/openstreetmap-openmaptiles.{MAPS_DATA_DATE}.full.pmtiles",
+            "extract": extract_file(f"openstreetmap-openmaptiles.{MAPS_DATA_DATE}"),
+            "tmp": tmp_file(f"openstreetmap-openmaptiles.{MAPS_DATA_DATE}"),
+        },
+        "satellite": {
+            # TODO - point to https://iiab.switnet.org/maps/1 once we have z13 maps on there (which I should do soon! in case of data change? which won't happen.)
+            "source": "https://maps.black/s2maps-sentinel2-2023.pmtiles",
+            "extract": extract_file(f"s2maps-sentinel2-2023.{MAPS_SLOW_DATA_DATE}"),
+            "tmp": tmp_file(f"s2maps-sentinel2-2023.{MAPS_SLOW_DATA_DATE}"),
+        },
+        "terrain": {
+            "source": f"https://iiab.switnet.org/maps/1/terrarium.{MAPS_SLOW_DATA_DATE}.full.pmtiles",
+            "extract": extract_file(f"terrarium.{MAPS_SLOW_DATA_DATE}"),
+            "tmp": tmp_file(f"terrarium.{MAPS_SLOW_DATA_DATE}"),
+        },
+    }
+
+# Main functions
+
+def delete_extract(extract_name):
+    extract_files = get_extract_files(extract_name)
+    for files in extract_files.values():
+        if os.path.exists(files["extract"]):
+            os.remove(files["extract"])
+
+def create_extract(extract_name, extract_box):
+
+    extract_files = get_extract_files(extract_name)
+
+    # Extract them all successfully before moving them.
+    for files in extract_files.values():
+        returncode = subprocess.run([
+            PMTILES, "extract", files["source"], files["tmp"], "--bbox=" + extract_box
+        ]).returncode
+        assert returncode == 0, "pmtiles extract exited with returncode " + str(returncode)
+
+    for files in extract_files.values():
+        shutil.move(files["tmp"], files["extract"])
+
+def check_for_existing_name(extract_name):
+    existing_extracts = json.loads(open(EXTRACTS_JSON).read())
+    if extract_name in existing_extracts.keys():
+        while True:
+            response = input("Already have a full quality region called \"" + extract_name + "\". Overwrite it? y/n ")
+            if response == "y":
+                return True
+            if response == "n":
+                return False
+            print ("Invalid response.")
+    else:
+        return True
+
+def check_for_overlaps(new_box):
+    [new_min_long, new_min_lat, new_max_long, new_max_lat] = [
+        float(n) for n in new_box.split(",")
+    ]
+
+    existing_region_extracts = json.loads(open(EXTRACTS_JSON).read())["regions"]
+    for existing in existing_region_extracts.values():
+        [long_1, lat_1, long_2, lat_2] = existing
+        existing_min_long = min([long_1, long_2])
+        existing_max_long = max([long_1, long_2])
+        existing_min_lat = min([lat_1, lat_2])
+        existing_max_lat = max([lat_1, lat_2])
+
+        if (
+            new_min_long < existing_max_long and
+            new_max_long > existing_min_long and
+            new_min_lat  < existing_max_lat and
+            new_max_lat  > existing_min_lat
+        ):
+            return False
+
+    return True
+
+def update_extracts_json():
+    region_extracts = {}
+    region_extract_types = collections.defaultdict(set)
+
+    for region_extract in glob.glob(os.path.join(HOSTING_DIR, "*.full-region.*.pmtiles")):
+
+        match (os.path.basename(region_extract).split('.')):
+            case [region_extract_type, _date, "full-region", name, "pmtiles"]:
+                pass
+            case _:
+                raise Exception("Oops can't parse pmtiles file name:", region_extract)
+
+        # Parse out coordinates
+        output = subprocess.getoutput(PMTILES + " show " + region_extract)
+        [line] = [l for l in output.split("\n") if l.startswith('bounds:')]
+        parts = line.replace('(', '').replace(')', '').replace(':', '').replace(',', '').split()
+        match parts:
+            case ['bounds', 'long', long_1, 'lat', lat_1, 'long', long_2, 'lat', lat_2]:
+                coordinates = [float(long_1), float(lat_1), float(long_2), float(lat_2)]
+            case _:
+                raise Exception("Oops can't parse output of pmtiles:", region_extract)
+
+        # Add coordinates unless it's for some reason inconsistent between satellite, vector, terrain.
+        if name in region_extracts and region_extracts[name] != coordinates:
+            raise Exception("Inconsistent coordinates between different region extracts for", name)
+        region_extracts[name] = coordinates
+        region_extract_types[name].add(region_extract_type)
+
+    for name in region_extract_types:
+        if region_extract_types[name] != {'s2maps-sentinel2-2023', 'terrarium', 'openstreetmap-openmaptiles'}:
+            print ("Warning: don't have all three types of ptiles files for:", name, "Have:", region_extract_types[name])
+    extracts = {"regions": region_extracts}
+    open(EXTRACTS_JSON, "w").write(json.dumps(extracts))
+
+if __name__ == "__main__":
+    match sys.argv[1]:
+        case "update-json":
+            assert len(sys.argv) == 2, "update-json takes no extra arguments"
+            update_extracts_json()
+
+        case "delete":
+            assert len(sys.argv) == 3, "delete takes one argument: extract_name"
+            extract_name = sys.argv[2]
+            validate_extract_name(extract_name)
+
+            delete_extract(extract_name=extract_name)
+            update_extracts_json()
+
+        case "extract":
+            assert len(sys.argv) == 4, "extract takes two arguments: extract_name, extract_box"
+            extract_box = sys.argv[3]
+            extract_name = sys.argv[2]
+            validate_extract_name(extract_name)
+            validate_extract_box(extract_box)
+
+            update_extracts_json() # Make sure we have updated data before we check for overlaps
+            if not check_for_overlaps(extract_box):
+                sys.exit("error: you cannot download overlapping full quality regions")
+            if not check_for_existing_name(extract_name):
+                sys.exit(1)
+
+            create_extract(extract_name=extract_name, extract_box=extract_box)
+            update_extracts_json() # Add the newly added extract
+
+        case unknown:
+            raise Exception("Unknown option:", unknown)

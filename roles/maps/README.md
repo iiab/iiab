@@ -73,9 +73,11 @@ As of this writing, search includes only administrative regions and natural feat
    maps_search_full: True
    ```
 
-## Downloaded Regions (experimental, available once [#4223](https://github.com/iiab/iiab/pull/4223) is merged!)
+## Full Quality Regions (experimental, available once [#4223](https://github.com/iiab/iiab/pull/4223) is merged!)
 
-Downloaded Regions is a feature that allows you to have small regions at "full" quality vector, satellite and terrain, while still having a full world map at "low" quality.
+Full Quality Regions is a feature that allows you to have small regions at "full" quality vector, satellite and terrain, while still having a full world map at a lower resolution.
+
+### Installation
 
 In order to turn it on, add the following setting:
 
@@ -83,31 +85,47 @@ In order to turn it on, add the following setting:
 maps_region_downloader: true
 ```
 
-Now open your map. You will find a new button on the top left:
+### Downloading Regions
+
+Open your map. You will find a new button on the top left:
 
 ![Download Button](README/download-button.png)
 
 If you click it, you'll enter a new "drawing" mode. You'll see your cursor change.
 
-Draw a rectangle that represents the region you want to download. To draw, click one corner of the rectangle and then the opposite corner. (Do not drag!).
+Draw a rectangle that represents the region you want to download. To draw, click one corner of the rectangle and then the opposite corner. **(Make sure to only click, do not drag!)**.
 
 Once you have a rectangle, you'll immediately see a pop-up in the middle of it:
 
 ![Download Popup](README/download-popup.png)
 
-Follow the instructions on the pop-up to download your region. You can test it out by clicking on the new Downloaded Region by clicking the rectangle. You should be able to see everything at full quality (terrain up to zoom level 10).
+Follow the instructions on the pop-up to download your region.
 
-Once you're viewing your Downloaded Region, you can delete it by clicking the delete button, which will bring up another pop-up:
+### Viewing Regions
+
+You can test out your downloaded Full Quality Region by clicking on the new rectangle on the map. You should be able to see everything at full quality (terrain up to zoom level 10).
+
+### Deleting Regions
+
+To delete a region, first make sure you are "inside" that region (instead of the full world map). Once there, you should see a delete button on the top left:
 
 ![Delete Button](README/delete-button.png)
 
-Finally, once your Downloaded Regions are in place and you are ready to let others use your map, you can turn off the setting:
+When you click it, it will bring up another pop-up with instructions on how to delete the region.
+
+### Overlapping Regions
+
+At the moment, overlapping regions is not allowed. However, if you find that you want to expand a region, you can always delete it and download a larger one instead.
+
+### Final Setup for Users
+
+Finally, once your Full Quality Regions are in place and you are ready to let others use your map, you can turn off the setting:
 
 ```
 maps_region_downloader: false
 ```
 
-...and run the `maps` role again. At this point, you will be able to view your Downloaded Regions, but the Download and Delete buttons will be gone.
+...and run the `maps` role again. At this point, you will be able to view your Full Quality Regions, but the Download and Delete buttons will be gone.
 
 # Installation Tips
 
@@ -129,5 +147,6 @@ For these large file downloads:
   * https://github.com/maps-black/maps.black#readme
   * https://github.com/maplibre/maplibre-gl-js
   * https://github.com/maplibre/maplibre-gl-geocoder?tab=ISC-1-ov-file#readme
+  * https://github.com/watergis/maplibre-gl-terradraw
 * Search (for now): https://github.com/osm-search/Nominatim?tab=GPL-3.0-1-ov-file#readme
 * Other credits: https://github.com/iiab/iiab/blob/master/roles/www_base/files/html/html/credits.html
