@@ -3,7 +3,7 @@
 import collections, json, glob, os, shutil, string, subprocess, sys
 
 HOSTING_DIR = "{{ maps_serve_path }}"
-REGIONS_JSON = os.path.join(HOSTING_DIR, "full-quality-regions.json")
+EXTRACTS_JSON = os.path.join(HOSTING_DIR, "{{ tile_extract.info_file }}")
 PMTILES = os.path.join(os.path.dirname(__file__), "pmtiles")
 
 # Helpers
@@ -74,7 +74,7 @@ def create_extract(extract_name, extract_box):
         shutil.move(files["tmp"], files["extract"])
 
 def check_for_existing_name(extract_name):
-    existing_extracts = json.loads(open(REGIONS_JSON).read())
+    existing_extracts = json.loads(open(EXTRACTS_JSON).read())
     if extract_name in existing_extracts.keys():
         while True:
             response = input("Already have a full quality region called \"" + extract_name + "\". Overwrite it? y/n ")
@@ -91,8 +91,8 @@ def check_for_overlaps(new_box):
         float(n) for n in new_box.split(",")
     ]
 
-    existing_extracts = json.loads(open(REGIONS_JSON).read())
-    for existing in existing_extracts.values():
+    existing_region_extracts = json.loads(open(EXTRACTS_JSON).read())["regions"]
+    for existing in existing_region_extracts.values():
         [long_1, lat_1, long_2, lat_2] = existing
         existing_min_long = min([long_1, long_2])
         existing_max_long = max([long_1, long_2])
@@ -110,37 +110,38 @@ def check_for_overlaps(new_box):
     return True
 
 def update_extracts_json():
-    extracts = {}
-    extract_types = collections.defaultdict(set)
+    region_extracts = {}
+    region_extract_types = collections.defaultdict(set)
 
-    for extract in glob.glob(os.path.join(HOSTING_DIR, "*.full-region.*.pmtiles")):
+    for region_extract in glob.glob(os.path.join(HOSTING_DIR, "*.full-region.*.pmtiles")):
 
-        match (os.path.basename(extract).split('.')):
-            case [extract_type, _date, "full-region", name, "pmtiles"]:
+        match (os.path.basename(region_extract).split('.')):
+            case [region_extract_type, _date, "full-region", name, "pmtiles"]:
                 pass
             case _:
-                raise Exception("Oops can't parse pmtiles file name:", extract)
+                raise Exception("Oops can't parse pmtiles file name:", region_extract)
 
         # Parse out coordinates
-        output = subprocess.getoutput(PMTILES + " show " + extract)
+        output = subprocess.getoutput(PMTILES + " show " + region_extract)
         [line] = [l for l in output.split("\n") if l.startswith('bounds:')]
         parts = line.replace('(', '').replace(')', '').replace(':', '').replace(',', '').split()
         match parts:
             case ['bounds', 'long', long_1, 'lat', lat_1, 'long', long_2, 'lat', lat_2]:
                 coordinates = [float(long_1), float(lat_1), float(long_2), float(lat_2)]
             case _:
-                raise Exception("Oops can't parse output of pmtiles:", extract)
+                raise Exception("Oops can't parse output of pmtiles:", region_extract)
 
         # Add coordinates unless it's for some reason inconsistent between satellite, vector, terrain.
-        if name in extracts and extracts[name] != coordinates:
-            raise Exception("Inconsistent coordinates between different extracts for", name)
-        extracts[name] = coordinates
-        extract_types[name].add(extract_type)
+        if name in region_extracts and region_extracts[name] != coordinates:
+            raise Exception("Inconsistent coordinates between different region extracts for", name)
+        region_extracts[name] = coordinates
+        region_extract_types[name].add(region_extract_type)
 
-    for name in extract_types:
-        if extract_types[name] != {'s2maps-sentinel2-2023', 'terrarium', 'openstreetmap-openmaptiles'}:
-            print ("Warning: don't have all three types of ptiles files for:", name, "Have:", extract_types[name])
-    open(REGIONS_JSON, "w").write(json.dumps(extracts))
+    for name in region_extract_types:
+        if region_extract_types[name] != {'s2maps-sentinel2-2023', 'terrarium', 'openstreetmap-openmaptiles'}:
+            print ("Warning: don't have all three types of ptiles files for:", name, "Have:", region_extract_types[name])
+    extracts = {"regions": region_extracts}
+    open(EXTRACTS_JSON, "w").write(json.dumps(extracts))
 
 if __name__ == "__main__":
     match sys.argv[1]:

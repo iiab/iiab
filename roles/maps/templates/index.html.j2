@@ -350,20 +350,25 @@
             let drawControl, terraDrawInstance
             let downloadedFQRegions = null;
             function setFQRegions() {
-                return fetch('./full-quality-regions.json')
+                return fetch('{{ tile_extract.info_file }}')
                     .then((response) => {
-                        if (response.status === 200) {
+                        if (response.status < 400) {
                             return response.json()
-                        } else if (response.status === 404) {
-                            // no regions if the file doesn't exist right now
-                            return {}
                         } else {
-                            // keep it null if there's some other error
+                            // keep `downloadedFQRegions` null if it returns 400 or 500 range (though that might go straight to `.catch` anyway).
+                            console.error("Failed to load Full Quality Regions:", response.status, response.statusText)
                             return null
                         }
                     })
+                    .catch((error) => {
+                        // Keep `downloadedFQRegions` at null if there is an error
+                        console.error("Failed to load Full Quality Regions:", error)
+                    })
                     .then((json) => {
-                        downloadedFQRegions = json;
+                        // Keep `downloadedFQRegions` at null if the expected field is not there. Perhaps it returned < 400 but with empty data.
+                        if (json && json.regions) {
+                          downloadedFQRegions = json.regions;
+                        }
                     });
             }
             setFQRegions()
