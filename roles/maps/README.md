@@ -73,7 +73,7 @@ As of this writing, search includes only administrative regions and natural feat
    maps_search_full: True
    ```
 
-## Full Quality Regions (experimental, available once [#4223](https://github.com/iiab/iiab/pull/4223) is merged!)
+## Full Quality Regions (experimental)
 
 Full Quality Regions is a feature that allows you to have small regions at "full" quality vector, satellite and terrain, while still having a full world map at a lower resolution.
 
