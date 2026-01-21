@@ -73,9 +73,11 @@ def create_extract(extract_name, extract_box):
         shutil.move(files["tmp"], files["extract"])
 
 
-def approve_estimated_download(extract_name):
+def approve_download_size(extract_name):
     extract_files = get_extract_files(extract_name)
     extract_sizes = {}
+
+    print("Determining download size...")
 
     # Extract them all successfully before moving them.
     for files in extract_files.values():
@@ -95,14 +97,16 @@ def approve_estimated_download(extract_name):
         transfer_num = transfer_unit = archive_num = archive_unit = None
         for line in result.stdout.split('\n'):
             match line.split():
-                case ["Extract", "transferred", transfer_num, transfer_unit,
-                    "(overfetch", _overfetch, "for", "an", "archive", "size",
-                    "of", archive_num, archive_unit]:
+                case [_date, _time, _code_line, "Extract", "transferred",
+                    transfer_num, transfer_unit, "(overfetch", _overfetch, "for",
+                    "an", "archive", "size", "of", archive_num, archive_unit]:
                     break
                 case _:
                     pass
 
         if transfer_num is None:
+            print (result.stdout)
+            print ()
             raise RuntimeError("Cannot get file size estimate due to unexpected output.")
 
         # Determine the sizes of all of the pmtiles files in bytes
@@ -113,8 +117,8 @@ def approve_estimated_download(extract_name):
             'TB': 1_000_000_000_000,
         }
         extract_sizes[files['source']] = {
-            "transfer": int(transfer_num) * unit_mult[transfer_unit],
-            "archive":  int(archive_num)   * unit_mult[archive_unit],
+            "transfer": float(transfer_num) * unit_mult[transfer_unit],
+            "archive":  float(archive_num)   * unit_mult[archive_unit],
         }
 
     # Convert the file sizes back to the best available unit
@@ -123,15 +127,15 @@ def approve_estimated_download(extract_name):
 
     transfer_display = f"{transfer_total} Bytes"
     archive_display = f"{archive_total} Bytes"
-    for unit, mult in unit_mult.iter():
+    for unit, mult in unit_mult.items():
         if 1 <= transfer_total / mult < 1000:
-            transfer_display = f"{transfer_total / mult} {unit}"
+            transfer_display = f"{round(transfer_total / mult, 2)} {unit}"
         if 1 <= archive_total / mult < 1000:
-            archive_display = f"{archive_total / mult} {unit}"
+            archive_display = f"{round(archive_total / mult, 2)} {unit}"
 
     # Ask the user if they're okay with the size.
     while True:
-        response = input(f'New regions will be {transfer_display} transferred, {archive_display} on disk. Continue? y/n ')
+        response = input(f'New regions will be {transfer_display} downloaded, {archive_display} on disk. Continue? y/n ')
         if response == "y":
             return True
         if response == "n":
@@ -239,7 +243,7 @@ if __name__ == "__main__":
                 sys.exit(1)
 
             # Get a download estimate and give users a chance to back out
-            if not approve_estimated_download(extract_name):
+            if not approve_download_size(extract_name):
                 sys.exit(1)
 
             # Do the extracts
