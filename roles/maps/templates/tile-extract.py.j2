@@ -60,24 +60,90 @@ def delete_extract(extract_name):
             os.remove(files["extract"])
 
 def create_extract(extract_name, extract_box):
-
     extract_files = get_extract_files(extract_name)
 
     # Extract them all successfully before moving them.
     for files in extract_files.values():
-        returncode = subprocess.run([
-            PMTILES, "extract", files["source"], files["tmp"], "--bbox=" + extract_box
-        ]).returncode
-        assert returncode == 0, "pmtiles extract exited with returncode " + str(returncode)
+        result = subprocess.run(
+            [PMTILES, "extract", files["source"], files["tmp"], "--bbox=" + extract_box],
+        )
+        assert result.returncode == 0, "pmtiles extract exited with returncode " + str(result.returncode)
 
     for files in extract_files.values():
         shutil.move(files["tmp"], files["extract"])
+
+
+def approve_estimated_download(extract_name):
+    extract_files = get_extract_files(extract_name)
+    extract_sizes = {}
+
+    # Extract them all successfully before moving them.
+    for files in extract_files.values():
+        result = subprocess.run(
+            [PMTILES, "extract", files["source"], files["tmp"], "--bbox=" + extract_box, "--dry-run"],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0, "pmtiles extract --dry-run exited with returncode " + str(result.returncode)
+
+        # Parse transfer and archive sizes
+        #
+        # NOTE: The reason this is two different sizes is due to something
+        # called "overfetching" which is making fewer requests at the cost of
+        # grabbing some extra data we don't need. This is actually a ratio we
+        # can control and will likely look into.
+        transfer_num = transfer_unit = archive_num = archive_unit = None
+        for line in result.stdout.split('\n'):
+            match line.split():
+                case ["Extract", "transferred", transfer_num, transfer_unit,
+                    "(overfetch", _overfetch, "for", "an", "archive", "size",
+                    "of", archive_num, archive_unit]:
+                    break
+                case _:
+                    pass
+
+        if transfer_num is None:
+            raise RuntimeError("Cannot get file size estimate due to unexpected output.")
+
+        # Determine the sizes of all of the pmtiles files in bytes
+        unit_mult = {
+            'KB': 1_000,
+            'MB': 1_000_000,
+            'GB': 1_000_000_000,
+            'TB': 1_000_000_000_000,
+        }
+        extract_sizes[files['source']] = {
+            "transfer": int(transfer_num) * unit_mult[transfer_unit],
+            "archive":  int(archive_num)   * unit_mult[archive_unit],
+        }
+
+    # Convert the file sizes back to the best available unit
+    transfer_total = sum(size['transfer'] for size in extract_sizes.values())
+    archive_total = sum(size['archive'] for size in extract_sizes.values())
+
+    transfer_display = f"{transfer_total} Bytes"
+    archive_display = f"{archive_total} Bytes"
+    for unit, mult in unit_mult.iter():
+        if 1 <= transfer_total / mult < 1000:
+            transfer_display = f"{transfer_total / mult} {unit}"
+        if 1 <= archive_total / mult < 1000:
+            archive_display = f"{archive_total / mult} {unit}"
+
+    # Ask the user if they're okay with the size.
+    while True:
+        response = input(f'New regions will be {transfer_display} transferred, {archive_display} on disk. Continue? y/n ')
+        if response == "y":
+            return True
+        if response == "n":
+            return False
+        print ("Invalid response.")
+
 
 def check_for_existing_name(extract_name):
     existing_extracts = json.loads(open(EXTRACTS_JSON).read())
     if extract_name in existing_extracts.keys():
         while True:
-            response = input("Already have a full quality region called \"" + extract_name + "\". Overwrite it? y/n ")
+            response = input(f'Already have a full quality region called \"{extract_name}\". Overwrite it? y/n ')
             if response == "y":
                 return True
             if response == "n":
@@ -158,18 +224,25 @@ if __name__ == "__main__":
             update_extracts_json()
 
         case "extract":
+            # Get and validate arguments
             assert len(sys.argv) == 4, "extract takes two arguments: extract_name, extract_box"
             extract_box = sys.argv[3]
             extract_name = sys.argv[2]
             validate_extract_name(extract_name)
             validate_extract_box(extract_box)
 
+            # Check arguments against existing data
             update_extracts_json() # Make sure we have updated data before we check for overlaps
             if not check_for_overlaps(extract_box):
                 sys.exit("error: you cannot download overlapping full quality regions")
             if not check_for_existing_name(extract_name):
                 sys.exit(1)
 
+            # Get a download estimate and give users a chance to back out
+            if not approve_estimated_download(extract_name):
+                sys.exit(1)
+
+            # Do the extracts
             create_extract(extract_name=extract_name, extract_box=extract_box)
             update_extracts_json() # Add the newly added extract
 
