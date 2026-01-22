@@ -5,6 +5,7 @@ import collections, json, glob, os, re, shutil, string, subprocess, sys
 HOSTING_DIR = "{{ maps_serve_path }}"
 EXTRACTS_JSON = os.path.join(HOSTING_DIR, "{{ tile_extract.info_file }}")
 PMTILES = os.path.join(os.path.dirname(__file__), "pmtiles")
+TMP_DIR = "/library/downloads/maps"
 
 # Helpers
 
@@ -27,7 +28,6 @@ def validate_extract_box(extract_box):
 def get_extract_files(extract_name):
     MAPS_DATA_DATE = "{{ maps_data_date }}"
     MAPS_SLOW_DATA_DATE = "{{ maps_slow_data_date }}"
-    TMP_DIR = "/library/downloads/maps"
 
     tmp_file = lambda base: os.path.join(TMP_DIR, f"{base}.full-region.{extract_name}.pmtiles")
     extract_file = lambda base: os.path.join(HOSTING_DIR, f"{base}.full-region.{extract_name}.pmtiles")
@@ -137,16 +137,20 @@ def approve_download_size(extract_name):
     transfer_total = sum(size['transfer'] for size in extract_sizes.values())
     archive_total = sum(size['archive'] for size in extract_sizes.values())
 
-    transfer_display = f"{transfer_total} Bytes"
-    archive_display = f"{archive_total} Bytes"
-    for unit, mult in unit_mult.items():
-        if 1 <= transfer_total / mult < 1000:
-            transfer_display = f"{round(transfer_total / mult, 2)} {unit}"
-        if 1 <= archive_total / mult < 1000:
-            archive_display = f"{round(archive_total / mult, 2)} {unit}"
+    def display(num_bytes):
+        for unit, mult in unit_mult.items():
+            if 1 <= num_bytes / mult < 1000:
+                return f"{round(num_bytes / mult, 2)} {unit}"
+
+        # If something falls through the cracks
+        return f"{num_bytes} Bytes"
+
+    total_b, used_b, free_b = shutil.disk_usage(TMP_DIR)
 
     # Ask the user if they're okay with the size.
-    return yes_no(f'New regions will be {transfer_display} downloaded, {archive_display} on disk. Continue?')
+    return yes_no(
+        f'\nNew regions will be {display(transfer_total)} downloaded, {display(archive_total)} on disk. This will'
+        f'\nleave about {display(free_b - archive_total)} free space on this partition. Continue?')
 
 
 def check_for_existing_name(extract_name):
