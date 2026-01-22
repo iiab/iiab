@@ -13,12 +13,66 @@
 
 - block:
 
-    - name: Install maps if 'maps_installed' not defined, e.g. in {{ iiab_state_file }}    # /etc/iiab/iiab_state.yml
-      include_tasks: install.yml
-      when: maps_installed is undefined
+    - name: "Remove 'maps_installed: True' in {{ iiab_state_file }}"
+      lineinfile:
+        path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
+        regexp: '^maps_installed'
+        line: 'maps_installed: True'
+        state: absent
 
-    - name: Enable/Disable/Reload NGINX for maps, if nginx_enabled
-      include_tasks: nginx.yml
+    - name: Install maps dependencies if 'map_tools_installed' not defined, e.g. in {{ iiab_state_file }}    # /etc/iiab/iiab_state.yml
+      include_tasks: install.yml
+      when: map_tools_installed is undefined
+
+    - name: Install nominatim if not installed and is defined as maps_search_engine
+      include_tasks: install_nominatim.yml
+      when: nominatim_installed is undefined and maps_search_engine == "nominatim"
+
+    - name: Download nominatim database
+      include_tasks: download_large_file.yml
+      when: maps_search_engine == "nominatim"
+      vars:
+        dest_base_path: "{{ maps_data_root }}"
+      with_items: "{{ nominatim_data[maps_search_full] }}"
+
+    - name: Select nominatim database
+      file:
+        src: "{{ maps_data_root }}/{{ nominatim_data[maps_search_full] }}"
+        dest: "{{ maps_data_root }}/{{ nominatim_db_symlink_name }}"
+        state: link
+        force: yes
+      when: maps_search_engine == "nominatim"
+
+    - include_tasks: install_tile_extract.yml
+      when: maps_installed is undefined and maps_region_downloader
+
+    - name: "Add 'maps_installed: True' to {{ iiab_state_file }}"
+      lineinfile:
+        path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
+        regexp: '^maps_installed'
+        line: 'maps_installed: True'
+
+    # This could go away as there is nothing else using the fact
+    # - name: "Set 'maps_installed: True'"
+    #   set_fact:
+    #     maps_installed: True
+
+    - include_tasks: install_tile_extract.yml
+      when: maps_installed is undefined and maps_region_downloader
+
+    - name: "Add 'maps_installed: True' to {{ iiab_state_file }}"
+      lineinfile:
+        path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
+        regexp: '^maps_installed'
+        line: 'maps_installed: True'
+
+    # This could go away as there is nothing else using the fact
+    # - name: "Set 'maps_installed: True'"
+    #   set_fact:
+    #     maps_installed: True
+
+    - name: Enable/Disable/Reload NGINX for maps.black/nominatim
+      include_tasks: enable-or-disable.yml
 
     - name: Add 'maps' variable values to {{ iiab_ini_file }}
       ini_file:
