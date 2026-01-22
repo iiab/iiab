@@ -1,10 +1,11 @@
 #!/usr/bin/python3
 
-import collections, json, glob, os, shutil, string, subprocess, sys
+import collections, json, glob, os, re, shutil, string, subprocess, sys
 
 HOSTING_DIR = "{{ maps_serve_path }}"
 EXTRACTS_JSON = os.path.join(HOSTING_DIR, "{{ tile_extract.info_file }}")
 PMTILES = os.path.join(os.path.dirname(__file__), "pmtiles")
+TMP_DIR = "/library/downloads/maps"
 
 # Helpers
 
@@ -27,7 +28,6 @@ def validate_extract_box(extract_box):
 def get_extract_files(extract_name):
     MAPS_DATA_DATE = "{{ maps_data_date }}"
     MAPS_SLOW_DATA_DATE = "{{ maps_slow_data_date }}"
-    TMP_DIR = "/library/downloads/maps"
 
     tmp_file = lambda base: os.path.join(TMP_DIR, f"{base}.full-region.{extract_name}.pmtiles")
     extract_file = lambda base: os.path.join(HOSTING_DIR, f"{base}.full-region.{extract_name}.pmtiles")
@@ -51,6 +51,15 @@ def get_extract_files(extract_name):
         },
     }
 
+def yes_no(prompt):
+    while True:
+        response = input(f'{prompt} y/n ')
+        if response == "y":
+            return True
+        if response == "n":
+            return False
+        print ("Invalid response.")
+
 # Main functions
 
 def delete_extract(extract_name):
@@ -60,29 +69,92 @@ def delete_extract(extract_name):
             os.remove(files["extract"])
 
 def create_extract(extract_name, extract_box):
-
     extract_files = get_extract_files(extract_name)
 
     # Extract them all successfully before moving them.
     for files in extract_files.values():
-        returncode = subprocess.run([
-            PMTILES, "extract", files["source"], files["tmp"], "--bbox=" + extract_box
-        ]).returncode
-        assert returncode == 0, "pmtiles extract exited with returncode " + str(returncode)
+        result = subprocess.run(
+            [PMTILES, "extract", files["source"], files["tmp"], "--bbox=" + extract_box],
+        )
+        assert result.returncode == 0, "pmtiles extract exited with returncode " + str(result.returncode)
 
     for files in extract_files.values():
         shutil.move(files["tmp"], files["extract"])
 
+
+def approve_download_size(extract_name):
+    extract_files = get_extract_files(extract_name)
+    extract_sizes = {}
+
+    print("Determining download size...")
+
+    for files in extract_files.values():
+        result = subprocess.run(
+            [PMTILES, "extract", files["source"], files["tmp"], "--bbox=" + extract_box, "--dry-run"],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0, "pmtiles extract --dry-run exited with returncode " + str(result.returncode)
+
+        # Parse transfer and archive sizes from the last line of --dry-run output.
+        # (Though we'll check every line to make it a bit more robust)
+        #
+        # NOTE: The reason this is two different sizes is due to something
+        # called "overfetching" which is making fewer requests at the cost of
+        # grabbing some extra data we don't need. This is actually a ratio we
+        # can control and will likely look into for optimizing user experience.
+        pattern = (
+            r'\d+/\d+/\d+ \d+:\d+:\d+ extract.go:\d*: '
+            r'Extract transferred (\d*\.?\d*) (KB|MB|GB|TB) '
+            r'\(overfetch \d*\.?\d*\) '
+            r'for an archive size of (\d*\.?\d*) (KB|MB|GB|TB)'
+        )
+        for line in result.stdout.split('\n'):
+            re_match = re.match(pattern, line)
+            if re_match is not None:
+                break
+
+        if re_match is None:
+            return yes_no("Cannot get file size estimate due to unexpected output from pmtiles. Download anyway?")
+
+        (transfer_num, transfer_unit, archive_num, archive_unit) = re_match.groups()
+
+        # Determine the sizes of all of the pmtiles files in bytes
+        unit_mult = {
+            'KB': 1_000,
+            'MB': 1_000_000,
+            'GB': 1_000_000_000,
+            'TB': 1_000_000_000_000,
+        }
+        extract_sizes[files['source']] = {
+            "transfer": float(transfer_num) * unit_mult[transfer_unit],
+            "archive":  float(archive_num)   * unit_mult[archive_unit],
+        }
+
+    # Convert the file sizes back to the best available unit
+    transfer_total = sum(size['transfer'] for size in extract_sizes.values())
+    archive_total = sum(size['archive'] for size in extract_sizes.values())
+
+    def display(num_bytes):
+        for unit, mult in unit_mult.items():
+            if 1 <= num_bytes / mult < 1000:
+                return f"{round(num_bytes / mult, 2)} {unit}"
+
+        # If something falls through the cracks
+        return f"{num_bytes} Bytes"
+
+    total_b, used_b, free_b = shutil.disk_usage(TMP_DIR)
+
+    # Ask the user if they're okay with the size.
+    return yes_no(
+        f'\nNew regions will be {display(transfer_total)} downloaded, {display(archive_total)} on disk. This will'
+        f'\nleave about {display(free_b - archive_total)} free space on this partition. Continue?')
+
+
 def check_for_existing_name(extract_name):
     existing_extracts = json.loads(open(EXTRACTS_JSON).read())
-    if extract_name in existing_extracts.keys():
-        while True:
-            response = input("Already have a full quality region called \"" + extract_name + "\". Overwrite it? y/n ")
-            if response == "y":
-                return True
-            if response == "n":
-                return False
-            print ("Invalid response.")
+    if extract_name in existing_extracts["regions"].keys():
+        return yes_no(f'Already have a full quality region called \"{extract_name}\". Overwrite it?')
     else:
         return True
 
@@ -121,15 +193,8 @@ def update_extracts_json():
             case _:
                 raise Exception("Oops can't parse pmtiles file name:", region_extract)
 
-        # Parse out coordinates
-        output = subprocess.getoutput(PMTILES + " show " + region_extract)
-        [line] = [l for l in output.split("\n") if l.startswith('bounds:')]
-        parts = line.replace('(', '').replace(')', '').replace(':', '').replace(',', '').split()
-        match parts:
-            case ['bounds', 'long', long_1, 'lat', lat_1, 'long', long_2, 'lat', lat_2]:
-                coordinates = [float(long_1), float(lat_1), float(long_2), float(lat_2)]
-            case _:
-                raise Exception("Oops can't parse output of pmtiles:", region_extract)
+        output = subprocess.getoutput(PMTILES + " show " + region_extract + " --header-json")
+        coordinates = [float(coord) for coord in json.loads(output)["bounds"]]
 
         # Add coordinates unless it's for some reason inconsistent between satellite, vector, terrain.
         if name in region_extracts and region_extracts[name] != coordinates:
@@ -158,18 +223,25 @@ if __name__ == "__main__":
             update_extracts_json()
 
         case "extract":
+            # Get and validate arguments
             assert len(sys.argv) == 4, "extract takes two arguments: extract_name, extract_box"
             extract_box = sys.argv[3]
             extract_name = sys.argv[2]
             validate_extract_name(extract_name)
             validate_extract_box(extract_box)
 
+            # Check arguments against existing data
             update_extracts_json() # Make sure we have updated data before we check for overlaps
             if not check_for_overlaps(extract_box):
                 sys.exit("error: you cannot download overlapping full quality regions")
             if not check_for_existing_name(extract_name):
                 sys.exit(1)
 
+            # Get a download estimate and give users a chance to back out
+            if not approve_download_size(extract_name):
+                sys.exit(1)
+
+            # Do the extracts
             create_extract(extract_name=extract_name, extract_box=extract_box)
             update_extracts_json() # Add the newly added extract
 
