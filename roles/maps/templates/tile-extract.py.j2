@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-import collections, json, glob, os, shutil, string, subprocess, sys
+import collections, json, glob, os, re, shutil, string, subprocess, sys
 
 HOSTING_DIR = "{{ maps_serve_path }}"
 EXTRACTS_JSON = os.path.join(HOSTING_DIR, "{{ tile_extract.info_file }}")
@@ -51,7 +51,7 @@ def get_extract_files(extract_name):
         },
     }
 
-def yeS_no(prompt):
+def yes_no(prompt):
     while True:
         response = input(f'{prompt} y/n ')
         if response == "y":
@@ -96,26 +96,30 @@ def approve_download_size(extract_name):
         )
         assert result.returncode == 0, "pmtiles extract --dry-run exited with returncode " + str(result.returncode)
 
-        # Parse transfer and archive sizes
+        # Parse transfer and archive sizes from the last line of --dry-run output.
+        # (Though we'll check every line to make it a bit more robust)
         #
         # NOTE: The reason this is two different sizes is due to something
         # called "overfetching" which is making fewer requests at the cost of
         # grabbing some extra data we don't need. This is actually a ratio we
         # can control and will likely look into for optimizing user experience.
-        transfer_num = transfer_unit = archive_num = archive_unit = None
+        pattern = (
+            r'\d+/\d+/\d+ \d+:\d+:\d+ extract.go:\d*: '
+            r'Extract transferred (\d*\.?\d*) (KB|MB|GB|TB) '
+            r'\(overfetch \d*\.?\d*\) '
+            r'for an archive size of (\d*\.?\d*) (KB|MB|GB|TB)'
+        )
         for line in result.stdout.split('\n'):
-            match line.split():
-                case [_date, _time, _code_line, "Extract", "transferred",
-                    transfer_num, transfer_unit, "(overfetch", _overfetch, "for",
-                    "an", "archive", "size", "of", archive_num, archive_unit]:
-                    break
-                case _:
-                    pass
+            re_match = re.match(pattern, line)
+            if re_match is not None:
+                break
 
-        if transfer_num is None:
+        if re_match is None:
             print (result.stdout)
             print ()
             return yes_no("Cannot get file size estimate due to unexpected output from pmtiles. Download anyway?")
+
+        (transfer_num, transfer_unit, archive_num, archive_unit) = re_match.groups()
 
         # Determine the sizes of all of the pmtiles files in bytes
         unit_mult = {
