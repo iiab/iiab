@@ -22,7 +22,7 @@
     enabled: no
 
 
-- name: FreePBX - Install 24 packages = 7 (wget, git, unixodbc, sudo, net-tools, cron, sox) + 12 PHP dependencies (run 'php -m' or 'php -i' to verify PHP modules) + 5 for CDR ODBC (cmake, make, gcc, libssl-dev, unixodbc-dev)
+- name: FreePBX - Install 23 packages = 7 (wget, git, unixodbc, sudo, net-tools, cron, sox) + 11 PHP dependencies (run 'php -m' or 'php -i' to verify PHP modules) + 5 for CDR ODBC (cmake, make, gcc, libssl-dev, unixodbc-dev)
   package:
     name:
       - wget
@@ -40,7 +40,7 @@
       - php{{ php_version }}-fpm         # Likewise installed in nginx/tasks/install.yml
       # - php{{ php_version }}-gettext
       - php{{ php_version }}-gd          # Likewise installed in moodle/tasks/install.yml, nextcloud/tasks/install.yml
-      - php{{ php_version }}-imap
+      # - php{{ php_version }}-imap
       # - php{{ php_version }}-json      # See stanza just below
       - php{{ php_version }}-mbstring    # Likewise installed in mediawiki/tasks/install.yml, moodle/tasks/install.yml, nextcloud/tasks/install.yml, wordpress/tasks/install.yml
       # - python-mysqldb                 # https://github.com/Yannik/ansible-role-freepbx/blob/master/tasks/freepbx.yml#L33
@@ -55,6 +55,59 @@
       - libssl-dev
       - unixodbc-dev
     state: latest
+
+- name: FreePBX - Install php{{ php_version }}-imap
+  package:
+    name:
+      - php{{ php_version }}-imap
+  when: php_version is version('8.4', '<')
+
+# check see if imap is still required
+- name: FreePBX - Install imap via some other means
+  fail:
+    msg: 'FreePBX php{{ php_version }}-imap does not exist on PHP 8.3+ AS OF JAN 2026.  YOU ARE PROCEEDING ENTIRELY AT YOUR OWN RISK.'
+  when: php_version is version('8.4', '>=')
+  ignore_errors: yes
+
+- name: Install imap via pecl - WIP
+  when: php_version is version('8.4', '>=')
+  block:
+    - name: FreePBX - Install php{{ php_version }}-dev
+      package:
+        name:
+          - php{{ php_version }}-dev
+          - libkrb5-dev
+
+    - name: apt install libc-client2007e_:2007f~dfsg-7.1 for Ubuntu
+      package:
+        name: libc-client2007e-dev
+      when: is_ubuntu
+
+    - name: apt install libc-client2007e_2007f~dfsg-7.1 for RasPiOS from debian
+      apt:
+        deb: "{{ item }}"
+      with_items:
+        - http://ftp.debian.org/debian/pool/main/u/uw-imap/mlock_2007f~dfsg-7+b1_arm64.deb
+        - http://ftp.debian.org/debian/pool/main/u/uw-imap/libc-client2007e_2007f~dfsg-7+b1_arm64.deb
+        - http://ftp.debian.org/debian/pool/main/u/uw-imap/libc-client2007e-dev_2007f~dfsg-7+b1_arm64.deb
+
+      when: is_raspbian or (is_debian and ansible_facts.architecture == "aarch64")
+
+    # re-runs fails if the extension is already compiled php8.4 uses 20240924
+    - name: Compile imap
+      command: pecl install imap
+      args:
+        creates: /lib/php/20240924/imap.so
+
+    - name: Enable imap.so in php.ini for fpm and cli
+      lineinfile:
+        path: "{{ item }}"
+        value: extension=imap.so
+      with_items:
+        - /etc/php/{{ php_version }}/fpm/php.ini
+        - /etc/php/{{ php_version }}/cli/php.ini
+
+
 
 # For PHP >= 8.0: phpX.Y-json is baked into PHP itself.
 # For PHP <  8.0: phpX.Y-json auto-installed by phpX.Y-fpm AND phpX.Y-cli in 3-base-server's nginx/tasks/install.yml, as confirmed by: apt rdepends phpX.Y-json
@@ -157,7 +210,7 @@
     # login_host: "{{ asterisk_db_host }}"
     # login_user: root
     # login_password: "{{ mysql_root_password }}"
-    host: "{{ (asterisk_db_host == 'localhost') | ternary('localhost', ansible_default_ipv4.address) }}"
+    host: "{{ (asterisk_db_host == 'localhost') | ternary('localhost', ansible_facts.default_ipv4.address) }}"
 
 - name: FreePBX - Add MySQL db ({{ asterisk_db_dbname }})
   mysql_db:
@@ -251,8 +304,8 @@
 # /usr/sbin/asterisk -rx 'core show version'
 # journalctl -eu asterisk
 
-- name: FreePBX - WAIT 5 SECONDS TO SIMULATE './start_asterisk start' (REQUIRED DUE TO ABOVE ANSIBLE BUG) THEN... install FreePBX to {{ freepbx_install_dir }} - FAST W/ GITHUB (OR freepbx-16.0-latest.tgz CAN TAKE 3-12 MIN OR LONGER!)
-  shell: sleep 5 && ./install -n --webroot {{ freepbx_install_dir }} --dbuser {{ asterisk_db_user }} --dbpass {{ asterisk_db_password }}
+- name: FreePBX - WAIT 10 SECONDS TO SIMULATE './start_asterisk start' (REQUIRED DUE TO ABOVE ANSIBLE BUG) THEN... install FreePBX to {{ freepbx_install_dir }} - FAST W/ GITHUB (OR freepbx-16.0-latest.tgz CAN TAKE 3-12 MIN OR LONGER!)
+  shell: sleep 10 && ./install -n --webroot {{ freepbx_install_dir }} --dbuser {{ asterisk_db_user }} --dbpass {{ asterisk_db_password }}
   args:
     chdir: "{{ freepbx_src_dir }}"
     #creates: "{{ freepbx_install_dir }}"    # /var/www/html/freepbx
@@ -279,7 +332,7 @@
   command: "{{ item }}"
   with_items:
     - fwconsole stop
-    - killall -9 safe_asterisk    # 2021-08-08: Stronger medicine needed for 64-bit Ubuntu Server 21.04 on RPi 4.  Originally from @jvonau's PR #2912.
+    # - killall -9 safe_asterisk    # 2021-08-08: Stronger medicine needed for 64-bit Ubuntu Server 21.04 on RPi 4.  Originally from @jvonau's PR #2912.
     # - killall -9 asterisk       # 2021-08-05: Also from @jvonau's PR #2912, to brute force this.  In the end, above 'fwconsole stop' works more gracefully.
     # - ./start_asterisk stop     # Buggy!
     # - /usr/sbin/asterisk -rx "core stop gracefully"
@@ -292,8 +345,8 @@
     # - fwconsole restart
   ignore_errors: yes    # 2021-08-08: As 'killall -9 safe_asterisk' will fail when process doesn't exist (on many OS's!)
 
-- name: "FreePBX - Run 'killall -9 \"PM2 v4.5.0: God\"' for good measure"
-  command: 'killall -9 "PM2 v4.5.0: God"'    # 2021-08-09: Missed by above 'fwconsole stop' (does this matter?)
+- name: "FreePBX - Run 'killall -9 \"PM2 v5.2.2: God\"' for good measure"
+  command: 'killall -9 "PM2 v5.2.2: God"'    # 2021-08-09: Missed by above 'fwconsole stop' (does this matter?)
   ignore_errors: yes    # 2021-08-16: As 'killall -9 "PM2 v4.5.0: God"' will fail if process doesn't exist (e.g. if version number changes, etc)
 
 # 2021-08-06: This stanza works, but above is more graceful.  (FYI PRs #2908,
