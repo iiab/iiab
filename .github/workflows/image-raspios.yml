@@ -1,0 +1,52 @@
+name: 'IIAB "MEDIUM" RaspberryPi OS sdcard image'
+
+on: [push, workflow_dispatch]
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v5
+
+      - name: Install host dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            systemd-container \
+            qemu-user-static \
+            binfmt-support \
+            expect \
+            parted \
+            aria2 \
+            jq \
+            xz-utils \
+            dosfstools \
+            e2fsprogs \
+            gdisk
+
+      - name: Clone nspawn-loop
+        run: git clone https://github.com/chapmanjacobd/nspawn-loop
+
+      - name: Build image
+        working-directory: nspawn-loop
+        run: |
+          sudo ./mount.sh
+          # Automatically detect the state file to handle potential name variations
+          STATE_FILE=$(ls *.state | head -n 1)
+          echo "Using State File: $STATE_FILE"
+          sudo ./install_iiab.sh "$STATE_FILE" ../vars/local_vars_medium.yml
+          sudo ./shrink.sh "$STATE_FILE"
+
+      - name: Compress image
+        working-directory: nspawn-loop
+        run: |
+          IMG_FILE=$(ls *.img | head -n 1)
+          echo "Compressing $IMG_FILE..."
+          xz -v -9 -T0 "$IMG_FILE"
+
+      - name: Upload image as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: iiab-raspios-image
+          path: nspawn-loop/*.img.xz
