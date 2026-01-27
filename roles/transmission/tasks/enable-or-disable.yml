@@ -1,9 +1,34 @@
 - name: Enable & (Re)Start 'transmission-daemon' systemd service, if transmission_enabled
-  systemd:
-    daemon_reload: yes
-    name: transmission-daemon
-    enabled: yes
-    state: restarted
+  block:
+    - name: Enable & (Re)Start 'transmission-daemon' systemd service
+      systemd:
+        daemon_reload: yes
+        name: transmission-daemon
+        enabled: yes
+        state: restarted
+        timeout: 300
+  rescue:
+    - name: Get 'transmission-daemon' status
+      command: systemctl status transmission-daemon
+      register: service_status
+      ignore_errors: yes
+
+    - name: Get 'transmission-daemon' journal logs
+      command: journalctl -u transmission-daemon -n 50
+      register: service_logs
+      ignore_errors: yes
+
+    - name: Display 'transmission-daemon' diagnostics
+      debug:
+        msg:
+          - "Service Status:"
+          - "{{ service_status.stdout_lines | default('Could not get status') }}"
+          - "Recent Logs:"
+          - "{{ service_logs.stdout_lines | default('Could not get logs') }}"
+
+    - name: Fail with diagnostics
+      fail:
+        msg: "Transmission-daemon failed to start. See diagnostics above."
   when: transmission_enabled
 
 - debug:
