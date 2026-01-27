@@ -27,15 +27,6 @@
         </style>
 
         <link rel='stylesheet' href='maplibre-gl.css' />
-        <script src='maplibre-gl.js'></script>
-
-        <script src="maplibre-gl-geocoder.min.js"></script>
-        <link rel="stylesheet" href="maplibre-gl-geocoder.css"/>
-
-        <script src="maplibre-gl-terradraw.umd.js"></script>
-        <link rel="stylesheet" href="maplibre-gl-terradraw.css"/>
-
-        <script src="maps.black-component.js" type="module"></script>
         <script>
 
             /****************
@@ -51,6 +42,30 @@
             const MAPS_SEARCH_ENGINE = "{{ maps_search_engine }}"
             const MAPS_REGION_DOWNLOADER = "{{ maps_region_downloader }}" === "True"
 
+        </script>
+        <script type="module">
+            import { AddressTextualIndex } from "./{{ maps_static_search_dir }}/static_search.js"
+            if (MAPS_SEARCH_ENGINE === "static") {
+                // We have to do this `window.` stuff to communicate between module and non-module javascript code
+                window.staticSearch = {
+                    init: () => {
+                        const searchDb = activeFQRegionName || "world-map"
+                        window.staticSearch.engine = new AddressTextualIndex(`static-search/${searchDb}`)
+                    }
+                }
+                window.staticSearch.init()
+            }
+        </script>
+        <script src='maplibre-gl.js'></script>
+
+        <script src="maplibre-gl-geocoder.min.js"></script>
+        <link rel="stylesheet" href="maplibre-gl-geocoder.css"/>
+
+        <script src="maplibre-gl-terradraw.umd.js"></script>
+        <link rel="stylesheet" href="maplibre-gl-terradraw.css"/>
+
+        <script src="maps.black-component.js" type="module"></script>
+        <script>
             // we want style choice to survive the map reset that happens when a maps.black
             // feature or style changes, so we rely on this instead of the select tag value
             let mapStyleChoice
@@ -676,6 +691,68 @@
                 }
             };
 
+            const staticGeocoderApi = {
+                // TODO reverse geocode
+                forwardGeocode: async (config) => {
+                    const features = [];
+                    try {
+                        const response = await window.staticSearch.engine.search(config.query);
+                        for (const result of response) {
+                            const center = [result.lon, result.lat]
+                            const point = {
+                                type: 'Feature',
+                                geometry: {
+                                    type: 'Point',
+                                    coordinates: center
+                                },
+                                place_name: result.name,
+                                properties: [],
+                                text: result.name,
+                                place_type: ['place'],
+                                extratags: [],
+                                center,
+                            };
+                            features.push(point);
+                        }
+                    } catch (e) {
+                        console.error(`Failed to forwardGeocode with error: ${e}`);
+                    }
+
+                    return {
+                        features
+                    };
+                }
+            };
+
+            // have to use MAX_SEARCH_RESULT_ZOOM in a couple different places to cover a couple different scenarios, it seems
+            const MAX_SEARCH_RESULT_ZOOM = 10;
+            const geocoderCommonOptions = {
+                maplibregl,
+                zoom: MAX_SEARCH_RESULT_ZOOM,
+                flyTo: {
+                    maxZoom: MAX_SEARCH_RESULT_ZOOM,
+                },
+                popup: true,
+            }
+
+            const geocoderAlternatives = {
+                nominatim: {
+                    api: nominatimGeocoderApi,
+                    options: geocoderCommonOptions,
+                },
+                static: {
+                    api: staticGeocoderApi,
+                    options: {
+                        showResultsWhileTyping: true,
+
+                        // In case we want to alter the time from stopping typing to searching:
+                        // debounceSearch: 200,
+
+                        ...geocoderCommonOptions
+                    },
+                },
+            }
+
             function showSearchResultBorder(searchResult) {
                 const source = mb.map.getSource('search-result')
                 if (source) {
@@ -692,16 +769,13 @@
                 mb.map.addLayer({id: "search-result-outline", type: "line", source: 'search-result', layout:{}, paint: {'line-color': '#FF4444', 'line-width': 2}})
             }
 
-            // have to use MAX_ZOOM in a couple different places to cover a couple different scenarios, it seems
-            const MAX_ZOOM = 10;
-            const geocoder = new MaplibreGeocoder(nominatimGeocoderApi, {
-                maplibregl,
-                zoom: MAX_ZOOM,
-                flyTo: {
-                    maxZoom: MAX_ZOOM,
-                },
-                popup: true,
-            })
+            let geocoder = null;
+            if (geocoderAlternatives[MAPS_SEARCH_ENGINE]) {
+                geocoder = new MaplibreGeocoder(
+                    geocoderAlternatives[MAPS_SEARCH_ENGINE].api,
+                    geocoderAlternatives[MAPS_SEARCH_ENGINE].options,
+                )
+            }
             const scaleControl = new maplibregl.ScaleControl()
             drawControl = new MaplibreTerradrawControl.MaplibreTerradrawControl({
                 modes: [
@@ -930,7 +1004,7 @@
                     myStyles.replace(stylesheetText)
                     mb.shadowRoot.adoptedStyleSheets = [...mb.shadowRoot.adoptedStyleSheets, myStyles]
 
-                    if (MAPS_SEARCH_ENGINE === "nominatim") {
+                    if (geocoder) {
                         mb.map.addControl(geocoder, 'top-left');
                     }
                     mb.map.addControl(scaleControl);

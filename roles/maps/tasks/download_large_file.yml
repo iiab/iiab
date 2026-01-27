@@ -48,8 +48,13 @@
     log_file: "{{ item | hash('md5') }}.log"
     working_dir: "/library/downloads/maps"
 
+    # `file_name` is the file being downloaded. if it's an archive, it needs to
+    # be extracted to `extracted_dir_name` before moving to the final destination.
+    file_name: "{{ item }}{{ '.tar.gz' if is_archive | default(false) else '' }}"
+    extracted_dir_name: "{{ item if is_archive | default(false) else '' }}"
+
   block:
-    - name: "Fetching file size for {{ iiab_map_host_url }}/{{ item }} via .meta4 file"
+    - name: "Fetching file size for {{ iiab_map_host_url }}/{{ file_name }} via .meta4 file"
       shell: |
         import sys, xmltodict, requests, os
 
@@ -57,7 +62,7 @@
           sys.exit(0)
 
         size = int(xmltodict.parse(
-          requests.get("{{ iiab_map_host_url }}/{{ item }}.meta4").content
+          requests.get("{{ iiab_map_host_url }}/{{ file_name }}.meta4").content
         )['metalink']['file']['size'])
         KiB = 1024
         MiB = KiB * 1024
@@ -91,7 +96,7 @@
       # task should exit before any console output.
       when: download_file_details.stdout_lines|length != 0
 
-    - name: "Download {{ item }} {{ download_file_details.stdout_lines.0 | default('(done)')}}"
+    - name: "Download {{ file_name }} {{ download_file_details.stdout_lines.0 | default('(done)')}}"
       # cd to the temp directory so that the aria2c file, data file, and (perhaps
       # eventually) torrent file all end up there.
       shell: |
@@ -100,7 +105,7 @@
         cd {{ working_dir }}
 
         date > "{{ log_file }}"
-        echo "Downloading {{ item }}..." >> "{{ log_file }}"
+        echo "Downloading {{ file_name }}..." >> "{{ log_file }}"
         echo >> "{{ log_file }}"
         aria2c \
             --async-dns=false \
@@ -116,11 +121,20 @@
             --enable-http-pipelining=true \
             --seed-time=0 \
             --allow-overwrite=true \
-            "{{ iiab_map_host_url }}/{{ item }}.meta4" \
+            "{{ iiab_map_host_url }}/{{ file_name }}.meta4" \
             >> "{{ log_file }}"
 
-        chmod 644 "{{ item }}"
-        mv "{{ item }}" "{{ dest_path }}"
+        chmod 644 "{{ file_name }}"
+        if "{{ 'true' if is_archive | default(false) else 'false' }}"; then
+            rm -rf "{{ extracted_dir_name }}"
+            mkdir "{{ extracted_dir_name }}"
+            chmod 755 "{{ extracted_dir_name }}"
+            tar xzf "{{ file_name }}" -C "{{ extracted_dir_name }}" --strip-components 1
+            rm "{{ file_name }}"
+            mv "{{ extracted_dir_name }}" "{{ dest_path }}"
+        else
+            mv "{{ file_name }}" "{{ dest_path }}"
+        fi
         rm "{{ log_file }}"
       args:
         executable: /bin/bash
@@ -132,7 +146,7 @@
     # Here, we parse out the error message, ignoring almost all of
     # the summary lines, which could be a lot.
     # Finally, we exit 1 so Ansible shows this error.
-    - name: "Error downloading {{ item }}"
+    - name: "Error downloading {{ file_name }}"
       shell: |
         set -euo pipefail
 
