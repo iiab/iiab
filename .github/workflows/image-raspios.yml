@@ -89,6 +89,7 @@ jobs:
 
           expect -re {#\s?$} { send "apt update\r" }
           expect -re {#\s?$} { send "apt list --installed 2>/dev/null | grep -E 'linux-image|linux-headers' | cut -d/ -f1 | xargs apt-mark hold\r" }
+          expect -re {#\s?$} { send "grep -l 'update-initramfs' /var/lib/dpkg/info/*.triggers | xargs -n1 basename | cut -d. -f1 | xargs apt-mark hold\r" }
           expect -re {#\s?$} { send "DEBIAN_FRONTEND=noninteractive apt upgrade -y\r" }
 
           expect -re {#\s?$} { send "curl -fLo /usr/sbin/iiab https://raw.githubusercontent.com/iiab/iiab-factory/master/iiab\r" }
@@ -111,6 +112,8 @@ jobs:
 
       - name: Shrink image
         working-directory: nspawn-loop
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           sudo -E bash << 'EOF'
           set -euo pipefail
@@ -119,8 +122,11 @@ jobs:
           source "$STATE_FILE"
 
           echo "$IMG_NAME" > "$MOUNT_DIR/.iiab-image"
-          echo "$(git -C ../iiab rev-parse --abbrev-ref HEAD)" >> "$MOUNT_DIR/.iiab-image"
-          echo "$(git -C ../iiab log -1)" >> "$MOUNT_DIR/.iiab-image"
+          echo "Build: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" >> "$MOUNT_DIR/.iiab-image"
+          gh pr list --repo ${{ github.repository }} --commit $(git -C ../iiab rev-parse HEAD) --json number,url --jq '.[0] | "PR #\(.number): \(.url)"' >> "$MOUNT_DIR/.iiab-image" 2>/dev/null || true
+          git -C ../iiab rev-parse --abbrev-ref HEAD >> "$MOUNT_DIR/.iiab-image"
+          git -C ../iiab remote -v >> "$MOUNT_DIR/.iiab-image"
+          git -C ../iiab log -1 >> "$MOUNT_DIR/.iiab-image"
 
           ./shrink.sh "$STATE_FILE"
 
