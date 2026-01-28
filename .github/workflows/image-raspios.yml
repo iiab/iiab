@@ -31,6 +31,9 @@ jobs:
           sudo -E bash << 'EOF'
           set -euo pipefail
 
+          STATE_FILE=$(find . -maxdepth 1 -name "*.state" | head -n 1)
+          source "$STATE_FILE"
+
           VERSION=$(grep '^iiab_base_ver:' ../iiab/vars/default_vars.yml | awk '{print $2}')
           DATE=$(date +'%y%m%d')
           OS="raspios"
@@ -39,16 +42,11 @@ jobs:
           IMG_NAME="iiab-$VERSION-$DATE-$OS-$EDITION-$HASH.img"
           echo "IMG_NAME=$IMG_NAME" >> $GITHUB_ENV
 
-          STATE_FILE=$(find . -maxdepth 1 -name "*.state" | head -n 1)
-          source "$STATE_FILE"
-
           mkdir -p "$MOUNT_DIR/opt/iiab/iiab"
           cp -a ../iiab/* "$MOUNT_DIR/opt/iiab/iiab/"
           mkdir -p "$MOUNT_DIR/etc/iiab"
           cp -a ../iiab/vars/local_vars_small.yml "$MOUNT_DIR/etc/iiab/local_vars.yml"
-          # chown -R 1000:1000 "$MOUNT_DIR/opt/iiab/iiab"
-
-          source ./utils.sh
+          # chown -R 1000:1000 "$MOUNT_DIR/opt/iiab/iiab" "$MOUNT_DIR/etc/iiab"
 
           if ! command -v expect &>/dev/null; then
               apt-get update && apt-get install -y expect
@@ -116,20 +114,18 @@ jobs:
       - name: Shrink image
         working-directory: nspawn-loop
         run: |
-          export BRANCH=$(git -C ../iiab branch | grep '*')
-          export LOG=$(git -C ../iiab log -1)
-
           sudo -E bash << 'EOF'
           set -euo pipefail
 
+          STATE_FILE=$(find . -maxdepth 1 -name "*.state" | head -n 1)
+          source "$STATE_FILE"
+
           echo "$IMG_NAME" > "$MOUNT_DIR/.iiab-image"
-          echo "$BRANCH" >> "$MOUNT_DIR/.iiab-image"
-          echo "$LOG" >> "$MOUNT_DIR/.iiab-image"
+          echo "$(git -C ../iiab rev-parse --abbrev-ref HEAD)" >> "$MOUNT_DIR/.iiab-image"
+          echo "$(git -C ../iiab log -1)" >> "$MOUNT_DIR/.iiab-image"
 
           ./shrink.sh "$STATE_FILE"
 
-          STATE_FILE=$(find . -maxdepth 1 -name "*.state" | head -n 1)
-          source "$STATE_FILE"
           mv "$IMG_FILE" "$IMG_NAME"
           EOF
 
