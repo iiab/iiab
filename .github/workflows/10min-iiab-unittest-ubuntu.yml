@@ -1,0 +1,61 @@
+name: '"10 min" IIAB "UNITTEST" on Ubuntu 24.04 on x86-64'
+# run-name: ${{ github.actor }} is testing out GitHub Actions 🚀
+
+# https://michaelcurrin.github.io/dev-cheatsheets/cheatsheets/ci-cd/github-actions/triggers.html
+on: [push, pull_request, workflow_dispatch]
+
+# on:
+#   push:
+#
+#   pull_request:
+#
+#   # Allows you to run this workflow manually from the Actions tab
+#   workflow_dispatch:
+#
+#   # Set your workflow to run every day of the week from Monday to Friday at 6:00 UTC
+#   schedule:
+#     - cron: "0 6 * * 1-5"
+
+jobs:
+  test-install:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: echo "🎉 The job was automatically triggered by a ${{ github.event_name }} event."
+      - run: echo "🔎 The name of your branch is ${{ github.ref }} and your repository is ${{ github.repository }}."
+      #- name: Dump GitHub context (typically almost 500 lines)
+      #  env:
+      #    GITHUB_CONTEXT: ${{ toJSON(github) }}
+      #  run: echo "$GITHUB_CONTEXT"
+      - name: Check out repository code    # Clones repo onto github runner
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0    # Default is 1, but iiab-summary (below) needs git tag history.  FYI "fetch-depth: 0" works but is way too greedy, downloading all branches.  The ideal would've been "fetch-depth: 10000" with "fetch-tags: true" -- but this remains broken as of actions/checkout@v4 on 2025-03-26: see issues #217, #338, PR #1396, #1467, #1471, #1662 in https://github.com/actions/checkout -- Dec 2020 background: https://github.blog/open-source/git/get-up-to-speed-with-partial-clone-and-shallow-clone/
+      - run: echo "🍏 This job's status [SO FAR!] is ${{ job.status }}."
+      - name: GitHub Actions "runner" environment
+        run: |
+          uname -a    # uname -srm
+          whoami      # Typically 'runner' instead of 'root'
+          pwd         # /home/runner/work/iiab/iiab == $GITHUB_WORKSPACE == ${{ github.workspace }}
+          # tree /home/runner/work/_actions /home/runner/work/_temp /opt/hostedtoolcache (reusable deps; 88,000+ lines!)
+          # ls -la /opt    # az, containerd, google, hostedtoolcache, microsoft, mssql-tools, pipx, pipx_bin, post-generation, runner, vsts
+          # apt update && apt dist-upgrade -y && apt autoremove -y
+      - name: Set up /opt/iiab/iiab    # Some steps to get ready for the install
+        run: |
+          mkdir /opt/iiab
+          mv $GITHUB_WORKSPACE /opt/iiab
+          mkdir $GITHUB_WORKSPACE    # OR SUBSEQUENT STEPS WILL FAIL ('working-directory: /opt/iiab/iiab' hacks NOT worth it!)
+      - name: Set up /etc/iiab/local_vars.yml
+        run: |
+          sudo mkdir /etc/iiab
+          # local_vars_unittest.yml installs a quite minimal IIAB, without IIAB Apps
+          sudo cp /opt/iiab/iiab/vars/local_vars_unittest.yml /etc/iiab/local_vars.yml
+      - run: sudo /opt/iiab/iiab/scripts/ansible    # Installs Ansible
+      - name: Install ansible-lint
+        run: pip install ansible-lint
+      - name: Run ansible-lint
+        run: ansible-lint
+        working-directory: /opt/iiab/iiab
+      - run: sudo ./iiab-install                    # Installs IIAB!
+        working-directory: /opt/iiab/iiab
+      - run: iiab-summary
+      - run: diff /opt/iiab/iiab/.github/workflows/tests/expected_state_unittest.yml /etc/iiab/iiab_state.yml --color    # Final validation

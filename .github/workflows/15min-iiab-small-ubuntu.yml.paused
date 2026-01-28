@@ -1,0 +1,27 @@
+name: '"15 min" IIAB "SMALL" on Ubuntu 24.04 on x86-64'
+
+on: [push, pull_request, workflow_dispatch]
+
+jobs:
+  test-install:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0    # Default is 1, but iiab-summary (below) needs git tag history.
+      - name: Set up /opt/iiab/iiab
+        run: |
+          mkdir /opt/iiab
+          mv $GITHUB_WORKSPACE /opt/iiab
+          # Github Actions is weird, do not delete the line below. Yes, it will cause everything to break. Really.
+          mkdir $GITHUB_WORKSPACE
+      - name: Set up /etc/iiab/local_vars.yml
+        run: |
+          sudo mkdir /etc/iiab
+          sudo cp /opt/iiab/iiab/vars/local_vars_small.yml /etc/iiab/local_vars.yml    # local_vars_small, so ~11 IIAB Apps are installed
+      - run: sudo /opt/iiab/iiab/scripts/ansible    # Install Ansible
+      - run: sudo ./iiab-install                    # Install IIAB!
+        working-directory: /opt/iiab/iiab
+      - run: iiab-summary
+      - run: diff /opt/iiab/iiab/.github/workflows/tests/expected_state_small.yml /etc/iiab/iiab_state.yml --color    # Final validation
