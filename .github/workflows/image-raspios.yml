@@ -12,49 +12,136 @@ jobs:
   build:
     runs-on: ubuntu-24.04-arm
     steps:
-      - name: Check out repository code
-        uses: actions/checkout@v5
+      - uses: actions/checkout@v5
+        with:
+          path: iiab
 
-      - name: Clone nspawn-loop
-        run: git clone https://github.com/chapmanjacobd/nspawn-loop
+      - uses: actions/checkout@v5
+        with:
+          repository: chapmanjacobd/nspawn-loop
+          path: nspawn-loop
+
+      - name: Download RaspberryPi OS
+        working-directory: nspawn-loop
+        run: sudo ./mount.sh https://downloads.raspberrypi.org/raspios_lite_arm64_latest 10000
 
       - name: Build image
         working-directory: nspawn-loop
         run: |
-          VERSION=$(grep '^iiab_base_ver:' ../vars/default_vars.yml | awk '{print $2}')
+          sudo -E bash << 'EOF'
+          set -euo pipefail
+
+          VERSION=$(grep '^iiab_base_ver:' ../iiab/vars/default_vars.yml | awk '{print $2}')
           DATE=$(date +'%y%m%d')
           OS="raspios"
           EDITION="ContentReady"
-          HASH=$(git -C .. rev-parse --short HEAD)
+          HASH=$(git -C ../iiab rev-parse --short HEAD)
           IMG_NAME="iiab-$VERSION-$DATE-$OS-$EDITION-$HASH.img"
           echo "IMG_NAME=$IMG_NAME" >> $GITHUB_ENV
-
-          sudo ./mount.sh https://downloads.raspberrypi.org/raspios_lite_arm64_latest 10000
 
           STATE_FILE=$(find . -maxdepth 1 -name "*.state" | head -n 1)
           source "$STATE_FILE"
 
-          sudo ./install_iiab.sh "$STATE_FILE" ../vars/local_vars_none.yml
+          mkdir -p "$MOUNT_DIR/opt/iiab/iiab"
+          cp -a ../iiab/* "$MOUNT_DIR/opt/iiab/iiab/"
+          cp -a ../iiab/vars/local_vars_small.yml "$MOUNT_DIR/etc/iiab/local_vars.yml"
+          # chown -R 1000:1000 "$MOUNT_DIR/opt/iiab/iiab"
 
-          echo "$IMG_NAME" | sudo tee "$MOUNT_DIR/.iiab-image"
-          git -C .. branch | grep '*' | sudo tee -a "$MOUNT_DIR/.iiab-image"
-          git -C .. log -1 | sudo tee -a "$MOUNT_DIR/.iiab-image"
+          source ./utils.sh
 
-          sudo ./shrink.sh "$STATE_FILE"
+          if ! command -v expect &>/dev/null; then
+              apt-get update && apt-get install -y expect
+          fi
+          if ! command -v systemd-nspawn &> /dev/null; then
+              apt-get update && apt-get install -y systemd-container
+          fi
 
-      - name: Compress image
+          systemctl is-active --quiet systemd-networkd || systemctl start systemd-networkd
+          systemctl is-active --quiet systemd-resolved || systemctl start systemd-resolved
+
+          # Explicitly allow forwarding for systemd-nspawn virtual interfaces
+          sysctl -w net.ipv4.ip_forward=1
+          EXT_IF=$(ip route | grep default | awk '{print $5}' | head -n1)
+          iptables -t nat -A POSTROUTING -o "$EXT_IF" -j MASQUERADE
+          iptables -A FORWARD -i ve-+ -o "$EXT_IF" -j ACCEPT
+          iptables -A FORWARD -i "$EXT_IF" -o ve-+ -m state --state RELATED,ESTABLISHED -j ACCEPT
+
+          echo "nameserver 8.8.8.8" > "$MOUNT_DIR/etc/resolv.conf"
+          echo "nameserver 1.1.1.1" >> "$MOUNT_DIR/etc/resolv.conf"
+
+          sed 's/^          //' << 'EOF_PRESET' > "$MOUNT_DIR/root/install_preset.sh"
+          #!/bin/bash
+          set -euo pipefail
+          cd /opt/iiab/iiab-admin-console
+
+          scripts/get_kiwix_catalog
+          scripts/get_oer2go_catalog
+
+          iiab-cmdsrv-ctl 'INST-PRESETS {"preset_id":"test"}'
+          EOF_PRESET
+          chmod +x "$MOUNT_DIR/root/install_preset.sh"
+
+          systemd-firstboot --root="$MOUNT_DIR" --delete-root-password --force
+          export MOUNT_DIR
+          sed 's/^          //' << 'EXPECT_EOF' | expect
+          set timeout 7200
+
+          spawn systemd-nspawn -q --network-veth --resolv-conf=off -D $env(MOUNT_DIR) -M box --boot
+          expect "login: " { send "root\r" }
+
+          expect -re {#\s?$} { send "apt update\r" }
+          expect -re {#\s?$} { send "apt list --installed 2>/dev/null | grep -E 'linux-image|linux-headers' | cut -d/ -f1 | xargs apt-mark hold\r" }
+          expect -re {#\s?$} { send "DEBIAN_FRONTEND=noninteractive apt upgrade -y\r" }
+          expect -re {#\s?$} { send "DEBIAN_FRONTEND=noninteractive apt install -y systemd-repart\r" }
+
+          expect -re {#\s?$} { send "curl -fLo /usr/sbin/iiab https://raw.githubusercontent.com/iiab/iiab-factory/master/iiab\r" }
+          expect -re {#\s?$} { send "chmod 0755 /usr/sbin/iiab\r" }
+          expect -re {#\s?$} { send "/usr/sbin/iiab --risky\r" }
+          expect {
+              timeout { puts "\nTimed out waiting for final confirmation prompt"; exit 1 }
+              "photographed" { send "\r" }
+          }
+          # forced reboot
+          expect "login: " { send "root\r" }
+
+          expect -re {#\s?$} { send "/root/install_preset.sh\r" }
+          expect -re {#\s?$} { send "apt-mark showhold | xargs apt-mark unhold\r" }
+          expect -re {#\s?$} { send "shutdown now\r" }
+          expect eof
+          EXPECT_EOF
+
+          EOF
+
+      - name: Shrink image
         working-directory: nspawn-loop
         run: |
-          IMG_FILE=$(find . -maxdepth 1 -name "*.img" | head -n 1)
-          echo "Compressing $IMG_FILE to $IMG_NAME.xz..."
-          xz -v -9 -T0 --stdout "$IMG_FILE" > "$IMG_NAME.xz"
+          export BRANCH=$(git -C ../iiab branch | grep '*')
+          export LOG=$(git -C ../iiab log -1)
+
+          sudo -E bash << 'EOF'
+          set -euo pipefail
+
+          echo "$IMG_NAME" > "$MOUNT_DIR/.iiab-image"
+          echo "$BRANCH" >> "$MOUNT_DIR/.iiab-image"
+          echo "$LOG" >> "$MOUNT_DIR/.iiab-image"
+
+          ./shrink.sh "$STATE_FILE"
+
+          STATE_FILE=$(find . -maxdepth 1 -name "*.state" | head -n 1)
+          source "$STATE_FILE"
+          mv "$IMG_FILE" "$IMG_NAME"
+          EOF
 
       - name: Upload image as artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.IMG_NAME }}.xz
-          path: nspawn-loop/${{ env.IMG_NAME }}.xz
-          compression-level: 0
+          name: ${{ env.IMG_NAME }}.zip
+          path: nspawn-loop/${{ env.IMG_NAME }}
+          compression-level: 9
+
+      # - name: Compress image
+      #   working-directory: nspawn-loop
+      #   run: xz -v -9 -T0 --stdout "$IMG_NAME" > "$IMG_NAME.xz"
 
       # - name: Create GitHub Release
       #   env:
