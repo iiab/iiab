@@ -11,11 +11,22 @@ on:
 jobs:
   build:
     runs-on: ubuntu-24.04-arm
+    strategy:
+      matrix:
+        include:
+          - edition: ContentReady
+            config: vars/local_vars_none.yml
+          # - edition: Small
+          #   config: vars/local_vars_small.yml
+          # - edition: Medium
+          #   config: vars/local_vars_medium.yml
+          # - edition: Large
+          #   config: vars/local_vars_large.yml
     steps:
       - uses: actions/checkout@v6
         with:
           path: iiab
-          fetch-depth: 0
+          # fetch-depth: 0
 
       - uses: actions/checkout@v6
         with:
@@ -38,17 +49,17 @@ jobs:
           VERSION=$(grep '^iiab_base_ver:' ../iiab/vars/default_vars.yml | awk '{print $2}')
           DATE=$(date +'%y%m%d')
           OS="raspios"
-          EDITION="ContentReady"
+          EDITION="${{ matrix.edition }}"
           HASH=$(git -C ../iiab rev-parse --short HEAD)
           IMG_NAME="iiab-$VERSION-$DATE-$OS-$EDITION-$HASH.img"
           echo "IMG_NAME=$IMG_NAME" >> $GITHUB_ENV
 
           mkdir -p "$MOUNT_DIR/opt/iiab"
-          cp -a ../iiab "$MOUNT_DIR/opt/iiab/"
+          cp -R --preserve=mode,timestamps,links ../iiab "$MOUNT_DIR/opt/iiab/"
           echo 'RPI_MODEL="Raspberry Pi 5 Model B Rev 1.0"' >> "$MOUNT_DIR/opt/iiab/iiab/scripts/local_facts.fact"
 
           mkdir -p "$MOUNT_DIR/etc/iiab"
-          cp -a ../iiab/vars/local_vars_none.yml "$MOUNT_DIR/etc/iiab/local_vars.yml"
+          cp --preserve=mode,timestamps ../iiab/${{ matrix.config }} "$MOUNT_DIR/etc/iiab/local_vars.yml"
 
           if ! command -v expect &>/dev/null; then
               apt-get update && apt-get install -y expect
