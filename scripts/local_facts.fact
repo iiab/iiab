@@ -25,6 +25,13 @@ PHP_VERSION="none"
 DHCPCD="none"    # The last 3 conditioned on string output not RC.  SEE BELOW.
 NETWORK_MANAGER="none"
 SYSTEMD_NETWORKD="none"
+NUM_WIFI_INTERFACES=${NUM_WIFI_INTERFACES:-0}
+DISCOVERED_WIRELESS_IFACE=${DISCOVERED_WIRELESS_IFACE:-"none"}
+DISCOVERED_WIRED_IFACE=${DISCOVERED_WIRED_IFACE:-"none"}
+WAN_IN_INTERFACES=${WAN_IN_INTERFACES:-"none"}
+CAN_BE_AP=${CAN_BE_AP:-"none"}
+DISCOVERED_WAN_IFACE=${DISCOVERED_WAN_IFACE:-"none"}
+HOST_COUNTRY_CODE_FOUND=${HOST_COUNTRY_CODE_FOUND:-"none"}
 
 
 # STAGE variable is for ./iiab-install which runs Ansible with iiab-stages.yml
@@ -34,18 +41,19 @@ SYSTEMD_NETWORKD="none"
 # We initialize it to '0' (zero) to cover the following 2 possibs: (1) iiab.env
 # doesn't exist, or (2) iiab.env exists but fails to set STAGE=<something>
 source /etc/iiab/iiab.env || true    # STAGE var auto-set, so no "if" required.
+source /etc/iiab/iiab_local.env || true
 
 # /etc/lsb-release could also be grep'd.  But /etc/upstream-release/lsb-release
 # on Linux Mint 20 caused grep of /etc/*elease to fail (on directory not file)
-if tmp=$(grep ^ID= /etc/os-release); then
+[[ $OS == "none" ]] && if tmp=$(grep ^ID= /etc/os-release); then
     OS=$(echo "$tmp" | cut -d= -f2)
     OS=${OS//\"/}    # Remove all '"'
 fi
-if [ -f /etc/rpi-issue ]; then
+[[ $OS == "none" ]] && if [ -f /etc/rpi-issue ]; then
     OS="raspbian"    # For 64-bit Raspberry Pi OS which contains "ID=debian" as
 fi    # of 2020: https://github.com/raspberrypi/Raspberry-Pi-OS-64bit/issues/6
 
-if tmp=$(grep ^VERSION_ID= /etc/os-release); then
+[[ $OS_VER == "none" ]] && if tmp=$(grep ^VERSION_ID= /etc/os-release); then
     VERSION_ID=$(echo "$tmp" | cut -d= -f2)
     # https://gnu.org/software/bash/manual/bash.html#Shell-Parameter-Expansion
     VERSION_ID=${VERSION_ID//\"/}    # Remove all '"'
@@ -53,8 +61,8 @@ if tmp=$(grep ^VERSION_ID= /etc/os-release); then
         VERSION_ID=${VERSION_ID//\./}    # Remove all '.'
     [[ $OS == "linuxmint" || "trisquel" ]] &&    # e.g. '20.2' -> '20'
         VERSION_ID=${VERSION_ID%%.*}     # Remove all '.' & stuff to the right
+    OS_VER="$OS-$VERSION_ID"
 fi
-OS_VER="$OS-$VERSION_ID"
 
 # Previously supported Linux distributions / versions:
     #"fedora-18"    | \
@@ -123,7 +131,7 @@ tmp=$(git rev-parse --verify HEAD) &&
     IIAB_COMMIT=$tmp
 
 
-grep -iq raspberry /proc/cpuinfo &&
+[[ $RPI_MODEL == "none" ]] && grep -iq raspberry /proc/cpuinfo &&
     RPI_MODEL=$(grep -i raspberry /proc/cpuinfo | sed 's/.*: //')
     #RPI_MODEL=$(grep -ai raspberry /proc/device-tree/model | tr -d '\0')
 
@@ -132,7 +140,7 @@ grep -iq raspberry /proc/cpuinfo &&
 
 # tr -d '\0' ...strips out its null byte, for cleaner output (PR #3086)
 
-tmp=$(tr -d '\0' < /proc/device-tree/model) &&
+[[ $DEVICETREE_MODEL == "none" ]] && tmp=$(tr -d '\0' < /proc/device-tree/model) &&
     DEVICETREE_MODEL=$tmp
 
 
@@ -193,5 +201,12 @@ cat <<EOF
 "php_version"             : "$PHP_VERSION",
 "dhcpcd"                  : "$DHCPCD",
 "network_manager"         : "$NETWORK_MANAGER",
-"systemd_networkd"        : "$SYSTEMD_NETWORKD"}
+"systemd_networkd"        : "$SYSTEMD_NETWORKD",
+"num_wifi_interfaces"     : "$NUM_WIFI_INTERFACES",
+"discovered_wireless_iface" : "$DISCOVERED_WIRELESS_IFACE",
+"discovered_wired_iface"    : "$DISCOVERED_WIRED_IFACE",
+"wan_in_interfaces"       : "$WAN_IN_INTERFACES",
+"can_be_ap"               : "$CAN_BE_AP",
+"discovered_wan_iface"    : "$DISCOVERED_WAN_IFACE",
+"host_country_code_found" : "$HOST_COUNTRY_CODE_FOUND"}
 EOF

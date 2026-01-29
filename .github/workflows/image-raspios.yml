@@ -26,7 +26,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           path: iiab
-          # fetch-depth: 0
+          fetch-depth: 0  # should be a full copy for updating later via git pull
 
       - uses: actions/checkout@v6
         with:
@@ -56,10 +56,20 @@ jobs:
 
           mkdir -p "$MOUNT_DIR/opt/iiab"
           cp -R --preserve=mode,timestamps,links ../iiab "$MOUNT_DIR/opt/iiab/"
-          echo 'RPI_MODEL="Raspberry Pi 5 Model B Rev 1.0"' >> "$MOUNT_DIR/opt/iiab/iiab/scripts/local_facts.fact"
 
           mkdir -p "$MOUNT_DIR/etc/iiab"
           cp --preserve=mode,timestamps ../iiab/${{ matrix.config }} "$MOUNT_DIR/etc/iiab/local_vars.yml"
+
+          # Mock RaspberryPi hardware facts
+          {
+            echo 'RPI_MODEL="Raspberry Pi 5 Model B Rev 1.0"'
+            echo 'NUM_WIFI_INTERFACES=1'
+            echo 'DISCOVERED_WIRELESS_IFACE="wlan0"'
+            echo 'DISCOVERED_WIRED_IFACE="eth0"'
+            echo 'DISCOVERED_WAN_IFACE="eth0"'
+            echo 'CAN_BE_AP=True'
+            echo 'HOST_COUNTRY_CODE_FOUND="US"'
+          } > "$MOUNT_DIR/etc/iiab/iiab_local.env"
 
           if ! command -v expect &>/dev/null; then
               apt-get update && apt-get install -y expect
@@ -142,7 +152,7 @@ jobs:
 
           rm -f "$MOUNT_DIR/etc/initramfs-tools/conf.d/nspawn.conf"
 
-          ./shrink.sh "$STATE_FILE"
+          ./shrink.sh "$STATE_FILE" 5000
 
           mv "$IMG_FILE" "$IMG_NAME"
           EOF
@@ -153,7 +163,7 @@ jobs:
           name: ${{ env.IMG_NAME }}
           path: nspawn-loop/${{ env.IMG_NAME }}
           if-no-files-found: error
-          retention-days: 20
+          retention-days: 3
           compression-level: 9
 
       # - name: Compress image
