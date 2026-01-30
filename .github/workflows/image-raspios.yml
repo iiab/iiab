@@ -60,16 +60,7 @@ jobs:
           mkdir -p "$MOUNT_DIR/etc/iiab"
           cp --preserve=mode,timestamps ../iiab/${{ matrix.config }} "$MOUNT_DIR/etc/iiab/local_vars.yml"
 
-          # Mock RaspberryPi hardware facts
-          {
-            echo 'RPI_MODEL="Raspberry Pi 5 Model B Rev 1.0"'
-            echo 'NUM_WIFI_INTERFACES=1'
-            echo 'DISCOVERED_WIRELESS_IFACE="wlan0"'
-            echo 'DISCOVERED_WIRED_IFACE="eth0"'
-            echo 'DISCOVERED_WAN_IFACE="eth0"'
-            echo 'CAN_BE_AP=True'
-            echo 'HOST_COUNTRY_CODE_FOUND="US"'
-          } > "$MOUNT_DIR/etc/iiab/iiab_local.env"
+          echo "rpi_image: True" >> "$MOUNT_DIR/etc/iiab/local_vars.yml"
 
           if ! command -v expect &>/dev/null; then
               apt-get update && apt-get install -y expect
@@ -143,6 +134,7 @@ jobs:
           STATE_FILE=$(find . -maxdepth 1 -name "*.state" | head -n 1)
           source "$STATE_FILE"
 
+          # Add image metadata
           echo "$IMG_NAME" > "$MOUNT_DIR/.iiab-image"
           echo "Build: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" >> "$MOUNT_DIR/.iiab-image"
           gh pr list --repo ${{ github.repository }} --commit $(git -C ../iiab rev-parse HEAD) --json number,url --jq '.[0] | "PR #\(.number): \(.url)"' >> "$MOUNT_DIR/.iiab-image" 2>/dev/null || true
@@ -150,7 +142,9 @@ jobs:
           git -C ../iiab remote -v >> "$MOUNT_DIR/.iiab-image"
           git -C ../iiab log -1 >> "$MOUNT_DIR/.iiab-image"
 
+          # Remove image-specific configuration
           rm -f "$MOUNT_DIR/etc/initramfs-tools/conf.d/nspawn.conf"
+          sed -i '/rpi_image: True/d' "$MOUNT_DIR/etc/iiab/local_vars.yml"
 
           ./shrink.sh "$STATE_FILE" 5000
 
