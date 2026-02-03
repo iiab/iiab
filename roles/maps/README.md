@@ -55,22 +55,35 @@ To add terrain files, you can set this optional setting. You may find that when 
 
 ## Can I try out search (which is still experimental)?
 
-This is not recommended for very low-power devices such as Raspberry Pi [Zero 2 W](https://www.raspberrypi.com/products/raspberry-pi-zero-2-w/), though this might change.
+### Low-power search
 
-As of this writing, search includes only administrative regions and natural features.
+This option is good for all devices. Fast and simple, but limited features.
+
+This is a list of all cities with population 1000 or higher (**~35MB**)
+
+   ```
+   maps_search_engine: "static"
+   maps_search_static_db: "pop-1k-cities"
+   ```
+
+### High-power search
+
+These options are not recommended for very low-power devices such as Raspberry Pi [Zero 2 W](https://www.raspberrypi.com/products/raspberry-pi-zero-2-w/), though this might change.
+
+As of this writing it includes only administrative (i.e. political) regions and natural features.
 
 1. If you want **~640 MB** "small" (only California, as of this writing) search:
 
    ```
    maps_search_engine: "nominatim"
-   maps_search_full: False
+   maps_search_nominatim_db: "basic"
    ```
 
 2. If you want **~67 GB** "full" (planet-wide) search:
 
    ```
    maps_search_engine: "nominatim"
-   maps_search_full: True
+   maps_search_nominatim_db: "full"
    ```
 
 ## Full Quality Regions (experimental)
@@ -155,5 +168,7 @@ For these large file downloads:
   * https://github.com/maplibre/maplibre-gl-js
   * https://github.com/maplibre/maplibre-gl-geocoder?tab=ISC-1-ov-file#readme
   * https://github.com/watergis/maplibre-gl-terradraw
-* Search (for now): https://github.com/osm-search/Nominatim?tab=GPL-3.0-1-ov-file#readme
+* Search (for now):
+  * https://github.com/osm-search/Nominatim?tab=GPL-3.0-1-ov-file#readme
+  * https://github.com/jacopofar/static-osm-indexer/?tab=readme-ov-file#licensing-anc-crediting (some pieces and inspiration taken from this project)
 * Other credits: https://github.com/iiab/iiab/blob/master/roles/www_base/files/html/html/credits.html
