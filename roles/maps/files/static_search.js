@@ -36,7 +36,7 @@ var AddressTextualIndex = class {
         results.push(candidate);
       }
     }
-    results.sort((x, y) => y.pop - x.pop)
+    results.sort((x, y) => Number(y.pop) - Number(x.pop))
     return results;
   }
   async search(query) {
