@@ -93,11 +93,11 @@
 #     msg: 16-STANZA BLOCK BELOW, RUNS *IF* 64-BIT -- i.e. ansible_architecture == "aarch64" or ansible_architecture == "x86_64"
 
 # - block:
-- name: Add mongodb.org signing key (only 64-bit available) for MongoDB version {{ mongodb_version }}
+- name: Add mongodb.org signing key (only 64-bit available) for MongoDB version {{ mongodb_version }} for Ubuntu
   # https://www.mongodb.com/community/forums/t/installing-mongodb-over-ubuntu-22-04/159931/90
   # 2025-07-16 far clean option, that we should consider in future: (as they also publish ready-to-go ".pub" keys)
   #shell: curl https://pgp.mongodb.com/server-{{ mongodb_version }}.pub > /usr/share/keyrings/mongodb.gpg
-#  shell: wget -qO - https://www.mongodb.org/static/pgp/server-{{ mongodb_version }}.asc | gpg --dearmor > /etc/apt/keyrings/mongodb.gpg
+  shell: wget -qO - https://www.mongodb.org/static/pgp/server-{{ mongodb_version }}.asc | gpg --dearmor > /etc/apt/keyrings/mongodb.gpg
   #shell: wget -qO - https://www.mongodb.org/static/pgp/server-{{ mongodb_version }}.asc | apt-key add -
   #shell: wget -qO - https://pgp.mongodb.com/server-{{ mongodb_version }}.asc | apt-key add -
   #args:
@@ -106,9 +106,7 @@
   # "Unsupported parameters for (ansible.legacy.command) module: warn.
   # Supported parameters include: removes, strip_empty_ends, _raw_params,
   # _uses_shell, stdin_add_newline, creates, chdir, executable, argv, stdin."
-  shell:
-    gpg --keyserver keyserver.ubuntu.com --recv-keys F5679A222C647C87527C2F8CB00A0BD1E2C63C11
-    gpg --export --armor F5679A222C647C87527C2F8CB00A0BD1E2C63C11 --output /etc/apt/keyrings/mongodb.gpg
+  when: not is_debian
 
 - name: Remove stale apt .list
   file:
@@ -117,13 +115,19 @@
 
 - name: Workaround https://github.com/iiab/iiab/issues/4253
   shell: |
-    mkdir /etc/crypto-policies/back-ends/
+    mkdir -p /etc/crypto-policies/back-ends/
     cat << EOF > /etc/crypto-policies/back-ends/apt-sequoia.config
     [hash_algorithms]
     sha1.second_preimage_resistance = 2026-06-01
     EOF
   args:
     creates: /etc/crypto-policies/back-ends/apt-sequoia.config
+  when: is_debian
+
+- name: Add mongodb.org signing key (only 64-bit available) for MongoDB version {{ mongodb_version }} for Debian
+  shell:
+    gpg --keyserver keyserver.ubuntu.com --recv-keys F5679A222C647C87527C2F8CB00A0BD1E2C63C11
+    gpg --export --armor F5679A222C647C87527C2F8CB00A0BD1E2C63C11 > /etc/apt/keyrings/mongodb.gpg
   when: is_debian
 
 # 2023-01-19: MongoDB only offers x86_64 for Debian, AND IN ANY CASE all their
