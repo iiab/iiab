@@ -71,17 +71,43 @@
 # https://github.com/learningequality/kolibri-installer-debian/pull/117
 
 # 2022-08-31: keyring /etc/apt/trusted.gpg DEPRECATED as detailed on #3343
-- name: Download Kolibri's apt key to /usr/share/keyrings/learningequality-kolibri.gpg
+- name: Download Kolibri's apt key to /etc/apt/keyrings/learningequality-kolibri.gpg
   shell: |
     gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys DC5BAA93F9E4AE4F0411F97C74F88ADB3194DD81
-    gpg --yes --output /usr/share/keyrings/learningequality-kolibri.gpg --export DC5BAA93F9E4AE4F0411F97C74F88ADB3194DD81
+    gpg --yes --output /etc/apt/keyrings/learningequality-kolibri.gpg --export DC5BAA93F9E4AE4F0411F97C74F88ADB3194DD81
+  when: not is_debian
+
+- name: Remove stale apt .list
+  file:
+    path: /etc/apt/sources.list.d/ppa_launchpad_net_learningequality_kolibri_ubuntu.list
+    state: absent
+
+- name: Workaround https://github.com/iiab/iiab/issues/4253
+  shell: |
+    mkdir -p /etc/crypto-policies/back-ends/
+    cat << EOF > /etc/crypto-policies/back-ends/apt-sequoia.config
+    [hash_algorithms]
+    sha1.second_preimage_resistance = 2026-06-01
+    EOF
+  args:
+    creates: /etc/crypto-policies/back-ends/apt-sequoia.config
+  when: is_debian
+
+- name: Download Kolibri's apt key to /etc/apt/keyrings/learningequality-kolibri.gpg
+  shell: |
+    gpg --keyserver keyserver.ubuntu.com --recv-keys DC5BAA93F9E4AE4F0411F97C74F88ADB3194DD81
+    gpg --export --armor DC5BAA93F9E4AE4F0411F97C74F88ADB3194DD81 > /etc/apt/keyrings/learningequality-kolibri.gpg
+  when: is_debian
 
 # 2024-06-25: Strongly consider PPA "kolibri-proposed" in future...
 # https://github.com/learningequality/kolibri/issues/11892
 # https://kolibri.readthedocs.io/en/latest/install/ubuntu-debian.html
-- name: Add signed Kolibri PPA 'jammy'
-  apt_repository:
-    repo: "deb [signed-by=/usr/share/keyrings/learningequality-kolibri.gpg] http://ppa.launchpad.net/learningequality/kolibri/ubuntu jammy main"
+- name: Add signed Kolibri PPA {{ kolibri_suite }}
+  template:
+    src: kolibri_ubuntu.sources.j2
+    dest: /etc/apt/sources.list.d/kolibri_ubuntu.sources
+#  apt_repository:
+#    repo: "deb [signed-by=/usr/share/keyrings/learningequality-kolibri.gpg] http://ppa.launchpad.net/learningequality/kolibri/ubuntu jammy main"
 #   when: is_ubuntu and os_ver is version('ubuntu-2204', '>=') or is_linuxmint_21 or is_debian_12
 #   #when: is_ubuntu_2204 or is_ubuntu_2210 or is_debian_12    # MINT 21 COVERED BY is_ubuntu_2204
 
@@ -141,6 +167,7 @@
 - name: apt install kolibri (using apt source specified above, if kolibri_deb_url ISN'T defined)
   apt:
     name: kolibri
+    update_cache: true
   when: kolibri_deb_url is undefined
   # environment:
   #   KOLIBRI_HOME: "{{ kolibri_home }}"    # 2023-03-27: These don't do a thing
