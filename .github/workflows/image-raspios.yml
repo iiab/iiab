@@ -5,7 +5,7 @@ name: 'Build RaspberryPi OS sdcard image'
 #   cancel-in-progress: true
 
 on:
-  workflow_dispatch:
+  # workflow_dispatch:
   push:
     branches: [ "main" ]
   # schedule:
@@ -15,23 +15,23 @@ on:
 jobs:
   build:
     runs-on: ubuntu-24.04-arm
-    environment:
-      name: deploy
+    # environment:
+    #   name: deploy
     strategy:
       matrix:
         include:
-          - edition: ContentReady
-            config: vars/local_vars_none.yml
-            working_image_size: 5000
+          # - edition: ContentReady
+          #   config: vars/local_vars_none.yml
+          #   working_image_size: 5000
           # - edition: Small
           #   config: vars/local_vars_small.yml
           #   working_image_size: 15000
           # - edition: Medium
           #   config: vars/local_vars_medium.yml
           #   working_image_size: 15000
-          # - edition: Large
-          #   config: vars/local_vars_large.yml
-          #   working_image_size: 20000
+          - edition: Large
+            config: vars/local_vars_large.yml
+            working_image_size: 20000
           # - edition: Medical
           #   config: vars/local_vars_none.yml
           #   # Maybe only possible self-hosted
@@ -149,45 +149,45 @@ jobs:
 
           EOF
 
-      - name: Shrink image
-        working-directory: nspawn-loop
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          sudo -E bash << 'EOF'
-          set -euo pipefail
+      # - name: Shrink image
+      #   working-directory: nspawn-loop
+      #   env:
+      #     GH_TOKEN: ${{ github.token }}
+      #   run: |
+      #     sudo -E bash << 'EOF'
+      #     set -euo pipefail
 
-          STATE_FILE=$(find . -maxdepth 1 -name "*.state" | head -n 1)
-          source "$STATE_FILE"
+      #     STATE_FILE=$(find . -maxdepth 1 -name "*.state" | head -n 1)
+      #     source "$STATE_FILE"
 
-          # Add image metadata
-          echo "$IMG_NAME" > "$MOUNT_DIR/.iiab-image"
-          echo "Build: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" >> "$MOUNT_DIR/.iiab-image"
-          gh pr list --repo ${{ github.repository }} --commit $(git -C ../iiab rev-parse HEAD) --json number,url --jq '.[0] | "PR #\(.number): \(.url)"' >> "$MOUNT_DIR/.iiab-image" 2>/dev/null || true
-          git -C ../iiab rev-parse --abbrev-ref HEAD >> "$MOUNT_DIR/.iiab-image"
-          git -C ../iiab remote -v >> "$MOUNT_DIR/.iiab-image"
-          git -C ../iiab log -1 >> "$MOUNT_DIR/.iiab-image"
+      #     # Add image metadata
+      #     echo "$IMG_NAME" > "$MOUNT_DIR/.iiab-image"
+      #     echo "Build: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" >> "$MOUNT_DIR/.iiab-image"
+      #     gh pr list --repo ${{ github.repository }} --commit $(git -C ../iiab rev-parse HEAD) --json number,url --jq '.[0] | "PR #\(.number): \(.url)"' >> "$MOUNT_DIR/.iiab-image" 2>/dev/null || true
+      #     git -C ../iiab rev-parse --abbrev-ref HEAD >> "$MOUNT_DIR/.iiab-image"
+      #     git -C ../iiab remote -v >> "$MOUNT_DIR/.iiab-image"
+      #     git -C ../iiab log -1 >> "$MOUNT_DIR/.iiab-image"
 
-          # Remove image-specific configuration
-          rm -f "$MOUNT_DIR/etc/initramfs-tools/conf.d/nspawn.conf"
-          sed -i '/rpi_image: True/d' "$MOUNT_DIR/etc/iiab/local_vars.yml"
+      #     # Remove image-specific configuration
+      #     rm -f "$MOUNT_DIR/etc/initramfs-tools/conf.d/nspawn.conf"
+      #     sed -i '/rpi_image: True/d' "$MOUNT_DIR/etc/iiab/local_vars.yml"
 
-          echo uninitialized > "$MOUNT_DIR/etc/machine-id"
-          rm -f "$MOUNT_DIR/etc/iiab/uuid"
-          rm -f "$MOUNT_DIR/var/swap"
-          ./shrink.sh "$STATE_FILE" 1800
+      #     echo uninitialized > "$MOUNT_DIR/etc/machine-id"
+      #     rm -f "$MOUNT_DIR/etc/iiab/uuid"
+      #     rm -f "$MOUNT_DIR/var/swap"
+      #     ./shrink.sh "$STATE_FILE" 1800
 
-          mv "$IMG_FILE" "$IMG_NAME"
-          EOF
+      #     mv "$IMG_FILE" "$IMG_NAME"
+      #     EOF
 
-      - name: Upload image as artifact
-        uses: actions/upload-artifact@v6
-        with:
-          name: ${{ env.IMG_NAME }}
-          path: nspawn-loop/${{ env.IMG_NAME }}
-          if-no-files-found: error
-          retention-days: 3
-          compression-level: 9
+      # - name: Upload image as artifact
+      #   uses: actions/upload-artifact@v6
+      #   with:
+      #     name: ${{ env.IMG_NAME }}
+      #     path: nspawn-loop/${{ env.IMG_NAME }}
+      #     if-no-files-found: error
+      #     retention-days: 3
+      #     compression-level: 9
 
       # - name: Compress image
       #   working-directory: nspawn-loop
