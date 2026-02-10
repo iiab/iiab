@@ -1,5 +1,9 @@
 name: 'Build RaspberryPi OS sdcard image'
 
+concurrency:
+  group: deploy_environment
+  cancel-in-progress: true
+
 on:
   workflow_dispatch:
   push:
@@ -11,19 +15,28 @@ on:
 jobs:
   build:
     runs-on: ubuntu-24.04-arm
+    environment:
+      name: deploy
     strategy:
       matrix:
         include:
-          # - edition: ContentReady
-          #   config: vars/local_vars_none.yml
-          # - edition: Small
-          #   config: vars/local_vars_small.yml
+          - edition: ContentReady
+            config: vars/local_vars_none.yml
+            working_image_size: 5000
+          - edition: Small
+            config: vars/local_vars_small.yml
+            working_image_size: 15000
           - edition: Medium
             config: vars/local_vars_medium.yml
             working_image_size: 15000
-          # - edition: Large
-          #   config: vars/local_vars_large.yml
-          #   working_image_size: 20000
+          - edition: Large
+            config: vars/local_vars_large.yml
+            working_image_size: 20000
+          # - edition: Medical
+          #   config: vars/local_vars_none.yml
+          #   # Maybe only possible self-hosted
+          #   # https://github.com/marketplace/actions/maximize-build-disk-space-only-remove-unwanted-software#how-it-works
+          #   working_image_size: 75000
           #   preset_id: en-medical
     steps:
       - uses: actions/checkout@v6
@@ -50,6 +63,7 @@ jobs:
           source "$STATE_FILE"
 
           VERSION=$(grep '^iiab_base_ver:' ../iiab/vars/default_vars.yml | awk '{print $2}')
+          echo "IIAB_BASE_VERSION=$VERSION" >> $GITHUB_ENV
           DATE=$(date +'%y%m%d')
           OS="raspios"
           EDITION="${{ matrix.edition }}"
@@ -166,25 +180,53 @@ jobs:
           mv "$IMG_FILE" "$IMG_NAME"
           EOF
 
-      - name: Upload image as artifact
-        uses: actions/upload-artifact@v6
-        with:
-          name: ${{ env.IMG_NAME }}
-          path: nspawn-loop/${{ env.IMG_NAME }}
-          if-no-files-found: error
-          retention-days: 3
-          compression-level: 9
-
       # - name: Compress image
       #   working-directory: nspawn-loop
       #   run: xz -v -9 -T0 --stdout "$IMG_NAME" > "$IMG_NAME.xz"
 
-      # - name: Create GitHub Release
+      # - name: Upload to Internet Archive
+      #   working-directory: nspawn-loop
       #   env:
-      #     GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      #     IA_ACCESS_KEY: ${{ secrets.IA_ACCESS_KEY }}
+      #     IA_SECRET_KEY: ${{ secrets.IA_SECRET_KEY }}
       #   run: |
-      #     TAG="${{ env.IMG_NAME }}"
-      #     TAG="${TAG%.img}"
-      #     gh release create "$TAG" "nspawn-loop/${{ env.IMG_NAME }}.xz" \
-      #       --title "$TAG" \
-      #       --generate-notes
+      #     set -euo pipefail
+      #     pipx install internetarchive
+      #     export PATH="$PATH:$HOME/.local/bin"
+
+      #     # Configure IA credentials using S3 keys
+      #     mkdir -p ~/.config
+      #     printf "[s3]\naccess = %s\nsecret = %s\n" "$IA_ACCESS_KEY" "$IA_SECRET_KEY" > ~/.config/ia.ini
+      #     chmod 600 ~/.config/ia.ini
+
+      #     # Construct a stable identifier for "updating" (no dots allowed)
+      #     # Format: iiab-raspios-edition (e.g., iiab-raspios-contentready)
+      #     ID="iiab-raspios-$(echo "${{ matrix.edition }}" | tr '[:upper:]' '[:lower:]' | tr '.' '-' | tr '_' '-')"
+
+      #     echo "Calculating hashes for $IMG_NAME..."
+      #     IMG_SIZE=$(stat -c%s "$IMG_NAME")
+      #     IMG_SHA256=$(sha256sum "$IMG_NAME" | awk '{print $1}')
+      #     rm -f "$IMG_NAME"
+      #     XZ_SIZE=$(stat -c%s "$IMG_NAME.xz")
+      #     XZ_MD5=$(md5sum "$IMG_NAME.xz" | awk '{print $1}')
+
+      #     echo "Deleting previous versions of $ID"
+      #     ia delete "$ID" --all -H "x-archive-keep-old-version:0" || true
+
+      #     echo "Uploading $IMG_NAME.xz to Internet Archive as item: $ID"
+      #     ia upload "$ID" "$IMG_NAME.xz" \
+      #       --no-derive --verify --retries 3 --sleep 300 \
+      #       --metadata="mediatype:software" \
+      #       --metadata="collection:internetinabox" \
+      #       --metadata="title:Internet in a Box Raspberry Pi Image - ${{ matrix.edition }} (Latest)" \
+      #       --metadata="language:eng" \
+      #       --metadata="description:Internet in a Box $IIAB_BASE_VERSION Raspberry Pi Build<BR>Edition: ${{ matrix.edition }}<BR>Filename: $IMG_NAME<BR>Workflow: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+      #       --metadata="creator:Internet in a Box" \
+      #       --metadata="subject:rpi" \
+      #       --metadata="subject:iiab" \
+      #       --metadata="subject:${{ matrix.edition }}" \
+      #       --metadata="licenseurl:http://creativecommons.org/licenses/by-sa/4.0/" \
+      #       --metadata="img_sha256:$IMG_SHA256" \
+      #       --metadata="img_size:$IMG_SIZE" \
+      #       --metadata="xz_size:$XZ_SIZE" \
+      #       --metadata="xz_md5:$XZ_MD5"
