@@ -29,10 +29,31 @@
   file:
     path: "{{ nginx_conf_dir }}/nominatim-nginx.conf"
     state: absent
-  when: not (maps_enabled and maps_search_engine == "nominatim")
+  when: not maps_enabled or not maps_search_engine == "nominatim"
 
 
 - name: Reload 'nginx' systemd service
   systemd:
+    daemon_reload: yes
     name: nginx
     state: reloaded
+
+- name: Disable nominatim service
+  systemd:
+    name: "{{ item }}"
+    enabled: no
+    state: stopped
+  with_items:
+    - nominatim.socket
+    - nominatim.service
+  when: nominatim_installed is defined and (not maps_enabled or not maps_search_engine == "nominatim")
+
+- name: Enable nominatim service
+  systemd:
+    name: "{{ item }}"
+    enabled: yes
+    state: restarted
+  with_items:
+    - nominatim.socket
+    - nominatim.service
+  when: maps_enabled and maps_search_engine == "nominatim"
