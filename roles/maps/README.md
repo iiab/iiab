@@ -29,6 +29,8 @@ To configure your map, set the following variables (for the option your choose!)
    maps_satellite_zoom: 12
    ```
 
+See `maps_dot_black_vector_tiles` and `maps_dot_black_satellite_tiles` [here](https://github.com/iiab/iiab/blob/master/roles/maps/defaults/main.yml) for all valid values.
+
 ## What about terrain?
 
 To add terrain files, you can set this optional setting. You may find that when looking at mountains, high quality satellite imagery may compensate for low quality terrain, and vice versa.
@@ -52,6 +54,8 @@ To add terrain files, you can set this optional setting. You may find that when 
    ```
    maps_terrain_zoom: 10
    ```
+
+See `maps_dot_black_terrain_tiles` [here](https://github.com/iiab/iiab/blob/master/roles/maps/defaults/main.yml) for all valid values.
 
 ## Can I try out search (which is still experimental)?
 
