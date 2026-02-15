@@ -1,4 +1,4 @@
-# How do I try IIAB's new maps as of 2026-01-15?
+# How do I try IIAB's new maps as of 2026-02-15?
 
 To configure your map, set the following variables (for the option your choose!) in [/etc/iiab/local_vars.yml](https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it?) before installing IIAB software:
 
