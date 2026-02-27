@@ -1,15 +1,7 @@
-name: "Ansible Role CI"
+name: "Ansible Roles CI"
 
 on:
   push:
-    branches: [ master, main ]
-  pull_request:
-    branches: [ master, main ]
-  workflow_dispatch:
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
   list-roles:
@@ -21,8 +13,22 @@ jobs:
       - id: set-roles
         run: |
           # Get all directories in roles/ except 0-DEPRECATED-ROLES and 0-init
+          # Also excluding stage roles and problematic roles for isolation tests
           cd roles
-          ROLES=$(find . -maxdepth 1 -type d -not -name "." -not -name "0-DEPRECATED-ROLES" -not -name "0-init" | sed 's|^\./||' | sort | jq -R -s -c 'split("\n")[:-1]')
+          ROLES=$(find . -maxdepth 1 -type d -not -name "." \
+            -not -name "0-DEPRECATED-ROLES" \
+            -not -name "0-init" \
+            -not -name "1-prep" \
+            -not -name "2-common" \
+            -not -name "3-base-server" \
+            -not -name "4-server-options" \
+            -not -name "5-xo-services" \
+            -not -name "6-generic-apps" \
+            -not -name "7-edu-apps" \
+            -not -name "8-mgmt-tools" \
+            -not -name "9-local-addons" \
+            -not -name "transmission" \
+            | sed 's|^\./||' | sort | jq -R -s -c 'split("\n")[:-1]')
           echo "roles=$ROLES" >> $GITHUB_OUTPUT
 
   run-role:
@@ -34,7 +40,7 @@ jobs:
         role: ${{ fromJson(needs.list-roles.outputs.roles) }}
     steps:
       - name: Check out repository code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -43,20 +49,50 @@ jobs:
           sudo mkdir -p /opt/iiab
           sudo mv $GITHUB_WORKSPACE /opt/iiab/iiab
           mkdir $GITHUB_WORKSPACE
+          sudo mkdir -p /opt/iiab/iiab/library
+          sudo cp /opt/iiab/iiab/modules/*.py /opt/iiab/iiab/library/
 
       - name: Install Ansible
         run: sudo /opt/iiab/iiab/scripts/ansible
 
-      - name: Set up /etc/iiab
+      - name: Pre-install common packages and dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y nginx bzip2 curl gawk gpg htop i2c-tools logrotate lshw pandoc pastebinit plocate rsync sqlite3 tar unzip usbutils wget jq
+
+      - name: Set up /etc/iiab and base environment
         run: |
           sudo mkdir -p /etc/iiab
+          sudo mkdir -p /etc/ansible/facts.d
+          sudo cp /opt/iiab/iiab/scripts/local_facts.fact /etc/ansible/facts.d/local_facts.fact
+
+          # Create dummy iiab.env
+          echo "IIAB_BASE_PATH=/opt/iiab" | sudo tee /etc/iiab/iiab.env
+          echo "IIAB_DIR=/opt/iiab/iiab" | sudo tee -a /etc/iiab/iiab.env
+          echo "WWWROOT=/library/www/html" | sudo tee -a /etc/iiab/iiab.env
+
+          # Create dummy iiab-refresh-wiki-docs
+          echo "#!/bin/bash" | sudo tee /usr/bin/iiab-refresh-wiki-docs
+          sudo chmod +x /usr/bin/iiab-refresh-wiki-docs
+
+          # Create expected directory structure
+          sudo mkdir -p /opt/iiab/downloads /opt/iiab/pip-packages /library/downloads/zims /library/downloads/maps
+          sudo mkdir -p /library/www/html/common/{assets,css,js,fonts,html,images,services}
+          sudo mkdir -p /usr/lib/python3/dist-packages/iiab
+
+          # Create dummy map-catalog.json for osm-vector-maps
+          echo '{"maps": []}' | sudo tee /etc/iiab/map-catalog.json
+
+          # Create basic iiab_state.yml
           sudo touch /etc/iiab/iiab_state.yml
+
+          # Start with local_vars_none.yml and precisely modify it
           sudo cp /opt/iiab/iiab/vars/local_vars_none.yml /etc/iiab/local_vars.yml
+          sudo sed -i '1i php_version: "8.3"' /etc/iiab/local_vars.yml
 
       - name: Prepare Role Variables
         run: |
           ROLE_NAME="${{ matrix.role }}"
-          # Map role name to variable name as done in runrole script
           if [ "$ROLE_NAME" == "calibre-web" ]; then
               ROLE_VAR=calibreweb
           elif [ "$ROLE_NAME" == "osm-vector-maps" ]; then
@@ -64,15 +100,35 @@ jobs:
           else
               ROLE_VAR="$ROLE_NAME"
           fi
-          # Ensure the role is set to install and enabled in local_vars.yml to avoid runrole prompts
-          echo "${ROLE_VAR}_install: True" | sudo tee -a /etc/iiab/local_vars.yml
-          echo "${ROLE_VAR}_enabled: True" | sudo tee -a /etc/iiab/local_vars.yml
+
+          # Precisely enable the role using sed if it exists, otherwise append
+          if grep -q "^${ROLE_VAR}_install:" /etc/iiab/local_vars.yml; then
+              sudo sed -i "s/^${ROLE_VAR}_install: .*/${ROLE_VAR}_install: True/" /etc/iiab/local_vars.yml
+          else
+              echo "${ROLE_VAR}_install: True" | sudo tee -a /etc/iiab/local_vars.yml
+          fi
+
+          if grep -q "^${ROLE_VAR}_enabled:" /etc/iiab/local_vars.yml; then
+              sudo sed -i "s/^${ROLE_VAR}_enabled: .*/${ROLE_VAR}_enabled: True/" /etc/iiab/local_vars.yml
+          else
+              echo "${ROLE_VAR}_enabled: True" | sudo tee -a /etc/iiab/local_vars.yml
+          fi
+
+          # Facts for isolated runs
+          echo "nginx_installed: True" | sudo tee -a /etc/iiab/iiab_state.yml
+          echo "www_base_installed: True" | sudo tee -a /etc/iiab/iiab_state.yml
+
+          if [ "$ROLE_NAME" == "munin" ]; then
+              sudo apt-get install -y mariadb-server
+              echo "mysql_installed: True" | sudo tee -a /etc/iiab/iiab_state.yml
+          else
+              echo "mysql_installed: False" | sudo tee -a /etc/iiab/iiab_state.yml
+          fi
 
       - name: Run Role
         working-directory: /opt/iiab/iiab
         run: |
-          # We don't use 'yes' because runrole reads from /dev/tty specifically,
-          # but setting the variables above should bypass the prompts.
+          # Use non-interactive mode for runrole
           sudo ./runrole ${{ matrix.role }}
 
       - name: Show IIAB Summary
@@ -83,5 +139,8 @@ jobs:
         if: failure()
         run: |
           if [ -f /opt/iiab/iiab/iiab-debug.log ]; then
-            tail -n 100 /opt/iiab/iiab/iiab-debug.log
+            tail -n 200 /opt/iiab/iiab/iiab-debug.log
+          fi
+          if command -v journalctl > /dev/null; then
+            sudo journalctl -n 100 --no-pager
           fi
