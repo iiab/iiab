@@ -1,0 +1,87 @@
+name: "Ansible Role CI"
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  list-roles:
+    runs-on: ubuntu-latest
+    outputs:
+      roles: ${{ steps.set-roles.outputs.roles }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: set-roles
+        run: |
+          # Get all directories in roles/ except 0-DEPRECATED-ROLES and 0-init
+          cd roles
+          ROLES=$(find . -maxdepth 1 -type d -not -name "." -not -name "0-DEPRECATED-ROLES" -not -name "0-init" | sed 's|^\./||' | sort | jq -R -s -c 'split("\n")[:-1]')
+          echo "roles=$ROLES" >> $GITHUB_OUTPUT
+
+  run-role:
+    needs: list-roles
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        role: ${{ fromJson(needs.list-roles.outputs.roles) }}
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up /opt/iiab/iiab
+        run: |
+          sudo mkdir -p /opt/iiab
+          sudo mv $GITHUB_WORKSPACE /opt/iiab/iiab
+          mkdir $GITHUB_WORKSPACE
+
+      - name: Install Ansible
+        run: sudo /opt/iiab/iiab/scripts/ansible
+
+      - name: Set up /etc/iiab
+        run: |
+          sudo mkdir -p /etc/iiab
+          sudo touch /etc/iiab/iiab_state.yml
+          sudo cp /opt/iiab/iiab/vars/local_vars_none.yml /etc/iiab/local_vars.yml
+
+      - name: Prepare Role Variables
+        run: |
+          ROLE_NAME="${{ matrix.role }}"
+          # Map role name to variable name as done in runrole script
+          if [ "$ROLE_NAME" == "calibre-web" ]; then
+              ROLE_VAR=calibreweb
+          elif [ "$ROLE_NAME" == "osm-vector-maps" ]; then
+              ROLE_VAR=osm_vector_maps
+          else
+              ROLE_VAR="$ROLE_NAME"
+          fi
+          # Ensure the role is set to install and enabled in local_vars.yml to avoid runrole prompts
+          echo "${ROLE_VAR}_install: True" | sudo tee -a /etc/iiab/local_vars.yml
+          echo "${ROLE_VAR}_enabled: True" | sudo tee -a /etc/iiab/local_vars.yml
+
+      - name: Run Role
+        working-directory: /opt/iiab/iiab
+        run: |
+          # We don't use 'yes' because runrole reads from /dev/tty specifically,
+          # but setting the variables above should bypass the prompts.
+          sudo ./runrole ${{ matrix.role }}
+
+      - name: Show IIAB Summary
+        if: always()
+        run: /usr/bin/iiab-summary || /opt/iiab/iiab/scripts/iiab-summary || true
+
+      - name: Show Logs on Failure
+        if: failure()
+        run: |
+          if [ -f /opt/iiab/iiab/iiab-debug.log ]; then
+            tail -n 100 /opt/iiab/iiab/iiab-debug.log
+          fi
