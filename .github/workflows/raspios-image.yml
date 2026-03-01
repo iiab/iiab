@@ -58,9 +58,6 @@ jobs:
           STATE_FILE=$(find . -maxdepth 1 -name "*.state" | head -n 1)
           source "$STATE_FILE"
 
-          echo "VM image is $MOUNT_DIR mounted at:"
-          mount | grep loop
-
           VERSION=$(grep '^iiab_base_ver:' ../iiab/vars/default_vars.yml | awk '{print $2}')
           echo "IIAB_BASE_VERSION=$VERSION" >> $GITHUB_ENV
           DATE=$(date +'%y%m%d')
@@ -79,9 +76,6 @@ jobs:
           echo "rpi_image: True" >> "$MOUNT_DIR/etc/iiab/local_vars.yml"
           sed -i "s/^iiab_admin_user_install: True/iiab_admin_user_install: False/" "$MOUNT_DIR/etc/iiab/local_vars.yml"
 
-          #if ! command -v expect &>/dev/null; then
-          #    apt-get update && apt-get install -y expect
-          #fi
           if ! command -v systemd-nspawn &> /dev/null; then
               apt-get update && apt-get install -y systemd-container
           fi
@@ -89,38 +83,6 @@ jobs:
           systemctl is-active --quiet systemd-networkd || systemctl start systemd-networkd
           systemctl is-active --quiet systemd-resolved || systemctl start systemd-resolved
 
-          # Explicitly allow forwarding for systemd-nspawn virtual interfaces
-          #sysctl -w net.ipv4.ip_forward=1
-          #EXT_IF=$(ip route | grep default | awk '{print $5}' | head -n1)
-          #iptables -t nat -A POSTROUTING -o "$EXT_IF" -j MASQUERADE
-          #iptables -A FORWARD -i ve-+ -o "$EXT_IF" -j ACCEPT
-          #iptables -A FORWARD -i "$EXT_IF" -o ve-+ -m state --state RELATED,ESTABLISHED -j ACCEPT
-
-          # Manually setting DNS can help avoid host loopback/127.0.0.53 issues
-          # echo "nameserver 1.1.1.1" >> "$MOUNT_DIR/etc/resolv.conf"
-
-          #sed 's/^          //' << 'EOF_PRESET' > "$MOUNT_DIR/root/install_preset.sh"
-          #!/bin/bash
-          #set -euo pipefail
-          #cd /opt/admin/cmdsrv
-
-          #scripts/get_kiwix_catalog
-          #scripts/get_oer2go_catalog
-
-          #if [ -n "${{ matrix.preset_id }}" ]; then
-          #    iiab-cmdsrv-ctl 'INST-PRESETS {"preset_id":"${{ matrix.preset_id }}"}'
-          #fi
-
-          #rm -f /root/install_preset.sh
-          #EOF_PRESET
-          #chmod +x "$MOUNT_DIR/root/install_preset.sh"
-
-          #systemd-firstboot --root="$MOUNT_DIR" --delete-root-password --force
-          #export MOUNT_DIR
-          #sed 's/^          //' << 'EXPECT_EOF' | expect
-          #set timeout 7200
-
-          #spawn systemd-nspawn -q --network-veth --resolv-conf=off -D $env(MOUNT_DIR) -M box --boot
           mount --bind /dev "${MOUNT_DIR}"/dev
           mount -t proc none "${MOUNT_DIR}"/proc
           mount -t sysfs none "${MOUNT_DIR}"/sys
@@ -142,13 +104,15 @@ jobs:
           apt install curl
           curl -fLo /usr/sbin/iiab https://raw.githubusercontent.com/iiab/iiab-factory/master/iiab
           chmod 0755 /usr/sbin/iiab
+
+          echo "box" > /etc/hostname
           /usr/sbin/iiab --risky
 
           EOF_CHROOT
 
           chmod 0755 $MOUNT_DIR/root/builder.sh
+          echo "Entering CHROOT"
           chroot $MOUNT_DIR /root/builder.sh
-          # could clean up builder at this point
 
           umount "${MOUNT_DIR}"/run
           umount "${MOUNT_DIR}"/tmp
@@ -157,6 +121,7 @@ jobs:
           umount "${MOUNT_DIR}"/sys
           umount "${MOUNT_DIR}"/proc
 
+          EOF
 
       - name: Validation
         working-directory: nspawn-loop
@@ -200,7 +165,7 @@ jobs:
           echo uninitialized > "$MOUNT_DIR/etc/machine-id"
           rm -f "$MOUNT_DIR/etc/iiab/uuid"
           rm -f "$MOUNT_DIR/var/swap"
-          #touch "$MOUNT_DIR/.resize-rootfs"
+          rm -f "$MOUNT_DIR/root/builder.sh"
           ./shrink.sh "$STATE_FILE" 1800
 
           mv "$IMG_FILE" "$IMG_NAME"
