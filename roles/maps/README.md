@@ -15,6 +15,9 @@ To configure your map, set the following variables (for the option your choose!)
    maps_satellite_zoom: 7
    ```
 
+![Vector Natural Earth](README/vector-satellite/vector-ne.png)
+![Satellite Zoom 7](README/vector-satellite/satellite-7.png)
+
 2. Or if you want **~3.1 GB** = 1.9 GB vector (Higher detail, up to zoom 9, from OpenStreetMap) + 1.2 GB satellite (up to zoom 9), include:
 
    ```
@@ -22,12 +25,18 @@ To configure your map, set the following variables (for the option your choose!)
    maps_satellite_zoom: 9
    ```
 
+![Vector OSM Zoom 9](README/vector-satellite/vector-osm-z9.png)
+![Satellite Zoom 9](README/vector-satellite/satellite-9.png)
+
 3. Or if you want **~168 GB** = 78 GB vector (Higher detail, up to zoom 14, including 3D buildings, from OpenStreetMap) + 80 GB satellite (up to zoom 12), include:
 
    ```
    maps_vector_quality: osm-full
    maps_satellite_zoom: 12
    ```
+
+![Vector OSM Full Zoom](README/vector-satellite/vector-full.png)
+![Satellite Full Zoom](README/vector-satellite/satellite-full.png)
 
 See `maps_dot_black_vector_tiles` and `maps_dot_black_satellite_tiles` [here](https://github.com/iiab/iiab/blob/master/roles/maps/defaults/main.yml) for all valid values.
 
@@ -40,20 +49,28 @@ To add terrain files, you can set this optional setting. You may find that when 
    maps_terrain_zoom: 7
    ```
 
+![Terrain Zoom 7](README/terrain/terrain-7.png)
+
 2. If you want **~6.4 GB** terrain maps (up to zoom 8), include:
    ```
    maps_terrain_zoom: 8
    ```
+
+![Terrain Zoom 8](README/terrain/terrain-8.png)
 
 3. If you want **~29 GB** terrain maps (up to zoom 9), include:
    ```
    maps_terrain_zoom: 9
    ```
 
+![Terrain Zoom 9](README/terrain/terrain-9.png)
+
 4. If you want **~106 GB** terrain maps (up to zoom 10), include:
    ```
    maps_terrain_zoom: 10
    ```
+
+![Terrain Full Zoom](README/terrain/terrain-full.png)
 
 See `maps_dot_black_terrain_tiles` [here](https://github.com/iiab/iiab/blob/master/roles/maps/defaults/main.yml) for all valid values.
 
@@ -69,6 +86,9 @@ This is a list of all cities with population 1000 or higher (**~35MB**)
    maps_search_engine: "static"
    maps_search_static_db: "pop-1k-cities"
    ```
+
+![Search](README/search.png)
+![Search Result](README/search-result.png)
 
 ### High-power search
 
