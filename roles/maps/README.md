@@ -165,6 +165,30 @@ For these large file downloads:
 * Map data files as of 2025-12-10: https://iiab.switnet.org/maps/1/
 * IIAB integration thanks to [Dan Krol](https://github.com/orblivion)
 
+# Next Steps
+
+What I hope to be working on in the next few months
+
+**March 2026**:
+
+* Search fixes (search for two-letter words)
+* Smarter sorting (Distance, word length)
+* Region downloader (Better error messages, pick download mirror randomly)
+
+**April 2026**:
+
+* Adding more data do static search
+    * Add natural features, historical places, etc
+    * Search optimizations for large databases
+    * Sorting non-cities (natural feature, etc) vs cities. Cannot rely on population anymore.
+    * Even if this becomes "big", we should keep a small database around as an option.
+
+**May 2026**:
+
+* Split search by region and include as part of "Full quality region" downloads
+    * (assuming the database is big enough to merit splitting)
+* UI improvements (Out-of-box experience, Navigating regions, Buttons, Searching while viewing a region)
+
 # Extra attributions:
 
 * UI
