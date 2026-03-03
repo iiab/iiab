@@ -197,7 +197,7 @@ What I hope to be working on in the next few months
 
 **April 2026**:
 
-* Adding more data do static search
+* Adding more data to static search
     * Add natural features, historical places, etc
     * Search optimizations for large databases
     * Sorting non-cities (natural feature, etc) vs cities. Cannot rely on population anymore.
