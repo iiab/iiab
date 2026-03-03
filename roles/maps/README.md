@@ -116,7 +116,7 @@ Full Quality Regions is a feature that allows you to have small regions at "full
 
 ### Installation
 
-In order to turn it on, add the following setting: (e.g. in [/etc/iiab/local_vars.yml](https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it?)
+In order to turn it on, add the following setting: (e.g. in [/etc/iiab/local_vars.yml](https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it?))
 
 ```
 maps_region_downloader: true
