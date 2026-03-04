@@ -1,10 +1,14 @@
 # IIAB Maps
 
-The new IIAB Maps lets you choose a configuration that works for you. Because we know your disk space is limited, we give you multiple granular quality options for global street maps (vector), satellite imagery (raster), and optionally [terrain (elevation)](#what-about-3d-terrain).
+The new IIAB Maps lets you choose a configuration that works for you. Because we know your disk space is limited, we give you multiple granular quality levels for:
+​
+- Street Maps (vector)
+​- Satellite Imagery (raster)
+​- [Terrain](#what-about-3d-terrain) (optional 3D elevation data)
+​
+Need more detail in specific areas? Regardless of your global quality setting, you can download "[Full Quality Regions](#full-quality-regions-experimental)". These high-res rectangular extracts provide maximum detail for your local community without completely filling your disk full of maps. If it's a small region, it won't take up much disk space.
 
-Regardless of the global quality you choose, you can always download high-res rectangular ["Full Quality Regions"](#full-quality-regions-experimental) of parts of the world that are especially important to your community. If it's a small region, it won't take up much disk space.
-
-Similarly for [map search](#can-i-try-out-search-which-is-still-experimental), we have a few options of different sizes.
+​We also offer [map search](#can-i-try-out-search-which-is-still-experimental) in several sizes to fit your hardware.
 
 ## How do I try IIAB's new maps as of 2026-03-04?
 
