@@ -1,8 +1,8 @@
-The new IIAB Maps lets you choose a configuration that works for you. Because we know your disk space is limited, we give you options for how much detail you want for vector (street) maps, satellite imagery, and (optional) [terrain (elevation)](#what-about-3d-terrain).
+The new IIAB Maps lets you choose a configuration that works for you. Because we know your disk space is limited, we give you options for how much detail you want for vector (street) maps, satellite imagery, and optionally [terrain (elevation)](#what-about-3d-terrain).
 
 Similarly for [search](#can-i-try-out-search-which-is-still-experimental), we have a few options of different sizes.
 
-In addition, you can still download ["Full Quality Regions"](#full-quality-regions-experimental) for parts of the world that are important to you. If it's a small region, it won't take up much disk space.
+In addition, you can download high-res rectangular ["Full Quality Regions"](#full-quality-regions-experimental) for parts of the world that are especially important to your community. If it's a small region, it won't take up much disk space.
 
 # How do I try IIAB's new maps as of 2026-03-04?
 
