@@ -1,4 +1,10 @@
-# How do I try IIAB's new maps as of 2026-03-03?
+The new IIAB Maps lets you choose a configuration that works for you. Because we know your disk space is limited, we give you options for how much detail you want for vector (street) maps, satellite imagery, and optionally [terrain (elevation)](#what-about-3d-terrain).
+
+Similarly for [search](#can-i-try-out-search-which-is-still-experimental), we have a few options of different sizes.
+
+In addition, you can download high-res rectangular ["Full Quality Regions"](#full-quality-regions-experimental) for parts of the world that are especially important to your community. If it's a small region, it won't take up much disk space.
+
+# How do I try IIAB's new maps as of 2026-03-04?
 
 To configure your map, set the following variables (for the options you choose!) in [/etc/iiab/local_vars.yml](https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it?) before installing IIAB software:
 
