@@ -1,10 +1,12 @@
-The new IIAB Maps lets you choose a configuration that works for you. Because we know your disk space is limited, we give you options for how much detail you want for vector (street) maps, satellite imagery, and optionally [terrain (elevation)](#what-about-3d-terrain).
+# IIAB Maps
 
-Similarly for [search](#can-i-try-out-search-which-is-still-experimental), we have a few options of different sizes.
+The new IIAB Maps lets you choose a configuration that works for you. Because we know your disk space is limited, we give you multiple granular quality options for global street maps (vector), satellite imagery (raster), and optionally [terrain (elevation)](#what-about-3d-terrain).
 
-In addition, you can download high-res rectangular ["Full Quality Regions"](#full-quality-regions-experimental) for parts of the world that are especially important to your community. If it's a small region, it won't take up much disk space.
+Regardless of the global quality you choose, you can always download high-res rectangular ["Full Quality Regions"](#full-quality-regions-experimental) of parts of the world that are especially important to your community. If it's a small region, it won't take up much disk space.
 
-# How do I try IIAB's new maps as of 2026-03-04?
+Similarly for [map search](#can-i-try-out-search-which-is-still-experimental), we have a few options of different sizes.
+
+## How do I try IIAB's new maps as of 2026-03-04?
 
 To configure your map, set the following variables (for the options you choose!) in [/etc/iiab/local_vars.yml](https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it?) before installing IIAB software:
 
@@ -80,41 +82,6 @@ To add 3D (three-dimensional) terrain files, you can set this optional setting. 
 
 See `maps_dot_black_terrain_tiles` [here](https://github.com/iiab/iiab/blob/master/roles/maps/defaults/main.yml) for all valid values.
 
-## Can I try out search (which is still experimental)?
-
-### Low-power search
-
-This option is good for all devices. Fast and simple, but limited features.
-
-This is a list of all cities with population 1000 or higher (**~35MB**)
-
-   ```
-   maps_search_engine: static
-   maps_search_static_db: pop-1k-cities
-   ```
-
-![Search](README/search.png)
-![Search Result](README/search-result.png)
-
-### High-power search
-
-These options are not recommended for very low-power devices such as Raspberry Pi [Zero 2 W](https://www.raspberrypi.com/products/raspberry-pi-zero-2-w/), though this might change.
-
-As of this writing it includes only administrative (i.e. political) regions and natural features.
-
-1. If you want **~640 MB** "small" (only California, as of this writing) search:
-
-   ```
-   maps_search_engine: nominatim
-   maps_search_nominatim_db: basic
-   ```
-
-2. If you want **~67 GB** "full" (planet-wide) search:
-
-   ```
-   maps_search_engine: nominatim
-   maps_search_nominatim_db: full
-   ```
 
 ## Full Quality Regions (experimental)
 
@@ -177,21 +144,57 @@ maps_region_downloader: false
 
 ...and run the `maps` role again. At this point, you will be able to view your Full Quality Regions, but the Download and Delete buttons will be gone.
 
-# Installation Tips
+## Can I try out search (which is still experimental)?
+
+### Low-power search
+
+This option is good for all devices. Fast and simple, but limited features.
+
+This is a list of all cities with population 1000 or higher (**~35MB**)
+
+   ```
+   maps_search_engine: static
+   maps_search_static_db: pop-1k-cities
+   ```
+
+![Search](README/search.png)
+![Search Result](README/search-result.png)
+
+### High-power search
+
+These options are not recommended for very low-power devices such as Raspberry Pi [Zero 2 W](https://www.raspberrypi.com/products/raspberry-pi-zero-2-w/), though this might change.
+
+As of this writing it includes only administrative (i.e. political) regions and natural features.
+
+1. If you want **~640 MB** "small" (only California, as of this writing) search:
+
+   ```
+   maps_search_engine: nominatim
+   maps_search_nominatim_db: basic
+   ```
+
+2. If you want **~67 GB** "full" (planet-wide) search:
+
+   ```
+   maps_search_engine: nominatim
+   maps_search_nominatim_db: full
+   ```
+
+## Installation Tips
 
 For these large file downloads:
 
 * If there is an interruption and you need to run it again, it should resume where it left off.
 * If you want to see download progress, read the Ansible output for instructions.
 
-# Further options & detail:
+## Further options & detail:
 
 * https://github.com/iiab/iiab/blob/master/roles/maps/defaults/main.yml
 * [PR #4120](https://github.com/iiab/iiab/pull/4120)
 * Map data files as of 2025-12-10: https://iiab.switnet.org/maps/1/
 * IIAB integration thanks to [Dan Krol](https://github.com/orblivion)
 
-# Next Steps
+## Next Steps
 
 What I hope to be working on in the next few months
 
@@ -215,7 +218,7 @@ What I hope to be working on in the next few months
     * (assuming the database is big enough to merit splitting)
 * UI improvements (Out-of-box experience, Navigating regions, Buttons, Searching while viewing a region)
 
-# Extra attributions:
+## Extra attributions:
 
 * UI
   * https://github.com/maps-black/maps.black#readme
