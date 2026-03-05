@@ -1,11 +1,11 @@
 # IIAB Maps
 
-The new IIAB Maps lets you choose a configuration that works for you. Because we know your disk space is limited, we give you multiple granular quality levels for:
+The new IIAB Maps lets you choose a configuration that works for you. Because we know your disk space is limited, we give you multiple quality options, in each of these 4 areas:
 
 - [OpenStreetMap or Natural Earth](#how-do-i-try-iiabs-new-maps-as-of-march-2026) (vector)
 - [Satellite Photos](#how-do-i-try-iiabs-new-maps-as-of-march-2026) (raster)
 - [Terrain](#what-about-3d-terrain) (optional 3D elevation data)
-- ​[Map search](#can-i-try-out-search) (cities only for now)
+- ​[Map search](#can-i-try-out-search) (e.g. to find cities and towns)
 
 NEW: Need more detail in specific areas, in addition to the above global maps? IIAB implementers/operators can download "[Full Quality Regions](#full-quality-regions-experimental)" for parts of the world that are especially important to their community. These high-res rectangular regions provide _maximum_ graphical detail, without using up too much disk space.
 
@@ -95,7 +95,7 @@ PREREQ: Confirm [IIAB Maps]((#how-do-i-try-iiabs-new-maps-as-of-march-2026)) (wi
 
 This option is good for all devices. Fast and simple, but limited features.
 
-This is a list of all cities with population 1000 or higher (**~35MB**)
+Allows users to search for any city or town with population 1000 or higher (**~35MB**).
 
    ```
    maps_search_engine: static
@@ -111,14 +111,14 @@ These options are not recommended for very low-power devices such as Raspberry P
 
 As of this writing it includes only administrative (i.e. political) regions and natural features.
 
-1. If you want **~640 MB** "small" (only California, as of this writing) search:
+1. For **~640 MB** "small" (only California, as of this writing) search:
 
    ```
    maps_search_engine: nominatim
    maps_search_nominatim_db: basic
    ```
 
-2. If you want **~67 GB** "full" (planet-wide) search:
+2. For **~67 GB** "full" (planet-wide) search:
 
    ```
    maps_search_engine: nominatim
@@ -127,7 +127,7 @@ As of this writing it includes only administrative (i.e. political) regions and 
 
 ## Full Quality Regions (experimental)
 
-You can download rectangular "Full Quality Regions" to supplement your lower-resolution world map. The goal is to provide your community with the latest vector, satellite and terrain data for the regions they care about most.
+You can download rectangular "Full Quality Regions" to supplement your lower-resolution world map. The goal is to provide your community with the latest high-res vector, satellite and terrain data for the regions they care about most.
 
 PREREQ: Confirm [IIAB Maps]((#how-do-i-try-iiabs-new-maps-as-of-march-2026)) (with global vector/satellite data) is installed!
 
