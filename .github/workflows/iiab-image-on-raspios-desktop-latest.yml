@@ -1,4 +1,4 @@
-name: 'IIAB image on RPiOS Lite Latest'
+name: 'IIAB Desktop IMAGE on RPiOS Latest'
 
 # cancel-in-progress: false
 # concurrency:
@@ -22,9 +22,9 @@ jobs:
           #   # https://github.com/marketplace/actions/maximize-build-disk-space-only-remove-unwanted-software#how-it-works
           #   working_image_size: 75000
           #   preset_id: en-medical
-          - edition: large
-            config: vars/local_vars_large.yml
-            working_image_size: 20000
+          #- edition: large
+          #  config: vars/local_vars_large.yml
+          #  working_image_size: 20000
           # - edition: medium
           #   config: vars/local_vars_medium.yml
           #   working_image_size: 15000
@@ -33,7 +33,7 @@ jobs:
           #   working_image_size: 15000
           - edition: tiny
             config: vars/local_vars_tiny.yml
-            working_image_size: 7450
+            working_image_size: 15000
     steps:
       - uses: actions/checkout@v6
         with:
@@ -47,7 +47,7 @@ jobs:
 
       - name: Download RaspberryPi OS
         working-directory: nspawn-loop
-        run: sudo ./mount.sh https://downloads.raspberrypi.org/raspios_lite_arm64_latest ${{ matrix.working_image_size || 10000 }}
+        run: sudo ./mount.sh https://downloads.raspberrypi.org/raspios_arm64_latest ${{ matrix.working_image_size || 10000 }}
 
       - name: Build image
         working-directory: nspawn-loop
@@ -64,7 +64,7 @@ jobs:
           OS="raspios"
           EDITION="${{ matrix.edition }}"
           HASH=$(git -C ../iiab rev-parse --short HEAD)
-          IMG_NAME="iiab-$VERSION-$DATE-$OS-$EDITION-$HASH.img"
+          IMG_NAME="iiab-desktop-$VERSION-$DATE-$OS-$EDITION-$HASH.img"
           echo "IMG_NAME=$IMG_NAME" >> $GITHUB_ENV
 
           mkdir -p "$MOUNT_DIR/opt/iiab"
@@ -76,9 +76,6 @@ jobs:
           echo "rpi_image: True" >> "$MOUNT_DIR/etc/iiab/local_vars.yml"
           sed -i "s/^iiab_admin_user_install: True/iiab_admin_user_install: False/" "$MOUNT_DIR/etc/iiab/local_vars.yml"
 
-          if ! command -v expect &>/dev/null; then
-              apt-get update && apt-get install -y expect
-          fi
           if ! command -v systemd-nspawn &> /dev/null; then
               apt-get update && apt-get install -y systemd-container
           fi
@@ -86,64 +83,46 @@ jobs:
           systemctl is-active --quiet systemd-networkd || systemctl start systemd-networkd
           systemctl is-active --quiet systemd-resolved || systemctl start systemd-resolved
 
-          # Explicitly allow forwarding for systemd-nspawn virtual interfaces
-          sysctl -w net.ipv4.ip_forward=1
-          EXT_IF=$(ip route | grep default | awk '{print $5}' | head -n1)
-          iptables -t nat -A POSTROUTING -o "$EXT_IF" -j MASQUERADE
-          iptables -A FORWARD -i ve-+ -o "$EXT_IF" -j ACCEPT
-          iptables -A FORWARD -i "$EXT_IF" -o ve-+ -m state --state RELATED,ESTABLISHED -j ACCEPT
+          # based on https://github.com/jvonau/mk-image/blob/main/mkarm-image.sh
+          mount --bind /dev "${MOUNT_DIR}"/dev
+          mount -t proc none "${MOUNT_DIR}"/proc
+          mount -t sysfs none "${MOUNT_DIR}"/sys
+          mount -t devpts none "${MOUNT_DIR}"/dev/pts
+          mount -t tmpfs tmpfs "${MOUNT_DIR}"/tmp
+          mount -t tmpfs tmpfs "${MOUNT_DIR}"/run
+          mkdir -p "${MOUNT_DIR}"/run/lock
 
-          # Manually setting DNS can help avoid host loopback/127.0.0.53 issues
-          # echo "nameserver 1.1.1.1" >> "$MOUNT_DIR/etc/resolv.conf"
-
-          sed 's/^          //' << 'EOF_PRESET' > "$MOUNT_DIR/root/install_preset.sh"
+          sed 's/^          //' << 'EOF_CHROOT' > "$MOUNT_DIR/root/builder.sh"
           #!/bin/bash
           set -euo pipefail
-          cd /opt/admin/cmdsrv
 
-          scripts/get_kiwix_catalog
-          scripts/get_oer2go_catalog
+          export DEBIAN_FRONTEND=noninteractive
 
-          if [ -n "${{ matrix.preset_id }}" ]; then
-              iiab-cmdsrv-ctl 'INST-PRESETS {"preset_id":"${{ matrix.preset_id }}"}'
-          fi
+          apt update
+          mkdir -p /etc/initramfs-tools/conf.d
+          echo 'MODULES=most' > /etc/initramfs-tools/conf.d/nspawn.conf
+          apt -y full-upgrade
 
-          rm -f /root/install_preset.sh
-          EOF_PRESET
-          chmod +x "$MOUNT_DIR/root/install_preset.sh"
+          apt install curl
+          curl -fLo /usr/sbin/iiab https://raw.githubusercontent.com/iiab/iiab-factory/master/iiab
+          chmod 0755 /usr/sbin/iiab
 
-          systemd-firstboot --root="$MOUNT_DIR" --delete-root-password --force
-          export MOUNT_DIR
-          sed 's/^          //' << 'EXPECT_EOF' | expect
-          set timeout 7200
+          echo "box" > /etc/hostname
+          /usr/sbin/iiab --risky
 
-          spawn systemd-nspawn -q --network-veth --resolv-conf=off -D $env(MOUNT_DIR) -M box --boot
-          expect "login: " { send "root\r" }
+          EOF_CHROOT
 
-          expect -re {#\s?$} { send "apt update\r" }
-          expect -re {#\s?$} { send "mkdir -p /etc/initramfs-tools/conf.d && echo 'MODULES=most' > /etc/initramfs-tools/conf.d/nspawn.conf\r" }
-          expect -re {#\s?$} { send "DEBIAN_FRONTEND=noninteractive apt upgrade -y\r" }
+          chmod 0755 $MOUNT_DIR/root/builder.sh
+          echo "Entering CHROOT"
+          chroot $MOUNT_DIR /root/builder.sh
+          echo "Leaving CHROOT"
 
-          expect -re {#\s?$} { send "curl -fLo /usr/sbin/iiab https://raw.githubusercontent.com/iiab/iiab-factory/master/iiab\r" }
-          expect -re {#\s?$} { send "chmod 0755 /usr/sbin/iiab\r" }
-          expect -re {#\s?$} { send "/usr/sbin/iiab --risky\r" }
-          expect {
-              timeout { puts "\nTimed out waiting for final confirmation prompt"; exit 1 }
-              "photographed" { send "\r" }
-          }
-          # forced reboot
-          expect "login: " { send "root\r" }
-
-          expect -re {#\s?$} { send "/root/install_preset.sh\r" }
-
-          expect -re {#\s?$} { send "usermod --lock --expiredate=1 root\r" }
-
-          # legacy whiptail TUI OOBE, replaced by cloud-init / rpi-imager
-          # expect -re {#\s?$} { send "systemctl disable userconfig.service\r" }
-
-          expect -re {#\s?$} { send "shutdown now\r" }
-          expect eof
-          EXPECT_EOF
+          umount "${MOUNT_DIR}"/run
+          umount "${MOUNT_DIR}"/tmp
+          umount "${MOUNT_DIR}"/dev/pts
+          umount "${MOUNT_DIR}"/dev
+          umount "${MOUNT_DIR}"/sys
+          umount "${MOUNT_DIR}"/proc
 
           EOF
 
@@ -189,7 +168,9 @@ jobs:
           echo uninitialized > "$MOUNT_DIR/etc/machine-id"
           rm -f "$MOUNT_DIR/etc/iiab/uuid"
           rm -f "$MOUNT_DIR/var/swap"
-          touch "$MOUNT_DIR/.resize-rootfs"
+          rm -f "$MOUNT_DIR/root/builder.sh"
+          rm -fr "$MOUNT_DIR/home/runner"
+
           ./shrink.sh "$STATE_FILE" 1800
 
           mv "$IMG_FILE" "$IMG_NAME"
@@ -277,7 +258,7 @@ jobs:
                   {
                       "name": f"Internet in a Box - {os.environ.get('EDITION', 'Custom')} (64-bit)",
                       "description": f"IIAB {os.environ.get('IIAB_BASE_VERSION', '')} {os.environ.get('EDITION', '')} edition",
-                      "icon": "https://downloads.raspberrypi.com/raspios_arm64/Raspberry_Pi_OS_(64-bit).png",
+                      "icon": "https://raw.githubusercontent.com/iiab/iiab-factory/master/box/rpi/iiab40.png",
                       "url": f"file:///home/YOUR_USERNAME/Downloads/{img_name}.zip",
                       "image_download_size": file_size,
                       "extract_size": file_size,
@@ -300,7 +281,7 @@ jobs:
         if: ${{ matrix.edition == 'tiny' }}
         uses: actions/upload-artifact@v6
         with:
-          name: rpi-imager-manifest
+          name: iiab-desktop.rpi-imager-manifest
           path: nspawn-loop/iiab.rpi-imager-manifest
           if-no-files-found: error
           retention-days: 3
