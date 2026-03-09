@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - master
+    tags:
+      - "v*"
     paths-ignore:
       - '**/*.md'
       - '**/*.rst'
@@ -19,6 +21,8 @@ on:
 jobs:
   image:
     runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: write
     # environment:
     #   name: deploy
     steps:
@@ -37,7 +41,12 @@ jobs:
         run: |
           DATE=$(date +'%y%m%d')
           HASH=$(git -C iiab rev-parse --short HEAD)
-          RELEASE_NAME="iiab-daily-${DATE}-${HASH}"
+          TAG_NAME=${{ github.ref_name }}
+          if [[ "$TAG_NAME" == v* ]]; then
+            RELEASE_NAME="$TAG_NAME"
+          else
+            RELEASE_NAME="iiab-daily-${DATE}-${HASH}"
+          fi
           echo "RELEASE_NAME=$RELEASE_NAME" >> $GITHUB_OUTPUT
           echo "RELEASE_NAME=$RELEASE_NAME" >> $GITHUB_ENV
 
@@ -291,3 +300,21 @@ jobs:
             nspawn-loop/${{ env.IMG_NAME }}.xz \
             nspawn-loop/iiab.rpi-imager-manifest \
             --repo ${{ github.repository }}
+
+      - name: Cleanup old daily releases
+        if: ${{ !startsWith(github.ref_name, 'v') }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Delete daily releases older than 7 days
+          THRESHOLD=$(date -d "7 days ago" +%s)
+          
+          gh release list --repo ${{ github.repository }} --json name,tagName,isDraft,isPrerelease,createdAt | \
+          jq -r '.[] | select(.name | startswith("iiab-daily-")) | "\(.name)\t\(.createdAt)"' | \
+          while IFS=$'\t' read -r release_name created_at; do
+            release_timestamp=$(date -d "$created_at" +%s)
+            if [[ $release_timestamp -lt $THRESHOLD ]]; then
+              echo "Deleting old daily release: $release_name"
+              gh release delete "$release_name" --repo ${{ github.repository }} --yes --cleanup-branch || true
+            fi
+          done
