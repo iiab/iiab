@@ -1,8 +1,9 @@
 name: '"20 min" IIAB "MEDIUM" on RPiOS Desktop'
 
 on:
-  pull_request:
-    types: [closed]   # only run when PR is merged
+  push:
+    branches:
+      - master
     paths-ignore:
       - '**/*.md'
       - '**/*.rst'
@@ -17,7 +18,6 @@ on:
 
 jobs:
   image:
-    if: github.event.pull_request.merged == true
     runs-on: ubuntu-24.04-arm
     # environment:
     #   name: deploy
@@ -31,6 +31,15 @@ jobs:
         with:
           repository: chapmanjacobd/nspawn-loop
           path: nspawn-loop
+
+      - name: Set release name
+        id: release_name
+        run: |
+          DATE=$(date +'%y%m%d')
+          HASH=$(git -C iiab rev-parse --short HEAD)
+          RELEASE_NAME="iiab-daily-${DATE}-${HASH}"
+          echo "RELEASE_NAME=$RELEASE_NAME" >> $GITHUB_OUTPUT
+          echo "RELEASE_NAME=$RELEASE_NAME" >> $GITHUB_ENV
 
       - name: Download RaspberryPi OS
         working-directory: nspawn-loop
@@ -63,6 +72,9 @@ jobs:
           echo "rpi_image: True" >> "$MOUNT_DIR/etc/iiab/local_vars.yml"
           sed -i "s/^iiab_admin_user_install: True/iiab_admin_user_install: False/" "$MOUNT_DIR/etc/iiab/local_vars.yml"
 
+          if ! command -v expect &>/dev/null; then
+              apt-get update && apt-get install -y expect
+          fi
           if ! command -v systemd-nspawn &> /dev/null; then
               apt-get update && apt-get install -y systemd-container
           fi
@@ -70,46 +82,40 @@ jobs:
           systemctl is-active --quiet systemd-networkd || systemctl start systemd-networkd
           systemctl is-active --quiet systemd-resolved || systemctl start systemd-resolved
 
-          # based on https://github.com/jvonau/mk-image/blob/main/mkarm-image.sh
-          mount --bind /dev "${MOUNT_DIR}"/dev
-          mount -t proc none "${MOUNT_DIR}"/proc
-          mount -t sysfs none "${MOUNT_DIR}"/sys
-          mount -t devpts none "${MOUNT_DIR}"/dev/pts
-          mount -t tmpfs tmpfs "${MOUNT_DIR}"/tmp
-          mount -t tmpfs tmpfs "${MOUNT_DIR}"/run
-          mkdir -p "${MOUNT_DIR}"/run/lock
+          # Explicitly allow forwarding for systemd-nspawn virtual interfaces
+          sysctl -w net.ipv4.ip_forward=1
+          EXT_IF=$(ip route | grep default | awk '{print $5}' | head -n1)
+          iptables -t nat -A POSTROUTING -o "$EXT_IF" -j MASQUERADE
+          iptables -A FORWARD -i ve-+ -o "$EXT_IF" -j ACCEPT
+          iptables -A FORWARD -i "$EXT_IF" -o ve-+ -m state --state RELATED,ESTABLISHED -j ACCEPT
 
-          sed 's/^          //' << 'EOF_CHROOT' > "$MOUNT_DIR/root/builder.sh"
-          #!/bin/bash
-          set -euo pipefail
+          systemd-firstboot --root="$MOUNT_DIR" --delete-root-password --force
+          export MOUNT_DIR
+          sed 's/^          //' << 'EXPECT_EOF' | expect
+          set timeout 7200
 
-          export DEBIAN_FRONTEND=noninteractive
+          spawn systemd-nspawn -q --network-veth --resolv-conf=off -D $env(MOUNT_DIR) -M box --boot
+          expect "login: " { send "root\r" }
 
-          apt update
-          mkdir -p /etc/initramfs-tools/conf.d
-          echo 'MODULES=most' > /etc/initramfs-tools/conf.d/nspawn.conf
-          apt -y full-upgrade
+          expect -re {#\s?$} { send "apt update\r" }
+          expect -re {#\s?$} { send "mkdir -p /etc/initramfs-tools/conf.d && echo 'MODULES=most' > /etc/initramfs-tools/conf.d/nspawn.conf\r" }
+          expect -re {#\s?$} { send "DEBIAN_FRONTEND=noninteractive apt upgrade -y\r" }
 
-          apt install curl
-          curl -fLo /usr/sbin/iiab https://raw.githubusercontent.com/iiab/iiab-factory/master/iiab
-          chmod 0755 /usr/sbin/iiab
+          expect -re {#\s?$} { send "curl -fLo /usr/sbin/iiab https://raw.githubusercontent.com/iiab/iiab-factory/master/iiab\r" }
+          expect -re {#\s?$} { send "chmod 0755 /usr/sbin/iiab\r" }
+          expect -re {#\s?$} { send "/usr/sbin/iiab --risky\r" }
+          expect {
+              timeout { puts "\nTimed out waiting for final confirmation prompt"; exit 1 }
+              "photographed" { send "\r" }
+          }
+          # forced reboot
+          expect "login: " { send "root\r" }
 
-          echo "box" > /etc/hostname
-          /usr/sbin/iiab --risky
+          expect -re {#\s?$} { send "usermod --lock --expiredate=1 root\r" }
 
-          EOF_CHROOT
-
-          chmod 0755 $MOUNT_DIR/root/builder.sh
-          echo "Entering CHROOT"
-          chroot $MOUNT_DIR /root/builder.sh
-          echo "Leaving CHROOT"
-
-          umount "${MOUNT_DIR}"/run
-          umount "${MOUNT_DIR}"/tmp
-          umount "${MOUNT_DIR}"/dev/pts
-          umount "${MOUNT_DIR}"/dev
-          umount "${MOUNT_DIR}"/sys
-          umount "${MOUNT_DIR}"/proc
+          expect -re {#\s?$} { send "shutdown now\r" }
+          expect eof
+          EXPECT_EOF
 
           EOF
 
@@ -160,6 +166,9 @@ jobs:
           ./shrink.sh "$STATE_FILE" 1800
 
           mv "$IMG_FILE" "$IMG_NAME"
+          
+          # Compress image with xz
+          xz -v -9 -T0 --stdout "$IMG_NAME" > "$IMG_NAME.xz"
           EOF
 
       - name: Generate rpi-imager manifest
@@ -262,20 +271,20 @@ jobs:
 
           python3 gen_manifest.py
 
-      - name: Upload iiab.rpi-imager-manifest
-        uses: actions/upload-artifact@v6
-        with:
-          name: iiab-desktop.rpi-imager-manifest
-          path: nspawn-loop/iiab.rpi-imager-manifest
-          if-no-files-found: error
-          retention-days: 3
-          compression-level: 9
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create ${{ env.RELEASE_NAME }} \
+            --title "IIAB Daily Build ${{ env.RELEASE_NAME }}" \
+            --generate-notes \
+            --repo ${{ github.repository }} || true
 
-      - name: Upload image
-        uses: actions/upload-artifact@v6
-        with:
-          name: ${{ env.IMG_NAME }}
-          path: nspawn-loop/${{ env.IMG_NAME }}
-          if-no-files-found: error
-          retention-days: 3
-          compression-level: 9
+      - name: Upload image and manifest to Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload ${{ env.RELEASE_NAME }} \
+            nspawn-loop/${{ env.IMG_NAME }}.xz \
+            nspawn-loop/iiab.rpi-imager-manifest \
+            --repo ${{ github.repository }}
