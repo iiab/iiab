@@ -200,17 +200,26 @@ jobs:
               print("Error: IMG_NAME not set")
               sys.exit(1)
 
-          if not os.path.exists(img_name):
-              print(f"Error: {img_name} not found")
+          xz_name = f"{img_name}.xz"
+          if not os.path.exists(xz_name):
+              print(f"Error: {xz_name} not found")
               sys.exit(1)
 
-          file_size = os.path.getsize(img_name)
-          print(f"Calculating SHA256 for {img_name} ({file_size} bytes)...")
+          # Get compressed file size (for download size)
+          compressed_size = os.path.getsize(xz_name)
+          print(f"Compressed size: {compressed_size} bytes")
+
+          # Get uncompressed image size and hash (for extract verification)
+          image_size = os.path.getsize(img_name)
+          print(f"Image size: {image_size} bytes")
+          print(f"Calculating SHA256 for {img_name}...")
           sha256_hash = hashlib.sha256()
           with open(img_name, "rb") as f:
               for byte_block in iter(lambda: f.read(4096), b""):
                   sha256_hash.update(byte_block)
           extract_sha256 = sha256_hash.hexdigest()
+
+          manifest_name = img_name.replace(".img", ".rpi-imager-manifest")
 
           manifest = {
               "imager": {
@@ -265,9 +274,9 @@ jobs:
                       "name": f"Internet in a Box - {os.environ.get('EDITION', 'Custom')} (64-bit)",
                       "description": f"IIAB {os.environ.get('IIAB_BASE_VERSION', '')} {os.environ.get('EDITION', '')} edition",
                       "icon": "https://raw.githubusercontent.com/iiab/iiab-factory/master/box/rpi/iiab40.png",
-                      "url": f"file:///home/YOUR_USERNAME/Downloads/{img_name}.zip",
-                      "image_download_size": file_size,
-                      "extract_size": file_size,
+                      "url": f"file:///home/YOUR_USERNAME/Downloads/{xz_name}",
+                      "image_download_size": compressed_size,
+                      "extract_size": image_size,
                       "extract_sha256": extract_sha256,
                       "release_date": datetime.date.today().isoformat(),
                       "init_format": "cloudinit-rpi",
@@ -277,7 +286,7 @@ jobs:
               ]
           }
 
-          with open("iiab.rpi-imager-manifest", "w") as f:
+          with open(manifest_name, "w") as f:
               json.dump(manifest, f, indent=2)
           EOF
 
@@ -298,7 +307,7 @@ jobs:
         run: |
           gh release upload ${{ env.RELEASE_NAME }} \
             nspawn-loop/${{ env.IMG_NAME }}.xz \
-            nspawn-loop/iiab.rpi-imager-manifest \
+            nspawn-loop/${{ env.IMG_NAME }}.rpi-imager-manifest \
             --repo ${{ github.repository }}
 
       - name: Cleanup old daily releases
