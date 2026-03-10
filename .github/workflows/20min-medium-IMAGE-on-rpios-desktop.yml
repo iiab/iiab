@@ -40,7 +40,7 @@ jobs:
         id: release_name
         run: |
           DATE=$(date +'%y%m%d')
-          HASH=$(git -C iiab rev-parse --short HEAD)
+          HASH=$(git -C iiab rev-parse --short=7 HEAD)
           TAG_NAME=${{ github.ref_name }}
           if [[ "$TAG_NAME" == v* ]]; then
             RELEASE_NAME="$TAG_NAME"
@@ -68,8 +68,8 @@ jobs:
           DATE=$(date +'%y%m%d')
           OS="raspios"
           EDITION="medium"
-          HASH=$(git -C ../iiab rev-parse --short HEAD)
-          IMG_NAME="iiab-desktop-$VERSION-$DATE-$OS-$EDITION-$HASH.img"
+          HASH=$(git -C ../iiab rev-parse --short=7 HEAD)
+          IMG_NAME="iiab-desktop-$VERSION-$DATE-$OS-$EDITION-$HASH"
           echo "IMG_NAME=$IMG_NAME" >> $GITHUB_ENV
 
           mkdir -p "$MOUNT_DIR/opt/iiab"
@@ -174,10 +174,10 @@ jobs:
 
           ./shrink.sh "$STATE_FILE" 1800
 
-          mv "$IMG_FILE" "$IMG_NAME"
+          mv "$IMG_FILE" "${IMG_NAME}.img"
 
           # Compress image with xz
-          xz -v -9 -T0 --stdout "$IMG_NAME" > "$IMG_NAME.xz"
+          xz -v -9 -T0 --stdout "${IMG_NAME}.img" > "${IMG_NAME}.img.xz"
           EOF
 
       - name: Generate rpi-imager manifest
@@ -197,7 +197,7 @@ jobs:
               print("Error: IMG_NAME not set")
               sys.exit(1)
 
-          xz_name = f"{img_name}.xz"
+          xz_name = f"{img_name}.img.xz"
           if not os.path.exists(xz_name):
               print(f"Error: {xz_name} not found")
               sys.exit(1)
@@ -207,16 +207,16 @@ jobs:
           print(f"Compressed size: {compressed_size} bytes")
 
           # Get uncompressed image size and hash (for extract verification)
-          image_size = os.path.getsize(img_name)
+          image_size = os.path.getsize(f"{img_name}.img")
           print(f"Image size: {image_size} bytes")
-          print(f"Calculating SHA256 for {img_name}...")
+          print(f"Calculating SHA256 for {img_name}.img...")
           sha256_hash = hashlib.sha256()
-          with open(img_name, "rb") as f:
+          with open(f"{img_name}.img", "rb") as f:
               for byte_block in iter(lambda: f.read(4096), b""):
                   sha256_hash.update(byte_block)
           extract_sha256 = sha256_hash.hexdigest()
 
-          manifest_name = img_name.replace(".img", ".rpi-imager-manifest")
+          manifest_name = f"{img_name}.rpi-imager-manifest"
 
           manifest = {
               "imager": {
@@ -303,7 +303,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release upload ${{ env.RELEASE_NAME }} \
-            nspawn-loop/${{ env.IMG_NAME }}.xz \
+            nspawn-loop/${{ env.IMG_NAME }}.img.xz \
             nspawn-loop/${{ env.IMG_NAME }}.rpi-imager-manifest \
             --repo ${{ github.repository }}
 
