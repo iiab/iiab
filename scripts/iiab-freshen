@@ -1,11 +1,8 @@
 #!/bin/bash -e
-REBOOT=0
 if [ -d /opt/iiab/iiab-admin-console ] && [ -f /etc/iiab/install-flags/iiab-admin-console-complete ]; then
     cd /opt/iiab/iiab-admin-console
     git checkout master
-    if git pull -ff | grep 'Already up to date'; then
-        echo "iiab-admin-console already up to date"
-    else
+    if ! git pull -ff | grep 'Already up to date'; then
         echo "Updating iiab-admin-console"
         ./install
     fi
@@ -16,25 +13,13 @@ git pull --ff
 
 scripts/ansible
 
-if ! apt -qq update > /tmp/apt.stdout 2> /tmp/apt.stderr; then
-    echo -e "'apt update' FAILED. VERIFY YOU'RE ONLINE and resolve all errors below:\n"
-    cat /tmp/apt.stderr
-    exit 1
-fi
-if grep -q 'linux-image-rpi' /tmp/apt.stdout; then
-    REBOOT=1
-    echo "REBOOT NEEDED"
-fi
-
+apt update
 apt -y full-upgrade
-
+apt -y autoremove
 rm /tmp/apt.*
 
 touch /etc/iiab/install-flags/iiab-refreshed
-
-if [ $REBOOT = 1 ]; then
-    echo "REBOOT NOW"
-    reboot
-fi
 echo "IIAB install updated"
-exit 0    
+echo "REBOOTING NOW"
+reboot
+exit 0
