@@ -3,10 +3,33 @@
   register: df1
 
 
-- name: "Set up apt source (jammy) in /etc/apt/sources.list.d/tailscale.list and its key /usr/share/keyrings/tailscale-archive-keyring.gpg, to install Tailscale"
-  shell: |
-    curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/jammy.noarmor.gpg > /usr/share/keyrings/tailscale-archive-keyring.gpg
-    curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/jammy.tailscale-keyring.list > /etc/apt/sources.list.d/tailscale.list
+# 2026-02-09: One-line installer https://tailscale.com/download/linux might
+# simplify but unfortunately is never quite ready for new distros when IIAB
+# testers/implementers need it:  https://github.com/iiab/iiab/pull/4096
+
+# 2026-02-09: Background thanks to @Ark74 and @jvonau, until Tailscale refines their official install routine,
+# e.g. https://pkgs.tailscale.com/stable/#debian-trixie and https://pkgs.tailscale.com/stable/#ubuntu-resolute etc:
+# https://github.com/iiab/iiab/pull/4234#issuecomment-3775698711
+# https://manpages.debian.org/unstable/apt/apt-key.8.en.html
+# Since APT 2.4, /etc/apt/keyrings is provided as the recommended location for keys not managed by packages
+# dpkg -L tailscale-archive-keyring
+# tailscale pulls in deb package tailscale-archive-keyring to update /usr/share/keyrings/tailscale-archive-keyring.gpg, so /usr/share/keyrings would be correct
+#
+# Alternative approach outlined by @jvonau:
+# curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/noble.noarmor.gpg > /usr/share/keyrings/tailscale-archive-keyring.gpg
+# curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/noble.tailscale-keyring.list > /etc/apt/sources.list.d/tailscale.list
+# apt modernize-sources -y
+# apt update
+# apt install tailscale-archive-keyring -y
+# apt install tailscale -y
+
+- name: Download signing key to /usr/share/keyrings/tailscale-archive-keyring.gpg, to install Tailscale
+  shell: curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/noble.noarmor.gpg > /usr/share/keyrings/tailscale-archive-keyring.gpg
+
+- name: Create /etc/apt/sources.list.d/tailscale.sources from template
+  template:
+    src: tailscale.sources
+    dest: /etc/apt/sources.list.d/tailscale.sources
 
 - name: "Install packages: jq, sudo, tailscale"
   package:

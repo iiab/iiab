@@ -27,15 +27,6 @@
         </style>
 
         <link rel='stylesheet' href='maplibre-gl.css' />
-        <script src='maplibre-gl.js'></script>
-
-        <script src="maplibre-gl-geocoder.min.js"></script>
-        <link rel="stylesheet" href="maplibre-gl-geocoder.css"/>
-
-        <script src="maplibre-gl-terradraw.umd.js"></script>
-        <link rel="stylesheet" href="maplibre-gl-terradraw.css"/>
-
-        <script src="maps.black-component.js" type="module"></script>
         <script>
 
             /****************
@@ -51,6 +42,30 @@
             const MAPS_SEARCH_ENGINE = "{{ maps_search_engine }}"
             const MAPS_REGION_DOWNLOADER = "{{ maps_region_downloader }}" === "True"
 
+        </script>
+        <script type="module">
+            import { AddressTextualIndex } from "./{{ maps_static_search_dir }}/static_search.js"
+            if (MAPS_SEARCH_ENGINE === "static") {
+                // We have to do this `window.` stuff to communicate between module and non-module javascript code
+                window.staticSearch = {
+                    init: () => {
+                        const searchDb = activeFQRegionName || "world-map"
+                        window.staticSearch.engine = new AddressTextualIndex(`static-search/${searchDb}`)
+                    }
+                }
+                window.staticSearch.init()
+            }
+        </script>
+        <script src='maplibre-gl.js'></script>
+
+        <script src="maplibre-gl-geocoder.min.js"></script>
+        <link rel="stylesheet" href="maplibre-gl-geocoder.css"/>
+
+        <script src="maplibre-gl-terradraw.umd.js"></script>
+        <link rel="stylesheet" href="maplibre-gl-terradraw.css"/>
+
+        <script src="maps.black-component.js" type="module"></script>
+        <script>
             // we want style choice to survive the map reset that happens when a maps.black
             // feature or style changes, so we rely on this instead of the select tag value
             let mapStyleChoice
@@ -140,7 +155,7 @@
                 const zoom = Math.round(mb.zoom * 100) / 100
                 const globe = mb.globe ? 'g' : 'm' // [g]lobe : [m]ercator (i.e. like a paper map)
                 const terrain = mb.terrain ? 't' : 'f' // [t]errain : [f]lat (i.e. no mountains)
-                window.location.hash = `${lat}/${lon}/${pitch}/${bearing}/${zoom}/${globe}/${terrain}/${mapStyleChoice}/${activeFQRegionName}`
+                history.replaceState({}, "", `#${lat}/${lon}/${pitch}/${bearing}/${zoom}/${globe}/${terrain}/${mapStyleChoice}/${activeFQRegionName}`)
             }
 
             // Why two different functions for reading the URL hash?
@@ -676,6 +691,89 @@
                 }
             };
 
+            const staticGeocoderApi = {
+                // TODO reverse geocode
+                forwardGeocode: async (config) => {
+                    const features = [];
+                    try {
+                        const response = await window.staticSearch.engine.search(config.query);
+                        for (const result of response) {
+                            const center = [result.lon, result.lat]
+                            const point = {
+                                type: 'Feature',
+                                geometry: {
+                                    type: 'Point',
+                                    coordinates: center
+                                },
+                                place_name: result.name,
+                                properties: {
+                                    population: Number(result.pop),
+                                },
+                                text: result.name,
+                                place_type: ['place'],
+                                extratags: [],
+                                center,
+                            };
+                            features.push(point);
+                        }
+                    } catch (e) {
+                        console.error(`Failed to forwardGeocode with error: ${e}`);
+                    }
+
+                    return {
+                        features
+                    };
+                }
+            };
+
+            // have to use MAX_SEARCH_RESULT_ZOOM in a couple different places to cover a couple different scenarios, it seems
+            const MAX_SEARCH_RESULT_ZOOM = 10;
+            const geocoderCommonOptions = {
+                maplibregl,
+                zoom: MAX_SEARCH_RESULT_ZOOM,
+                flyTo: {
+                    maxZoom: MAX_SEARCH_RESULT_ZOOM,
+                },
+                popup: true,
+            }
+
+            const geocoderAlternatives = {
+                nominatim: {
+                    api: nominatimGeocoderApi,
+                    options: geocoderCommonOptions,
+                },
+                static: {
+                    api: staticGeocoderApi,
+                    options: {
+                        minLength: 3, // Until and unless we add a "short names" json file
+                        popupRender: feature => {
+                          // Not ideal to assume that comma means this but I suspect maplibre does this too
+                          const [city_name, ...rest] = feature.place_name.split(',')
+                          const state_and_country_name = rest.join(',')
+                          return `
+                            <div class="mapboxgl-ctrl-geocoder--suggestion maplibre-ctrl-geocoder--suggestion popup-suggestion">
+                                <div class="mapboxgl-ctrl-geocoder--suggestion-title maplibre-ctrl-geocoder--suggestion-title popup-suggestion-title">
+                                    <b>${city_name}</b>
+                                </div>
+                                <div class="mapboxgl-ctrl-geocoder--suggestion-address maplibre-ctrl-geocoder--suggestion-address popup-suggestion-address">
+                                    ${state_and_country_name}
+                                </div>
+                                <div>
+                                    Population: ${feature.properties.population.toLocaleString()}
+                                </div>
+                            </div>
+                          `
+                        },
+                        showResultsWhileTyping: true,
+
+                        // In case we want to alter the time from stopping typing to searching:
+                        // debounceSearch: 200,
+
+                        ...geocoderCommonOptions
+                    },
+                },
+            }
+
             function showSearchResultBorder(searchResult) {
                 const source = mb.map.getSource('search-result')
                 if (source) {
@@ -692,16 +790,13 @@
                 mb.map.addLayer({id: "search-result-outline", type: "line", source: 'search-result', layout:{}, paint: {'line-color': '#FF4444', 'line-width': 2}})
             }
 
-            // have to use MAX_ZOOM in a couple different places to cover a couple different scenarios, it seems
-            const MAX_ZOOM = 10;
-            const geocoder = new MaplibreGeocoder(nominatimGeocoderApi, {
-                maplibregl,
-                zoom: MAX_ZOOM,
-                flyTo: {
-                    maxZoom: MAX_ZOOM,
-                },
-                popup: true,
-            })
+            let geocoder = null;
+            if (geocoderAlternatives[MAPS_SEARCH_ENGINE]) {
+                geocoder = new MaplibreGeocoder(
+                    geocoderAlternatives[MAPS_SEARCH_ENGINE].api,
+                    geocoderAlternatives[MAPS_SEARCH_ENGINE].options,
+                )
+            }
             const scaleControl = new maplibregl.ScaleControl()
             drawControl = new MaplibreTerradrawControl.MaplibreTerradrawControl({
                 modes: [
@@ -928,9 +1023,50 @@
                     const stylesheetText = [...mapLibreGlGeocoderCSS.cssRules, ...mapLibreGlTerradrawCSS.cssRules].reduce((accumulator, rule) => accumulator + rule.cssText, '');
                     const myStyles = new CSSStyleSheet()
                     myStyles.replace(stylesheetText)
+                    .then(() => {
+                        if (geocoder) {
+                            /* If the screen gets narrow enough (such as with vertically oriented phones
+                               that are especially low resolution) setting max-width on the search bar isn't
+                               enough to stop it from overlapping the top-right controls. And anyway, we
+                               don't want it to get too small. Instead, we move the top-right controls down
+                               and let the search bar take up the whole top of the screen. */
+                            myStyles.insertRule(`
+                                @media screen and (max-width:349px) {
+                                    .maplibregl-ctrl-top-right {
+                                        top: 60px !important;
+                                        transition: top 0.25s ease;
+                                    }
+                                    /* Ensure the search bar stretches to hit the edge of the screen to make it look nice */
+                                    .maplibregl-ctrl-top-left {
+                                        width: calc(100% - 20px);
+                                    }
+                                }
+                            `)
+                            /* If the screen gets narrow but not too narrow, we can simply set max-width to
+                               stop the search bar from overlapping the top-right controls. It won't get too
+                               small in this range.
+
+                               This appears to be relevant for a very narrow range roughly (350px-400px screen
+                               width on the Chromium/Firefox dev tools for phone screens), but I am hoping
+                               that "modern" (circa 2025) smart phone will benefit from this. It looks nicer
+                               IMHO. */
+                            myStyles.insertRule(`
+                                @media screen and (min-width:350px) {
+                                    /* Ensure the search bar doesn't stretch to hit the zoom buttons */
+                                    .maplibregl-ctrl-top-left {
+                                        max-width: calc(100% - 60px);
+                                    }
+                                    .maplibregl-ctrl-top-right {
+                                        top: 0px !important;
+                                        transition: top 0.25s ease;
+                                    }
+                                }
+                            `)
+                        }
+                    })
                     mb.shadowRoot.adoptedStyleSheets = [...mb.shadowRoot.adoptedStyleSheets, myStyles]
 
-                    if (MAPS_SEARCH_ENGINE === "nominatim") {
+                    if (geocoder) {
                         mb.map.addControl(geocoder, 'top-left');
                     }
                     mb.map.addControl(scaleControl);
