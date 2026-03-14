@@ -1,39 +1,30 @@
-name: 'IIAB image on RPiOS Lite Latest'
+name: '"15 min" SMALL IMAGE on latest RPiOS Lite'
 
-# cancel-in-progress: false
-# concurrency:
-#   group: ${{ github.ref }}-${{ github.workflow }}
-
-on: [push, pull_request, workflow_dispatch]
+on:
+  push:
+    tags:
+      - "[0-9]+.*"
+    branches:
+      - master
+    paths-ignore:
+      - '**/*.md'
+      - '**/*.rst'
+      - '**/*.html'
+      - '**/*.css'
+      - '**/*.svg'
+      - '**/*.jpg'
+      - '**/*.png'
+      - '**/*.php'
+      - '**/*.js'
+  workflow_dispatch:
 
 jobs:
-  build:
+  image:
     runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: write
     # environment:
     #   name: deploy
-    strategy:
-      # fail-fast: true
-      # max-parallel: 1
-      matrix:
-        include:
-          # - edition: medical
-          #   config: vars/local_vars_none.yml
-          #   # Maybe only possible self-hosted
-          #   # https://github.com/marketplace/actions/maximize-build-disk-space-only-remove-unwanted-software#how-it-works
-          #   working_image_size: 75000
-          #   preset_id: en-medical
-          - edition: large
-            config: vars/local_vars_large.yml
-            working_image_size: 20000
-          # - edition: medium
-          #   config: vars/local_vars_medium.yml
-          #   working_image_size: 15000
-          # - edition: small
-          #   config: vars/local_vars_small.yml
-          #   working_image_size: 15000
-          - edition: tiny
-            config: vars/local_vars_tiny.yml
-            working_image_size: 7450
     steps:
       - uses: actions/checkout@v6
         with:
@@ -45,9 +36,22 @@ jobs:
           repository: chapmanjacobd/nspawn-loop
           path: nspawn-loop
 
+      - name: Set release name
+        id: release_name
+        run: |
+          DATE=$(date +'%y%m%d')
+          HASH=$(git -C iiab rev-parse --short=7 HEAD)
+          TAG_NAME=${{ github.ref_name }}
+          if [[ "$TAG_NAME" =~ ^[0-9] ]]; then
+            RELEASE_NAME="$TAG_NAME"
+          else
+            RELEASE_NAME="daily-${DATE}-${HASH}"
+          fi
+          echo "RELEASE_NAME=$RELEASE_NAME" >> $GITHUB_ENV
+
       - name: Download RaspberryPi OS
         working-directory: nspawn-loop
-        run: sudo ./mount.sh https://downloads.raspberrypi.org/raspios_lite_arm64_latest ${{ matrix.working_image_size || 10000 }}
+        run: sudo ./mount.sh https://downloads.raspberrypi.org/raspios_lite_arm64_latest 12000
 
       - name: Build image
         working-directory: nspawn-loop
@@ -62,16 +66,16 @@ jobs:
           echo "IIAB_BASE_VERSION=$VERSION" >> $GITHUB_ENV
           DATE=$(date +'%y%m%d')
           OS="raspios"
-          EDITION="${{ matrix.edition }}"
-          HASH=$(git -C ../iiab rev-parse --short HEAD)
-          IMG_NAME="iiab-$VERSION-$DATE-$OS-$EDITION-$HASH.img"
+          EDITION="small"
+          HASH=$(git -C ../iiab rev-parse --short=7 HEAD)
+          IMG_NAME="iiab-$VERSION-$DATE-$OS-$EDITION-$HASH"
           echo "IMG_NAME=$IMG_NAME" >> $GITHUB_ENV
 
           mkdir -p "$MOUNT_DIR/opt/iiab"
           cp -R --preserve=mode,timestamps,links ../iiab "$MOUNT_DIR/opt/iiab/"
 
           mkdir -p "$MOUNT_DIR/etc/iiab"
-          cp --preserve=mode,timestamps ../iiab/${{ matrix.config }} "$MOUNT_DIR/etc/iiab/local_vars.yml"
+          cp --preserve=mode,timestamps ../iiab/vars/local_vars_small.yml "$MOUNT_DIR/etc/iiab/local_vars.yml"
 
           echo "rpi_image: True" >> "$MOUNT_DIR/etc/iiab/local_vars.yml"
           sed -i "s/^iiab_admin_user_install: True/iiab_admin_user_install: False/" "$MOUNT_DIR/etc/iiab/local_vars.yml"
@@ -93,25 +97,6 @@ jobs:
           iptables -A FORWARD -i ve-+ -o "$EXT_IF" -j ACCEPT
           iptables -A FORWARD -i "$EXT_IF" -o ve-+ -m state --state RELATED,ESTABLISHED -j ACCEPT
 
-          # Manually setting DNS can help avoid host loopback/127.0.0.53 issues
-          # echo "nameserver 1.1.1.1" >> "$MOUNT_DIR/etc/resolv.conf"
-
-          sed 's/^          //' << 'EOF_PRESET' > "$MOUNT_DIR/root/install_preset.sh"
-          #!/bin/bash
-          set -euo pipefail
-          cd /opt/admin/cmdsrv
-
-          scripts/get_kiwix_catalog
-          scripts/get_oer2go_catalog
-
-          if [ -n "${{ matrix.preset_id }}" ]; then
-              iiab-cmdsrv-ctl 'INST-PRESETS {"preset_id":"${{ matrix.preset_id }}"}'
-          fi
-
-          rm -f /root/install_preset.sh
-          EOF_PRESET
-          chmod +x "$MOUNT_DIR/root/install_preset.sh"
-
           systemd-firstboot --root="$MOUNT_DIR" --delete-root-password --force
           export MOUNT_DIR
           sed 's/^          //' << 'EXPECT_EOF' | expect
@@ -122,7 +107,7 @@ jobs:
 
           expect -re {#\s?$} { send "apt update\r" }
           expect -re {#\s?$} { send "mkdir -p /etc/initramfs-tools/conf.d && echo 'MODULES=most' > /etc/initramfs-tools/conf.d/nspawn.conf\r" }
-          expect -re {#\s?$} { send "DEBIAN_FRONTEND=noninteractive apt upgrade -y\r" }
+          expect -re {#\s?$} { send "DEBIAN_FRONTEND=noninteractive apt -y full-upgrade\r" }
 
           expect -re {#\s?$} { send "curl -fLo /usr/sbin/iiab https://raw.githubusercontent.com/iiab/iiab-factory/master/iiab\r" }
           expect -re {#\s?$} { send "chmod 0755 /usr/sbin/iiab\r" }
@@ -130,16 +115,12 @@ jobs:
           expect {
               timeout { puts "\nTimed out waiting for final confirmation prompt"; exit 1 }
               "photographed" { send "\r" }
+              "root@raspberrypi" { puts "\nAnsible quit before photograph. Exiting with failure."; exit 1 }
           }
           # forced reboot
           expect "login: " { send "root\r" }
 
-          expect -re {#\s?$} { send "/root/install_preset.sh\r" }
-
           expect -re {#\s?$} { send "usermod --lock --expiredate=1 root\r" }
-
-          # legacy whiptail TUI OOBE, replaced by cloud-init / rpi-imager
-          # expect -re {#\s?$} { send "systemctl disable userconfig.service\r" }
 
           expect -re {#\s?$} { send "shutdown now\r" }
           expect eof
@@ -157,13 +138,12 @@ jobs:
           source "$STATE_FILE"
 
           diff \
-            <(sort ../iiab/.github/workflows/tests/expected_state_${{ matrix.edition }}_image.yml) \
+            <(sort ../iiab/.github/workflows/tests/expected_state_small_image.yml) \
             <(sort "$MOUNT_DIR/etc/iiab/iiab_state.yml")
 
           EOF
 
       - name: Shrink image
-        if: ${{ matrix.edition == 'tiny' }}
         working-directory: nspawn-loop
         env:
           GH_TOKEN: ${{ github.token }}
@@ -177,7 +157,8 @@ jobs:
           # Add image metadata
           echo "$IMG_NAME" > "$MOUNT_DIR/.iiab-image"
           echo "Build: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" >> "$MOUNT_DIR/.iiab-image"
-          gh pr list --repo ${{ github.repository }} --commit $(git -C ../iiab rev-parse HEAD) --json number,url --jq '.[0] | "PR #\(.number): \(.url)"' >> "$MOUNT_DIR/.iiab-image" 2>/dev/null || true
+          echo "" >> "$MOUNT_DIR/.iiab-image"
+
           git -C ../iiab rev-parse --abbrev-ref HEAD >> "$MOUNT_DIR/.iiab-image"
           git -C ../iiab remote -v >> "$MOUNT_DIR/.iiab-image"
           git -C ../iiab log -1 >> "$MOUNT_DIR/.iiab-image"
@@ -190,16 +171,19 @@ jobs:
           rm -f "$MOUNT_DIR/etc/iiab/uuid"
           rm -f "$MOUNT_DIR/var/swap"
           touch "$MOUNT_DIR/.resize-rootfs"
+
           ./shrink.sh "$STATE_FILE" 1800
 
-          mv "$IMG_FILE" "$IMG_NAME"
+          mv "$IMG_FILE" "${IMG_NAME}.img"
+
+          # Compress image with xz
+          xz -v -9 -T0 --stdout "${IMG_NAME}.img" > "${IMG_NAME}.img.xz"
           EOF
 
       - name: Generate rpi-imager manifest
-        if: ${{ matrix.edition == 'tiny' }}
         working-directory: nspawn-loop
         env:
-          EDITION: ${{ matrix.edition }}
+          EDITION: small
         run: |
           cat << 'EOF' > gen_manifest.py
           import json
@@ -213,17 +197,26 @@ jobs:
               print("Error: IMG_NAME not set")
               sys.exit(1)
 
-          if not os.path.exists(img_name):
-              print(f"Error: {img_name} not found")
+          xz_name = f"{img_name}.img.xz"
+          if not os.path.exists(xz_name):
+              print(f"Error: {xz_name} not found")
               sys.exit(1)
 
-          file_size = os.path.getsize(img_name)
-          print(f"Calculating SHA256 for {img_name} ({file_size} bytes)...")
+          # Get compressed file size (for download size)
+          compressed_size = os.path.getsize(xz_name)
+          print(f"Compressed size: {compressed_size} bytes")
+
+          # Get uncompressed image size and hash (for extract verification)
+          image_size = os.path.getsize(f"{img_name}.img")
+          print(f"Image size: {image_size} bytes")
+          print(f"Calculating SHA256 for {img_name}.img...")
           sha256_hash = hashlib.sha256()
-          with open(img_name, "rb") as f:
+          with open(f"{img_name}.img", "rb") as f:
               for byte_block in iter(lambda: f.read(4096), b""):
                   sha256_hash.update(byte_block)
           extract_sha256 = sha256_hash.hexdigest()
+
+          manifest_name = f"{img_name}.rpi-imager-manifest"
 
           manifest = {
               "imager": {
@@ -277,10 +270,10 @@ jobs:
                   {
                       "name": f"Internet in a Box - {os.environ.get('EDITION', 'Custom')} (64-bit)",
                       "description": f"IIAB {os.environ.get('IIAB_BASE_VERSION', '')} {os.environ.get('EDITION', '')} edition",
-                      "icon": "https://downloads.raspberrypi.com/raspios_arm64/Raspberry_Pi_OS_(64-bit).png",
-                      "url": f"file:///home/YOUR_USERNAME/Downloads/{img_name}.zip",
-                      "image_download_size": file_size,
-                      "extract_size": file_size,
+                      "icon": "https://raw.githubusercontent.com/iiab/iiab-factory/master/box/rpi/iiab40.png",
+                      "url": f"file:///home/YOUR_USERNAME/Downloads/{xz_name}",
+                      "image_download_size": compressed_size,
+                      "extract_size": image_size,
                       "extract_sha256": extract_sha256,
                       "release_date": datetime.date.today().isoformat(),
                       "init_format": "cloudinit-rpi",
@@ -290,32 +283,45 @@ jobs:
               ]
           }
 
-          with open("iiab.rpi-imager-manifest", "w") as f:
+          with open(manifest_name, "w") as f:
               json.dump(manifest, f, indent=2)
           EOF
 
           python3 gen_manifest.py
 
-      - name: Upload iiab.rpi-imager-manifest
-        if: ${{ matrix.edition == 'tiny' }}
-        uses: actions/upload-artifact@v6
-        with:
-          name: rpi-imager-manifest
-          path: nspawn-loop/iiab.rpi-imager-manifest
-          if-no-files-found: error
-          retention-days: 3
-          compression-level: 9
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create ${{ env.RELEASE_NAME }} \
+            --title "IIAB Daily Build ${{ env.RELEASE_NAME }}" \
+            --generate-notes \
+            --prerelease \
+            --repo ${{ github.repository }} || true
 
-      - name: Upload image
-        if: ${{ matrix.edition == 'tiny' }}
-        uses: actions/upload-artifact@v6
-        with:
-          name: ${{ env.IMG_NAME }}
-          path: nspawn-loop/${{ env.IMG_NAME }}
-          if-no-files-found: error
-          retention-days: 3
-          compression-level: 9
+      - name: Upload image and manifest to Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload ${{ env.RELEASE_NAME }} \
+            nspawn-loop/${{ env.IMG_NAME }}.img.xz \
+            nspawn-loop/${{ env.IMG_NAME }}.rpi-imager-manifest \
+            --repo ${{ github.repository }}
 
-      # - name: Compress image
-      #   working-directory: nspawn-loop
-      #   run: xz -v -9 -T0 --stdout "$IMG_NAME" > "$IMG_NAME.xz"
+      - name: Cleanup old daily releases
+        if: ${{ github.ref_type == 'branch' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Delete daily releases older than 7 days
+          THRESHOLD=$(date -d "7 days ago" +%s)
+
+          gh release list --repo ${{ github.repository }} --json name,tagName,isDraft,isPrerelease,createdAt | \
+          jq -r '.[] | select(.name | startswith("daily-")) | "\(.name)\t\(.createdAt)"' | \
+          while IFS=$'\t' read -r release_name created_at; do
+            release_timestamp=$(date -d "$created_at" +%s)
+            if [[ $release_timestamp -lt $THRESHOLD ]]; then
+              echo "Deleting old daily release: $release_name"
+              gh release delete "$release_name" --repo ${{ github.repository }} --yes --cleanup-tag || true
+            fi
+          done
