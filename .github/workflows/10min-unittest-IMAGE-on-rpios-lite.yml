@@ -58,14 +58,20 @@ jobs:
           EDITION="unittest"
           HASH=$(git -C ../iiab rev-parse --short=7 HEAD)
           COMMIT_DATE=$(git -C ../iiab log -1 --format=%cd --date=format:'%y%m%d')
-          PR_NUM=$(git -C ../iiab log -1 --pretty=%B | grep -oP 'Merge pull request #\K[0-9]+' || echo "")
+          COMMIT_TIME=$(git -C ../iiab log -1 --format=%cd --date=format:'%H%M')
+          # Use GitHub context for PR number (works for pull_request events)
+          PR_NUM="${{ github.event.pull_request.number }}"
+          if [[ -z "$PR_NUM" ]]; then
+            # Fallback: try to extract from merge commit message
+            PR_NUM=$(git -C ../iiab log -1 --pretty=%B | grep -oP 'Merge pull request #\K[0-9]+' || echo "")
+          fi
           TAG_NAME=${{ github.ref_name }}
           if [[ "$TAG_NAME" =~ ^[0-9] ]]; then
             IMG_NAME="iiab-$VERSION-$OS-$EDITION-$TAG_NAME"
           elif [[ -n "$PR_NUM" ]]; then
-            IMG_NAME="iiab-$VERSION-$OS-$EDITION-${COMMIT_DATE}-PR${PR_NUM}"
+            IMG_NAME="iiab-$VERSION-$OS-$EDITION-${COMMIT_DATE}-${COMMIT_TIME}-PR${PR_NUM}"
           else
-            IMG_NAME="iiab-$VERSION-$OS-$EDITION-${COMMIT_DATE}-${HASH}"
+            IMG_NAME="iiab-$VERSION-$OS-$EDITION-${COMMIT_DATE}-${COMMIT_TIME}-${HASH}"
           fi
           echo "IMG_NAME=$IMG_NAME" >> $GITHUB_ENV
 
