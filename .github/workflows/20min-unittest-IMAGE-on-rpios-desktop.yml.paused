@@ -49,9 +49,15 @@ jobs:
           DATE=$(date +'%y%m%d')
           HASH=$(git -C iiab rev-parse --short=7 HEAD)
           TAG_NAME=${{ github.ref_name }}
+          # Extract PR number from merge commit message (format: "Merge pull request #1234")
+          PR_NUM=$(git -C iiab log -1 --pretty=%B | grep -oP 'Merge pull request #\K[0-9]+' || echo "")
           if [[ "$TAG_NAME" =~ ^[0-9] ]]; then
             RELEASE_NAME="$TAG_NAME"
+          elif [[ -n "$PR_NUM" ]]; then
+            # Use PR number for idempotent, chronologically sortable tags
+            RELEASE_NAME="daily-${DATE}-PR${PR_NUM}"
           else
+            # Fallback to hash for non-PR commits
             RELEASE_NAME="daily-${DATE}-${HASH}"
           fi
           echo "RELEASE_NAME=$RELEASE_NAME" >> $GITHUB_ENV
