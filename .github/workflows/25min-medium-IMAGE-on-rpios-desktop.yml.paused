@@ -39,21 +39,22 @@ jobs:
       - name: Set release name
         id: release_name
         run: |
-          DATE=$(date +'%y%m%d')
-          TIME=$(date +'%H%M')
           HASH=$(git -C iiab rev-parse --short=7 HEAD)
+          # Use commit timestamp for true idempotency (same commit = same tag)
+          COMMIT_DATE=$(git -C iiab log -1 --format=%cd --date=format:'%y%m%d')
+          COMMIT_TIME=$(git -C iiab log -1 --format=%cd --date=format:'%H%M')
           TAG_NAME=${{ github.ref_name }}
           # Extract PR number from merge commit message (format: "Merge pull request #1234")
           PR_NUM=$(git -C iiab log -1 --pretty=%B | grep -oP 'Merge pull request #\K[0-9]+' || echo "")
           if [[ "$TAG_NAME" =~ ^[0-9] ]]; then
             RELEASE_NAME="$TAG_NAME"
           elif [[ -n "$PR_NUM" ]]; then
-            # Use timestamp+PR for idempotent, chronologically sortable tags
-            # Format: daily-YYMMDDHHMM-PR1234 (sorts alphabetically & chronologically)
-            RELEASE_NAME="daily-${DATE}-${TIME}-PR${PR_NUM}"
+            # Use commit timestamp+PR for idempotent, chronologically sortable tags
+            # Format: daily-YYMMDD-HHMM-PR1234 (sorts alphabetically & chronologically)
+            RELEASE_NAME="daily-${COMMIT_DATE}-${COMMIT_TIME}-PR${PR_NUM}"
           else
             # Fallback to hash for non-PR commits
-            RELEASE_NAME="daily-${DATE}-${TIME}-${HASH}"
+            RELEASE_NAME="daily-${COMMIT_DATE}-${COMMIT_TIME}-${HASH}"
           fi
           echo "RELEASE_NAME=$RELEASE_NAME" >> $GITHUB_ENV
 
