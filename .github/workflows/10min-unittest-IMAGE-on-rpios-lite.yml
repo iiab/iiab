@@ -2,6 +2,9 @@ name: '"10 min" UNITTEST IMAGE on latest RPiOS Lite'
 
 on:
   push:
+    branches-ignore:
+      - main
+      - master
     paths-ignore:
       - '**/*.md'
       - '**/*.rst'
@@ -54,18 +57,34 @@ jobs:
 
           VERSION=$(grep '^iiab_base_ver:' ../iiab/vars/default_vars.yml | awk '{print $2}')
           echo "IIAB_BASE_VERSION=$VERSION" >> $GITHUB_ENV
-          DATE=$(date +'%y%m%d')
-          OS="raspios"
+          OS="rpios"
           EDITION="unittest"
           HASH=$(git -C ../iiab rev-parse --short=7 HEAD)
-          IMG_NAME="iiab-$VERSION-$DATE-$OS-$EDITION-$HASH"
+          COMMIT_DATE=$(git -C ../iiab log -1 --format=%cd --date=format:'%y%m%d')
+          COMMIT_TIME=$(git -C ../iiab log -1 --format=%cd --date=format:'%H%M')
+          # Use GitHub context for PR number (works for pull_request events)
+          PR_NUM="${{ github.event.pull_request.number }}"
+          if [[ -z "$PR_NUM" ]]; then
+            # Fallback: try to extract from merge commit message
+            PR_NUM=$(git -C ../iiab log -1 --pretty=%B | grep -oP 'Merge pull request #\K[0-9]+' || echo "")
+          fi
+          PR_NUM="${PR_NUM%/*}"
+          TAG_NAME="${{ github.ref_name }}"
+          TAG_NAME="${TAG_NAME%/*}"
+          if [[ "$TAG_NAME" =~ ^[0-9] ]]; then
+            IMG_NAME="iiab-$VERSION-$OS-$EDITION-$TAG_NAME"
+          elif [[ -n "$PR_NUM" ]]; then
+            IMG_NAME="iiab-$VERSION-$OS-$EDITION-${COMMIT_DATE}-${COMMIT_TIME}-PR${PR_NUM}"
+          else
+            IMG_NAME="iiab-$VERSION-$OS-$EDITION-${COMMIT_DATE}-${COMMIT_TIME}-${HASH}"
+          fi
           echo "IMG_NAME=$IMG_NAME" >> $GITHUB_ENV
 
           mkdir -p "$MOUNT_DIR/opt/iiab"
           cp -R --preserve=mode,timestamps,links ../iiab "$MOUNT_DIR/opt/iiab/"
 
           mkdir -p "$MOUNT_DIR/etc/iiab"
-          cp --preserve=mode,timestamps ../iiab/vars/local_vars_tiny.yml "$MOUNT_DIR/etc/iiab/local_vars.yml"
+          cp --preserve=mode,timestamps ../iiab/vars/local_vars_unittest.yml "$MOUNT_DIR/etc/iiab/local_vars.yml"
 
           echo "rpi_image: True" >> "$MOUNT_DIR/etc/iiab/local_vars.yml"
           sed -i "s/^iiab_admin_user_install: True/iiab_admin_user_install: False/" "$MOUNT_DIR/etc/iiab/local_vars.yml"
@@ -111,6 +130,8 @@ jobs:
           chroot $MOUNT_DIR /root/builder.sh
           echo "Leaving CHROOT"
 
+          fuser -vk -m "${MOUNT_DIR}"
+
           umount "${MOUNT_DIR}"/run
           umount "${MOUNT_DIR}"/tmp
           umount "${MOUNT_DIR}"/dev/pts
@@ -130,7 +151,7 @@ jobs:
           source "$STATE_FILE"
 
           diff \
-            <(sort ../iiab/.github/workflows/tests/expected_state_tiny_image.yml) \
+            <(sort ../iiab/.github/workflows/tests/expected_state_unittest_image.yml) \
             <(sort "$MOUNT_DIR/etc/iiab/iiab_state.yml")
 
           EOF
@@ -168,7 +189,7 @@ jobs:
           mv "$IMG_FILE" "${IMG_NAME}.img"
 
           # Compress image with zstd
-          zstd --long=27 -T0 -1 --stdout "${IMG_NAME}.img" > "${IMG_NAME}.img.zst"
+          zstd --long=27 -T0 -4 --stdout "${IMG_NAME}.img" > "${IMG_NAME}.img.zst"
           EOF
 
       - name: Generate rpi-imager manifest

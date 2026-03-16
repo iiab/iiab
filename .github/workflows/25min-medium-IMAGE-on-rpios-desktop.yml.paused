@@ -39,13 +39,24 @@ jobs:
       - name: Set release name
         id: release_name
         run: |
-          DATE=$(date +'%y%m%d')
           HASH=$(git -C iiab rev-parse --short=7 HEAD)
-          TAG_NAME=${{ github.ref_name }}
+          # Use commit timestamp for true idempotency (same commit = same tag)
+          COMMIT_DATE=$(git -C iiab log -1 --format=%cd --date=format:'%y%m%d')
+          COMMIT_TIME=$(git -C iiab log -1 --format=%cd --date=format:'%H%M')
+          TAG_NAME="${{ github.ref_name }}"
+          TAG_NAME="${TAG_NAME%/*}"
+          # Extract PR number from merge commit message (format: "Merge pull request #1234")
+          PR_NUM=$(git -C iiab log -1 --pretty=%B | grep -oP 'Merge pull request #\K[0-9]+' || echo "")
+          PR_NUM="${PR_NUM%/*}"
           if [[ "$TAG_NAME" =~ ^[0-9] ]]; then
             RELEASE_NAME="$TAG_NAME"
+          elif [[ -n "$PR_NUM" ]]; then
+            # Use commit timestamp+PR for idempotent, chronologically sortable tags
+            # Format: daily-YYMMDD-HHMM-PR1234 (sorts alphabetically & chronologically)
+            RELEASE_NAME="daily-${COMMIT_DATE}-${COMMIT_TIME}-PR${PR_NUM}"
           else
-            RELEASE_NAME="daily-${DATE}-${HASH}"
+            # Fallback to hash for non-PR commits
+            RELEASE_NAME="daily-${COMMIT_DATE}-${COMMIT_TIME}-${HASH}"
           fi
           echo "RELEASE_NAME=$RELEASE_NAME" >> $GITHUB_ENV
 
@@ -64,11 +75,21 @@ jobs:
 
           VERSION=$(grep '^iiab_base_ver:' ../iiab/vars/default_vars.yml | awk '{print $2}')
           echo "IIAB_BASE_VERSION=$VERSION" >> $GITHUB_ENV
-          DATE=$(date +'%y%m%d')
-          OS="raspios"
+          OS="rpios"
           EDITION="medium"
           HASH=$(git -C ../iiab rev-parse --short=7 HEAD)
-          IMG_NAME="iiab-desktop-$VERSION-$DATE-$OS-$EDITION-$HASH"
+          COMMIT_DATE=$(git -C ../iiab log -1 --format=%cd --date=format:'%y%m%d')
+          PR_NUM=$(git -C ../iiab log -1 --pretty=%B | grep -oP 'Merge pull request #\K[0-9]+' || echo "")
+          PR_NUM="${PR_NUM%/*}"
+          TAG_NAME="${{ github.ref_name }}"
+          TAG_NAME="${TAG_NAME%/*}"
+          if [[ "$TAG_NAME" =~ ^[0-9] ]]; then
+            IMG_NAME="iiab-desktop-$VERSION-$OS-$EDITION-$TAG_NAME"
+          elif [[ -n "$PR_NUM" ]]; then
+            IMG_NAME="iiab-desktop-$VERSION-$OS-$EDITION-${COMMIT_DATE}-PR${PR_NUM}"
+          else
+            IMG_NAME="iiab-desktop-$VERSION-$OS-$EDITION-${COMMIT_DATE}-${HASH}"
+          fi
           echo "IMG_NAME=$IMG_NAME" >> $GITHUB_ENV
 
           mkdir -p "$MOUNT_DIR/opt/iiab"
@@ -177,7 +198,7 @@ jobs:
           mv "$IMG_FILE" "${IMG_NAME}.img"
 
           # Compress image with zstd
-          zstd --long=27 -T0 -9 --stdout "${IMG_NAME}.img" > "${IMG_NAME}.img.zst"
+          zstd --long=27 -T0 -16 --stdout "${IMG_NAME}.img" > "${IMG_NAME}.img.zst"
           EOF
 
       - name: Generate rpi-imager manifest
@@ -313,15 +334,27 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # Delete daily releases older than 7 days
-          THRESHOLD=$(date -d "7 days ago" +%s)
+          cat << 'EOF' > old_dailies.py
+          import sys, json
+          from datetime import datetime, timedelta, timezone
 
-          gh release list --repo ${{ github.repository }} --json name,tagName,isDraft,isPrerelease,createdAt | \
-          jq -r '.[] | select(.name | startswith("daily-")) | "\(.name)\t\(.createdAt)"' | \
-          while IFS=$'\t' read -r release_name created_at; do
-            release_timestamp=$(date -d "$created_at" +%s)
-            if [[ $release_timestamp -lt $THRESHOLD ]]; then
-              echo "Deleting old daily release: $release_name"
-              gh release delete "$release_name" --repo ${{ github.repository }} --yes --cleanup-tag || true
-            fi
+          data = json.load(sys.stdin)
+          for r in data:
+              r['dt'] = datetime.fromisoformat(r['createdAt'].replace('Z', '+00:00'))
+
+          filtered = sorted(
+              [r for r in data if r.get('tagName', '').startswith('daily-') and r.get('isPrerelease')],
+              key=lambda x: x['dt'],
+              reverse=True
+          )
+
+          cutoff = datetime.now(timezone.utc) - timedelta(days=10)
+          for r in filtered[10:]:
+              if r['dt'] < cutoff:
+                  print(r['tagName'])
+          EOF
+
+          gh release list --repo ${{ github.repository }} --json tagName,isPrerelease,createdAt --limit 100 | python3 old_dailies.py | while read -r tag; do
+            echo "Deleting: $tag"
+            gh release delete "$tag" --repo ${{ github.repository }} --yes --cleanup-tag || true
           done
