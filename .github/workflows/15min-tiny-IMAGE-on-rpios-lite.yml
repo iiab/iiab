@@ -337,17 +337,27 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # Keep the 10 most recent pre-releases at all times.
-          # If there are more than 10 pre-releases from the prior 10 days, keep all of those.
-          CUTOFF=$(date -d "10 days ago" +%s)
+          cat << 'EOF' > old_dailies.py
+          import sys, json
+          from datetime import datetime, timedelta, timezone
 
-          gh release list --json tagName,name,isPrerelease,createdAt --limit 100 --jq '
-            [.[] | select(.tagName | startswith("daily-") and .isPrerelease)] 
-            | sort_by(.createdAt) | reverse 
-            | to_entries 
-            | .[] 
-            | select(.key >= 10 and (.value.createdAt | fromdateiso8601) < '$CUTOFF') 
-            | .value.tagName' | while read -r tag; do
-              echo "Deleting old daily release: $tag"
-              gh release delete "$tag" --repo ${{ github.repository }} --yes --cleanup-tag
+          data = json.load(sys.stdin)
+          for r in data:
+              r['dt'] = datetime.fromisoformat(r['createdAt'].replace('Z', '+00:00'))
+
+          filtered = sorted(
+              [r for r in data if r.get('tagName', '').startswith('daily-') and r.get('isPrerelease')],
+              key=lambda x: x['dt'],
+              reverse=True
+          )
+
+          cutoff = datetime.now(timezone.utc) - timedelta(days=10)
+          for r in filtered[10:]:
+              if r['dt'] < cutoff:
+                  print(r['tagName'])
+          EOF
+
+          gh release list --repo ${{ github.repository }} --json tagName,isPrerelease,createdAt --limit 100 | python3 old_dailies.py | while read -r tag; do
+            echo "Deleting: $tag"
+            gh release delete "$tag" --repo ${{ github.repository }} --yes --cleanup-tag || true
           done
