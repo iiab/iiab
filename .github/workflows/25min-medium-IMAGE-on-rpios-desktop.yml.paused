@@ -73,11 +73,19 @@ jobs:
 
           VERSION=$(grep '^iiab_base_ver:' ../iiab/vars/default_vars.yml | awk '{print $2}')
           echo "IIAB_BASE_VERSION=$VERSION" >> $GITHUB_ENV
-          DATE=$(date +'%y%m%d')
           OS="raspios"
           EDITION="medium"
           HASH=$(git -C ../iiab rev-parse --short=7 HEAD)
-          IMG_NAME="iiab-desktop-$VERSION-$DATE-$OS-$EDITION-$HASH"
+          COMMIT_DATE=$(git -C ../iiab log -1 --format=%cd --date=format:'%y%m%d')
+          PR_NUM=$(git -C ../iiab log -1 --pretty=%B | grep -oP 'Merge pull request #\K[0-9]+' || echo "")
+          TAG_NAME=${{ github.ref_name }}
+          if [[ "$TAG_NAME" =~ ^[0-9] ]]; then
+            IMG_NAME="iiab-desktop-$VERSION-$OS-$EDITION-$TAG_NAME"
+          elif [[ -n "$PR_NUM" ]]; then
+            IMG_NAME="iiab-desktop-$VERSION-$OS-$EDITION-${COMMIT_DATE}-PR${PR_NUM}"
+          else
+            IMG_NAME="iiab-desktop-$VERSION-$OS-$EDITION-${COMMIT_DATE}-${HASH}"
+          fi
           echo "IMG_NAME=$IMG_NAME" >> $GITHUB_ENV
 
           mkdir -p "$MOUNT_DIR/opt/iiab"
