@@ -41,8 +41,12 @@ jobs:
         run: |
           HASH=$(git -C iiab rev-parse --short=7 HEAD)
           # Use commit timestamp for true idempotency (same commit = same tag)
-          COMMIT_DATE=$(git -C iiab log -1 --format=%cd --date=format:'%y%m%d')
-          COMMIT_TIME=$(git -C iiab log -1 --format=%cd --date=format:'%H%M')
+          COMMIT_DATETIME_LOCAL=$(git -C iiab log -1 --format=%cd --date=iso-strict)
+          # Convert the local time to UTC using the 'date' command
+          COMMIT_DATETIME_UTC=$(date -d "$COMMIT_DATETIME_LOCAL" -u +"%Y-%m-%dT%H:%M:%SZ")
+          # Extract date and time components from the UTC timestamp
+          COMMIT_DATE=$(date -d "$COMMIT_DATETIME_UTC" +'%y%m%d')
+          COMMIT_TIME=$(date -d "$COMMIT_DATETIME_UTC" +'%H%M')
           TAG_NAME="${{ github.ref_name }}"
           TAG_NAME="${TAG_NAME%/*}"
           # Extract PR number from merge commit message (format: "Merge pull request #1234")
@@ -142,7 +146,7 @@ jobs:
           chroot $MOUNT_DIR /root/builder.sh
           echo "Leaving CHROOT"
 
-          fuser -vk -m "${MOUNT_DIR}"
+          fuser -vk -m "${MOUNT_DIR}" || true
 
           umount "${MOUNT_DIR}"/run
           umount "${MOUNT_DIR}"/tmp
