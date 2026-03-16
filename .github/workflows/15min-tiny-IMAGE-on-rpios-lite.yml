@@ -43,9 +43,11 @@ jobs:
           # Use commit timestamp for true idempotency (same commit = same tag)
           COMMIT_DATE=$(git -C iiab log -1 --format=%cd --date=format:'%y%m%d')
           COMMIT_TIME=$(git -C iiab log -1 --format=%cd --date=format:'%H%M')
-          TAG_NAME=${{ github.ref_name }}
+          TAG_NAME="${{ github.ref_name }}"
+          TAG_NAME="${TAG_NAME%/*}"
           # Extract PR number from merge commit message (format: "Merge pull request #1234")
           PR_NUM=$(git -C iiab log -1 --pretty=%B | grep -oP 'Merge pull request #\K[0-9]+' || echo "")
+          PR_NUM="${PR_NUM%/*}"
           if [[ "$TAG_NAME" =~ ^[0-9] ]]; then
             RELEASE_NAME="$TAG_NAME"
           elif [[ -n "$PR_NUM" ]]; then
@@ -73,12 +75,14 @@ jobs:
 
           VERSION=$(grep '^iiab_base_ver:' ../iiab/vars/default_vars.yml | awk '{print $2}')
           echo "IIAB_BASE_VERSION=$VERSION" >> $GITHUB_ENV
-          OS="raspios"
+          OS="rpios"
           EDITION="tiny"
           HASH=$(git -C ../iiab rev-parse --short=7 HEAD)
           COMMIT_DATE=$(git -C ../iiab log -1 --format=%cd --date=format:'%y%m%d')
           PR_NUM=$(git -C ../iiab log -1 --pretty=%B | grep -oP 'Merge pull request #\K[0-9]+' || echo "")
-          TAG_NAME=${{ github.ref_name }}
+          PR_NUM="${PR_NUM%/*}"
+          TAG_NAME="${{ github.ref_name }}"
+          TAG_NAME="${TAG_NAME%/*}"
           if [[ "$TAG_NAME" =~ ^[0-9] ]]; then
             IMG_NAME="iiab-$VERSION-$OS-$EDITION-$TAG_NAME"
           elif [[ -n "$PR_NUM" ]]; then
@@ -333,15 +337,17 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # Delete daily releases older than 7 days
-          THRESHOLD=$(date -d "7 days ago" +%s)
+          # Keep the 10 most recent pre-releases at all times.
+          # If there are more than 10 pre-releases from the prior 10 days, keep all of those.
+          CUTOFF=$(date -d "10 days ago" +%s)
 
-          gh release list --repo ${{ github.repository }} --json name,tagName,isDraft,isPrerelease,createdAt | \
-          jq -r '.[] | select(.name | startswith("daily-")) | "\(.name)\t\(.createdAt)"' | \
-          while IFS=$'\t' read -r release_name created_at; do
-            release_timestamp=$(date -d "$created_at" +%s)
-            if [[ $release_timestamp -lt $THRESHOLD ]]; then
-              echo "Deleting old daily release: $release_name"
-              gh release delete "$release_name" --repo ${{ github.repository }} --yes --cleanup-tag || true
-            fi
+          gh release list --json tagName,name,isPrerelease,createdAt --limit 100 --jq '
+            [.[] | select(.tagName | startswith("daily-") and .isPrerelease)] 
+            | sort_by(.createdAt) | reverse 
+            | to_entries 
+            | .[] 
+            | select(.key >= 10 and (.value.createdAt | fromdateiso8601) < '$CUTOFF') 
+            | .value.tagName' | while read -r tag; do
+              echo "Deleting old daily release: $tag"
+              gh release delete "$tag" --repo ${{ github.repository }} --yes --cleanup-tag
           done
