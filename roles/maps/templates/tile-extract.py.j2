@@ -25,6 +25,9 @@ def validate_extract_box(extract_box):
     except Exception:
         raise ValueError("extract_box is malformed: ", extract_box)
 
+def validate_noninteractive(noninteractive):
+    assert noninteractive in ("", "noninteractive"), f"`noninteractive` (optional) should only be set to \"noninteractive\". Got {noninteractive}"
+
 def get_extract_files(extract_name):
     MAPS_DATA_DATE = "{{ maps_data_date }}"
     MAPS_SLOW_DATA_DATE = "{{ maps_slow_data_date }}"
@@ -46,7 +49,9 @@ def get_extract_files(extract_name):
         "terrain": get_paths(f"terrarium.{MAPS_SLOW_DATA_DATE}"),
     }
 
-def yes_no(prompt):
+def yes_no(prompt, noninteractive, noninteractive_response):
+    if noninteractive:
+        return noninteractive_response
     while True:
         response = input(f'{prompt} y/n ')
         if response == "y":
@@ -110,7 +115,7 @@ def approve_download_size(extract_name):
                 break
 
         if re_match is None:
-            return yes_no("Cannot get file size estimate due to unexpected output from pmtiles. Download anyway?")
+            return yes_no("Cannot get file size estimate due to unexpected output from pmtiles. Download anyway?", False, None)
 
         (transfer_num, transfer_unit, archive_num, archive_unit) = re_match.groups()
 
@@ -143,13 +148,15 @@ def approve_download_size(extract_name):
     # Ask the user if they're okay with the size.
     return yes_no(
         f'\nNew regions will be {display(transfer_total)} downloaded, {display(archive_total)} on disk. This will'
-        f'\nleave about {display(free_b - archive_total)} free space on this partition. Continue?')
+        f'\nleave about {display(free_b - archive_total)} free space on this partition. Continue?',
+        noninteractive, True,
+    )
 
 
-def check_for_existing_name(extract_name):
+def check_for_existing_name(extract_name, noninteractive):
     existing_extracts = json.loads(open(EXTRACTS_JSON).read())
     if extract_name in existing_extracts["regions"].keys():
-        return yes_no(f'Already have a full quality region called \"{extract_name}\". Overwrite it?')
+        return yes_no(f'Already have a full quality region called \"{extract_name}\". Overwrite it?', noninteractive, False)
     else:
         return True
 
@@ -219,21 +226,34 @@ if __name__ == "__main__":
 
         case "extract":
             # Get and validate arguments
-            assert len(sys.argv) == 4, "extract takes two arguments: extract_name, extract_box"
-            extract_box = sys.argv[3]
+            assert len(sys.argv) in (4, 5), (
+                "extract arguments are: `extract_name`, `extract_box`, and (optional) `noninteractive`"
+            )
+
             extract_name = sys.argv[2]
+            extract_box = sys.argv[3]
+            noninteractive = sys.argv[4] if len(sys.argv) > 4 else ""
+
             validate_extract_name(extract_name)
             validate_extract_box(extract_box)
+            validate_noninteractive(noninteractive)
+            noninteractive = bool(noninteractive)
 
             # Check arguments against existing data
             update_extracts_json() # Make sure we have updated data before we check for overlaps
             if not check_for_overlaps(extract_box):
-                sys.exit("error: you cannot download overlapping full quality regions")
-            if not check_for_existing_name(extract_name):
-                sys.exit(1)
+                if noninteractive:
+                    sys.exit(0)
+                else:
+                    sys.exit("error: you cannot download overlapping full quality regions")
+            if not check_for_existing_name(extract_name, noninteractive):
+                if noninteractive:
+                    sys.exit(0)
+                else:
+                    sys.exit(1)
 
             # Get a download estimate and give users a chance to back out
-            if not approve_download_size(extract_name):
+            if not noninteractive and not approve_download_size(extract_name):
                 sys.exit(1)
 
             # Do the extracts
