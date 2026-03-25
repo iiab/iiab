@@ -192,7 +192,7 @@ maps_region_downloader: false
 
 If you are installing IIAB Maps for testing purposes (QA, CI, etc), there are "ultra-small" maps that you can install. These are too small[*] for useful map browsing, but still usable enough for QA testers.
 
-[*] Grand total disk usage is [~63 MB instead of the ~297 MB delivered by default_vars.yml](https://github.com/iiab/iiab/pull/4324), as of March 2026.
+[*] Grand total disk usage is [~66 MB instead of the ~312 MB delivered by default_vars.yml](https://github.com/iiab/iiab/pull/4324), as of March 2026.
 
    ```
    maps_ne6_zoom: ci
