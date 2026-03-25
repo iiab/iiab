@@ -13,7 +13,7 @@ NEW: Need more detail in specific areas, in addition to the above global maps? I
 
 To configure your map, set the following variables (for the options you choose!) in [/etc/iiab/local_vars.yml](https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it?) before installing IIAB software:
 
-1. If you want **~170 MB** = 85 MB vector (Lower detail, up to zoom 8, from Natural Earth) + 85 MB satellite (up to zoom 7), 
+1. If you want **~170 MB** = 85 MB vector (Lower detail, up to zoom 8, from Natural Earth) + 85 MB satellite (up to zoom 7):
 
    ```
    osm_vector_maps_install: False
@@ -187,6 +187,22 @@ maps_region_downloader: false
 ```
 
 ...and run the `maps` role again. At this point, you will be able to view your Full Quality Regions, but the Download and Delete buttons will be gone.
+
+## Testing
+
+If you are installing IIAB Maps for testing purposes (QA, CI, etc), there are "ultra-small" maps that you can install. These are too small[*] for useful map browsing, but still usable enough for QA testers.
+
+[*] Grand total disk usage is [~66 MB instead of the ~312 MB delivered by default_vars.yml](https://github.com/iiab/iiab/pull/4324), as of March 2026.
+
+   ```
+   maps_ne6_zoom: ci
+
+   maps_vector_quality: osm-z1
+   maps_satellite_zoom: 4
+
+   maps_search_engine: static
+   maps_search_static_db: pop-100k-cities
+   ```
 
 ## Installation Tips
 
