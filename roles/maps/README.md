@@ -136,7 +136,7 @@ PREREQ: Confirm [IIAB Maps]((#how-do-i-try-iiabs-new-maps-as-of-march-2026)) (wi
 In order to turn it on, add the following setting: (e.g. in [/etc/iiab/local_vars.yml](https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it?))
 
 ```
-maps_region_downloader: true
+maps_region_downloader: True
 ```
 
 Reinstall the new IIAB Maps, if already installed:
@@ -183,7 +183,7 @@ At the moment, overlapping regions are not allowed. However, if you find that yo
 Finally, once your Full Quality Regions are in place and you are ready to let others use your map, you can turn off the setting:
 
 ```
-maps_region_downloader: false
+maps_region_downloader: False
 ```
 
 ...and run the `maps` role again. At this point, you will be able to view your Full Quality Regions, but the Download and Delete buttons will be gone.
@@ -203,7 +203,7 @@ If you are installing IIAB Maps for testing purposes (QA, CI, etc), there are "u
    maps_search_engine: static
    maps_search_static_db: pop-100k-cities
 
-   maps_region_downloader: true
+   maps_region_downloader: True
    ```
 
 ## Installation Tips
