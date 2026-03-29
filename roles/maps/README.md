@@ -202,6 +202,8 @@ If you are installing IIAB Maps for testing purposes (QA, CI, etc), there are "u
 
    maps_search_engine: static
    maps_search_static_db: pop-100k-cities
+
+   maps_region_downloader: true
    ```
 
 ## Installation Tips
