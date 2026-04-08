@@ -1,6 +1,6 @@
 # IIAB Maps
 
-The new IIAB Maps (as of 2025 and 2026) lets your choose among multiple quality options — in each of these 4 areas — because we know your disk space is limited:
+The new IIAB Maps (as of 2025 and 2026) lets you choose among multiple quality options — in each of these 4 areas — because we know your disk space is limited:
 
 - [OpenStreetMap or Natural Earth](#how-do-i-try-iiabs-new-maps) (vector)
 - [Satellite Photos](#how-do-i-try-iiabs-new-maps) (raster)
