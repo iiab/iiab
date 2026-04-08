@@ -1,15 +1,15 @@
 # IIAB Maps
 
-The new IIAB Maps lets you choose a configuration that works for you. Because we know your disk space is limited, we give you multiple quality options, in each of these 4 areas:
+The new IIAB Maps (as of 2025 and 2026) lets your choose among multiple quality options — in each of these 4 areas — because we know your disk space is limited:
 
-- [OpenStreetMap or Natural Earth](#how-do-i-try-iiabs-new-maps-as-of-march-2026) (vector)
-- [Satellite Photos](#how-do-i-try-iiabs-new-maps-as-of-march-2026) (raster)
+- [OpenStreetMap or Natural Earth](#how-do-i-try-iiabs-new-maps) (vector)
+- [Satellite Photos](#how-do-i-try-iiabs-new-maps) (raster)
 - [Terrain](#what-about-3d-terrain) (optional 3D elevation data)
 - ​[Map search](#can-i-try-out-search) (e.g. to find cities and towns)
 
-NEW: Need more detail in specific areas, in addition to the above global maps? IIAB implementers/operators can download "[Full Quality Regions](#full-quality-regions-experimental)" for parts of the world that are especially important to their community. These high-res rectangular regions provide _maximum_ graphical detail, without using up too much disk space.
+NEW: Need more detail in specific areas, in addition to the above global maps? IIAB implementers/operators can download "[Full Quality Regions](#full-quality-regions)" for parts of the world that are especially important to their community. These high-res rectangular regions provide _maximum_ graphical detail, without using up too much disk space.
 
-## How do I try IIAB's new maps as of March 2026?
+## How do I try IIAB's new maps?
 
 To configure your map, set the following variables (for the options you choose!) in [/etc/iiab/local_vars.yml](https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it?) before installing IIAB software:
 
@@ -55,7 +55,7 @@ See `maps_dot_black_vector_tiles` and `maps_dot_black_satellite_tiles` [here](ht
 
 To add 3D (three-dimensional) terrain files, you can set this optional setting. You may find that when looking at mountains, high quality satellite imagery may compensate for low quality terrain, and vice versa.
 
-PREREQ: Confirm [IIAB Maps]((#how-do-i-try-iiabs-new-maps-as-of-march-2026)) (with global vector/satellite data) is installed!
+PREREQ: Confirm [IIAB Maps]((#how-do-i-try-iiabs-new-maps)) (with global vector/satellite data) is installed!
 
 1. If you want **~980 MB** terrain maps (up to zoom 7), include:
    ```
@@ -89,7 +89,7 @@ See `maps_dot_black_terrain_tiles` [here](https://github.com/iiab/iiab/blob/mast
 
 ## Can I try out search?
 
-PREREQ: Confirm [IIAB Maps]((#how-do-i-try-iiabs-new-maps-as-of-march-2026)) (with global vector/satellite data) is installed!
+PREREQ: Confirm [IIAB Maps]((#how-do-i-try-iiabs-new-maps)) (with global vector/satellite data) is installed!
 
 ### Low-power search
 
@@ -125,21 +125,21 @@ As of this writing it includes only administrative (i.e. political) regions and 
    maps_search_nominatim_db: full
    ```
 
-## Full Quality Regions (experimental)
+## Full Quality Regions
 
 You can download rectangular "Full Quality Regions" to supplement your lower-resolution world map. The goal is to provide your community with the latest high-res vector, satellite and terrain data for the regions they care about most.
 
-PREREQ: Confirm [IIAB Maps]((#how-do-i-try-iiabs-new-maps-as-of-march-2026)) (with global vector/satellite data) is installed!
+PREREQ: Confirm [IIAB Maps]((#how-do-i-try-iiabs-new-maps)) (with global vector/satellite data) is installed!
 
 ### Installation
 
-In order to turn it on, add the following setting: (e.g. in [/etc/iiab/local_vars.yml](https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it?))
+Make sure your IIAB has the following setting: (e.g. in [/etc/iiab/local_vars.yml](https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it?))
 
 ```
 maps_region_downloader: True
 ```
 
-Reinstall the new IIAB Maps, if already installed:
+Finally if your IIAB did not have the above setting, then you also need to enact it, by running:
 
 ```
 cd /opt/iiab/iiab
