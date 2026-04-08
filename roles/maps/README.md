@@ -55,7 +55,7 @@ See `maps_dot_black_vector_tiles` and `maps_dot_black_satellite_tiles` [here](ht
 
 To add 3D (three-dimensional) terrain files, you can set this optional setting. You may find that when looking at mountains, high quality satellite imagery may compensate for low quality terrain, and vice versa.
 
-PREREQ: Confirm [IIAB Maps]((#how-do-i-try-iiabs-new-maps)) (with global vector/satellite data) is installed!
+PREREQ: Confirm [IIAB Maps](#how-do-i-try-iiabs-new-maps) (with global vector/satellite data) is installed!
 
 1. If you want **~980 MB** terrain maps (up to zoom 7), include:
    ```
@@ -89,7 +89,7 @@ See `maps_dot_black_terrain_tiles` [here](https://github.com/iiab/iiab/blob/mast
 
 ## Can I try out search?
 
-PREREQ: Confirm [IIAB Maps]((#how-do-i-try-iiabs-new-maps)) (with global vector/satellite data) is installed!
+PREREQ: Confirm [IIAB Maps](#how-do-i-try-iiabs-new-maps) (with global vector/satellite data) is installed!
 
 ### Low-power search
 
@@ -129,7 +129,7 @@ As of this writing it includes only administrative (i.e. political) regions and 
 
 You can download rectangular "Full Quality Regions" to supplement your lower-resolution world map. The goal is to provide your community with the latest high-res vector, satellite and terrain data for the regions they care about most.
 
-PREREQ: Confirm [IIAB Maps]((#how-do-i-try-iiabs-new-maps)) (with global vector/satellite data) is installed!
+PREREQ: Confirm [IIAB Maps](#how-do-i-try-iiabs-new-maps) (with global vector/satellite data) is installed!
 
 ### Installation
 
