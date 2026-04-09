@@ -113,7 +113,7 @@ These options are not recommended for very low-power devices such as Raspberry P
 
 As of April 2026, it includes only administrative (i.e. political) regions and natural features.
 
-1. For **~640 MB** "small" (only California, as of this writing) search:
+1. For **~640 MB** "small" search (only California as of April 2026):
 
    ```
    maps_search_engine: nominatim
