@@ -1,13 +1,13 @@
 # IIAB Maps
 
-The new IIAB Maps (as of 2025 and 2026) lets you choose among multiple quality options — in each of these 4 areas — because we know your disk space is limited:
+The new IIAB Maps (as of 2025 and 2026) let you choose among multiple quality options — in each of these 4 areas — because we know your disk space is limited:
 
 - [OpenStreetMap or Natural Earth](#whats-a-minimum-iiab-maps-install) (vector)
 - [Satellite Photos](#whats-a-minimum-iiab-maps-install) (raster)
 - [Terrain](#how-do-i-install-3d-terrain) (optional 3D elevation data)
 - ​[Map Search](#how-do-i-install-map-search) (e.g. to find cities and towns)
 
-NEW: Need more detail in specific areas, in addition to the above global maps? IIAB implementers/operators can download "[Full Quality Regions](#full-quality-regions)" for parts of the world that are especially important to their community. These high-res rectangular regions provide _maximum_ graphical detail, without using up too much disk space.
+NEW: Need more detail in specific areas, in addition to the above global maps? IIAB implementers/operators can download "[Full Quality Regions](#full-quality-regions)" for parts of the world that are especially important to their community.  These high-res rectangular regions provide _maximum_ graphical detail, without using up too much disk space.
 
 ## What's a minimum IIAB Maps install?
 
@@ -55,7 +55,7 @@ See `maps_dot_black_vector_tiles` and `maps_dot_black_satellite_tiles` [here](ht
 
 ## How do I install 3D terrain?
 
-To add 3D (three-dimensional) terrain files, you can set this optional setting. You may find that when looking at mountains, high quality satellite imagery may compensate for low quality terrain, and vice versa.
+To add 3D (three-dimensional) terrain files, you can set this optional setting.  You may find that when looking at mountains, high quality satellite imagery may compensate for low quality terrain, and vice versa.
 
 PREREQ: Confirm that at least a [minimum IIAB Maps](#whats-a-minimum-iiab-maps-install) is installed!
 
@@ -95,7 +95,7 @@ PREREQ: Confirm that at least a [minimum IIAB Maps](#whats-a-minimum-iiab-maps-i
 
 ### Low-power Search
 
-This option is good for all devices. Fast and simple, but limited features.
+This option is good for all devices.  Fast and simple, but limited features.
 
 Allows users to search for any city or town with population 1000 or higher (**~35MB**).
 
@@ -107,11 +107,11 @@ Allows users to search for any city or town with population 1000 or higher (**~3
 ![Search](README/search.png)
 ![Search Result](README/search-result.png)
 
-### High-power Search (which is still experimental)
+### High-power Search (experimental)
 
 These options are not recommended for very low-power devices such as Raspberry Pi [Zero 2 W](https://www.raspberrypi.com/products/raspberry-pi-zero-2-w/), though this might change.
 
-As of this writing it includes only administrative (i.e. political) regions and natural features.
+As of April 2026, it includes only administrative (i.e. political) regions and natural features.
 
 1. For **~640 MB** "small" (only California, as of this writing) search:
 
@@ -129,7 +129,7 @@ As of this writing it includes only administrative (i.e. political) regions and 
 
 ## Full Quality Regions
 
-You can download rectangular "Full Quality Regions" (FQR) to supplement your lower-resolution world map. The goal is to provide your community with the latest high-res vector, satellite and terrain data for the regions they care about most.
+You can download rectangular "Full Quality Regions" (FQRs) to supplement your lower-resolution world map.  The goal is to provide your community with the latest high-res vector, satellite and terrain data for the regions they care about most.
 
 DETAILS: IIAB's FQR downloadable regions include OpenStreetMap vector data up to [zoom level](https://wiki.openstreetmap.org/wiki/Zoom_levels) 14, satellite data up to zoom level 13, and 3rd terrain up to zoom level 10.  (As of April 2026, [Map Search data](#how-do-i-install-map-search) is not yet affected, no matter how many FQR regions you download!)
 
@@ -137,7 +137,7 @@ PREREQ: Confirm that at least a [minimum IIAB Maps](#whats-a-minimum-iiab-maps-i
 
 ### Installation
 
-Make sure your IIAB has the following setting: (e.g. in [/etc/iiab/local_vars.yml](https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it?))
+Make sure your IIAB has the following setting:  (e.g. in [/etc/iiab/local_vars.yml](https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it?))
 
 ```
 maps_region_downloader: True
@@ -152,13 +152,13 @@ sudo ./install --reinstall maps
 
 ### Downloading Regions
 
-Open your map. You will find a new button on the top left:
+Open your map.  You will find a new button on the top left:
 
 ![Download Button](README/download-button.png)
 
-If you click it, you'll enter a new "drawing" mode. You'll see your cursor change.
+If you click it, you'll enter a new "drawing" mode.  You'll see your cursor change.
 
-Draw a rectangle that represents the region you want to download. To draw, click one corner of the rectangle and then the opposite corner. **(Make sure to only click, do not drag!)**.
+Draw a rectangle that represents the region you want to download.  To draw, click one corner of the rectangle and then the opposite corner.  **(Make sure to only click, do not drag!)**.
 
 Once you have a rectangle, you'll immediately see a pop-up in the middle of it:
 
@@ -168,11 +168,11 @@ Follow the instructions on the pop-up to download your region.
 
 ### Viewing Regions
 
-You can test out your downloaded Full Quality Region by clicking on the new rectangle on the map. You should be able to see everything at full quality (terrain up to zoom level 10).
+You can test out your downloaded Full Quality Region by clicking on the new rectangle on the map.  You should be able to see everything at full quality (terrain up to zoom level 10).
 
 ### Deleting Regions
 
-To delete a region, first make sure you are "inside" that region (instead of the full world map). Once there, you should see a delete button on the top left:
+To delete a region, first make sure you are "inside" that region (instead of the full world map).  Once there, you should see a delete button on the top left:
 
 ![Delete Button](README/delete-button.png)
 
@@ -180,7 +180,7 @@ When you click it, it will bring up another pop-up with instructions on how to d
 
 ### Overlapping Regions
 
-At the moment, overlapping regions are not allowed. However, if you find that you want to expand a region, you can always delete it and download a larger one instead.
+At the moment, overlapping regions are not allowed.  However, if you find that you want to expand a region, you can always delete it and download a larger one instead.
 
 ### Final Setup for Users
 
@@ -190,11 +190,11 @@ Finally, once your Full Quality Regions are in place and you are ready to let ot
 maps_region_downloader: False
 ```
 
-...and run the `maps` role again. At this point, you will be able to view your Full Quality Regions, but the Download and Delete buttons will be gone.
+...and run the `maps` role again.  At this point, you will be able to view your Full Quality Regions, but the Download and Delete buttons will be gone.
 
 ## Testing
 
-If you are installing IIAB Maps for testing purposes (QA, CI, etc), there are "ultra-small" maps that you can install. These are too small[*] for useful map browsing, but still usable enough for QA testers.
+If you are installing IIAB Maps for testing purposes (QA, CI, etc), there are "ultra-small" maps that you can install.  These are too small[*] for useful map browsing, but still usable enough for QA testers.
 
 [*] Grand total disk usage is [~66 MB instead of the ~312 MB delivered by default_vars.yml](https://github.com/iiab/iiab/pull/4324), as of March 2026.
 
@@ -239,7 +239,7 @@ What I hope to be working on in the next few months
 * Adding more data to static search
     * Add natural features, historical places, etc
     * Search optimizations for large databases
-    * Sorting non-cities (natural feature, etc) vs cities. Cannot rely on population anymore.
+    * Sorting non-cities (natural feature, etc) vs cities.  Cannot rely on population anymore.
     * Even if this becomes "big", we should keep a small database around as an option.
 
 **May 2026**:
