@@ -129,7 +129,9 @@ As of this writing it includes only administrative (i.e. political) regions and 
 
 ## Full Quality Regions
 
-You can download rectangular "Full Quality Regions" to supplement your lower-resolution world map. The goal is to provide your community with the latest high-res vector, satellite and terrain data for the regions they care about most.
+You can download rectangular "Full Quality Regions" (FQR) to supplement your lower-resolution world map. The goal is to provide your community with the latest high-res vector, satellite and terrain data for the regions they care about most.
+
+DETAILS: IIAB's FQR downloadable regions include OpenStreetMap vector data up to [zoom level](https://wiki.openstreetmap.org/wiki/Zoom_levels) 14, satellite data up to zoom level 13, and 3rd terrain up to zoom level 10.  (As of April 2026, [Map Search data](#how-do-i-install-map-search) is not yet affected, no matter how many FQR regions you download!)
 
 PREREQ: Confirm that at least a [minimum IIAB Maps](#whats-a-minimum-iiab-maps-install) is installed!
 
@@ -226,7 +228,7 @@ For large file downloads:
 
 What I hope to be working on in the next few months
 
-**March 2026**:
+~**March 2026**:~
 
 * Search fixes (search for two-letter words)
 * Smarter sorting (Distance, word length)
