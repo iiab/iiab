@@ -147,7 +147,7 @@ Finally if your IIAB did not have the above setting, then you also need to enact
 
 ```
 cd /opt/iiab/iiab
-sudo ./install --reinstall maps
+sudo ./runrole --reinstall maps
 ```
 
 ### Downloading Regions
@@ -216,6 +216,23 @@ For large file downloads:
 
 * If there is an interruption and you need to run it again, it should resume where it left off.
 * If you want to see download progress, read the Ansible output for instructions.
+
+## How to change or upgrade your IIAB Maps
+
+If your original IIAB install was many months ago (or many years ago), it's far better to start from scratch, [installing a completely new version of IIAB](https://wiki.iiab.io/go/FAQ#Is_a_quick_installation_possible?).
+
+If your original IIAB install was recent, it's usually safe to update your IIAB software: (at your own risk, and make sure you have enough disk space!)
+
+```
+cd /opt/iiab/iiab
+git pull
+```
+
+After [changing any IIAB Maps variables](#whats-a-minimum-iiab-maps-install) in /etc/iiab/local_vars.yml, you can now "reinstall" IIAB Maps to enact your new settings, by running:
+
+```
+sudo ./runrole --reinstall maps
+```
 
 ## Further options & detail:
 
