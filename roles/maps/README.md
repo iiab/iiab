@@ -1,6 +1,6 @@
 # IIAB Maps
 
-The new IIAB Maps (as of 2025 and 2026) let you choose among multiple quality options — in each of these 4 areas — because we know your disk space is limited:
+The new IIAB Maps (as of 2025 and 2026) lets you choose among multiple quality options — in each of these 4 areas — because we know your disk space is limited:
 
 - [OpenStreetMap or Natural Earth](#whats-a-minimum-iiab-maps-install) (vector)
 - [Satellite Photos](#whats-a-minimum-iiab-maps-install) (raster)
@@ -15,7 +15,7 @@ You need to decide (A) how much global vector detail... and (B) how much global 
 
 Here are 3 examples below, to help you decide what you'll put in [/etc/iiab/local_vars.yml](https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it?) (do this before installing IIAB software!)
 
-1. If you want **~170 MB** = 85 MB vector (Lower detail, up to zoom 8, from Natural Earth) + 85 MB satellite (up to zoom 7):
+1. If you want **~170 MB** = 85 MB vector (Lower detail, up to [zoom](https://wiki.openstreetmap.org/wiki/Zoom_levels) 8 [users can overzoom to zoom 12], from Natural Earth) + 85 MB satellite (up to zoom 7):
 
    ```
    osm_vector_maps_install: False
@@ -31,7 +31,7 @@ Here are 3 examples below, to help you decide what you'll put in [/etc/iiab/loca
 ![Vector Natural Earth](README/vector-satellite/vector-ne.png)
 ![Satellite Zoom 7](README/vector-satellite/satellite-7.png)
 
-2. Or if you want **~3.1 GB** = 1.9 GB vector (Higher detail, up to zoom 9, from OpenStreetMap) + 1.2 GB satellite (up to zoom 9), include:
+2. Or if you want **~3.1 GB** = 1.9 GB vector (Higher detail, up to zoom 9 [users can overzoom to zoom 13], from OpenStreetMap) + 1.2 GB satellite (up to zoom 9), include:
 
    ```
    maps_vector_quality: osm-z9
@@ -41,7 +41,7 @@ Here are 3 examples below, to help you decide what you'll put in [/etc/iiab/loca
 ![Vector OSM Zoom 9](README/vector-satellite/vector-osm-z9.png)
 ![Satellite Zoom 9](README/vector-satellite/satellite-9.png)
 
-3. Or if you want **~168 GB** = 78 GB vector (Higher detail, up to zoom 14, including 3D buildings, from OpenStreetMap) + 80 GB satellite (up to zoom 12), include:
+3. Or if you want **~168 GB** = 78 GB vector (Higher detail, up to zoom 14 [users can overzoom to zoom 18], including 3D buildings, from OpenStreetMap) + 80 GB satellite (up to zoom 12), include:
 
    ```
    maps_vector_quality: osm-full
