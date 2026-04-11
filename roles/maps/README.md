@@ -221,7 +221,7 @@ For large file downloads:
 
 If your original IIAB install was many months ago (or many years ago), it's far better to start from scratch, [installing a completely new version of IIAB](https://wiki.iiab.io/go/FAQ#Is_a_quick_installation_possible?).
 
-If your original IIAB install was recent, it's usually safe to update your IIAB software: (at your own risk, and make sure you have enough disk space!)
+If your original IIAB install was recent, it's usually safe to update your IIAB software: (at your own risk, if your IIAB is online, and has enough disk space!)
 
 ```
 cd /opt/iiab/iiab
