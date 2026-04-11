@@ -135,26 +135,26 @@ You can download rectangular "Full Quality Regions" (FQRs) to supplement your lo
 
 DETAILS: IIAB's downloadable regions (FQRs) include OpenStreetMap vector data up to [zoom level](https://wiki.openstreetmap.org/wiki/Zoom_levels) 14 (overzoomable to about zoom level 18), satellite photo data up to zoom level 13, and 3D terrain up to zoom level 10.  (As of April 2026, [Map Search data](#how-do-i-install-map-search) is not yet affected, no matter how many FQR regions you download!)
 
-### Installation
+### Prerequisites
 
-PREREQ: Confirm that at least a [minimum IIAB Maps](#whats-a-minimum-iiab-maps-install) is installed!
+1. Confirm that at least a [minimum IIAB Maps](#whats-a-minimum-iiab-maps-install) is installed.
 
-Check that your IIAB has the following setting:  (e.g. in [/etc/iiab/local_vars.yml](https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it?))
+2. Check that your IIAB has the following setting:  (e.g. in [/etc/iiab/local_vars.yml](https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it?))
 
-```
-maps_region_downloader: True
-```
+   ```
+   maps_region_downloader: True
+   ```
 
-If your IIAB doesn't the above setting, then you need to enact it, and then run:
+3. If your IIAB doesn't the above setting, then you need to enact it, and then run:
 
-```
-cd /opt/iiab/iiab
-sudo ./runrole --reinstall maps
-```
+   ```
+   cd /opt/iiab/iiab
+   sudo ./runrole maps --reinstall
+   ```
 
 ### Downloading Regions
 
-Open your IIAB Maps by browsing to http://box/maps or http://10.10.10.10/maps
+Open your IIAB Maps, e.g. by browsing to http://box/maps or http://10.10.10.10/maps
 
 Look for this button in the top-left:
 
@@ -188,13 +188,20 @@ At the moment, overlapping regions are not allowed.  However, if you find that y
 
 ### Final Setup for Users
 
-Finally, once your Full Quality Regions are in place and you are ready to let others use your map, you can turn off the setting:
+Once your Full Quality Regions are in place and ready for others to browse, you can turn off downloading of additional regions in `/etc/iiab/local_vars.yml`, by setting:
 
 ```
 maps_region_downloader: False
 ```
 
-...and run the `maps` role again.  At this point, you will be able to view your Full Quality Regions, but the Download and Delete buttons will be gone.
+Finalize this setting by reinstalling the `maps` role:
+
+```
+cd /opt/iiab/iiab
+sudo ./runrole maps --reinstall
+```
+
+When this completes, the Download and Delete buttons should be gone (for anybody who reloads http://box/maps or http://10.10.10.10/maps).
 
 ## Testing
 
@@ -235,7 +242,7 @@ sudo git pull
 After [changing any IIAB Maps variables](#whats-a-minimum-iiab-maps-install) in `/etc/iiab/local_vars.yml`, you can now "reinstall" IIAB Maps to enact your new settings, by running:
 
 ```
-sudo ./runrole --reinstall maps
+sudo ./runrole maps --reinstall
 ```
 
 ## Further options & detail:
