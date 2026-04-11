@@ -9,6 +9,8 @@ The new IIAB Maps (as of 2025 and 2026) lets you choose among multiple quality o
 
 NEW: Need more detail in specific areas, in addition to the above global maps? IIAB implementers/operators can download "[Full Quality Regions](#full-quality-regions)" for parts of the world that are especially important to their community.  These high-res rectangular regions provide _maximum_ graphical detail, without using up too much disk space.
 
+Follow the instructions below, so that your IIAB ([Internet-in-a-Box](https://internet-in-a-box.org/)) users will be able browse IIAB Maps at http://box/maps or http://10.10.10.10/maps
+
 ## What's a minimum IIAB Maps install?
 
 You need to decide (A) how much global vector detail... and (B) how much global satellite photo detail... your community needs!
@@ -219,16 +221,16 @@ For large file downloads:
 
 ## How to change or upgrade your IIAB Maps
 
-If your original IIAB install was many months ago (or many years ago), it's far better to start from scratch, [installing a completely new version of IIAB](https://wiki.iiab.io/go/FAQ#Is_a_quick_installation_possible?).
+If your IIAB was installed many months ago (or many years ago), it's far better to start from scratch [installing a completely new version of IIAB](https://wiki.iiab.io/go/FAQ#Is_a_quick_installation_possible?).
 
-If your original IIAB install was recent, it's usually safe to update your IIAB software: (at your own risk, if your IIAB is online, and has enough disk space!)
+If your IIAB was installed quite recently, it's usually safe to update your IIAB software: (at your own risk, if your IIAB is online, and has enough disk space!)
 
 ```
 cd /opt/iiab/iiab
 sudo git pull
 ```
 
-After [changing any IIAB Maps variables](#whats-a-minimum-iiab-maps-install) in /etc/iiab/local_vars.yml, you can now "reinstall" IIAB Maps to enact your new settings, by running:
+After [changing any IIAB Maps variables](#whats-a-minimum-iiab-maps-install) in `/etc/iiab/local_vars.yml`, you can now "reinstall" IIAB Maps to enact your new settings, by running:
 
 ```
 sudo ./runrole --reinstall maps
