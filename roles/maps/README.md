@@ -1,5 +1,7 @@
 # IIAB Maps
 
+[Internet-in-a-Box (IIAB)](https://internet-in-a-box.org/) Maps is similar to Google Maps, but better suited for schools: it works offline (including satellite photos, and 3D terrain) and avoids all advertising!
+
 The new IIAB Maps (as of 2025 and 2026) lets you choose among multiple quality options — in each of these 4 areas — because we know your disk space is limited:
 
 - [OpenStreetMap or Natural Earth](#whats-a-minimum-iiab-maps-install) (vector)
@@ -7,9 +9,9 @@ The new IIAB Maps (as of 2025 and 2026) lets you choose among multiple quality o
 - [Terrain](#how-do-i-install-3d-terrain) (optional 3D elevation data)
 - ​[Map Search](#how-do-i-install-map-search) (e.g. to find cities and towns)
 
-NEW: Need more detail in specific areas, in addition to the above global maps? IIAB implementers/operators can download "[Full Quality Regions](#full-quality-regions)" for parts of the world that are especially important to their community.  These high-res rectangular regions provide _maximum_ graphical detail, without using up too much disk space.
+NEW: Do you want vivid detail in specific areas, in addition to the above global maps? IIAB implementers/operators can download "[Full Quality Regions](#full-quality-regions)" for parts of the world that are especially important to their community.  These high-res rectangular regions provide _maximum_ graphical detail, without using up too much disk space.
 
-Follow the instructions below, so that your IIAB ([Internet-in-a-Box](https://internet-in-a-box.org/)) users will be able browse IIAB Maps at http://box/maps or http://10.10.10.10/maps
+Follow the instructions below, so that your IIAB users will be able browse IIAB Maps at http://box/maps or http://10.10.10.10/maps
 
 ## What's a minimum IIAB Maps install?
 
@@ -135,32 +137,34 @@ You can download rectangular "Full Quality Regions" (FQRs) to supplement your lo
 
 DETAILS: IIAB's downloadable regions (FQRs) include OpenStreetMap vector data up to [zoom level](https://wiki.openstreetmap.org/wiki/Zoom_levels) 14 (overzoomable to about zoom level 18), satellite photo data up to zoom level 13, and 3D terrain up to zoom level 10.  (As of April 2026, [Map Search data](#how-do-i-install-map-search) is not yet affected, no matter how many FQR regions you download!)
 
-### Installation
+### Prerequisites
 
-PREREQ: Confirm that at least a [minimum IIAB Maps](#whats-a-minimum-iiab-maps-install) is installed!
+1. Confirm that at least a [minimum IIAB Maps](#whats-a-minimum-iiab-maps-install) is installed.
 
-Make sure your IIAB has the following setting:  (e.g. in [/etc/iiab/local_vars.yml](https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it?))
+2. Check that your IIAB has the following setting:  (e.g. in [/etc/iiab/local_vars.yml](https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it?))
 
-```
-maps_region_downloader: True
-```
+   ```
+   maps_region_downloader: True
+   ```
 
-Finally if your IIAB did not have the above setting, then you also need to enact it, by running:
+3. If your IIAB doesn't have the above setting, then you need to enact it, and then run:
 
-```
-cd /opt/iiab/iiab
-sudo ./runrole --reinstall maps
-```
+   ```
+   cd /opt/iiab/iiab
+   sudo ./runrole maps --reinstall
+   ```
 
 ### Downloading Regions
 
-Open your map.  You will find a new button on the top left:
+Open your IIAB Maps, e.g. by browsing to http://box/maps or http://10.10.10.10/maps
+
+Look for this button in the top-left:
 
 ![Download Button](README-assets/download-button.png)
 
-If you click it, you'll enter a new "drawing" mode.  You'll see your cursor change.
+Click the button to enter "drawing" mode (your mouse pointer should change).
 
-Draw a rectangle that represents the region you want to download.  To draw, click one corner of the rectangle and then the opposite corner.  **(Make sure to only click, do not drag!)**.
+Draw a rectangle that represents the region you want to download.  To draw, click one corner of the rectangle and then the opposite corner.  **(Make sure to only click, do not drag!)**
 
 Once you have a rectangle, you'll immediately see a pop-up in the middle of it:
 
@@ -174,7 +178,7 @@ You can test out your downloaded Full Quality Region by clicking on the new rect
 
 ### Deleting Regions
 
-To delete a region, first make sure you are "inside" that region (instead of the full world map).  Once there, you should see a delete button on the top left:
+To delete a region, first make sure you are "inside" that region (instead of the full world map).  Once there, you should see a Delete button on the top left:
 
 ![Delete Button](README-assets/delete-button.png)
 
@@ -186,13 +190,20 @@ At the moment, overlapping regions are not allowed.  However, if you find that y
 
 ### Final Setup for Users
 
-Finally, once your Full Quality Regions are in place and you are ready to let others use your map, you can turn off the setting:
+Once your Full Quality Regions are in place and ready for others to browse, you can turn off downloading of additional regions in `/etc/iiab/local_vars.yml`, by setting:
 
 ```
 maps_region_downloader: False
 ```
 
-...and run the `maps` role again.  At this point, you will be able to view your Full Quality Regions, but the Download and Delete buttons will be gone.
+Finalize this setting by reinstalling the `maps` role:
+
+```
+cd /opt/iiab/iiab
+sudo ./runrole maps --reinstall
+```
+
+Once that completes, the Download and Delete buttons should be gone (for anybody who reloads http://box/maps or http://10.10.10.10/maps).
 
 ## Testing
 
@@ -233,7 +244,7 @@ sudo git pull
 After [changing any IIAB Maps variables](#whats-a-minimum-iiab-maps-install) in `/etc/iiab/local_vars.yml`, you can now "reinstall" IIAB Maps to enact your new settings, by running:
 
 ```
-sudo ./runrole --reinstall maps
+sudo ./runrole maps --reinstall
 ```
 
 ## Further options & detail:
