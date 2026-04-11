@@ -1,6 +1,6 @@
 # IIAB Maps
 
-[Internet-in-a-Box (IIAB)](https://internet-in-a-box.org/) Maps are similar to Google Maps, but better suited for schools: they work offline (including satellite photos, and 3D terrain) and avoid all advertising.
+[Internet-in-a-Box (IIAB)](https://internet-in-a-box.org/) Maps is similar to Google Maps, but better suited for schools: it works offline (including satellite photos, and 3D terrain) and avoids all advertising!
 
 The new IIAB Maps (as of 2025 and 2026) lets you choose among multiple quality options — in each of these 4 areas — because we know your disk space is limited:
 
@@ -9,7 +9,7 @@ The new IIAB Maps (as of 2025 and 2026) lets you choose among multiple quality o
 - [Terrain](#how-do-i-install-3d-terrain) (optional 3D elevation data)
 - ​[Map Search](#how-do-i-install-map-search) (e.g. to find cities and towns)
 
-NEW: Do you need more detail in specific areas, in addition to the above global maps? IIAB implementers/operators can download "[Full Quality Regions](#full-quality-regions)" for parts of the world that are especially important to their community.  These high-res rectangular regions provide _maximum_ graphical detail, without using up too much disk space.
+NEW: Do you need comprehensive detail in specific areas, in addition to the above global maps? IIAB implementers/operators can download "[Full Quality Regions](#full-quality-regions)" for parts of the world that are especially important to their community.  These high-res rectangular regions provide _maximum_ graphical detail, without using up too much disk space.
 
 Follow the instructions below, so that your IIAB users will be able browse IIAB Maps at http://box/maps or http://10.10.10.10/maps
 
