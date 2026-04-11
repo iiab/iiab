@@ -15,7 +15,7 @@ You need to decide (A) how much global vector detail... and (B) how much global 
 
 Here are 3 examples below, to help you decide what you'll put in [/etc/iiab/local_vars.yml](https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it?) (do this before installing IIAB software!)
 
-1. If you want **~170 MB** = 85 MB vector (Lower detail, up to [zoom level](https://wiki.openstreetmap.org/wiki/Zoom_levels) 8 [users can overzoom to zoom 12], from Natural Earth) + 85 MB satellite (up to zoom 7):
+1. If you want **~170 MB** = 85 MB vector (Lower detail, up to [zoom level](https://wiki.openstreetmap.org/wiki/Zoom_levels) 8 [users can overzoom to zoom 12], from [Natural Earth](https://www.naturalearthdata.com/) a.k.a. "ne") + 85 MB satellite (up to zoom 7):
 
    ```
    osm_vector_maps_install: False
@@ -225,7 +225,7 @@ If your original IIAB install was recent, it's usually safe to update your IIAB 
 
 ```
 cd /opt/iiab/iiab
-git pull
+sudo git pull
 ```
 
 After [changing any IIAB Maps variables](#whats-a-minimum-iiab-maps-install) in /etc/iiab/local_vars.yml, you can now "reinstall" IIAB Maps to enact your new settings, by running:
