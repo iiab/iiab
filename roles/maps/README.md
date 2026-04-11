@@ -151,7 +151,7 @@ DETAILS: IIAB's downloadable regions (FQRs) include OpenStreetMap vector data up
 
    ```
    cd /opt/iiab/iiab
-   sudo ./runrole maps --reinstall
+   sudo ./runrole --reinstall maps
    ```
 
 ### Downloading Regions
@@ -196,11 +196,11 @@ Once your Full Quality Regions are in place and ready for others to browse, you 
 maps_region_downloader: False
 ```
 
-Finalize this setting by reinstalling the `maps` role:
+Finalize the setting by reinstalling the `maps` role:
 
 ```
 cd /opt/iiab/iiab
-sudo ./runrole maps --reinstall
+sudo ./runrole --reinstall maps
 ```
 
 Once that completes, the Download and Delete buttons should be gone (for anybody who reloads http://box/maps or http://10.10.10.10/maps).
