@@ -178,7 +178,7 @@ You can test out your downloaded Full Quality Region by clicking on the new rect
 
 ### Deleting Regions
 
-To delete a region, first make sure you are "inside" that region (instead of the full world map).  Once there, you should see a delete button on the top left:
+To delete a region, first make sure you are "inside" that region (instead of the full world map).  Once there, you should see a Delete button on the top left:
 
 ![Delete Button](README-assets/delete-button.png)
 
@@ -203,7 +203,7 @@ cd /opt/iiab/iiab
 sudo ./runrole maps --reinstall
 ```
 
-Once this completes, the Download and Delete buttons should be gone (for anybody who reloads http://box/maps or http://10.10.10.10/maps).
+Once that completes, the Download and Delete buttons should be gone (for anybody who reloads http://box/maps or http://10.10.10.10/maps).
 
 ## Testing
 
