@@ -139,13 +139,13 @@ DETAILS: IIAB's downloadable regions (FQRs) include OpenStreetMap vector data up
 
 PREREQ: Confirm that at least a [minimum IIAB Maps](#whats-a-minimum-iiab-maps-install) is installed!
 
-Make sure your IIAB has the following setting:  (e.g. in [/etc/iiab/local_vars.yml](https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it?))
+Check that your IIAB has the following setting:  (e.g. in [/etc/iiab/local_vars.yml](https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it?))
 
 ```
 maps_region_downloader: True
 ```
 
-Finally if your IIAB did not have the above setting, then you also need to enact it, by running:
+If your IIAB doesn't the above setting, then you need to enact it, and then run:
 
 ```
 cd /opt/iiab/iiab
@@ -154,11 +154,13 @@ sudo ./runrole --reinstall maps
 
 ### Downloading Regions
 
-Open your map.  You will find a new button on the top left:
+Open your IIAB Maps by browsing to http://box/maps or http://10.10.10.10/maps
+
+Look for this button in the top-left:
 
 ![Download Button](README-assets/download-button.png)
 
-If you click it, you'll enter a new "drawing" mode.  You'll see your cursor change.
+Click the button to enter "drawing" mode (your mouse pointer should change).
 
 Draw a rectangle that represents the region you want to download.  To draw, click one corner of the rectangle and then the opposite corner.  **(Make sure to only click, do not drag!)**.
 
