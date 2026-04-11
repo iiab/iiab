@@ -164,7 +164,7 @@ Look for this button in the top-left:
 
 Click the button to enter "drawing" mode (your mouse pointer should change).
 
-Draw a rectangle that represents the region you want to download.  To draw, click one corner of the rectangle and then the opposite corner.  **(Make sure to only click, do not drag!)**.
+Draw a rectangle that represents the region you want to download.  To draw, click one corner of the rectangle and then the opposite corner.  **(Make sure to only click, do not drag!)**
 
 Once you have a rectangle, you'll immediately see a pop-up in the middle of it:
 
