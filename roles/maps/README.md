@@ -190,7 +190,7 @@ At the moment, overlapping regions are not allowed.  However, if you find that y
 
 ### Final Setup for Users
 
-Once your Full Quality Regions are in place and ready for others to browse, you can turn off downloading of additional regions in `/etc/iiab/local_vars.yml`, by setting:
+Once your Full Quality Regions are in place and ready for others to browse, you can turn off downloading of additional regions in `/etc/iiab/local_vars.yml` by setting:
 
 ```
 maps_region_downloader: False
