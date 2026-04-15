@@ -33,22 +33,17 @@
              *    configs   *
              ****************/
 
-            const MAPS_DATA_DATE = "{{ maps_data_date }}"
+            const MAPS_VECTOR_DATA_DATE = "{{ maps_vector_data_date }}"
             const MAPS_SLOW_DATA_DATE = "{{ maps_slow_data_date }}"
             const MAPS_VECTOR_QUALITY = "{{ maps_vector_quality }}"
             const MAPS_VECTOR_IS_OSM = MAPS_VECTOR_QUALITY.includes("osm")
 
             let MAPS_SATELLITE_ZOOM = Number("{{ maps_satellite_zoom }}")
             if (Number.isNaN(MAPS_SATELLITE_ZOOM)) {
-                if ("{{ maps_satellite_zoom }}" === "full") {
-                    // Full quality is 13
-                    MAPS_SATELLITE_ZOOM = 13
-                } else {
-                    // Use a default that is hopefully always available.
-                    // We hope they notice and report the bug if it ever comes here!
-                    console.warn("Unexpected value for maps_satellite_zoom")
-                    MAPS_SATELLITE_ZOOM = 7
-                }
+                // Use a default that is hopefully always available.
+                // We hope they notice and report the bug if it ever comes here!
+                console.warn("Unexpected value for maps_satellite_zoom")
+                MAPS_SATELLITE_ZOOM = 7
             }
 
             let MAPS_TERRAIN_ZOOM = Number("{{ maps_terrain_zoom }}")
@@ -131,9 +126,13 @@
                     }
 
                     switch (MAPS_VECTOR_QUALITY) {
+                        case 'osm-z1':
+                            return 1
                         case 'osm-z9':
                             return 9
-                        case 'osm-full':
+                        case 'osm-z11':
+                            return 11
+                        case 'osm-z14':
                             return 14
                         default:
                             // It seems that maps.black sets this up whether or not "ne"
@@ -145,20 +144,25 @@
 
                 getPmtilesName: (baseName) => {
                     // baseName and fname won't include ".pmtiles". ".pmtiles" gets added by the calling function.
+
                     if (!activeFQRegionName) {
-                        fname = baseName
-                        console.log("not currently viewing a Full Quality Region; pmtiles file name unchanged", fname)
-                    } else if (baseName.startsWith("terrarium")) {
+                        console.log("not currently viewing a Full Quality Region; pmtiles file name unchanged", baseName)
+                        return baseName
+                    }
+
+                    const pmtilesDates = downloadedFQRegions[activeFQRegionName].dates
+
+                    if (baseName.startsWith("terrarium")) {
                         // terrarium actually starts with "terrarium-z0-z10".
                         // We chop off the z0-z10 to avoid confusing since we
                         // make lower zoom versions.
-                        fname = `terrarium.${MAPS_SLOW_DATA_DATE}.full-region.` + activeFQRegionName
+                        fname = `terrarium.${pmtilesDates.terrain}.full-region.` + activeFQRegionName
                         console.log("pmtiles file name for full quality region", fname)
                     } else if (baseName.startsWith("openstreetmap")) {
-                        fname = baseName + `.${MAPS_DATA_DATE}.full-region.` + activeFQRegionName
+                        fname = baseName + `.${pmtilesDates.vector}.full-region.` + activeFQRegionName
                         console.log("pmtiles file name for full quality region", fname)
                     } else if (baseName.startsWith("s2maps")) {
-                        fname = baseName + `.${MAPS_SLOW_DATA_DATE}.full-region.` + activeFQRegionName
+                        fname = baseName + `.${pmtilesDates.satellite}.full-region.` + activeFQRegionName
                         console.log("pmtiles file name for full quality region", fname)
                     } else {
                         fname = baseName
@@ -249,7 +253,7 @@
                 for (regionName_ in downloadedFQRegions) {
                     const regionName = regionName_ // fix variable capturing in callbacks below
                     const regionId = "region-" + regionName
-                    const [min_lon, min_lat, max_lon, max_lat] = downloadedFQRegions[regionName]
+                    const [min_lon, min_lat, max_lon, max_lat] = downloadedFQRegions[regionName].bbox
 
                     if (mb.map.getSource(regionId)) {
                         // Looks like we already ran this. Quit without setting a timeout.
@@ -355,7 +359,7 @@
                         if (regionName === activeFQRegionName) {
                             return
                         }
-                        const [min_lon, min_lat, max_lon, max_lat] = downloadedFQRegions[regionName]
+                        const [min_lon, min_lat, max_lon, max_lat] = downloadedFQRegions[regionName].bbox
 
                         // First we kick off a zoom animation to a view focusing on the region.
                         mb.map.fitBounds([[min_lon, min_lat], [max_lon, max_lat]], {})
@@ -521,7 +525,7 @@
                     this._container.className = 'maplibregl-ctrl maplibregl-ctrl-group';
                     this._container.style = 'cursor: pointer;'
                     this._container.onclick = () => {
-                        const [min_lon, min_lat, max_lon, max_lat] = downloadedFQRegions[activeFQRegionName]
+                        const [min_lon, min_lat, max_lon, max_lat] = downloadedFQRegions[activeFQRegionName].bbox
 
                         // First we kick off a zoom animation to a view focusing on the region, zoomed out a bit more than when we entered it.
                         mb.map.setMaxBounds() // untether us from the bounds first so we can zoom out further
@@ -569,7 +573,7 @@
                     this._container.className = 'maplibregl-ctrl maplibregl-ctrl-group';
                     this._container.style = 'cursor: pointer;'
                     this._container.onclick = () => {
-                        const [min_lon, min_lat, max_lon, max_lat] = downloadedFQRegions[activeFQRegionName]
+                        const [min_lon, min_lat, max_lon, max_lat] = downloadedFQRegions[activeFQRegionName].bbox
 
                         // Zoom out to view the region so that the delete popup is well placed
                         mb.map.fitBounds([[min_lon, min_lat], [max_lon, max_lat]], {maxDuration: 2000, speed: 5})
@@ -1117,7 +1121,7 @@
 
                         // We are looking at a full quality region. Let's prevent
                         // the user from straying far from it so they don't get lost.
-                        const [min_lon, min_lat, max_lon, max_lat] = downloadedFQRegions[activeFQRegionName]
+                        const [min_lon, min_lat, max_lon, max_lat] = downloadedFQRegions[activeFQRegionName].bbox
                         mb.map.setMaxBounds([[min_lon - 0.5, min_lat - 0.5], [max_lon + 0.5, max_lat + 0.5]], {})
                     }
 

@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 
-import collections, json, glob, os, re, shutil, string, subprocess, sys
+import json, glob, os, re, shutil, string, subprocess, sys
+from collections import defaultdict
 
 HOSTING_DIR = "{{ maps_serve_path }}"
 EXTRACTS_JSON = os.path.join(HOSTING_DIR, "{{ tile_extract.info_file }}")
@@ -28,15 +29,24 @@ def validate_extract_box(extract_box):
 def validate_noninteractive(noninteractive):
     assert noninteractive in ("", "noninteractive"), f"`noninteractive` (optional) should only be set to \"noninteractive\". Got {noninteractive}"
 
-def get_extract_files(extract_name):
-    MAPS_DATA_DATE = "{{ maps_data_date }}"
+def get_new_extract_paths(extract_name):
+    """
+    Get the paths for *new* FQRs. I.e. what we expect to be able to download
+    from the server. Existing FQRs on the file system may have different dates,
+    so we can't rely on this function for getting an inventory or deletion.
+    """
+    MAPS_VECTOR_DATA_DATE = "{{ maps_vector_data_date }}"
     MAPS_SLOW_DATA_DATE = "{{ maps_slow_data_date }}"
     IIAB_MAP_HOST_URL = "{{ iiab_map_host_url }}"
 
-    def get_paths(base):
+    VECTOR_ZOOM_RANGE = "z00-z{{ '%02d' % maps_vector_max_zoom }}"
+    SATELLITE_ZOOM_RANGE = "z00-z{{ '%02d' % maps_satellite_max_zoom }}"
+    TERRAIN_ZOOM_RANGE = "z00-z{{ '%02d' % maps_terrain_max_zoom }}"
+
+    def get_paths(base, zoom_range):
         return {
             "source":
-                f"{IIAB_MAP_HOST_URL}/{base}.full.pmtiles",
+                f"{IIAB_MAP_HOST_URL}/{base}.{zoom_range}.pmtiles",
             "extract":
                 os.path.join(HOSTING_DIR, f"{base}.full-region.{extract_name}.pmtiles"),
             "tmp":
@@ -44,12 +54,24 @@ def get_extract_files(extract_name):
         }
 
     return {
-        "vector": get_paths(f"openstreetmap-openmaptiles.{MAPS_DATA_DATE}"),
-        "satellite": get_paths(f"s2maps-sentinel2-2023.{MAPS_SLOW_DATA_DATE}"),
-        "terrain": get_paths(f"terrarium.{MAPS_SLOW_DATA_DATE}"),
+        "vector": get_paths(f"openstreetmap-openmaptiles.{MAPS_VECTOR_DATA_DATE}", VECTOR_ZOOM_RANGE),
+        "satellite": get_paths(f"s2maps-sentinel2-2023.{MAPS_SLOW_DATA_DATE}", SATELLITE_ZOOM_RANGE),
+        "terrain": get_paths(f"terrarium.{MAPS_SLOW_DATA_DATE}", TERRAIN_ZOOM_RANGE),
     }
 
-def yes_no(prompt, noninteractive, noninteractive_response):
+def iter_region_files():
+    """
+    Get an inventory of exsting FQRs on the file system.
+    """
+    for full_path in glob.glob(os.path.join(HOSTING_DIR, "*.full-region.*.pmtiles")):
+        match (os.path.basename(full_path).split('.')):
+            case [region_extract_type, date, "full-region", name, "pmtiles"]:
+                pass
+            case _:
+                raise Exception("Oops can't parse pmtiles file name:", full_path)
+        yield full_path, region_extract_type, date, name
+
+def yes_no(prompt, noninteractive=False, noninteractive_response=None):
     if noninteractive:
         return noninteractive_response
     while True:
@@ -63,35 +85,72 @@ def yes_no(prompt, noninteractive, noninteractive_response):
 # Main functions
 
 def delete_extract(extract_name):
-    extract_files = get_extract_files(extract_name)
-    for files in extract_files.values():
-        if os.path.exists(files["extract"]):
-            os.remove(files["extract"])
+    """
+    Delete all full-region files whose name matches `extract_name`.
+
+    In the normal case, we will have one of each type (vector, terrain,
+    satellite). If we are missing one, or if we have multiple of a given type
+    (with different dates), confirm with the user before deleting.
+    """
+
+    # We could have used the extracts json for this. However, that one might
+    # skip over duplicates. So long as we're deleting, let's show everything we
+    # have so the user can really clean things up.
+
+    region_extract_types_for_name = defaultdict(list)
+    all_paths = []
+    for full_path, region_extract_type, date, name in iter_region_files():
+        if name != extract_name:
+            continue
+        all_paths.append(full_path)
+        region_extract_types_for_name[region_extract_type].append(date)
+
+    if len(all_paths) == 0:
+        print (f"Found no Full Quality Regions with the name '{extract_name}'")
+        return
+
+    # Something weird happened, maybe a mixture of dates or something.
+    if [len(dates) for dates in region_extract_types_for_name.values()] != [1, 1, 1]:
+        print (f"There are an unexpected set of files for the region '{extract_name}'")
+        print ("(expected exactly one 'openstreetmap', one 's2maps', and one 'terranium'):")
+        print ()
+        for path in all_paths:
+            print("*", path)
+        print ()
+        if not yes_no("Confirm delete?"):
+            return
+
+    for path in all_paths:
+        if os.path.dirname(path) != HOSTING_DIR or f".{extract_name}." not in path:
+            # Last-minute sanity check before deleting files in case some other
+            # error is introduced before we get to this point.
+            raise Exception(f"Unknown error. Stopping before we delete the wrong file!", path)
+        os.remove(path)
 
 def create_extract(extract_name, extract_box):
-    extract_files = get_extract_files(extract_name)
+    extract_paths = get_new_extract_paths(extract_name)
 
     # Extract them all successfully before moving them.
-    for files in extract_files.values():
+    for paths in extract_paths.values():
         result = subprocess.run(
-            [PMTILES, "extract", files["source"], files["tmp"], "--bbox=" + extract_box],
+            [PMTILES, "extract", paths["source"], paths["tmp"], "--bbox=" + extract_box],
         )
         if result.returncode != 0:
             raise Exception(f"Region download failed. Double-check your Internet connection. (error code {result.returncode})")
 
-    for files in extract_files.values():
-        shutil.move(files["tmp"], files["extract"])
+    for paths in extract_paths.values():
+        shutil.move(paths["tmp"], paths["extract"])
 
 
 def approve_download_size(extract_name):
-    extract_files = get_extract_files(extract_name)
+    extract_paths = get_new_extract_paths(extract_name)
     extract_sizes = {}
 
     print("Determining download size...")
 
-    for files in extract_files.values():
+    for paths in extract_paths.values():
         result = subprocess.run(
-            [PMTILES, "extract", files["source"], files["tmp"], "--bbox=" + extract_box, "--dry-run"],
+            [PMTILES, "extract", paths["source"], paths["tmp"], "--bbox=" + extract_box, "--dry-run"],
             capture_output=True,
             text=True,
         )
@@ -117,7 +176,7 @@ def approve_download_size(extract_name):
                 break
 
         if re_match is None:
-            return yes_no("Cannot get file size estimate due to unexpected output from pmtiles. Download anyway?", False, None)
+            return yes_no("Cannot get file size estimate due to unexpected output from pmtiles. Download anyway?")
 
         (transfer_num, transfer_unit, archive_num, archive_unit) = re_match.groups()
 
@@ -128,7 +187,7 @@ def approve_download_size(extract_name):
             'GB': 1_000_000_000,
             'TB': 1_000_000_000_000,
         }
-        extract_sizes[files['source']] = {
+        extract_sizes[paths['source']] = {
             "transfer": float(transfer_num) * unit_mult[transfer_unit],
             "archive":  float(archive_num)   * unit_mult[archive_unit],
         }
@@ -169,7 +228,7 @@ def check_for_overlaps(new_box):
 
     existing_region_extracts = json.loads(open(EXTRACTS_JSON).read())["regions"]
     for existing in existing_region_extracts.values():
-        [long_1, lat_1, long_2, lat_2] = existing
+        [long_1, lat_1, long_2, lat_2] = existing['bbox']
         existing_min_long = min([long_1, long_2])
         existing_max_long = max([long_1, long_2])
         existing_min_lat = min([lat_1, lat_2])
@@ -186,24 +245,36 @@ def check_for_overlaps(new_box):
     return True
 
 def update_extracts_json():
-    region_extracts = {}
-    region_extract_types = collections.defaultdict(set)
+    # region_extracts[name] = {
+    #   "bbox": coordinates,
+    #   "dates": {
+    #     "terrain": terrain_date,
+    #     "vector": vector_date,
+    #     "satellite": satellite_date,
+    #   },
+    # }
+    region_extracts = defaultdict(
+        lambda: dict(dates=defaultdict(dict)),
+    )
+    # region_extract_types[name] = {extract_type_1, extract_type_2, etc}
+    region_extract_types = defaultdict(set)
 
-    for region_extract in glob.glob(os.path.join(HOSTING_DIR, "*.full-region.*.pmtiles")):
-
-        match (os.path.basename(region_extract).split('.')):
-            case [region_extract_type, _date, "full-region", name, "pmtiles"]:
-                pass
-            case _:
-                raise Exception("Oops can't parse pmtiles file name:", region_extract)
-
-        output = subprocess.getoutput(PMTILES + " show " + region_extract + " --header-json")
+    for full_path, region_extract_type, date, name in iter_region_files():
+        output = subprocess.getoutput(PMTILES + " show " + full_path + " --header-json")
         coordinates = [float(coord) for coord in json.loads(output)["bounds"]]
 
         # Add coordinates unless it's for some reason inconsistent between satellite, vector, terrain.
-        if name in region_extracts and region_extracts[name] != coordinates:
+        if name in region_extracts and region_extracts[name]['bbox'] != coordinates:
             raise Exception("Inconsistent coordinates between different region extracts for", name)
-        region_extracts[name] = coordinates
+        if not re.match(r'\d{4}-\d{2}-\d{2}', date):
+            raise Exception(f"Invalid date for {name}: {date}")
+        region_extracts[name]["bbox"] = coordinates
+        region_type_for_date = {
+            's2maps-sentinel2-2023': 'satellite',
+            'terrarium': 'terrain',
+            'openstreetmap-openmaptiles': 'vector',
+        }[region_extract_type]
+        region_extracts[name]["dates"][region_type_for_date] = date
         region_extract_types[name].add(region_extract_type)
 
     for name in region_extract_types:

@@ -48,7 +48,7 @@ Here are 3 examples below, to help you decide what you'll put in [/etc/iiab/loca
 3. Or if you want **~168 GB** = 78 GB vector (Higher detail, up to zoom 14 [users can overzoom to zoom 18], including 3D buildings, from OpenStreetMap) + 80 GB satellite (up to zoom 12), include:
 
    ```
-   maps_vector_quality: osm-full
+   maps_vector_quality: osm-z14
    maps_satellite_zoom: 12
    ```
 
