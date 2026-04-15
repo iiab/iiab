@@ -32,8 +32,8 @@ Here are 3 examples below, to help you decide what you'll put in [/etc/iiab/loca
    maps_satellite_zoom: 7
    ```
 
-![Vector Natural Earth](README-assets/vector-satellite/vector-ne.png)
-![Satellite Zoom 7](README-assets/vector-satellite/satellite-7.png)
+![Vector Natural Earth](README-assets/vector/vector-nat-z08.png)
+![Satellite Zoom 7](README-assets/satellite/satellite-z07.png)
 
 2. Or if you want **~9.5 GB** = 8.3 GB vector (Higher detail, up to zoom 11 [users can overzoom to zoom 15], from OpenStreetMap) + 1.2 GB satellite (up to zoom 9), include:
 
@@ -42,8 +42,8 @@ Here are 3 examples below, to help you decide what you'll put in [/etc/iiab/loca
    maps_satellite_zoom: 9
    ```
 
-![Vector OSM Zoom 11](README-assets/vector-satellite/vector-osm-z11.png)
-![Satellite Zoom 9](README-assets/vector-satellite/satellite-9.png)
+![Vector OSM Zoom 11](README-assets/vector/vector-osm-z11.png)
+![Satellite Zoom 9](README-assets/satellite/satellite-z09.png)
 
 3. Or if you want **~160 GB** = 80 GB vector (Higher detail, up to zoom 14 [users can overzoom to zoom 18], including 3D buildings, from OpenStreetMap) + 80 GB satellite (up to zoom 12), include:
 
@@ -52,8 +52,8 @@ Here are 3 examples below, to help you decide what you'll put in [/etc/iiab/loca
    maps_satellite_zoom: 12
    ```
 
-![Vector OSM Full Zoom](README-assets/vector-satellite/vector-full.png)
-![Satellite Full Zoom](README-assets/vector-satellite/satellite-full.png)
+![Vector OSM Full Zoom](README-assets/vector/vector-osm-z14.png)
+![Satellite Full Zoom](README-assets/satellite/satellite-z12.png)
 
 See `maps_dot_black_vector_tiles` and `maps_dot_black_satellite_tiles` [here](https://github.com/iiab/iiab/blob/master/roles/maps/defaults/main.yml) for all valid values.
 
@@ -68,28 +68,28 @@ PREREQ: Confirm that at least a [minimum IIAB Maps](#whats-a-minimum-iiab-maps-i
    maps_terrain_zoom: 7
    ```
 
-![Terrain Zoom 7](README-assets/terrain/terrain-7.png)
+![Terrain Zoom 7](README-assets/terrain/terrain-z07.png)
 
 2. If you want **~6.4 GB** terrain maps (up to zoom 8), include:
    ```
    maps_terrain_zoom: 8
    ```
 
-![Terrain Zoom 8](README-assets/terrain/terrain-8.png)
+![Terrain Zoom 8](README-assets/terrain/terrain-z08.png)
 
 3. If you want **~29 GB** terrain maps (up to zoom 9), include:
    ```
    maps_terrain_zoom: 9
    ```
 
-![Terrain Zoom 9](README-assets/terrain/terrain-9.png)
+![Terrain Zoom 9](README-assets/terrain/terrain-z09.png)
 
 4. If you want **~106 GB** terrain maps (up to zoom 10), include:
    ```
    maps_terrain_zoom: 10
    ```
 
-![Terrain Full Zoom](README-assets/terrain/terrain-full.png)
+![Terrain Full Zoom](README-assets/terrain/terrain-z10.png)
 
 See `maps_dot_black_terrain_tiles` [here](https://github.com/iiab/iiab/blob/master/roles/maps/defaults/main.yml) for all valid values.
 
