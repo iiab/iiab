@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 
-import collections, json, glob, os, re, shutil, string, subprocess, sys
+import json, glob, os, re, shutil, string, subprocess, sys
+from collections import defaultdict
 
 HOSTING_DIR = "{{ maps_serve_path }}"
 EXTRACTS_JSON = os.path.join(HOSTING_DIR, "{{ tile_extract.info_file }}")
@@ -190,13 +191,24 @@ def check_for_overlaps(new_box):
     return True
 
 def update_extracts_json():
-    region_extracts = {}
-    region_extract_types = collections.defaultdict(set)
+    # region_extracts[name] = {
+    #   "bbox": coordinates,
+    #   "dates": {
+    #     "terrain": terrain_date,
+    #     "vector": vector_date,
+    #     "satellite": satellite_date,
+    #   },
+    # }
+    region_extracts = defaultdict(
+        lambda: dict(dates=defaultdict(dict)),
+    )
+    # region_extract_types[name] = {extract_type_1, extract_type_2, etc}
+    region_extract_types = defaultdict(set)
 
     for region_extract in glob.glob(os.path.join(HOSTING_DIR, "*.full-region.*.pmtiles")):
 
         match (os.path.basename(region_extract).split('.')):
-            case [region_extract_type, _date, "full-region", name, "pmtiles"]:
+            case [region_extract_type, date, "full-region", name, "pmtiles"]:
                 pass
             case _:
                 raise Exception("Oops can't parse pmtiles file name:", region_extract)
@@ -205,9 +217,17 @@ def update_extracts_json():
         coordinates = [float(coord) for coord in json.loads(output)["bounds"]]
 
         # Add coordinates unless it's for some reason inconsistent between satellite, vector, terrain.
-        if name in region_extracts and region_extracts[name] != coordinates:
+        if name in region_extracts and region_extracts[name]['bbox'] != coordinates:
             raise Exception("Inconsistent coordinates between different region extracts for", name)
-        region_extracts[name] = coordinates
+        if not re.match('\d{4}-\d{2}-\d{2}', date):
+            raise Exception(f"Invalid date for {name}: {date}")
+        region_extracts[name]["bbox"] = coordinates
+        region_type_for_date = {
+            's2maps-sentinel2-2023': 'satellite',
+            'terrain': 'terrarium',
+            'vector': 'openstreetmap-openmaptiles',
+        }[region_extract_type]
+        region_extracts[name]["dates"][region_type_for_date] = date
         region_extract_types[name].add(region_extract_type)
 
     for name in region_extract_types:
