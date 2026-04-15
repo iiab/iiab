@@ -35,14 +35,14 @@ Here are 3 examples below, to help you decide what you'll put in [/etc/iiab/loca
 ![Vector Natural Earth](README-assets/vector-satellite/vector-ne.png)
 ![Satellite Zoom 7](README-assets/vector-satellite/satellite-7.png)
 
-2. Or if you want **~3.1 GB** = 1.9 GB vector (Higher detail, up to zoom 9 [users can overzoom to zoom 13], from OpenStreetMap) + 1.2 GB satellite (up to zoom 9), include:
+2. Or if you want **~9.5 GB** = 8.3 GB vector (Higher detail, up to zoom 11 [users can overzoom to zoom 14], from OpenStreetMap) + 1.2 GB satellite (up to zoom 9), include:
 
    ```
-   maps_vector_quality: osm-z9
+   maps_vector_quality: osm-z11
    maps_satellite_zoom: 9
    ```
 
-![Vector OSM Zoom 9](README-assets/vector-satellite/vector-osm-z9.png)
+![Vector OSM Zoom 11](README-assets/vector-satellite/vector-osm-z11.png)
 ![Satellite Zoom 9](README-assets/vector-satellite/satellite-9.png)
 
 3. Or if you want **~168 GB** = 78 GB vector (Higher detail, up to zoom 14 [users can overzoom to zoom 18], including 3D buildings, from OpenStreetMap) + 80 GB satellite (up to zoom 12), include:
