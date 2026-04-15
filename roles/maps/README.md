@@ -19,7 +19,7 @@ You need to decide (A) how much global vector detail... and (B) how much global 
 
 Here are 3 examples below, to help you decide what you'll put in [/etc/iiab/local_vars.yml](https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it?) (do this before installing IIAB software!)
 
-1. If you want **~170 MB** = 85 MB vector (Lower detail, up to [zoom level](https://wiki.openstreetmap.org/wiki/Zoom_levels) 8 [users can overzoom to zoom 12], from [Natural Earth](https://www.naturalearthdata.com/) a.k.a. "ne") + 85 MB satellite (up to zoom 7):
+1. If you want **~170 MB** = 85 MB vector (Lower detail, up to [zoom level](https://wiki.openstreetmap.org/wiki/Zoom_levels) 8 [users can overzoom to zoom 12], from [Natural Earth](https://www.naturalearthdata.com/) a.k.a. "nat-z8") + 85 MB satellite (up to zoom 7):
 
    ```
    osm_vector_maps_install: False
@@ -28,7 +28,7 @@ Here are 3 examples below, to help you decide what you'll put in [/etc/iiab/loca
    maps_install: True
    maps_enabled: True
 
-   maps_vector_quality: ne
+   maps_vector_quality: nat-z8
    maps_satellite_zoom: 7
    ```
 
