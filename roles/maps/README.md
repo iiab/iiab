@@ -57,7 +57,7 @@ Here are 3 examples below, to help you decide what you'll put in [/etc/iiab/loca
 
 See `maps_dot_black_vector_tiles` and `maps_dot_black_satellite_tiles` [here](https://github.com/iiab/iiab/blob/master/roles/maps/defaults/main.yml) for all valid values.
 
-*NOTE: The satellite data is licensed under [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/), which means it cannot be distributed as part of a commercial product. If you would like to skip satellite imagery, set:*
+*NOTE: The satellite data is licensed "NonCommercial" under [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/). If you would like to skip satellite imagery, set:*
 
   ```
   maps_satellite_zoom: none
@@ -143,7 +143,7 @@ You can download rectangular "Full Quality Regions" (FQRs) to supplement your lo
 
 DETAILS: IIAB's downloadable regions (FQRs) include OpenStreetMap vector data up to [zoom level](https://wiki.openstreetmap.org/wiki/Zoom_levels) 14 (overzoomable to about zoom level 18), satellite photo data up to zoom level 13, and 3D terrain up to zoom level 10.  (As of April 2026, [Map Search data](#how-do-i-install-map-search) is not yet affected, no matter how many FQR regions you download!)
 
-*NOTE: The satellite data is licensed under [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/), which means it cannot be distributed as part of a commercial product.*
+*NOTE: The satellite data is licensed "NonCommercial" under [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/).*
 
 ### Prerequisites
 
