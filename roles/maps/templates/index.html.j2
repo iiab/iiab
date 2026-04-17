@@ -44,14 +44,12 @@
              *    configs   *
              ****************/
 
-            const MAPS_VECTOR_DATA_DATE = "{{ maps_vector_data_date }}"
-            const MAPS_SLOW_DATA_DATE = "{{ maps_slow_data_date }}"
-            const MAPS_VECTOR_QUALITY = "{{ maps_vector_quality }}"
+            const WORLD_MAP_VECTOR_QUALITY = "{{ maps_vector_quality }}"
 
             // VECTOR_TYPE_OSM or VECTOR_TYPE_NATURAL_EARTH
-            const MAPS_VECTOR_TYPE = MAPS_VECTOR_QUALITY.split("-")[0]
+            const WORLD_MAP_VECTOR_TYPE = WORLD_MAP_VECTOR_QUALITY.split("-")[0]
 
-            const MAPS_SATELLITE_ZOOM = (num => {
+            const WORLD_MAP_SATELLITE_MAX_ZOOM = (num => {
                 if (Number.isNaN(num)) {
                     if ("{{ maps_satellite_zoom }}" === "none") {
                         return null
@@ -65,9 +63,11 @@
                 return num
             })(Number("{{ maps_satellite_zoom }}"))
 
-            const MAPS_TERRAIN_ZOOM = (num => {
+            const WORLD_MAP_TERRAIN_MAX_ZOOM = (num => {
                 if (Number.isNaN(num)) {
                     if ("{{ maps_terrain_zoom }}" === "none") {
+                        // I don't think this will ever happen so long as we don't
+                        // let the user look at satellite or hybrid.
                         return null
                     }
 
@@ -79,13 +79,13 @@
                 return num
             })(Number("{{ maps_terrain_zoom }}"))
 
-            const MAPS_SEARCH_ENGINE = "{{ maps_search_engine }}"
-            const MAPS_REGION_DOWNLOADER = "{{ maps_region_downloader }}" === "True"
+            const MAP_SEARCH_ENGINE = "{{ maps_search_engine }}"
+            const REGION_DOWNLOADER_ENABLED = "{{ maps_region_downloader }}" === "True"
 
         </script>
         <script type="module">
             import { AddressTextualIndex } from "./{{ maps_static_search_dir }}/static_search.js"
-            if (MAPS_SEARCH_ENGINE === "static") {
+            if (MAP_SEARCH_ENGINE === "static") {
                 // We have to do this `window.` stuff to communicate between module and non-module javascript code
                 window.staticSearch = {
                     init: () => {
@@ -130,7 +130,7 @@
                     // It seems that maps.black sets this up whether or not it
                     // sees the terrain file, so we'll default to some valid value (1)
 
-                    return MAPS_TERRAIN_ZOOM || 1
+                    return WORLD_MAP_TERRAIN_MAX_ZOOM || 1
                 },
                 getMaxZoomS2maps: () => {
                     // We are looking at a full quality region. Let's make sure we can zoom all the way in.
@@ -138,7 +138,7 @@
                         return 13
                     }
 
-                    return MAPS_SATELLITE_ZOOM
+                    return WORLD_MAP_SATELLITE_MAX_ZOOM
                 },
                 getMaxZoomOSM: () => {
                     // We are looking at a full quality region. Let's make sure we can zoom all the way in.
@@ -146,7 +146,7 @@
                         return 14
                     }
 
-                    switch (MAPS_VECTOR_QUALITY) {
+                    switch (WORLD_MAP_VECTOR_QUALITY) {
                         case 'osm-z1':
                             return 1
                         case 'osm-z11':
@@ -215,7 +215,7 @@
             //
             // Strangely, if we set the `globe` parameter here, it seems to make `mb.globe = ...`
             // not work later on, which makes the `GlobeControl` no longer work. So, we call
-            // `readHashGlobe()` after window load. We'll do the same for terrain for uniformity.
+            // `readHashGlobeAndTerrain()` after window load. (We include terrain for uniformity).
             //
             // We already handle `mapStyleChoice` in our own funny way so it doesn't really matter
             // when it's set.
@@ -242,7 +242,7 @@
                 mb.globe = globe === 'g'
 
                 // contour lines is another thing that uses terrain maps, which we can consider
-                mb.terrain = mb.hillshade = terrain === 't' && (MAPS_TERRAIN_ZOOM || !!activeFQRegionName)
+                mb.terrain = mb.hillshade = (terrain === 't') && terrainAvailable()
             }
 
             // We need a timeout to wait for mb.map.style.loaded() to be true and
@@ -444,7 +444,17 @@
                     // Full Quality Regions are always OSM
                     return VECTOR_TYPE_OSM
                 }
-                return MAPS_VECTOR_TYPE
+                return WORLD_MAP_VECTOR_TYPE
+            }
+
+            function satelliteAvailable() {
+                // Full Quality Regions always have satellite
+                return Boolean(WORLD_MAP_SATELLITE_MAX_ZOOM || !!activeFQRegionName)
+            }
+
+            function terrainAvailable() {
+                // Full Quality Regions always have terrain
+                return Boolean(WORLD_MAP_TERRAIN_MAX_ZOOM || !!activeFQRegionName)
             }
 
             function getAvailableStyles() {
@@ -454,9 +464,9 @@
                     // Not avaiable if we're currently looking at Natural Earth vector tiles
                     (getMapVectorType() === VECTOR_TYPE_OSM) ? STYLE_POLITICAL : null,
 
-                    // Not avaiable if we disable satellite
-                    (MAPS_SATELLITE_ZOOM || !!activeFQRegionName) ? STYLE_SATELLITE : null,
-                    (MAPS_SATELLITE_ZOOM || !!activeFQRegionName) ? STYLE_HYBRID    : null,
+                    // Requires satellite tiles
+                    (satelliteAvailable()) ? STYLE_SATELLITE : null,
+                    (satelliteAvailable()) ? STYLE_HYBRID    : null,
                 ].filter(Boolean)
             }
 
@@ -606,7 +616,7 @@
 
                             // As we exit from a Full Quality Region, we have to disable things that may not be available in the full-sized map.
                             // (This sucks and a better organization of the code would prevent this.)
-                            mb.terrain = mb.hillshade = mb.terrain && (MAPS_TERRAIN_ZOOM || !!activeFQRegionName)
+                            mb.terrain = mb.hillshade = mb.terrain && terrainAvailable()
                             mapStyleChoice = tryAvailableStyle(mapStyleChoice)
 
                             applyMapStyle()
@@ -888,10 +898,10 @@
             }
 
             let geocoder = null;
-            if (geocoderAlternatives[MAPS_SEARCH_ENGINE]) {
+            if (geocoderAlternatives[MAP_SEARCH_ENGINE]) {
                 geocoder = new MaplibreGeocoder(
-                    geocoderAlternatives[MAPS_SEARCH_ENGINE].api,
-                    geocoderAlternatives[MAPS_SEARCH_ENGINE].options,
+                    geocoderAlternatives[MAP_SEARCH_ENGINE].api,
+                    geocoderAlternatives[MAP_SEARCH_ENGINE].options,
                 )
             }
             const scaleControl = new maplibregl.ScaleControl()
@@ -1169,11 +1179,11 @@
                         // Initialize the same way as maps.black
                         // https://github.com/maps-black/maps.black/blob/12205728ceb0672682381088c6c1e7ad05fdc4f5/client/maps.black.js#L120
                         mb.licenses = mb.licenses || { data: {}, styles: {}, fonts: {} }
-                        mb.licenses.search = geocoderAlternatives[MAPS_SEARCH_ENGINE].licenses
+                        mb.licenses.search = geocoderAlternatives[MAP_SEARCH_ENGINE].licenses
                     }
                     mb.map.addControl(scaleControl);
 
-                    if (MAPS_REGION_DOWNLOADER) {
+                    if (REGION_DOWNLOADER_ENABLED) {
                       setUpFQRegionDownloader()
                     }
 
@@ -1187,7 +1197,7 @@
                     }
 
                     mb.map.addControl(new MapsDotBlackGlobeControl(), 'top-right');
-                    if (MAPS_TERRAIN_ZOOM || !!activeFQRegionName) {
+                    if (terrainAvailable()) {
                         mb.map.addControl(new MapsDotBlackTerrainControl(), 'top-right');
                     }
                     mb.map.addControl(new MapsDotBlackStyleControl(), 'top-right');
