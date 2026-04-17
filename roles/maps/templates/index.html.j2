@@ -66,8 +66,6 @@
             const WORLD_MAP_TERRAIN_MAX_ZOOM = (num => {
                 if (Number.isNaN(num)) {
                     if ("{{ maps_terrain_zoom }}" === "none") {
-                        // I don't think this will ever happen so long as we don't
-                        // let the user look at satellite or hybrid.
                         return null
                     }
 
@@ -243,6 +241,22 @@
 
                 // contour lines is another thing that uses terrain maps, which we can consider
                 mb.terrain = mb.hillshade = (terrain === 't') && terrainAvailable()
+            }
+
+            // await until(function () { return someCondition })
+            // or
+            // await until(() => someCondition)
+            function until(condition, period=300) {
+                return new Promise(resolve => {
+                    function check() {
+                        if (condition()) {
+                            resolve()
+                        } else {
+                            setTimeout(check, period)
+                        }
+                    }
+                    check()
+                })
             }
 
             // We need a timeout to wait for mb.map.style.loaded() to be true and
@@ -860,6 +874,7 @@
                         "wikipedia": "Wikipedia is used to determine importance of search results.\n\nhttps://en.wikipedia.org/wiki/Wikipedia:Copyrights",
                         "wikidata": "Wikidata is used to determine importance of search results.\n\nhttps://www.wikidata.org/wiki/Wikidata:Licensing",
                     },
+                    setPlaceholder: () => {},
                 },
                 static: {
                     licenses: {
@@ -893,6 +908,21 @@
 
                         ...geocoderCommonOptions
                     },
+                    setPlaceholder: async () => {
+                        // some stuff that needs to exist before we can set the placeholder
+                        await until(() => (
+                          window.staticSearch &&
+                          window.staticSearch.engine &&
+                          window.staticSearch.engine.numCities &&
+                          geocoder._inputEl
+                        ))
+
+                        if (window.staticSearch.engine.numCities) {
+                            geocoder.setPlaceholder(
+                              `Search ${window.staticSearch.engine.numCities} cities`
+                            )
+                        }
+                    },
                 },
             }
 
@@ -921,6 +951,7 @@
                 addEventListener("resize", () => {
                     geocoder.setLimit(getMaxSearchResults())
                 })
+                geocoderAlternatives[MAP_SEARCH_ENGINE].setPlaceholder()
             }
             const scaleControl = new maplibregl.ScaleControl()
             drawControl = new MaplibreTerradrawControl.MaplibreTerradrawControl({
