@@ -29,6 +29,17 @@
         <link rel='stylesheet' href='maplibre-gl.css' />
         <script>
 
+            /******************
+             *    constants   *
+             *****************/
+            const STYLE_NATURAL = "natural"
+            const STYLE_POLITICAL = "political"
+            const STYLE_SATELLITE = "satellite"
+            const STYLE_HYBRID = "hybrid"
+
+            const VECTOR_TYPE_OSM = "osm"
+            const VECTOR_TYPE_NATURAL_EARTH = "nat"
+
             /****************
              *    configs   *
              ****************/
@@ -36,27 +47,37 @@
             const MAPS_VECTOR_DATA_DATE = "{{ maps_vector_data_date }}"
             const MAPS_SLOW_DATA_DATE = "{{ maps_slow_data_date }}"
             const MAPS_VECTOR_QUALITY = "{{ maps_vector_quality }}"
-            const MAPS_VECTOR_IS_OSM = MAPS_VECTOR_QUALITY.includes("osm")
 
-            let MAPS_SATELLITE_ZOOM = Number("{{ maps_satellite_zoom }}")
-            if (Number.isNaN(MAPS_SATELLITE_ZOOM)) {
-                // Use a default that is hopefully always available.
-                // We hope they notice and report the bug if it ever comes here!
-                console.warn("Unexpected value for maps_satellite_zoom")
-                MAPS_SATELLITE_ZOOM = 7
-            }
+            // VECTOR_TYPE_OSM or VECTOR_TYPE_NATURAL_EARTH
+            const MAPS_VECTOR_TYPE = MAPS_VECTOR_QUALITY.split("-")[0]
 
-            let MAPS_TERRAIN_ZOOM = Number("{{ maps_terrain_zoom }}")
-            if (Number.isNaN(MAPS_TERRAIN_ZOOM)) {
-                if ("{{ maps_terrain_zoom }}" === "none") {
-                    MAPS_TERRAIN_ZOOM = null
-                } else {
+            const MAPS_SATELLITE_ZOOM = (num => {
+                if (Number.isNaN(num)) {
+                    if ("{{ maps_satellite_zoom }}" === "none") {
+                        return null
+                    }
+
+                    // Use a default that is hopefully always available.
+                    // We hope they notice and report the bug if it ever comes here!
+                    console.warn("Unexpected value for maps_satellite_zoom")
+                    return 7
+                }
+                return num
+            })(Number("{{ maps_satellite_zoom }}"))
+
+            const MAPS_TERRAIN_ZOOM = (num => {
+                if (Number.isNaN(num)) {
+                    if ("{{ maps_terrain_zoom }}" === "none") {
+                        return null
+                    }
+
                     // Use a default that we can live with. We hope they notice and
                     // report the bug if it ever comes here!
                     console.warn("Unexpected value for maps_terrain_zoom")
-                    MAPS_TERRAIN_ZOOM = null
+                    return null
                 }
-            }
+                return num
+            })(Number("{{ maps_terrain_zoom }}"))
 
             const MAPS_SEARCH_ENGINE = "{{ maps_search_engine }}"
             const MAPS_REGION_DOWNLOADER = "{{ maps_region_downloader }}" === "True"
@@ -134,7 +155,7 @@
                             return 14
                         default:
                             // It seems that maps.black sets this up whether or not "nat-z8"
-                            // (naturalearth) is selected (perhaps due to a timing issue).
+                            // (Natural Earth) is selected (perhaps due to a timing issue).
                             // So, we'll give it some valid value.
                             return 1
                     }
@@ -203,15 +224,7 @@
 
                 activeFQRegionName = _activeFQRegionName || ""
 
-                if (["natural", "satellite"].includes(_mapStyleChoice)) {
-                  mapStyleChoice = _mapStyleChoice
-                } else if (_mapStyleChoice === "political" && (MAPS_VECTOR_IS_OSM || !!activeFQRegionName)) {
-                  // Allow "political" if the world map allows it, or if we're looking at a full quality region
-                  mapStyleChoice = _mapStyleChoice
-                } else {
-                  // We need to set a default here whether or not a hash was set or valid.
-                  mapStyleChoice = "hybrid"
-                }
+                mapStyleChoice = tryAvailableStyle(_mapStyleChoice)
 
                 if (window.location.hash) {
                     mb.lat = lat || 0
@@ -363,11 +376,11 @@
                         mb.map.fitBounds([[min_lon, min_lat], [max_lon, max_lat]], {})
 
                         // Then we create a handler that gets called once the zoom animation is complete.
-                        // (We don't have to worry about removing this handler. setStyle will refresh
+                        // (We don't have to worry about removing this handler. applyMapStyle will refresh
                         // the map and wipe everthing.)
                         mb.map.on('moveend', () => {
                             activeFQRegionName = regionName
-                            setStyle()
+                            applyMapStyle()
                         })
                     })
                 }
@@ -411,7 +424,7 @@
             setFQRegions()
                 .then(() => {
                     if (downloadedFQRegions !== null && !!activeFQRegionName && !(activeFQRegionName in downloadedFQRegions)) {
-                        // Real hack with `setTimeout`; I need to refactor `setStyle` and `setUpMap`.
+                        // Real hack with `setTimeout`; I need to refactor `applyMapStyle` and `setUpMap`.
                         // Setting it to a whole 1000 ms to avoid an intermittent console error.
                         // This is handling a somewhat uncommon case so I will just go with this non-ideal but easy approach.
                         setTimeout(() => {
@@ -421,39 +434,81 @@
                             // if downloadedFQRegions is null (see if statement above), maybe there's some connection error, in which case let's not
                             // go back to the full-sized map. the user may reload the page and succeed.
                             activeFQRegionName = ""
-                            setStyle()
+                            applyMapStyle()
                         }, 1000)
                     }
                 })
 
-            function setStyle() {
+            function getMapVectorType() {
+                if (!!activeFQRegionName) {
+                    // Full Quality Regions are always OSM
+                    return VECTOR_TYPE_OSM
+                }
+                return MAPS_VECTOR_TYPE
+            }
+
+            function getAvailableStyles() {
+                return [
+                    STYLE_NATURAL,
+
+                    // Not avaiable if we're currently looking at Natural Earth vector tiles
+                    (getMapVectorType() === VECTOR_TYPE_OSM) ? STYLE_POLITICAL : null,
+
+                    // Not avaiable if we disable satellite
+                    (MAPS_SATELLITE_ZOOM || !!activeFQRegionName) ? STYLE_SATELLITE : null,
+                    (MAPS_SATELLITE_ZOOM || !!activeFQRegionName) ? STYLE_HYBRID    : null,
+                ].filter(Boolean)
+            }
+
+            function tryAvailableStyle(requestedStyle) {
+                const availableStyles = getAvailableStyles()
+
+                // See if the one we want is available
+                if (availableStyles.includes(requestedStyle)) {
+                    return requestedStyle
+                }
+
+                // If the one we want is unavailable (or just a junk value someone
+                // typed into the hash), default to hybrid if we have satellite.
+                if (availableStyles.includes(STYLE_HYBRID)) {
+                    return STYLE_HYBRID
+                }
+
+                // Failing everything else, default to natural.
+                return STYLE_NATURAL
+            }
+
+            function applyMapStyle() {
                 // The first level key is the `mapStyleChoice`, i.e. "natural", "political", etc, from the dropdown menu. (These are names specific to
                 // IIAB maps.)
                 //
-                // The second level key is a boolean indicating whether the currently visible map is using OSM or Natural Earth data for vector data.
+                // The second level key indicates whether the currently visible map is using OSM or Natural Earth data for vector data.
                 //
                 // Both of these together point to a maps.black "mapstyle" which implies a maplibre style and data sources.
                 mb.mapstyle = {
                     // Has nicely colored regions, and buildings
-                    natural: {
-                        true:  "openstreetmap-openmaptiles/openfreemap/liberty",
-                        false: "naturalearth-openmaptiles/openfreemap/liberty",
+                    [STYLE_NATURAL]: {
+                        [VECTOR_TYPE_OSM]:           "openstreetmap-openmaptiles/openfreemap/liberty",
+                        [VECTOR_TYPE_NATURAL_EARTH]: "naturalearth-openmaptiles/openfreemap/liberty",
                     },
                     // Has more clearly defined political boundaries
                     // TODO - find something like this with buildings too?
-                    political:  {
-                        true:  "openstreetmap-openmaptiles/qwant/basic",
-                        false: undefined, // We will hide this option for naturalearth since it's not great for political maps - TODO Extract a low res osm for political map.
+                    [STYLE_POLITICAL]:  {
+                        [VECTOR_TYPE_OSM]:           "openstreetmap-openmaptiles/qwant/basic",
+
+                        // For now don't include political for naturalearth because it doesn't
+                        // have great political options zoomed out.
+                        [VECTOR_TYPE_NATURAL_EARTH]: undefined,
                     },
-                    hybrid:  {
-                        true:  "openstreetmap-openmaptiles/maps.black/hybrid-2023",
-                        false: "naturalearth-openmaptiles/maps.black/hybrid-2023", // we'll have a smaller satellite file with the same name in this case
+                    [STYLE_HYBRID]:  {
+                        [VECTOR_TYPE_OSM]:           "openstreetmap-openmaptiles/maps.black/hybrid-2023",
+                        [VECTOR_TYPE_NATURAL_EARTH]: "naturalearth-openmaptiles/maps.black/hybrid-2023",
                     },
-                    satellite:  {
-                        true:  "raster/s2maps/2023",
-                        false: "raster/s2maps/2023", // we'll have a smaller satellite file with the same name in this case
+                    [STYLE_SATELLITE]:  {
+                        [VECTOR_TYPE_OSM]:           "raster/s2maps/2023",
+                        [VECTOR_TYPE_NATURAL_EARTH]: "raster/s2maps/2023",
                     },
-                }[mapStyleChoice][MAPS_VECTOR_IS_OSM || !!activeFQRegionName]
+                }[mapStyleChoice][getMapVectorType()]
                 console.log("setting to", mapStyleChoice, "i.e.", mb.mapstyle)
 
                 setUpMap() // The above will reset the map so we have to add controls and other things again. This also covers initial page load.
@@ -465,13 +520,26 @@
                     this._container = document.createElement('div');
                     this._container.className = 'maplibregl-ctrl maplibregl-ctrl-group';
 
-                    const naturalSelected = mapStyleChoice === "natural" ? `selected="selected"` : ""
-                    const politicalSelected = mapStyleChoice === "political" ? `selected="selected"` : ""
-                    const satelliteSelected = mapStyleChoice === "satellite" ? `selected="selected"` : ""
-                    const hybridSelected = mapStyleChoice === "hybrid" ? `selected="selected"` : ""
-
-                    // For now don't include political for naturalearth because it doesn't have great political options zoomed out
-                    const maybePolitical = (MAPS_VECTOR_IS_OSM || !!activeFQRegionName) ? `<option title="Political Map" value="political" ${politicalSelected}>&#x1F3F3;</option>` : "";
+                    const styleTitles = {
+                        [STYLE_NATURAL]: "Natural Map",
+                        [STYLE_POLITICAL]: "Political Map",
+                        [STYLE_SATELLITE]: "Satellite",
+                        [STYLE_HYBRID]: "Satellite + Map",
+                    }
+                    const styleLabels = {
+                        [STYLE_NATURAL]: "&#x1F33F;",
+                        [STYLE_POLITICAL]: "&#x1F3F3;",
+                        [STYLE_SATELLITE]: "&#x1F4E1;",
+                        [STYLE_HYBRID]: "&#x1F4E1;+",
+                    }
+                    const styleOptions = getAvailableStyles().map(style =>
+                        `<option
+                           title="${styleTitles[style]}"
+                           value="${style}"
+                           ${mapStyleChoice === style ? `selected="selected"` : ""}>
+                             ${styleLabels[style]}
+                         </option>`
+                    ).join('\n')
 
                     // Keep in mind that maps.black destroys and creates this every time we change the map style or features.
                     // This makes it a little complicated to add handlers. So for now, I inline it.
@@ -491,14 +559,11 @@
                         <select
                           class="styleswitch"
                           id="styleswitch"
-                          onchange="mapStyleChoice = this.value; setStyle()"
+                          onchange="mapStyleChoice = this.value; applyMapStyle()"
                           title="Select Map Style"
                           style="background: white; padding-top:2px; padding-left:5px; border: none; outline: none; appearance: none; font-size: 13px; border-radius: 5px; height: 29px; width: 29px;"
                         >
-                            <option title="Natural Map" value="natural" ${naturalSelected}>&#x1F33F;</option>
-                            ${maybePolitical}
-                            <option title="Satellite" value="satellite" ${satelliteSelected}>&#x1F4E1;</option>
-                            <option title="Satellite + Map" value="hybrid" ${hybridSelected}>&#x1F4E1;+</option>
+                            ${styleOptions}
                         </select>
                     `
                     return this._container;
@@ -533,7 +598,7 @@
                         )
 
                         // Then we create a handler that gets called once the zoom animation is complete.
-                        // (We don't have to worry about removing this handler. setStyle will refresh
+                        // (We don't have to worry about removing this handler. applyMapStyle will refresh
                         // the map and wipe everthing.)
                         mb.map.on('moveend', () => {
                             // Unset the Full Quality Region, i.e. go back to the full-sized map
@@ -542,11 +607,9 @@
                             // As we exit from a Full Quality Region, we have to disable things that may not be available in the full-sized map.
                             // (This sucks and a better organization of the code would prevent this.)
                             mb.terrain = mb.hillshade = mb.terrain && (MAPS_TERRAIN_ZOOM || !!activeFQRegionName)
-                            if (mapStyleChoice === "political" && !(MAPS_VECTOR_IS_OSM || !!activeFQRegionName)) {
-                              mapStyleChoice = "hybrid"
-                            }
+                            mapStyleChoice = tryAvailableStyle(mapStyleChoice)
 
-                            setStyle()
+                            applyMapStyle()
                         })
                     }
                     return this._container
@@ -1152,7 +1215,7 @@
 
             window.addEventListener("load", () => {
                 readHashGlobeAndTerrain()
-                setStyle()
+                applyMapStyle()
             });
 
         </script>

@@ -57,6 +57,12 @@ Here are 3 examples below, to help you decide what you'll put in [/etc/iiab/loca
 
 See `maps_dot_black_vector_tiles` and `maps_dot_black_satellite_tiles` [here](https://github.com/iiab/iiab/blob/master/roles/maps/defaults/main.yml) for all valid values.
 
+*NOTE: The satellite data is licensed "NonCommercial" under [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/). If you would like to skip satellite imagery, set:*
+
+  ```
+  maps_satellite_zoom: none
+  ```
+
 ## How do I install 3D terrain?
 
 To add 3D (three-dimensional) terrain files, you can set this optional setting.  You may find that when looking at mountains, high quality satellite imagery may compensate for low quality terrain, and vice versa.
@@ -136,6 +142,8 @@ As of April 2026, it includes only administrative (i.e. political) regions and n
 You can download rectangular "Full Quality Regions" (FQRs) to supplement your lower-resolution world map.  The goal is to provide your community with the latest high-res vector, satellite and terrain data for the regions they care about most.
 
 DETAILS: IIAB's downloadable regions (FQRs) include OpenStreetMap vector data up to [zoom level](https://wiki.openstreetmap.org/wiki/Zoom_levels) 14 (overzoomable to about zoom level 18), satellite photo data up to zoom level 13, and 3D terrain up to zoom level 10.  (As of April 2026, [Map Search data](#how-do-i-install-map-search) is not yet affected, no matter how many FQR regions you download!)
+
+*NOTE: The satellite data is licensed "NonCommercial" under [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/).*
 
 ### Prerequisites
 
