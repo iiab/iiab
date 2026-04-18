@@ -66,8 +66,6 @@
             const WORLD_MAP_TERRAIN_MAX_ZOOM = (num => {
                 if (Number.isNaN(num)) {
                     if ("{{ maps_terrain_zoom }}" === "none") {
-                        // I don't think this will ever happen so long as we don't
-                        // let the user look at satellite or hybrid.
                         return null
                     }
 
@@ -243,6 +241,22 @@
 
                 // contour lines is another thing that uses terrain maps, which we can consider
                 mb.terrain = mb.hillshade = (terrain === 't') && terrainAvailable()
+            }
+
+            // await until(function () { return someCondition })
+            // or
+            // await until(() => someCondition)
+            function until(condition, period=300) {
+                return new Promise(resolve => {
+                    function check() {
+                        if (condition()) {
+                            resolve()
+                        } else {
+                            setTimeout(check, period)
+                        }
+                    }
+                    check()
+                })
             }
 
             // We need a timeout to wait for mb.map.style.loaded() to be true and
@@ -825,6 +839,17 @@
                 }
             };
 
+            const getMaxSearchResults = () => {
+                // Instead of trying to test for phone (but not tablet), let's
+                // just get to the point that small screens should have fewer results.
+
+                if (window.innerHeight < 650 || window.innerWidth < 650)
+                {
+                    return 5
+                }
+                return 10
+            }
+
             // have to use MAX_SEARCH_RESULT_ZOOM in a couple different places to cover a couple different scenarios, it seems
             const MAX_SEARCH_RESULT_ZOOM = 10;
             const geocoderCommonOptions = {
@@ -834,6 +859,7 @@
                     maxZoom: MAX_SEARCH_RESULT_ZOOM,
                 },
                 popup: true,
+                limit: getMaxSearchResults(),
             }
 
             const geocoderAlternatives = {
@@ -845,6 +871,7 @@
                         "wikipedia": "Wikipedia is used to determine importance of search results.\n\nhttps://en.wikipedia.org/wiki/Wikipedia:Copyrights",
                         "wikidata": "Wikidata is used to determine importance of search results.\n\nhttps://www.wikidata.org/wiki/Wikidata:Licensing",
                     },
+                    setPlaceholder: () => {},
                 },
                 static: {
                     licenses: {
@@ -878,6 +905,21 @@
 
                         ...geocoderCommonOptions
                     },
+                    setPlaceholder: async () => {
+                        // some stuff that needs to exist before we can set the placeholder
+                        await until(() => (
+                          window.staticSearch &&
+                          window.staticSearch.engine &&
+                          window.staticSearch.engine.numCities &&
+                          geocoder._inputEl
+                        ))
+
+                        if (window.staticSearch.engine.numCities) {
+                            geocoder.setPlaceholder(
+                              `Search ${window.staticSearch.engine.numCities.toLocaleString()} places`
+                            )
+                        }
+                    },
                 },
             }
 
@@ -903,6 +945,10 @@
                     geocoderAlternatives[MAP_SEARCH_ENGINE].api,
                     geocoderAlternatives[MAP_SEARCH_ENGINE].options,
                 )
+                addEventListener("resize", () => {
+                    geocoder.setLimit(getMaxSearchResults())
+                })
+                geocoderAlternatives[MAP_SEARCH_ENGINE].setPlaceholder()
             }
             const scaleControl = new maplibregl.ScaleControl()
             drawControl = new MaplibreTerradrawControl.MaplibreTerradrawControl({
