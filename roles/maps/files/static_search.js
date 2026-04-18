@@ -18,7 +18,7 @@ var AddressTextualIndex = class {
     const data = await (await this.fetcher(`${this.baseURL}/index_metadata.json`)).json();
     this.stopWords = new Set(data.stopwords);
     this.minLength = data.token_length;
-    this.numCities = data.num_cities;
+    this.numCities = data.num_cities || 163042;
   }
   async fileSearch(queryTokens) {
     let results = [];
