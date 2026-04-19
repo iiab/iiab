@@ -92,10 +92,30 @@
     mode: "0600"
   when: wan_ip != "dhcp"
 
-- name: Use systemd-networkd to handle br0
+- name: Copy dnsmasq trigger file for NetworkManager-dispatcher
+  when: iiab_lan_iface == "br0"
+  template:
+    dest: /etc/NetworkManager/dispatcher.d/99-iiab.sh
+    src: hostapd/NM-disp.j2
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Ensure systemd-networkd-wait-online is disabled when NetworkManager is active
+  systemd:
+    name: systemd-networkd-wait-online
+    enabled: no
+
+- name: Ensure networkd-dispatcher is disabled when netplan is present
+  systemd:
+    name: networkd-dispatcher
+    enabled: no
+  when: has_netplan
+
+- name: Use systemd-networkd to handle br0 without netplan present
   set_fact:
     systemd_networkd_active: True
-  when: iiab_lan_iface == "br0"
+  when: iiab_lan_iface == "br0" and not has_netplan
 
 - name: Reload systemd
   systemd:
