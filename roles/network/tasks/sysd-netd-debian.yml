@@ -100,9 +100,29 @@
     - { dest: '/etc/networkd-dispatcher/routable.d/iiab-wifi2' }
   when: discovered_wireless_iface != "none" and rpi_model != "none" and not wifi_up_down
 
+- name: Check if /etc/networkd-dispatcher/routable.d exists
+  stat:
+    path: /etc/networkd-dispatcher/routable.d
+  register: nd_dir
+
+- name: To restart dnsmasq whenever br0 comes up, install /etc/networkd-dispatcher/routable.d/dnsmasq.sh from template (if isn't Appliance, and directory /etc/networkd-dispatcher/routable.d exists, i.e. OS's like Ubuntu 18.04 or later) (root:root by default)
+  template:
+    src: roles/network/templates/network/dnsmasq.sh.j2
+    dest: /etc/networkd-dispatcher/routable.d/dnsmasq.sh
+    mode: "0755"
+  when: nd_dir.stat.exists and nd_dir.stat.isdir and iiab_network_mode != "Appliance"
+
 - name: Reload systemd
   systemd:
     daemon_reload: yes
+
+- name: Enable & Restart networkd-dispatcher.service
+  systemd:
+    name: networkd-dispatcher
+    state: restarted
+    enabled: yes
+    masked: no
+  when: not network_manager_active
 
 - name: Enable & Restart systemd-networkd.service
   systemd:
