@@ -1,0 +1,34 @@
+#!/bin/bash
+IFACE=$1
+ACTION=$2
+
+{% if wifi_up_down and discovered_wireless_iface != "none" %}
+if [ "$IFACE" == "{{ discovered_wireless_iface }}" ] && [ "$ACTION" == "down" ] ; then
+    echo "NM-DISP-WiFi $IFACE $STATE"
+    /usr/sbin/ip link set ap0 up
+fi
+if [ "$IFACE" == "{{ discovered_wireless_iface }}" ] && [ "$ACTION" == "up" ]; then
+    echo "NM-DISP-WiFi $IFACE $STATE"
+    # If we are here we have a dhcp ip address
+    CHAN=$(iw "$IFACE" info|grep channel|cut -d' ' -f2)
+    echo "Using channel $CHAN for carrier"
+    HOSTAPD=$(grep channel /etc/hostapd/hostapd.conf | awk -F = '{print $2}')
+    echo "Hostapd set for $HOSTAPD"
+    if [ $CHAN -ne $HOSTAPD ] && [ $CHAN -lt 14 ]; then
+        echo "Editing Hostapd for channel $CHAN"
+        cp /etc/hostapd/hostapd.conf.iiab /etc/hostapd/hostapd.conf
+        sed -i "s/^channel.*/channel=$CHAN/" /etc/hostapd/hostapd.conf
+        systemctl restart hostapd
+    else
+        echo "Upstream Channel greater than 13 or is the same - not changing hostapd.conf"
+    fi
+    sleep 3
+    /usr/sbin/ip link set ap0 up
+fi
+
+{% endif %}
+if [ "$IFACE" == "{{ iiab_lan_iface }}" ] && [ "$ACTION" == "up" ]; then
+    echo "NM-DISP-LAN $IFACE $STATE"
+    /bin/systemctl --no-block start dnsmasq.service
+    echo "Started dnsmasq"
+fi
