@@ -86,9 +86,17 @@
             if (MAP_SEARCH_ENGINE === "static") {
                 // We have to do this `window.` stuff to communicate between module and non-module javascript code
                 window.staticSearch = {
-                    init: () => {
+                    init: async function () {
+                        await until(() => (mb && mb.map))
                         const searchDb = activeFQRegionName || "world-map"
-                        window.staticSearch.engine = new AddressTextualIndex(`static-search/${searchDb}`)
+                        window.staticSearch.engine = new AddressTextualIndex({
+                            map: mb.map,
+                            baseURL: `{{ maps_static_search_dir }}/${searchDb}`,
+
+                            // Make sure to break caches every time the database changes.
+                            // We use a symlink so the URL is otherwise the same.
+                            cacheKey: "{{ maps_search_static_db }}",
+                        })
                     }
                 }
                 window.staticSearch.init()
@@ -242,7 +250,6 @@
                 // contour lines is another thing that uses terrain maps, which we can consider
                 mb.terrain = mb.hillshade = (terrain === 't') && terrainAvailable()
             }
-
             // await until(function () { return someCondition })
             // or
             // await until(() => someCondition)
@@ -818,7 +825,7 @@
                                     type: 'Point',
                                     coordinates: center
                                 },
-                                place_name: result.name,
+                                place_name: result.name + (result.admin1 ? (', ' + result.admin1) : '') + ", " + result.country,
                                 properties: {
                                     population: Number(result.pop),
                                 },
@@ -862,6 +869,7 @@
                 limit: getMaxSearchResults(),
             }
 
+            // Helpful link for options: https://maplibre.org/maplibre-gl-geocoder/types/MaplibreGeocoderOptions.html
             const geocoderAlternatives = {
                 nominatim: {
                     api: nominatimGeocoderApi,
@@ -871,7 +879,7 @@
                         "wikipedia": "Wikipedia is used to determine importance of search results.\n\nhttps://en.wikipedia.org/wiki/Wikipedia:Copyrights",
                         "wikidata": "Wikidata is used to determine importance of search results.\n\nhttps://www.wikidata.org/wiki/Wikidata:Licensing",
                     },
-                    setPlaceholder: () => {},
+                    onMapRefresh: () => {},
                 },
                 static: {
                     licenses: {
@@ -879,7 +887,11 @@
                     },
                     api: staticGeocoderApi,
                     options: {
-                        minLength: 3, // Until and unless we add a "short names" json file
+                        // `minLength` affects how many characters the user has to type before a search happens.
+                        // However, for the static db, it does not necessarily show the "No Results Found" error
+                        // message. See `_renderNoResults` below.
+                        minLength: 2,
+
                         popupRender: feature => {
                           // Not ideal to assume that comma means this but I suspect maplibre does this too
                           const [city_name, ...rest] = feature.place_name.split(',')
@@ -905,14 +917,42 @@
 
                         ...geocoderCommonOptions
                     },
-                    setPlaceholder: async () => {
-                        // some stuff that needs to exist before we can set the placeholder
+                    onMapRefresh: async () => {
+                        // This part can happen before the engine is loaded.
+                        // I'm not sure if we need to apply this after every refresh, but we may as well and I
+                        // don't want to get blindsided if we upgrade the library and it starts working differently.
+                        geocoder._renderNoResults = () => {
+                            // The geocoder normally shows "No Results Found" based on the `minLength` setting.
+                            // It assumes that if you hit that length and nothing is returned, there are no
+                            // results to be found if the user keeps typing. However the static search engine
+                            // gives special consideration to queries with very short tokens. It may be doing a
+                            // "partial" search. If the user keeps typing, the engine would do a "full" search and
+                            // possibly get more results. For "partial" searches, we don't want to show "No
+                            // Results Found" and discourage the user from typing more.
+                            //
+                            // For example (circa April 2026), "ne br" gives zero results because it searches
+                            // "ne.json" which only contains results with "ne" as a *complete* token. "ne bru"
+                            // gives many results because "bru" is a 3-character token, and "bru.json" contains
+                            // all results with "bru" as the *beginning* of a token (i.e. a "full" search).
+                            //
+                            // (The specific rules cited here are just to illustrate the concept. They may change
+                            // but will hopefully stay contained within `staticSearch.engine.lastQueryWasPartial`.)
+                            if (!window.staticSearch.engine.lastQueryWasPartial()) {
+                                originalGeocoderRenderNoResults()
+                            } else {
+                                // It turns out that the previously visible search results stick around in this case unless we clear them.
+                                // Conveniently enough, this function does this, despite its name. Just pass in a blank message.
+                                geocoder._renderMessage("")
+                            }
+                        }
+
+                        // Wait for the engine to load before the below
                         await until(() => (
                           window.staticSearch &&
                           window.staticSearch.engine &&
-                          window.staticSearch.engine.numCities &&
                           geocoder._inputEl
                         ))
+                        await window.staticSearch.engine.initializer
 
                         if (window.staticSearch.engine.numCities) {
                             geocoder.setPlaceholder(
@@ -940,6 +980,7 @@
             }
 
             let geocoder = null;
+            let originalGeocoderRenderNoResults = null;
             if (geocoderAlternatives[MAP_SEARCH_ENGINE]) {
                 geocoder = new MaplibreGeocoder(
                     geocoderAlternatives[MAP_SEARCH_ENGINE].api,
@@ -948,6 +989,7 @@
                 addEventListener("resize", () => {
                     geocoder.setLimit(getMaxSearchResults())
                 })
+                originalGeocoderRenderNoResults = geocoder._renderNoResults.bind(geocoder)
             }
             const scaleControl = new maplibregl.ScaleControl()
             drawControl = new MaplibreTerradrawControl.MaplibreTerradrawControl({
@@ -1226,7 +1268,7 @@
                         mb.licenses = mb.licenses || { data: {}, styles: {}, fonts: {} }
                         mb.licenses.search = geocoderAlternatives[MAP_SEARCH_ENGINE].licenses
 
-                        geocoderAlternatives[MAP_SEARCH_ENGINE].setPlaceholder()
+                        geocoderAlternatives[MAP_SEARCH_ENGINE].onMapRefresh()
                     }
                     mb.map.addControl(scaleControl);
 
