@@ -10,7 +10,8 @@ function cleanForMatch(str, debug=false) {
 }
 
 var AddressTextualIndex = class {
-  constructor(map, baseURL, fetcher = fetch, windowObj = window) {
+  constructor({baseURL, fetcher, cacheKey, map}) {
+
     // set by self.init() (aka self.initializer). Searches await for these to be set.
     this.stopWords = /* @__PURE__ */ new Set();
     this.minLength = 3;
@@ -19,7 +20,9 @@ var AddressTextualIndex = class {
     // constant
     this.tokenRegex = /[^\p{L}|^\p{N}]+/u;
     this.baseURL = baseURL;
-    this.fetcher = fetcher.bind(windowObj);
+    this.fetcher = fetcher || (
+      url => fetch(url + "?" + encodeURI(cacheKey || ""))
+    )
     this.map = map
     this.initializer = this.init();
 
