@@ -76,13 +76,16 @@
             const WORLD_MAP_TERRAIN_MAX_ZOOM = (num => {
                 if (Number.isNaN(num)) {
                     if ("{{ maps_terrain_zoom }}" === "none") {
-                        return null
+                        // Note that terrarium-none.pmtiles which is maxzoom=0 will still be used in
+                        // this case as a dummy to make maps.black / maplibre happy if we have FQRs
+                        // and the user enables terrain.
+                        return 0
                     }
 
-                    // Use a default that we can live with. We hope they notice and
-                    // report the bug if it ever comes here!
+                    // Use a default that we hope will not break everything. We hope they notice
+                    // the warning and report the bug if it ever comes here!
                     console.warn("Unexpected value for maps_terrain_zoom")
-                    return null
+                    return 0
                 }
                 return num
             })(Number("{{ maps_terrain_zoom }}"))
@@ -98,7 +101,7 @@
                 window.staticSearch = {
                     init: async function () {
                         await until(() => (mb && mb.map))
-                        const searchDb = activeFQRegionName || "world-map"
+                        const searchDb = "world-map"
                         window.staticSearch.engine = new AddressTextualIndex({
                             map: mb.map,
                             baseURL: `{{ maps_static_search_dir }}/${searchDb}`,
@@ -126,335 +129,140 @@
             // feature or style changes, so we rely on this instead of the select tag value
             let mapStyleChoice
 
-            // Currently active full quality region.
-            // activeFQRegionName = "" means no region selected.
-            // Initial value set in readHash().
-            let activeFQRegionName
-
             // set immediately after the tag is defined
             let mb = null
             let shouldSetDefaultView = false
 
             // One namespace for all changes
             iiabMapsDotBlackPatch = {
-                patchResource: handlerResult => {
+                patchResource: async handlerResult => {
                     const style = handlerResult && handlerResult.data
                     if (style && style.sources && !style.iiabPatched) {
+                        // Cut down on noise. Sometimes a protomaps style is set before our chosen
+                        // style. If we find a way to actually stop that, we should remove this.
+                        if ('openstreetmap-protomaps' in style.sources) {
+                            return handlerResult
+                        }
+
+                        await until(fqrLoaded, 100)
+
+                        // Grab the sources and layers as they are so we can replicate them in FQRs
+                        const worldMapLayers = [...style.layers]
+                        const worldMapSourceIds = Object.keys(style.sources)
+
+                        // Create FQR sources and layers by copying the same from the world map.
+                        // Order of layers matters. We want the FQR layers to be after the world map layers
+                        // so the FQR shows up on top. We also want all of the FQR layers to be in the same
+                        // order as their world map counterpart so it shows up correctly.
+                        Object.keys(downloadedFQRegions.regions).forEach(fqrName => {
+                            const pmtilesDates = downloadedFQRegions.regions[fqrName].dates
+
+                            const s2Id = "s2maps-sentinel2-2023"
+                            const s2FqrId = `${s2Id}.${pmtilesDates.satellite}.full-region.${fqrName}`
+                            const osmId = "openstreetmap-openmaptiles"
+                            const osmFqrId = `${osmId}.${pmtilesDates.vector}.full-region.${fqrName}`
+                            const terrariumId = "terrarium"
+                            const terrariumFqrId = `${terrariumId}.${pmtilesDates.terrain}.full-region.${fqrName}`
+                            const hillshadeId = "hillshade"
+                            const hillshadeFqrId = `${hillshadeId}.${pmtilesDates.terrain}.full-region.${fqrName}`
+                            const naturalEarth6Id = "naturalearth6-NE2_HR_SR_W_DR-WEBP"
+                            const backgroundLayerId = "background"
+
+                            // Make an FQR version of each source
+                            worldMapSourceIds.forEach(worldSourceId => {
+                                if (worldSourceId === s2Id) {
+                                    style.sources[s2FqrId] = {
+                                        ...style.sources[s2Id],
+                                        url: style.sources[s2Id].url.replace(s2Id, s2FqrId),
+                                        bounds: downloadedFQRegions.regions[fqrName].bbox,
+                                        minzoom: WORLD_MAP_SATELLITE_MAX_ZOOM + 1
+                                    }
+                                } else if (worldSourceId === osmId) {
+                                    style.sources[osmFqrId] = {
+                                        ...style.sources[osmId],
+                                        url: style.sources[osmId].url.replace(osmId, osmFqrId),
+                                        bounds: downloadedFQRegions.regions[fqrName].bbox,
+                                        minzoom: WORLD_MAP_VECTOR_MAX_ZOOM + 1
+                                    }
+                                } else if (worldSourceId === terrariumId) {
+                                    style.sources[terrariumFqrId] = {
+                                        ...style.sources[terrariumId],
+                                        url: style.sources[terrariumId].url
+                                            .replace(terrariumId, terrariumFqrId)
+                                            .replace(/\-z0\-z10\.pmtiles$/, '.pmtiles'),
+                                        bounds: downloadedFQRegions.regions[fqrName].bbox,
+                                        minzoom: WORLD_MAP_TERRAIN_MAX_ZOOM + 1
+                                    }
+                                } else if (worldSourceId === naturalEarth6Id) {
+                                    // pass, only world map
+                                } else {
+                                    console.warn("Unhandled world map source:", worldSourceId)
+                                }
+                            })
+
+                            // Special case hillshade source only because we want the hillshade and terrarium to be pointing
+                            // to the same object (as is the case in the world map style), and we want to make sure terrarium
+                            // got set first.
+                            if (terrariumFqrId in style.sources) {
+                                style.sources[hillshadeFqrId] = style.sources[terrariumFqrId]
+                            }
+
+                            // Make an FQR version of each layer
+                            worldMapLayers.map(worldLayer => {
+                                if (worldLayer.source === s2Id) {
+                                    return {
+                                        ...worldLayer,
+                                        id: s2FqrId + '.' + worldLayer.id,
+                                        source: s2FqrId,
+                                    }
+                                } else if (worldLayer.source === osmId) {
+                                    return {
+                                        ...worldLayer,
+                                        id: osmFqrId + '.' + worldLayer.id,
+                                        source: osmFqrId,
+                                    }
+                                } else if (worldLayer.source === hillshadeId) {
+                                    return {
+                                        ...worldLayer,
+                                      id: hillshadeFqrId + '.' + worldLayer.id,
+                                      source: hillshadeFqrId,
+                                    }
+                                } else if (worldLayer.source === naturalEarth6Id) {
+                                    // pass, only world map
+                                } else if (worldLayer.id === backgroundLayerId) {
+                                    // pass, only world map (note that we're testing the *layer id* here; there is no source used)
+                                } else {
+                                    console.warn("Unhandled world map layer:", worldLayer)
+                                }
+                            })
+                            .filter(Boolean) // In case we fail to create some layers, we don't want to break everything.
+                            .forEach(fqrLayer => {
+                                style.layers.push(fqrLayer)
+                            })
+                        })
+
                         // set max zooms of world maps
-                        const updateSource = (field, maxzoom) => {
+                        const setMaxZoom = (field, maxzoom) => {
                             if (style.sources[field]) {
                                 style.sources[field].maxzoom = maxzoom
-                                style.sources[field].url = iiabMapsDotBlackPatch.getPmtilesName(field, style.sources[field].url)
                             }
                         }
-                        updateSource('openstreetmap-openmaptiles', iiabMapsDotBlackPatch.getMaxZoomOSM())
-                        updateSource('s2maps-sentinel2-2023', iiabMapsDotBlackPatch.getMaxZoomS2maps())
+                        setMaxZoom('openstreetmap-openmaptiles', WORLD_MAP_VECTOR_MAX_ZOOM)
+                        setMaxZoom('s2maps-sentinel2-2023', WORLD_MAP_SATELLITE_MAX_ZOOM)
 
                         // Sources that use the terrarium file. We don't necessarily even use all of them
                         // but we'll change them here in case we do.
-                        updateSource('terrarium', iiabMapsDotBlackPatch.getMaxZoomTerrariumPmtiles())
-                        updateSource('hillshade', iiabMapsDotBlackPatch.getMaxZoomTerrariumPmtiles())
-                        updateSource('contours', iiabMapsDotBlackPatch.getMaxZoomTerrariumPmtiles())
+                        setMaxZoom('terrarium', WORLD_MAP_TERRAIN_MAX_ZOOM)
+                        setMaxZoom('hillshade', WORLD_MAP_TERRAIN_MAX_ZOOM)
+                        setMaxZoom('contours',  WORLD_MAP_TERRAIN_MAX_ZOOM)
 
-                        // We could `updateSource` for 'naturalearth6-NE2_HR_SR_W_DR-WEBP' as well, but it looks
+                        // We could `setMaxZoom` for 'naturalearth6-NE2_HR_SR_W_DR-WEBP' as well, but it looks
                         // okay without adjusting, and we should stress that this only changes for CI so
                         // we won't bother for now.
-
-                        // We want to doublecheck that 'openstreetmap-openmaptiles' is in the sources because the map sometimes
-                        // starts up intermittently with protomaps, though it rights itself promptly.
-                        if (WORLD_MAP_VECTOR_TYPE === VECTOR_TYPE_NATURAL_EARTH && 'openstreetmap-openmaptiles' in style.sources) {
-                            if (mapStyleChoice === STYLE_NATURAL) {
-                                iiabMapsDotBlackPatch.setLibertyForOsmToNaturalEarth(style)
-                            }
-                            if (mapStyleChoice === STYLE_HYBRID) {
-                                iiabMapsDotBlackPatch.setHybridForOsmToNaturalEarth(style)
-                            }
-                        }
 
                         style.iiabPatched = true
                     }
                     return handlerResult
-                },
-                getMaxZoomTerrariumPmtiles: () => {
-                    // We are looking at a full quality region. Let's make sure we can see full quality terrain.
-                    if (!!activeFQRegionName) {
-                        return 10
-                    }
-
-                    // It seems that maps.black sets this up whether or not it
-                    // sees the terrain file, so we'll default to some valid value (1)
-
-                    return WORLD_MAP_TERRAIN_MAX_ZOOM || 1
-                },
-                getMaxZoomS2maps: () => {
-                    // We are looking at a full quality region. Let's make sure we can zoom all the way in.
-                    if (!!activeFQRegionName) {
-                        return 13
-                    }
-
-                    return WORLD_MAP_SATELLITE_MAX_ZOOM
-                },
-                getMaxZoomOSM: () => {
-                    // We are looking at a full quality region. Let's make sure we can zoom all the way in.
-                    if (!!activeFQRegionName) {
-                        return 14
-                    }
-
-                    return WORLD_MAP_VECTOR_MAX_ZOOM
-                },
-
-                getPmtilesName: (baseName, url) => {
-                    if (!activeFQRegionName) {
-                        console.log("not currently viewing a Full Quality Region; pmtiles file name unchanged", url)
-                        return url
-                    }
-
-                    const pmtilesDates = downloadedFQRegions[activeFQRegionName].dates
-
-                    if (baseName.startsWith("terrarium")) {
-                        // terrarium actually starts with "terrarium-z0-z10".
-                        // We chop off the z0-z10 to avoid confusing since we
-                        // make lower zoom versions.
-                        fname = `terrarium.${pmtilesDates.terrain}.full-region.` + activeFQRegionName
-                        console.log("pmtiles file name for full quality region", fname)
-                        return url.replace(/terrarium-z0-z10.pmtiles$/, fname + ".pmtiles")
-                    } else if (baseName.startsWith("openstreetmap")) {
-                        fname = baseName + `.${pmtilesDates.vector}.full-region.` + activeFQRegionName
-                        console.log("pmtiles file name for full quality region", fname)
-                        return url.replace(/openstreetmap-openmaptiles.pmtiles$/, fname + ".pmtiles")
-                    } else if (baseName.startsWith("s2maps")) {
-                        fname = baseName + `.${pmtilesDates.satellite}.full-region.` + activeFQRegionName
-                        console.log("pmtiles file name for full quality region", fname)
-                        return url.replace(/s2maps-sentinel2-2023.pmtiles$/, fname + ".pmtiles")
-                    }
-                    console.log("pmtiles file needs no change", fname)
-                    return url
-                },
-
-                // Even though maps.black thinks this is an OpenStreetMap file, it's actually a
-                // Natural Earth file. These are formatted the same way given the same schema,
-                // but it's apparently created with different zoom ranges in mind so the styles
-                // are a bit different. This function adjust the OpenStreetMap style to behave
-                // like the Natural Earth style (for the world map. FQRs should all be actual
-                // OpenStreetMap) This function is generated by:
-                //
-                // https://github.com/iiab/maps2/blob/master/build-tiles/nat-to-osm
-                //
-                // It also makes sure that these zoom levels are the only differences between
-                // these the styles.
-                setLibertyForOsmToNaturalEarth: (style) => {
-                    console.log("Preparing openstreetmap liberty style for a naturalearth pmtiles file")
-
-                    UNEXPECTED_ID_ERROR = 'Unexpected id in layer in `setLibertyForOsmToNaturalEarth`'
-
-                    if (style.layers[4].id === 'landuse_residential') {
-                        style.layers[4].maxzoom = 20 // from 12
-                    } else {
-                        console.log(UNEXPECTED_ID_ERROR)
-                    }
-                    if (style.layers[8].id === 'landcover_wetland') {
-                        style.layers[8].minzoom = 8 // from 12
-                    } else {
-                        console.log(UNEXPECTED_ID_ERROR)
-                    }
-                    if (style.layers[19].id === 'aeroway_fill') {
-                        style.layers[19].minzoom = 8 // from 11
-                    } else {
-                        console.log(UNEXPECTED_ID_ERROR)
-                    }
-                    if (style.layers[20].id === 'aeroway_runway') {
-                        style.layers[20].minzoom = 8 // from 11
-                    } else {
-                        console.log(UNEXPECTED_ID_ERROR)
-                    }
-                    if (style.layers[21].id === 'aeroway_taxiway') {
-                        style.layers[21].minzoom = 8 // from 11
-                    } else {
-                        console.log(UNEXPECTED_ID_ERROR)
-                    }
-                    if (style.layers[42].id === 'road_motorway_link_casing') {
-                        style.layers[42].minzoom = 8 // from 12
-                    } else {
-                        console.log(UNEXPECTED_ID_ERROR)
-                    }
-                    if (style.layers[44].id === 'road_link_casing') {
-                        style.layers[44].minzoom = 8 // from 13
-                    } else {
-                        console.log(UNEXPECTED_ID_ERROR)
-                    }
-                    if (style.layers[49].id === 'road_path_pedestrian') {
-                        style.layers[49].minzoom = 8 // from 14
-                    } else {
-                        console.log(UNEXPECTED_ID_ERROR)
-                    }
-                    if (style.layers[50].id === 'road_motorway_link') {
-                        style.layers[50].minzoom = 8 // from 12
-                    } else {
-                        console.log(UNEXPECTED_ID_ERROR)
-                    }
-                    if (style.layers[52].id === 'road_link') {
-                        style.layers[52].minzoom = 8 // from 13
-                    } else {
-                        console.log(UNEXPECTED_ID_ERROR)
-                    }
-                    if (style.layers[61].id === 'road_one_way_arrow') {
-                        style.layers[61].minzoom = 8 // from 16
-                    } else {
-                        console.log(UNEXPECTED_ID_ERROR)
-                    }
-                    if (style.layers[62].id === 'road_one_way_arrow_opposite') {
-                        style.layers[62].minzoom = 8 // from 16
-                    } else {
-                        console.log(UNEXPECTED_ID_ERROR)
-                    }
-                    if (style.layers[83].id === 'building') {
-                        style.layers[83].minzoom = 8 // from 13
-                    } else {
-                        console.log(UNEXPECTED_ID_ERROR)
-                    }
-                    if (style.layers[83].id === 'building') {
-                        style.layers[83].maxzoom = 20 // from 14
-                    } else {
-                        console.log(UNEXPECTED_ID_ERROR)
-                    }
-                    if (style.layers[84].id === 'building-3d') {
-                        style.layers[84].minzoom = 8 // from 14
-                    } else {
-                        console.log(UNEXPECTED_ID_ERROR)
-                    }
-                    if (style.layers[88].id === 'waterway_line_label') {
-                        style.layers[88].minzoom = 8 // from 10
-                    } else {
-                        console.log(UNEXPECTED_ID_ERROR)
-                    }
-                    if (style.layers[91].id === 'poi_r20') {
-                        style.layers[91].minzoom = 8 // from 17
-                    } else {
-                        console.log(UNEXPECTED_ID_ERROR)
-                    }
-                    if (style.layers[92].id === 'poi_r7') {
-                        style.layers[92].minzoom = 8 // from 16
-                    } else {
-                        console.log(UNEXPECTED_ID_ERROR)
-                    }
-                    if (style.layers[93].id === 'poi_r1') {
-                        style.layers[93].minzoom = 8 // from 15
-                    } else {
-                        console.log(UNEXPECTED_ID_ERROR)
-                    }
-                    if (style.layers[95].id === 'highway-name-path') {
-                        style.layers[95].minzoom = 8 // from 15.5
-                    } else {
-                        console.log(UNEXPECTED_ID_ERROR)
-                    }
-                    if (style.layers[96].id === 'highway-name-minor') {
-                        style.layers[96].minzoom = 8 // from 15
-                    } else {
-                        console.log(UNEXPECTED_ID_ERROR)
-                    }
-                    if (style.layers[97].id === 'highway-name-major') {
-                        style.layers[97].minzoom = 8 // from 12.2
-                    } else {
-                        console.log(UNEXPECTED_ID_ERROR)
-                    }
-                    if (style.layers[100].id === 'road_shield_us') {
-                        style.layers[100].minzoom = 8 // from 9
-                    } else {
-                        console.log(UNEXPECTED_ID_ERROR)
-                    }
-                    if (style.layers[101].id === 'airport') {
-                        style.layers[101].minzoom = 8 // from 10
-                    } else {
-                        console.log(UNEXPECTED_ID_ERROR)
-                    }
-                    if (style.layers[103].id === 'label_village') {
-                        style.layers[103].minzoom = 8 // from 9
-                    } else {
-                        console.log(UNEXPECTED_ID_ERROR)
-                    }
-                    if (style.layers[105].id === 'label_state') {
-                        style.layers[105].maxzoom = 20 // from 8
-                    } else {
-                        console.log(UNEXPECTED_ID_ERROR)
-                    }
-                    if (style.layers[108].id === 'label_country_3') {
-                        style.layers[108].maxzoom = 20 // from 9
-                    } else {
-                        console.log(UNEXPECTED_ID_ERROR)
-                    }
-                    if (style.layers[109].id === 'label_country_2') {
-                        style.layers[109].maxzoom = 20 // from 9
-                    } else {
-                        console.log(UNEXPECTED_ID_ERROR)
-                    }
-                    if (style.layers[110].id === 'label_country_1') {
-                        style.layers[110].maxzoom = 20 // from 9
-                    } else {
-                        console.log(UNEXPECTED_ID_ERROR)
-                    }
-                },
-
-                // Even though maps.black thinks this is an OpenStreetMap file, it's actually a
-                // Natural Earth file. These are formatted the same way given the same schema,
-                // but it's apparently created with different zoom ranges in mind so the styles
-                // are a bit different. This function adjust the OpenStreetMap style to behave
-                // like the Natural Earth style (for the world map. FQRs should all be actual
-                // OpenStreetMap) This function is generated by:
-                //
-                // https://github.com/iiab/maps2/blob/master/build-tiles/nat-to-osm
-                //
-                // It also makes sure that these zoom levels are the only differences between
-                // these the styles.
-                setHybridForOsmToNaturalEarth: (style) => {
-                    console.log("Preparing openstreetmap hybrid style for a naturalearth pmtiles file")
-
-                    UNEXPECTED_ID_ERROR = 'Unexpected id in layer in `setHybridForOsmToNaturalEarth`'
-
-                    if (style.layers[3].id === 'housenumber') {
-                        style.layers[3].minzoom = 9 // from 17
-                    } else {
-                        console.log(UNEXPECTED_ID_ERROR)
-                    }
-                    if (style.layers[8].id === 'road_minor') {
-                        style.layers[8].minzoom = 9 // from 13
-                    } else {
-                        console.log(UNEXPECTED_ID_ERROR)
-                    }
-                    if (style.layers[12].id === 'aeroway-taxiway') {
-                        style.layers[12].minzoom = 9 // from 12
-                    } else {
-                        console.log(UNEXPECTED_ID_ERROR)
-                    }
-                    if (style.layers[28].id === 'poi_label') {
-                        style.layers[28].minzoom = 9 // from 14
-                    } else {
-                        console.log(UNEXPECTED_ID_ERROR)
-                    }
-                    if (style.layers[29].id === 'airport-label') {
-                        style.layers[29].minzoom = 9 // from 10
-                    } else {
-                        console.log(UNEXPECTED_ID_ERROR)
-                    }
-                    if (style.layers[30].id === 'road_major_label') {
-                        style.layers[30].minzoom = 9 // from 13
-                    } else {
-                        console.log(UNEXPECTED_ID_ERROR)
-                    }
-                    if (style.layers[32].id === 'place_label_city') {
-                        style.layers[32].maxzoom = 20 // from 16
-                    } else {
-                        console.log(UNEXPECTED_ID_ERROR)
-                    }
-                    if (style.layers[33].id === 'country_label-other') {
-                        style.layers[33].maxzoom = 20 // from 12
-                    } else {
-                        console.log(UNEXPECTED_ID_ERROR)
-                    }
-                    if (style.layers[34].id === 'country_label') {
-                        style.layers[34].maxzoom = 20 // from 12
-                    } else {
-                        console.log(UNEXPECTED_ID_ERROR)
-                    }
                 },
             }
             // Defining these hash get/set functions outside of the window load because we
@@ -469,7 +277,7 @@
                 const zoom = Math.round(mb.zoom * 100) / 100
                 const globe = mb.globe ? 'g' : 'm' // [g]lobe : [m]ercator (i.e. like a paper map)
                 const terrain = mb.terrain ? 't' : 'f' // [t]errain : [f]lat (i.e. no mountains)
-                history.replaceState({}, "", `#${lat}/${lon}/${pitch}/${bearing}/${zoom}/${globe}/${terrain}/${mapStyleChoice}/${activeFQRegionName}`)
+                history.replaceState({}, "", `#${lat}/${lon}/${pitch}/${bearing}/${zoom}/${globe}/${terrain}/${mapStyleChoice}`)
             }
 
             // Why two different functions for reading the URL hash?
@@ -486,10 +294,8 @@
             //
             // We already handle `mapStyleChoice` in our own funny way so it doesn't really matter
             // when it's set.
-            function readHash() {
-                const [lat, lon, pitch, bearing, zoom, globe, terrain, _mapStyleChoice, _activeFQRegionName] = window.location.hash.slice(1).split('/')
-
-                activeFQRegionName = _activeFQRegionName || ""
+            async function readHash() {
+                const [lat, lon, pitch, bearing, zoom, globe, terrain, _mapStyleChoice] = window.location.hash.slice(1).split('/')
 
                 mapStyleChoice = tryAvailableStyle(_mapStyleChoice)
 
@@ -504,12 +310,13 @@
                     shouldSetDefaultView = true
                 }
             }
-            function readHashGlobeAndTerrain() {
+            async function readHashGlobeAndTerrain() {
                 const [lat, lon, pitch, bearing, zoom, globe, terrain, _mapStyleChoice] = window.location.hash.slice(1).split('/')
+
                 mb.globe = globe === 'g'
 
                 // contour lines is another thing that uses terrain maps, which we can consider
-                mb.terrain = mb.hillshade = (terrain === 't') && terrainAvailable()
+                mb.terrain = mb.hillshade = (terrain === 't') && (await terrainAvailable())
             }
             // await until(function () { return someCondition })
             // or
@@ -531,26 +338,19 @@
                 })
             }
 
-            // We need a timeout to wait for mb.map.style.loaded() to be true and
-            // for setFQRegions to conclude (the latter much less likely to come later)
-            let showFQRegionOutlinesTimeout = null
+            const mapStylePresent = () => (mb && mb.map && mb.map.style)
+            const mapStyleLoaded = () => (mapStylePresent() && mb.map.style.loaded())
 
             // Show the outlines of the full quality regions and make them interactive.
-            function showFQRegionOutlines() {
-                // Whether we're setting a new timeout, actually showing the full quality region
-                // outlines, or neither, make sure no further timeouts are looming.
-                clearTimeout(showFQRegionOutlinesTimeout)
+            async function drawFQRegionOutlines() {
 
-                const styleLoaded = (mb && mb.map && mb.map.style && mb.map.style.loaded());
-                if (downloadedFQRegions === null || !styleLoaded) {
-                  showFQRegionOutlinesTimeout = setTimeout(showFQRegionOutlines, 300)
-                  return
-                }
+                await until(mapStyleLoaded)
+                await until(fqrLoaded)
 
-                for (regionName_ in downloadedFQRegions) {
+                for (regionName_ in downloadedFQRegions.regions) {
                     const regionName = regionName_ // fix variable capturing in callbacks below
                     const regionId = "region-" + regionName
-                    const [min_lon, min_lat, max_lon, max_lat] = downloadedFQRegions[regionName].bbox
+                    const [min_lon, min_lat, max_lon, max_lat] = downloadedFQRegions.regions[regionName].bbox
 
                     if (mb.map.getSource(regionId)) {
                         // Looks like we already ran this. Quit without setting a timeout.
@@ -581,7 +381,7 @@
                         id: regionId + "~line", // using "~" as a separator because it can't be part of a region name
                         type: "line",
                         source: regionId,
-                        layout:{},
+                        layout: {},
                         paint: {'line-color': '#00FFFF', 'line-width': 5, 'line-opacity': 0.7},
                     })
                     // Make a visible layer with the outline of the rectangle.
@@ -589,7 +389,7 @@
                         id: regionId + "~line-2", // using "~" as a separator because it can't be part of a region name
                         type: "line",
                         source: regionId,
-                        layout:{},
+                        layout: {},
                         paint: {'line-color': '#000000', 'line-width': 3, 'line-opacity': 0.7},
                     })
                     // Add an invisible layer that we will check for click events on later.
@@ -597,82 +397,23 @@
                         id: regionId + "~click",
                         type: "fill",
                         source: regionId,
-                        layout:{},
+                        layout: {},
                         paint: {'fill-color': '#FF2222', 'fill-opacity': 0},
+                        metadata: {
+                            // To make it simpler to retrieve and find later
+                            'iiab:center': ({
+                                lng: min_lon + (max_lon - min_lon) / 2,
+                                lat: min_lat + (max_lat - min_lat) / 2,
+                            }),
+                        }
                     })
-                    if (activeFQRegionName === regionName) {
-                        // If we're looking at a full quality region, create a half-transparent black
-                        // "blockout" area around the region, so it's clear what the focus is
-                        //
-                        // Create the source defining the MultiPolygon of the blockout area.
-                        mb.map.addSource(regionId + "~blockout", {
-                            type: 'geojson',
-                            data: {
-                                type: 'Feature',
-                                geometry: {
-                                    type: 'MultiPolygon',
-                                    // TODO - globe math instead of plain adding
-                                    // TODO - make this a polygon with a hole in it
-                                    coordinates: [[[
-                                        [min_lon - 10, max_lat],
-                                        [min_lon - 10, max_lat + 10],
-                                        [max_lon + 10, max_lat + 10],
-                                        [max_lon + 10, max_lat],
-                                        [min_lon - 10, max_lat],
-                                    ]], [[
-                                        [min_lon - 10, min_lat],
-                                        [min_lon - 10, min_lat - 10],
-                                        [max_lon + 10, min_lat - 10],
-                                        [max_lon + 10, min_lat],
-                                        [min_lon - 10, min_lat],
-                                    ]], [[
-                                        [min_lon, min_lat],
-                                        [min_lon, max_lat],
-                                        [min_lon - 10, max_lat],
-                                        [min_lon - 10, min_lat],
-                                        [min_lon, min_lat],
-                                    ]], [[
-                                        [max_lon + 10, min_lat],
-                                        [max_lon + 10, max_lat],
-                                        [max_lon, max_lat],
-                                        [max_lon, min_lat],
-                                        [max_lon + 10, min_lat],
-                                    ]]],
-                                },
-                            },
-                        });
-                        // Add the blockout area as a visible layer.
-                        mb.map.addLayer({
-                            id: regionId + "~blockout",
-                            type: "fill",
-                            source: regionId + "~blockout",
-                            layout:{},
-                            paint: {'fill-color': '#000000', 'fill-opacity': 0.5},
-                        })
-                    }
                     // Make the region clickable via the above invisbile area.
                     // This brings the user from the full world map to a view of just the region.
                     // TODO - try one handler for multiple layers: https://github.com/maplibre/maplibre-gl-js/pull/4570
                     mb.map.on('click', regionId + "~click", e => {
-                        if (regionName === activeFQRegionName) {
-                            return
-                        }
                         if (fqRegionsControl.isDeleteModeActive()) {
                             fqRegionsControl.onClickDeleteRegion(regionName)
-                            return
                         }
-                        const [min_lon, min_lat, max_lon, max_lat] = downloadedFQRegions[regionName].bbox
-
-                        // First we kick off a zoom animation to a view focusing on the region.
-                        mb.map.fitBounds([[min_lon, min_lat], [max_lon, max_lat]], {})
-
-                        // Then we create a handler that gets called once the zoom animation is complete.
-                        // (We don't have to worry about removing this handler. applyMapStyle will refresh
-                        // the map and wipe everthing.)
-                        mb.map.on('moveend', () => {
-                            activeFQRegionName = regionName
-                            applyMapStyle()
-                        })
                     })
                     mb.map.on('mouseenter', regionId + "~click", e => {
                         if (fqRegionsControl.isDeleteModeActive()) {
@@ -690,7 +431,90 @@
                     // Don't affect draw mode though.
                     fqRegionsControl.endDeleteMode()
                 })
+                mb.map.fqRegionsShown = true // attach to `mb.map` so that it clears if we reset the map
             }
+
+            async function setFQRegionOutlinesVisibility() {
+                await until(() => mb.map && mb.map.fqRegionsShown)
+                // Hide the lines if you zoom in enough
+                const lineVisibility = mb.map.getZoom() > 10 ? "none" : "visible"
+                for(regionName in downloadedFQRegions.regions) {
+                    // TODO - fade instead? or in addition?
+                    const regionId = "region-" + regionName
+                    mb.map.setLayoutProperty(regionId + "~line", "visibility", lineVisibility)
+                    mb.map.setLayoutProperty(regionId + "~line-2", "visibility", lineVisibility)
+                }
+            }
+
+            async function setBestTerrainSource() {
+                // Set the right terrain source based on which FQR might be on screen if we have
+                // terrain turned on.
+
+                await until(mapStyleLoaded)
+                await until(() => mb.map.fqRegionsShown) // to query features on screen. implies fqrLoaded
+
+                if (!mb.terrain) {
+                    return
+                }
+
+                const curTerrain = mb.map.getTerrain()
+                const curTerrainSource = curTerrain && curTerrain.source
+
+                // Pick a terrain source. Basically: if we're looking at a region, pick that.
+                // If not, pick the world map terrain. There are many edge cases though.
+                const newTerrainSource = (() => {
+                    const mapCenter = mb.map.getCenter()
+                    const regionsOnScreen = (
+                        mb.map.queryRenderedFeatures()                                   // Get everything on screen
+                            .filter(f=>f.layer.id.includes("~click"))                    // The clickable areas exactly cover the region we need, and are available in every style
+                            .sort((f1, f2) => (                                          // Order by proximity to the center of the map
+                                mapCenter.distanceTo(f1.layer.metadata['iiab:center']) -
+                                mapCenter.distanceTo(f2.layer.metadata['iiab:center'])
+                            ))
+                            .map(f=>f.source.split('region-')[1])                        // Extract the name of the region
+                    )
+
+                    if (WORLD_MAP_TERRAIN_MAX_ZOOM === 10) {
+                        // If the world map is maximum zoom, don't bother with FQR terrain
+                        return 'terrarium'
+                    }
+                    if (regionsOnScreen.length) {
+                        // awkward situation to be looking at multiple regions,
+                        // so take the first one (which is the closest to the
+                        // map center, see sorting above)
+                        return `terrarium.${downloadedFQRegions.regions[regionsOnScreen[0]].dates.terrain}.full-region.${regionsOnScreen[0]}`
+                    }
+                    if (WORLD_MAP_TERRAIN_MAX_ZOOM > 0) {
+                        // If no FQRs are on screen and we have a world map terrain, return to it
+                        return 'terrarium'
+                    }
+                    if (curTerrainSource) {
+                        // If no FQRs are on screen and we have no world map terrain, but we have some terrain
+                        // loaded (i.e. this is not for initialization), stick with the one that's loaded.
+                        // Even if we're not looking at it now, decent chance we'll look at it again soon.
+                        return curTerrainSource
+                    }
+                    if (fqRegionsExist()) {
+                        // If no FQRs are on screen, and we have no world map terrain, and no terrain is
+                        // currently loaded, (probably initializing) just pick an arbitrary FQR to start with.
+                        return Object.keys(downloadedFQRegions.regions)[0]
+                    }
+                    // If we have no FQRs at all, and we have no world map terrain, report a bug because
+                    // terrain should never be turned on in this case. And then, pick "terrarium" anyway,
+                    // I think it would just use the dummy terrain file.
+                    console.warn("Trying to choose a terrain source when we have none!")
+                    return 'terrarium'
+                })()
+
+                // Set the new terrain if there is no currently set terrain, or if the new one is diffferent
+                if (curTerrainSource !== newTerrainSource) {
+                    // console.log("setting terrain source:", newTerrainSource)
+                    mb.map.setTerrain(
+                        {source: newTerrainSource, exaggeration: 0.05}
+                    )
+                }
+            }
+
 
             function setDefaultView() {
                 // Setting the default view to show all the continents once, and have a decent vertical center.
@@ -703,56 +527,70 @@
                     shouldSetDefaultView = false
                 }
             }
+
             let fqRegionsControl
             let downloadedFQRegions = null;
+
+            const fqrLoaded = () => !!downloadedFQRegions
+
             function setFQRegions() {
                 return fetch('{{ tile_extract.info_file }}')
                     .then((response) => {
                         if (response.status < 400) {
                             return response.json()
                         } else {
-                            // keep `downloadedFQRegions` null if it returns 400 or 500 range (though that might go straight to `.catch` anyway).
                             console.error("Failed to load Full Quality Regions:", response.status, response.statusText)
-                            return null
                         }
                     })
                     .catch((error) => {
-                        // Keep `downloadedFQRegions` at null if there is an error
+                        downloadedFQRegions = {error: true, regions: {}}
                         console.error("Failed to load Full Quality Regions:", error)
                     })
                     .then((json) => {
-                        // Keep `downloadedFQRegions` at null if the expected field is not there. Perhaps it returned < 400 but with empty data.
                         if (json && json.regions) {
-                          downloadedFQRegions = json.regions;
+                            downloadedFQRegions = {regions: json.regions};
+                        } else {
+                            downloadedFQRegions = {error: true, regions: {}}
                         }
                     });
             }
             setFQRegions()
-                .then(() => {
-                    if (downloadedFQRegions !== null && !!activeFQRegionName && !(activeFQRegionName in downloadedFQRegions)) {
-                        // Real hack with `setTimeout`; I need to refactor `applyMapStyle` and `setUpMap`.
-                        // Setting it to a whole 1000 ms to avoid an intermittent console error.
-                        // This is handling a somewhat uncommon case so I will just go with this non-ideal but easy approach.
-                        setTimeout(() => {
-                            // The currently active Full Quality Region seems to be nonexistent.
-                            // One very likely scenario for this is that the user deleted a region by this name and reloaded the page.
-                            // Another hypothetical is that someone is looking at an old link, or maybe a link copied from another IIAB?
-                            // if downloadedFQRegions is null (see if statement above), maybe there's some connection error, in which case let's not
-                            // go back to the full-sized map. the user may reload the page and succeed.
-                            activeFQRegionName = ""
-                            applyMapStyle()
-                        }, 1000)
-                    }
-                })
 
-            function satelliteAvailable() {
-                // Full Quality Regions always have satellite
-                return Boolean(WORLD_MAP_SATELLITE_MAX_ZOOM || !!activeFQRegionName)
+            // Assumes calling function has already done `await until(fqrLoaded)`
+            function fqRegionsExist() {
+                return !!(Object.keys(downloadedFQRegions.regions).length)
             }
 
-            function terrainAvailable() {
+            // Here's the deal:
+            //
+            // For now we are not accommodating users who want satellite: none
+            // globally but who do want to see the satellite in their FQRs.
+            // In fact, this intersection of users is likely an empty set.
+            //
+            // Considering FQRs here would require that we wait until extracts.json
+            // loads, and then figure out whether satellite is allowed, and only
+            // then set the mapstyle. This causes some weird timing issues with
+            // how maps.black gets set up. We can work around all that, but it's
+            // not worth the extra complications (making a bunch of things async,
+            // etc).
+            //
+            // As such, we will simply say that satellite is not avaialble if
+            // the user does not download it globally.
+            function satelliteAvailable() {
+                if (WORLD_MAP_SATELLITE_MAX_ZOOM) {
+                    return true
+                }
+            }
+
+            async function terrainAvailable() {
+                // Check this first to return faster
+                if (WORLD_MAP_TERRAIN_MAX_ZOOM > 0) {
+                    return true
+                }
+
                 // Full Quality Regions always have terrain
-                return Boolean(WORLD_MAP_TERRAIN_MAX_ZOOM || !!activeFQRegionName)
+                await until(fqrLoaded)
+                return fqRegionsExist()
             }
 
             function getAvailableStyles() {
@@ -761,8 +599,8 @@
                     STYLE_POLITICAL,
 
                     // Requires satellite tiles
-                    (satelliteAvailable()) ? STYLE_SATELLITE : null,
-                    (satelliteAvailable()) ? STYLE_HYBRID    : null,
+                    satelliteAvailable() ? STYLE_SATELLITE : null,
+                    satelliteAvailable() ? STYLE_HYBRID    : null,
                 ].filter(Boolean)
             }
 
@@ -784,7 +622,9 @@
                 return STYLE_NATURAL
             }
 
-            function applyMapStyle() {
+            async function applyMapStyle() {
+                await until(() => mapStyleChoice, 100)
+
                 // The key is the `mapStyleChoice`, i.e. "natural", "political", etc, from the dropdown menu. (These are names specific to
                 // IIAB maps.)
                 //
@@ -806,6 +646,9 @@
             }
 
             class MapsDotBlackStyleControl {
+                constructor(availableStyles) {
+                    this.availableStyles = availableStyles
+                }
                 onAdd(map) {
                     this._map = map;
                     this._container = document.createElement('div');
@@ -823,7 +666,7 @@
                         [STYLE_SATELLITE]: "&#x1F4E1;",
                         [STYLE_HYBRID]: "&#x1F4E1;+",
                     }
-                    const styleOptions = getAvailableStyles().map(style =>
+                    const styleOptions = this.availableStyles.map(style =>
                         `<option
                            title="${styleTitles[style]}"
                            value="${style}"
@@ -866,51 +709,6 @@
                 }
             }
 
-            // This button brings us back from a Full Quality Region to the full world map
-            class ReturnFromRegionControl {
-                onAdd(map) {
-                    this._map = map;
-                    this._container = document.createElement('div');
-                    const button = document.createElement('button');
-                    button.type = "button"
-                    button.title = "Return to world map"
-                    button.innerHTML = "&#8617;&#65039;" // curved arrow
-                    this._container.appendChild(button)
-                    this._container.className = 'maplibregl-ctrl maplibregl-ctrl-group';
-                    this._container.style = 'cursor: pointer;'
-                    this._container.onclick = () => {
-                        const [min_lon, min_lat, max_lon, max_lat] = downloadedFQRegions[activeFQRegionName].bbox
-
-                        // First we kick off a zoom animation to a view focusing on the region, zoomed out a bit more than when we entered it.
-                        mb.map.setMaxBounds() // untether us from the bounds first so we can zoom out further
-                        mb.map.fitBounds(
-                            [[min_lon - 0.5, min_lat - 0.5], [max_lon + 0.5, max_lat + 0.5]],
-                            {speed: 1.75}, // a little slower than the Delete button, but a little faster than the default
-                        )
-
-                        // Then we create a handler that gets called once the zoom animation is complete.
-                        // (We don't have to worry about removing this handler. applyMapStyle will refresh
-                        // the map and wipe everthing.)
-                        mb.map.on('moveend', () => {
-                            // Unset the Full Quality Region, i.e. go back to the full-sized map
-                            activeFQRegionName = ""
-
-                            // As we exit from a Full Quality Region, we have to disable things that may not be available in the full-sized map.
-                            // (This sucks and a better organization of the code would prevent this.)
-                            mb.terrain = mb.hillshade = mb.terrain && terrainAvailable()
-                            mapStyleChoice = tryAvailableStyle(mapStyleChoice)
-
-                            applyMapStyle()
-                        })
-                    }
-                    return this._container
-                }
-
-                onRemove() {
-                    this._container.parentNode.removeChild(this._container);
-                    this._map = undefined;
-                }
-            }
             class FQRegionsControl {
                 onAdd(map) {
                     this._map = map;
@@ -946,7 +744,7 @@
                     // A lot of the FQR managing logic is encapsulated in this control now.
                     // For simplicity, lets always keep it around, but hide it if we don't
                     // want the user to edit anything.
-                    if (!REGION_DOWNLOADER_ENABLED || !!activeFQRegionName) {
+                    if (!REGION_DOWNLOADER_ENABLED) {
                         this._container.style['display'] = 'none'
                     }
 
@@ -1213,7 +1011,7 @@
                     })
                 }
                 onClickDeleteRegion(regionName) {
-                    const [min_lon, min_lat, max_lon, max_lat] = downloadedFQRegions[regionName].bbox
+                    const [min_lon, min_lat, max_lon, max_lat] = downloadedFQRegions.regions[regionName].bbox
 
                     // Zoom out to view the region so that the delete popup is well placed
                     const fqrWidth = max_lon - min_lon
@@ -1550,21 +1348,20 @@
             }
             const scaleControl = new maplibregl.ScaleControl()
 
-            // We need a timeout to wait for mb.map.style to be set
-            let setUpMapTimeout = null
-            function setUpMap() {
-                // Whether we're setting a new timeout, actually setting up all this
-                // stuff, or neither, make sure no further timeouts are looming.
-                clearTimeout(setUpMapTimeout)
+            async function setUpMap() {
+                // TODO (maybe?) use a maps-dot-black "on add map" callback instead, if such a thing exists.
+                // The problem is that at on creation, mb doesn't immediately contain a map.
+                // NOTE mapStyleLoaded happens much later than mapStylePresent.
+                // until(mapStylePresent) seems to be sufficient.
+                await until(mapStylePresent, 100)
 
-                if (scaleControl._map) {
-                  // We are already set up. Neither set up again, nor set a timer
+                // Avoid multiple concurrent runs. But, make sure it clears if we reset the map, so we attach it to `mb.map`.
+                if (mb.map.iiabSetUp) {
                   return
                 }
+                mb.map.iiabSetUp = true
 
-                // TODO use a maps-dot-black "on add map" callback instead, if such a thing exists.
-                // The problem is that at on creation, mb doesn't immediately contain a map.
-                if (mb.map && mb.map.style) { // NOTE mb.map.loaded() becomes true much later than mb.map.style. mb.map.style seems to be sufficient.
+                if (true) { // TODO obviously remove this if statement; I just don't want a gigantic dedent in the middle of this already large PR
                     // sigh. deal with sneaking the style sheets into a "Shadow DOM" here. Thankfully this somehow isn't an issue with javascript.
                     // https://stackoverflow.com/questions/79736280/importing-a-css-stylesheet-into-a-webcomponent-with-shadow-dom-in-firefox/79744809#79744809
                     // TODO - See if I can do this in a more direct way. I only need the geocoder css as part of this shadow DOM. Also I probably don't need the
@@ -1630,23 +1427,30 @@
                     }
                     mb.map.addControl(scaleControl);
 
+                    // in case of nat-z8 and no FQRs, get rid of OSM attribution.
+                    (async () => {
+                        await until(fqrLoaded)
+                        if (WORLD_MAP_VECTOR_TYPE === VECTOR_TYPE_NATURAL_EARTH && !fqRegionsExist()) {
+                            await until(() =>
+                              mb.licenses &&
+                              mb.licenses.data &&
+                              mb.licenses.data['openstreetmap-openmaptiles']
+                            )
+                            delete mb.licenses.data['openstreetmap-openmaptiles']
+                        }
+                    })()
+
                     fqRegionsControl = new FQRegionsControl()
                     mb.map.addControl(fqRegionsControl, 'top-left');
 
-                    if (downloadedFQRegions !== null && !!activeFQRegionName && (activeFQRegionName in downloadedFQRegions)) {
-                        mb.map.addControl(new ReturnFromRegionControl(), 'top-left');
-
-                        // We are looking at a full quality region. Let's prevent
-                        // the user from straying far from it so they don't get lost.
-                        const [min_lon, min_lat, max_lon, max_lat] = downloadedFQRegions[activeFQRegionName].bbox
-                        mb.map.setMaxBounds([[min_lon - 0.5, min_lat - 0.5], [max_lon + 0.5, max_lat + 0.5]], {})
-                    }
-
-                    mb.map.addControl(new MapsDotBlackGlobeControl(), 'top-right');
-                    if (terrainAvailable()) {
-                        mb.map.addControl(new MapsDotBlackTerrainControl(), 'top-right');
-                    }
-                    mb.map.addControl(new MapsDotBlackStyleControl(), 'top-right');
+                    // Add all the right-side controls at once after we determine whether terrain is among them
+                    terrainAvailable().then(showTerrainControl => {
+                        mb.map.addControl(new MapsDotBlackGlobeControl(), 'top-right');
+                        if (showTerrainControl) {
+                            mb.map.addControl(new MapsDotBlackTerrainControl(), 'top-right');
+                        }
+                        mb.map.addControl(new MapsDotBlackStyleControl(getAvailableStyles()), 'top-right');
+                    })
                     // NOTE Navigation control is added via `navigationcontrol` attribute on the maps-black tag
 
                     // The call to this function (`setUpMap`) may have been triggered by a globe, terrain, or style change.
@@ -1656,21 +1460,25 @@
                     // Future changes in orientation should also be reflected in the hash:
                     mb.map.off('moveend', setHash) // unsetting first, in case it's already there from a previous refresh
                     mb.map.on('moveend', setHash)
+                    mb.map.on('moveend', async () => {
+                        setFQRegionOutlinesVisibility()
+                        setBestTerrainSource()
+                    })
 
                     // Any time we set up the map, we should make a point to show the full quality region outlines as well.
                     // This depends both on mb.map.style.loaded() and also for the fetch to have returned.
                     // Thus, it'll be on its own timer loop. We just need to make sure to kick it off here.
-                    showFQRegionOutlines()
+                    drawFQRegionOutlines()
+
+                    setFQRegionOutlinesVisibility()
+                    setBestTerrainSource()
 
                     setDefaultView()
-                } else {
-                    // For now try periodically until it's ready.
-                    setUpMapTimeout = setTimeout(setUpMap, 100)
                 }
             }
 
-            window.addEventListener("load", () => {
-                readHashGlobeAndTerrain()
+            window.addEventListener("load", async () => {
+                await readHashGlobeAndTerrain()
                 applyMapStyle()
             });
 
