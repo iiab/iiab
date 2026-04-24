@@ -44,20 +44,7 @@ def get_zim_list(path):
                 files_processed[zimname] = zimidx
                 zimname = content + filename + ".zim"
                 zimidx = index + filename + ".zim.idx"
-                if filename in CONST.old_zim_map: # handle old names that don't parse
-                    perma_ref = CONST.old_zim_map[filename]
-                else:
-                    # handle various zim name patterns:
-                    # 1. canonical zim ending in _YYYY-MM
-                    # as of 10/16/2024 it looks like all Kiwix zims fit this pattern
-                    # 2. otherwise assume no versioning and perma_ref = filename
-
-                    match = re.search("_[0-5][0-9][0-5][0-9]-[0-5][0-9]$", filename)
-                    if match:
-                        perma_ref = filename[: match.span()[0]]
-                    else:
-                        perma_ref = filename
-
+                perma_ref = calc_zim_perma_ref(zimname)
                 zim_info['file_name'] = filename
                 zim_versions[perma_ref] = zim_info # if there are multiples, last should win
     return files_processed, zim_versions
@@ -151,19 +138,26 @@ def read_lang_codes():
     for lang in lang_codes:
         lang_iso2_codes[lang_codes[lang]['iso2']  ] = lang
 
-# there is a different algorithm in get_zim_list above
-def calc_perma_ref(uri):
-    '''Given a path or url return the generic zim name'''
+def calc_perma_ref(uri): # preserve name for backwards compatibility
+    return calc_zim_perma_ref(uri)
+
+def calc_zim_perma_ref(uri):
+    '''Given a path with a zim filename return the generic zim name'''
     url_slash = uri.split('/')
     url_end = url_slash[-1] # last element
-    file_ref = url_end.split('.zim')[0] # true for both internal and external index
-    perma_ref_parts = file_ref.split('_')
-    perma_ref = perma_ref_parts[0]
-    if len(perma_ref_parts) > 1:
-        perma_ref_parts = perma_ref_parts[0:len(perma_ref_parts) - 1] # all but last, which should be date
-        for part in perma_ref_parts[1:]: # start with 2nd
-            if not part.isdigit():
-                perma_ref += "_" + part
+    zim_filename = url_end.split('.zim')[0] # true for both internal and external index
+    if zim_filename in CONST.old_zim_map: # handle old names that don't parse
+        perma_ref = CONST.old_zim_map[zim_filename]
+    else:
+        # handle various zim name patterns:
+        # 1. canonical zim ending in _YYYY-MM
+        # as of 10/16/2024 it looks like all Kiwix zims fit this pattern
+        # 2. otherwise assume no versioning and perma_ref = filename
+        match = re.search("_[0-5][0-9][0-5][0-9]-[0-5][0-9]$", zim_filename) # good until 2060
+        if match:
+            perma_ref = zim_filename[: match.span()[0]]
+        else:
+            perma_ref = zim_filename
     return perma_ref
 
 def kiwix_lang_to_iso2(zim_lang_code):
