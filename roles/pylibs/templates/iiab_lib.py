@@ -153,7 +153,8 @@ def calc_zim_perma_ref(uri):
         # 1. canonical zim ending in _YYYY-MM
         # as of 10/16/2024 it looks like all Kiwix zims fit this pattern
         # 2. otherwise assume no versioning and perma_ref = filename
-        match = re.search("_[0-5][0-9][0-5][0-9]-[0-5][0-9]$", zim_filename) # good until 2060
+        #match = re.search("_[0-5][0-9][0-5][0-9]-[0-5][0-9]$", zim_filename) # good until 2060
+        match = re.search(r'_20[0-9]{2}-(0[1-9]|1[0-2])$',zim_filename) # more robust regex for date pattern for this century
         if match:
             perma_ref = zim_filename[: match.span()[0]]
         else:
