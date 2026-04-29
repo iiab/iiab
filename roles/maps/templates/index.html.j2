@@ -132,6 +132,38 @@
 
             // One namespace for all changes
             iiabMapsDotBlackPatch = {
+                patchResource: handlerResult => {
+                    if (handlerResult &&
+                        handlerResult.data &&
+                        handlerResult.data.sources &&
+                        !handlerResult.data.iiabPatched
+                    ) {
+                        const data = handlerResult.data
+
+                        // set max zooms of world maps
+                        const updateSource = (field, maxzoom) => {
+                            if (data.sources[field]) {
+                                data.sources[field].maxzoom = maxzoom
+                                data.sources[field].url = iiabMapsDotBlackPatch.getPmtilesName(field, data.sources[field].url)
+                            }
+                        }
+                        updateSource('openstreetmap-openmaptiles', iiabMapsDotBlackPatch.getMaxZoomOSM())
+                        updateSource('s2maps-sentinel2-2023', iiabMapsDotBlackPatch.getMaxZoomS2maps())
+
+                        // Sources that use the terrarium file. We don't necessarily even use all of them
+                        // but we'll change them here in case we do.
+                        updateSource('terrarium', iiabMapsDotBlackPatch.getMaxZoomTerrariumPmtiles())
+                        updateSource('hillshade', iiabMapsDotBlackPatch.getMaxZoomTerrariumPmtiles())
+                        updateSource('contours', iiabMapsDotBlackPatch.getMaxZoomTerrariumPmtiles())
+
+                        // We could handle 'naturalearth6-NE2_HR_SR_W_DR-WEBP' here as well, but it looks
+                        // okay without adjusting, and we should stress that this only changes for CI so
+                        // we won't bother for now.
+
+                        data.iiabPatched = true
+                    }
+                    return handlerResult
+                },
                 getMaxZoomTerrariumPmtiles: () => {
                     // We are looking at a full quality region. Let's make sure we can see full quality terrain.
                     if (!!activeFQRegionName) {
@@ -160,12 +192,10 @@
                     return WORLD_MAP_VECTOR_MAX_ZOOM
                 },
 
-                getPmtilesName: (baseName) => {
-                    // baseName and fname won't include ".pmtiles". ".pmtiles" gets added by the calling function.
-
+                getPmtilesName: (baseName, url) => {
                     if (!activeFQRegionName) {
-                        console.log("not currently viewing a Full Quality Region; pmtiles file name unchanged", baseName)
-                        return baseName
+                        console.log("not currently viewing a Full Quality Region; pmtiles file name unchanged", url)
+                        return url
                     }
 
                     const pmtilesDates = downloadedFQRegions[activeFQRegionName].dates
@@ -176,17 +206,18 @@
                         // make lower zoom versions.
                         fname = `terrarium.${pmtilesDates.terrain}.full-region.` + activeFQRegionName
                         console.log("pmtiles file name for full quality region", fname)
+                        return url.replace(/terrarium-z0-z10.pmtiles$/, fname + ".pmtiles")
                     } else if (baseName.startsWith("openstreetmap")) {
                         fname = baseName + `.${pmtilesDates.vector}.full-region.` + activeFQRegionName
                         console.log("pmtiles file name for full quality region", fname)
+                        return url.replace(/openstreetmap-openmaptiles.pmtiles$/, fname + ".pmtiles")
                     } else if (baseName.startsWith("s2maps")) {
                         fname = baseName + `.${pmtilesDates.satellite}.full-region.` + activeFQRegionName
                         console.log("pmtiles file name for full quality region", fname)
-                    } else {
-                        fname = baseName
-                        console.log("pmtiles file needs no change", fname)
+                        return url.replace(/s2maps-sentinel2-2023.pmtiles$/, fname + ".pmtiles")
                     }
-                    return fname
+                    console.log("pmtiles file needs no change", fname)
+                    return url
                 },
             }
             // Defining these hash get/set functions outside of the window load because we
