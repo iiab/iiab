@@ -37,17 +37,22 @@
             const STYLE_SATELLITE = "satellite"
             const STYLE_HYBRID = "hybrid"
 
-            const VECTOR_TYPE_OSM = "osm"
-            const VECTOR_TYPE_NATURAL_EARTH = "nat"
-
             /****************
              *    configs   *
              ****************/
 
-            const WORLD_MAP_VECTOR_QUALITY = "{{ maps_vector_quality }}"
-
-            // VECTOR_TYPE_OSM or VECTOR_TYPE_NATURAL_EARTH
-            const WORLD_MAP_VECTOR_TYPE = WORLD_MAP_VECTOR_QUALITY.split("-")[0]
+            const WORLD_MAP_VECTOR_MAX_ZOOM = (num => {
+                if (Number.isNaN(num)) {
+                    // Use a default that is hopefully always available.
+                    // We hope they notice and report the bug if it ever comes here!
+                    console.warn("Unexpected value for maps_vector_quality")
+                    return 1
+                }
+                return num
+            })(Number(
+                // "osm-z11" -> "11", "nat-z8" -> "8", "somethingelse" -> undefined, etc
+                "{{ maps_vector_quality }}".split("-z")[1]
+            ))
 
             const WORLD_MAP_SATELLITE_MAX_ZOOM = (num => {
                 if (Number.isNaN(num)) {
@@ -152,19 +157,7 @@
                         return 14
                     }
 
-                    switch (WORLD_MAP_VECTOR_QUALITY) {
-                        case 'osm-z1':
-                            return 1
-                        case 'osm-z11':
-                            return 11
-                        case 'osm-z14':
-                            return 14
-                        default:
-                            // It seems that maps.black sets this up whether or not "nat-z8"
-                            // (Natural Earth) is selected (perhaps due to a timing issue).
-                            // So, we'll give it some valid value.
-                            return 1
-                    }
+                    return WORLD_MAP_VECTOR_MAX_ZOOM
                 },
 
                 getPmtilesName: (baseName) => {
@@ -460,14 +453,6 @@
                     }
                 })
 
-            function getMapVectorType() {
-                if (!!activeFQRegionName) {
-                    // Full Quality Regions are always OSM
-                    return VECTOR_TYPE_OSM
-                }
-                return WORLD_MAP_VECTOR_TYPE
-            }
-
             function satelliteAvailable() {
                 // Full Quality Regions always have satellite
                 return Boolean(WORLD_MAP_SATELLITE_MAX_ZOOM || !!activeFQRegionName)
@@ -481,9 +466,7 @@
             function getAvailableStyles() {
                 return [
                     STYLE_NATURAL,
-
-                    // Not avaiable if we're currently looking at Natural Earth vector tiles
-                    (getMapVectorType() === VECTOR_TYPE_OSM) ? STYLE_POLITICAL : null,
+                    STYLE_POLITICAL,
 
                     // Requires satellite tiles
                     (satelliteAvailable()) ? STYLE_SATELLITE : null,
@@ -510,36 +493,21 @@
             }
 
             function applyMapStyle() {
-                // The first level key is the `mapStyleChoice`, i.e. "natural", "political", etc, from the dropdown menu. (These are names specific to
+                // The key is the `mapStyleChoice`, i.e. "natural", "political", etc, from the dropdown menu. (These are names specific to
                 // IIAB maps.)
-                //
-                // The second level key indicates whether the currently visible map is using OSM or Natural Earth data for vector data.
                 //
                 // Both of these together point to a maps.black "mapstyle" which implies a maplibre style and data sources.
                 mb.mapstyle = {
                     // Has nicely colored regions, and buildings
-                    [STYLE_NATURAL]: {
-                        [VECTOR_TYPE_OSM]:           "openstreetmap-openmaptiles/openfreemap/liberty",
-                        [VECTOR_TYPE_NATURAL_EARTH]: "naturalearth-openmaptiles/openfreemap/liberty",
-                    },
+                    [STYLE_NATURAL]: "openstreetmap-openmaptiles/openfreemap/liberty",
+
                     // Has more clearly defined political boundaries
                     // TODO - find something like this with buildings too?
-                    [STYLE_POLITICAL]:  {
-                        [VECTOR_TYPE_OSM]:           "openstreetmap-openmaptiles/qwant/basic",
+                    [STYLE_POLITICAL]: "openstreetmap-openmaptiles/qwant/basic",
 
-                        // For now don't include political for naturalearth because it doesn't
-                        // have great political options zoomed out.
-                        [VECTOR_TYPE_NATURAL_EARTH]: undefined,
-                    },
-                    [STYLE_HYBRID]:  {
-                        [VECTOR_TYPE_OSM]:           "openstreetmap-openmaptiles/maps.black/hybrid-2023",
-                        [VECTOR_TYPE_NATURAL_EARTH]: "naturalearth-openmaptiles/maps.black/hybrid-2023",
-                    },
-                    [STYLE_SATELLITE]:  {
-                        [VECTOR_TYPE_OSM]:           "raster/s2maps/2023",
-                        [VECTOR_TYPE_NATURAL_EARTH]: "raster/s2maps/2023",
-                    },
-                }[mapStyleChoice][getMapVectorType()]
+                    [STYLE_HYBRID]: "openstreetmap-openmaptiles/maps.black/hybrid-2023",
+                    [STYLE_SATELLITE]: "raster/s2maps/2023",
+                }[mapStyleChoice]
                 console.log("setting to", mapStyleChoice, "i.e.", mb.mapstyle)
 
                 setUpMap() // The above will reset the map so we have to add controls and other things again. This also covers initial page load.
