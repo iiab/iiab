@@ -50,7 +50,7 @@ Example
 Historical Notes
 ================
 
-* We no longer support setting your password using a hash e.g. ``python -c 'import crypt; print crypt.crypt("<plaintext>", "$6$<salt>")'`` (or the Python 3 equivalent, ``python3 -c 'import crypt; print(crypt.crypt("<plaintext>", crypt.mksalt(crypt.METHOD_SHA512)))'``) as these are very cumbersome — and worse, exposing your "salt" opens up your password to `possible attack <https://stackoverflow.com/questions/6776050/how-long-to-brute-force-a-salted-sha-512-hash-salt-provided>`_.  [October 2020]
+* We no longer support setting your password using a hash e.g. ``python -c 'import crypt; print crypt.crypt("<plaintext>", "$6$<salt>")'`` (or the Python < 3.13 equivalent, ``python3 -c 'import crypt; print(crypt.crypt("<plaintext>", crypt.mksalt(crypt.METHOD_SHA512)))'`` or the CLI equivalent, ``openssl passwd -6 -salt $(openssl rand -base64 12) "plaintext"``) as these are very cumbersome — and worse, exposing your "salt" opens up your password to `possible attack <https://stackoverflow.com/questions/6776050/how-long-to-brute-force-a-salted-sha-512-hash-salt-provided>`_.  [October 2020]
 * The sudo flag ``NOPASSWORD:`` and the ``wheel`` group are similarly no longer recommended, so that your IIAB faces fewer security risks.  [October 2020]
 
 Remote Support Tools
