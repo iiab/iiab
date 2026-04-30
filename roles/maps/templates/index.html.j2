@@ -44,10 +44,20 @@
              *    configs   *
              ****************/
 
-            const WORLD_MAP_VECTOR_QUALITY = "{{ maps_vector_quality }}"
-
+            const WORLD_MAP_VECTOR_MAX_ZOOM = (num => {
+                if (Number.isNaN(num)) {
+                    // Use a default that is hopefully always available.
+                    // We hope they notice and report the bug if it ever comes here!
+                    console.warn("Unexpected value for maps_vector_quality")
+                    return 1
+                }
+                return num
+            })(Number(
+                // "osm-z11" -> "11", "nat-z8" -> "8", "somethingelse" -> undefined, etc
+                "{{ maps_vector_quality }}".split("-z")[1]
+            ))
             // VECTOR_TYPE_OSM or VECTOR_TYPE_NATURAL_EARTH
-            const WORLD_MAP_VECTOR_TYPE = WORLD_MAP_VECTOR_QUALITY.split("-")[0]
+            const WORLD_MAP_VECTOR_TYPE = "{{ maps_vector_quality }}".split("-z")[0]
 
             const WORLD_MAP_SATELLITE_MAX_ZOOM = (num => {
                 if (Number.isNaN(num)) {
@@ -127,6 +137,44 @@
 
             // One namespace for all changes
             iiabMapsDotBlackPatch = {
+                patchResource: handlerResult => {
+                    const style = handlerResult && handlerResult.data
+                    if (style && style.sources && !style.iiabPatched) {
+                        // set max zooms of world maps
+                        const updateSource = (field, maxzoom) => {
+                            if (style.sources[field]) {
+                                style.sources[field].maxzoom = maxzoom
+                                style.sources[field].url = iiabMapsDotBlackPatch.getPmtilesName(field, style.sources[field].url)
+                            }
+                        }
+                        updateSource('openstreetmap-openmaptiles', iiabMapsDotBlackPatch.getMaxZoomOSM())
+                        updateSource('s2maps-sentinel2-2023', iiabMapsDotBlackPatch.getMaxZoomS2maps())
+
+                        // Sources that use the terrarium file. We don't necessarily even use all of them
+                        // but we'll change them here in case we do.
+                        updateSource('terrarium', iiabMapsDotBlackPatch.getMaxZoomTerrariumPmtiles())
+                        updateSource('hillshade', iiabMapsDotBlackPatch.getMaxZoomTerrariumPmtiles())
+                        updateSource('contours', iiabMapsDotBlackPatch.getMaxZoomTerrariumPmtiles())
+
+                        // We could `updateSource` for 'naturalearth6-NE2_HR_SR_W_DR-WEBP' as well, but it looks
+                        // okay without adjusting, and we should stress that this only changes for CI so
+                        // we won't bother for now.
+
+                        // We want to doublecheck that 'openstreetmap-openmaptiles' is in the sources because the map sometimes
+                        // starts up intermittently with protomaps, though it rights itself promptly.
+                        if (WORLD_MAP_VECTOR_TYPE === VECTOR_TYPE_NATURAL_EARTH && 'openstreetmap-openmaptiles' in style.sources) {
+                            if (mapStyleChoice === STYLE_NATURAL) {
+                                iiabMapsDotBlackPatch.setLibertyForOsmToNaturalEarth(style)
+                            }
+                            if (mapStyleChoice === STYLE_HYBRID) {
+                                iiabMapsDotBlackPatch.setHybridForOsmToNaturalEarth(style)
+                            }
+                        }
+
+                        style.iiabPatched = true
+                    }
+                    return handlerResult
+                },
                 getMaxZoomTerrariumPmtiles: () => {
                     // We are looking at a full quality region. Let's make sure we can see full quality terrain.
                     if (!!activeFQRegionName) {
@@ -152,27 +200,13 @@
                         return 14
                     }
 
-                    switch (WORLD_MAP_VECTOR_QUALITY) {
-                        case 'osm-z1':
-                            return 1
-                        case 'osm-z11':
-                            return 11
-                        case 'osm-z14':
-                            return 14
-                        default:
-                            // It seems that maps.black sets this up whether or not "nat-z8"
-                            // (Natural Earth) is selected (perhaps due to a timing issue).
-                            // So, we'll give it some valid value.
-                            return 1
-                    }
+                    return WORLD_MAP_VECTOR_MAX_ZOOM
                 },
 
-                getPmtilesName: (baseName) => {
-                    // baseName and fname won't include ".pmtiles". ".pmtiles" gets added by the calling function.
-
+                getPmtilesName: (baseName, url) => {
                     if (!activeFQRegionName) {
-                        console.log("not currently viewing a Full Quality Region; pmtiles file name unchanged", baseName)
-                        return baseName
+                        console.log("not currently viewing a Full Quality Region; pmtiles file name unchanged", url)
+                        return url
                     }
 
                     const pmtilesDates = downloadedFQRegions[activeFQRegionName].dates
@@ -183,17 +217,244 @@
                         // make lower zoom versions.
                         fname = `terrarium.${pmtilesDates.terrain}.full-region.` + activeFQRegionName
                         console.log("pmtiles file name for full quality region", fname)
+                        return url.replace(/terrarium-z0-z10.pmtiles$/, fname + ".pmtiles")
                     } else if (baseName.startsWith("openstreetmap")) {
                         fname = baseName + `.${pmtilesDates.vector}.full-region.` + activeFQRegionName
                         console.log("pmtiles file name for full quality region", fname)
+                        return url.replace(/openstreetmap-openmaptiles.pmtiles$/, fname + ".pmtiles")
                     } else if (baseName.startsWith("s2maps")) {
                         fname = baseName + `.${pmtilesDates.satellite}.full-region.` + activeFQRegionName
                         console.log("pmtiles file name for full quality region", fname)
-                    } else {
-                        fname = baseName
-                        console.log("pmtiles file needs no change", fname)
+                        return url.replace(/s2maps-sentinel2-2023.pmtiles$/, fname + ".pmtiles")
                     }
-                    return fname
+                    console.log("pmtiles file needs no change", fname)
+                    return url
+                },
+
+                // Even though maps.black thinks this is an OpenStreetMap file, it's actually a
+                // Natural Earth file. These are formatted the same way given the same schema,
+                // but it's apparently created with different zoom ranges in mind so the styles
+                // are a bit different. This function adjust the OpenStreetMap style to behave
+                // like the Natural Earth style (for the world map. FQRs should all be actual
+                // OpenStreetMap) This function is generated by:
+                //
+                // https://github.com/iiab/maps2/blob/master/build-tiles/nat-to-osm
+                //
+                // It also makes sure that these zoom levels are the only differences between
+                // these the styles.
+                setLibertyForOsmToNaturalEarth: (style) => {
+                    console.log("Preparing openstreetmap liberty style for a naturalearth pmtiles file")
+
+                    UNEXPECTED_ID_ERROR = 'Unexpected id in layer in `setLibertyForOsmToNaturalEarth`'
+
+                    if (style.layers[4].id === 'landuse_residential') {
+                        style.layers[4].maxzoom = 20 // from 12
+                    } else {
+                        console.log(UNEXPECTED_ID_ERROR)
+                    }
+                    if (style.layers[8].id === 'landcover_wetland') {
+                        style.layers[8].minzoom = 8 // from 12
+                    } else {
+                        console.log(UNEXPECTED_ID_ERROR)
+                    }
+                    if (style.layers[19].id === 'aeroway_fill') {
+                        style.layers[19].minzoom = 8 // from 11
+                    } else {
+                        console.log(UNEXPECTED_ID_ERROR)
+                    }
+                    if (style.layers[20].id === 'aeroway_runway') {
+                        style.layers[20].minzoom = 8 // from 11
+                    } else {
+                        console.log(UNEXPECTED_ID_ERROR)
+                    }
+                    if (style.layers[21].id === 'aeroway_taxiway') {
+                        style.layers[21].minzoom = 8 // from 11
+                    } else {
+                        console.log(UNEXPECTED_ID_ERROR)
+                    }
+                    if (style.layers[42].id === 'road_motorway_link_casing') {
+                        style.layers[42].minzoom = 8 // from 12
+                    } else {
+                        console.log(UNEXPECTED_ID_ERROR)
+                    }
+                    if (style.layers[44].id === 'road_link_casing') {
+                        style.layers[44].minzoom = 8 // from 13
+                    } else {
+                        console.log(UNEXPECTED_ID_ERROR)
+                    }
+                    if (style.layers[49].id === 'road_path_pedestrian') {
+                        style.layers[49].minzoom = 8 // from 14
+                    } else {
+                        console.log(UNEXPECTED_ID_ERROR)
+                    }
+                    if (style.layers[50].id === 'road_motorway_link') {
+                        style.layers[50].minzoom = 8 // from 12
+                    } else {
+                        console.log(UNEXPECTED_ID_ERROR)
+                    }
+                    if (style.layers[52].id === 'road_link') {
+                        style.layers[52].minzoom = 8 // from 13
+                    } else {
+                        console.log(UNEXPECTED_ID_ERROR)
+                    }
+                    if (style.layers[61].id === 'road_one_way_arrow') {
+                        style.layers[61].minzoom = 8 // from 16
+                    } else {
+                        console.log(UNEXPECTED_ID_ERROR)
+                    }
+                    if (style.layers[62].id === 'road_one_way_arrow_opposite') {
+                        style.layers[62].minzoom = 8 // from 16
+                    } else {
+                        console.log(UNEXPECTED_ID_ERROR)
+                    }
+                    if (style.layers[83].id === 'building') {
+                        style.layers[83].minzoom = 8 // from 13
+                    } else {
+                        console.log(UNEXPECTED_ID_ERROR)
+                    }
+                    if (style.layers[83].id === 'building') {
+                        style.layers[83].maxzoom = 20 // from 14
+                    } else {
+                        console.log(UNEXPECTED_ID_ERROR)
+                    }
+                    if (style.layers[84].id === 'building-3d') {
+                        style.layers[84].minzoom = 8 // from 14
+                    } else {
+                        console.log(UNEXPECTED_ID_ERROR)
+                    }
+                    if (style.layers[88].id === 'waterway_line_label') {
+                        style.layers[88].minzoom = 8 // from 10
+                    } else {
+                        console.log(UNEXPECTED_ID_ERROR)
+                    }
+                    if (style.layers[91].id === 'poi_r20') {
+                        style.layers[91].minzoom = 8 // from 17
+                    } else {
+                        console.log(UNEXPECTED_ID_ERROR)
+                    }
+                    if (style.layers[92].id === 'poi_r7') {
+                        style.layers[92].minzoom = 8 // from 16
+                    } else {
+                        console.log(UNEXPECTED_ID_ERROR)
+                    }
+                    if (style.layers[93].id === 'poi_r1') {
+                        style.layers[93].minzoom = 8 // from 15
+                    } else {
+                        console.log(UNEXPECTED_ID_ERROR)
+                    }
+                    if (style.layers[95].id === 'highway-name-path') {
+                        style.layers[95].minzoom = 8 // from 15.5
+                    } else {
+                        console.log(UNEXPECTED_ID_ERROR)
+                    }
+                    if (style.layers[96].id === 'highway-name-minor') {
+                        style.layers[96].minzoom = 8 // from 15
+                    } else {
+                        console.log(UNEXPECTED_ID_ERROR)
+                    }
+                    if (style.layers[97].id === 'highway-name-major') {
+                        style.layers[97].minzoom = 8 // from 12.2
+                    } else {
+                        console.log(UNEXPECTED_ID_ERROR)
+                    }
+                    if (style.layers[100].id === 'road_shield_us') {
+                        style.layers[100].minzoom = 8 // from 9
+                    } else {
+                        console.log(UNEXPECTED_ID_ERROR)
+                    }
+                    if (style.layers[101].id === 'airport') {
+                        style.layers[101].minzoom = 8 // from 10
+                    } else {
+                        console.log(UNEXPECTED_ID_ERROR)
+                    }
+                    if (style.layers[103].id === 'label_village') {
+                        style.layers[103].minzoom = 8 // from 9
+                    } else {
+                        console.log(UNEXPECTED_ID_ERROR)
+                    }
+                    if (style.layers[105].id === 'label_state') {
+                        style.layers[105].maxzoom = 20 // from 8
+                    } else {
+                        console.log(UNEXPECTED_ID_ERROR)
+                    }
+                    if (style.layers[108].id === 'label_country_3') {
+                        style.layers[108].maxzoom = 20 // from 9
+                    } else {
+                        console.log(UNEXPECTED_ID_ERROR)
+                    }
+                    if (style.layers[109].id === 'label_country_2') {
+                        style.layers[109].maxzoom = 20 // from 9
+                    } else {
+                        console.log(UNEXPECTED_ID_ERROR)
+                    }
+                    if (style.layers[110].id === 'label_country_1') {
+                        style.layers[110].maxzoom = 20 // from 9
+                    } else {
+                        console.log(UNEXPECTED_ID_ERROR)
+                    }
+                },
+
+                // Even though maps.black thinks this is an OpenStreetMap file, it's actually a
+                // Natural Earth file. These are formatted the same way given the same schema,
+                // but it's apparently created with different zoom ranges in mind so the styles
+                // are a bit different. This function adjust the OpenStreetMap style to behave
+                // like the Natural Earth style (for the world map. FQRs should all be actual
+                // OpenStreetMap) This function is generated by:
+                //
+                // https://github.com/iiab/maps2/blob/master/build-tiles/nat-to-osm
+                //
+                // It also makes sure that these zoom levels are the only differences between
+                // these the styles.
+                setHybridForOsmToNaturalEarth: (style) => {
+                    console.log("Preparing openstreetmap hybrid style for a naturalearth pmtiles file")
+
+                    UNEXPECTED_ID_ERROR = 'Unexpected id in layer in `setHybridForOsmToNaturalEarth`'
+
+                    if (style.layers[3].id === 'housenumber') {
+                        style.layers[3].minzoom = 9 // from 17
+                    } else {
+                        console.log(UNEXPECTED_ID_ERROR)
+                    }
+                    if (style.layers[8].id === 'road_minor') {
+                        style.layers[8].minzoom = 9 // from 13
+                    } else {
+                        console.log(UNEXPECTED_ID_ERROR)
+                    }
+                    if (style.layers[12].id === 'aeroway-taxiway') {
+                        style.layers[12].minzoom = 9 // from 12
+                    } else {
+                        console.log(UNEXPECTED_ID_ERROR)
+                    }
+                    if (style.layers[28].id === 'poi_label') {
+                        style.layers[28].minzoom = 9 // from 14
+                    } else {
+                        console.log(UNEXPECTED_ID_ERROR)
+                    }
+                    if (style.layers[29].id === 'airport-label') {
+                        style.layers[29].minzoom = 9 // from 10
+                    } else {
+                        console.log(UNEXPECTED_ID_ERROR)
+                    }
+                    if (style.layers[30].id === 'road_major_label') {
+                        style.layers[30].minzoom = 9 // from 13
+                    } else {
+                        console.log(UNEXPECTED_ID_ERROR)
+                    }
+                    if (style.layers[32].id === 'place_label_city') {
+                        style.layers[32].maxzoom = 20 // from 16
+                    } else {
+                        console.log(UNEXPECTED_ID_ERROR)
+                    }
+                    if (style.layers[33].id === 'country_label-other') {
+                        style.layers[33].maxzoom = 20 // from 12
+                    } else {
+                        console.log(UNEXPECTED_ID_ERROR)
+                    }
+                    if (style.layers[34].id === 'country_label') {
+                        style.layers[34].maxzoom = 20 // from 12
+                    } else {
+                        console.log(UNEXPECTED_ID_ERROR)
+                    }
                 },
             }
             // Defining these hash get/set functions outside of the window load because we
@@ -460,14 +721,6 @@
                     }
                 })
 
-            function getMapVectorType() {
-                if (!!activeFQRegionName) {
-                    // Full Quality Regions are always OSM
-                    return VECTOR_TYPE_OSM
-                }
-                return WORLD_MAP_VECTOR_TYPE
-            }
-
             function satelliteAvailable() {
                 // Full Quality Regions always have satellite
                 return Boolean(WORLD_MAP_SATELLITE_MAX_ZOOM || !!activeFQRegionName)
@@ -481,9 +734,7 @@
             function getAvailableStyles() {
                 return [
                     STYLE_NATURAL,
-
-                    // Not avaiable if we're currently looking at Natural Earth vector tiles
-                    (getMapVectorType() === VECTOR_TYPE_OSM) ? STYLE_POLITICAL : null,
+                    STYLE_POLITICAL,
 
                     // Requires satellite tiles
                     (satelliteAvailable()) ? STYLE_SATELLITE : null,
@@ -510,36 +761,21 @@
             }
 
             function applyMapStyle() {
-                // The first level key is the `mapStyleChoice`, i.e. "natural", "political", etc, from the dropdown menu. (These are names specific to
+                // The key is the `mapStyleChoice`, i.e. "natural", "political", etc, from the dropdown menu. (These are names specific to
                 // IIAB maps.)
-                //
-                // The second level key indicates whether the currently visible map is using OSM or Natural Earth data for vector data.
                 //
                 // Both of these together point to a maps.black "mapstyle" which implies a maplibre style and data sources.
                 mb.mapstyle = {
                     // Has nicely colored regions, and buildings
-                    [STYLE_NATURAL]: {
-                        [VECTOR_TYPE_OSM]:           "openstreetmap-openmaptiles/openfreemap/liberty",
-                        [VECTOR_TYPE_NATURAL_EARTH]: "naturalearth-openmaptiles/openfreemap/liberty",
-                    },
+                    [STYLE_NATURAL]: "openstreetmap-openmaptiles/openfreemap/liberty",
+
                     // Has more clearly defined political boundaries
                     // TODO - find something like this with buildings too?
-                    [STYLE_POLITICAL]:  {
-                        [VECTOR_TYPE_OSM]:           "openstreetmap-openmaptiles/qwant/basic",
+                    [STYLE_POLITICAL]: "openstreetmap-openmaptiles/qwant/basic",
 
-                        // For now don't include political for naturalearth because it doesn't
-                        // have great political options zoomed out.
-                        [VECTOR_TYPE_NATURAL_EARTH]: undefined,
-                    },
-                    [STYLE_HYBRID]:  {
-                        [VECTOR_TYPE_OSM]:           "openstreetmap-openmaptiles/maps.black/hybrid-2023",
-                        [VECTOR_TYPE_NATURAL_EARTH]: "naturalearth-openmaptiles/maps.black/hybrid-2023",
-                    },
-                    [STYLE_SATELLITE]:  {
-                        [VECTOR_TYPE_OSM]:           "raster/s2maps/2023",
-                        [VECTOR_TYPE_NATURAL_EARTH]: "raster/s2maps/2023",
-                    },
-                }[mapStyleChoice][getMapVectorType()]
+                    [STYLE_HYBRID]: "openstreetmap-openmaptiles/maps.black/hybrid-2023",
+                    [STYLE_SATELLITE]: "raster/s2maps/2023",
+                }[mapStyleChoice]
                 console.log("setting to", mapStyleChoice, "i.e.", mb.mapstyle)
 
                 setUpMap() // The above will reset the map so we have to add controls and other things again. This also covers initial page load.
