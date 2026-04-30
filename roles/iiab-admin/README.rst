@@ -37,7 +37,7 @@ Security
    #. ``sudo``
 * Please read much more about what escalated (root) actions are authorized when you log into IIAB's Admin Console, and how this works: https://github.com/iiab/iiab-admin-console/blob/master/Authentication.md
 * If your IIAB includes Tailscale (VPN), ``/root/.ssh/authorized_keys`` should be installed by `roles/tailscale/tasks/install.yml <../tailscale/tasks/install.yml>`_ to facilitate remote community support.  Feel free to remove this as mentioned here: https://wiki.iiab.io/go/Security
-* Auto-checking for the default/published password (as specified by ``iiab_admin_published_pwd`` in `/opt/iiab/iiab/vars/default_vars.yml <../../vars/default_vars.yml>`_) is implemented in `/etc/profile.d <templates/sshpwd-profile-iiab.sh>`_ (and `/etc/xdg/lxsession/LXDE-pi <templates/sshpwd-lxde-iiab.sh>`_ when it exists, i.e. on Raspberry Pi OS with desktop).
+* Auto-checking for the default/published password (as specified by ``iiab_admin_published_pwd`` in `/opt/iiab/iiab/vars/default_vars.yml <../../vars/default_vars.yml>`_) is implemented in `/etc/profile.d/iiab-pwdwarn-profile.sh <templates/iiab-pwdwarn-profile.sh.j2>`_ (and `/usr/local/sbin/iiab-pwdwarn-labwc <templates/iiab-pwdwarn-labwc.j2>`_ when ``/home/iiab-admin/.config/labwc/`` exists, i.e. on Raspberry Pi OS with desktop).
 
 Example
 =======
