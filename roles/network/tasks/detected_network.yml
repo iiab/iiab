@@ -110,13 +110,13 @@
   set_fact:
     wifi2: "{{ item | trim }}"
     discovered_wireless_iface: "{{ item | trim }}"
-  when: wireless_list2.stdout is defined and item | trim != "ap0"
+  when: wireless_list2.stdout is defined and item | trim != "ap0" and item | trim != "wld0"
   with_items:
     - "{{ wireless_list2.stdout_lines }}"
 #item | trim != discovered_wan_iface
 
 - name: Count WiFi ifaces
-  shell: "ls -la /sys/class/net/*/phy80211 | awk -F / '{print $5}' | grep -v -e ap0 | wc -l"
+  shell: "ls -la /sys/class/net/*/phy80211 | awk -F / '{print $5}' | grep -v -e ap0 -e wld0 | wc -l"
   register: count_wifi_interfaces
 
 - name: Remember number of WiFi devices
@@ -227,6 +227,12 @@
   set_fact:
     iiab_wireless_lan_iface: ap0
   when: discovered_wireless_iface != "none" and wifi_up_down
+
+# might need to expand the coverage to NM and non-rpi hardware
+- name: Set iiab_wireless_lan_iface to wld0 if WiFi device is present on U26.04 and is a Rpi
+  set_fact:
+    iiab_wireless_lan_iface: wld0
+  when: discovered_wireless_iface != "none" and wifi_up_down and systemd_networkd_active and rpi_model != "none" and os_ver is version('ubuntu-2604', '<=')
 
 - name: Set iiab_wired_lan_iface if present
   set_fact:
