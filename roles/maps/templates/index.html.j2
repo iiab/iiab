@@ -514,13 +514,17 @@
             // await until(function () { return someCondition })
             // or
             // await until(() => someCondition)
-            function until(condition, period=300) {
+            function until(condition, period=300, timeout=15000) {
+                let elapsed = 0
                 return new Promise(resolve => {
                     function check() {
+                        elapsed += period
                         if (condition()) {
                             resolve()
                         } else {
-                            setTimeout(check, period)
+                            if (elapsed < timeout) {
+                                setTimeout(check, period)
+                            }
                         }
                     }
                     check()
@@ -594,7 +598,7 @@
                         type: "fill",
                         source: regionId,
                         layout:{},
-                        paint: {'fill-color': '#4444FF', 'fill-opacity': 0},
+                        paint: {'fill-color': '#FF2222', 'fill-opacity': 0},
                     })
                     if (activeFQRegionName === regionName) {
                         // If we're looking at a full quality region, create a half-transparent black
@@ -648,8 +652,13 @@
                     }
                     // Make the region clickable via the above invisbile area.
                     // This brings the user from the full world map to a view of just the region.
+                    // TODO - try one handler for multiple layers: https://github.com/maplibre/maplibre-gl-js/pull/4570
                     mb.map.on('click', regionId + "~click", e => {
                         if (regionName === activeFQRegionName) {
+                            return
+                        }
+                        if (fqRegionsControl.isDeleteModeActive()) {
+                            fqRegionsControl.onClickDeleteRegion(regionName)
                             return
                         }
                         const [min_lon, min_lat, max_lon, max_lat] = downloadedFQRegions[regionName].bbox
@@ -665,7 +674,22 @@
                             applyMapStyle()
                         })
                     })
+                    mb.map.on('mouseenter', regionId + "~click", e => {
+                        if (fqRegionsControl.isDeleteModeActive()) {
+                            mb.map.setPaintProperty(regionId + "~click", 'fill-opacity', 0.5)
+                            mb.map.setPaintProperty(regionId + "~line-2", 'line-color', '#FF0000')
+                        }
+                    })
+                    mb.map.on('mouseleave', regionId + "~click", e => {
+                        mb.map.setPaintProperty(regionId + "~click", 'fill-opacity', 0)
+                        mb.map.setPaintProperty(regionId + "~line-2", 'line-color', '#000000')
+                    })
                 }
+                mb.map.on('click', e => {
+                    // Whether or not we just clicked on a region, make sure that we turn off FQR delete mode.
+                    // Don't affect draw mode though.
+                    fqRegionsControl.endDeleteMode()
+                })
             }
 
             function setDefaultView() {
@@ -679,7 +703,7 @@
                     shouldSetDefaultView = false
                 }
             }
-            let drawControl, terraDrawInstance
+            let fqRegionsControl
             let downloadedFQRegions = null;
             function setFQRegions() {
                 return fetch('{{ tile_extract.info_file }}')
@@ -887,59 +911,350 @@
                     this._map = undefined;
                 }
             }
-
-            class DeleteFQRegionControl {
+            class FQRegionsControl {
                 onAdd(map) {
-
                     this._map = map;
                     this._container = document.createElement('div');
-                    const button = document.createElement('button');
-                    button.type = "button"
-                    button.title = "Delete this region"
-                    button.innerHTML = "&#128465;&#65039;" // wastebasket
-                    this._container.appendChild(button)
+
+                    this.setTerraDrawInstance()
+
+                    this.drawButton = document.createElement('button');
+                    this.drawButton.type = "button"
+                    this.drawButton.title = "Select region for download"
+                    // TODO showcase scissors (&#9986;&#65039;) microscope? telescope, rectangle, crop tool.
+                    this.drawButton.innerHTML = "&#128229;" // inbox tray
+                    this.drawButton.onclick = this.toggleDrawMode.bind(this)
+
+                    this.deleteButton = document.createElement('button');
+                    this.deleteButton.type = "button"
+                    this.deleteButton.title = "Choose region to delete"
+                    this.deleteButton.innerHTML = "&#128465;&#65039;" // wastebasket
+                    this.deleteButton.onclick = this.toggleDeleteMode.bind(this)
+
+                    this._container.appendChild(this.drawButton)
+                    this._container.appendChild(this.deleteButton)
+
                     this._container.className = 'maplibregl-ctrl maplibregl-ctrl-group';
                     this._container.style = 'cursor: pointer;'
-                    this._container.onclick = () => {
-                        const [min_lon, min_lat, max_lon, max_lat] = downloadedFQRegions[activeFQRegionName].bbox
 
-                        // Zoom out to view the region so that the delete popup is well placed
-                        mb.map.fitBounds([[min_lon, min_lat], [max_lon, max_lat]], {maxDuration: 2000, speed: 5})
+                    // A lot of the FQR managing logic is encapsulated in this control now.
+                    // For simplicity, lets always keep it around, but hide it if we don't
+                    // want the user to edit anything.
+                    if (!REGION_DOWNLOADER_ENABLED || !!activeFQRegionName) {
+                        this._container.style['display'] = 'none'
+                    }
+
+                    this.DELETE_MODE = 'delete'
+                    this.DRAW_MODE = 'draw'
+                    this.OFF_MODE = 'off'
+                    this._mode = this.OFF_MODE
+
+                    this.ACTIVE_COLOR = '#fbc412' // the "active" color on the old terraDraw control
+                    this.INACTIVE_COLOR = ''
+
+                    this.setupDownloaderUI()
+
+                    return this._container
+                }
+                setTerraDrawInstance() {
+                    // We only need the controller for the terraDrawInstance. We don't want the
+                    // controller's UI anymore (we were contorting it for our needs, it's not
+                    // their fault).
+                    //
+                    // We could of course just get the terraDraw library directly:
+                    //
+                    // https://github.com/JamesLMilner/terra-draw/blob/main/guides/3.ADAPTERS.md
+                    //
+                    // But it works fine as it is.
+                    this._drawControl = new MaplibreTerradrawControl.MaplibreTerradrawControl({
+                        modes: [
+                            'rectangle',
+                        ],
+                        open: true,
+                    });
+                    mb.map.addControl(this._drawControl, 'top-left');
+                    this._drawControl.controlContainer.style['display'] = 'none'
+
+                    this._terraDrawInstance = this._drawControl.getTerraDrawInstance()
+                }
+                onRemove() {
+                    this._container.parentNode.removeChild(this._container);
+                    this._map = undefined;
+                }
+                isDeleteModeActive() {
+                    return this._mode === this.DELETE_MODE
+                }
+                toggleDeleteMode() {
+                    if (this._mode === this.DELETE_MODE) {
+                        this.setOffMode()
+                    } else {
+                        this.setDeleteMode()
+                    }
+                }
+                toggleDrawMode() {
+                    if (this._mode === this.DRAW_MODE) {
+                        this.setOffMode()
+                    } else {
+                        this.setDrawMode()
+                    }
+                }
+                endDeleteMode() {
+                    if (this._mode === this.DELETE_MODE) {
+                        this.setOffMode()
+                    }
+                }
+
+                // TODO - Close the popups as appropriate when we switch modes.
+                // This would require moving more code.
+                setDeleteMode() {
+                    this._mode = this.DELETE_MODE
+
+                    this._terraDrawInstance.setMode('default') // I think this basically turns it off
+                    this._terraDrawInstance.clear();
+                    mb.map.getCanvas().style.cursor = 'crosshair'
+                    this.deleteButton.style['background-color'] = this.ACTIVE_COLOR
+                    this.drawButton.style['background-color'] = this.INACTIVE_COLOR
+                }
+                setDrawMode() {
+                    this._mode = this.DRAW_MODE
+
+                    this._terraDrawInstance.setMode('rectangle') // This sets the cursor to a crosshair
+                    this.drawButton.style['background-color'] = this.ACTIVE_COLOR
+                    this.deleteButton.style['background-color'] = this.INACTIVE_COLOR
+                }
+                setOffMode() {
+                    this._mode = self.OFF_MODE
+
+                    this._terraDrawInstance.setMode('default') // I think this basically turns it off
+                    this._terraDrawInstance.clear();
+                    mb.map.getCanvas().style.cursor = ''
+                    this.deleteButton.style['background-color'] = this.INACTIVE_COLOR
+                    this.drawButton.style['background-color'] = this.INACTIVE_COLOR
+                }
+
+                setupDownloaderUI() {
+                    const thisControl = this
+                    let downloadPopup = null
+                    function removePopup() {
+                        if (downloadPopup) {
+                            downloadPopup.remove()
+                            downloadPopup = null
+                        }
+                    }
+                    function removeOtherRectangles(id) {
+                        for (let feature of thisControl._drawControl.getFeatures().features) {
+                            if (feature.id !== id) {
+                                this._terraDrawInstance.removeFeatures([feature.id])
+                            }
+                        }
+                    }
+                    thisControl._terraDrawInstance.on("change", (ids, type) => {
+                        if (type === "create") {
+                            // We're starting to create a new rectangle. Delete other rectangles on the map.
+                            // Not sure why ids would contain more than one, but at worst we'll
+                            // delete whatever extra stuff that might be there.
+                            removeOtherRectangles(ids[0])
+                            removePopup()
+                        }
+                    })
+                    thisControl._terraDrawInstance.on("finish", (id, context) => {
+                        if (context.mode !== "rectangle" || context.action !== "draw") {
+                          // Confirm expected values. I don't know why it would be anything else
+                          // but I'm not totally familiar with terraDraw.
+                          return
+                        }
+
+                        // Remove any other rectangles. They *shouldn't* be here in the first place,
+                        // but again this system is unfamiliar so just in case I make sure we're in
+                        // a familiar state. And then, we select the remaining one which by
+                        // elimination should be the one we just finished.
+                        removeOtherRectangles(id)
+                        removePopup()
+
+                        // We assume that the library is doing its job and it's a rectangle
+                        const rectangle = thisControl._drawControl.getFeatures().features[0]
+                        const shape = rectangle.geometry.coordinates[0]
+
+                        // A small note about the 180/-180 longitude border:
+                        //
+                        // I was initially afraid that this approach would lead to a bug if the selected region crossed
+                        // longitude of 180 (which is the same as -180). Let's say 170 on the west to -175 on the east.
+                        // Usually the western edge of the bounding box has the smallest longitude, but not when we are
+                        // crossing 180/-180.
+                        //
+                        // However, it seems as though this plugin accounts for that. If the current center of the
+                        // map *view* is to the west of 180/-180, then the longitudes of this bounding box would be
+                        // expressed as 170, 185. If the map view center is moved east of 180/-180, then longitudes of the
+                        // the bounding box would be expressed as -190, -175.
+                        //
+                        // Therefore, the min/max sorting should work as intended even if the bounding box straddles the
+                        // 180/-180 line. Furthermore, a lot of the downstream headaches with displaying regions go away.
+                        const lats = shape.map( ([lon, lat]) => lat)
+                        const lons = shape.map( ([lon, lat]) => lon)
+
+                        const min_lon = Math.min.apply(null, lons)
+                        const min_lat = Math.min.apply(null, lats)
+                        const max_lon = Math.max.apply(null, lons)
+                        const max_lat = Math.max.apply(null, lats)
+
                         const center = [
                             min_lon + (max_lon - min_lon) / 2,
                             min_lat + (max_lat - min_lat) / 2,
                         ]
 
-                        const deleteCommand = document.createElement('div');
-                        const deleteCommandString = `sudo {{ tile_extract.working_dir }}/tile-extract.py delete ${activeFQRegionName}`
-                        deleteCommand.innerHTML = `<pre
-                              style="font-size:0.8em; background-color:#DDD; padding:1em; border-style:dashed; border-color:#FFF; border-width:2px; white-space: pre-wrap; word-wrap: break-word; line-height:1em;"
-                              onclick="window.getSelection().selectAllChildren(this)"
-                          >${deleteCommandString}</pre>`
+                        function popupButton(textContent, onclick) {
+                            const button = document.createElement('button')
+                            button.textContent = textContent
+                            button.onclick = onclick
+                            button.className = "maplibregl-ctrl maplibregl-ctrl-group" // happens to look good
+                            button.style = "padding-left: 5px;padding-right: 5px; margin: 5px; text-align: center; cursor: pointer;"
+                            return button
+                        }
 
-                        const popupContainer = document.createElement('div');
-                        popupContainer.innerHTML = `
-                            <h1>Delete this region</h1>
+                        const backButton = popupButton("Back", () => {
+                            // show popupStart, hide popupFinish
+                            popupStart.style = ""
+                            popupFinish.style = "display: none;"
+                        })
+
+                        const doneButton = popupButton("Done", () => {
+                            this.setOffMode();
+                            removePopup();
+                        })
+                        const cancelButton = popupButton("Cancel", () => {
+                            this.setOffMode();
+                            removePopup();
+                        })
+
+                        const downloadCommand = document.createElement('div');
+                        downloadCommand.set = function(downloadName) {
+                            const downloadCommandString = `sudo {{ tile_extract.working_dir }}/tile-extract.py extract ${downloadName} ${min_lon},${min_lat},${max_lon},${max_lat}`
+                            this.innerHTML = `<pre
+                                style="font-size:0.8em; background-color:#DDD; padding:1em; border-style:dashed; border-color:#FFF; border-width:2px; white-space: pre-wrap; word-wrap: break-word; line-height:1em;"
+                                onclick="window.getSelection().selectAllChildren(this)"
+                            >${downloadCommandString}</pre>`
+                        }
+
+                        const downloadNameInput = document.createElement('input');
+                        downloadNameInput.style = "display: block; margin-bottom: 1em;"
+
+                        function updateName () {
+                            const cleanedName = downloadNameInput.value.slice(0, 35).toLowerCase().replace(/[^a-z0-9]+/g, "_")
+                            downloadNameInput.value = cleanedName
+                            downloadCommand.set(cleanedName)
+                            nextButton.set()
+                        }
+                        // be as annoying and cover as many bases as I can
+                        downloadNameInput.onkeydown = downloadNameInput.onpaste = downloadNameInput.onchange = updateName
+
+                        downloadNameInput.onkeyup = e => {
+                            updateName() // because onkeydown happens before the new value is actually set
+                            if (e.key === "Enter") {
+                                tryGoToNext()
+                            }
+                        }
+
+                        const popupStart = document.createElement('div');
+                        popupStart.innerHTML = `
+                            <h1>Download region</h1>
+                            <p>Choose a name for this <b>Full Quality Region</b> <i>(lower case letters, numbers, and _ only)</i>
+                            </p>
+                        `
+                        function tryGoToNext() {
+                            if (downloadNameInput.value.length > 0) {
+                                popupFinish.style = "" // show popupFinish
+                                popupStart.style = "display: none;"
+                                updateName() // for good measure. we want to avoid them inputting a destructive command!
+                            }
+                        }
+                        const nextButton = popupButton("", tryGoToNext)
+                        nextButton.set = function() {
+                            if (downloadNameInput.value.length > 0) {
+                                this.innerHTML = "Next"
+                            } else {
+                                this.innerHTML = "<span style='color: #888'>Next</span>"
+                            }
+                        }
+                        nextButton.set()
+
+                        popupStart.appendChild(downloadNameInput)
+                        popupStart.appendChild(nextButton)
+                        popupStart.appendChild(cancelButton)
+
+                        const popupFinish = document.createElement('div');
+                        popupFinish.style = "display: none;"
+                        popupFinish.innerHTML = `
+                            <h1>Download region</h1>
                             <ul>
                               <li>Click below to select text</li>
                               <li>Copy text</li>
                               <li>Paste and run in a terminal logged into your Internet-in-a-Box</li>
-                              <li>When it is done deleting, reload this page</li>
+                              <li>When it is done downloading, reload this page</li>
                             </ul>
                         `
-                        popupContainer.appendChild(deleteCommand)
+                        popupFinish.appendChild(downloadCommand)
+                        popupFinish.appendChild(backButton)
+                        popupFinish.appendChild(doneButton)
 
-                        const deletePopup = new maplibregl.Popup()
+                        const popupContainer = document.createElement('div');
+                        popupContainer.appendChild(popupStart)
+                        popupContainer.appendChild(popupFinish)
+
+                        downloadPopup = new maplibregl.Popup({closeOnClick: false, closeButton: false})
                             .setLngLat(center)
                             .setDOMContent(popupContainer)
                             .addTo(mb.map);
-                        }
-                    return this._container
+                    })
                 }
+                onClickDeleteRegion(regionName) {
+                    const [min_lon, min_lat, max_lon, max_lat] = downloadedFQRegions[regionName].bbox
 
-                onRemove() {
-                    this._container.parentNode.removeChild(this._container);
-                    this._map = undefined;
+                    // Zoom out to view the region so that the delete popup is well placed
+                    const fqrWidth = max_lon - min_lon
+                    const fqrHeight = max_lat - min_lat
+                    mb.map.fitBounds([
+                      [min_lon - (fqrWidth / 4), min_lat - (fqrHeight / 4)],
+                      [max_lon + (fqrWidth / 4), max_lat + (fqrHeight / 4)],
+                    ], {maxDuration: 4000, speed: 2.5})
+                    const center = [
+                        min_lon + (max_lon - min_lon) / 2,
+                        min_lat + (max_lat - min_lat) / 2,
+                    ]
+
+                    const deleteCommand = document.createElement('div');
+                    const deleteCommandString = `sudo {{ tile_extract.working_dir }}/tile-extract.py delete ${regionName}`
+                    const deleteCommandStyle = [
+                        "font-size: 0.8em;",
+                        "background-color: #DDD;",
+                        "padding: 1em;",
+                        "border-style: dashed;",
+                        "border-color:#FFF;",
+                        "border-width:2px;",
+                        "white-space: pre-wrap;",
+                        "word-wrap: break-word;",
+                        "line-height:1em;",
+                    ].join(" ")
+                    deleteCommand.innerHTML = `<pre
+                        style="${deleteCommandStyle}"
+                        onclick="window.getSelection().selectAllChildren(this)"
+                      >${deleteCommandString}</pre>`
+
+                    const popupContainer = document.createElement('div');
+                    popupContainer.innerHTML = `
+                        <h1>Delete this region</h1>
+                        <ul>
+                          <li>Click below to select text</li>
+                          <li>Copy text</li>
+                          <li>Paste and run in a terminal logged into your Internet-in-a-Box</li>
+                          <li>When it is done deleting, reload this page</li>
+                        </ul>
+                    `
+                    popupContainer.appendChild(deleteCommand)
+
+                    const deletePopup = new maplibregl.Popup()
+                        .setLngLat(center)
+                        .setDOMContent(popupContainer)
+                        .addTo(mb.map);
                 }
             }
 
@@ -1228,205 +1543,6 @@
                 originalGeocoderRenderNoResults = geocoder._renderNoResults.bind(geocoder)
             }
             const scaleControl = new maplibregl.ScaleControl()
-            drawControl = new MaplibreTerradrawControl.MaplibreTerradrawControl({
-                modes: [
-                    'rectangle',
-                ],
-                open: true,
-            });
-
-            // separating this because it's just so much
-            function setUpFQRegionDownloader() {
-                if (downloadedFQRegions !== null && !!activeFQRegionName && (activeFQRegionName in downloadedFQRegions)) {
-                    mb.map.addControl(new DeleteFQRegionControl(), 'top-left');
-                    return
-                }
-
-                mb.map.addControl(drawControl, 'top-left');
-
-                terraDrawInstance = drawControl.getTerraDrawInstance()
-                const drawControlButton = drawControl
-                    .controlContainer
-                    .getElementsByClassName("maplibregl-terradraw-add-rectangle-button")[0]
-
-                // Keep the rectangle functionality but change it to the download button.
-                // From the perspective of a user of this app, this is a download tool.
-                drawControlButton.classList.remove("maplibregl-terradraw-add-rectangle-button");
-                drawControlButton.classList.add("maplibregl-terradraw-download-button");
-                drawControlButton.title = "Select region for download"
-
-                let downloadPopup = null
-                function removePopup() {
-                    if (downloadPopup) {
-                        downloadPopup.remove()
-                        downloadPopup = null
-                    }
-                }
-                function removeOtherRectangles(id) {
-                    for (feature of drawControl.getFeatures().features) {
-                        if (feature.id !== id) {
-                            terraDrawInstance.removeFeatures([feature.id])
-                        }
-                    }
-                }
-                terraDrawInstance.on("change", (ids, type) => {
-                    if (type === "create") {
-                        // We're starting to create a new rectangle. Delete other rectangles on the map.
-                        // Not sure why ids would contain more than one, but at worst we'll
-                        // delete whatever extra stuff that might be there.
-                        removeOtherRectangles(ids[0])
-                        removePopup()
-                    }
-                })
-                terraDrawInstance.on("finish", (id, context) => {
-                    if (context.mode !== "rectangle" || context.action !== "draw") {
-                      // Confirm expected values. I don't know why it would be anything else
-                      // but I'm not totally familiar with terraDraw.
-                      return
-                    }
-
-                    // Remove any other rectangles. They *shouldn't* be here in the first place,
-                    // but again this system is unfamiliar so just in case I make sure we're in
-                    // a familiar state. And then, we select the remaining one which by
-                    // elimination should be the one we just finished.
-                    removeOtherRectangles(id)
-                    removePopup()
-
-                    // We assume that the library is doing its job and it's a rectangle
-                    const rectangle = drawControl.getFeatures().features[0]
-                    const shape = rectangle.geometry.coordinates[0]
-
-                    // A small note about the 180/-180 longitude border:
-                    //
-                    // I was initially afraid that this approach would lead to a bug if the selected region crossed
-                    // longitude of 180 (which is the same as -180). Let's say 170 on the west to -175 on the east.
-                    // Usually the western edge of the bounding box has the smallest longitude, but not when we are
-                    // crossing 180/-180.
-                    //
-                    // However, it seems as though this plugin accounts for that. If the current center of the
-                    // map *view* is to the west of 180/-180, then the longitudes of this bounding box would be
-                    // expressed as 170, 185. If the map view center is moved east of 180/-180, then longitudes of the
-                    // the bounding box would be expressed as -190, -175.
-                    //
-                    // Therefore, the min/max sorting should work as intended even if the bounding box straddles the
-                    // 180/-180 line. Furthermore, a lot of the downstream headaches with displaying regions go away.
-                    const lats = shape.map( ([lon, lat]) => lat)
-                    const lons = shape.map( ([lon, lat]) => lon)
-
-                    const min_lon = Math.min.apply(null, lons)
-                    const min_lat = Math.min.apply(null, lats)
-                    const max_lon = Math.max.apply(null, lons)
-                    const max_lat = Math.max.apply(null, lats)
-
-                    const center = [
-                        min_lon + (max_lon - min_lon) / 2,
-                        min_lat + (max_lat - min_lat) / 2,
-                    ]
-
-                    function popupButton(textContent, onclick) {
-                        const button = document.createElement('button')
-                        button.textContent = textContent
-                        button.onclick = onclick
-                        button.className = "maplibregl-ctrl maplibregl-ctrl-group" // happens to look good
-                        button.style = "padding-left: 5px;padding-right: 5px; margin: 5px; text-align: center; cursor: pointer;"
-                        return button
-                    }
-
-                    const backButton = popupButton("Back", () => {
-                        // show popupStart, hide popupFinish
-                        popupStart.style = ""
-                        popupFinish.style = "display: none;"
-                    })
-
-                    const doneButton = popupButton("Done", () => {
-                        terraDrawInstance.clear();
-                        removePopup();
-                    })
-                    const cancelButton = popupButton("Cancel", () => {
-                        terraDrawInstance.clear();
-                        removePopup();
-                    })
-
-                    const downloadCommand = document.createElement('div');
-                    downloadCommand.set = function(downloadName) {
-                        const downloadCommandString = `sudo {{ tile_extract.working_dir }}/tile-extract.py extract ${downloadName} ${min_lon},${min_lat},${max_lon},${max_lat}`
-                        this.innerHTML = `<pre
-                            style="font-size:0.8em; background-color:#DDD; padding:1em; border-style:dashed; border-color:#FFF; border-width:2px; white-space: pre-wrap; word-wrap: break-word; line-height:1em;"
-                            onclick="window.getSelection().selectAllChildren(this)"
-                        >${downloadCommandString}</pre>`
-                    }
-
-                    const downloadNameInput = document.createElement('input');
-                    downloadNameInput.style = "display: block; margin-bottom: 1em;"
-
-                    function updateName () {
-                        const cleanedName = downloadNameInput.value.slice(0, 35).toLowerCase().replace(/[^a-z0-9]+/g, "_")
-                        downloadNameInput.value = cleanedName
-                        downloadCommand.set(cleanedName)
-                        nextButton.set()
-                    }
-                    // be as annoying and cover as many bases as I can
-                    downloadNameInput.onkeydown = downloadNameInput.onpaste = downloadNameInput.onchange = updateName
-
-                    downloadNameInput.onkeyup = e => {
-                        updateName() // because onkeydown happens before the new value is actually set
-                        if (e.key === "Enter") {
-                            tryGoToNext()
-                        }
-                    }
-
-                    const popupStart = document.createElement('div');
-                    popupStart.innerHTML = `
-                        <h1>Download region</h1>
-                        <p>Choose a name for this <b>Full Quality Region</b> <i>(lower case letters, numbers, and _ only)</i>
-                        </p>
-                    `
-                    function tryGoToNext() {
-                        if (downloadNameInput.value.length > 0) {
-                            popupFinish.style = "" // show popupFinish
-                            popupStart.style = "display: none;"
-                            updateName() // for good measure. we want to avoid them inputting a destructive command!
-                        }
-                    }
-                    const nextButton = popupButton("", tryGoToNext)
-                    nextButton.set = function() {
-                        if (downloadNameInput.value.length > 0) {
-                            this.innerHTML = "Next"
-                        } else {
-                            this.innerHTML = "<span style='color: #888'>Next</span>"
-                        }
-                    }
-                    nextButton.set()
-
-                    popupStart.appendChild(downloadNameInput)
-                    popupStart.appendChild(nextButton)
-                    popupStart.appendChild(cancelButton)
-
-                    const popupFinish = document.createElement('div');
-                    popupFinish.style = "display: none;"
-                    popupFinish.innerHTML = `
-                        <h1>Download region</h1>
-                        <ul>
-                          <li>Click below to select text</li>
-                          <li>Copy text</li>
-                          <li>Paste and run in a terminal logged into your Internet-in-a-Box</li>
-                          <li>When it is done downloading, reload this page</li>
-                        </ul>
-                    `
-                    popupFinish.appendChild(downloadCommand)
-                    popupFinish.appendChild(backButton)
-                    popupFinish.appendChild(doneButton)
-
-                    const popupContainer = document.createElement('div');
-                    popupContainer.appendChild(popupStart)
-                    popupContainer.appendChild(popupFinish)
-
-                    downloadPopup = new maplibregl.Popup({closeOnClick: false, closeButton: false})
-                        .setLngLat(center)
-                        .setDOMContent(popupContainer)
-                        .addTo(mb.map);
-                })
-            }
 
             // We need a timeout to wait for mb.map.style to be set
             let setUpMapTimeout = null
@@ -1508,9 +1624,8 @@
                     }
                     mb.map.addControl(scaleControl);
 
-                    if (REGION_DOWNLOADER_ENABLED) {
-                      setUpFQRegionDownloader()
-                    }
+                    fqRegionsControl = new FQRegionsControl()
+                    mb.map.addControl(fqRegionsControl, 'top-left');
 
                     if (downloadedFQRegions !== null && !!activeFQRegionName && (activeFQRegionName in downloadedFQRegions)) {
                         mb.map.addControl(new ReturnFromRegionControl(), 'top-left');
