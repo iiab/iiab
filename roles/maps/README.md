@@ -168,11 +168,11 @@ DETAILS: IIAB's downloadable regions (FQRs) include OpenStreetMap vector data up
 
 Open your IIAB Maps, e.g. by browsing to http://box/maps or http://10.10.10.10/maps
 
-Look for this button in the top-left:
+Look for these buttons in the top-left of your map. Click the top one to enter "drawing" mode:
 
-![Download Button](README-assets/download-button.png)
+![Download Button](README-assets/fqr-downloader-selected.png)
 
-Click the button to enter "drawing" mode (your mouse pointer should change).
+(the button will turn orange and your mouse pointer should change).
 
 Draw a rectangle that represents the region you want to download.  To draw, click one corner of the rectangle and then the opposite corner.  **(Make sure to only click, do not drag!)**
 
@@ -188,11 +188,13 @@ You can test out your downloaded Full Quality Region by clicking on the new rect
 
 ### Deleting Regions
 
-To delete a region, first make sure you are "inside" that region (instead of the full world map).  Once there, you should see a Delete button on the top left:
+Look for these buttons in the top-left of your map. Click the bottom one to enter "delete" mode:
 
-![Delete Button](README-assets/delete-button.png)
+![Delete Button](README-assets/fqr-deleter-selected.png)
 
-When you click it, it will bring up another pop-up with instructions on how to delete the region.
+(the button will turn orange and your mouse pointer should change).
+
+You can then click on a region you want to delete. It will bring up a pop-up with instructions on how to delete the region.
 
 ### Overlapping Regions
 
