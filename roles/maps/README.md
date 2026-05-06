@@ -274,7 +274,7 @@ What I hope to be working on in the next few months
 * Smarter sorting (Distance, word length)
 * Region downloader (Better error messages, pick download mirror randomly)
 
-**April 2026**:
+~**April 2026**:~
 
 * Adding more data to static search
     * Add natural features, historical places, etc
