@@ -1,0 +1,58 @@
+- name: Assert that "anki_install is sameas true" (boolean not string etc)
+  assert:
+    that: anki_install is sameas true
+    fail_msg: "PLEASE SET 'anki_install: True' e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+
+- name: Assert that "anki_enabled | type_debug == 'bool'" (boolean not string etc)
+  assert:
+    that: anki_enabled | type_debug == 'bool'
+    fail_msg: "PLEASE GIVE VARIABLE 'anki_enabled' A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+
+- name: Assert that "anki_sync_users" is a non-empty list
+  assert:
+    that:
+      - anki_sync_users is iterable
+      - anki_sync_users is not string
+      - anki_sync_users | length > 0
+    fail_msg: "PLEASE SET 'anki_sync_users' TO A NON-EMPTY LIST OF username:password VALUES e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+
+
+- block:
+
+    - name: Install Anki sync server if 'anki_installed' not defined, e.g. in {{ iiab_state_file }}    # /etc/iiab/iiab_state.yml
+      include_tasks: install.yml
+      when: anki_installed is undefined
+
+    - include_tasks: enable-or-disable.yml
+
+    - name: Add 'anki' variable values to {{ iiab_ini_file }}
+      ini_file:
+        path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+        section: anki
+        option: "{{ item.option }}"
+        value: "{{ item.value | string }}"
+      with_items:
+        - option: name
+          value: Anki Sync Server
+        - option: description
+          value: '"Self-hosted Anki-compatible sync server for Anki desktop and mobile clients."'
+        - option: anki_install
+          value: "{{ anki_install }}"
+        - option: anki_enabled
+          value: "{{ anki_enabled }}"
+        - option: anki_url
+          value: "{{ anki_url }}"
+        - option: anki_port
+          value: "{{ anki_port }}"
+        - option: anki_home
+          value: "{{ anki_home }}"
+
+  rescue:
+
+    - name: 'SEE ERROR ABOVE (skip_role_on_error: {{ skip_role_on_error }})'
+      fail:
+        msg: ""
+      when: not skip_role_on_error
