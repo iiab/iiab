@@ -31,11 +31,17 @@
 # 2022-07-22: SIMILAR TO roles/iiab-admin/tasks/pwd-warnings.yml FOR passwords
 #                    AND roles/network/tasks/netwarn.yml      FOR iiab-network
 
+- name: Get username for UID 1000 via shell -- typical graphical desktop login on Raspberry Pi OS
+  command: id -nu 1000
+  register: uid_1000_username
+  ignore_errors: true
+
 # 2024-12-12: RasPiOS changed compositor from wayfire to labwc: https://forums.raspberrypi.com/viewtopic.php?t=379321
-- name: Does directory /home/{{ iiab_admin_user }}/.config/labwc/ exist?
+- name: Does directory /home/{{ uid_1000_username.stdout }}/.config/labwc/ exist?
   stat:
-    path: /home/{{ iiab_admin_user }}/.config/labwc/
+    path: /home/{{ uid_1000_username.stdout }}/.config/labwc/
   register: labwc_dir
+  when: uid_1000_username.stdout is defined and uid_1000_username.stdout != ""
 
 # 2025-12-14: RasPiOS 13 "Trixie" recently renamed chromium-browser to chromium
 - name: Does /usr/bin/chromium exist?
@@ -43,26 +49,14 @@
     path: /usr/bin/chromium
   register: chromium_browser
 
-# - name: Does /usr/bin/chromium exist? (check for browser filename change)
-#   stat:
-#     path: /usr/bin/chromium
-#   register: chromium_present
-
 # 2024-12-12: RasPiOS changed compositor from wayfire to labwc: https://forums.raspberrypi.com/viewtopic.php?t=379321
-- name: If both above exist, add '/usr/bin/chromium --disable-restore-session-state http://box/home &' to /home/{{ iiab_admin_user }}/.config/labwc/autostart
+- name: ...and add '/usr/bin/chromium --hide-crash-restore-bubble http://box/home &' to /home/{{ uid_1000_username.stdout }}/.config/labwc/autostart
   lineinfile:
-    path: /home/{{ iiab_admin_user }}/.config/labwc/autostart    # iiab-admin
+    path: /home/{{ uid_1000_username.stdout }}/.config/labwc/autostart    # iiab-admin
     create: yes
     regexp: '^/usr/bin/chromium'
-    line: '/usr/bin/chromium --disable-restore-session-state http://box/home &'
+    line: '/usr/bin/chromium --hide-crash-restore-bubble http://box/home &'
   when: labwc_dir.stat.exists and labwc_dir.stat.isdir and chromium_browser.stat.exists
-
-# - name: Add chromium to /etc/xdg/lxsession/LXDE-pi/autostart
-#   lineinfile:
-#     path: /etc/xdg/lxsession/LXDE-pi/autostart
-#     regexp: '^/usr/bin/chromium'
-#     line: '/usr/bin/chromium --disable-restore-session-state http://box/home'
-#   when: lxde_pi_autostart_present.stat.exists and chromium_present.stat.exists
 
 
 # 2022-12-29: php-settings.yml is ALSO attempted (on demand) by every
