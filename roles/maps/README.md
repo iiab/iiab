@@ -284,9 +284,9 @@ What I hope to be working on in the next few months
 
 **May 2026**:
 
-* Split search by region and include as part of "Full quality region" downloads
+* Split search by region and include as part of "Full Quality Region" downloads
     * (assuming the database is big enough to merit splitting)
-* UI improvements (Out-of-Box experience, Navigating regions, Buttons, Searching while viewing a region)
+* UI improvements (Out-of-Box Experience, Navigating regions, Buttons, Searching while viewing a region)
 
 ## Extra attributions:
 
