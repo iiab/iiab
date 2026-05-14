@@ -280,44 +280,57 @@
                 history.replaceState({}, "", `#${lat}/${lon}/${pitch}/${bearing}/${zoom}/${globe}/${terrain}/${mapStyleChoice}`)
             }
 
-            // Why two different functions for reading the URL hash?
-            //
-            // The mb orientation params seem to need to be set *before* window load, or else an
-            // intermittent 404 in a resource (pmtiles, even js? just watch the console) will
-            // (somehow) cause mb to freak out or something, defaulting to zero values for all
-            // of them. Calling `readHash()` early on seems to be close enough to setting the html tag
-            // parameters on <maps-black> I guess? Which it seems to hold onto more robustly.
-            //
-            // Strangely, if we set the `globe` parameter here, it seems to make `mb.globe = ...`
-            // not work later on, which makes the `GlobeControl` no longer work. So, we call
-            // `readHashGlobeAndTerrain()` after window load. (We include terrain for uniformity).
-            //
-            // We already handle `mapStyleChoice` in our own funny way so it doesn't really matter
-            // when it's set.
-            async function readHash() {
+            function readHash() {
                 const [lat, lon, pitch, bearing, zoom, globe, terrain, _mapStyleChoice] = window.location.hash.slice(1).split('/')
 
                 mapStyleChoice = tryAvailableStyle(_mapStyleChoice)
 
                 if (window.location.hash) {
-                    mb.lat = lat || 0
-                    mb.lon = lon || 0
-                    mb.pitch = pitch || 0
-                    mb.bearing = bearing || 0
-                    mb.zoom = zoom || 0
+                    return {
+                      "lat": lat || 0,
+                      "lon": lon || 0,
+                      "pitch": pitch || 0,
+                      "bearing": bearing || 0,
+                      "zoom": zoom || 0,
+                      "mapstyle": getMdbMapStyle(),
+                      "globe": globe === 'g',
+
+                      // contour lines is another thing that uses terrain maps, which we can consider
+                      "terrain": terrain === 't',
+                      "hillshade": terrain === 't',
+                    }
                 } else {
                     // If there's no initial hash, set the default view once the map loads
                     shouldSetDefaultView = true
+
+                    return {
+                      "mapstyle": getMdbMapStyle(),
+                    }
                 }
             }
-            async function readHashGlobeAndTerrain() {
-                const [lat, lon, pitch, bearing, zoom, globe, terrain, _mapStyleChoice] = window.location.hash.slice(1).split('/')
 
-                mb.globe = globe === 'g'
+            // If the user sets terrain to true via the hash, make sure terrain
+            // is actually available. If it's not, unset it. This is a slightly
+            // bumpy experience for the user but it's a rare case (either the
+            // user is messing around, someone sent them a link from another
+            // box, or the implementer changed the map setup). The hash should
+            // be corrected along with this, so the next page load won't have
+            // this problem.
+            //
+            // We take this "set first, check later" approach to terrain because
+            // we'd rather have the map set up quickly in the usual case, and
+            // let it correct itself in the rare case.
+            async function correctTerrainSetting() {
+                // it would be faster with mapStylePresent but that doesn't seem
+                // to avoid an error
+                await until(mapStyleLoaded)
 
-                // contour lines is another thing that uses terrain maps, which we can consider
-                mb.terrain = mb.hillshade = (terrain === 't') && (await terrainAvailable())
+                if (mb.terrain && !(await terrainAvailable())) {
+                    mb.terrain = false
+                    setUpMap() // set it up again after this change
+                }
             }
+
             // await until(function () { return someCondition })
             // or
             // await until(() => someCondition)
@@ -622,14 +635,12 @@
                 return STYLE_NATURAL
             }
 
-            async function applyMapStyle() {
-                await until(() => mapStyleChoice, 100)
-
+            function getMdbMapStyle() {
                 // The key is the `mapStyleChoice`, i.e. "natural", "political", etc, from the dropdown menu. (These are names specific to
                 // IIAB maps.)
                 //
                 // Both of these together point to a maps.black "mapstyle" which implies a maplibre style and data sources.
-                mb.mapstyle = {
+                return {
                     // Has nicely colored regions, and buildings
                     [STYLE_NATURAL]: "openstreetmap-openmaptiles/openfreemap/liberty",
 
@@ -640,6 +651,11 @@
                     [STYLE_HYBRID]: "openstreetmap-openmaptiles/maps.black/hybrid-2023",
                     [STYLE_SATELLITE]: "raster/s2maps/2023",
                 }[mapStyleChoice]
+            }
+
+            async function applyMapStyle() {
+                mb.mapstyle = getMdbMapStyle()
+
                 console.log("setting to", mapStyleChoice, "i.e.", mb.mapstyle)
 
                 setUpMap() // The above will reset the map so we have to add controls and other things again. This also covers initial page load.
@@ -1478,18 +1494,30 @@
             }
 
             window.addEventListener("load", async () => {
-                await readHashGlobeAndTerrain()
-                applyMapStyle()
+                correctTerrainSetting()
+                setUpMap()
             });
 
         </script>
     </head>
     <body>
-        {# `cooperativegestures=false` provides familiar zoom/scroll/tilt controls for fullscreen #}
-        <maps-black loader="pmtiles" navigationcontrol="true" cooperativegestures="false"></maps-black>
         <script>
-          mb = document.getElementsByTagName("maps-black")[0];
-          readHash()
+          mb = document.createElement("maps-black")
+
+          const mbAttributes = {
+            ...readHash(),
+            "loader": "pmtiles",
+            "navigationcontrol": "true",
+
+            // `cooperativegestures=false` provides familiar zoom/scroll/tilt controls for fullscreen
+            "cooperativegestures": "false",
+          }
+          Object.entries(mbAttributes).forEach(([k, v]) => {
+            mb.setAttribute(k, v)
+          })
+
+          console.log("setting to", mapStyleChoice, "i.e.", mbAttributes.mapstyle)
+          document.body.prepend(mb)
         </script>
     </body>
 </html>
