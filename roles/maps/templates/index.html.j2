@@ -128,6 +128,9 @@
             // we want style choice to survive the map reset that happens when a maps.black
             // feature or style changes, so we rely on this instead of the select tag value
             let mapStyleChoice
+            // keep track of which layer ids refer to OSM layers. At some points we want to
+            // show or hide them.
+            let worldMapOSMLayers = new Set()
 
             // set immediately after the tag is defined
             let mb = null
@@ -148,12 +151,17 @@
 
                         // Grab the sources and layers as they are so we can replicate them in FQRs
                         const worldMapLayers = [...style.layers]
+                        worldMapOSMLayers = new Set()
                         const worldMapSourceIds = Object.keys(style.sources)
 
                         // Create FQR sources and layers by copying the same from the world map.
                         // Order of layers matters. We want the FQR layers to be after the world map layers
                         // so the FQR shows up on top. We also want all of the FQR layers to be in the same
                         // order as their world map counterpart so it shows up correctly.
+                        //
+                        // There's one exception though, which is that we want all satellite, world or FQR,
+                        // to be the bottom layers. This is because the world vector may in some cases be
+                        // on top of an FQR satellite in hybrid mode.
                         Object.keys(downloadedFQRegions.regions).forEach(fqrName => {
                             const pmtilesDates = downloadedFQRegions.regions[fqrName].dates
 
@@ -216,6 +224,7 @@
                                         source: s2FqrId,
                                     }
                                 } else if (worldLayer.source === osmId) {
+                                    worldMapOSMLayers.add(worldLayer.id)
                                     return {
                                         ...worldLayer,
                                         id: osmFqrId + '.' + worldLayer.id,
@@ -239,6 +248,22 @@
                             .forEach(fqrLayer => {
                                 style.layers.push(fqrLayer)
                             })
+
+                        })
+
+                        // We've copied all of the world layers to FQRs, in the same order. Now it's time to take all of the
+                        // satellite layers and move them to the beginning.
+                        for (const [index, layer] of style.layers.entries()) {
+                            layer.__sortOrder = index
+                        }
+                        style.layers.sort((a, b) => {
+                            const a_s2maps = a.id.startsWith('s2maps-sentinel2-2023')
+                            const b_s2maps = b.id.startsWith('s2maps-sentinel2-2023')
+                            if (a_s2maps !== b_s2maps) {
+                                return b_s2maps - a_s2maps
+                            } else {
+                                return a.__sortOrder - b.__sortOrder
+                            }
                         })
 
                         // set max zooms of world maps
@@ -268,6 +293,11 @@
             // Defining these hash get/set functions outside of the window load because we
             // need to run some of it earlier. Again, the overall code layout sucks and we
             // should reorganize it.
+            //
+            // This should be called:
+            // * On start to correct any mistakes in the URL (covered by `setUpMap`)
+            // * On a globe, terrain, or style change (also covered by `setUpMap`)
+            // * On map move (covered by `map.on('moveend',...`)
             function setHash() {
                 // Prevent some absurd precision. This may even be too much.
                 const lat = Math.round(mb.lat * 1000000) / 1000000
@@ -411,6 +441,8 @@
                         type: "fill",
                         source: regionId,
                         layout: {},
+                        // have to hide it with fill-opacity because we need `layout: {visibility: "visible"}`
+                        // (which is the default) to see if it's on screen
                         paint: {'fill-color': '#FF2222', 'fill-opacity': 0},
                         metadata: {
                             // To make it simpler to retrieve and find later
@@ -444,9 +476,47 @@
                     // Don't affect draw mode though.
                     fqRegionsControl.endDeleteMode()
                 })
+
+                // Before we declare the regions as shown (`fqRegionsShown`), we have to make sure
+                // sure they're actually visible (assuming we have any). Since we don't know where
+                // the user is looking, we just make a world-wide region and wait until it's
+                // visible.
+                mb.map.addSource("world~test", {
+                    type: 'geojson',
+                    data: {
+                        type: 'Feature',
+                        geometry: {
+                            type: 'Polygon',
+                            coordinates: [[
+                                [-180, -90],
+                                [-180, 90],
+                                [180, 90],
+                                [180, -90],
+                                [-180, -90],
+                            ]],
+                        },
+                    },
+                });
+                mb.map.addLayer({
+                    id: "world~test",
+                    type: "fill",
+                    source: "world~test",
+                    layout: {},
+                    paint: {'fill-color': '#FF2222', 'fill-opacity': 0},
+                })
+                await until(() =>
+                    mb.map.queryRenderedFeatures()
+                    .filter(f=>f.layer.id.includes("world~test"))
+                    .length
+                )
+                // Don't waste rendering time thinking about "world~test"
+                mb.map.setLayoutProperty("world~test", "visibility", "none")
+
                 mb.map.fqRegionsShown = true // attach to `mb.map` so that it clears if we reset the map
             }
 
+            // Hide region outlines to cut down on annoying things on
+            // the screen when zoomed in
             async function setFQRegionOutlinesVisibility() {
                 await until(() => mb.map && mb.map.fqRegionsShown)
                 // Hide the lines if you zoom in enough
@@ -456,15 +526,47 @@
                     const regionId = "region-" + regionName
                     mb.map.setLayoutProperty(regionId + "~line", "visibility", lineVisibility)
                     mb.map.setLayoutProperty(regionId + "~line-2", "visibility", lineVisibility)
+                    // Hiding the `click~` layer as well would probably speed things up even more.
+                    // Unfortunately for now we need it to identify that we're looking at a region.
                 }
             }
 
-            async function setBestTerrainSource() {
+            async function getRegionsOnScreen() {
+                await until(() => mb.map.fqRegionsShown)
+
+                const mapCenter = mb.map.getCenter()
+                return (
+                    mb.map.queryRenderedFeatures()                                   // Get everything on screen
+                        .filter(f=>f.layer.id.includes("~click"))                    // The clickable areas exactly cover the region we need, and are available in every style
+                        .sort((f1, f2) => (                                          // Order by proximity to the center of the map
+                            mapCenter.distanceTo(f1.layer.metadata['iiab:center']) -
+                            mapCenter.distanceTo(f2.layer.metadata['iiab:center'])
+                        ))
+                        .map(f=>f.source.split('region-')[1])                        // Extract the name of the region
+                )
+            }
+
+            // Are we (roughly) so much looking at a region (any region) that it obscures the world map?
+            function isWorldMapObscuredByFQR(regionsOnScreen) {
+                const mapBounds = mb.map.getBounds()
+                const mapCorners = [
+                  mapBounds.getSouthWest(),
+                  mapBounds.getSouthEast(),
+                  mapBounds.getNorthWest(),
+                  mapBounds.getNorthEast(),
+                ]
+
+                // Does SOME region contain EVERY corner of the map bounds?
+                return regionsOnScreen
+                .map(regionName => new maplibregl.LngLatBounds(downloadedFQRegions.regions[regionName].bbox))
+                .some(regionBounds => mapCorners.every(lngLat => regionBounds.contains(lngLat)))
+            }
+
+            async function setBestTerrainSource(regionsOnScreen) {
                 // Set the right terrain source based on which FQR might be on screen if we have
                 // terrain turned on.
 
                 await until(mapStyleLoaded)
-                await until(() => mb.map.fqRegionsShown) // to query features on screen. implies fqrLoaded
 
                 if (!mb.terrain) {
                     return
@@ -476,17 +578,6 @@
                 // Pick a terrain source. Basically: if we're looking at a region, pick that.
                 // If not, pick the world map terrain. There are many edge cases though.
                 const newTerrainSource = (() => {
-                    const mapCenter = mb.map.getCenter()
-                    const regionsOnScreen = (
-                        mb.map.queryRenderedFeatures()                                   // Get everything on screen
-                            .filter(f=>f.layer.id.includes("~click"))                    // The clickable areas exactly cover the region we need, and are available in every style
-                            .sort((f1, f2) => (                                          // Order by proximity to the center of the map
-                                mapCenter.distanceTo(f1.layer.metadata['iiab:center']) -
-                                mapCenter.distanceTo(f2.layer.metadata['iiab:center'])
-                            ))
-                            .map(f=>f.source.split('region-')[1])                        // Extract the name of the region
-                    )
-
                     if (WORLD_MAP_TERRAIN_MAX_ZOOM === 10) {
                         // If the world map is maximum zoom, don't bother with FQR terrain
                         return 'terrarium'
@@ -528,6 +619,85 @@
                 }
             }
 
+            // Hide FQRs that we aren't looking at, and hide the world map if we're looking at an FQR.
+            async function hideUnseenFQRs(regionsOnScreen) {
+                // THIS FUNCTION IS UNUSED for now (also commented out at the function call)
+                //
+                // I've been doing cleanup, particularly performance related, after implementing seamless
+                // FQRs. I have found some glitchiness in the process. It may or may not be related to
+                // this function, and actually may or may not have existed before of any of this cleanup work.
+                // All the same, I'm dropping this function for now because cleanup is taking up a lot of time,
+                // I don't want to risk adding more glitches, and as of yet there isn't much reason to
+                // think that performance is a big issue (given that most people only have one FQR). Other
+                // cleanup stuff I am keeping though, because it's not just performance. I think the cost is
+                // worth the benefit for those.
+                //
+                // But, in case I revisit performance / glitchiness, here a couple of my current thoughts
+                // about the source of the glitchiness:
+                //
+                // 1) Best guess now: `setBestTerrainSource` changes the terrain source, and maplibre is just
+                // buggy internally and stops displaying certain layers, or maybe incorrectly draws certain
+                // layers over others, or something. I have seen this happen without calling this function
+                // (`hideUnseenFQRs`), but I'm not 100% sure this function doesn't make it happen more often.
+                // Investigating this is a real slog and I don't want to take any more time with it. Perhaps
+                // a remedy to try would be to upgrade maplibre, maybe they've ironed some things out?
+                //
+                // 2) Less likely: There may be something wrong with the `regionsOnScreen` thing. Like, maybe
+                // the `...~click` layers that it's looking for doesn't show up all the time, so it doesn't
+                // register that you're looking at the region you're looking at? We could debug to confirm
+                // this (if we wanted to take more time). If it is the case, we could improve this by
+                // upgrading maplibre and using the bounds `intersects` function (not available in our
+                // current version) instead of looking to see if the `...~click` layer is being rendered.
+                // This was my initial guess before I considered `setBestTerrainSource`. Still, maybe
+                // `hideUnseenFQRs` would compound it? And maybe a better `regionsOnScreen` would fix it.
+                return
+
+                await until(mapStyleLoaded)
+
+                const regionsSet = new Set(Object.keys(downloadedFQRegions.regions))
+                const regionsOnScreenSet = new Set(regionsOnScreen)
+                const regionsOffScreenSet = regionsSet.difference(regionsOnScreenSet)
+
+                // TODO optimization ideas:
+                //   Just use `worldMapOSMLayers` and determine the region layer names
+                //   Keep track of which regions are hidden or visible so I only update the necessary ones.
+                mb.map.getLayersOrder().forEach(layerName => {
+                    [_, _, fullRegion, regionName] = layerName.split('.')
+                    if (fullRegion !== "full-region") return
+                    if (regionsOnScreenSet.has(regionName)) {
+                        mb.map.setLayoutProperty(layerName, "visibility", "visible")
+                    }
+                    if (regionsOffScreenSet.has(regionName)) {
+                        mb.map.setLayoutProperty(layerName, "visibility", "none")
+                    }
+                })
+            }
+
+            async function hideWorldMapIfObscured(regionsOnScreen) {
+                await until(mapStyleLoaded)
+
+                const shouldHideWorldMap = (mb.map.getZoom() >= WORLD_MAP_VECTOR_MAX_ZOOM + 1) && isWorldMapObscuredByFQR(regionsOnScreen)
+                const worldLayerVisibility = shouldHideWorldMap ? "none" : "visible"
+                if (mb.terrain) {
+                    mb.map.setLayoutProperty("hillshade", "visibility", worldLayerVisibility)
+                }
+                worldMapOSMLayers.forEach(
+                    layerName => mb.map.setLayoutProperty(layerName, "visibility", worldLayerVisibility)
+                )
+            }
+
+            // Everything that should happen when we stop moving the map or (re)load the map.
+            async function onMoveEnd() {
+                setHash()
+                setFQRegionOutlinesVisibility()
+
+                const regionsOnScreen = await getRegionsOnScreen()
+                setBestTerrainSource(regionsOnScreen)
+
+                // Skipping for now. See function definition.
+                // hideUnseenFQRs(regionsOnScreen)
+                hideWorldMapIfObscured(regionsOnScreen)
+            }
 
             function setDefaultView() {
                 // Setting the default view to show all the continents once, and have a decent vertical center.
@@ -1468,25 +1638,14 @@
                 })
                 // NOTE Navigation control is added via `navigationcontrol` attribute on the maps-black tag
 
-                // The call to this function (`setUpMap`) may have been triggered by a globe, terrain, or style change.
-                // That should be reflected in the hash:
-                setHash()
-
-                // Future changes in orientation should also be reflected in the hash:
-                mb.map.off('moveend', setHash) // unsetting first, in case it's already there from a previous refresh
-                mb.map.on('moveend', setHash)
-                mb.map.on('moveend', async () => {
-                    setFQRegionOutlinesVisibility()
-                    setBestTerrainSource()
-                })
+                mb.map.off('moveend', onMoveEnd) // unsetting first, in case it's already there from a previous refresh
+                mb.map.on('moveend', onMoveEnd)
+                onMoveEnd()
 
                 // Any time we set up the map, we should make a point to show the full quality region outlines as well.
                 // This depends both on mb.map.style.loaded() and also for the fetch to have returned.
                 // Thus, it'll be on its own timer loop. We just need to make sure to kick it off here.
                 drawFQRegionOutlines()
-
-                setFQRegionOutlinesVisibility()
-                setBestTerrainSource()
 
                 setDefaultView()
             }
