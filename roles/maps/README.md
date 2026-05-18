@@ -57,11 +57,12 @@ Here are 3 examples below, to help you decide what you'll put in [/etc/iiab/loca
 
 See `maps_dot_black_vector_tiles` and `maps_dot_black_satellite_tiles` [here](https://github.com/iiab/iiab/blob/master/roles/maps/defaults/main.yml) for all valid values.
 
-*NOTE: The satellite data is licensed "NonCommercial" under [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/).  To skip satellite imagery, set:*
+*NOTE: The satellite data is licensed "NonCommercial" under [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/).  To skip worldwide satellite imagery, set:*
 
   ```
   maps_satellite_zoom: none
-  ```
+
+*Full Quality Regions will still download satellite data, though it will not be visible in the UI.*
 
 ## How do I install 3D terrain?
 

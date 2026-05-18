@@ -79,31 +79,24 @@
     path: "{{ maps_serve_path }}/{{ maps_dot_black_satellite_symlink_name }}"
     state: absent
 
-- when: maps_terrain_zoom != "none"
-  block:
-    - name: "Make sure maps_terrain_zoom has a valid value"
-      assert:
-        that: maps_dot_black_terrain_tiles[maps_terrain_zoom] is defined
-        fail_msg: "Error: maps_terrain_zoom is set to an invalid value. See `maps_dot_black_terrain_tiles` in https://github.com/iiab/iiab/blob/master/roles/maps/defaults/main.yml for valid values."
-        quiet: yes
+- name: "Make sure maps_terrain_zoom has a valid value"
+  assert:
+    that: maps_dot_black_terrain_tiles[maps_terrain_zoom] is defined
+    fail_msg: "Error: maps_terrain_zoom is set to an invalid value. See `maps_dot_black_terrain_tiles` in https://github.com/iiab/iiab/blob/master/roles/maps/defaults/main.yml for valid values."
+    quiet: yes
 
-    - name: Download terrain tiles
-      include_tasks: download_large_file.yml
-      vars:
-        dest_base_path: "{{ maps_serve_path }}"
-        item: "{{ maps_dot_black_terrain_tiles[maps_terrain_zoom] }}"
+- name: Download terrain tiles
+  include_tasks: download_large_file.yml
+  vars:
+    dest_base_path: "{{ maps_serve_path }}"
+    item: "{{ maps_dot_black_terrain_tiles[maps_terrain_zoom] }}"
 
-    - name: Select terrain tiles
-      file:
-        src: "{{ maps_serve_path }}/{{ maps_dot_black_terrain_tiles[maps_terrain_zoom] }}"
-        dest: "{{ maps_serve_path }}/{{ maps_dot_black_terrain_symlink_name }}"
-        state: link
-
-- name: Remove unused terrain symlink
-  when: maps_terrain_zoom == "none"
+# If the user selects "none", we download a dummy file
+- name: Select terrain tiles
   file:
-    path: "{{ maps_serve_path }}/{{ maps_dot_black_terrain_symlink_name }}"
-    state: absent
+    src: "{{ maps_serve_path }}/{{ maps_dot_black_terrain_tiles[maps_terrain_zoom] }}"
+    dest: "{{ maps_serve_path }}/{{ maps_dot_black_terrain_symlink_name }}"
+    state: link
 
 - name: Initiate the extracts json
   copy:
@@ -126,14 +119,6 @@
   args:
     executable: /bin/bash
   with_items: "{{ maps_preset_full_quality_regions }}"
-
-# If the user goes back to "none", we want to delete the symlink that gives them terrain.
-# However, it will not delete the pmtiles file that it points to.
-- name: Unselect terrain tiles
-  file:
-    path: "{{ maps_serve_path }}/{{ maps_dot_black_terrain_symlink_name }}"
-    state: absent
-  when: maps_terrain_zoom == "none"
 
 ### maplibre ###
 
