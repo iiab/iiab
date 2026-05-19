@@ -62,7 +62,7 @@
             const WORLD_MAP_SATELLITE_MAX_ZOOM = (num => {
                 if (Number.isNaN(num)) {
                     if ("{{ maps_satellite_zoom }}" === "none") {
-                        return null
+                        return 0
                     }
 
                     // Use a default that is hopefully always available.
@@ -280,10 +280,10 @@
                 history.replaceState({}, "", `#${lat}/${lon}/${pitch}/${bearing}/${zoom}/${globe}/${terrain}/${mapStyleChoice}`)
             }
 
-            function readHash() {
+            async function readHash() {
                 const [lat, lon, pitch, bearing, zoom, globe, terrain, _mapStyleChoice] = window.location.hash.slice(1).split('/')
 
-                mapStyleChoice = tryAvailableStyle(_mapStyleChoice)
+                mapStyleChoice = await tryAvailableStyle(_mapStyleChoice)
 
                 if (window.location.hash) {
                     return {
@@ -589,10 +589,14 @@
             //
             // As such, we will simply say that satellite is not avaialble if
             // the user does not download it globally.
-            function satelliteAvailable() {
-                if (WORLD_MAP_SATELLITE_MAX_ZOOM) {
+            async function satelliteAvailable() {
+                if (WORLD_MAP_SATELLITE_MAX_ZOOM > 0) {
                     return true
                 }
+
+                // Full Quality Regions always have terrain
+                await until(fqrLoaded)
+                return fqRegionsExist()
             }
 
             async function terrainAvailable() {
@@ -606,19 +610,21 @@
                 return fqRegionsExist()
             }
 
-            function getAvailableStyles() {
+            async function getAvailableStyles() {
+                satelliteAvailable_ = await satelliteAvailable()
+
                 return [
                     STYLE_NATURAL,
                     STYLE_POLITICAL,
 
                     // Requires satellite tiles
-                    satelliteAvailable() ? STYLE_SATELLITE : null,
-                    satelliteAvailable() ? STYLE_HYBRID    : null,
+                    satelliteAvailable_ ? STYLE_SATELLITE : null,
+                    satelliteAvailable_ ? STYLE_HYBRID    : null,
                 ].filter(Boolean)
             }
 
-            function tryAvailableStyle(requestedStyle) {
-                const availableStyles = getAvailableStyles()
+            async function tryAvailableStyle(requestedStyle) {
+                const availableStyles = await getAvailableStyles()
 
                 // See if the one we want is available
                 if (availableStyles.includes(requestedStyle)) {
@@ -1458,14 +1464,13 @@
                 fqRegionsControl = new FQRegionsControl()
                 mb.map.addControl(fqRegionsControl, 'top-left');
 
-                // Add all the right-side controls at once after we determine whether terrain is among them
-                terrainAvailable().then(showTerrainControl => {
+                (async () => {
                     mb.map.addControl(new MapsDotBlackGlobeControl(), 'top-right');
-                    if (showTerrainControl) {
+                    if (await terrainAvailable()) {
                         mb.map.addControl(new MapsDotBlackTerrainControl(), 'top-right');
                     }
-                    mb.map.addControl(new MapsDotBlackStyleControl(getAvailableStyles()), 'top-right');
-                })
+                    mb.map.addControl(new MapsDotBlackStyleControl(await getAvailableStyles()), 'top-right');
+                })()
                 // NOTE Navigation control is added via `navigationcontrol` attribute on the maps-black tag
 
                 // The call to this function (`setUpMap`) may have been triggered by a globe, terrain, or style change.
@@ -1500,22 +1505,24 @@
     </head>
     <body>
         <script>
-          mb = document.createElement("maps-black")
+            readHash().then(hash => {
+                mb = document.createElement("maps-black")
 
-          const mbAttributes = {
-            ...readHash(),
-            "loader": "pmtiles",
-            "navigationcontrol": "true",
+                const mbAttributes = {
+                  ...hash,
+                  "loader": "pmtiles",
+                  "navigationcontrol": "true",
 
-            // `cooperativegestures=false` provides familiar zoom/scroll/tilt controls for fullscreen
-            "cooperativegestures": "false",
-          }
-          Object.entries(mbAttributes).forEach(([k, v]) => {
-            mb.setAttribute(k, v)
-          })
+                  // `cooperativegestures=false` provides familiar zoom/scroll/tilt controls for fullscreen
+                  "cooperativegestures": "false",
+                }
+                Object.entries(mbAttributes).forEach(([k, v]) => {
+                  mb.setAttribute(k, v)
+                })
 
-          console.log("setting to", mapStyleChoice, "i.e.", mbAttributes.mapstyle)
-          document.body.prepend(mb)
+                console.log("setting to", mapStyleChoice, "i.e.", mbAttributes.mapstyle)
+                document.body.prepend(mb)
+            })
         </script>
     </body>
 </html>
