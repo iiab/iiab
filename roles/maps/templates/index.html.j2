@@ -154,6 +154,10 @@
                         // Order of layers matters. We want the FQR layers to be after the world map layers
                         // so the FQR shows up on top. We also want all of the FQR layers to be in the same
                         // order as their world map counterpart so it shows up correctly.
+                        //
+                        // There's one exception though, which is that we want all satellite, world or FQR,
+                        // to be the bottom layers. This is because the world vector may in some cases be
+                        // on top of an FQR satellite in hybrid mode.
                         Object.keys(downloadedFQRegions.regions).forEach(fqrName => {
                             const pmtilesDates = downloadedFQRegions.regions[fqrName].dates
 
@@ -239,6 +243,21 @@
                             .forEach(fqrLayer => {
                                 style.layers.push(fqrLayer)
                             })
+                        })
+
+                        // We've copied all of the world layers to FQRs, in the same order. Now it's time to take all of the
+                        // satellite layers and move them to the beginning.
+                        for (const [index, layer] of style.layers.entries()) {
+                            layer.__sortOrder = index
+                        }
+                        style.layers.sort((a, b) => {
+                            const a_s2maps = a.id.startsWith('s2maps-sentinel2-2023')
+                            const b_s2maps = b.id.startsWith('s2maps-sentinel2-2023')
+                            if (a_s2maps !== b_s2maps) {
+                                return b_s2maps - a_s2maps
+                            } else {
+                                return a.__sortOrder - b.__sortOrder
+                            }
                         })
 
                         // set max zooms of world maps
