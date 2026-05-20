@@ -37,7 +37,7 @@ Security
    #. ``sudo``
 * Please read much more about what escalated (root) actions are authorized when you log into IIAB's Admin Console, and how this works: https://github.com/iiab/iiab-admin-console/blob/master/Authentication.md
 * If your IIAB includes Tailscale (VPN), ``/root/.ssh/authorized_keys`` should be installed by `roles/tailscale/tasks/install.yml <../tailscale/tasks/install.yml>`_ to facilitate remote community support.  Feel free to remove this as mentioned here: https://wiki.iiab.io/go/Security
-* Auto-checking for the default/published password (as specified by ``iiab_admin_published_pwd`` in `/opt/iiab/iiab/vars/default_vars.yml <../../vars/default_vars.yml>`_) is implemented in `/etc/profile.d <templates/sshpwd-profile-iiab.sh>`_ (and `/etc/xdg/lxsession/LXDE-pi <templates/sshpwd-lxde-iiab.sh>`_ when it exists, i.e. on Raspberry Pi OS with desktop).
+* Auto-checking for the default/published password (as specified by ``iiab_admin_published_pwd`` in `/opt/iiab/iiab/vars/default_vars.yml <../../vars/default_vars.yml>`_) is implemented in `/etc/profile.d/iiab-pwdwarn-profile.sh <templates/iiab-pwdwarn-profile.sh.j2>`_ (and `/usr/local/sbin/iiab-pwdwarn-labwc <templates/iiab-pwdwarn-labwc.j2>`_ when ``/home/iiab-admin/.config/labwc/`` exists, i.e. on Raspberry Pi OS with desktop).
 
 Example
 =======
@@ -50,7 +50,7 @@ Example
 Historical Notes
 ================
 
-* We no longer support setting your password using a hash e.g. ``python -c 'import crypt; print crypt.crypt("<plaintext>", "$6$<salt>")'`` (or the Python 3 equivalent, ``python3 -c 'import crypt; print(crypt.crypt("<plaintext>", crypt.mksalt(crypt.METHOD_SHA512)))'``) as these are very cumbersome — and worse, exposing your "salt" opens up your password to `possible attack <https://stackoverflow.com/questions/6776050/how-long-to-brute-force-a-salted-sha-512-hash-salt-provided>`_.  [October 2020]
+* We no longer support setting your password using a hash e.g. ``python -c 'import crypt; print crypt.crypt("<plaintext>", "$6$<salt>")'`` (or the Python < 3.13 equivalent, ``python3 -c 'import crypt; print(crypt.crypt("<plaintext>", crypt.mksalt(crypt.METHOD_SHA512)))'`` or the CLI equivalent, ``openssl passwd -6 -salt $(openssl rand -base64 12) "plaintext"``) as these are very cumbersome — and worse, exposing your "salt" opens up your password to `possible attack <https://stackoverflow.com/questions/6776050/how-long-to-brute-force-a-salted-sha-512-hash-salt-provided>`_.  [October 2020]
 * The sudo flag ``NOPASSWORD:`` and the ``wheel`` group are similarly no longer recommended, so that your IIAB faces fewer security risks.  [October 2020]
 
 Remote Support Tools

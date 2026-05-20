@@ -18,23 +18,20 @@
     mode: "0644"
 
 - name: Download the remaining basic maps.black javascript and styles (0644)
-  get_url:
-    url: "{{ maps_dot_black_small_assets_url }}/{{ item.filename }}"
-    dest: "{{ maps_serve_path }}/{{ item.filename }}"
-    checksum: "sha256:{{ item.sha256sum }}"
-    mode: "0644"
-    timeout: "{{ download_timeout }}"
+  include_tasks: download_large_file.yml
+  vars:
+    dest_base_path: "{{ maps_serve_path }}"
   with_items: "{{ maps_dot_black_js_and_styles }}"
 
 - name: Download naturalearth6 tiles
   include_tasks: download_large_file.yml
   vars:
     dest_base_path: "{{ maps_serve_path }}"
-    item: "{{ maps_dot_black_naturalearth6_tiles }}"
+    item: "{{ maps_dot_black_naturalearth6_tiles[maps_ne6_zoom] }}"
 
 - name: Select naturalearth6 tiles
   file:
-    src: "{{ maps_serve_path }}/{{ maps_dot_black_naturalearth6_tiles }}"
+    src: "{{ maps_serve_path }}/{{ maps_dot_black_naturalearth6_tiles[maps_ne6_zoom] }}"
     dest: "{{ maps_serve_path }}/{{ maps_dot_black_naturalearth6_symlink_name }}"
     state: link
 
@@ -50,65 +47,78 @@
     dest_base_path: "{{ maps_serve_path }}"
     item: "{{ maps_dot_black_vector_tiles[maps_vector_quality] }}"
 
-- name: Select vector tiles (if openstreetmap)
+- name: Select vector tiles
   file:
     src: "{{ maps_serve_path }}/{{ maps_dot_black_vector_tiles[maps_vector_quality] }}"
     dest: "{{ maps_serve_path }}/{{ maps_dot_black_osm_symlink_name }}"
     state: link
-  when: maps_vector_quality != "ne"
 
-- name: Select vector tiles (if naturalearth)
-  file:
-    src: "{{ maps_serve_path }}/{{ maps_dot_black_vector_tiles[maps_vector_quality] }}"
-    dest: "{{ maps_serve_path }}/{{ maps_dot_black_ne_symlink_name }}"
-    state: link
-  when: maps_vector_quality == "ne"
-
-- name: "Make sure maps_satellite_zoom has a valid value"
-  assert:
-    that: maps_dot_black_satellite_tiles[maps_satellite_zoom] is defined
-    fail_msg: "Error: maps_satellite_zoom is set to an invalid value. See `maps_dot_black_satellite_tiles` in https://github.com/iiab/iiab/blob/master/roles/maps/defaults/main.yml for valid values."
-    quiet: yes
-
-- name: Download satellite tiles
-  include_tasks: download_large_file.yml
-  vars:
-    dest_base_path: "{{ maps_serve_path }}"
-    item: "{{ maps_dot_black_satellite_tiles[maps_satellite_zoom] }}"
-
-- name: Select satellite tiles
-  file:
-    src: "{{ maps_serve_path }}/{{ maps_dot_black_satellite_tiles[maps_satellite_zoom] }}"
-    dest: "{{ maps_serve_path }}/{{ maps_dot_black_satellite_symlink_name }}"
-    state: link
-
-- when: maps_terrain_zoom != "none"
+- when: maps_satellite_zoom != "none"
   block:
-    - name: "Make sure maps_terrain_zoom has a valid value"
+    - name: "Make sure maps_satellite_zoom has a valid value"
       assert:
-        that: maps_dot_black_terrain_tiles[maps_terrain_zoom] is defined
-        fail_msg: "Error: maps_terrain_zoom is set to an invalid value. See `maps_dot_black_terrain_tiles` in https://github.com/iiab/iiab/blob/master/roles/maps/defaults/main.yml for valid values."
+        that: maps_dot_black_satellite_tiles[maps_satellite_zoom] is defined
+        fail_msg: "Error: maps_satellite_zoom is set to an invalid value. See `maps_dot_black_satellite_tiles` in https://github.com/iiab/iiab/blob/master/roles/maps/defaults/main.yml for valid values."
         quiet: yes
 
-    - name: Download terrain tiles
+    - name: Download satellite tiles
       include_tasks: download_large_file.yml
       vars:
         dest_base_path: "{{ maps_serve_path }}"
-        item: "{{ maps_dot_black_terrain_tiles[maps_terrain_zoom] }}"
+        item: "{{ maps_dot_black_satellite_tiles[maps_satellite_zoom] }}"
 
-    - name: Select terrain tiles
+    - name: Select satellite tiles
       file:
-        src: "{{ maps_serve_path }}/{{ maps_dot_black_terrain_tiles[maps_terrain_zoom] }}"
-        dest: "{{ maps_serve_path }}/{{ maps_dot_black_terrain_symlink_name }}"
+        src: "{{ maps_serve_path }}/{{ maps_dot_black_satellite_tiles[maps_satellite_zoom] }}"
+        dest: "{{ maps_serve_path }}/{{ maps_dot_black_satellite_symlink_name }}"
         state: link
 
-# If the user goes back to "none", we want to delete the symlink that gives them terrain.
-# However, it will not delete the pmtiles file that it points to.
-- name: Unselect terrain tiles
+- name: Remove unused satellite symlink
+  when: maps_satellite_zoom == "none"
   file:
-    path: "{{ maps_serve_path }}/{{ maps_dot_black_terrain_symlink_name }}"
+    path: "{{ maps_serve_path }}/{{ maps_dot_black_satellite_symlink_name }}"
     state: absent
-  when: maps_terrain_zoom == "none"
+
+- name: "Make sure maps_terrain_zoom has a valid value"
+  assert:
+    that: maps_dot_black_terrain_tiles[maps_terrain_zoom] is defined
+    fail_msg: "Error: maps_terrain_zoom is set to an invalid value. See `maps_dot_black_terrain_tiles` in https://github.com/iiab/iiab/blob/master/roles/maps/defaults/main.yml for valid values."
+    quiet: yes
+
+- name: Download terrain tiles
+  include_tasks: download_large_file.yml
+  vars:
+    dest_base_path: "{{ maps_serve_path }}"
+    item: "{{ maps_dot_black_terrain_tiles[maps_terrain_zoom] }}"
+
+# If the user selects "none", we download a dummy file
+- name: Select terrain tiles
+  file:
+    src: "{{ maps_serve_path }}/{{ maps_dot_black_terrain_tiles[maps_terrain_zoom] }}"
+    dest: "{{ maps_serve_path }}/{{ maps_dot_black_terrain_symlink_name }}"
+    state: link
+
+- name: Initiate the extracts json
+  copy:
+    content: '{"regions": {}}'
+    dest: "{{ maps_serve_path }}/{{ tile_extract.info_file }}"
+    mode: "0644"
+    force: false
+
+- name: "Make sure maps_region_downloader is true if maps_preset_full_quality_regions has items"
+  assert:
+    that: maps_region_downloader or (maps_preset_full_quality_regions | length <= 0)
+    fail_msg: "Error: you have maps_preset_full_quality_regions. Either set maps_region_downloader to true or unset maps_preset_full_quality_regions (this will not delete any already downloaded regions)."
+    quiet: yes
+
+- name: "Download preset full quality regions"
+  # TODO - Is there a safer way to pass in item.name and item.bbox?
+  shell: |
+    set -euo pipefail
+    {{ tile_extract.working_dir }}/tile-extract.py extract {{ item.name }} {{ item.bbox }} noninteractive
+  args:
+    executable: /bin/bash
+  with_items: "{{ maps_preset_full_quality_regions }}"
 
 ### maplibre ###
 

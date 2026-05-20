@@ -110,13 +110,13 @@
   set_fact:
     wifi2: "{{ item | trim }}"
     discovered_wireless_iface: "{{ item | trim }}"
-  when: wireless_list2.stdout is defined and item | trim != "ap0"
+  when: wireless_list2.stdout is defined and item | trim != "ap0" and item | trim != "wld0"
   with_items:
     - "{{ wireless_list2.stdout_lines }}"
 #item | trim != discovered_wan_iface
 
 - name: Count WiFi ifaces
-  shell: "ls -la /sys/class/net/*/phy80211 | awk -F / '{print $5}' | grep -v -e ap0 | wc -l"
+  shell: "ls -la /sys/class/net/*/phy80211 | awk -F / '{print $5}' | grep -v -e ap0 -e wld0 | wc -l"
   register: count_wifi_interfaces
 
 - name: Remember number of WiFi devices
@@ -140,7 +140,7 @@
 - name: "Set 'can_be_ap: True' if 'iw list' output contains suitable '* AP'"
   set_fact:
     can_be_ap: True
-  when: look_for_ap.failed is defined and not look_for_ap.failed
+  when: look_for_ap.skipped is defined and not look_for_ap.skipped and look_for_ap.failed is defined and not look_for_ap.failed
 
 - name: Detect wifi gateway active
   shell: ip r | grep default | grep {{ discovered_wireless_iface }} | wc -l
@@ -228,10 +228,16 @@
     iiab_wireless_lan_iface: ap0
   when: discovered_wireless_iface != "none" and wifi_up_down
 
+# might need to expand the coverage to non-rpi hardware
+- name: Set iiab_wireless_lan_iface to wld0 if WiFi device is present on U26.04 and is a Rpi
+  set_fact:
+    iiab_wireless_lan_iface: wld0
+  when: discovered_wireless_iface != "none" and wifi_up_down and rpi_model != "none" and is_ubuntu and os_ver is version('ubuntu-2604', 'ge')
+
 - name: Set iiab_wired_lan_iface if present
   set_fact:
     iiab_wired_lan_iface: "{{ discovered_wired_iface }}"
-  when: discovered_wired_iface is defined and discovered_wired_iface != "none" and discovered_wired_iface != iiab_wan_iface and not is_raspbian
+  when: discovered_wired_iface is defined and discovered_wired_iface != "none" and discovered_wired_iface != iiab_wan_iface
 
 # use value only if present
 - name: 2 or more devices on the LAN - use bridging
@@ -384,6 +390,14 @@
     option: cmdline_country_code
     value: "{{ cmdline_country_code.stdout }}"
   when: cmdline_country_code.stdout is defined and cmdline_country_code.stdout != ""
+
+- name: Add 'detected_network' variable 'wireless_lan_iface' value if defined and non-empty, to {{ iiab_ini_file }}
+  ini_file:
+    dest: "{{ iiab_ini_file }}"
+    section: detected_network
+    option: wireless_lan_iface
+    value: "{{ iiab_wireless_lan_iface }}"
+  when: iiab_wireless_lan_iface is defined and iiab_wireless_lan_iface != ""
 
 # well if there ever was a point to tell the user things are FUBAR this is it.
 # limit 2 network adapters wifi wired

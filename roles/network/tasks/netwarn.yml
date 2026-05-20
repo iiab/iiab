@@ -5,14 +5,26 @@
 # shell / ssh logins (across all OS's/distros/window managers) might also make sense?
 
 
-- name: Does directory /home/{{ iiab_admin_user }}/.config/labwc/ exist?
-  stat:
-    path: /home/{{ iiab_admin_user }}/.config/labwc/
-  register: labwc_dir
+- name: Get username for UID 1000 via shell -- typical graphical desktop login on Raspberry Pi OS
+  command: id -nu 1000
+  register: uid_1000_username
+  ignore_errors: true
 
-- name: If so, add '/usr/local/sbin/iiab-netwarn &' to /home/{{ iiab_admin_user }}/.config/labwc/autostart
+# 2024-12-12: RasPiOS changed compositor from wayfire to labwc: https://forums.raspberrypi.com/viewtopic.php?t=379321
+- name: Does directory /home/{{ uid_1000_username.stdout }}/.config/labwc/ exist?
+  stat:
+    path: /home/{{ uid_1000_username.stdout }}/.config/labwc/
+  register: labwc_dir
+  when: uid_1000_username.stdout is defined and uid_1000_username.stdout != ""
+
+- name: If so, install at-spi2-core (GNOME Accessibility, avoids zenity CLI warnings)
+  package:
+    name: at-spi2-core
+  when: labwc_dir.stat.exists and labwc_dir.stat.isdir
+
+- name: ...and add '/usr/local/sbin/iiab-netwarn &' to /home/{{ uid_1000_username.stdout }}/.config/labwc/autostart
   lineinfile:
-    path: /home/{{ iiab_admin_user }}/.config/labwc/autostart    # iiab-admin
+    path: /home/{{ uid_1000_username.stdout }}/.config/labwc/autostart    # iiab-admin
     create: yes
     line: '/usr/local/sbin/iiab-netwarn &'
   when: labwc_dir.stat.exists and labwc_dir.stat.isdir
