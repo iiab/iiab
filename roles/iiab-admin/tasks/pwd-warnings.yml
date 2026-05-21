@@ -2,35 +2,53 @@
 #                    AND roles/network/tasks/netwarn.yml  FOR iiab-network
 
 
+- name: Get username for UID 1000 via shell -- typical primary login on Raspberry Pi OS
+  command: id -nu 1000
+  register: uid_1000_username
+  ignore_errors: true
+
 - name: Install /etc/profile.d/iiab-pwdwarn-profile.sh from template, to issue warnings (during shell/ssh logins) if iiab-admin password is the default
   template:
     src: iiab-pwdwarn-profile.sh.j2
     dest: "{{ etc_path }}/profile.d/iiab-pwdwarn-profile.sh"
     mode: '0644'
 
-- name: Does directory /home/{{ iiab_admin_user }}/.config/labwc/ exist?
-  stat:
-    path: /home/{{ iiab_admin_user }}/.config/labwc/
-  register: labwc_dir
 
-- name: "If so, install from template: /usr/local/sbin/iiab-pwdwarn-labwc"
-  template:
-    src: iiab-pwdwarn-labwc.j2
-    dest: /usr/local/sbin/iiab-pwdwarn-labwc
-    mode: '0755'
-  when: labwc_dir.stat.exists and labwc_dir.stat.isdir
+# 2026-05-10: Sadly end-of-the-line for published password pop-up warnings on
+# RPiOS graphical desktop, as iiab-pwdwarn-labwc checking /etc/shadow no longer
+# works, due to RPiOS sudo mandating passwords starting mid-April 2026:
+# https://www.raspberrypi.com/news/a-security-update-for-raspberry-pi-os/
 
-# 2019-03-07: This pop-up (/etc/xdg/lxsession/LXDE-pi/sshpwd-lxde-iiab.sh) did
-# not actually appear when triggered by /etc/xdg/autostart/pprompt-iiab.desktop
-# (or pprompt.desktop as Raspbian has working since 2018-11-13!)  Too bad as it
-# would be really nice to standardize pop-ups across Ubermix & all distros...
-# Is this a permissions/security issue presumably?  Official autostart spec is:
-# https://specifications.freedesktop.org/autostart-spec/autostart-spec-latest.html
-# Raspbian's 2016-2018 evolution here: https://github.com/iiab/iiab/issues/1537
+# # 2024-12-12: RasPiOS changed compositor from wayfire to labwc: https://forums.raspberrypi.com/viewtopic.php?t=379321
+# - name: Does directory /home/{{ uid_1000_username.stdout }}/.config/labwc/ exist?
+#   stat:
+#     path: /home/{{ uid_1000_username.stdout }}/.config/labwc/
+#   register: labwc_dir
+#   when: uid_1000_username.stdout is defined and uid_1000_username.stdout != ""
 
-- name: ...and put a line in /home/{{ iiab_admin_user }}/.config/labwc/autostart to trigger iiab-pwdwarn-labwc (& pop-up as nec)
-  lineinfile:
-    path: /home/{{ iiab_admin_user }}/.config/labwc/autostart    # iiab-admin
-    create: yes
-    line: '/usr/local/sbin/iiab-pwdwarn-labwc &'
-  when: labwc_dir.stat.exists and labwc_dir.stat.isdir
+# - name: If so, install at-spi2-core (GNOME Accessibility, avoids zenity CLI warnings)
+#   package:
+#     name: at-spi2-core
+#   when: labwc_dir.stat.exists and labwc_dir.stat.isdir
+
+# - name: "...and install from template: /usr/local/sbin/iiab-pwdwarn-labwc"
+#   template:
+#     src: iiab-pwdwarn-labwc.j2
+#     dest: /usr/local/sbin/iiab-pwdwarn-labwc
+#     mode: '0755'
+#   when: labwc_dir.stat.exists and labwc_dir.stat.isdir
+
+# # 2019-03-07: This pop-up (/etc/xdg/lxsession/LXDE-pi/sshpwd-lxde-iiab.sh) did
+# # not actually appear when triggered by /etc/xdg/autostart/pprompt-iiab.desktop
+# # (or pprompt.desktop as Raspbian has working since 2018-11-13!)  Too bad as it
+# # would be really nice to standardize pop-ups across Ubermix & all distros...
+# # Is this a permissions/security issue presumably?  Official autostart spec is:
+# # https://specifications.freedesktop.org/autostart-spec/autostart-spec-latest.html
+# # Raspbian's 2016-2018 evolution here: https://github.com/iiab/iiab/issues/1537
+
+# - name: ...and put a line in /home/{{ uid_1000_username.stdout }}/.config/labwc/autostart to trigger iiab-pwdwarn-labwc (& pop-up as nec)
+#   lineinfile:
+#     path: /home/{{ uid_1000_username.stdout }}/.config/labwc/autostart    # iiab-admin
+#     create: yes
+#     line: '/usr/local/sbin/iiab-pwdwarn-labwc &'
+#   when: labwc_dir.stat.exists and labwc_dir.stat.isdir

@@ -1,6 +1,14 @@
 #!/bin/bash
-if [ "$IFACE" == "{{ discovered_wireless_iface }}" ]; then
-    echo "NET-DISP-WiFi $IFACE $STATE"
+IFACE=$1
+ACTION=$2
+
+{% if wifi_up_down and discovered_wireless_iface != "none" %}
+if [ "$IFACE" == "{{ discovered_wireless_iface }}" ] && [ "$ACTION" == "down" ] ; then
+    echo "NM-DISP-WiFi $IFACE $STATE"
+    /usr/sbin/ip link set {{ iiab_wireless_lan_iface }} up
+fi
+if [ "$IFACE" == "{{ discovered_wireless_iface }}" ] && [ "$ACTION" == "up" ]; then
+    echo "NM-DISP-WiFi $IFACE $STATE"
     # If we are here we have a dhcp ip address
     CHAN=$(iw "$IFACE" info|grep channel|cut -d' ' -f2)
     echo "Using channel $CHAN for carrier"
@@ -16,4 +24,11 @@ if [ "$IFACE" == "{{ discovered_wireless_iface }}" ]; then
     fi
     sleep 3
     /usr/sbin/ip link set {{ iiab_wireless_lan_iface }} up
+fi
+
+{% endif %}
+if [ "$IFACE" == "{{ iiab_lan_iface }}" ] && [ "$ACTION" == "up" ]; then
+    echo "NM-DISP-LAN $IFACE $STATE"
+    /bin/systemctl --no-block start dnsmasq.service
+    echo "Started dnsmasq"
 fi

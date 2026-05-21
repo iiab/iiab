@@ -57,11 +57,12 @@ Here are 3 examples below, to help you decide what you'll put in [/etc/iiab/loca
 
 See `maps_dot_black_vector_tiles` and `maps_dot_black_satellite_tiles` [here](https://github.com/iiab/iiab/blob/master/roles/maps/defaults/main.yml) for all valid values.
 
-*NOTE: The satellite data is licensed "NonCommercial" under [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/).  To skip satellite imagery, set:*
+*NOTE: The satellite data is licensed "NonCommercial" under [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/).  To skip worldwide satellite imagery, set:*
 
   ```
   maps_satellite_zoom: none
-  ```
+
+*Full Quality Regions will still download satellite data, though it will not be visible in the UI.*
 
 ## How do I install 3D terrain?
 
@@ -166,11 +167,11 @@ DETAILS: IIAB's downloadable regions (FQRs) include OpenStreetMap vector data up
 
 Open your IIAB Maps, e.g. by browsing to http://box/maps or http://10.10.10.10/maps
 
-Look for this button in the top-left:
+Look for these buttons in the top-left of your map. Click the top one to enter "drawing" mode:
 
-![Download Button](README-assets/download-button.png)
+![Download Button](README-assets/fqr-downloader-selected.png)
 
-Click the button to enter "drawing" mode (your mouse pointer should change).
+(the button will turn orange and your mouse pointer should change).
 
 Draw a rectangle that represents the region you want to download.  To draw, click one corner of the rectangle and then the opposite corner.  **(Make sure to only click, do not drag!)**
 
@@ -186,11 +187,13 @@ You can test out your downloaded Full Quality Region by clicking on the new rect
 
 ### Deleting Regions
 
-To delete a region, first make sure you are "inside" that region (instead of the full world map).  Once there, you should see a Delete button on the top left:
+Look for these buttons in the top-left of your map. Click the bottom one to enter "delete" mode:
 
-![Delete Button](README-assets/delete-button.png)
+![Delete Button](README-assets/fqr-deleter-selected.png)
 
-When you click it, it will bring up another pop-up with instructions on how to delete the region.
+(the button will turn orange and your mouse pointer should change).
+
+You can then click on a region you want to delete. It will bring up a pop-up with instructions on how to delete the region.
 
 ### Overlapping Regions
 
@@ -259,7 +262,7 @@ sudo ./runrole maps --reinstall
 
 * https://github.com/iiab/iiab/blob/master/roles/maps/defaults/main.yml
 * [PR #4120](https://github.com/iiab/iiab/pull/4120)
-* Map data files as of 2025-12-10: https://iiab.switnet.org/maps/1/
+* Map data files as of 2026-04-14: https://iiab.switnet.org/maps/2/
 * IIAB integration thanks to [Dan Krol](https://github.com/orblivion)
 
 ## Next Steps
@@ -272,7 +275,7 @@ What I hope to be working on in the next few months
 * Smarter sorting (Distance, word length)
 * Region downloader (Better error messages, pick download mirror randomly)
 
-**April 2026**:
+~**April 2026**:~
 
 * Adding more data to static search
     * Add natural features, historical places, etc
@@ -282,9 +285,9 @@ What I hope to be working on in the next few months
 
 **May 2026**:
 
-* Split search by region and include as part of "Full quality region" downloads
+* Split search by region and include as part of "Full Quality Region" downloads
     * (assuming the database is big enough to merit splitting)
-* UI improvements (Out-of-Box experience, Navigating regions, Buttons, Searching while viewing a region)
+* UI improvements (Out-of-Box Experience, Navigating regions, Buttons, Searching while viewing a region)
 
 ## Extra attributions:
 

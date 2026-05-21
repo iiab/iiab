@@ -1,9 +1,3 @@
-- name: Copy netplan template for br0
-  template:
-    src: network/60-iiab.yml.j2
-    dest: /etc/netplan/60-iiab.yaml
-    mode: "0600"
-
 - name: Remove stale IIAB-Bridge.network when using netplan
   file:
     path: /etc/systemd/network/IIAB-Bridge.network
@@ -14,14 +8,49 @@
     path: /etc/systemd/network/IIAB-Bridge.netdev
     state: absent
 
+- name: Copy netplan template for br0
+  template:
+    src: network/60-iiab.yml.j2
+    dest: /etc/netplan/60-iiab.yaml
+    mode: "0600"
+
+- name: Copy netplan template for br0 WiFi slave
+  when: iiab_wireless_lan_iface is defined
+  template:
+    src: network/60-WiFi.yml.j2
+    dest: /etc/netplan/60-WiFi.yaml
+    mode: "0600"
+
+- name: Remove stale br0 WiFi slave
+  when: iiab_wireless_lan_iface is defined
+  command: nmcli c delete netplan-{{ iiab_wireless_lan_iface }}
+  ignore_errors: True
+
+- name: Find macaddress for br0 bluetooth slave
+  when: bluetooth_enabled
+  shell: hciconfig | grep 'BD Address' | cut -d' ' -f3
+  register: BT_mac
+
+- name: Setting ap0 mac address for use in hostapd service file
+  when: bluetooth_enabled
+  set_fact:
+    BT_mac_addr: "{{ BT_mac.stdout }}"
+
+- name: Copy netplan template for br0 bluetooth slave
+  when: bluetooth_enabled
+  template:
+    src: network/60-BT.yml
+    dest: /etc/netplan/60-BT-iiab.yaml
+    mode: "0600"
+
 - name: Copy netplan templates for br0 wired slaves
+  when: use_wired_slaves and iiab_wired_lan_iface is defined and num_lan_interfaces | int >= 1
   template:
     src: network/60-slave.yml.j2
     dest: /etc/netplan/60-slave-{{ item | trim }}.yaml
     mode: "0600"
   with_items:
     - "{{ lan_list_result.stdout_lines }}"
-  when: iiab_wired_lan_iface is defined and num_lan_interfaces | int >= 1
 
 - name: Generate Netplan bridge files
   shell: netplan generate
