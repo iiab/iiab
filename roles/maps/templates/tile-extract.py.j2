@@ -1,7 +1,113 @@
 #!/usr/bin/python3
 
-import json, glob, os, re, shutil, string, subprocess, sys
+import json, glob, os, re, shutil, string, subprocess, sys, tempfile
 from collections import defaultdict
+
+sys.path.insert(1, "{{ tile_extract.working_dir }}/{{ tile_extract.pmtiles_python.dir_name }}/python/pmtiles")
+
+from pmtiles.reader import MmapSource, all_tiles
+
+# Any pmtiles file for a region that crosses 180/-180 longitude (aka the
+# antimeridian) will say its min and max longitudes are -180 and 180.
+# Technically true, but there's of course the massive gap in the middle.
+# So here we inspect the file to find where that hole is.
+def get_bounds(full_path):
+    output = subprocess.getoutput(PMTILES + " show " + full_path + " --header-json")
+    try:
+        render_bounds = [float(coord) for coord in json.loads(output)["bounds"]]
+    except:
+        print (f"Failed to get bounds from pmtiles header for {full_path}. Got this output from pmtiles:\n", output)
+        return None, None
+
+    if (render_bounds[0], render_bounds[2]) != (-180, 180):
+        # render_bounds is what the pmtiles system needs to know about what area may be displayed
+        # ui_bounds is the area with actual tiles, which we can use to draw the rectangles and check for overlaps
+        # In the normal case here, i.e. not crossing the antimeridian, they're one and the same.
+        ui_bounds = render_bounds
+        return render_bounds, ui_bounds
+
+    # At this point we have a pmtiles file that reports to span -180 to 180, i.e. the entire
+    # logical width of the map. While this might actually be the case, it's more likely that
+    # it's a normal sized region that crosses the antimeridian, i.e. starts before 180 and
+    # wraps around to end after -180. But pmtiles doesn't have a concept of wrapping around
+    # the map. We were only able to create this region in the first place using a multipolygon
+    # with one part of the region after -180 and another part of the region before 180.
+    # For instance, if we created a region with longitudes from 165 to 190, we would turn it
+    # into a multipolygon from 165 to 180 and from -180 to -170. This spans from -180 to 180,
+    # and that's what gets recorded in the header (and we just got it with render_bounds).
+    # For ui_bounds, we want 165 and 190 so maplibre can draw the rectangle. And to find those
+    # numbers, we need to inspect the file to see where all of the tiles are.
+
+    with open(full_path, "r+b") as f:
+        source = MmapSource(f)
+        # all_tiles(source) = generator of [((z,x,y), tile_data)]
+        # tiles = [(z,x,y)]
+        tiles = [tile[0] for tile in all_tiles(source)]
+
+    # We want a high zoom level that gives us a reasonably precise rectangular region. But we
+    # also want something that's available to vector, satellite, and terrain. That way our
+    # bounding box will tend to be consistent between them.
+    zoom = 10
+
+    # For all the tiles, what are all of the "x values" of those tiles?
+    # Tiles have z: zoom, x: horizontal index, and y: vertical index.
+    # For z=0, x is always 0. For z=1, x can be 0-1. For z=2, x can be 0-3. And so on.
+    # x = 0 represents the tiles that are -180 on their western edge.
+    # x = (2 ** z - 1) represents the tiles that are 180 on their eastern edge.
+    # For all the tiles in this file at our desired zoom level, let's first put their
+    # x values in order, removing duplicates. This will tell us where we have actual
+    # tile data:
+    x_values = sorted({tile[1] for tile in tiles if tile[0] == zoom})
+    if len(x_values) == 0:
+        # Not sure how we got here but we don't have any tiles!
+        print (f"Warning: Got zero tiles, skipping {full_path}")
+        return None, None
+
+    # Now that we know what all the x values are, we can find the gaps between them.
+    # Usually, within a region, tiles are continuous, thus gaps are 1. (Sometimes
+    # they're a different small number so we can't rely on it.) For a region that
+    # crosses the antimeridian, it shows up as if it's two regions, and thus two
+    # clusters of x values: One close to x = 0 (aka -180 lng) and another close to
+    # x = 2 ** zoom - 1 (aka 180 lng), with a large gap between them. If we find that
+    # large gap, we can figure out the x values at the edges of the clusters, and
+    # translate those to the longitudes of the borders of the region.
+    gaps = [b - a for (a, b) in zip(x_values, x_values[1:])]
+
+    if gaps:
+        biggest_gap = max(gaps)               # Find the biggest gap.
+        gap_start = gaps.index(biggest_gap)   # Get the index of that gap so we can use it to find the x values before and after the gap.
+        eastern_x = x_values[gap_start] + 1   # The last tile before the gap is the eastern side of the region. We add 1 to get on the eastern side of that tile.
+        western_x = x_values[gap_start + 1]   # The first tile after the gap is the western side of the region.
+
+        # Note: if biggest_gap is very small, it means that our region does indeed wrap around the
+        # entire world. Our current logic should still be fine. It doesn't really matter which
+        # "eastern and western borders" we pick for such a region.
+    else:
+        print (f"Warning: Got zero tile gaps, doing our best for {full_path}")
+
+        # If we somehow have no gaps, it must mean the region is one tile wide. I'm not sure this is even possible for a file
+        # that reports -180 to 180 in the header, but let's just do our best. At this point we're forgetting about the gap and
+        # even the antimeridian. We just take the one tile width and draw the border around it.
+        western_x = x_values[0]      # The western side of the one tile
+        eastern_x = x_values[0] + 1  # The eastern side (+ 1) of the one tile
+
+    # Translate x values to longitudes.
+    def x_to_lng(x):
+        degrees_per_x_values = 360 / (2 ** zoom)
+        return x * degrees_per_x_values - 180
+
+    # We add 360 to the eastern end because otherwise it would be to the west of the western end, given that we wrapped
+    # around the antimeridian. This will be > 180, thus an "invalid" value from the point of view of a pmtiles file,
+    # but from a UI perspective this works and is probably more proper. It draws the correct rectangle, it becomes the
+    # correct clickable area.
+    ui_bounds = [
+        x_to_lng(western_x),
+        render_bounds[1],
+        x_to_lng(eastern_x) + 360,
+        render_bounds[3],
+    ]
+
+    return render_bounds, ui_bounds
 
 HOSTING_DIR = "{{ maps_serve_path }}"
 EXTRACTS_JSON = os.path.join(HOSTING_DIR, "{{ tile_extract.info_file }}")
@@ -21,8 +127,17 @@ def validate_extract_name(extract_name):
 
 def validate_extract_box(extract_box):
     try:
-        # `float` is just a parsing check.
-        assert len([float(n) for n in extract_box.split(",")]) == 4
+        # `float` is important here even if just as a parsing check.
+        min_lon, min_lat, max_lon, max_lat = [float(n) for n in extract_box.split(",")]
+
+        # I am concerned about longitudes in particular because -180 and 180 refer to the same place.
+        # I expect to get all all positives or all negatives for longitudes (see the big comment in
+        # index.html, inside `terraDrawInstance.on("finish"` for details) but this is just based on
+        # observation. I would like to confirm it here.
+        assert min_lon < max_lon, "longitudes seem to be out of order"
+        assert min_lat < max_lat, "latitudes seem to be out of order"
+        assert max_lon - min_lon < 360, "FQR can't wrap around the world"
+
     except Exception:
         raise ValueError("extract_box is malformed: ", extract_box)
 
@@ -124,73 +239,159 @@ def delete_extract(extract_name):
         if os.path.dirname(path) != HOSTING_DIR or f".{extract_name}." not in path:
             # Last-minute sanity check before deleting files in case some other
             # error is introduced before we get to this point.
-            raise Exception(f"Unknown error. Stopping before we delete the wrong file!", path)
+            raise Exception("Unknown error. Stopping before we delete the wrong file!", path)
         os.remove(path)
+
+def set_region_geojson(extract_box, geojson_file):
+    # TODO maybe move the "cleaning" of min_lon and max_lon to `validate_extract_box`
+    # (and rename the function) since all the logic is related
+
+    # These values come straight from the region drawing tool, and may not be
+    # friendly for pmtiles
+    [min_lon, min_lat, max_lon, max_lat] = map(float, extract_box.split(",") )
+
+    # We want min_lon to be from -180 to 180. We want to performa modulo 360
+    # to give it an equivalent longitude, but starting at -180 instead of 180
+    new_min_lon = (
+      (                 # start off assuming that min_lon "ought to be" in the range of -180 < x < 180
+        (min_lon + 180) # thus this "ought to be" in the range of 0 < x < 360
+        % 360           # Modulo 360 will in fact change our range to 0 < x < 360
+      )
+    ) - 180             # Finally subtracting 180 will set our range to -180 < x < 180
+
+    # Set min_lon and max_lon, adjusting by the same amount as necessary
+    # Because of our previous assurances, we know that max_lon > min_lon,
+    # and that the width of the FQR is less than the width of the whole earth (360).
+    # Thus, max_lon has a potential range of -180 < x < 540, which the system can
+    # hopefully deal with. This normalizes things nicely for us as well, which we
+    # see below.
+    min_lon, max_lon = new_min_lon, max_lon + (new_min_lon - min_lon)
+
+    # Since we know that now -180 < min_lon < 180, and max_lon > min_lon, crossing the antimeridian
+    # will always come in the form of max_lon > 180 and not min_lon < -180.
+    if max_lon <= 180:
+        # Normal case, one rectangle
+        coordinates = [
+          [
+            [
+              # 5 points because we have to trace out a closed square. The first and last points are the same.
+              [min_lon, min_lat],
+              [min_lon, max_lat],
+              [max_lon, max_lat],
+              [max_lon, min_lat],
+              [min_lon, min_lat],
+            ]
+          ]
+        ]
+    else:
+        # Crossing the antimeridian, split into two rectangles.
+        coordinates = [
+          [
+            [
+              # The western rectangle is on the eastern part of the -180 to 180 map.
+              # We want the part that starts at min_lon and ends at 180, since max_lon > 180
+              [min_lon, min_lat],
+              [min_lon, max_lat],
+              [180, max_lat],
+              [180, min_lat],
+              [min_lon, min_lat],
+            ],
+          ],
+          [
+            [
+              # The eastern rectangle is on the western part of the -180 to 180 map.
+              # We want the part that starts at -180 and ends at max_lon. Since
+              # max_lon > 180, we subtract 360 to get the equivalent that's within
+              # -180 and 180.
+              [-180, min_lat],
+              [-180, max_lat],
+              [max_lon - 360, max_lat],
+              [max_lon - 360, min_lat],
+              [-180, min_lat],
+            ]
+          ]
+        ]
+
+    region = {
+      "type": "MultiPolygon",
+      "coordinates": coordinates
+    }
+
+    geojson_file.write(json.dumps(region))
+
 
 def create_extract(extract_name, extract_box):
     extract_paths = get_new_extract_paths(extract_name)
 
-    # Extract them all successfully before moving them.
-    for paths in extract_paths.values():
-        result = subprocess.run(
-            [PMTILES, "extract", paths["source"], paths["tmp"], "--bbox=" + extract_box],
-        )
-        if result.returncode != 0:
-            raise Exception(f"Region download failed. Double-check your Internet connection. (error code {result.returncode})")
+    with tempfile.NamedTemporaryFile(delete_on_close=False, mode="w") as geojson_file:
+        set_region_geojson(extract_box, geojson_file)
+        geojson_file.close()
+
+        # Extract them all successfully before moving them.
+        for paths in extract_paths.values():
+            result = subprocess.run(
+                [PMTILES, "extract", paths["source"], paths["tmp"], f"--region={geojson_file.name}"],
+            )
+            if result.returncode != 0:
+                raise Exception(f"Region download failed. Double-check your Internet connection. (error code {result.returncode})")
 
     for paths in extract_paths.values():
         shutil.move(paths["tmp"], paths["extract"])
 
 
-def approve_download_size(extract_name):
+def approve_download_size(extract_name, extract_box):
     extract_paths = get_new_extract_paths(extract_name)
     extract_sizes = {}
 
     print("Determining download size...")
 
-    for paths in extract_paths.values():
-        result = subprocess.run(
-            [PMTILES, "extract", paths["source"], paths["tmp"], "--bbox=" + extract_box, "--dry-run"],
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode != 0:
-            raise Exception(f"Download size check failed. Double-check your Internet connection. (error code {result.returncode})")
+    with tempfile.NamedTemporaryFile(delete_on_close=False, mode="w") as geojson_file:
+        set_region_geojson(extract_box, geojson_file)
+        geojson_file.close()
 
-        # Parse transfer and archive sizes from the last line of --dry-run output.
-        # (Though we'll check every line to make it a bit more robust)
-        #
-        # NOTE: The reason this is two different sizes is due to something
-        # called "overfetching" which is making fewer requests at the cost of
-        # grabbing some extra data we don't need. This is actually a ratio we
-        # can control and will likely look into for optimizing user experience.
-        pattern = (
-            r'\d+/\d+/\d+ \d+:\d+:\d+ extract.go:\d*: '
-            r'Extract transferred (\d*\.?\d*) (kB|MB|GB|TB) '
-            r'\(overfetch \d*\.?\d*\) '
-            r'for an archive size of (\d*\.?\d*) (kB|MB|GB|TB)'
-        )
-        for line in result.stdout.split('\n'):
-            re_match = re.match(pattern, line)
-            if re_match is not None:
-                break
+        for paths in extract_paths.values():
+            result = subprocess.run(
+                [PMTILES, "extract", paths["source"], paths["tmp"], f"--region={geojson_file.name}", "--dry-run"],
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode != 0:
+                raise Exception(f"Download size check failed. Double-check your Internet connection. (error code {result.returncode})")
 
-        if re_match is None:
-            return yes_no("Cannot get file size estimate due to unexpected output from pmtiles. Download anyway?")
+            # Parse transfer and archive sizes from the last line of --dry-run output.
+            # (Though we'll check every line to make it a bit more robust)
+            #
+            # NOTE: The reason this is two different sizes is due to something
+            # called "overfetching" which is making fewer requests at the cost of
+            # grabbing some extra data we don't need. This is actually a ratio we
+            # can control and will likely look into for optimizing user experience.
+            pattern = (
+                r'\d+/\d+/\d+ \d+:\d+:\d+ extract.go:\d*: '
+                r'Extract transferred (\d*\.?\d*) (kB|MB|GB|TB) '
+                r'\(overfetch \d*\.?\d*\) '
+                r'for an archive size of (\d*\.?\d*) (kB|MB|GB|TB)'
+            )
+            for line in result.stdout.split('\n'):
+                re_match = re.match(pattern, line)
+                if re_match is not None:
+                    break
 
-        (transfer_num, transfer_unit, archive_num, archive_unit) = re_match.groups()
+            if re_match is None:
+                return yes_no("Cannot get file size estimate due to unexpected output from pmtiles. Download anyway?")
 
-        # Determine the sizes of all of the pmtiles files in bytes
-        unit_mult = {
-            'kB': 1_000,
-            'MB': 1_000_000,
-            'GB': 1_000_000_000,
-            'TB': 1_000_000_000_000,
-        }
-        extract_sizes[paths['source']] = {
-            "transfer": float(transfer_num) * unit_mult[transfer_unit],
-            "archive":  float(archive_num)   * unit_mult[archive_unit],
-        }
+            (transfer_num, transfer_unit, archive_num, archive_unit) = re_match.groups()
+
+            # Determine the sizes of all of the pmtiles files in bytes
+            unit_mult = {
+                'kB': 1_000,
+                'MB': 1_000_000,
+                'GB': 1_000_000_000,
+                'TB': 1_000_000_000_000,
+            }
+            extract_sizes[paths['source']] = {
+                "transfer": float(transfer_num) * unit_mult[transfer_unit],
+                "archive":  float(archive_num)   * unit_mult[archive_unit],
+            }
 
     # Convert the file sizes back to the best available unit
     transfer_total = sum(size['transfer'] for size in extract_sizes.values())
@@ -228,7 +429,7 @@ def check_for_overlaps(new_box):
 
     existing_region_extracts = json.loads(open(EXTRACTS_JSON).read())["regions"]
     for existing in existing_region_extracts.values():
-        [long_1, lat_1, long_2, lat_2] = existing['bbox']
+        [long_1, lat_1, long_2, lat_2] = existing['ui_bounds']
         existing_min_long = min([long_1, long_2])
         existing_max_long = max([long_1, long_2])
         existing_min_lat = min([lat_1, lat_2])
@@ -245,8 +446,14 @@ def check_for_overlaps(new_box):
     return True
 
 def update_extracts_json():
+    # render_bounds and ui_bounds are the same unless the region crosses the 180/-180 boundary.
+    # If it does cross, ui_bounds is what you'd expect, with one end of the bounds inside of
+    # the -180 to 180 range, and one outside. render_bounds on the other hand would have lng
+    # bounds of -180 to 180: two partial regions on opposite sides of the map.
+    #
     # region_extracts[name] = {
-    #   "bbox": coordinates,
+    #   "render_bounds": coordinates,
+    #   "ui_bounds": coordinates,
     #   "dates": {
     #     "terrain": terrain_date,
     #     "vector": vector_date,
@@ -260,15 +467,24 @@ def update_extracts_json():
     region_extract_types = defaultdict(set)
 
     for full_path, region_extract_type, date, name in iter_region_files():
-        output = subprocess.getoutput(PMTILES + " show " + full_path + " --header-json")
-        coordinates = [float(coord) for coord in json.loads(output)["bounds"]]
+        render_bounds, ui_bounds = get_bounds(full_path)
+        if render_bounds is None:
+            continue # Something went really haywire. Skip this pmtiles file.
 
         # Add coordinates unless it's for some reason inconsistent between satellite, vector, terrain.
-        if name in region_extracts and region_extracts[name]['bbox'] != coordinates:
-            raise Exception("Inconsistent coordinates between different region extracts for", name)
+        if name in region_extracts:
+            # Let's be lenient and let these happen with a warning. Better to have
+            # something that works. Hopefully it's close to what they need and expect.
+            old, new = region_extracts[name]['render_bounds'], render_bounds
+            if old != new:
+                print (f"Warning: inconsistent render_bounds between different region extracts for '{name}'", '\n* ', old, '\n* ', new)
+            old, new = region_extracts[name]['ui_bounds'], ui_bounds
+            if old != new:
+                print (f"Warning: inconsistent ui_bounds between different region extracts for '{name}'",     '\n* ', old, '\n* ', new)
         if not re.match(r'\d{4}-\d{2}-\d{2}', date):
             raise Exception(f"Invalid date for {name}: {date}")
-        region_extracts[name]["bbox"] = coordinates
+        region_extracts[name]["ui_bounds"] = ui_bounds
+        region_extracts[name]["render_bounds"] = render_bounds
         region_type_for_date = {
             's2maps-sentinel2-2023': 'satellite',
             'terrarium': 'terrain',
@@ -326,7 +542,7 @@ if __name__ == "__main__":
                     sys.exit(1)
 
             # Get a download estimate and give users a chance to back out
-            if not noninteractive and not approve_download_size(extract_name):
+            if not noninteractive and not approve_download_size(extract_name, extract_box):
                 sys.exit(1)
 
             # Do the extracts

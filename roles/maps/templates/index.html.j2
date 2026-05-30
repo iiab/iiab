@@ -182,14 +182,14 @@
                                     style.sources[s2FqrId] = {
                                         ...style.sources[s2Id],
                                         url: style.sources[s2Id].url.replace(s2Id, s2FqrId),
-                                        bounds: downloadedFQRegions.regions[fqrName].bbox,
+                                        bounds: downloadedFQRegions.regions[fqrName].render_bounds,
                                         minzoom: WORLD_MAP_SATELLITE_MAX_ZOOM + 1
                                     }
                                 } else if (worldSourceId === osmId) {
                                     style.sources[osmFqrId] = {
                                         ...style.sources[osmId],
                                         url: style.sources[osmId].url.replace(osmId, osmFqrId),
-                                        bounds: downloadedFQRegions.regions[fqrName].bbox,
+                                        bounds: downloadedFQRegions.regions[fqrName].render_bounds,
                                         minzoom: WORLD_MAP_VECTOR_MAX_ZOOM + 1
                                     }
                                 } else if (worldSourceId === terrariumId) {
@@ -198,7 +198,7 @@
                                         url: style.sources[terrariumId].url
                                             .replace(terrariumId, terrariumFqrId)
                                             .replace(/\-z0\-z10\.pmtiles$/, '.pmtiles'),
-                                        bounds: downloadedFQRegions.regions[fqrName].bbox,
+                                        bounds: downloadedFQRegions.regions[fqrName].render_bounds,
                                         minzoom: WORLD_MAP_TERRAIN_MAX_ZOOM + 1
                                     }
                                 } else if (worldSourceId === naturalEarth6Id) {
@@ -382,7 +382,23 @@
             }
 
             const mapStylePresent = () => (mb && mb.map && mb.map.style)
-            const mapStyleLoaded = () => (mapStylePresent() && mb.map.style.loaded())
+
+            // The more proper thing would be mb.map.style.loaded() or even
+            // mb.map.isStyleLoaded(), but this version seems to work for what
+            // we need. .loaded() checks a few things, including _loaded and
+            // that a bunch of source caches (whatever those are) are loaded
+            // as well. For whatever reason, it seems that if we are looking
+            // at an FQR that crosses the antimeridian, that FQR's source
+            // cache is not loaded (it even goes from loaded to not loaded
+            // when you start looking at it). But you can see the FQR. I'm
+            // not sure what's going on with that and I'm not going to try
+            // to figure that out right now. It seems to work.
+            //
+            // Also, this version is generally much faster and makes initial
+            // page loads nicer for FQR rectangles and setting FQR terrain.
+            // Hopefully I'm not wrong that this is good enough and we won't
+            // see errors show up.
+            const mapStyleLoaded = () => (mapStylePresent() && mb.map.style._loaded)
 
             // Show the outlines of the full quality regions and make them interactive.
             async function drawFQRegionOutlines() {
@@ -393,7 +409,7 @@
                 for (regionName_ in downloadedFQRegions.regions) {
                     const regionName = regionName_ // fix variable capturing in callbacks below
                     const regionId = "region-" + regionName
-                    const [min_lon, min_lat, max_lon, max_lat] = downloadedFQRegions.regions[regionName].bbox
+                    const [min_lon, min_lat, max_lon, max_lat] = downloadedFQRegions.regions[regionName].ui_bounds
 
                     if (mb.map.getSource(regionId)) {
                         // Looks like we already ran this. Quit without setting a timeout.
@@ -558,7 +574,7 @@
 
                 // Does SOME region contain EVERY corner of the map bounds?
                 return regionsOnScreen
-                .map(regionName => new maplibregl.LngLatBounds(downloadedFQRegions.regions[regionName].bbox))
+                .map(regionName => new maplibregl.LngLatBounds(downloadedFQRegions.regions[regionName].ui_bounds))
                 .some(regionBounds => mapCorners.every(lngLat => regionBounds.contains(lngLat)))
             }
 
@@ -1197,7 +1213,7 @@
                     })
                 }
                 onClickDeleteRegion(regionName) {
-                    const [min_lon, min_lat, max_lon, max_lat] = downloadedFQRegions.regions[regionName].bbox
+                    const [min_lon, min_lat, max_lon, max_lat] = downloadedFQRegions.regions[regionName].ui_bounds
 
                     // Zoom out to view the region so that the delete popup is well placed
                     const fqrWidth = max_lon - min_lon
