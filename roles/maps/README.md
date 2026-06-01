@@ -284,7 +284,7 @@ What I hope to be working on in the next few months
     * Sorting non-cities (natural feature, etc) vs cities.  Cannot rely on population anymore.
     * Even if this becomes "big", we should keep a small database around as an option.
 
-**May 2026**:
+~**May 2026**:~
 
 * Split search by region and include as part of "Full Quality Region" downloads
     * (assuming the database is big enough to merit splitting)
