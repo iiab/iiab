@@ -174,6 +174,8 @@ Look for these buttons in the top-left of your map. Click the top one to enter "
 
 (the button will turn orange and your mouse pointer should change).
 
+*NOTE: Because of compatibility issues, selecting this will automatically turn off "globe" view. You can turn it back on once you've started your download.*
+
 Draw a rectangle that represents the region you want to download.  To draw, click one corner of the rectangle and then the opposite corner.  **(Make sure to only click, do not drag!)**
 
 Once you have a rectangle, you'll immediately see a pop-up in the middle of it:
