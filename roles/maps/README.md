@@ -194,7 +194,7 @@ Follow the instructions on the pop-up to download your region.
 
 Look for rectangles on your map, and zoom in there!
 
-If you downloaded a mountainous region, also take a look at its [3D terrain](#how-do-i-view-3D-terrain).
+If a downloaded rectangle region contains mountains, also take a look at its [3D terrain](#how-do-i-view-3D-terrain).
 
 ### How do I delete a Full Quality Region?
 
