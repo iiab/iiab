@@ -912,6 +912,9 @@
             }
 
             class FQRegionsControl {
+                constructor(startWithDrawMode) {
+                    this.startWithDrawMode = startWithDrawMode
+                }
                 onAdd(map) {
                     this._map = map;
                     this._container = document.createElement('div');
@@ -959,6 +962,9 @@
                     this.INACTIVE_COLOR = ''
 
                     this.setupDownloaderUI()
+                    if (this.startWithDrawMode) {
+                        this.setDrawMode()
+                    }
 
                     return this._container
                 }
@@ -1022,11 +1028,20 @@
                     this.drawButton.style['background-color'] = this.INACTIVE_COLOR
                 }
                 setDrawMode() {
-                    this._mode = this.DRAW_MODE
+                    // Rectangles sometimes wrap around the world in globe mode.
+                    // If the user turns on this control in globe mode, we should
+                    // instead turn off globe mode and turn draw mode on as soon
+                    // as we refresh the map.
+                    if (!mb.globe) {
+                        this._mode = this.DRAW_MODE
 
-                    this._terraDrawInstance.setMode('rectangle') // This sets the cursor to a crosshair
-                    this.drawButton.style['background-color'] = this.ACTIVE_COLOR
-                    this.deleteButton.style['background-color'] = this.INACTIVE_COLOR
+                        this._terraDrawInstance.setMode('rectangle') // This sets the cursor to a crosshair
+                        this.drawButton.style['background-color'] = this.ACTIVE_COLOR
+                        this.deleteButton.style['background-color'] = this.INACTIVE_COLOR
+                    } else {
+                        mb.globe = false
+                        setUpMap({startFQRegionsControlWithDrawMode: true})
+                    }
                 }
                 setOffMode() {
                     this._mode = self.OFF_MODE
@@ -1550,7 +1565,7 @@
             }
             const scaleControl = new maplibregl.ScaleControl()
 
-            async function setUpMap() {
+            async function setUpMap({startFQRegionsControlWithDrawMode} = {}) {
                 // TODO (maybe?) use a maps-dot-black "on add map" callback instead, if such a thing exists.
                 // The problem is that at on creation, mb doesn't immediately contain a map.
                 // NOTE mapStyleLoaded happens much later than mapStylePresent.
@@ -1641,7 +1656,7 @@
                     }
                 })()
 
-                fqRegionsControl = new FQRegionsControl()
+                fqRegionsControl = new FQRegionsControl(startFQRegionsControlWithDrawMode)
                 mb.map.addControl(fqRegionsControl, 'top-left');
 
                 // Add all the right-side controls at once after we determine whether terrain is among them

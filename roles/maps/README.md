@@ -65,9 +65,9 @@ See `maps_dot_black_vector_tiles` and `maps_dot_black_satellite_tiles` [here](ht
 
 *Full Quality Regions will still download satellite data, though it will not be visible in the UI.*
 
-## How do I install 3D terrain?
+## How do I install 3D Terrain?
 
-To add 3D (three-dimensional) terrain files, you can set this optional setting.  You may find that when looking at mountains, high quality satellite imagery may compensate for low quality terrain, and vice versa.
+To add 3D (three-dimensional) terrain files, you can set this optional setting.
 
 PREREQ: Confirm that at least a [minimum IIAB Maps](#whats-a-minimum-iiab-maps-install) is installed!
 
@@ -100,6 +100,14 @@ PREREQ: Confirm that at least a [minimum IIAB Maps](#whats-a-minimum-iiab-maps-i
 ![Terrain Full Zoom](README-assets/terrain/terrain-z10.png)
 
 See `maps_dot_black_terrain_tiles` [here](https://github.com/iiab/iiab/blob/master/roles/maps/defaults/main.yml) for all valid values.
+
+### How do I view 3D Terrain?
+
+After 3D terrain is installed, enable it by clicking the mountains button in the top-right.
+
+Then tilt the map by holding down the **Ctrl** key on your keyboard while dragging your mouse (or drag with two fingers, if on a mobile device!)
+
+GURU TIP: You may find that when looking at mountains, high-quality satellite imagery may compensate for low-quality terrain, and vice versa.
 
 ## How do I install Map Search?
 
@@ -164,7 +172,7 @@ DETAILS: IIAB's downloadable regions (FQRs) include OpenStreetMap vector data up
    sudo ./runrole --reinstall maps
    ```
 
-### Downloading Regions
+### How do I download a Full Quality Region?
 
 Open your IIAB Maps, e.g. by browsing to http://box/maps or http://10.10.10.10/maps
 
@@ -172,9 +180,9 @@ Look for these buttons in the top-left of your map. Click the top one to enter "
 
 ![Download Button](README-assets/fqr-downloader-selected.png)
 
-(the button will turn orange and your mouse pointer should change).
+(The button will turn orange and your mouse pointer should change.  GURU TIP: Because of [180th meridian issues](https://github.com/iiab/iiab/pull/4418), selecting this will automatically turn off "globe" [spherical] view.  You can turn it back on [by clicking the "globe" button in top-right] once you've started your download below.)
 
-Draw a rectangle that represents the region you want to download.  To draw, click one corner of the rectangle and then the opposite corner.  **(Make sure to only click, do not drag!)**
+Now draw a rectangle that represents the region you want to download.  To draw, click one corner of the rectangle and then the opposite corner.  **(Make sure to only click, do not drag!)**
 
 Once you have a rectangle, you'll immediately see a pop-up in the middle of it:
 
@@ -182,19 +190,21 @@ Once you have a rectangle, you'll immediately see a pop-up in the middle of it:
 
 Follow the instructions on the pop-up to download your region.
 
-### Viewing Regions
+### How do I view Full Quality Regions?
 
-You can test out your downloaded Full Quality Region by clicking on the new rectangle on the map.  You should be able to see everything at full quality (terrain up to zoom level 10).
+Look for rectangles on your map, and zoom in there!
 
-### Deleting Regions
+If a downloaded rectangle region contains mountains, also take a look at its [3D terrain](#how-do-i-view-3D-terrain).
 
-Look for these buttons in the top-left of your map. Click the bottom one to enter "delete" mode:
+### How do I delete a Full Quality Region?
+
+Look for these buttons in the top-left of your map.  Click the bottom one to enter "delete" mode:
 
 ![Delete Button](README-assets/fqr-deleter-selected.png)
 
-(the button will turn orange and your mouse pointer should change).
+(The button will turn orange and your mouse pointer should change.)
 
-You can then click on a region you want to delete. It will bring up a pop-up with instructions on how to delete the region.
+You can then click on a region you want to delete.  It will bring up a pop-up with instructions on how to delete the region.
 
 ### Overlapping Regions
 
