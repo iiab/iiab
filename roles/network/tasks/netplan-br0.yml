@@ -43,6 +43,21 @@
     dest: /etc/netplan/60-BT-iiab.yaml
     mode: "0600"
 
+- name: Look for configured wired slaves
+  when: not use_wired_slaves and iiab_wired_lan_iface is defined
+  shell: grep netplan-{{ item | trim }} /etc/netplan/* | awk -F: '{ print $1 }'
+  register: configured_wired_slave_list_result
+  with_items:
+    - "{{ lan_list_result.stdout_lines }}"
+  ignore_errors: True
+
+- name: Remove wired slaves if present when use_wired_slaves is not present
+  when: configured_wired_slave_list_result is defined and item | trim != ""
+  file:
+    state: absent
+  with_items:
+    - "{{ configured_wired_slave_list_result.stdout_lines }}"
+
 - name: Copy netplan templates for br0 wired slaves
   when: use_wired_slaves and iiab_wired_lan_iface is defined and num_lan_interfaces | int >= 1
   template:
