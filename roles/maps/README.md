@@ -180,7 +180,7 @@ Look for these buttons in the top-left of your map. Click the top one to enter "
 
 ![Download Button](README-assets/fqr-downloader-selected.png)
 
-(The button will turn orange and your mouse pointer should change.  GURU TIP: Because of [180th meridian issues](https://github.com/iiab/iiab/pull/4418), selecting this will automatically turn off "globe" [spherical] view.  You can turn it back on [by clicking the "globe" button in top-right] once you've started your download below.)
+(The button will turn orange and your mouse pointer should change.  GURU TIP: Because of [180th meridian issues](https://github.com/iiab/iiab/pull/4418), selecting this will automatically turn off "globe" [spherical] view.  You can turn it back on [by clicking the "globe" button in the top-right] once you've started your download below.)
 
 Now draw a rectangle that represents the region you want to download.  To draw, click one corner of the rectangle and then the opposite corner.  **(Make sure to only click, do not drag!)**
 
