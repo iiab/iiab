@@ -160,7 +160,7 @@ DETAILS: IIAB's downloadable regions (FQRs) include OpenStreetMap vector data up
 | | 100&nbsp;km&nbsp;×&nbsp;100&nbsp;km URBAN [example](https://opencagedata.com/tools/bounds-finder#76.6942553,28.1845497,77.7196694,29.0845497) | 100&nbsp;km&nbsp;×&nbsp;100&nbsp;km MOUNTAINS [example](https://opencagedata.com/tools/bounds-finder#84.4154371,28.0376883,85.4394215,28.9376883) | 1000&nbsp;km&nbsp;×&nbsp;1000&nbsp;km ISLANDS [example](https://opencagedata.com/tools/bounds-finder#-76.8383789,16.2146745,-67.2163479,25.2146745) | 1000&nbsp;km&nbsp;×&nbsp;1000&nbsp;km RURAL [example](https://opencagedata.com/tools/bounds-finder#101.5270099,62.4567592,124.5198784,71.4567592) |
 | ---: | :---: | :---: | :---: | :---: |
 | OSM Vector Data (MB)                                       | 39  | 13  | 119 | 91   |
-| Satellite&nbsp;Photos, Depth&nbsp;Sounding&nbsp;(MB) | 19  | 16  | 207 | 2369 |
+| Satellite&nbsp;Photos, Depth&nbsp;Sounding&nbsp;(MB)       | 19  | 16  | 207 | 2369 |
 | 3D Terrain (MB)                                            | 1.5 | 2.8 | 126 | 381  |
 | **FQR TOTAL (MB)**                                         | 58  | 32  | 451 | 2840 |
 
