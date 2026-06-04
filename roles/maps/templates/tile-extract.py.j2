@@ -1,9 +1,10 @@
 #!/usr/bin/python3
 
-import json, glob, os, re, shutil, string, subprocess, sys, tempfile
+import json, glob, math, os, random, re, shutil, string, subprocess, sys, tempfile
+from pprint import pprint
 from collections import defaultdict
 
-sys.path.insert(1, "{{ tile_extract.working_dir }}/{{ tile_extract.pmtiles_python.dir_name }}/python/pmtiles")
+sys.path.insert(1, "/opt/iiab/maps/tile-extract/pmtiles-python/python/pmtiles")
 
 from pmtiles.reader import MmapSource, all_tiles
 
@@ -339,11 +340,17 @@ def create_extract(extract_name, extract_box):
         shutil.move(paths["tmp"], paths["extract"])
 
 
-def approve_download_size(extract_name, extract_box):
-    extract_paths = get_new_extract_paths(extract_name)
-    extract_sizes = {}
+UNIT_MULT = {
+    'kB': 1_000,
+    'MB': 1_000_000,
+    'GB': 1_000_000_000,
+    'TB': 1_000_000_000_000,
+}
 
-    print("Determining download size...")
+
+def get_estimates(extract_box):
+    extract_paths = get_new_extract_paths("test")
+    extract_sizes = {}
 
     with tempfile.NamedTemporaryFile(delete_on_close=False, mode="w") as geojson_file:
         set_region_geojson(extract_box, geojson_file)
@@ -377,28 +384,32 @@ def approve_download_size(extract_name, extract_box):
                     break
 
             if re_match is None:
-                return yes_no("Cannot get file size estimate due to unexpected output from pmtiles. Download anyway?")
+                return None
 
             (transfer_num, transfer_unit, archive_num, archive_unit) = re_match.groups()
 
             # Determine the sizes of all of the pmtiles files in bytes
-            unit_mult = {
-                'kB': 1_000,
-                'MB': 1_000_000,
-                'GB': 1_000_000_000,
-                'TB': 1_000_000_000_000,
-            }
             extract_sizes[paths['source']] = {
-                "transfer": float(transfer_num) * unit_mult[transfer_unit],
-                "archive":  float(archive_num)   * unit_mult[archive_unit],
+                "transfer": float(transfer_num) * UNIT_MULT[transfer_unit],
+                "archive":  float(archive_num)  * UNIT_MULT[archive_unit],
             }
+
+    return extract_sizes
+
+
+def approve_download_size(extract_name, extract_box):
+    print("Determining download size...")
+
+    extract_sizes = get_estimates(extract_box)
+    if extract_sizes is None:
+        return yes_no("Cannot get file size estimate due to unexpected output from pmtiles. Download anyway?")
 
     # Convert the file sizes back to the best available unit
     transfer_total = sum(size['transfer'] for size in extract_sizes.values())
     archive_total = sum(size['archive'] for size in extract_sizes.values())
 
     def display(num_bytes):
-        for unit, mult in unit_mult.items():
+        for unit, mult in UNIT_MULT.items():
             if 1 <= num_bytes / mult < 1000:
                 return f"{round(num_bytes / mult, 2)} {unit}"
 
