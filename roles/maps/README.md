@@ -157,39 +157,12 @@ DETAILS: IIAB's downloadable regions (FQRs) include OpenStreetMap vector data up
 
 ### How big will these files be?
 
-<!-- See https://github.com/iiab/maps2/blob/master/build-tiles/stats.py for obtaining these numbers -->
-
-An FQR has three files: vector, satellite, and terrain.
-
-For a typical FQR that is **1 square km**:
-
-The *total* size (all three files) will be **3.5MB**, but it can get as big as **6MB**.
-
-Breaking it down by type:
-
-* Vector: typically **2.4MB**, sometimes **4.2MB**.
-* Satellite: typically **0.2MB**, sometimes **0.7MB**.
-* Terrain: typically **0.9MB**, sometimes **1.6MB**.
-
-For a typical FQR in an **urban area** that is **1 square km**:
-
-The *total* size (all three files) will be **5MB**, but it can get as big as **9MB**.
-
-Breaking it down by type:
-
-* Vector: typically **3.8MB**, sometimes **7MB**.
-* Satellite: typically **0.2MB**, sometimes **0.7MB**.
-* Terrain: typically **0.9MB**, sometimes **1.6MB**.
-
-For a typical FQR that is **1000 square km**:
-
-The *total* size (all three files) will be **1.9GB**, but it can get as big as **4.4GB**.
-
-Breaking it down by type:
-
-* Vector: typically **380MB**, sometimes **2GB**.
-* Satellite: typically **1.4GB**, sometimes **3GB**.
-* Terrain: typically **140MB**, sometimes **500MB**.
+| | 100&nbsp;km&nbsp;×&nbsp;100&nbsp;km URBAN [example](https://opencagedata.com/tools/bounds-finder#76.6942553,28.1845497,77.7196694,29.0845497) | 100&nbsp;km&nbsp;×&nbsp;100&nbsp;km MOUNTAINS [example](https://opencagedata.com/tools/bounds-finder#84.4154371,28.0376883,85.4394215,28.9376883) | 1000&nbsp;km&nbsp;×&nbsp;1000&nbsp;km ISLANDS [example](https://opencagedata.com/tools/bounds-finder#-76.8383789,16.2146745,-67.2163479,25.2146745) | 1000&nbsp;km&nbsp;×&nbsp;1000&nbsp;km RURAL [example](https://opencagedata.com/tools/bounds-finder#101.5270099,62.4567592,124.5198784,71.4567592) |
+| ---: | :---: | :---: | :---: | :---: |
+| OSM Vector Data (MB)                                        | 39  | 13  | 119 | 91   |
+| Satellite&nbsp;Photos&nbsp;or Depth&nbsp;Sounding&nbsp;(MB) | 19  | 16  | 207 | 2369 |
+| 3D Terrain (MB)                                             | 1.5 | 2.8 | 126 | 381  |
+| **FQR TOTAL (MB)**                                          | 58  | 32  | 451 | 2840 |
 
 ### Prerequisites
 
