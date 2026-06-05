@@ -103,7 +103,7 @@ See `maps_dot_black_terrain_tiles` [here](https://github.com/iiab/iiab/blob/mast
 
 ### How do I view 3D Terrain?
 
-After 3D terrain is installed, enable it by clicking the mountains button in the top-right.
+After 3D terrain is installed, enable it by clicking the "mountains" square button, in the top-right.
 
 Then tilt the map by holding down the **Ctrl** key on your keyboard while dragging your mouse (or drag with two fingers, if on a mobile device!)
 
