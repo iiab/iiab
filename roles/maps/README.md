@@ -117,7 +117,7 @@ PREREQ: Confirm that at least a [minimum IIAB Maps](#whats-a-minimum-iiab-maps-i
 
 This option is good for all devices.  Fast and simple, but limited features.
 
-Allows users to search for any city or town with population 1000 or higher (**~35MB**).
+Allows users to search for any of 165,623 cities and towns with population 1000 or higher (**~35MB**).
 
    ```
    maps_search_engine: static
