@@ -63,7 +63,7 @@ See `maps_dot_black_vector_tiles` and `maps_dot_black_satellite_tiles` [here](ht
   maps_satellite_zoom: none
   ```
 
-<!-- *Full Quality Regions will still download satellite data, though it will not be visible in the UI.* -->
+*FYI [Full Quality Regions](#full-quality-regions) will still download and display satellite data.*  <!-- though it will not be visible in the UI. -->
 
 ## How do I install 3D Terrain?
 
