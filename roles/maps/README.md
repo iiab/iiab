@@ -63,7 +63,7 @@ See `maps_dot_black_vector_tiles` and `maps_dot_black_satellite_tiles` [here](ht
   maps_satellite_zoom: none
   ```
 
-*Full Quality Regions will still download satellite data, though it will not be visible in the UI.*
+<!-- *Full Quality Regions will still download satellite data, though it will not be visible in the UI.* -->
 
 ## How do I install 3D Terrain?
 
@@ -72,6 +72,7 @@ To add 3D (three-dimensional) terrain files, you can set this optional setting.
 PREREQ: Confirm that at least a [minimum IIAB Maps](#whats-a-minimum-iiab-maps-install) is installed!
 
 1. If you want **~980 MB** terrain maps (up to zoom 7), include:
+
    ```
    maps_terrain_zoom: 7
    ```
@@ -79,16 +80,19 @@ PREREQ: Confirm that at least a [minimum IIAB Maps](#whats-a-minimum-iiab-maps-i
 ![Terrain Zoom 7](README-assets/terrain/terrain-z07.png)
 
 2. If you want **~6.4 GB** terrain maps ([up to zoom 8](README-assets/terrain/terrain-z08.png)), include:
+
    ```
    maps_terrain_zoom: 8
    ```
 
 3. If you want **~29 GB** terrain maps ([up to zoom 9](README-assets/terrain/terrain-z09.png)), include:
+
    ```
    maps_terrain_zoom: 9
    ```
 
 4. If you want **~106 GB** terrain maps (up to zoom 10), include:
+
    ```
    maps_terrain_zoom: 10
    ```
