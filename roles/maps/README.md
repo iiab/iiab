@@ -308,6 +308,18 @@ What I hope to be working on in the next few months
     * (assuming the database is big enough to merit splitting)
 * UI improvements (Out-of-Box Experience, Navigating regions, Buttons, Searching while viewing a region)
 
+**June 2026**:
+
+- TBA
+
+**July 2026**:
+
+- TBA
+
+**August 2026**:
+
+- TBA
+
 ## Extra attributions:
 
 * UI
