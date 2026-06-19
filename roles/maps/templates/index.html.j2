@@ -62,7 +62,7 @@
             const WORLD_MAP_SATELLITE_MAX_ZOOM = (num => {
                 if (Number.isNaN(num)) {
                     if ("{{ maps_satellite_zoom }}" === "none") {
-                        return null
+                        return 0
                     }
 
                     // Use a default that is hopefully always available.
@@ -266,6 +266,21 @@
                             }
                         })
 
+                        // We've copied all of the world layers to FQRs, in the same order. Now it's time to take all of the
+                        // satellite layers and move them to the beginning.
+                        for (const [index, layer] of style.layers.entries()) {
+                            layer.__sortOrder = index
+                        }
+                        style.layers.sort((a, b) => {
+                            const a_s2maps = a.id.startsWith('s2maps-sentinel2-2023')
+                            const b_s2maps = b.id.startsWith('s2maps-sentinel2-2023')
+                            if (a_s2maps !== b_s2maps) {
+                                return b_s2maps - a_s2maps
+                            } else {
+                                return a.__sortOrder - b.__sortOrder
+                            }
+                        })
+
                         // set max zooms of world maps
                         const setMaxZoom = (field, maxzoom) => {
                             if (style.sources[field]) {
@@ -274,6 +289,17 @@
                         }
                         setMaxZoom('openstreetmap-openmaptiles', WORLD_MAP_VECTOR_MAX_ZOOM)
                         setMaxZoom('s2maps-sentinel2-2023', WORLD_MAP_SATELLITE_MAX_ZOOM)
+
+                        if (WORLD_MAP_SATELLITE_MAX_ZOOM === 0 && fqRegionsExist() && "s2maps-sentinel2-2023" in style.sources) {
+                            // Pick any FQR, use it as the satellite source. It has a zoom-0 full world image.
+                            const someFqr = Object.keys(downloadedFQRegions.regions)[0]
+                            const satelliteDate = downloadedFQRegions.regions[someFqr].dates.satellite
+
+                            style.sources['s2maps-sentinel2-2023'].url = style.sources['s2maps-sentinel2-2023'].url.replace(
+                              '/s2maps-sentinel2-2023.pmtiles',
+                              `/s2maps-sentinel2-2023.${satelliteDate}.full-region.${someFqr}.pmtiles`,
+                            )
+                        }
 
                         // Sources that use the terrarium file. We don't necessarily even use all of them
                         // but we'll change them here in case we do.
@@ -310,10 +336,10 @@
                 history.replaceState({}, "", `#${lat}/${lon}/${pitch}/${bearing}/${zoom}/${globe}/${terrain}/${mapStyleChoice}`)
             }
 
-            function readHash() {
+            async function readHash() {
                 const [lat, lon, pitch, bearing, zoom, globe, terrain, _mapStyleChoice] = window.location.hash.slice(1).split('/')
 
-                mapStyleChoice = tryAvailableStyle(_mapStyleChoice)
+                mapStyleChoice = await tryAvailableStyle(_mapStyleChoice)
 
                 if (window.location.hash) {
                     return {
@@ -775,10 +801,14 @@
             //
             // As such, we will simply say that satellite is not avaialble if
             // the user does not download it globally.
-            function satelliteAvailable() {
-                if (WORLD_MAP_SATELLITE_MAX_ZOOM) {
+            async function satelliteAvailable() {
+                if (WORLD_MAP_SATELLITE_MAX_ZOOM > 0) {
                     return true
                 }
+
+                // Full Quality Regions always have terrain
+                await until(fqrLoaded)
+                return fqRegionsExist()
             }
 
             async function terrainAvailable() {
@@ -792,19 +822,21 @@
                 return fqRegionsExist()
             }
 
-            function getAvailableStyles() {
+            async function getAvailableStyles() {
+                satelliteAvailable_ = await satelliteAvailable()
+
                 return [
                     STYLE_NATURAL,
                     STYLE_POLITICAL,
 
                     // Requires satellite tiles
-                    satelliteAvailable() ? STYLE_SATELLITE : null,
-                    satelliteAvailable() ? STYLE_HYBRID    : null,
+                    satelliteAvailable_ ? STYLE_SATELLITE : null,
+                    satelliteAvailable_ ? STYLE_HYBRID    : null,
                 ].filter(Boolean)
             }
 
-            function tryAvailableStyle(requestedStyle) {
-                const availableStyles = getAvailableStyles()
+            async function tryAvailableStyle(requestedStyle) {
+                const availableStyles = await getAvailableStyles()
 
                 // See if the one we want is available
                 if (availableStyles.includes(requestedStyle)) {
@@ -1659,14 +1691,13 @@
                 fqRegionsControl = new FQRegionsControl(startFQRegionsControlWithDrawMode)
                 mb.map.addControl(fqRegionsControl, 'top-left');
 
-                // Add all the right-side controls at once after we determine whether terrain is among them
-                terrainAvailable().then(showTerrainControl => {
+                (async () => {
                     mb.map.addControl(new MapsDotBlackGlobeControl(), 'top-right');
-                    if (showTerrainControl) {
+                    if (await terrainAvailable()) {
                         mb.map.addControl(new MapsDotBlackTerrainControl(), 'top-right');
                     }
-                    mb.map.addControl(new MapsDotBlackStyleControl(getAvailableStyles()), 'top-right');
-                })
+                    mb.map.addControl(new MapsDotBlackStyleControl(await getAvailableStyles()), 'top-right');
+                })()
                 // NOTE Navigation control is added via `navigationcontrol` attribute on the maps-black tag
 
                 mb.map.off('moveend', onMoveEnd) // unsetting first, in case it's already there from a previous refresh
@@ -1690,22 +1721,24 @@
     </head>
     <body>
         <script>
-          mb = document.createElement("maps-black")
+            readHash().then(hash => {
+                mb = document.createElement("maps-black")
 
-          const mbAttributes = {
-            ...readHash(),
-            "loader": "pmtiles",
-            "navigationcontrol": "true",
+                const mbAttributes = {
+                  ...hash,
+                  "loader": "pmtiles",
+                  "navigationcontrol": "true",
 
-            // `cooperativegestures=false` provides familiar zoom/scroll/tilt controls for fullscreen
-            "cooperativegestures": "false",
-          }
-          Object.entries(mbAttributes).forEach(([k, v]) => {
-            mb.setAttribute(k, v)
-          })
+                  // `cooperativegestures=false` provides familiar zoom/scroll/tilt controls for fullscreen
+                  "cooperativegestures": "false",
+                }
+                Object.entries(mbAttributes).forEach(([k, v]) => {
+                  mb.setAttribute(k, v)
+                })
 
-          console.log("setting to", mapStyleChoice, "i.e.", mbAttributes.mapstyle)
-          document.body.prepend(mb)
+                console.log("setting to", mapStyleChoice, "i.e.", mbAttributes.mapstyle)
+                document.body.prepend(mb)
+            })
         </script>
     </body>
 </html>
