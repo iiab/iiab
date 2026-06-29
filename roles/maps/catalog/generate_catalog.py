@@ -1,6 +1,8 @@
 #!/usr/bin/python3
 import requests, jinja2, json, yaml
 
+# TODO mirrros
+
 mail_yml = yaml.safe_load(open("../defaults/main.yml").read())
 
 def render(source, data):
