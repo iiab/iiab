@@ -151,19 +151,17 @@ def get_new_extract_paths(extract_name):
     from the server. Existing FQRs on the file system may have different dates,
     so we can't rely on this function for getting an inventory or deletion.
     """
-    MAPS_VECTOR_DATA_DATE = "{{ maps_vector_data_date }}"
-    MAPS_SATELLITE_DATA_DATE = "{{ maps_satellite_data_date }}"
-    MAPS_TERRAIN_DATA_DATE = "{{ maps_slow_data_date }}"
-    IIAB_MAP_HOST_URL = "{{ iiab_map_host_url }}"
+    catalog = requests.get("https://raw.githubusercontent.com/iiab/iiab/refs/heads/master/roles/maps/catalog/catalog.json")
 
+    # Hmm - zoom levels? I guess the size preview will be there in case there's a surprise change in this.
     VECTOR_ZOOM_RANGE = "z00-z{{ '%02d' % maps_vector_max_zoom }}"
     SATELLITE_ZOOM_RANGE = "z00-z{{ '%02d' % maps_satellite_max_zoom }}"
     TERRAIN_ZOOM_RANGE = "z00-z{{ '%02d' % maps_terrain_max_zoom }}"
 
-    def get_paths(base, zoom_range):
+    def get_paths(sources, base, zoom_range):
         return {
             "source":
-                f"{IIAB_MAP_HOST_URL}/{base}.{zoom_range}.pmtiles",
+                random.choice(sources),
             "extract":
                 os.path.join(HOSTING_DIR, f"{base}.full-region.{extract_name}.pmtiles"),
             "tmp":
@@ -171,9 +169,9 @@ def get_new_extract_paths(extract_name):
         }
 
     return {
-        "vector": get_paths(f"openstreetmap-openmaptiles.{MAPS_VECTOR_DATA_DATE}", VECTOR_ZOOM_RANGE),
-        "satellite": get_paths(f"s2maps-sentinel2-2023.{MAPS_SATELLITE_DATA_DATE}", SATELLITE_ZOOM_RANGE),
-        "terrain": get_paths(f"terrarium.{MAPS_TERRAIN_DATA_DATE}", TERRAIN_ZOOM_RANGE),
+        "vector": get_paths(catalog["vector"], f"openstreetmap-openmaptiles.{MAPS_VECTOR_DATA_DATE}", VECTOR_ZOOM_RANGE),
+        "satellite": get_paths(catalog["satellite"], f"s2maps-sentinel2-2023.{MAPS_SATELLITE_DATA_DATE}", SATELLITE_ZOOM_RANGE),
+        "terrain": get_paths(catalog["terrain"], f"terrarium.{MAPS_TERRAIN_DATA_DATE}", TERRAIN_ZOOM_RANGE),
     }
 
 def iter_region_files():
