@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 import requests, jinja2, json, yaml
 
-# If you are installing or configuring IIAB Maps, *you should ignore `/opt/iiab/iiab/maps-catalog.json`*.
+# If you are installing or configuring IIAB Maps, *you should ignore `/opt/iiab/iiab/maps/maps-catalog.json`*.
 #
 # But in case you're curious:
 #
@@ -31,4 +31,4 @@ for key, url in catalog.items():
     if key != "_README":
         assert requests.head(url).status_code == 200, "Error with URL: " + url
 
-open("../maps-catalog.json", "w").write(json.dumps(catalog, sort_keys=True, indent=4))
+open("maps-catalog.json", "w").write(json.dumps(catalog, sort_keys=True, indent=4))
