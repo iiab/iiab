@@ -22,13 +22,34 @@ catalog = {
         "See /opt/iiab/iiab/maps/generate-catalog.py",
         "for more info.",
     ],
-    "vector": mail_yml['iiab_map_host_url'] + '/' + render(mail_yml['maps_dot_black_vector_tiles']['osm-z14'], mail_yml),
-    "satellite": mail_yml['iiab_map_host_url'] + '/' + render(mail_yml['maps_dot_black_satellite_tiles'][13], mail_yml),
-    "terrain": mail_yml['iiab_map_host_url'] + '/' + render(mail_yml['maps_dot_black_terrain_tiles'][10], mail_yml),
+    "vector": {
+        "14":     mail_yml['iiab_map_host_url'] + '/' + render(mail_yml['maps_dot_black_vector_tiles']['osm-z14'], mail_yml),
+        "11":     mail_yml['iiab_map_host_url'] + '/' + render(mail_yml['maps_dot_black_vector_tiles']['osm-z11'], mail_yml),
+        "nat-z8": mail_yml['iiab_map_host_url'] + '/' + render(mail_yml['maps_dot_black_vector_tiles']['nat-z8'], mail_yml),
+
+        "1":      mail_yml['iiab_map_host_url'] + '/' + render(mail_yml['maps_dot_black_vector_tiles']['osm-z1'], mail_yml),
+    },
+    "satellite": {
+       "7":       mail_yml['iiab_map_host_url'] + '/' + render(mail_yml['maps_dot_black_satellite_tiles'][7], mail_yml),
+       "9":       mail_yml['iiab_map_host_url'] + '/' + render(mail_yml['maps_dot_black_satellite_tiles'][9], mail_yml),
+       "11":      mail_yml['iiab_map_host_url'] + '/' + render(mail_yml['maps_dot_black_satellite_tiles'][11], mail_yml),
+       "12":      mail_yml['iiab_map_host_url'] + '/' + render(mail_yml['maps_dot_black_satellite_tiles'][12], mail_yml),
+       "13":      mail_yml['iiab_map_host_url'] + '/' + render(mail_yml['maps_dot_black_satellite_tiles'][13], mail_yml),
+
+       "4":       mail_yml['iiab_map_host_url'] + '/' + render(mail_yml['maps_dot_black_satellite_tiles'][4], mail_yml),
+    },
+    "terrain": {
+        "7":      mail_yml['iiab_map_host_url'] + '/' + render(mail_yml['maps_dot_black_terrain_tiles'][7], mail_yml),
+        "8":      mail_yml['iiab_map_host_url'] + '/' + render(mail_yml['maps_dot_black_terrain_tiles'][8], mail_yml),
+        "9":      mail_yml['iiab_map_host_url'] + '/' + render(mail_yml['maps_dot_black_terrain_tiles'][9], mail_yml),
+        "10":     mail_yml['iiab_map_host_url'] + '/' + render(mail_yml['maps_dot_black_terrain_tiles'][10], mail_yml),
+        "none":   mail_yml['iiab_map_host_url'] + '/' + "terrarium-none.pmtiles",
+    },
 }
 
-for key, url in catalog.items():
-    if key != "_README":
-        assert requests.head(url).status_code == 200, "Error with URL: " + url
+for maptype, zooms in catalog.items():
+    if maptype != "_README":
+        for zoom, url in zooms.items():
+            assert requests.head(url).status_code == 200, "Error with URL: " + url
 
 open("maps-catalog.json", "w").write(json.dumps(catalog, sort_keys=True, indent=4))
