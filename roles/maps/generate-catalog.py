@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 import requests, jinja2, json, yaml
 
-# If you are installing or configuring IIAB Maps, *you should ignore `/opt/iiab/iiab/maps/maps-catalog.json`*.
+# If you are installing or configuring IIAB Maps, *you should ignore `/opt/iiab/iiab/roles/maps/maps-catalog.json`*.
 #
 # But in case you're curious:
 #
