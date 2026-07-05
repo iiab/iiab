@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-import json, glob, math, os, random, re, shutil, string, subprocess, sys, tempfile
+import json, glob, os, random, re, requests, shutil, string, subprocess, sys, tempfile, xmltodict, xml
 from pprint import pprint
 from collections import defaultdict
 
@@ -145,6 +145,28 @@ def validate_extract_box(extract_box):
 def validate_noninteractive(noninteractive):
     assert noninteractive in ("", "noninteractive"), f"`noninteractive` (optional) should only be set to \"noninteractive\". Got {noninteractive}"
 
+def get_mirror(path):
+    try:
+        meta4 = xmltodict.parse(requests.get(path + ".meta4").content, force_list=('url',))
+    except (xml.parsers.expat.ExpatError, requests.RequestException):
+        # If something goes wrong just return the path we put in
+        print("error finding mirror (xml parse error), defaulting to", path)
+        return path
+
+    try:
+        urls = [url['#text'] for url in meta4['metalink']['file']['url']]
+    except (KeyError, TypeError):
+        # If something goes wrong just return the path we put in
+        print("error finding mirror (xml schema error), defaulting to", path)
+        return path
+
+    random.shuffle(urls)
+    for mirror in urls:
+        if requests.head(mirror).status_code == 200:
+            return mirror
+
+    raise Exception(f"Failed to download {path} from any of the available mirrors.")
+
 def get_new_extract_paths(extract_name):
     """
     Get the paths for *new* FQRs. I.e. what we expect to be able to download
@@ -162,7 +184,7 @@ def get_new_extract_paths(extract_name):
     def get_paths(base, zoom_range):
         return {
             "source":
-                f"{IIAB_MAP_HOST_URL}/{base}.{zoom_range}.pmtiles",
+                get_mirror(f"{IIAB_MAP_HOST_URL}/{base}.{zoom_range}.pmtiles"),
             "extract":
                 os.path.join(HOSTING_DIR, f"{base}.full-region.{extract_name}.pmtiles"),
             "tmp":
@@ -321,9 +343,7 @@ def set_region_geojson(extract_box, geojson_file):
     geojson_file.write(json.dumps(region))
 
 
-def create_extract(extract_name, extract_box):
-    extract_paths = get_new_extract_paths(extract_name)
-
+def create_extract(extract_box, extract_paths):
     with tempfile.NamedTemporaryFile(delete_on_close=False, mode="w") as geojson_file:
         set_region_geojson(extract_box, geojson_file)
         geojson_file.close()
@@ -348,8 +368,7 @@ UNIT_MULT = {
 }
 
 
-def get_estimates(extract_box):
-    extract_paths = get_new_extract_paths("test")
+def get_estimates(extract_box, extract_paths):
     extract_sizes = {}
 
     with tempfile.NamedTemporaryFile(delete_on_close=False, mode="w") as geojson_file:
@@ -397,10 +416,10 @@ def get_estimates(extract_box):
     return extract_sizes
 
 
-def approve_download_size(extract_name, extract_box):
+def approve_download_size(extract_box, extract_paths):
     print("Determining download size...")
 
-    extract_sizes = get_estimates(extract_box)
+    extract_sizes = get_estimates(extract_box, extract_paths)
     if extract_sizes is None:
         return yes_no("Cannot get file size estimate due to unexpected output from pmtiles. Download anyway?")
 
@@ -552,12 +571,14 @@ if __name__ == "__main__":
                 else:
                     sys.exit(1)
 
+            extract_paths = get_new_extract_paths(extract_name)
+
             # Get a download estimate and give users a chance to back out
-            if not noninteractive and not approve_download_size(extract_name, extract_box):
+            if not noninteractive and not approve_download_size(extract_box, extract_paths):
                 sys.exit(1)
 
             # Do the extracts
-            create_extract(extract_name=extract_name, extract_box=extract_box)
+            create_extract(extract_box, extract_paths)
             update_extracts_json() # Add the newly added extract
 
         case unknown:
