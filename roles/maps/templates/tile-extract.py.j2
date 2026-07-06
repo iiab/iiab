@@ -174,11 +174,18 @@ def get_new_extract_paths(extract_name):
     from the server. Existing FQRs on the file system may have different dates,
     so we can't rely on this function for getting an inventory or deletion.
     """
-    catalog = requests.get(CATALOG_URL)
+    catalog_response = requests.get(CATALOG_URL)
+    if catalog_response.status_code != 200:
+        raise Exception("Cannot find map data catalog")
+
+    try:
+        catalog = catalog_response.json()
+    except json.decoder.JSONDecodeError:
+        raise Exception("Error reading map data catalog")
 
     def get_paths(source):
         match (source.split('/')[-1].split('.')):
-            case [base, date, "full-region", name, "pmtiles"]:
+            case [base, date, _zoom_range, "pmtiles"]:
                 return {
                     "source":
                         get_mirror(source),
@@ -191,9 +198,9 @@ def get_new_extract_paths(extract_name):
                 raise Exception("Oops got unexpected pmtiles file name:", source)
 
     return {
-        "vector": get_paths(catalog["vector"]),
-        "satellite": get_paths(catalog["satellite"]),
-        "terrain": get_paths(catalog["terrain"]),
+        "vector": get_paths(catalog["vector"]["14"]),
+        "satellite": get_paths(catalog["satellite"]["13"]),
+        "terrain": get_paths(catalog["terrain"]["10"]),
     }
 
 def iter_region_files():
