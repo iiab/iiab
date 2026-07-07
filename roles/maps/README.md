@@ -55,7 +55,7 @@ Here are 3 examples below, to help you decide what you'll put in [/etc/iiab/loca
 ![Vector OSM Full Zoom](README-assets/vector/vector-osm-z14.png)
 ![Satellite Full Zoom](README-assets/satellite/satellite-z12.png)
 
-See `maps_dot_black_vector_tiles` and `maps_dot_black_satellite_tiles` [here](https://github.com/iiab/iiab/blob/master/roles/maps/defaults/main.yml) for all valid values.
+See `maps_dot_black_vector_tiles` and `maps_dot_black_satellite_tiles` [here](https://github.com/iiab/iiab/blob/master/roles/maps/generate-catalog.py) for all valid values.
 
 *NOTE: The satellite data is licensed "NonCommercial" under [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/).  To skip worldwide satellite imagery, set:*
 
@@ -99,7 +99,7 @@ PREREQ: Confirm that at least a [minimum IIAB Maps](#whats-a-minimum-iiab-maps-i
 
 ![Terrain Full Zoom](README-assets/terrain/terrain-z10.png)
 
-See `maps_dot_black_terrain_tiles` [here](https://github.com/iiab/iiab/blob/master/roles/maps/defaults/main.yml) for all valid values.
+See `maps_dot_black_terrain_tiles` [here](https://github.com/iiab/iiab/blob/master/roles/maps/generate-catalog.py) for all valid values.
 
 ### How do I view 3D Terrain?
 
@@ -280,7 +280,9 @@ sudo ./runrole maps --reinstall
 
 ## Further options & detail:
 
-* [Key map variables](https://github.com/iiab/iiab/blob/master/roles/maps/defaults/main.yml) based on [PR #4120](https://github.com/iiab/iiab/pull/4120) from Oct/Nov 2025
+maps/generate-catalog.py
+* [Details on zoom levels](https://github.com/iiab/iiab/blob/master/roles/maps/generate-catalog.py)
+* [Other map variables](https://github.com/iiab/iiab/blob/master/roles/maps/defaults/main.yml) based on [PR #4120](https://github.com/iiab/iiab/pull/4120) from Oct/Nov 2025
 * Map data files as of 2026-04-14: https://iiab.switnet.org/maps/2/
 * IIAB integration thanks to [Dan Krol](https://github.com/orblivion)
 
