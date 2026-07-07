@@ -24,16 +24,22 @@ maps_static_search_data_date = "2026-04-22"
 # naturalearth, naturalearth6, terrain, nominatim search [for now!]
 maps_slow_data_date = "2025-12-10"
 
+# The order that makes sense for explanation in this file may not make as much
+# sense in the generated file. So here, we can reorder it before it gets generated.
+def set_key_order(tiles, ordered_keys):
+    assert set(tiles.keys()) == set(ordered_keys), (tiles.keys(), ordered_keys)
+    return {key: tiles[key] for key in ordered_keys}
+
 maps_dot_black_vector_tiles = {
   # "high res" full osm, including 3d buildings.
   # (TODO does this include colors and topography? Or is it used along with naturalearth6 above in most styles?)
   # maps_vector_quality = "osm-z14"
-  "14": f"{iiab_map_host_url}/openstreetmap-openmaptiles.{maps_vector_data_date}.z00-z14.pmtiles",
+  14: f"{iiab_map_host_url}/openstreetmap-openmaptiles.{maps_vector_data_date}.z00-z14.pmtiles",
 
   # "medium res" osm, up to zoom level 11 (original file has 14).
   # (TODO does this include colors and topography? Or is it used along with naturalearth6 above in most styles?)
   # maps_vector_quality = "osm-z11"
-  "11": f"{iiab_map_host_url}/openstreetmap-openmaptiles.{maps_vector_data_date}.z00-z11.pmtiles",
+  11: f"{iiab_map_host_url}/openstreetmap-openmaptiles.{maps_vector_data_date}.z00-z11.pmtiles",
 
   # "low res" - mostly borders, rivers, country names, large roads.
   # maps_vector_quality = "nat-z8"
@@ -51,8 +57,59 @@ maps_dot_black_vector_tiles = {
   # FOR TESTING ONLY
   # "medium res" osm, up to zoom level 1 (original file has 14).
   # maps_vector_quality = "osm-z1"
-  "1": f"{iiab_map_host_url}/openstreetmap-openmaptiles.{maps_vector_data_date}.z00-z01.pmtiles",
+  1: f"{iiab_map_host_url}/openstreetmap-openmaptiles.{maps_vector_data_date}.z00-z01.pmtiles",
 }
+maps_dot_black_vector_tiles = set_key_order(maps_dot_black_vector_tiles, [1, 11, 14, "nat-z8"])
+
+maps_dot_black_satellite_tiles = {
+  # Low quality satellite, up to zoom level 7 (original file has 13)
+  # maps_satellite_zoom = 7
+  7: f"{iiab_map_host_url}/s2maps-sentinel2-2023.{maps_satellite_data_date}.z00-z07.pmtiles",
+
+  # Moderately high quality satellite, up to zoom level 9 (original file has 13)
+  # maps_satellite_zoom = 9
+  9: f"{iiab_map_host_url}/s2maps-sentinel2-2023.{maps_satellite_data_date}.z00-z09.pmtiles",
+
+  # Pretty high quality satellite, up to zoom level 11 (original file has 13)
+  # maps_satellite_zoom = 11
+  11: f"{iiab_map_host_url}/s2maps-sentinel2-2023.{maps_satellite_data_date}.z00-z11.pmtiles",
+
+  # Pretty high quality satellite, up to zoom level 12 (original file has 13)
+  # maps_satellite_zoom = 12
+  12: f"{iiab_map_host_url}/s2maps-sentinel2-2023.{maps_satellite_data_date}.z00-z12.pmtiles",
+
+  # Highest available quality satellite, up to zoom level 13
+  # maps_satellite_zoom = 13
+  13: f"{iiab_map_host_url}/s2maps-sentinel2-2023.{maps_satellite_data_date}.z00-z13.pmtiles",
+
+  # FOR TESTING ONLY
+  # Super-low quality satellite, up to zoom level 4 (original file has 13)
+  # maps_satellite_zoom = 4
+  4: f"{iiab_map_host_url}/s2maps-sentinel2-2023.{maps_satellite_data_date}.z00-z04.pmtiles",
+}
+maps_dot_black_satellite_tiles = set_key_order(maps_dot_black_satellite_tiles, [4, 7, 9, 11, 12, 13])
+
+maps_dot_black_terrain_tiles = {
+  # Low quality terrain, up to zoom level 7 (original file has 10)
+  # maps_terrain_zoom = 7
+  7: f"{iiab_map_host_url}/terrarium.{maps_slow_data_date}.z00-z07.pmtiles",
+
+  # maps_terrain_zoom = 8
+  8: f"{iiab_map_host_url}/terrarium.{maps_slow_data_date}.z00-z08.pmtiles",
+
+  # maps_terrain_zoom = 9
+  9: f"{iiab_map_host_url}/terrarium.{maps_slow_data_date}.z00-z09.pmtiles",
+
+  # maps_terrain_zoom = 10
+  # (This is the highest quality that maps.black offers in pmtiles format. They
+  # offer 11, 12, and 13 in squashfs format, but they are massive files.)
+  10: f"{iiab_map_host_url}/terrarium.{maps_slow_data_date}.z00-z10.pmtiles",
+
+  # A "dummy" maxzoom=0 world map terrain file to fill a role that maps.black/maplibre
+  # needs if we have FQRs and the user enables terrain.
+  "none": f"{iiab_map_host_url}/terrarium-none.pmtiles",
+}
+maps_dot_black_terrain_tiles = set_key_order(maps_dot_black_terrain_tiles, [7, 8, 9, 10, "none"])
 
 def render(source, data):
     rtemplate = jinja2.Environment(loader=jinja2.BaseLoader).from_string(source)
@@ -65,23 +122,9 @@ catalog = {
         "See /opt/iiab/iiab/maps/generate-catalog.py",
         "for more info.",
     ],
+    "satellite": maps_dot_black_satellite_tiles,
+    "terrain": maps_dot_black_terrain_tiles,
     "vector": maps_dot_black_vector_tiles,
-    "satellite": {
-       "7":       mail_yml['iiab_map_host_url'] + '/' + render(mail_yml['maps_dot_black_satellite_tiles'][7], mail_yml),
-       "9":       mail_yml['iiab_map_host_url'] + '/' + render(mail_yml['maps_dot_black_satellite_tiles'][9], mail_yml),
-       "11":      mail_yml['iiab_map_host_url'] + '/' + render(mail_yml['maps_dot_black_satellite_tiles'][11], mail_yml),
-       "12":      mail_yml['iiab_map_host_url'] + '/' + render(mail_yml['maps_dot_black_satellite_tiles'][12], mail_yml),
-       "13":      mail_yml['iiab_map_host_url'] + '/' + render(mail_yml['maps_dot_black_satellite_tiles'][13], mail_yml),
-
-       "4":       mail_yml['iiab_map_host_url'] + '/' + render(mail_yml['maps_dot_black_satellite_tiles'][4], mail_yml),
-    },
-    "terrain": {
-        "7":      mail_yml['iiab_map_host_url'] + '/' + render(mail_yml['maps_dot_black_terrain_tiles'][7], mail_yml),
-        "8":      mail_yml['iiab_map_host_url'] + '/' + render(mail_yml['maps_dot_black_terrain_tiles'][8], mail_yml),
-        "9":      mail_yml['iiab_map_host_url'] + '/' + render(mail_yml['maps_dot_black_terrain_tiles'][9], mail_yml),
-        "10":     mail_yml['iiab_map_host_url'] + '/' + render(mail_yml['maps_dot_black_terrain_tiles'][10], mail_yml),
-        "none":   mail_yml['iiab_map_host_url'] + '/' + "terrarium-none.pmtiles",
-    },
 }
 
 for maptype, zooms in catalog.items():
@@ -89,4 +132,4 @@ for maptype, zooms in catalog.items():
         for zoom, url in zooms.items():
             assert requests.head(url).status_code == 200, "Error with URL: " + url
 
-open("maps-catalog.json", "w").write(json.dumps(catalog, sort_keys=True, indent=4))
+open("maps-catalog.json", "w").write(json.dumps(catalog, indent=4))
