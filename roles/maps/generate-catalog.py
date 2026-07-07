@@ -129,7 +129,7 @@ def render(source, data):
     return rtemplate.render(**data)
 
 catalog = {
-    "_README": [
+    "README": [
         "If you are installing or configuring",
         "IIAB Maps, you should ignore this file.",
         "See /opt/iiab/iiab/maps/generate-catalog.py",
@@ -142,7 +142,7 @@ catalog = {
 }
 
 for maptype, zooms in catalog.items():
-    if maptype != "_README":
+    if maptype != "README":
         for zoom, url in zooms.items():
             assert requests.head(url).status_code == 200, "Error with URL: " + url
 
