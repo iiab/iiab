@@ -28,7 +28,7 @@ Here are 3 examples below, to help you decide what you'll put in [/etc/iiab/loca
    maps_install: True
    maps_enabled: True
 
-   maps_vector_quality: nat-z8
+   maps_vector_zoom: nat-z8
    maps_satellite_zoom: 7
    ```
 
@@ -38,7 +38,7 @@ Here are 3 examples below, to help you decide what you'll put in [/etc/iiab/loca
 2. Or if you want **~9.5 GB** = 8.3 GB vector (Higher detail, up to zoom 11 [users can overzoom to zoom 15], from OpenStreetMap) + 1.2 GB satellite (up to zoom 9), include:
 
    ```
-   maps_vector_quality: osm-z11
+   maps_vector_zoom: osm-z11
    maps_satellite_zoom: 9
    ```
 
@@ -48,7 +48,7 @@ Here are 3 examples below, to help you decide what you'll put in [/etc/iiab/loca
 3. Or if you want **~160 GB** = 80 GB vector (Higher detail, up to zoom 14 [users can overzoom to zoom 18], including 3D buildings, from OpenStreetMap) + 80 GB satellite (up to zoom 12), include:
 
    ```
-   maps_vector_quality: osm-z14
+   maps_vector_zoom: osm-z14
    maps_satellite_zoom: 12
    ```
 
@@ -245,7 +245,7 @@ If you are installing IIAB Maps for testing purposes (QA, CI, etc), there are "u
    ```
    maps_ne6_zoom: ci
 
-   maps_vector_quality: osm-z1
+   maps_vector_zoom: osm-z1
    maps_satellite_zoom: 4
 
    maps_search_engine: static

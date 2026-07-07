@@ -33,16 +33,16 @@ def set_key_order(tiles, ordered_keys):
 maps_dot_black_vector_tiles = {
   # "high res" full osm, including 3d buildings.
   # (TODO does this include colors and topography? Or is it used along with naturalearth6 above in most styles?)
-  # maps_vector_quality = "osm-z14"
+  # maps_vector_zoom = 14
   14: f"{iiab_map_host_url}/openstreetmap-openmaptiles.{maps_vector_data_date}.z00-z14.pmtiles",
 
   # "medium res" osm, up to zoom level 11 (original file has 14).
   # (TODO does this include colors and topography? Or is it used along with naturalearth6 above in most styles?)
-  # maps_vector_quality = "osm-z11"
+  # maps_vector_zoom = 11
   11: f"{iiab_map_host_url}/openstreetmap-openmaptiles.{maps_vector_data_date}.z00-z11.pmtiles",
 
   # "low res" - mostly borders, rivers, country names, large roads.
-  # maps_vector_quality = "nat-z8"
+  # maps_vector_zoom = "nat-z8"
   # (nat-z8 = "Natural Earth")
   #
   # NOTE: We will pass this into maps.black as if it's the OpenStreetMap data, even though
@@ -56,7 +56,7 @@ maps_dot_black_vector_tiles = {
 
   # FOR TESTING ONLY
   # "medium res" osm, up to zoom level 1 (original file has 14).
-  # maps_vector_quality = "osm-z1"
+  # maps_vector_zoom = 1
   1: f"{iiab_map_host_url}/openstreetmap-openmaptiles.{maps_vector_data_date}.z00-z01.pmtiles",
 }
 maps_dot_black_vector_tiles = set_key_order(maps_dot_black_vector_tiles, [1, 11, 14, "nat-z8"])
