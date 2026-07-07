@@ -12,6 +12,48 @@ import requests, jinja2, json, yaml
 # TODO put dates etc directly into this file, not in main.yml
 mail_yml = yaml.safe_load(open("defaults/main.yml").read())
 
+iiab_map_host_url = "https://iiab.switnet.org/maps/2"
+
+# "data dates" refer to how recent a certain type of data is
+
+maps_vector_data_date = "2026-07-01"
+maps_satellite_data_date = "2025-12-10"
+maps_static_search_data_date = "2026-04-22"
+
+# `maps_slow_data_date` is for data that changes rarely if ever
+# naturalearth, naturalearth6, terrain, nominatim search [for now!]
+maps_slow_data_date = "2025-12-10"
+
+maps_dot_black_vector_tiles = {
+  # "high res" full osm, including 3d buildings.
+  # (TODO does this include colors and topography? Or is it used along with naturalearth6 above in most styles?)
+  # maps_vector_quality = "osm-z14"
+  "14": f"{iiab_map_host_url}/openstreetmap-openmaptiles.{maps_vector_data_date}.z00-z14.pmtiles",
+
+  # "medium res" osm, up to zoom level 11 (original file has 14).
+  # (TODO does this include colors and topography? Or is it used along with naturalearth6 above in most styles?)
+  # maps_vector_quality = "osm-z11"
+  "11": f"{iiab_map_host_url}/openstreetmap-openmaptiles.{maps_vector_data_date}.z00-z11.pmtiles",
+
+  # "low res" - mostly borders, rivers, country names, large roads.
+  # maps_vector_quality = "nat-z8"
+  # (nat-z8 = "Natural Earth")
+  #
+  # NOTE: We will pass this into maps.black as if it's the OpenStreetMap data, even though
+  # it's Natural Earth. They're both in the OpenMapTiles schema. The OSM and NE variants of
+  # the "Natural" style we use are compatible, with just some zoom range differences (which
+  # makes no difference that I notice). This will fail to show "naturalearth" in attributions
+  # ("naturalearth6" is separate), even in "generous" attribution mode. However maps.black
+  # and the naturalearth website say that crediting authors is unnecessary. It's not worth
+  # the time to fix just for consistency.
+  "nat-z8": f"{iiab_map_host_url}/naturalearth-openmaptiles.{maps_slow_data_date}.z00-z08.pmtiles",
+
+  # FOR TESTING ONLY
+  # "medium res" osm, up to zoom level 1 (original file has 14).
+  # maps_vector_quality = "osm-z1"
+  "1": f"{iiab_map_host_url}/openstreetmap-openmaptiles.{maps_vector_data_date}.z00-z01.pmtiles",
+}
+
 def render(source, data):
     rtemplate = jinja2.Environment(loader=jinja2.BaseLoader).from_string(source)
     return rtemplate.render(**data)
@@ -23,13 +65,7 @@ catalog = {
         "See /opt/iiab/iiab/maps/generate-catalog.py",
         "for more info.",
     ],
-    "vector": {
-        "14":     mail_yml['iiab_map_host_url'] + '/' + render(mail_yml['maps_dot_black_vector_tiles']['osm-z14'], mail_yml),
-        "11":     mail_yml['iiab_map_host_url'] + '/' + render(mail_yml['maps_dot_black_vector_tiles']['osm-z11'], mail_yml),
-        "nat-z8": mail_yml['iiab_map_host_url'] + '/' + render(mail_yml['maps_dot_black_vector_tiles']['nat-z8'], mail_yml),
-
-        "1":      mail_yml['iiab_map_host_url'] + '/' + render(mail_yml['maps_dot_black_vector_tiles']['osm-z1'], mail_yml),
-    },
+    "vector": maps_dot_black_vector_tiles,
     "satellite": {
        "7":       mail_yml['iiab_map_host_url'] + '/' + render(mail_yml['maps_dot_black_satellite_tiles'][7], mail_yml),
        "9":       mail_yml['iiab_map_host_url'] + '/' + render(mail_yml['maps_dot_black_satellite_tiles'][9], mail_yml),
