@@ -1,14 +1,15 @@
 #!/usr/bin/python3
 import requests, jinja2, json, yaml
 
+# TODO - this message doesn't apply to the copy of this file that gets cached
+# in /etc/iiab/ copy since that one is actually up to date
 # If you are installing or configuring IIAB Maps, *you should ignore `/opt/iiab/iiab/roles/maps/maps-catalog.json`*.
 #
 # But in case you're curious:
 #
 # `maps-catalog.json` is a catalog of the latest available IIAB Maps data. Unlike just about everything else in this repository, this file is not used directly by the IIAB Maps installation process. Instead, it is made to requested by IIAB Maps _from Github_ during installation and map upgrades. This way, as soon as a map data update is made available, we can update this file on Github and it can be installed without upgrading all of Maps on your IIAB.
 
-# TODO mirrros
-
+# TODO put dates etc directly into this file, not in main.yml
 mail_yml = yaml.safe_load(open("defaults/main.yml").read())
 
 def render(source, data):
