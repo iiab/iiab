@@ -9,6 +9,9 @@ import requests, jinja2, json, yaml
 #
 # `maps-catalog.json` is a catalog of the latest available IIAB Maps data. Unlike just about everything else in this repository, this file is not used directly by the IIAB Maps installation process. Instead, it is made to requested by IIAB Maps _from Github_ during installation and map upgrades. This way, as soon as a map data update is made available, we can update this file on Github and it can be installed without upgrading all of Maps on your IIAB.
 
+import os
+os.chdir(os.path.dirname(__file__))
+
 # TODO put dates etc directly into this file, not in main.yml
 mail_yml = yaml.safe_load(open("defaults/main.yml").read())
 
@@ -111,6 +114,16 @@ maps_dot_black_terrain_tiles = {
 }
 maps_dot_black_terrain_tiles = set_key_order(maps_dot_black_terrain_tiles, [7, 8, 9, 10, "none"])
 
+# Mostly colors, topography, etc.
+maps_dot_black_naturalearth6_tiles = {
+  # For actual users
+  "full": f"{iiab_map_host_url}/naturalearth6-NE2_HR_SR_W_DR-WEBP.{maps_slow_data_date}.z00-z06.pmtiles",
+
+  # FOR TESTING ONLY
+  "ci": f"{iiab_map_host_url}/naturalearth6-NE2_HR_SR_W_DR-WEBP.{maps_slow_data_date}.z00-z04.pmtiles",
+}
+maps_dot_black_naturalearth6_tiles = set_key_order(maps_dot_black_naturalearth6_tiles, ["full", "ci"])
+
 def render(source, data):
     rtemplate = jinja2.Environment(loader=jinja2.BaseLoader).from_string(source)
     return rtemplate.render(**data)
@@ -125,6 +138,7 @@ catalog = {
     "satellite": maps_dot_black_satellite_tiles,
     "terrain": maps_dot_black_terrain_tiles,
     "vector": maps_dot_black_vector_tiles,
+    "naturalearth6": maps_dot_black_naturalearth6_tiles,
 }
 
 for maptype, zooms in catalog.items():
