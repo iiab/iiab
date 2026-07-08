@@ -12,9 +12,6 @@ import requests, jinja2, json, yaml
 import os
 os.chdir(os.path.dirname(__file__))
 
-# TODO put dates etc directly into this file, not in main.yml
-mail_yml = yaml.safe_load(open("defaults/main.yml").read())
-
 iiab_map_host_url = "https://iiab.switnet.org/maps/2"
 
 # "data dates" refer to how recent a certain type of data is
@@ -29,11 +26,11 @@ maps_slow_data_date = "2025-12-10"
 
 # The order that makes sense for explanation in this file may not make as much
 # sense in the generated file. So here, we can reorder it before it gets generated.
-def set_key_order(tiles, ordered_keys):
-    assert set(tiles.keys()) == set(ordered_keys), (tiles.keys(), ordered_keys)
-    return {key: tiles[key] for key in ordered_keys}
+def dict_with_order(d, ordered_keys):
+    assert set(d.keys()) == set(ordered_keys), (d.keys(), ordered_keys)
+    return {key: d[key] for key in ordered_keys}
 
-maps_dot_black_vector_tiles = {
+maps_dot_black_vector_tiles = dict_with_order({
   # "high res" full osm, including 3d buildings.
   # (TODO does this include colors and topography? Or is it used along with naturalearth6 above in most styles?)
   # maps_vector_zoom = 14
@@ -61,10 +58,9 @@ maps_dot_black_vector_tiles = {
   # "medium res" osm, up to zoom level 1 (original file has 14).
   # maps_vector_zoom = 1
   1: f"{iiab_map_host_url}/openstreetmap-openmaptiles.{maps_vector_data_date}.z00-z01.pmtiles",
-}
-maps_dot_black_vector_tiles = set_key_order(maps_dot_black_vector_tiles, [1, 11, 14, "nat-z8"])
+}, [1, 11, 14, "nat-z8"])
 
-maps_dot_black_satellite_tiles = {
+maps_dot_black_satellite_tiles = dict_with_order({
   # Low quality satellite, up to zoom level 7 (original file has 13)
   # maps_satellite_zoom = 7
   7: f"{iiab_map_host_url}/s2maps-sentinel2-2023.{maps_satellite_data_date}.z00-z07.pmtiles",
@@ -89,10 +85,9 @@ maps_dot_black_satellite_tiles = {
   # Super-low quality satellite, up to zoom level 4 (original file has 13)
   # maps_satellite_zoom = 4
   4: f"{iiab_map_host_url}/s2maps-sentinel2-2023.{maps_satellite_data_date}.z00-z04.pmtiles",
-}
-maps_dot_black_satellite_tiles = set_key_order(maps_dot_black_satellite_tiles, [4, 7, 9, 11, 12, 13])
+}, [4, 7, 9, 11, 12, 13])
 
-maps_dot_black_terrain_tiles = {
+maps_dot_black_terrain_tiles = dict_with_order({
   # Low quality terrain, up to zoom level 7 (original file has 10)
   # maps_terrain_zoom = 7
   7: f"{iiab_map_host_url}/terrarium.{maps_slow_data_date}.z00-z07.pmtiles",
@@ -111,18 +106,40 @@ maps_dot_black_terrain_tiles = {
   # A "dummy" maxzoom=0 world map terrain file to fill a role that maps.black/maplibre
   # needs if we have FQRs and the user enables terrain.
   "none": f"{iiab_map_host_url}/terrarium-none.pmtiles",
-}
-maps_dot_black_terrain_tiles = set_key_order(maps_dot_black_terrain_tiles, [7, 8, 9, 10, "none"])
+}, [7, 8, 9, 10, "none"])
 
 # Mostly colors, topography, etc.
-maps_dot_black_naturalearth6_tiles = {
+maps_dot_black_naturalearth6_tiles = dict_with_order({
   # For actual users
   "full": f"{iiab_map_host_url}/naturalearth6-NE2_HR_SR_W_DR-WEBP.{maps_slow_data_date}.z00-z06.pmtiles",
 
   # FOR TESTING ONLY
   "ci": f"{iiab_map_host_url}/naturalearth6-NE2_HR_SR_W_DR-WEBP.{maps_slow_data_date}.z00-z04.pmtiles",
-}
-maps_dot_black_naturalearth6_tiles = set_key_order(maps_dot_black_naturalearth6_tiles, ["full", "ci"])
+}, ["full", "ci"])
+
+static_search_data = dict_with_order({
+  # Cities-only static database
+  # maps_search_static_db = "pop-1k-cities"
+  "pop-1k-cities": f"{iiab_map_host_url}/static-search.{maps_static_search_data_date}.pop-1k-cities",
+
+  # Large cities-only static database
+  # maps_search_static_db = "pop-100k-cities"
+  # FOR TESTING ONLY
+  "pop-100k-cities": f"{iiab_map_host_url}/static-search.{maps_static_search_data_date}.pop-100k-cities",
+}, ["pop-1k-cities", "pop-100k-cities"])
+
+# Keeping nominatim on maps_slow_data_date until we actually update it again
+nominatim_data = dict_with_order({
+  # Basic nominatim database
+  # maps_search_nominatim_db = "basic"
+  "basic": f"{iiab_map_host_url}/nominatim.{maps_slow_data_date}.basic.sqlite",
+    # California admin+natural for now. TODO make a small worldwide one. (unless we go to the frontend-only one)
+    # TODO - Make a basic small whole-world map, at least as good as previous maps
+
+  # Full nominatim database
+  # maps_search_nominatim_db = "full"
+  "full": f"{iiab_map_host_url}/nominatim.{maps_slow_data_date}.full.sqlite",
+}, ["basic", "full"])
 
 def render(source, data):
     rtemplate = jinja2.Environment(loader=jinja2.BaseLoader).from_string(source)
@@ -139,6 +156,8 @@ catalog = {
     "terrain": maps_dot_black_terrain_tiles,
     "vector": maps_dot_black_vector_tiles,
     "naturalearth6": maps_dot_black_naturalearth6_tiles,
+    "static_search": static_search_data,
+    "nominatim": nominatim_data,
 }
 
 for maptype, zooms in catalog.items():
