@@ -120,12 +120,12 @@ maps_dot_black_naturalearth6_tiles = dict_with_order({
 static_search_data = dict_with_order({
   # Cities-only static database
   # maps_search_static_db = "pop-1k-cities"
-  "pop-1k-cities": f"{iiab_map_host_url}/static-search.{maps_static_search_data_date}.pop-1k-cities",
+  "pop-1k-cities": f"{iiab_map_host_url}/static-search.{maps_static_search_data_date}.pop-1k-cities.tar.gz",
 
   # Large cities-only static database
   # maps_search_static_db = "pop-100k-cities"
   # FOR TESTING ONLY
-  "pop-100k-cities": f"{iiab_map_host_url}/static-search.{maps_static_search_data_date}.pop-100k-cities",
+  "pop-100k-cities": f"{iiab_map_host_url}/static-search.{maps_static_search_data_date}.pop-100k-cities.tar.gz",
 }, ["pop-1k-cities", "pop-100k-cities"])
 
 # Keeping nominatim on maps_slow_data_date until we actually update it again
