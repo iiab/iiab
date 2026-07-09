@@ -42,24 +42,25 @@
     quiet: yes
 
 - vars:
-    # Where the file eventually goes
-    dest_path: "{{ dest_base_path }}/{{ item[:-7] if is_archive | default(false) else item }}"
+    file_name: "{{ item | split('/') | last }}"
+
+    # Where the file eventually goes. [:-7] is for .tar.gz
+    dest_path: "{{ dest_base_path }}/{{ file_name[:-7] if is_archive | default(false) else file_name }}"
 
     # Use md5sum to generate the log file name:
     # * Name has short, consistent length. The "to check progress..." message
     #   fits within 80 characters on terminal (at least in the current
     #   ansible version) in case users have small screens.
     # * If the user mis-copies, it's less likely to do anything destructive.
-    log_file: "{{ item | hash('md5') }}.log"
+    log_file: "{{ file_name | hash('md5') }}.log"
     working_dir: "/library/downloads/maps"
 
-    # `file_name` is the file being downloaded. if it's an archive, it needs to
-    # be extracted to `extracted_dir_name` before moving to the final destination.
-    file_name: "{{ item }}"
-    extracted_dir_name: "{{ item[:-7] if is_archive | default(false) else '' }}"
+    # If `file_name` is an archive, it needs to be extracted to `extracted_dir_name`
+    # before moving to the final destination.
+    extracted_dir_name: "{{ file_name[:-7] if is_archive | default(false) else '' }}"
 
   block:
-    - name: "Fetching file size for {{ host_url }}/{{ file_name }} via .meta4 file"
+    - name: "Fetching file size for {{ item }} via .meta4 file"
       shell: |
         import sys, xmltodict, requests, os
 
@@ -67,7 +68,7 @@
           sys.exit(0)
 
         size = int(xmltodict.parse(
-          requests.get("{{ host_url }}/{{ file_name }}.meta4").content
+          requests.get("{{ item }}.meta4").content
         )['metalink']['file']['size'])
         KiB = 1024
         MiB = KiB * 1024
@@ -121,7 +122,7 @@
             --enable-http-pipelining=true \
             --seed-time=0 \
             --allow-overwrite=true \
-            "{{ host_url }}/{{ file_name }}.meta4" \
+            "{{ item }}.meta4" \
             >> "{{ log_file }}"
 
         chmod 644 "{{ file_name }}"
