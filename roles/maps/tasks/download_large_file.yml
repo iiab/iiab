@@ -52,7 +52,7 @@
     #   fits within 80 characters on terminal (at least in the current
     #   ansible version) in case users have small screens.
     # * If the user mis-copies, it's less likely to do anything destructive.
-    log_file: "{{ file_name | hash('md5') }}.log"
+    progress_log_file: "{{ file_name | hash('md5') }}.log"
     working_dir: "/library/downloads/maps"
 
     # If `file_name` is an archive, it needs to be extracted to `extracted_dir_name`
@@ -92,7 +92,7 @@
     - debug:
         msg:
           - "   TO CHECK DOWNLOAD PROGRESS, RUN:   "
-          - "   tail {{ working_dir }}/{{ log_file }}   "
+          - "   tail {{ working_dir }}/{{ progress_log_file }}   "
       # If the file already exists (and thus no download will happen) the above
       # task should exit before any console output.
       when: download_file_details.stdout_lines|length != 0
@@ -105,9 +105,13 @@
 
         cd {{ working_dir }}
 
-        date > "{{ log_file }}"
-        echo "Downloading {{ file_name }}..." >> "{{ log_file }}"
-        echo >> "{{ log_file }}"
+        date >> "{{ progress_log_file }}"
+        date +%F_%T >> "{{ maps_logs_downloads }}"
+
+        echo "Downloading {{ file_name }}..." >> "{{ progress_log_file }}"
+        echo "Downloading world {{ item }}" >> "{{ maps_logs_downloads }}"
+
+        echo >> "{{ progress_log_file }}"
         aria2c \
             --async-dns=false \
             --connect-timeout="{{ download_timeout }}" \
@@ -123,7 +127,7 @@
             --seed-time=0 \
             --allow-overwrite=true \
             "{{ item }}.meta4" \
-            >> "{{ log_file }}"
+            >> "{{ progress_log_file }}"
 
         chmod 644 "{{ file_name }}"
         if "{{ 'true' if is_archive | default(false) else 'false' }}"; then
@@ -136,7 +140,9 @@
         else
             mv "{{ file_name }}" "{{ dest_path }}"
         fi
-        rm "{{ log_file }}"
+        rm "{{ progress_log_file }}"
+
+        echo "Downloaded world {{ item }}" >> "{{ maps_logs_downloads }}"
       args:
         executable: /bin/bash
         creates: "{{ dest_path }}"
@@ -154,7 +160,7 @@
         cd {{ working_dir }}
 
         echo "aria2c error:" 1>&2
-        tac "{{ log_file }}" | sed '/'"Download Progress Summary as of"'/q' | tac 1>&2
+        tac "{{ progress_log_file }}" | sed '/'"Download Progress Summary as of"'/q' | tac 1>&2
         exit 1
       args:
         executable: /bin/bash
