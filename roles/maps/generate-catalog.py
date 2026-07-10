@@ -1,8 +1,10 @@
 #!/usr/bin/python3
 import requests, jinja2, json, yaml
 
-# TODO - this message doesn't apply to the copy of this file that gets cached
-# in /etc/iiab/ copy since that one is actually up to date
+# TODO - In case we go back to caching in /etc/iiab:
+# * We need to use /etc/iiab/ cache for FQRs as well
+# * The following message doesn't apply to the cache in /etc/iiab/ copy since that one is actually up to date.
+#
 # If you are installing or configuring IIAB Maps, *you should ignore `/opt/iiab/iiab/roles/maps/maps-catalog.json`*.
 #
 # But in case you're curious:
