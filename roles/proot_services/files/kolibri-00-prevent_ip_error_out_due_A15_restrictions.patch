@@ -1,9 +1,10 @@
 This patch is necessary on,
 
+* Android 16 - yes
 * Android 15 - yes
 * Android 14 - untested
 * Android 13 - untested
-* Android 12 - no
+* Android 12 - untested
 * Android 11 - untested
 * Andoird 10 - untested
 
@@ -41,3 +42,72 @@ index a11b0e9..4b0b8b7 100644
  
  
  def get_urls(listen_port=None):
+--- a/usr/lib/python3/dist-packages/kolibri/utils/http_session.py
++++ b/usr/lib/python3/dist-packages/kolibri/utils/http_session.py
+@@ -19,6 +19,24 @@
+ class SameHostSession(requests.Session):
+     """A :class:`requests.Session` that refuses cross-host redirects."""
+ 
++    def __init__(self, *args, **kwargs):
++        super().__init__(*args, **kwargs)
++        # IIAB/proot: prefer the system CA bundle for outbound HTTPS. Under
++        # Android/proot the cert store requests bundles can be stale or absent
++        # while the system store is valid, which made every content-server
++        # request fail and disabled "Kolibri Studio (online)" despite internet.
++        import os
++
++        for _ca in (
++            os.environ.get("REQUESTS_CA_BUNDLE"),
++            os.environ.get("SSL_CERT_FILE"),
++            "/etc/ssl/certs/ca-certificates.crt",
++            "/etc/ssl/cert.pem",
++        ):
++            if _ca and os.path.exists(_ca):
++                self.verify = _ca
++                break
++
+     def get_redirect_target(self, resp):
+         target = super().get_redirect_target(resp)
+         if target is None:
+--- a/usr/lib/python3/dist-packages/kolibri/core/content/api.py
++++ b/usr/lib/python3/dist-packages/kolibri/core/content/api.py
+@@ -2066,6 +2066,41 @@
+             NetworkLocationConnectionFailure,
+             NetworkLocationNotFound,
+         ):
++            # IIAB/proot fallback: NetworkClient can wrongly report the content
++            # server as unreachable under Android/proot due stalled ca-certificates.
++            # When the device actually has internet, confirm reachability
++            # with a plain request that uses the system CA bundle and follows
++            # redirects, so the online import option is not disabled wrongly.
++            import os
++            import requests as _requests
++
++            _verify = True
++            for _ca in (
++                os.environ.get("REQUESTS_CA_BUNDLE"),
++                os.environ.get("SSL_CERT_FILE"),
++                "/etc/ssl/certs/ca-certificates.crt",
++                "/etc/ssl/cert.pem",
++            ):
++                if _ca and os.path.exists(_ca):
++                    _verify = _ca
++                    break
++            try:
++                _resp = _requests.get(
++                    CENTRAL_CONTENT_BASE_URL.rstrip("/") + "/api/public/info",
++                    timeout=15,
++                    allow_redirects=True,
++                    verify=_verify,
++                )
++                if _resp.status_code == 200:
++                    try:
++                        _data = _resp.json()
++                    except ValueError:
++                        _data = {}
++                    _data["available"] = True
++                    _data["status"] = "online"
++                    return Response(_data)
++            except Exception:
++                pass
+             return Response({"status": "offline", "available": False})
