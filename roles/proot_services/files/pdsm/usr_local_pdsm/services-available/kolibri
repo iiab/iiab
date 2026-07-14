@@ -26,6 +26,20 @@ start() {
   # Ensure nginx is up as a requirement
   require_service "nginx"
 
+  # Seed Studio & KDP "reserved" NetworkLocations if absent.
+  # Normally created via the ZeroConf registration event, which does not
+  # run under proot (netlink is blocked). Seed directly.
+  reserved_count=$(sqlite3 "${KOLIBRI_HOME%/}/networklocation.sqlite3" \
+    "SELECT COUNT(*) FROM discovery_networklocation WHERE location_type='reserved';" \
+    2>/dev/null || echo 0)
+  if [ "${reserved_count:-0}" -eq 0 ]; then
+    echo "[pdsm:$SERVICE_NAME] seeding reserved network locations (Studio/KDP)"
+    "$KOLIBRI_BIN" manage shell -c \
+      "from kolibri.core.discovery.tasks import _refresh_reserved_locations; _refresh_reserved_locations()" \
+      >/dev/null 2>&1 || \
+      echo "[pdsm:$SERVICE_NAME] WARNING: reserved-location seeding failed (continuing)" >&2
+  fi
+
   "$KOLIBRI_BIN" start
 
   # Small wait loop so 'start' only returns when it's actually alive
