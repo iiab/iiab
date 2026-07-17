@@ -83,6 +83,10 @@ maps_dot_black_satellite_tiles = dict_with_order({
   # maps_satellite_zoom = 13
   13: f"{iiab_map_host_url}/s2maps-sentinel2-2023.{maps_satellite_data_date}.z00-z13.pmtiles",
 
+  # To disable satellite, use the value "none". (There is no URL associated with this option
+  # because it doesn't download anything, but it is valid!)
+  # maps_satellite_zoom = none
+
   # FOR TESTING ONLY
   # Super-low quality satellite, up to zoom level 4 (original file has 13)
   # maps_satellite_zoom = 4
@@ -105,6 +109,7 @@ maps_dot_black_terrain_tiles = dict_with_order({
   # offer 11, 12, and 13 in squashfs format, but they are massive files.)
   10: f"{iiab_map_host_url}/terrarium.{maps_slow_data_date}.z00-z10.pmtiles",
 
+  # maps_terrain_zoom = none
   # A "dummy" maxzoom=0 world map terrain file to fill a role that maps.black/maplibre
   # needs if we have FQRs and the user enables terrain.
   "none": f"{iiab_map_host_url}/terrarium-none.pmtiles",
