@@ -263,16 +263,7 @@ For large file downloads:
 
 ## How to change or upgrade your IIAB Maps
 
-If your IIAB was installed many months ago (or many years ago), it's far better to start from scratch [installing a completely new version of IIAB](https://wiki.iiab.io/go/FAQ#Is_a_quick_installation_possible?).
-
-If your IIAB was installed quite recently, it's usually safe to update your IIAB software: (at your own risk, if your IIAB is online, and has enough disk space!)
-
-```
-cd /opt/iiab/iiab
-sudo git pull
-```
-
-After [changing any IIAB Maps variables](#whats-a-minimum-iiab-maps-install) in `/etc/iiab/local_vars.yml`, you can now "reinstall" IIAB Maps to enact your new settings, by running:
+After [changing any IIAB Maps variables](#whats-a-minimum-iiab-maps-install) in `/etc/iiab/local_vars.yml`, you can "reinstall" IIAB Maps to enact your new settings, by running:
 
 ```
 sudo ./runrole maps --reinstall
