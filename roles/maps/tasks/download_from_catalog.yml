@@ -1,23 +1,30 @@
 - vars:
-    lol: "test"
+    catalog_file_path: "{{ maps_catalog[catalog_item][catalog_item_variant | string] | default("") }}"
+    catalog_file_name: "{{ catalog_file_path | split('/') | last }}"
+
+    test: "" | split('/') | last
+
+    # How it's saved. Either a file or a directory.
+    dest_name: "{{ catalog_file_name[:-7] if is_archive | default(false) else catalog_file_name }}"
+
   block:
     - name: "Make sure archives end in .tar.gz as expected"
       assert:
-        that: (not (is_archive | default(false))) or maps_catalog[catalog_item][catalog_item_variant | string][-7:] == ".tar.gz"
+        that: (not (is_archive | default(false))) or catalog_file_name[-7:] == ".tar.gz"
         fail_msg: "Error: expect download file name to end in .tar.gz when is_archive=true"
         quiet: yes
 
     - name: "Make sure {{ catalog_item_variant_name }} has a valid value"
       assert:
-        that: maps_catalog[catalog_item][catalog_item_variant | string] is defined
+        that: catalog_file_path != ""
         fail_msg: "Error: {{ catalog_item_variant_name }} is set to an invalid value (\"{{ catalog_item_variant }}\"). See `\"{{ catalog_item_variant_name }}\"` in https://github.com/iiab/iiab/blob/master/roles/maps/generate-catalog.py for valid values."
         quiet: yes
 
-    - name: "Check if we already have {{ maps_catalog[catalog_item][catalog_item_variant | string] }} possibly with a different date"
+    - name: "Check if we already have {{ catalog_file_path }} possibly with a different date"
       shell: |
         import glob, os
 
-        new_file_name = "{{ maps_catalog[catalog_item][catalog_item_variant | string] }}"
+        new_file_name = "{{ dest_name }}"
         new_file_name_parts = new_file_name.split('.')
 
         if len(new_file_name_parts) not in [3, 4]:
@@ -50,18 +57,10 @@
         - name: "Download {{ catalog_item }} from catalog"
           include_tasks: download_large_file.yml
           vars:
-            item: "{{ maps_catalog[catalog_item][catalog_item_variant | string] }}"
+            item: "{{ catalog_file_path }}"
        
         - name: "Select {{ catalog_item }}"
-          when: not (is_archive | default(false))
           file:
-            src: "{{ dest_base_path }}/{{ maps_catalog[catalog_item][catalog_item_variant | string] | split('/') | last }}"
-            path: "{{ dest_base_path }}/{{ symlink_name }}"
-            state: link
-       
-        - name: "Select {{ catalog_item }} directory"
-          when: is_archive | default(false)
-          file:
-            src: "{{ dest_base_path }}/{{ maps_catalog[catalog_item][catalog_item_variant | string][:-7] | split('/') | last }}"
+            src: "{{ dest_base_path }}/{{ dest_name }}"
             path: "{{ dest_base_path }}/{{ symlink_name }}"
             state: link
