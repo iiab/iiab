@@ -18,97 +18,12 @@
         fail_msg: "Error: {{ catalog_item_variant_name }} is set to an invalid value (\"{{ catalog_item_variant }}\"). See `\"{{ catalog_item_variant_name }}\"` in https://github.com/iiab/iiab/blob/master/roles/maps/generate-catalog.py for valid values."
         quiet: yes
 
-    - name: "Check if we already have {{ catalog_file_path }} possibly with a different date"
-      shell: |
-        import glob, os
-
-        new_file_name = "{{ dest_name }}"
-        new_file_name_parts = new_file_name.split('.')
-
-        if len(new_file_name_parts) not in [3, 4]:
-            # TODO - we need to fix terrarium-none.pmtiles to conform to this
-            print ("unexpected_name")
-            print ("Unexpected file name:", new_file_name)
-        else:
-            if len(new_file_name_parts) == 4:
-                file_type, _date, file_depth, extension = new_file_name_parts
-                glob_test = f"{file_type}.*.{file_depth}.{extension}"
-            elif len(new_file_name_parts) == 3:
-                file_type, _date, file_depth = new_file_name_parts
-                glob_test = f"{file_type}.*.{file_depth}"
-
-            if len(glob.glob(os.path.join("{{ dest_base_path }}", glob_test))) > 0:
-                print ("existing_file")
-            else:
-                print ("download")
-      args:
-        executable: /usr/bin/python3
-
-      register: file_upgrade
-
-    - name: "Check for unexpected file name in catalog"
-      fail:
-          msg: "{{ file_upgrade.stdout_lines.1 }}"
-      when: file_upgrade.stdout_lines|length != 0 and file_upgrade.stdout_lines.0 == "unexpected_name"
-
-    - name: "Check if {{ catalog_item }} symlink exists"
-      ansible.builtin.stat:
+    - name: "Download {{ catalog_item }} from catalog"
+      include_tasks: download_large_file.yml
+      vars:
+        item: "{{ catalog_file_path }}"
+    - name: "Select {{ catalog_item }}"
+      file:
+        src: "{{ dest_base_path }}/{{ dest_name }}"
         path: "{{ dest_base_path }}/{{ symlink_name }}"
-      register: symlink_stat
-
-    # Sequence:
-    # * Download file
-    # * Set Symlink
-    #
-    # Before the catalog, this was simply idempotent. If the download fails, it
-    # always tries exactly the same file (unless the user does a git pull).
-    # Once the file was done it pointed the symlink to the new file.
-    #
-    # With the catalog, if we get interrupted and the catalog item changes before
-    # we try again, we start downloading the new file instead, and point the
-    # symlink to the new file. This is at the cost of space, but we end up
-    # pointing at the right place in the end. Once the symlink is set, it won't
-    # change even if the catalog changes.
-    #
-    # If the user changes the zoom level setting, it will download again and update the symlink.
-    # TODO - NO this is broken. If it fails to re-set the symlink, it won't try again.
-    #
-    # If the user messes around with the files here they might get unexpected
-    # results. If all else fails they should delete the symlink and everything
-    # should get fixed.
-    #
-    # We could reduce extra downloads by having the symlink find the latest
-    # file on the file system and pointing to that, instead of always going
-    # with what's in the current catalog. However this is a fringe enough
-    # issue that it's probably not worth complicating it. However, it may end
-    # up being the case that users will run out of space, so maybe it's
-    # actually worth it.
-    # 
-    # Alternately we could delete old files as we install new ones. Or, we
-    # could save the catalog to disk and not update it. But then we'd have
-    # issues with updating FQRs.
-
-    - when: (file_upgrade.stdout_lines|length != 0 and file_upgrade.stdout_lines.0 == "download") or not (symlink_stat.stat.islnk is defined and symlink_stat.stat.islnk)
-      block:
-        - name: "Download {{ catalog_item }} from catalog"
-          include_tasks: download_large_file.yml
-          vars:
-            item: "{{ catalog_file_path }}"
-        - name: "Select {{ catalog_item }}"
-          file:
-            src: "{{ dest_base_path }}/{{ dest_name }}"
-            path: "{{ dest_base_path }}/{{ symlink_name }}"
-            state: link
-
-
-
-
-
-
-
-
-
-
-
-
-
+        state: link
