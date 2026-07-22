@@ -56,16 +56,59 @@
         path: "{{ dest_base_path }}/{{ symlink_name }}"
       register: symlink_stat
 
+    # Sequence:
+    # * Download file
+    # * Set Symlink
+    #
+    # Before the catalog, this was simply idempotent. If the download fails, it
+    # always tries exactly the same file (unless the user does a git pull).
+    # Once the file was done it pointed the symlink to the new file.
+    #
+    # With the catalog, if we get interrupted and the catalog item changes before
+    # we try again, we start downloading the new file instead, and point the
+    # symlink to the new file. This is at the cost of space, but we end up
+    # pointing at the right place in the end. Once the symlink is set, it won't
+    # change even if the catalog changes.
+    #
+    # If the user changes the zoom level setting, it will download again and update the symlink.
+    # TODO - NO this is broken. If it fails to re-set the symlink, it won't try again.
+    #
+    # If the user messes around with the files here they might get unexpected
+    # results. If all else fails they should delete the symlink and everything
+    # should get fixed.
+    #
+    # We could reduce extra downloads by having the symlink find the latest
+    # file on the file system and pointing to that, instead of always going
+    # with what's in the current catalog. However this is a fringe enough
+    # issue that it's probably not worth complicating it. However, it may end
+    # up being the case that users will run out of space, so maybe it's
+    # actually worth it.
+    # 
+    # Alternately we could delete old files as we install new ones. Or, we
+    # could save the catalog to disk and not update it. But then we'd have
+    # issues with updating FQRs.
+
     - when: (file_upgrade.stdout_lines|length != 0 and file_upgrade.stdout_lines.0 == "download") or not (symlink_stat.stat.islnk is defined and symlink_stat.stat.islnk)
       block:
         - name: "Download {{ catalog_item }} from catalog"
           include_tasks: download_large_file.yml
           vars:
             item: "{{ catalog_file_path }}"
-       
-        # TODO actually be careful - in the end we want to make sure the correct symlink is set no matter the input scenario
         - name: "Select {{ catalog_item }}"
           file:
             src: "{{ dest_base_path }}/{{ dest_name }}"
             path: "{{ dest_base_path }}/{{ symlink_name }}"
             state: link
+
+
+
+
+
+
+
+
+
+
+
+
+
