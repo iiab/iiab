@@ -40,7 +40,7 @@
             if len(glob.glob(os.path.join("{{ dest_base_path }}", glob_test))) > 0:
                 print ("existing_file")
             else:
-                print ("ok")
+                print ("download")
       args:
         executable: /usr/bin/python3
 
@@ -51,7 +51,12 @@
           msg: "{{ file_upgrade.stdout_lines.1 }}"
       when: file_upgrade.stdout_lines|length != 0 and file_upgrade.stdout_lines.0 == "unexpected_name"
 
-    - when: file_upgrade.stdout_lines|length != 0 and file_upgrade.stdout_lines.0 == "ok"
+    - name: "Check if {{ catalog_item }} symlink exists"
+      ansible.builtin.stat:
+        path: "{{ dest_base_path }}/{{ symlink_name }}"
+      register: symlink_stat
+
+    - when: (file_upgrade.stdout_lines|length != 0 and file_upgrade.stdout_lines.0 == "download") or not (symlink_stat.stat.islnk is defined and symlink_stat.stat.islnk)
       block:
         - name: "Download {{ catalog_item }} from catalog"
           include_tasks: download_large_file.yml
