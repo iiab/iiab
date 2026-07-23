@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-import json, glob, os, random, re, requests, shutil, string, subprocess, sys, tempfile, xmltodict, xml
+import datetime, json, glob, os, random, re, requests, shutil, string, subprocess, sys, tempfile, xmltodict, xml
 from pprint import pprint
 from collections import defaultdict
 
@@ -110,6 +110,7 @@ def get_bounds(full_path):
 
     return render_bounds, ui_bounds
 
+CATALOG_URL = "{{ maps_catalog_url }}" # defined in /vars because we want it to be customizable
 HOSTING_DIR = "{{ maps_serve_path }}"
 EXTRACTS_JSON = os.path.join(HOSTING_DIR, "{{ tile_extract.info_file }}")
 PMTILES = os.path.join(os.path.dirname(__file__), "pmtiles")
@@ -173,28 +174,40 @@ def get_new_extract_paths(extract_name):
     from the server. Existing FQRs on the file system may have different dates,
     so we can't rely on this function for getting an inventory or deletion.
     """
-    MAPS_VECTOR_DATA_DATE = "{{ maps_vector_data_date }}"
-    MAPS_SLOW_DATA_DATE = "{{ maps_slow_data_date }}"
-    IIAB_MAP_HOST_URL = "{{ iiab_map_host_url }}"
+    # Unlike the global data, FQRs always stay up to date, so it downloads
+    # the latest catalog.
+    catalog_response = requests.get(CATALOG_URL)
+    if catalog_response.status_code != 200:
+        raise Exception("Cannot find map data catalog")
 
-    VECTOR_ZOOM_RANGE = "z00-z{{ '%02d' % maps_vector_max_zoom }}"
-    SATELLITE_ZOOM_RANGE = "z00-z{{ '%02d' % maps_satellite_max_zoom }}"
-    TERRAIN_ZOOM_RANGE = "z00-z{{ '%02d' % maps_terrain_max_zoom }}"
+    try:
+        catalog = catalog_response.json()
+    except json.decoder.JSONDecodeError:
+        raise Exception("Error reading map data catalog")
 
-    def get_paths(base, zoom_range):
-        return {
-            "source":
-                get_mirror(f"{IIAB_MAP_HOST_URL}/{base}.{zoom_range}.pmtiles"),
-            "extract":
-                os.path.join(HOSTING_DIR, f"{base}.full-region.{extract_name}.pmtiles"),
-            "tmp":
-                os.path.join(TMP_DIR, f"{base}.full-region.{extract_name}.pmtiles"),
-        }
+    # TODO - fix the zoom level string vs int issue. Cast to integer.
+    VECTOR_MAX_ZOOM = "{{ maps_vector_fqr_max_zoom }}"
+    SATELLITE_MAX_ZOOM = "{{ maps_satellite_fqr_max_zoom }}"
+    TERRAIN_MAX_ZOOM = "{{ maps_terrain_fqr_max_zoom }}"
+
+    def get_paths(source):
+        match (source.split('/')[-1].split('.')):
+            case [base, date, _zoom_range, "pmtiles"]:
+                return {
+                    "source":
+                        get_mirror(source),
+                    "extract":
+                        os.path.join(HOSTING_DIR, f"{base}.{date}.full-region.{extract_name}.pmtiles"),
+                    "tmp":
+                        os.path.join(TMP_DIR, f"{base}.{date}.full-region.{extract_name}.pmtiles"),
+                }
+            case _:
+                raise Exception("Oops got unexpected pmtiles file name:", source)
 
     return {
-        "vector": get_paths(f"openstreetmap-openmaptiles.{MAPS_VECTOR_DATA_DATE}", VECTOR_ZOOM_RANGE),
-        "satellite": get_paths(f"s2maps-sentinel2-2023.{MAPS_SLOW_DATA_DATE}", SATELLITE_ZOOM_RANGE),
-        "terrain": get_paths(f"terrarium.{MAPS_SLOW_DATA_DATE}", TERRAIN_ZOOM_RANGE),
+        "vector": get_paths(catalog["vector"][VECTOR_MAX_ZOOM]),
+        "satellite": get_paths(catalog["satellite"][SATELLITE_MAX_ZOOM]),
+        "terrain": get_paths(catalog["terrain"][TERRAIN_MAX_ZOOM]),
     }
 
 def iter_region_files():
@@ -350,15 +363,25 @@ def create_extract(extract_box, extract_paths):
 
         # Extract them all successfully before moving them.
         for paths in extract_paths.values():
+            open("{{ maps_logs_downloads }}", "a").write(
+                f"{datetime.datetime.now().strftime('%F_%T')}\n"
+            )
+            open("{{ maps_logs_downloads }}", "a").write(
+                f"Downloading fqr {extract_box} {paths['source']}\n"
+            )
+
             result = subprocess.run(
                 [PMTILES, "extract", paths["source"], paths["tmp"], f"--region={geojson_file.name}"],
             )
             if result.returncode != 0:
                 raise Exception(f"Region download failed. Double-check your Internet connection. (error code {result.returncode})")
 
+            open("{{ maps_logs_downloads }}", "a").write(
+                f"Downloaded fqr {extract_box} {paths['source']}\n"
+            )
+
     for paths in extract_paths.values():
         shutil.move(paths["tmp"], paths["extract"])
-
 
 UNIT_MULT = {
     'kB': 1_000,

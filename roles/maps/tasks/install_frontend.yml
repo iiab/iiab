@@ -1,3 +1,5 @@
+# TODO - What if the catalog upgrades, but people re-run and don't want to upgrade global data? Maybe stop if they have data, even if it's old? Add a "quick tip" to delete it first, to allow upgrade?
+
 - name: Make serving directory (0755 by default)
   file:
     path: "{{ maps_serve_path }}"
@@ -23,55 +25,33 @@
     dest_base_path: "{{ maps_serve_path }}"
   with_items: "{{ maps_dot_black_js_and_styles }}"
 
-- name: Download naturalearth6 tiles
-  include_tasks: download_large_file.yml
+- name: Get naturalearth6 from catalog
+  include_tasks: download_from_catalog.yml
   vars:
+    catalog_item: naturalearth6
+    catalog_item_variant: "{{ maps_ne6_zoom }}"
+    catalog_item_variant_name: maps_ne6_zoom
+    symlink_name: "{{ maps_dot_black_naturalearth6_symlink_name }}"
     dest_base_path: "{{ maps_serve_path }}"
-    item: "{{ maps_dot_black_naturalearth6_tiles[maps_ne6_zoom] }}"
 
-- name: Select naturalearth6 tiles
-  file:
-    src: "{{ maps_serve_path }}/{{ maps_dot_black_naturalearth6_tiles[maps_ne6_zoom] }}"
-    dest: "{{ maps_serve_path }}/{{ maps_dot_black_naturalearth6_symlink_name }}"
-    state: link
-
-- name: "Make sure maps_vector_quality has a valid value"
-  assert:
-    that: maps_dot_black_vector_tiles[maps_vector_quality] is defined
-    fail_msg: "Error: maps_vector_quality is set to an invalid value. See `maps_dot_black_vector_tiles` in https://github.com/iiab/iiab/blob/master/roles/maps/defaults/main.yml for valid values."
-    quiet: yes
-
-- name: Download vector tiles
-  include_tasks: download_large_file.yml
+- name: Get vector from catalog
+  include_tasks: download_from_catalog.yml
   vars:
+    catalog_item: vector
+    catalog_item_variant: "{{ maps_vector_zoom }}"
+    catalog_item_variant_name: maps_vector_zoom
+    symlink_name: "{{ maps_dot_black_osm_symlink_name }}"
     dest_base_path: "{{ maps_serve_path }}"
-    item: "{{ maps_dot_black_vector_tiles[maps_vector_quality] }}"
 
-- name: Select vector tiles
-  file:
-    src: "{{ maps_serve_path }}/{{ maps_dot_black_vector_tiles[maps_vector_quality] }}"
-    dest: "{{ maps_serve_path }}/{{ maps_dot_black_osm_symlink_name }}"
-    state: link
-
-- when: maps_satellite_zoom != "none"
-  block:
-    - name: "Make sure maps_satellite_zoom has a valid value"
-      assert:
-        that: maps_dot_black_satellite_tiles[maps_satellite_zoom] is defined
-        fail_msg: "Error: maps_satellite_zoom is set to an invalid value. See `maps_dot_black_satellite_tiles` in https://github.com/iiab/iiab/blob/master/roles/maps/defaults/main.yml for valid values."
-        quiet: yes
-
-    - name: Download satellite tiles
-      include_tasks: download_large_file.yml
-      vars:
-        dest_base_path: "{{ maps_serve_path }}"
-        item: "{{ maps_dot_black_satellite_tiles[maps_satellite_zoom] }}"
-
-    - name: Select satellite tiles
-      file:
-        src: "{{ maps_serve_path }}/{{ maps_dot_black_satellite_tiles[maps_satellite_zoom] }}"
-        dest: "{{ maps_serve_path }}/{{ maps_dot_black_satellite_symlink_name }}"
-        state: link
+- name: Get satellite from catalog
+  when: maps_satellite_zoom != "none"
+  include_tasks: download_from_catalog.yml
+  vars:
+    catalog_item: satellite
+    catalog_item_variant: "{{ maps_satellite_zoom }}"
+    catalog_item_variant_name: maps_satellite_zoom
+    symlink_name: "{{ maps_dot_black_satellite_symlink_name }}"
+    dest_base_path: "{{ maps_serve_path }}"
 
 - name: Remove unused satellite symlink
   when: maps_satellite_zoom == "none"
@@ -79,24 +59,15 @@
     path: "{{ maps_serve_path }}/{{ maps_dot_black_satellite_symlink_name }}"
     state: absent
 
-- name: "Make sure maps_terrain_zoom has a valid value"
-  assert:
-    that: maps_dot_black_terrain_tiles[maps_terrain_zoom] is defined
-    fail_msg: "Error: maps_terrain_zoom is set to an invalid value. See `maps_dot_black_terrain_tiles` in https://github.com/iiab/iiab/blob/master/roles/maps/defaults/main.yml for valid values."
-    quiet: yes
-
-- name: Download terrain tiles
-  include_tasks: download_large_file.yml
+# Unlike with satellite, if the user selects "none" for terrain, we download a dummy file
+- name: Get terrain from catalog
+  include_tasks: download_from_catalog.yml
   vars:
+    catalog_item: terrain
+    catalog_item_variant: "{{ maps_terrain_zoom }}"
+    catalog_item_variant_name: maps_terrain_zoom
+    symlink_name: "{{ maps_dot_black_terrain_symlink_name }}"
     dest_base_path: "{{ maps_serve_path }}"
-    item: "{{ maps_dot_black_terrain_tiles[maps_terrain_zoom] }}"
-
-# If the user selects "none", we download a dummy file
-- name: Select terrain tiles
-  file:
-    src: "{{ maps_serve_path }}/{{ maps_dot_black_terrain_tiles[maps_terrain_zoom] }}"
-    dest: "{{ maps_serve_path }}/{{ maps_dot_black_terrain_symlink_name }}"
-    state: link
 
 - name: Initiate the extracts json
   copy:

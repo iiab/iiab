@@ -35,26 +35,33 @@
 #
 # TODO - files should be owned by www-data
 
+- name: "Make sure archives end in .tar.gz as expected"
+  assert:
+    that: (not (is_archive | default(false))) or item[-7:] == ".tar.gz"
+    fail_msg: "Error: expect download file name to end in .tar.gz when is_archive=true"
+    quiet: yes
 
 - vars:
-    # Where the file eventually goes
-    dest_path: "{{ dest_base_path }}/{{ item }}"
+    file_name: "{{ item | split('/') | last }}"
+
+    # Where the file eventually goes. [:-7] is for .tar.gz
+    # TODO redundant with download_from_catalog now?
+    dest_path: "{{ dest_base_path }}/{{ file_name[:-7] if is_archive | default(false) else file_name }}"
 
     # Use md5sum to generate the log file name:
     # * Name has short, consistent length. The "to check progress..." message
     #   fits within 80 characters on terminal (at least in the current
     #   ansible version) in case users have small screens.
     # * If the user mis-copies, it's less likely to do anything destructive.
-    log_file: "{{ item | hash('md5') }}.log"
+    progress_log_file: "{{ file_name | hash('md5') }}.log"
     working_dir: "/library/downloads/maps"
 
-    # `file_name` is the file being downloaded. if it's an archive, it needs to
-    # be extracted to `extracted_dir_name` before moving to the final destination.
-    file_name: "{{ item }}{{ '.tar.gz' if is_archive | default(false) else '' }}"
-    extracted_dir_name: "{{ item if is_archive | default(false) else '' }}"
+    # If `file_name` is an archive, it needs to be extracted to `extracted_dir_name`
+    # before moving to the final destination.
+    extracted_dir_name: "{{ file_name[:-7] if is_archive | default(false) else '' }}"
 
   block:
-    - name: "Fetching file size for {{ iiab_map_host_url }}/{{ file_name }} via .meta4 file"
+    - name: "Fetching file size for {{ item }} via .meta4 file"
       shell: |
         import sys, xmltodict, requests, os
 
@@ -62,7 +69,7 @@
           sys.exit(0)
 
         size = int(xmltodict.parse(
-          requests.get("{{ iiab_map_host_url }}/{{ file_name }}.meta4").content
+          requests.get("{{ item }}.meta4").content
         )['metalink']['file']['size'])
         KiB = 1024
         MiB = KiB * 1024
@@ -86,7 +93,7 @@
     - debug:
         msg:
           - "   TO CHECK DOWNLOAD PROGRESS, RUN:   "
-          - "   tail {{ working_dir }}/{{ log_file }}   "
+          - "   tail {{ working_dir }}/{{ progress_log_file }}   "
       # If the file already exists (and thus no download will happen) the above
       # task should exit before any console output.
       when: download_file_details.stdout_lines|length != 0
@@ -99,9 +106,13 @@
 
         cd {{ working_dir }}
 
-        date > "{{ log_file }}"
-        echo "Downloading {{ file_name }}..." >> "{{ log_file }}"
-        echo >> "{{ log_file }}"
+        date >> "{{ progress_log_file }}"
+        date +%F_%T >> "{{ maps_logs_downloads }}"
+
+        echo "Downloading {{ file_name }}..." >> "{{ progress_log_file }}"
+        echo "Downloading world {{ item }}" >> "{{ maps_logs_downloads }}"
+
+        echo >> "{{ progress_log_file }}"
         aria2c \
             --async-dns=false \
             --connect-timeout="{{ download_timeout }}" \
@@ -116,8 +127,8 @@
             --enable-http-pipelining=true \
             --seed-time=0 \
             --allow-overwrite=true \
-            "{{ iiab_map_host_url }}/{{ file_name }}.meta4" \
-            >> "{{ log_file }}"
+            "{{ item }}.meta4" \
+            >> "{{ progress_log_file }}"
 
         chmod 644 "{{ file_name }}"
         if "{{ 'true' if is_archive | default(false) else 'false' }}"; then
@@ -130,7 +141,9 @@
         else
             mv "{{ file_name }}" "{{ dest_path }}"
         fi
-        rm "{{ log_file }}"
+        rm "{{ progress_log_file }}"
+
+        echo "Downloaded world {{ item }}" >> "{{ maps_logs_downloads }}"
       args:
         executable: /bin/bash
         creates: "{{ dest_path }}"
@@ -148,7 +161,7 @@
         cd {{ working_dir }}
 
         echo "aria2c error:" 1>&2
-        tac "{{ log_file }}" | sed '/'"Download Progress Summary as of"'/q' | tac 1>&2
+        tac "{{ progress_log_file }}" | sed '/'"Download Progress Summary as of"'/q' | tac 1>&2
         exit 1
       args:
         executable: /bin/bash
