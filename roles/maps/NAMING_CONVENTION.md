@@ -1,4 +1,8 @@
-# Global file examples:
+# Naming Convention
+
+How map data files are named
+
+## Global map data files:
 
 ```
 type                       | date       | depth         | extension (for files)
@@ -14,7 +18,7 @@ nominatim                  . 2025-12-10 . basic         . sqlite
 [type].[date].[depth].[extension (for files)]
 ```
 
-# Full Quality Region examples:
+## Full Quality Regions:
 
 ```
 type                       | date       | region | ...         | extension (for files)
