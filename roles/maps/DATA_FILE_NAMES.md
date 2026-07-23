@@ -1,7 +1,7 @@
-Global file examples:
+# Global file examples:
 
 ```
-type                       | date       | depth         | extension
+type                       | date       | depth         | extension (for files)
 ---------------------------------------------------------------------------
 s2maps-sentinel2-2023      . 2025-12-10 . z00-z07       . pmtiles
 naturalearth-openmaptiles  . 2025-12-10 . z00-z08       . pmtiles
@@ -10,25 +10,23 @@ static-search              . 2026-04-22 . pop-1k-cities
 nominatim                  . 2025-12-10 . basic         . sqlite
 ```
 
-Full Quality Region examples:
-
-```
-type                       | date       | region | ...         | extension
----------------------------------------------------------------------------
-openstreetmap-openmaptiles . 2026-07-01 . africa . full-region . pmtiles
-```
-
-For global files:
-
 ```
 [type].[date].[depth].[extension (for files)]
 ```
 
-For Full Quality Region (FQR) files:
+# Full Quality Region examples:
+
+```
+type                       | date       | region | ...         | extension (for files)
+---------------------------------------------------------------------------
+openstreetmap-openmaptiles . 2026-07-01 . africa . full-region . pmtiles
+```
 
 ```
 [type].[date].full-region.[region].[extension (for files)]
 ```
+
+# Key
 
 * `type` refers to the data source for pmtiles files, or the search engine for search
 * `date` refers to the date that the data was generated
