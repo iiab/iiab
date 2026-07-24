@@ -59,8 +59,8 @@ maps_dot_black_vector_tiles = dict_with_order({
   # FOR TESTING ONLY
   # "medium res" osm, up to zoom level 1 (original file has 14).
   # maps_vector_zoom = 1
-  1: f"{iiab_map_host_url}/openstreetmap-openmaptiles.{maps_vector_data_date}.z00-z01.pmtiles",
-}, [1, 11, 14, "nat-z8"])
+  "1-ci": f"{iiab_map_host_url}/openstreetmap-openmaptiles.{maps_vector_data_date}.z00-z01.pmtiles",
+}, ["nat-z8", 11, 14, "1-ci"])
 
 maps_dot_black_satellite_tiles = dict_with_order({
   # Low quality satellite, up to zoom level 7 (original file has 13)
@@ -90,8 +90,8 @@ maps_dot_black_satellite_tiles = dict_with_order({
   # FOR TESTING ONLY
   # Super-low quality satellite, up to zoom level 4 (original file has 13)
   # maps_satellite_zoom = 4
-  4: f"{iiab_map_host_url}/s2maps-sentinel2-2023.{maps_satellite_data_date}.z00-z04.pmtiles",
-}, [4, 7, 9, 11, 12, 13])
+  "4-ci": f"{iiab_map_host_url}/s2maps-sentinel2-2023.{maps_satellite_data_date}.z00-z04.pmtiles",
+}, [7, 9, 11, 12, 13, "4-ci"])
 
 maps_dot_black_terrain_tiles = dict_with_order({
   # Low quality terrain, up to zoom level 7 (original file has 10)
@@ -109,20 +109,20 @@ maps_dot_black_terrain_tiles = dict_with_order({
   # offer 11, 12, and 13 in squashfs format, but they are massive files.)
   10: f"{iiab_map_host_url}/terrarium.{maps_slow_data_date}.z00-z10.pmtiles",
 
-  # maps_terrain_zoom = none
+  # maps_terrain_zoom = 0-none
   # A "dummy" maxzoom=0 world map terrain file to fill a role that maps.black/maplibre
   # needs if we have FQRs and the user enables terrain.
-  "none": f"{iiab_map_host_url}/terrarium-none.pmtiles",
-}, [7, 8, 9, 10, "none"])
+  "0-none": f"{iiab_map_host_url}/terrarium-none.pmtiles",
+}, [7, 8, 9, 10, "0-none"])
 
 # Mostly colors, topography, etc.
 maps_dot_black_naturalearth6_tiles = dict_with_order({
   # For actual users
-  "full": f"{iiab_map_host_url}/naturalearth6-NE2_HR_SR_W_DR-WEBP.{maps_slow_data_date}.z00-z06.pmtiles",
+  6: f"{iiab_map_host_url}/naturalearth6-NE2_HR_SR_W_DR-WEBP.{maps_slow_data_date}.z00-z06.pmtiles",
 
   # FOR TESTING ONLY
-  "ci": f"{iiab_map_host_url}/naturalearth6-NE2_HR_SR_W_DR-WEBP.{maps_slow_data_date}.z00-z04.pmtiles",
-}, ["full", "ci"])
+  "4-ci": f"{iiab_map_host_url}/naturalearth6-NE2_HR_SR_W_DR-WEBP.{maps_slow_data_date}.z00-z04.pmtiles",
+}, [6, "4-ci"])
 
 static_search_data = dict_with_order({
   # Cities-only static database
