@@ -42,6 +42,8 @@ def run_module():
 
     if not dest_is_dir and os.path.exists(dest) and not force:
         # File exists and not forcing, just update attributes
+        # NOTE: Some expected behavior will break if the file is overwritten
+        # with a new version. This isn't only about saving bandwidth.
         file_args = module.load_file_common_arguments(module.params, path=dest)
         changed = module.set_fs_attributes_if_different(file_args, changed=False)
         msg = "File already exists"
