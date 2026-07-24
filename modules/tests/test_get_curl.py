@@ -18,7 +18,7 @@ def _check_curl_available():
 
 
 def _serve_file_url(source_path):
-    return "file://" + str(source_path.resolve())
+    return source_path.resolve().as_uri()
 
 
 def _make_module_mock(tmp_path, force, dest_path, tmp_dest=None, timeout=5, retries=1):
