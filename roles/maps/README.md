@@ -276,6 +276,7 @@ maps/generate-catalog.py
 * [Other map variables](https://github.com/iiab/iiab/blob/master/roles/maps/defaults/main.yml) based on [PR #4120](https://github.com/iiab/iiab/pull/4120) from Oct/Nov 2025
 * Map data files as of 2026-04-14: https://iiab.switnet.org/maps/2/
 * IIAB integration thanks to [Dan Krol](https://github.com/orblivion)
+* [Details on data file naming conventions](https://github.com/iiab/iiab/blob/master/roles/maps/NAMING_CONVENTION.md)
 
 ## Next Steps
 
