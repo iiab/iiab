@@ -156,13 +156,22 @@ class TestForceDefaults:
         dest = tmp_path / "default-force"
         dest.write_text("exists")
 
-        module = _make_module_mock(tmp_path, force=False, dest_path=dest)
-        monkeypatch.setattr("get_curl.AnsibleModule", lambda *a, **kw: module)
+        captured_spec = {}
+        module = None
+
+        def spy_ansible_module(*args, **kwargs):
+            nonlocal module
+            captured_spec.update(kwargs.get("argument_spec", {}))
+            module = _make_module_mock(tmp_path, force=False, dest_path=dest)
+            return module
+
+        monkeypatch.setattr("get_curl.AnsibleModule", spy_ansible_module)
 
         with pytest.raises(SystemExit) as exc:
             get_curl.run_module()
 
         assert exc.value.code == 0
+        assert captured_spec["force"]["default"] is False
         module.exit_json.assert_called_once_with(
             msg="File already exists", dest=str(dest), url="", changed=False
         )
