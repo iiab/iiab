@@ -5,19 +5,21 @@ How map data files are named
 ## Global map data files:
 
 ```
-type                       | date       | depth         | extension (for files)
----------------------------------------------------------------------------
-s2maps-sentinel2-2023      . 2025-12-10 . z00-z07       . pmtiles
-naturalearth-openmaptiles  . 2025-12-10 . z00-z08       . pmtiles
-openstreetmap-openmaptiles . 2026-07-01 . z00-z14       . pmtiles
-static-search              . 2026-04-22 . pop-1k-cities . tar.gz
-static-search              . 2026-04-22 . pop-1k-cities
-nominatim                  . 2025-12-10 . basic         . sqlite
+| type                       | date       | depth         | extension (for files)
+|---------------------------------------------------------------
+| s2maps-sentinel2-2023      . 2025-12-10 . z00-z07       . pmtiles
+| naturalearth-openmaptiles  . 2025-12-10 . z00-z08       . pmtiles
+| openstreetmap-openmaptiles . 2026-07-01 . z00-z14       . pmtiles
+| static-search              . 2026-04-22 . pop-1k-cities . tar.gz (*)
+| static-search              . 2026-04-22 . pop-1k-cities
+| nominatim                  . 2025-12-10 . basic         . sqlite
 ```
 
 ```
 [type].[date].[depth].[extension (for files)]
 ```
+
+(*) Note that in the case of `.tar.gz` files (currently only static-search), the extension will be in the catalog and on the file server, but when installed locally it will be expanded into a directory with no extension.
 
 ## Full Quality Regions:
 
@@ -37,4 +39,4 @@ openstreetmap-openmaptiles . 2026-07-01 . africa . full-region . pmtiles
 * `date` refers to the date that the data was generated
 * `depth` refers to the zoom level range for pmtiles files, or in the case of search it refers to the type or amount of search data available. Depth should not be named "full-region".
 * `region` is the user-defined name of the FQR
-* `extension` is a file extension in the case of files, or nothing in the case of directories. (Ideally all data files are self-contained, but in the case of static search it is served as a tar.gz and saved on IIAB as a directory, at least for now)
+* `extension` is a file extension in the case of files, or nothing in the case of directories.
