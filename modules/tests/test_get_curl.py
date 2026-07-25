@@ -12,8 +12,8 @@ import get_curl
 
 def _check_curl_available():
     try:
-        subprocess.run(["curl", "--version"], capture_output=True, check=True)
-    except Exception:
+        subprocess.run(["curl", "--version"], capture_output=True, check=True, text=True)
+    except (FileNotFoundError, subprocess.CalledProcessError):
         pytest.skip("curl not available")
 
 
@@ -163,6 +163,7 @@ class TestForceDefaults:
             nonlocal module
             captured_spec.update(kwargs.get("argument_spec", {}))
             module = _make_module_mock(tmp_path, force=False, dest_path=dest)
+            module.params["url"] = "https://example.invalid/default-force"
             return module
 
         monkeypatch.setattr("get_curl.AnsibleModule", spy_ansible_module)
@@ -173,5 +174,5 @@ class TestForceDefaults:
         assert exc.value.code == 0
         assert captured_spec["force"]["default"] is False
         module.exit_json.assert_called_once_with(
-            msg="File already exists", dest=str(dest), url="", changed=False
+            msg="File already exists", dest=str(dest), url="https://example.invalid/default-force", changed=False
         )
