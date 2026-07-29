@@ -1,0 +1,68 @@
+---
+- name: Download a file when the destination does not exist
+  get_curl:
+    url: "{{ source_url }}"
+    dest: "{{ test_dir }}/downloaded.txt"
+    tmp_dest: "{{ tmp_dir }}"
+  register: download_result
+
+- name: Assert that a missing destination is downloaded
+  assert:
+    that:
+      - download_result.changed
+
+- name: Read the downloaded file
+  slurp:
+    src: "{{ test_dir }}/downloaded.txt"
+  register: downloaded_content
+
+- name: Assert that the downloaded content is correct
+  assert:
+    that:
+      - downloaded_content.content | b64decode == "source content\n"
+
+- name: Create a stale file for a forced download
+  copy:
+    content: "stale content\n"
+    dest: "{{ test_dir }}/forced.txt"
+    mode: "0644"
+
+- name: Replace an existing file when force is true
+  get_curl:
+    url: "{{ source_url }}"
+    dest: "{{ test_dir }}/forced.txt"
+    tmp_dest: "{{ tmp_dir }}"
+    force: true
+  register: forced_result
+
+- name: Assert that force replaces the destination
+  assert:
+    that:
+      - forced_result.changed
+
+- name: Read the forced download
+  slurp:
+    src: "{{ test_dir }}/forced.txt"
+  register: forced_content
+
+- name: Assert that the forced content is correct
+  assert:
+    that:
+      - forced_content.content | b64decode == "source content\n"
+
+- name: Create a file for the default-force check
+  copy:
+    content: "default content\n"
+    dest: "{{ test_dir }}/default-force.txt"
+    mode: "0644"
+
+- name: Omit force and preserve an existing file
+  get_curl:
+    url: file:///does-not-exist
+    dest: "{{ test_dir }}/default-force.txt"
+  register: default_force_result
+
+- name: Assert that force defaults to false
+  assert:
+    that:
+      - not default_force_result.changed
