@@ -1,0 +1,62 @@
+---
+- name: Create a file that should not be replaced
+  copy:
+    content: "existing content\n"
+    dest: "{{ test_dir }}/existing.txt"
+    mode: "0644"
+
+- name: Preserve an existing file when force is false
+  get_curl:
+    url: "{{ source_url }}"
+    dest: "{{ test_dir }}/existing.txt"
+    tmp_dest: "{{ tmp_dir }}"
+  register: preserve_result
+
+- name: Assert that an existing file is preserved
+  assert:
+    that:
+      - not preserve_result.changed
+
+- name: Read the preserved file
+  slurp:
+    src: "{{ test_dir }}/existing.txt"
+  register: preserved_content
+
+- name: Assert that the existing content was preserved
+  assert:
+    that:
+      - preserved_content.content | b64decode == "existing content\n"
+
+- name: Create a file with restrictive permissions
+  copy:
+    content: "attribute content\n"
+    dest: "{{ test_dir }}/attributes.txt"
+    mode: "0600"
+
+- name: Update attributes without downloading when force is false
+  get_curl:
+    url: "{{ source_url }}"
+    dest: "{{ test_dir }}/attributes.txt"
+    mode: "0644"
+  register: attributes_result
+
+- name: Assert that file attributes were updated
+  assert:
+    that:
+      - attributes_result.changed
+
+- name: Read the updated file attributes
+  stat:
+    path: "{{ test_dir }}/attributes.txt"
+  register: attributes_stat
+
+- name: Read the file after its attributes changed
+  slurp:
+    src: "{{ test_dir }}/attributes.txt"
+  register: attributes_content
+
+- name: Assert that only the attributes changed
+  assert:
+    that:
+      - attributes_stat.stat.mode == "0644"
+      - attributes_content.content | b64decode == "attribute content\n"
