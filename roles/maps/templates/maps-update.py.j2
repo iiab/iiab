@@ -18,9 +18,9 @@ vector_symlink = maps_serve_path / '{{ maps_dot_black_osm_symlink_name }}'
 satellite_symlink = maps_serve_path / '{{ maps_dot_black_satellite_symlink_name }}'
 terrain_symlink = maps_serve_path / '{{ maps_dot_black_terrain_symlink_name }}'
 
-vector_fallback = maps_fallback_path / '{{ maps_dot_black_vector_tiles["osm-z1"] }}'
-satellite_fallback = maps_fallback_path / '{{ maps_dot_black_satellite_tiles[7] }}'
-terrain_fallback = maps_fallback_path / '{{ maps_dot_black_terrain_tiles["none"] }}'
+vector_fallback = maps_fallback_path / '{{ maps_dot_black_vector_tiles[maps_fallback_vector_quality] }}'
+satellite_fallback = maps_fallback_path / '{{ maps_dot_black_satellite_tiles[maps_fallback_satellite_zoom] }}'
+terrain_fallback = maps_fallback_path / '{{ maps_dot_black_terrain_tiles[maps_fallback_terrain_zoom] }}'
 
 def handle_fallback_file(symlink, fallback, required=True):
     if symlink.exists():
@@ -52,6 +52,15 @@ def get_max_zoom(full_path, fallback, required=True):
         print (f"Got this output from pmtiles:\n{output}")
         return fallback
 
+# Since I have a bit of a mess as of right now as far as what the numbers might
+# mean, let's make a quick decoder that hopefully works on everything. This
+# should run every time on all of the fallback zoom keys so we should know
+# right away if it stops working.
+def get_fallback_zoom_number(fallback_zoom_key):
+    if fallback_zoom_key == "none":
+        return 0
+    return int(fallback_zoom_key.split('-z')[-1])
+
 handle_fallback_file(vector_symlink, vector_fallback)
 handle_fallback_file(satellite_symlink, satellite_fallback, False)
 handle_fallback_file(terrain_symlink, terrain_fallback)
@@ -60,13 +69,23 @@ handle_fallback_file(terrain_symlink, terrain_fallback)
 # terrarium-none.pmtiles which is maxzoom=0 will always be used as a
 # dummy to make maps.black / maplibre happy if we have FQRs and the
 # terrain is enabled.
-WORLD_MAP_VECTOR_MAX_ZOOM = get_max_zoom(vector_symlink, 1)
+WORLD_MAP_VECTOR_MAX_ZOOM = get_max_zoom(
+    vector_symlink,
+    get_fallback_zoom_number("{{ maps_fallback_vector_quality }}")
+)
 if satellite_symlink.exists():
     # Allow for satellite=none
-    WORLD_MAP_SATELLITE_MAX_ZOOM = get_max_zoom(satellite_symlink, 7, False)
+    WORLD_MAP_SATELLITE_MAX_ZOOM = get_max_zoom(
+        satellite_symlink,
+        get_fallback_zoom_number("{{ maps_fallback_satellite_zoom }}"),
+        False,
+    )
 else:
     WORLD_MAP_SATELLITE_MAX_ZOOM = "null"
-WORLD_MAP_TERRAIN_MAX_ZOOM = get_max_zoom(terrain_symlink, 0)
+WORLD_MAP_TERRAIN_MAX_ZOOM = get_max_zoom(
+    terrain_symlink,
+    get_fallback_zoom_number("{{ maps_fallback_terrain_zoom }}")
+)
 
 jsbool = lambda b: "true" if b else "false"
 WORLD_MAP_IS_NATURAL_EARTH = jsbool("naturalearth" in str(vector_symlink.readlink()))
