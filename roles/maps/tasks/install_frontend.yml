@@ -53,6 +53,13 @@
     dest: "{{ maps_serve_path }}/{{ maps_dot_black_osm_symlink_name }}"
     state: link
 
+- name: Download fallback vector tiles
+  include_tasks: download_large_file.yml
+  when: maps_vector_quality != maps_fallback_vector_quality
+  vars:
+    dest_base_path: "{{ maps_serve_path }}"
+    item: "{{ maps_dot_black_vector_tiles[maps_fallback_vector_quality] }}"
+
 - when: maps_satellite_zoom != "none"
   block:
     - name: "Make sure maps_satellite_zoom has a valid value"
@@ -72,6 +79,13 @@
         src: "{{ maps_serve_path }}/{{ maps_dot_black_satellite_tiles[maps_satellite_zoom] }}"
         dest: "{{ maps_serve_path }}/{{ maps_dot_black_satellite_symlink_name }}"
         state: link
+
+    - name: Download fallback satellite tiles
+      include_tasks: download_large_file.yml
+      when: maps_satellite_zoom != maps_fallback_satellite_zoom
+      vars:
+        dest_base_path: "{{ maps_serve_path }}"
+        item: "{{ maps_dot_black_satellite_tiles[maps_fallback_satellite_zoom] }}"
 
 - name: Remove unused satellite symlink
   when: maps_satellite_zoom == "none"
@@ -98,18 +112,30 @@
     dest: "{{ maps_serve_path }}/{{ maps_dot_black_terrain_symlink_name }}"
     state: link
 
+- name: Download fallback terrain tiles
+  include_tasks: download_large_file.yml
+  when: maps_terrain_zoom != maps_fallback_terrain_zoom
+  vars:
+    dest_base_path: "{{ maps_serve_path }}"
+    item: "{{ maps_dot_black_terrain_tiles[maps_fallback_terrain_zoom] }}"
+
+# maps-update.py is used here but it can also be run independently. As we use
+# it here, we take advantage of its handling of pmtiles zoom levels. It only
+# partially handles symlink repairs for now so we still need to set symlinks
+# by other means.
+- name: "Final map configuration"
+  shell: |
+    set -euo pipefail
+    {{ maps_tools_dir }}/maps-update.py
+  args:
+    executable: /bin/bash
+
 - name: Initiate the extracts json
   copy:
     content: '{"regions": {}}'
     dest: "{{ maps_serve_path }}/{{ tile_extract.info_file }}"
     mode: "0644"
     force: false
-
-- name: "Make sure maps_region_downloader is true if maps_preset_full_quality_regions has items"
-  assert:
-    that: maps_region_downloader or (maps_preset_full_quality_regions | length <= 0)
-    fail_msg: "Error: you have maps_preset_full_quality_regions. Either set maps_region_downloader to true or unset maps_preset_full_quality_regions (this will not delete any already downloaded regions)."
-    quiet: yes
 
 - name: "Download preset full quality regions"
   # TODO - Is there a safer way to pass in item.name and item.bbox?
