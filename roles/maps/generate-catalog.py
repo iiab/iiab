@@ -124,7 +124,7 @@ maps_dot_black_terrain_tiles = dict_with_order({
 #   downside: just weird
 #
 
-# Mostly colors, topography, etc.
+# Mostly colors, topography (as an image, not an elevation map), etc.
 maps_dot_black_naturalearth6_tiles = dict_with_order({
   # For actual users
   6: f"{iiab_map_host_url}/naturalearth6-NE2_HR_SR_W_DR-WEBP.{maps_slow_data_date}.z00-z06.pmtiles",
