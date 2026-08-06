@@ -1,32 +1,28 @@
 # Lokole PDF (User's Guide) gets copied for offline use (http://box/info) here:
 # https://github.com/iiab/iiab/blob/master/roles/www_base/templates/iiab-refresh-wiki-docs.sh#L51-L52
 
-
 - name: Record (initial) disk space used
   shell: df -B1 --output=used / | tail -1
   register: df1
 
-
-- name: Install 12 packages for Lokole
+- name: Install 11 packages for Lokole
   apt:
     name:
       #- python3    # 2022-12-21: IIAB pre-req, see scripts/local_facts.fact
       #- python3-pip
       - python3-dev
-      - python3-bcrypt    # 2019-10-14: Should work across modern Linux OS's
+      - python3-bcrypt # 2019-10-14: Should work across modern Linux OS's
       #- bcrypt does not exist on Ubuntu 19.10
       - libffi-dev
       - libjpeg-dev
       - libssl-dev
-      - libopenjp2-7    # 2020-02-01: To solve bug #2221
-      - supervisor
+      - libopenjp2-7 # 2020-02-01: To solve bug #2221
       - usb-modeswitch
       - usb-modeswitch-data
       - mobile-broadband-provider-info
       - ppp
       - wvdial
     state: present
-
 
 # For development purposes -- To install Lokole from a given commit, add the
 # following line to roles/lokole/defaults/main.yml:
@@ -77,17 +73,10 @@
   ansible.builtin.user:
     state: present
     name: "{{ lokole_user }}"
-    #group: "{{ lokole_user }}"
     groups: dialout, dip
     system: yes
-    #uid: "{{ lokole_uid }}"
+    shell: /bin/false
     home: "{{ lokole_home_dir }}"
-
-- name: "Add user '{{ apache_user }}' to group '{{ lokole_user }}' for socket access via NGINX"
-  ansible.builtin.user:
-    name: "{{ apache_user }}"
-    groups: "{{ lokole_user }}"
-    append: yes
 
 - name: mkdir {{ lokole_run_dir }}
   file:
@@ -125,22 +114,19 @@
 #    group: "{{ lokole_user }}"
 #    mode: u=rw+s,g=rx,o=rx
 
-- name: Install {{ lokole_confd }} templates to configure Lokole
+- name: Install systemd service files for Lokole
   template:
-    src: "{{ item.src }}"
-    dest: "{{ lokole_confd }}/{{ item.dest }}"
-    group: "{{ lokole_user }}"
-    owner: "{{ lokole_user }}"
+    src: "lokole-{{ item }}.service.j2"
+    dest: "/etc/systemd/system/lokole-{{ item }}.service"
     mode: "0644"
-  with_items:
-    - { src: 'lokole_gunicorn.conf.j2', dest: 'lokole_gunicorn.conf' }
-    - { src: 'lokole_celery_beat.conf.j2', dest: 'lokole_celery_beat.conf' }
-    - { src: 'lokole_celery_worker.conf.j2', dest: 'lokole_celery_worker.conf' }
-    - { src: 'lokole_restarter.conf.j2', dest: 'lokole_restarter.conf' }
+  loop:
+    - gunicorn
+    - celery-beat
+    - celery-worker
+    - restarter
 
 - name: Create Lokole admin user with password, for http://box{{ lokole_url }}    # http://box/lokole
   include_tasks: setup.yml
-
 
 # RECORD Lokole AS INSTALLED
 
