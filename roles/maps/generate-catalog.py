@@ -157,10 +157,6 @@ nominatim_data = dict_with_order({
   "full": f"{iiab_map_host_url}/nominatim.{maps_slow_data_date}.full.sqlite",
 }, ["basic", "full"])
 
-def render(source, data):
-    rtemplate = jinja2.Environment(loader=jinja2.BaseLoader).from_string(source)
-    return rtemplate.render(**data)
-
 catalog = {
     "README": [
         "If you are installing or configuring",
