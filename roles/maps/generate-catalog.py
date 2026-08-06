@@ -24,12 +24,10 @@ def dict_with_order(d, ordered_keys):
 
 maps_dot_black_vector_tiles = dict_with_order({
   # "high res" full osm, including 3d buildings.
-  # (TODO does this include colors and topography? Or is it used along with naturalearth6 above in most styles?)
   # maps_vector_zoom = 14
   14: f"{iiab_map_host_url}/openstreetmap-openmaptiles.{maps_vector_data_date}.z00-z14.pmtiles",
 
   # "medium res" osm, up to zoom level 11 (original file has 14).
-  # (TODO does this include colors and topography? Or is it used along with naturalearth6 above in most styles?)
   # maps_vector_zoom = 11
   11: f"{iiab_map_host_url}/openstreetmap-openmaptiles.{maps_vector_data_date}.z00-z11.pmtiles",
 
