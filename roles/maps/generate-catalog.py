@@ -172,6 +172,7 @@ catalog = {
     "nominatim": nominatim_data,
 }
 
+# Make sure all of the URLs are valid
 for maptype, zooms in catalog.items():
     if maptype != "README":
         for zoom, url in zooms.items():
