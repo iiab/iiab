@@ -24,7 +24,7 @@ def dict_with_order(d, ordered_keys):
 
 maps_dot_black_vector_tiles = dict_with_order({
   # "high res" full osm, including 3d buildings.
-  # maps_vector_zoom = 14
+  # maps_vector_zoom = 14 (full quality)
   14: f"{iiab_map_host_url}/openstreetmap-openmaptiles.{maps_vector_data_date}.z00-z14.pmtiles",
 
   # "medium res" osm, up to zoom level 11 (original file has 14).
@@ -45,7 +45,7 @@ maps_dot_black_vector_tiles = dict_with_order({
   "nat-z8": f"{iiab_map_host_url}/naturalearth-openmaptiles.{maps_slow_data_date}.z00-z08.pmtiles",
 
   # FOR TESTING OR FALLBACK ONLY
-  # "medium res" osm, up to zoom level 1 (original file has 14).
+  # "skeleton" osm, up to zoom level 1 (original file has 14).
   # maps_vector_zoom = 1
   "1-ci": f"{iiab_map_host_url}/openstreetmap-openmaptiles.{maps_vector_data_date}.z00-z01.pmtiles",
 }, ["nat-z8", 11, 14, "1-ci"])
