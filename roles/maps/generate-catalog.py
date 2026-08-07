@@ -137,12 +137,6 @@ nominatim_data = dict_with_order({
 }, ["basic", "full"])
 
 catalog = {
-    "README": [
-        "If you are installing or configuring",
-        "IIAB Maps, you should ignore this file.",
-        "See /opt/iiab/iiab/maps/generate-catalog.py",
-        "for more info.",
-    ],
     "satellite": maps_dot_black_satellite_tiles,
     "terrain": maps_dot_black_terrain_tiles,
     "vector": maps_dot_black_vector_tiles,
