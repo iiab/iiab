@@ -48,7 +48,7 @@ maps_dot_black_vector_tiles = dict_with_order({
   # "skeleton" osm, up to zoom level 1 (original file has 14).
   # maps_vector_zoom = 1
   "1-ci": f"{iiab_map_host_url}/openstreetmap-openmaptiles.{maps_vector_data_date}.z00-z01.pmtiles",
-}, ["nat-z8", 11, 14, "1-ci"])
+}, ["1-ci", "nat-z8", 11, 14])
 
 maps_dot_black_satellite_tiles = dict_with_order({
   # Low quality satellite, up to zoom level 7 (original file has 13)
@@ -79,7 +79,7 @@ maps_dot_black_satellite_tiles = dict_with_order({
   # Super-low quality satellite, up to zoom level 4 (original file has 13)
   # maps_satellite_zoom = 4
   "4-ci": f"{iiab_map_host_url}/s2maps-sentinel2-2023.{maps_satellite_data_date}.z00-z04.pmtiles",
-}, [7, 9, 11, 12, 13, "4-ci"])
+}, ["4-ci", 7, 9, 11, 12, 13])
 
 maps_dot_black_terrain_tiles = dict_with_order({
   # Low quality terrain, up to zoom level 7 (original file has 10)
@@ -101,28 +101,7 @@ maps_dot_black_terrain_tiles = dict_with_order({
   # A "dummy" maxzoom=0 world map terrain file to fill a role that maps.black/maplibre
   # needs if we have FQRs and the user enables terrain.
   "0-none": f"{iiab_map_host_url}/terrarium-none.pmtiles",
-}, [7, 8, 9, 10, "0-none"])
-# TODO - let's sort this out:
-#
-# The question is the relationship between user settings and catalog keys
-#
-# Option 1: literal - keys are just digits and the instructions here (or in a separate doc?) just instruct them on what to put
-#   upside: everything is consistent
-#   upside: no goofy keys anywhere
-#   downside: implementers don't get useful keys in their configs - just numbers (for none type "0")  (maybe that's fine?!? how long will implementers be manually editing configs anyway?)
-# Option 2: convert - i.e. "none" in config becomes "0" from the catalog
-#   upside: implementers don't have to think about "0 actually means none"
-#   upside: no goofy keys in the catalog
-#   downside: implementers who just look at the keys of the json file may put the wrong values
-# Option 3: Annotated keys in both config and catalog ("1-ci", "0-none", etc) and go with that for configs and catalog
-#   upside: consistent, and the keys give clues to the implementer
-#   downside: for vector, 1 is now also the "fallback" not just the CI, so the naming is not totally accurate
-#   downside: meanings could keep evolving! do we want this sort of thing for everything?
-#   downside: there's "0-none" for terrain and "none" for satellite (because in that case there really is no satellite) which is weird (though that should be short lived)
-# Option 4: redundant keys for everything? i.e have all of "1" "1-ci" "1-fallback" in the catalog and configs?
-#   upside: if uses evolve we can just keep adding keys
-#   downside: just weird
-#
+}, ["0-none", 7, 8, 9, 10])
 
 # Mostly colors, topography (as an image, not an elevation map), etc.
 maps_dot_black_naturalearth6_tiles = dict_with_order({
