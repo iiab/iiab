@@ -110,7 +110,7 @@ maps_dot_black_naturalearth6_tiles = dict_with_order({
 
   # FOR TESTING ONLY
   "4-ci": f"{iiab_map_host_url}/naturalearth6-NE2_HR_SR_W_DR-WEBP.{maps_slow_data_date}.z00-z04.pmtiles",
-}, [6, "4-ci"])
+}, ["4-ci", 6])
 
 static_search_data = dict_with_order({
   # Cities-only static database
