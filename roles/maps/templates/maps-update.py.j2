@@ -6,6 +6,15 @@ from pathlib import Path
 maps_serve_path = Path('{{ maps_serve_path }}')
 maps_fallback_path = Path('{{ maps_fallback_path }}')
 
+# NOTE - Our intention is to (very) soon read the latest version of this file
+# from github.com rather than within the repository. This is an intermediary
+# step.
+catalog = json.load(open("/opt/iiab/iiab/roles/maps/maps-catalog.json", "r"))
+
+VECTOR_FALLBACK_ZOOM = "{{ maps_fallback_vector_zoom }}"
+SATELLITE_FALLBACK_ZOOM = "{{ maps_fallback_satellite_zoom }}"
+TERRAIN_FALLBACK_ZOOM = "{{ maps_fallback_terrain_zoom }}"
+
 # NOTE: This file uses ansible vars defined in default/main.yml for its construction
 # but it should not use anything based in vars/ because it should facilitate those
 # same changes without ansible.
@@ -18,9 +27,9 @@ vector_symlink = maps_serve_path / '{{ maps_dot_black_osm_symlink_name }}'
 satellite_symlink = maps_serve_path / '{{ maps_dot_black_satellite_symlink_name }}'
 terrain_symlink = maps_serve_path / '{{ maps_dot_black_terrain_symlink_name }}'
 
-vector_fallback = maps_fallback_path / '{{ maps_dot_black_vector_tiles[maps_fallback_vector_zoom] }}'
-satellite_fallback = maps_fallback_path / '{{ maps_dot_black_satellite_tiles[maps_fallback_satellite_zoom] }}'
-terrain_fallback = maps_fallback_path / '{{ maps_dot_black_terrain_tiles[maps_fallback_terrain_zoom] }}'
+vector_fallback = maps_fallback_path / catalog["vector"][VECTOR_FALLBACK_ZOOM].split('/')[-1]
+satellite_fallback = maps_fallback_path / catalog["satellite"][SATELLITE_FALLBACK_ZOOM].split('/')[-1]
+terrain_fallback = maps_fallback_path / catalog["terrain"][TERRAIN_FALLBACK_ZOOM].split('/')[-1]
 
 def handle_fallback_file(symlink, fallback, required=True):
     if symlink.exists():
@@ -59,7 +68,10 @@ def get_max_zoom(full_path, fallback, required=True):
 def get_fallback_zoom_number(fallback_zoom_key):
     if fallback_zoom_key == "none":
         return 0
-    return int(fallback_zoom_key.split('-z')[-1])
+    return int(fallback_zoom_key
+        .split('-z')[-1] # deal with nat-z8
+        .split('-')[0]   # deal with 0-none etc
+    )
 
 handle_fallback_file(vector_symlink, vector_fallback)
 handle_fallback_file(satellite_symlink, satellite_fallback, False)

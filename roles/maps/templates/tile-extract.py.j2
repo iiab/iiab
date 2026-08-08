@@ -173,28 +173,34 @@ def get_new_extract_paths(extract_name):
     from the server. Existing FQRs on the file system may have different dates,
     so we can't rely on this function for getting an inventory or deletion.
     """
-    MAPS_VECTOR_DATA_DATE = "{{ maps_vector_data_date }}"
-    MAPS_SLOW_DATA_DATE = "{{ maps_slow_data_date }}"
-    IIAB_MAP_HOST_URL = "{{ iiab_map_host_url }}"
 
-    VECTOR_ZOOM_RANGE = "z00-z{{ '%02d' % maps_vector_max_zoom }}"
-    SATELLITE_ZOOM_RANGE = "z00-z{{ '%02d' % maps_satellite_max_zoom }}"
-    TERRAIN_ZOOM_RANGE = "z00-z{{ '%02d' % maps_terrain_max_zoom }}"
+    # NOTE - Our intention is to (very) soon read the latest version of this file
+    # from github.com rather than within the repository. This is an intermediary
+    # step.
+    catalog = json.load(open("/opt/iiab/iiab/roles/maps/maps-catalog.json", "r"))
 
-    def get_paths(base, zoom_range):
-        return {
-            "source":
-                get_mirror(f"{IIAB_MAP_HOST_URL}/{base}.{zoom_range}.pmtiles"),
-            "extract":
-                os.path.join(HOSTING_DIR, f"{base}.full-region.{extract_name}.pmtiles"),
-            "tmp":
-                os.path.join(TMP_DIR, f"{base}.full-region.{extract_name}.pmtiles"),
-        }
+    VECTOR_MAX_ZOOM = "{{ maps_vector_fqr_max_zoom }}"
+    SATELLITE_MAX_ZOOM = "{{ maps_satellite_fqr_max_zoom }}"
+    TERRAIN_MAX_ZOOM = "{{ maps_terrain_fqr_max_zoom }}"
+
+    def get_paths(source):
+        match (source.split('/')[-1].split('.')):
+            case [base, date, _zoom_range, "pmtiles"]:
+                return {
+                    "source":
+                        get_mirror(source),
+                    "extract":
+                        os.path.join(HOSTING_DIR, f"{base}.{date}.full-region.{extract_name}.pmtiles"),
+                    "tmp":
+                        os.path.join(TMP_DIR, f"{base}.{date}.full-region.{extract_name}.pmtiles"),
+                }
+            case _:
+                raise Exception("Oops got unexpected pmtiles file name:", source)
 
     return {
-        "vector": get_paths(f"openstreetmap-openmaptiles.{MAPS_VECTOR_DATA_DATE}", VECTOR_ZOOM_RANGE),
-        "satellite": get_paths(f"s2maps-sentinel2-2023.{MAPS_SLOW_DATA_DATE}", SATELLITE_ZOOM_RANGE),
-        "terrain": get_paths(f"terrarium.{MAPS_SLOW_DATA_DATE}", TERRAIN_ZOOM_RANGE),
+        "vector": get_paths(catalog["vector"][VECTOR_MAX_ZOOM]),
+        "satellite": get_paths(catalog["satellite"][SATELLITE_MAX_ZOOM]),
+        "terrain": get_paths(catalog["terrain"][TERRAIN_MAX_ZOOM]),
     }
 
 def iter_region_files():
