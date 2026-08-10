@@ -22,6 +22,19 @@ def dict_with_order(d, ordered_keys):
     assert set(d.keys()) == set(ordered_keys), (d.keys(), ordered_keys)
     return {key: d[key] for key in ordered_keys}
 
+def json_comment(s):
+    "Take a multi-line string and return a list of strings that is formatted nicely for json."
+
+    lines = s.strip().split('\n')
+    longest_line = max(len(line) for line in lines)
+    return [
+        # Space before the line, and enough spaces after the line to make all
+        # of them uniform, with a space after the longest line.
+
+        " " + line + " " * (longest_line + 1 - len(line))
+        for line in lines
+    ]
+
 maps_dot_black_vector_tiles = dict_with_order({
   # "high res" full osm, including 3d buildings.
   # maps_vector_zoom = 14 (full quality)
@@ -136,7 +149,27 @@ nominatim_data = dict_with_order({
   "full": f"{iiab_map_host_url}/nominatim.{maps_slow_data_date}.full.sqlite",
 }, ["basic", "full"])
 
+README = json_comment("""
+This is a catalog of the latest data available for IIAB Maps.
+
+IMPORTANT: The copy of this file found at /opt/iiab/iiab/roles/maps/maps-catalog.json
+may not be the version that your IIAB will use for downloading map data. It may be
+out of date, and any changes made here will have no effect.
+
+Instead, for map installation and upgrades, your IIAB will always use the latest
+version found here:
+https://github.com/iiab/iiab/blob/master/roles/maps/maps-catalog.json
+
+This way, you can always the latest map data without upgrading your IIAB software.
+
+To see the data that is stored: https://iiab.switnet.org/maps/2/
+
+For info on how to use this file see:
+https://github.com/iiab/iiab/blob/master/roles/maps/README.md
+""")
+
 catalog = {
+    "README": README,
     "satellite": maps_dot_black_satellite_tiles,
     "terrain": maps_dot_black_terrain_tiles,
     "vector": maps_dot_black_vector_tiles,
