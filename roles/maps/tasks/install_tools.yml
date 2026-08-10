@@ -1,0 +1,64 @@
+- name: Set up tile extraction working dir
+  file:
+    state: directory
+    path: "{{ maps_tools.tile_extract.working_dir }}"
+
+- name: Set up pmtiles unarchiving dir
+  file:
+    state: directory
+    path: "{{ maps_tools.pmtiles.archive_tmp_dir }}"
+
+- name: Define detected arch
+  set_fact:
+    maps_normalized_arch: |
+      {% if dpkg_arch.stdout in ['arm64', 'aarch64'] %}arm64
+      {% elif dpkg_arch.stdout in ['amd64', 'x86_64'] %}amd64
+      {% elif dpkg_arch.stdout is regex('^armv[7-8].*') or dpkg_arch.stdout in ['armhf', 'armeabi-v7a'] %}armhf
+      {% else %}unsupported{% endif %}
+
+- name: "Make sure we have a supported arch for pmtiles"
+  assert:
+    that: maps_normalized_arch != "unsupported"
+    fail_msg: "Error: unsupported architecture for pmtiles: "
+    quiet: yes
+
+- name: Download pmtiles archive for {{ dpkg_arch.stdout }}
+  get_url:
+    url: "{{ maps_tools.pmtiles.releases[dpkg_arch.stdout].src_url }}"
+    dest: "{{ maps_tools.pmtiles.archive_tmp_file }}"
+    checksum: "sha256:{{ maps_tools.pmtiles.releases[dpkg_arch.stdout].sha256sum }}"
+    mode: "0644"
+    timeout: "{{ download_timeout }}"
+
+- name: Unarchive pmtiles archive
+  unarchive:
+    src: "{{ maps_tools.pmtiles.archive_tmp_file }}"
+    dest: "{{ maps_tools.pmtiles.archive_tmp_dir }}"
+    remote_src: yes
+
+- name: Copy pmtiles executable into working dir
+  copy:
+    src: "{{ maps_tools.pmtiles.archive_tmp_dir }}/pmtiles"
+    dest: "{{ maps_tools.pmtiles.executable_path }}"
+    mode: "0744"
+
+# Getting the Python tool, which is not usually recommended over the Go tool,
+# so that we can write code with it that we don't need to build.
+- name: Get PMTiles (Python tool)
+  git:
+    repo: "{{ maps_tools.pmtiles_python.git_url }}"
+    dest: "{{ maps_tools.tile_extract.working_dir }}/{{ maps_tools.pmtiles_python.dir_name }}"
+    version: "{{ maps_tools.pmtiles_python.version }}"
+    depth: 1
+
+- name: Install our tile extraction script
+  template:
+    src: "tile-extract.py.j2"
+    dest: "{{ maps_tools.tile_extract.working_dir }}/tile-extract.py"
+    mode: "0755"
+
+- name: Install maps-update.py
+  template:
+    src: "maps-update.py.j2"
+    dest: "{{ maps_tools.base_dir }}/maps-update.py"
+    mode: "0755"

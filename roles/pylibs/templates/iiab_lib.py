@@ -63,7 +63,8 @@ def read_library_xml(lib_xml_file, kiwix_exclude_attr=["favicon"]): # duplicated
       path_to_id_map (dict): A dictionary that translates zim ids to physical names
     '''
 
-    kiwix_exclude_attr.append("id") # don't include id because is key
+    excluded_attr = {'id'} # use a set and never include the key
+    excluded_attr.update(kiwix_exclude_attr)
     zims_installed = {}
     path_to_id_map = {}
     try:
@@ -75,7 +76,7 @@ def read_library_xml(lib_xml_file, kiwix_exclude_attr=["favicon"]): # duplicated
                 print("xml record missing Book Id")
             zim_id = child.attrib['id']
             for attr in child.attrib:
-                if attr not in kiwix_exclude_attr:
+                if attr not in excluded_attr:
                     attributes[attr] = child.attrib[attr] # copy if not id or in exclusion list
             zims_installed[zim_id] = attributes
             path_to_id_map[child.attrib['path']] = zim_id

@@ -1,0 +1,51 @@
+---
+- name: Exercise the get_curl module through Ansible
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    ansible_python_interpreter: "{{ ansible_playbook_python }}"
+    test_dir: /tmp/iiab-get-curl-integration
+    source_file: "{{ test_dir }}/source.txt"
+    source_url: "file://{{ source_file }}"
+    tmp_dir: "{{ test_dir }}/tmp"
+
+  tasks:
+    - name: Start with a clean test directory
+      file:
+        path: "{{ test_dir }}"
+        state: absent
+
+    - name: Create test directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: "0755"
+      loop:
+        - "{{ test_dir }}"
+        - "{{ tmp_dir }}"
+
+    - name: Create a local source file for curl
+      copy:
+        content: "source content\n"
+        dest: "{{ source_file }}"
+        mode: "0644"
+
+    - name: Verify curl is available to the module
+      command: curl --version
+      changed_when: false
+
+    - name: Test existing-file behavior
+      include_tasks: get_curl/existing-file.yml
+
+    - name: Test downloads and force behavior
+      include_tasks: get_curl/download.yml
+
+    - name: Test directory destinations
+      include_tasks: get_curl/directory.yml
+
+    - name: Remove integration-test artifacts
+      file:
+        path: "{{ test_dir }}"
+        state: absent
