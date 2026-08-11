@@ -135,8 +135,9 @@ maps_dot_black_satellite_tiles = dict_with_order({
     "DETAILS": json_comment("""
       maps_satellite_zoom: none
 
-      Disable satellite. (There is no URL associated with this option
-      because it doesn't download anything.)
+      Disable satellite. There is no URL associated with this option because it
+      doesn't download anything. However it will NOT delete satellite files
+      you have downloaded previously.
     """)
   },
 
