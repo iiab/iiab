@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-import requests, json
+import humanize, requests, json
 
 import os
 os.chdir(os.path.dirname(__file__))
@@ -42,18 +42,23 @@ def json_comment(s):
     ]
 
 def url_only(zooms):
-    filtered_zooms = {
+    return {
         zoom: file["url"]
         for (zoom, file)
         in zooms.items()
         if "url" in file
     }
 
-    # Make sure all of the URLs are valid
-    for zoom, url in filtered_zooms.items():
-        assert requests.head(url).status_code == 200, "Error with URL: " + url
+def add_file_sizes(zooms):
+    for (zoom, file) in zooms.items():
+        if "url" in file:
+            url = file["url"]
+            response = requests.head(url)
 
-    return filtered_zooms
+            # Make the URLs are valid while we're at it
+            assert response.status_code == 200, "Error with URL: " + url
+
+            file["size"] = humanize.naturalsize(response.headers["Content-Length"])
 
 maps_dot_black_vector_tiles = dict_with_order({
   14: {
@@ -266,6 +271,9 @@ catalog = {
     "nominatim": nominatim_data,
 }
 
+for map_type, zooms in catalog.items():
+    add_file_sizes(zooms)
+
 setting_name = {
     "satellite": "maps_satellite_zoom",
     "terrain": "maps_terrain_zoom",
@@ -288,4 +296,5 @@ with open("CATALOG_DETAILS.md", "w") as f:
     for map_type, zooms in catalog.items():
         f.write(f"# {map_type}\n\n")
         for zoom, file in zooms.items():
-            f.write(f"## `{setting_name[map_type]}: {zoom}`\n\n{file['details']}\n\n")
+            file_size = f" ({file['size']})" if 'size' in file else ""
+            f.write(f"## `{setting_name[map_type]}: {zoom}`{file_size}\n\n{file['details']}\n\n")
