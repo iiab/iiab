@@ -284,10 +284,13 @@ setting_name = {
 }
 
 open("maps-catalog.json", "w").write(json.dumps(
-    {"README": json_comment(JSON_README)} | {
-        map_type: url_only(zooms)
-        for (map_type, zooms)
-        in catalog.items()
+    {
+        "README": json_comment(JSON_README),
+        "data": {
+            map_type: url_only(zooms)
+            for (map_type, zooms)
+            in catalog.items()
+        }
     }
 , indent=4))
 
