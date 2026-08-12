@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-import requests, jinja2, json, yaml
+import requests, json
 
 import os
 os.chdir(os.path.dirname(__file__))
@@ -235,7 +235,7 @@ nominatim_data = dict_with_order({
   },
 }, ["basic", "full"])
 
-README = """
+JSON_README = """
 This is a catalog of the latest data available for IIAB Maps. The only truly valid version of
 maps-catalog.json is: https://github.com/iiab/iiab/blob/master/roles/maps/maps-catalog.json
 ASSUME ALL OTHER COPIES ARE STALE (OUT OF DATE!)
@@ -245,6 +245,17 @@ Full Documentation: https://github.com/iiab/iiab/blob/master/roles/maps/README.m
 
 Raw file listing: https://iiab.switnet.org/maps/2/
 """.strip()
+
+CATALOG_DETAILS_README = """
+This guide is for [`maps-catalog.json`](https://github.com/iiab/iiab/blob/master/roles/maps/maps-catalog.json),
+which is the catalog of the latest data available for IIAB Maps. The only truly valid version of this
+guide is is [here](https://github.com/iiab/iiab/blob/master/roles/maps/CATALOG_DETAILS.md).
+ASSUME ALL OTHER COPIES ARE STALE (OUT OF DATE!)
+
+* [IIAB Maps Catalog](https://github.com/iiab/iiab/blob/master/roles/maps/)
+* [IIAB Maps Documentation](https://github.com/iiab/iiab/blob/master/roles/maps/README.md)
+* [Raw file listing](https://iiab.switnet.org/maps/2/)
+"""
 
 catalog = {
     "satellite": maps_dot_black_satellite_tiles,
@@ -265,7 +276,7 @@ setting_name = {
 }
 
 open("maps-catalog.json", "w").write(json.dumps(
-    {"README": json_comment(README)} | {
+    {"README": json_comment(JSON_README)} | {
         map_type: url_only(zooms)
         for (map_type, zooms)
         in catalog.items()
@@ -273,7 +284,7 @@ open("maps-catalog.json", "w").write(json.dumps(
 , indent=4))
 
 with open("CATALOG_DETAILS.md", "w") as f:
-    f.write(README + "\n\n")
+    f.write(CATALOG_DETAILS_README + "\n\n")
     for map_type, zooms in catalog.items():
         f.write(f"# {map_type}\n\n")
         for zoom, file in zooms.items():
