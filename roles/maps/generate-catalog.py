@@ -236,14 +236,12 @@ nominatim_data = dict_with_order({
 }, ["basic", "full"])
 
 README = """
-This is a catalog of the latest data available for IIAB Maps. The only truly
-valid version of maps-catalog.json is:
-
-https://github.com/iiab/iiab/blob/master/roles/maps/maps-catalog.json
-
+This is a catalog of the latest data available for IIAB Maps. The only truly valid version of
+maps-catalog.json is: https://github.com/iiab/iiab/blob/master/roles/maps/maps-catalog.json
 ASSUME ALL OTHER COPIES ARE STALE (OUT OF DATE!)
 
-Documentation: https://github.com/iiab/iiab/blob/master/roles/maps/README.md
+Catalog Guide: https://github.com/iiab/iiab/blob/master/roles/maps/CATALOG_DETAILS.md
+Full Documentation: https://github.com/iiab/iiab/blob/master/roles/maps/README.md
 
 Raw file listing: https://iiab.switnet.org/maps/2/
 """.strip()
