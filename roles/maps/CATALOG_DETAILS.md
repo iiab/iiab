@@ -2,7 +2,7 @@
 This guide is for [`maps-catalog.json`](https://github.com/iiab/iiab/blob/master/roles/maps/maps-catalog.json),
 which is the catalog of the latest data available for IIAB Maps. The only truly valid version of this
 guide is is [here](https://github.com/iiab/iiab/blob/master/roles/maps/CATALOG_DETAILS.md).
-ASSUME ALL OTHER COPIES ARE STALE (OUT OF DATE!)
+ASSUME ALL OTHER COPIES (INCLUDING THE ONE ON YOUR IIAB) ARE STALE (OUT OF DATE!)
 
 * [IIAB Maps Catalog](https://github.com/iiab/iiab/blob/master/roles/maps/)
 * [IIAB Maps Documentation](https://github.com/iiab/iiab/blob/master/roles/maps/README.md)
