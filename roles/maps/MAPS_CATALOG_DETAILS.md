@@ -4,7 +4,6 @@ which is the catalog of the latest data available for IIAB Maps. The only truly 
 guide is is [here](https://github.com/iiab/iiab/blob/master/roles/maps/MAPS_CATALOG_DETAILS.md).
 ASSUME ALL OTHER COPIES (INCLUDING THE ONE ON YOUR IIAB) ARE STALE (OUT OF DATE!)
 
-* [IIAB Maps Catalog](https://github.com/iiab/iiab/blob/master/roles/maps/)
 * [IIAB Maps Documentation](https://github.com/iiab/iiab/blob/master/roles/maps/README.md)
 * [Raw file listing](https://iiab.switnet.org/maps/2/)
 
