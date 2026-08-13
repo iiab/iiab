@@ -4,6 +4,13 @@ import humanize, requests, json
 import os
 os.chdir(os.path.dirname(__file__))
 
+# This file is for generating:
+#
+# * `maps-catalog.json`: a catalog of the latest available IIAB Maps data
+# * `MAPS_CATALOG_DETAILS.md`: an implementer guide for the above
+#
+# Unlike just about everything else in this repository, `maps-catalog.json` is not used directly by the IIAB Maps installation process. Instead, it is made to requested by IIAB Maps _from Github_ during installation and map upgrades. This way, as soon as a map data update is made available, we can update `maps-catalog.json` on Github and it can be installed without upgrading the IIAB Maps software.
+
 iiab_map_host_url = "https://iiab.switnet.org/maps/2"
 
 # "data dates" refer to how recent a certain type of data is
