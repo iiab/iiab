@@ -49,6 +49,9 @@ def add_file_sizes(tiles):
             file["size"] = humanize.naturalsize(response.headers["Content-Length"])
 
 vector_tiles = {
+  "details": fix_multiline_spacing("""
+    Map features in a vector format from OpenStreetMap or Natural Earth. Maximum zoom level available is 14.
+  """),
   "tiles": dict_with_order({
     14: {
       "url": f"{iiab_map_host_url}/openstreetmap-openmaptiles.{maps_vector_data_date}.z00-z14.pmtiles",
@@ -59,7 +62,7 @@ vector_tiles = {
     11: {
       "url": f"{iiab_map_host_url}/openstreetmap-openmaptiles.{maps_vector_data_date}.z00-z11.pmtiles",
       "details": fix_multiline_spacing("""
-        'medium res' osm, up to zoom level 11 (original file has 14).
+        'medium res' osm, up to zoom level 11
       """)
     },
     # NOTE: We will pass this into maps.black as if it's the OpenStreetMap data, even though
@@ -80,36 +83,39 @@ vector_tiles = {
       "details": fix_multiline_spacing("""
         FOR TESTING OR FALLBACK ONLY
 
-        'skeleton' osm, up to zoom level 1 (original file has 14).
+        'skeleton' osm, up to zoom level 1
       """)
     },
   }, ["1-ci", "nat-z8", 11, 14]),
 }
 
 satellite_tiles = {
+  "details": fix_multiline_spacing("""
+    Satellite imagery from s2maps. Maximum zoom level available is 13.
+  """),
   "tiles": dict_with_order({
     7: {
       "url": f"{iiab_map_host_url}/s2maps-sentinel2-2023.{maps_satellite_data_date}.z00-z07.pmtiles",
       "details": fix_multiline_spacing("""
-        Low quality satellite, up to zoom level 7 (original file has 13)
+        Low quality satellite, up to zoom level 7
       """)
     },
     9: {
       "url": f"{iiab_map_host_url}/s2maps-sentinel2-2023.{maps_satellite_data_date}.z00-z09.pmtiles",
       "details": fix_multiline_spacing("""
-        Moderately high quality satellite, up to zoom level 9 (original file has 13)
+        Moderately high quality satellite, up to zoom level 9
       """)
     },
     11: {
       "url": f"{iiab_map_host_url}/s2maps-sentinel2-2023.{maps_satellite_data_date}.z00-z11.pmtiles",
       "details": fix_multiline_spacing("""
-        Pretty high quality satellite, up to zoom level 11 (original file has 13)
+        Pretty high quality satellite, up to zoom level 11
       """)
     },
     12: {
       "url": f"{iiab_map_host_url}/s2maps-sentinel2-2023.{maps_satellite_data_date}.z00-z12.pmtiles",
       "details": fix_multiline_spacing("""
-        Pretty high quality satellite, up to zoom level 12 (original file has 13)
+        Pretty high quality satellite, up to zoom level 12
       """)
     },
     13: {
@@ -130,18 +136,21 @@ satellite_tiles = {
       "details": fix_multiline_spacing("""
         FOR TESTING ONLY
 
-        Super-low quality satellite, up to zoom level 4 (original file has 13)
+        Super-low quality satellite, up to zoom level 4
       """)
     },
   }, ["none", "4-ci", 7, 9, 11, 12, 13]),
 }
 
 terrain_tiles = {
+  "details": fix_multiline_spacing("""
+    Terrain (i.e. elevation) data from Terrarium. Maximum zoom level available is 10.
+  """),
   "tiles": dict_with_order({
     7: {
       "url": f"{iiab_map_host_url}/terrarium.{maps_slow_data_date}.z00-z07.pmtiles",
       "details": fix_multiline_spacing("""
-        Low quality terrain, up to zoom level 7 (original file has 10)
+        Low quality terrain, up to zoom level 7
       """)
     },
     8: {
@@ -171,6 +180,9 @@ terrain_tiles = {
 
 # Mostly colors, topography (as an image, not an elevation map), etc.
 naturalearth6_tiles = {
+  "details": fix_multiline_spacing("""
+    Backdrop imagery in raster format, used in conjunction with vector maps in some styles.
+  """),
   "tiles": dict_with_order({
     6: {
       "url": f"{iiab_map_host_url}/naturalearth6-NE2_HR_SR_W_DR-WEBP.{maps_slow_data_date}.z00-z06.pmtiles",
@@ -188,6 +200,9 @@ naturalearth6_tiles = {
 }
 
 static_search_data = {
+  "details": fix_multiline_spacing("""
+    Search database for the statically hosted search engine. Requires `maps_search_engine: static`.
+  """),
   "tiles": dict_with_order({
     "pop-1k-cities": {
       "url": f"{iiab_map_host_url}/static-search.{maps_static_search_data_date}.pop-1k-cities.tar.gz",
@@ -209,6 +224,9 @@ static_search_data = {
 
 # Keeping nominatim on maps_slow_data_date until we actually update it again
 nominatim_data = {
+  "details": fix_multiline_spacing("""
+    Search database for the Nominatim search engine. Requires `maps_search_engine: nominatim`.
+  """),
   "tiles": dict_with_order({
     # TODO - Make a basic small whole-world map
     "basic": {
@@ -280,7 +298,7 @@ open("maps-catalog.json", "w").write(json.dumps(
 with open("MAPS_CATALOG_DETAILS.md", "w") as f:
     f.write(MAPS_CATALOG_DETAILS_README + "\n\n")
     for map_type in catalog:
-        f.write(f"# {map_type}\n\n")
+        f.write(f"# {map_type}\n\n{catalog[map_type]['details']}\n\n")
         for zoom, file in catalog[map_type]["tiles"].items():
             file_size = f" ({file['size']})" if 'size' in file else ""
             f.write(f"## `{setting_name[map_type]}: {zoom}`{file_size}\n\n{file['details']}\n\n")
