@@ -29,16 +29,16 @@ def json_comment(s):
     assert '"' not in s, f"remove the double quotation mark (escaping it looks ugly) from:\n\n{s}"
     return fix_multiline_spacing(s).split('\n')
 
-def url_only(zooms):
+def url_only(tiles):
     return {
         zoom: file["url"]
         for (zoom, file)
-        in zooms.items()
+        in tiles.items()
         if "url" in file
     }
 
-def add_file_sizes(zooms):
-    for (zoom, file) in zooms.items():
+def add_file_sizes(tiles):
+    for (zoom, file) in tiles.items():
         if "url" in file:
             url = file["url"]
             response = requests.head(url)
@@ -48,7 +48,7 @@ def add_file_sizes(zooms):
 
             file["size"] = humanize.naturalsize(response.headers["Content-Length"])
 
-maps_dot_black_vector_tiles = dict_with_order({
+vector_tiles = dict_with_order({
   14: {
     "url": f"{iiab_map_host_url}/openstreetmap-openmaptiles.{maps_vector_data_date}.z00-z14.pmtiles",
     "details": fix_multiline_spacing("""
@@ -87,7 +87,7 @@ maps_dot_black_vector_tiles = dict_with_order({
   },
 }, ["1-ci", "nat-z8", 11, 14])
 
-maps_dot_black_satellite_tiles = dict_with_order({
+satellite_tiles = dict_with_order({
   7: {
     "url": f"{iiab_map_host_url}/s2maps-sentinel2-2023.{maps_satellite_data_date}.z00-z07.pmtiles",
     "details": fix_multiline_spacing("""
@@ -141,7 +141,7 @@ maps_dot_black_satellite_tiles = dict_with_order({
   },
 }, ["none", "4-ci", 7, 9, 11, 12, 13])
 
-maps_dot_black_terrain_tiles = dict_with_order({
+terrain_tiles = dict_with_order({
   7: {
     "url": f"{iiab_map_host_url}/terrarium.{maps_slow_data_date}.z00-z07.pmtiles",
     "details": fix_multiline_spacing("""
@@ -177,7 +177,7 @@ maps_dot_black_terrain_tiles = dict_with_order({
 }, ["0-none", 7, 8, 9, 10])
 
 # Mostly colors, topography (as an image, not an elevation map), etc.
-maps_dot_black_naturalearth6_tiles = dict_with_order({
+naturalearth6_tiles = dict_with_order({
   6: {
     "url": f"{iiab_map_host_url}/naturalearth6-NE2_HR_SR_W_DR-WEBP.{maps_slow_data_date}.z00-z06.pmtiles",
     "details": fix_multiline_spacing("""
@@ -248,16 +248,16 @@ ASSUME ALL OTHER COPIES (INCLUDING THE ONE ON YOUR IIAB) ARE STALE (OUT OF DATE!
 """
 
 catalog = {
-    "satellite": maps_dot_black_satellite_tiles,
-    "terrain": maps_dot_black_terrain_tiles,
-    "vector": maps_dot_black_vector_tiles,
-    "naturalearth6": maps_dot_black_naturalearth6_tiles,
+    "satellite": satellite_tiles,
+    "terrain": terrain_tiles,
+    "vector": vector_tiles,
+    "naturalearth6": naturalearth6_tiles,
     "static_search": static_search_data,
     "nominatim": nominatim_data,
 }
 
-for map_type, zooms in catalog.items():
-    add_file_sizes(zooms)
+for map_type, tiles in catalog.items():
+    add_file_sizes(tiles)
 
 setting_name = {
     "satellite": "maps_satellite_zoom",
@@ -272,8 +272,8 @@ open("maps-catalog.json", "w").write(json.dumps(
     {
         "README": json_comment(JSON_README),
         "data": {
-            map_type: url_only(zooms)
-            for (map_type, zooms)
+            map_type: url_only(tiles)
+            for (map_type, tiles)
             in catalog.items()
         }
     }
@@ -281,8 +281,8 @@ open("maps-catalog.json", "w").write(json.dumps(
 
 with open("MAPS_CATALOG_DETAILS.md", "w") as f:
     f.write(MAPS_CATALOG_DETAILS_README + "\n\n")
-    for map_type, zooms in catalog.items():
+    for map_type, tiles in catalog.items():
         f.write(f"# {map_type}\n\n")
-        for zoom, file in zooms.items():
+        for zoom, file in tiles.items():
             file_size = f" ({file['size']})" if 'size' in file else ""
             f.write(f"## `{setting_name[map_type]}: {zoom}`{file_size}\n\n{file['details']}\n\n")
