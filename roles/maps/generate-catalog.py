@@ -36,16 +36,16 @@ def json_comment(s):
     assert '"' not in s, f"remove the double quotation mark (escaping it looks ugly) from:\n\n{s}"
     return fix_multiline_spacing(s).split('\n')
 
-def url_only(zooms):
+def url_only(tiles):
     return {
         zoom: file["url"]
         for (zoom, file)
-        in zooms.items()
+        in tiles.items()
         if "url" in file
     }
 
-def add_file_sizes(zooms):
-    for (zoom, file) in zooms.items():
+def add_file_sizes(tiles):
+    for (zoom, file) in tiles.items():
         if "url" in file:
             url = file["url"]
             response = requests.head(url)
@@ -55,185 +55,201 @@ def add_file_sizes(zooms):
 
             file["size"] = humanize.naturalsize(response.headers["Content-Length"])
 
-maps_dot_black_vector_tiles = dict_with_order({
-  14: {
-    "url": f"{iiab_map_host_url}/openstreetmap-openmaptiles.{maps_vector_data_date}.z00-z14.pmtiles",
-    "details": fix_multiline_spacing("""
-      'high res' aka 'full quality' osm, including 3d buildings.
-    """)
-  },
+vector_tiles = {
+  "details": fix_multiline_spacing("""
+    Map features in a vector format from OpenStreetMap or Natural Earth. Maximum zoom level available is 14.
+  """),
+  "tiles": dict_with_order({
+    14: {
+      "url": f"{iiab_map_host_url}/openstreetmap-openmaptiles.{maps_vector_data_date}.z00-z14.pmtiles",
+      "details": fix_multiline_spacing("""
+        'high res' aka 'full quality' osm, including 3d buildings.
+      """)
+    },
+    11: {
+      "url": f"{iiab_map_host_url}/openstreetmap-openmaptiles.{maps_vector_data_date}.z00-z11.pmtiles",
+      "details": fix_multiline_spacing("""
+        'medium res' osm, up to zoom level 11
+      """)
+    },
+    # NOTE: We will pass this into maps.black as if it's the OpenStreetMap data, even though
+    # it's Natural Earth. They're both in the OpenMapTiles schema. The OSM and NE variants of
+    # the "Natural" style we use are compatible, with just some zoom range differences (which
+    # makes no difference that I notice). This will fail to show "naturalearth" in attributions
+    # ("naturalearth6" is separate), even in "generous" attribution mode. However maps.black
+    # and the naturalearth website say that crediting authors is unnecessary. It's not worth
+    # the time to fix just for consistency.
+    "nat-z8": {
+      "url": f"{iiab_map_host_url}/naturalearth-openmaptiles.{maps_slow_data_date}.z00-z08.pmtiles",
+      "details": fix_multiline_spacing("""
+        'low res' - mostly borders, rivers, country names, large roads. (Uses Natural Earth instead of OpenStreetMap)
+      """)
+    },
+    "1-ci": {
+      "url": f"{iiab_map_host_url}/openstreetmap-openmaptiles.{maps_vector_data_date}.z00-z01.pmtiles",
+      "details": fix_multiline_spacing("""
+        FOR TESTING OR FALLBACK ONLY
 
-  11: {
-    "url": f"{iiab_map_host_url}/openstreetmap-openmaptiles.{maps_vector_data_date}.z00-z11.pmtiles",
-    "details": fix_multiline_spacing("""
-      'medium res' osm, up to zoom level 11 (original file has 14).
-    """)
-  },
+        'skeleton' osm, up to zoom level 1
+      """)
+    },
+  }, ["1-ci", "nat-z8", 11, 14]),
+}
 
-  # NOTE: We will pass this into maps.black as if it's the OpenStreetMap data, even though
-  # it's Natural Earth. They're both in the OpenMapTiles schema. The OSM and NE variants of
-  # the "Natural" style we use are compatible, with just some zoom range differences (which
-  # makes no difference that I notice). This will fail to show "naturalearth" in attributions
-  # ("naturalearth6" is separate), even in "generous" attribution mode. However maps.black
-  # and the naturalearth website say that crediting authors is unnecessary. It's not worth
-  # the time to fix just for consistency.
-  "nat-z8": {
-    "url": f"{iiab_map_host_url}/naturalearth-openmaptiles.{maps_slow_data_date}.z00-z08.pmtiles",
-    "details": fix_multiline_spacing("""
-      'low res' - mostly borders, rivers, country names, large roads. (Uses Natural Earth instead of OpenStreetMap)
-    """)
-  },
+satellite_tiles = {
+  "details": fix_multiline_spacing("""
+    Satellite imagery from s2maps. Maximum zoom level available is 13.
+  """),
+  "tiles": dict_with_order({
+    7: {
+      "url": f"{iiab_map_host_url}/s2maps-sentinel2-2023.{maps_satellite_data_date}.z00-z07.pmtiles",
+      "details": fix_multiline_spacing("""
+        Low quality satellite, up to zoom level 7
+      """)
+    },
+    9: {
+      "url": f"{iiab_map_host_url}/s2maps-sentinel2-2023.{maps_satellite_data_date}.z00-z09.pmtiles",
+      "details": fix_multiline_spacing("""
+        Moderately high quality satellite, up to zoom level 9
+      """)
+    },
+    11: {
+      "url": f"{iiab_map_host_url}/s2maps-sentinel2-2023.{maps_satellite_data_date}.z00-z11.pmtiles",
+      "details": fix_multiline_spacing("""
+        Pretty high quality satellite, up to zoom level 11
+      """)
+    },
+    12: {
+      "url": f"{iiab_map_host_url}/s2maps-sentinel2-2023.{maps_satellite_data_date}.z00-z12.pmtiles",
+      "details": fix_multiline_spacing("""
+        Pretty high quality satellite, up to zoom level 12
+      """)
+    },
+    13: {
+      "url": f"{iiab_map_host_url}/s2maps-sentinel2-2023.{maps_satellite_data_date}.z00-z13.pmtiles",
+      "details": fix_multiline_spacing("""
+        Highest available quality satellite, up to zoom level 13
+      """)
+    },
+    "none": {
+      "details": fix_multiline_spacing("""
+        Disable satellite. There is no URL associated with this option because it doesn't download anything.
 
-  "1-ci": {
-    "url": f"{iiab_map_host_url}/openstreetmap-openmaptiles.{maps_vector_data_date}.z00-z01.pmtiles",
-    "details": fix_multiline_spacing("""
-      FOR TESTING OR FALLBACK ONLY
+        NOTE: This will not necessarily delete any satellite files you have downloaded previously.
+      """)
+    },
+    "4-ci": {
+      "url": f"{iiab_map_host_url}/s2maps-sentinel2-2023.{maps_satellite_data_date}.z00-z04.pmtiles",
+      "details": fix_multiline_spacing("""
+        FOR TESTING ONLY
 
-      'skeleton' osm, up to zoom level 1 (original file has 14).
-    """)
-  },
-}, ["1-ci", "nat-z8", 11, 14])
+        Super-low quality satellite, up to zoom level 4
+      """)
+    },
+  }, ["none", "4-ci", 7, 9, 11, 12, 13]),
+}
 
-maps_dot_black_satellite_tiles = dict_with_order({
-  7: {
-    "url": f"{iiab_map_host_url}/s2maps-sentinel2-2023.{maps_satellite_data_date}.z00-z07.pmtiles",
-    "details": fix_multiline_spacing("""
-      Low quality satellite, up to zoom level 7 (original file has 13)
-    """)
-  },
-
-  9: {
-    "url": f"{iiab_map_host_url}/s2maps-sentinel2-2023.{maps_satellite_data_date}.z00-z09.pmtiles",
-    "details": fix_multiline_spacing("""
-      Moderately high quality satellite, up to zoom level 9 (original file has 13)
-    """)
-  },
-
-  11: {
-    "url": f"{iiab_map_host_url}/s2maps-sentinel2-2023.{maps_satellite_data_date}.z00-z11.pmtiles",
-    "details": fix_multiline_spacing("""
-      Pretty high quality satellite, up to zoom level 11 (original file has 13)
-    """)
-  },
-
-  12: {
-    "url": f"{iiab_map_host_url}/s2maps-sentinel2-2023.{maps_satellite_data_date}.z00-z12.pmtiles",
-    "details": fix_multiline_spacing("""
-      Pretty high quality satellite, up to zoom level 12 (original file has 13)
-    """)
-  },
-
-  13: {
-    "url": f"{iiab_map_host_url}/s2maps-sentinel2-2023.{maps_satellite_data_date}.z00-z13.pmtiles",
-    "details": fix_multiline_spacing("""
-      Highest available quality satellite, up to zoom level 13
-    """)
-  },
-
-  "none": {
-    "details": fix_multiline_spacing("""
-      Disable satellite. There is no URL associated with this option because it doesn't download anything.
-
-      NOTE: This will not necessarily delete any satellite files you have downloaded previously.
-    """)
-  },
-
-  "4-ci": {
-    "url": f"{iiab_map_host_url}/s2maps-sentinel2-2023.{maps_satellite_data_date}.z00-z04.pmtiles",
-    "details": fix_multiline_spacing("""
-      FOR TESTING ONLY
-
-      Super-low quality satellite, up to zoom level 4 (original file has 13)
-    """)
-  },
-}, ["none", "4-ci", 7, 9, 11, 12, 13])
-
-maps_dot_black_terrain_tiles = dict_with_order({
-  7: {
-    "url": f"{iiab_map_host_url}/terrarium.{maps_slow_data_date}.z00-z07.pmtiles",
-    "details": fix_multiline_spacing("""
-      Low quality terrain, up to zoom level 7 (original file has 10)
-    """)
-  },
-
-  8: {
-    "url": f"{iiab_map_host_url}/terrarium.{maps_slow_data_date}.z00-z08.pmtiles",
-    "details": fix_multiline_spacing("""
-    """)
-  },
-
-  9: {
-    "url": f"{iiab_map_host_url}/terrarium.{maps_slow_data_date}.z00-z09.pmtiles",
-    "details": fix_multiline_spacing("""
-    """)
-  },
-
-  10: {
-    "url": f"{iiab_map_host_url}/terrarium.{maps_slow_data_date}.z00-z10.pmtiles",
-    "details": fix_multiline_spacing("""
-      (This is the highest quality that maps.black offers in pmtiles format. They offer 11, 12, and 13 in squashfs format, but they are massive files.)
-    """)
-  },
-
-  "0-none": {
-    "url": f"{iiab_map_host_url}/terrarium-none.pmtiles",
-    "details": fix_multiline_spacing("""
-      A 'dummy' maxzoom=0 world map terrain file to fill a role that maps.black/maplibre needs if we have FQRs and the user enables terrain.
-    """)
-  },
-}, ["0-none", 7, 8, 9, 10])
+terrain_tiles = {
+  "details": fix_multiline_spacing("""
+    Terrain (i.e. elevation) data from Terrarium. Maximum zoom level available is 10.
+  """),
+  "tiles": dict_with_order({
+    7: {
+      "url": f"{iiab_map_host_url}/terrarium.{maps_slow_data_date}.z00-z07.pmtiles",
+      "details": fix_multiline_spacing("""
+        Low quality terrain, up to zoom level 7
+      """)
+    },
+    8: {
+      "url": f"{iiab_map_host_url}/terrarium.{maps_slow_data_date}.z00-z08.pmtiles",
+      "details": fix_multiline_spacing("""
+      """)
+    },
+    9: {
+      "url": f"{iiab_map_host_url}/terrarium.{maps_slow_data_date}.z00-z09.pmtiles",
+      "details": fix_multiline_spacing("""
+      """)
+    },
+    10: {
+      "url": f"{iiab_map_host_url}/terrarium.{maps_slow_data_date}.z00-z10.pmtiles",
+      "details": fix_multiline_spacing("""
+        (This is the highest quality that maps.black offers in pmtiles format. They offer 11, 12, and 13 in squashfs format, but they are massive files.)
+      """)
+    },
+    "0-none": {
+      "url": f"{iiab_map_host_url}/terrarium-none.pmtiles",
+      "details": fix_multiline_spacing("""
+        A 'dummy' maxzoom=0 world map terrain file to fill a role that maps.black/maplibre needs if we have FQRs and the user enables terrain.
+      """)
+    },
+  }, ["0-none", 7, 8, 9, 10]),
+}
 
 # Mostly colors, topography (as an image, not an elevation map), etc.
-maps_dot_black_naturalearth6_tiles = dict_with_order({
-  6: {
-    "url": f"{iiab_map_host_url}/naturalearth6-NE2_HR_SR_W_DR-WEBP.{maps_slow_data_date}.z00-z06.pmtiles",
-    "details": fix_multiline_spacing("""
-      Normal, default value
-    """)
-  },
+naturalearth6_tiles = {
+  "details": fix_multiline_spacing("""
+    Backdrop imagery in raster format, used in conjunction with vector maps in some styles.
+  """),
+  "tiles": dict_with_order({
+    6: {
+      "url": f"{iiab_map_host_url}/naturalearth6-NE2_HR_SR_W_DR-WEBP.{maps_slow_data_date}.z00-z06.pmtiles",
+      "details": fix_multiline_spacing("""
+        Normal, default value
+      """)
+    },
+    "4-ci": {
+      "url": f"{iiab_map_host_url}/naturalearth6-NE2_HR_SR_W_DR-WEBP.{maps_slow_data_date}.z00-z04.pmtiles",
+      "details": fix_multiline_spacing("""
+        FOR TESTING ONLY
+      """)
+    },
+  }, ["4-ci", 6]),
+}
 
-  "4-ci": {
-    "url": f"{iiab_map_host_url}/naturalearth6-NE2_HR_SR_W_DR-WEBP.{maps_slow_data_date}.z00-z04.pmtiles",
-    "details": fix_multiline_spacing("""
-      FOR TESTING ONLY
-    """)
-  },
-}, ["4-ci", 6])
+static_search_data = {
+  "details": fix_multiline_spacing("""
+    Search database for the statically hosted search engine. Requires `maps_search_engine: static`.
+  """),
+  "tiles": dict_with_order({
+    "pop-1k-cities": {
+      "url": f"{iiab_map_host_url}/static-search.{maps_static_search_data_date}.pop-1k-cities.tar.gz",
+      "details": fix_multiline_spacing("""
+        Cities-only static database
+      """)
+    },
 
-static_search_data = dict_with_order({
-  "pop-1k-cities": {
-    "url": f"{iiab_map_host_url}/static-search.{maps_static_search_data_date}.pop-1k-cities.tar.gz",
-    "details": fix_multiline_spacing("""
-      Cities-only static database
-    """)
-  },
+    "pop-100k-cities": {
+      "url": f"{iiab_map_host_url}/static-search.{maps_static_search_data_date}.pop-100k-cities.tar.gz",
+      "details": fix_multiline_spacing("""
+        FOR TESTING ONLY
 
-  "pop-100k-cities": {
-    "url": f"{iiab_map_host_url}/static-search.{maps_static_search_data_date}.pop-100k-cities.tar.gz",
-    "details": fix_multiline_spacing("""
-      FOR TESTING ONLY
-
-      Large cities-only static database
-    """)
-  },
-}, ["pop-1k-cities", "pop-100k-cities"])
+        Large cities-only static database
+      """)
+    },
+  }, ["pop-1k-cities", "pop-100k-cities"])
+}
 
 # Keeping nominatim on maps_slow_data_date until we actually update it again
-nominatim_data = dict_with_order({
-  # TODO - Make a basic small whole-world map
-  "basic": {
-    "url": f"{iiab_map_host_url}/nominatim.{maps_slow_data_date}.basic.sqlite",
-    "details": fix_multiline_spacing("""
-      Basic nominatim database. (California admin+natural for now.)
-    """)
-  },
-  "full": {
-    "url": f"{iiab_map_host_url}/nominatim.{maps_slow_data_date}.full.sqlite",
-    "details": fix_multiline_spacing("""
-      Full nominatim database
-    """)
-  },
-}, ["basic", "full"])
+nominatim_data = {
+  "details": fix_multiline_spacing("""
+    Search database for the Nominatim search engine. Requires `maps_search_engine: nominatim`.
+  """),
+  "tiles": dict_with_order({
+    # TODO - Make a basic small whole-world map
+    "basic": {
+      "url": f"{iiab_map_host_url}/nominatim.{maps_slow_data_date}.basic.sqlite",
+      "details": fix_multiline_spacing("""
+        Basic nominatim database. (California admin+natural for now.)
+      """)
+    },
+    "full": {
+      "url": f"{iiab_map_host_url}/nominatim.{maps_slow_data_date}.full.sqlite",
+      "details": fix_multiline_spacing("""
+        Full nominatim database
+      """)
+    },
+  }, ["basic", "full"])
+}
 
 JSON_README = """
 Catalog of the latest available IIAB Maps data:
@@ -255,16 +271,16 @@ ASSUME ALL OTHER COPIES (INCLUDING THE ONE ON YOUR IIAB) ARE STALE (OUT OF DATE!
 """
 
 catalog = {
-    "satellite": maps_dot_black_satellite_tiles,
-    "terrain": maps_dot_black_terrain_tiles,
-    "vector": maps_dot_black_vector_tiles,
-    "naturalearth6": maps_dot_black_naturalearth6_tiles,
+    "satellite": satellite_tiles,
+    "terrain": terrain_tiles,
+    "vector": vector_tiles,
+    "naturalearth6": naturalearth6_tiles,
     "static_search": static_search_data,
     "nominatim": nominatim_data,
 }
 
-for map_type, zooms in catalog.items():
-    add_file_sizes(zooms)
+for map_type in catalog:
+    add_file_sizes(catalog[map_type]["tiles"])
 
 setting_name = {
     "satellite": "maps_satellite_zoom",
@@ -279,17 +295,17 @@ open("maps-catalog.json", "w").write(json.dumps(
     {
         "README": json_comment(JSON_README),
         "data": {
-            map_type: url_only(zooms)
-            for (map_type, zooms)
-            in catalog.items()
+            map_type: url_only(catalog[map_type]["tiles"])
+            for map_type
+            in catalog
         }
     }
 , indent=4))
 
 with open("MAPS_CATALOG_DETAILS.md", "w") as f:
     f.write(MAPS_CATALOG_DETAILS_README + "\n\n")
-    for map_type, zooms in catalog.items():
-        f.write(f"# {map_type}\n\n")
-        for zoom, file in zooms.items():
+    for map_type in catalog:
+        f.write(f"# {map_type}\n\n{catalog[map_type]['details']}\n\n")
+        for zoom, file in catalog[map_type]["tiles"].items():
             file_size = f" ({file['size']})" if 'size' in file else ""
             f.write(f"## `{setting_name[map_type]}: {zoom}`{file_size}\n\n{file['details']}\n\n")
