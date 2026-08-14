@@ -26,20 +26,8 @@ def fix_multiline_spacing(s):
     return '\n'.join([line.strip() for line in s.strip().split('\n')])
 
 def json_comment(s):
-    "Take a multi-line string and return a list of strings that is formatted nicely for json."
-
     assert '"' not in s, f"remove the double quotation mark (escaping it looks ugly) from:\n\n{s}"
-
-    lines = fix_multiline_spacing(s).split('\n')
-
-    longest_line = max(len(line) for line in lines)
-    return [
-        # Space before the line, and enough spaces after the line to make all
-        # of them uniform, with a space after the longest line.
-
-        " " + line + " " * (longest_line + 1 - len(line))
-        for line in lines
-    ]
+    return fix_multiline_spacing(s).split('\n')
 
 def url_only(zooms):
     return {
@@ -241,10 +229,9 @@ nominatim_data = dict_with_order({
 }, ["basic", "full"])
 
 JSON_README = """
-This is a catalog of the latest data available for IIAB Maps. The only truly valid version of
-maps-catalog.json is: https://github.com/iiab/iiab/blob/master/roles/maps/maps-catalog.json
-ASSUME ALL OTHER COPIES (INCLUDING THE ONE ON YOUR IIAB) ARE STALE (OUT OF DATE!)
-
+Catalog of the latest available IIAB Maps data:
+https://github.com/iiab/iiab/blob/master/roles/maps/maps-catalog.json
+ASSUME ALL OTHER COPIES of maps-catalog.json (INCLUDING THE ONE ON YOUR IIAB) ARE STALE AND OUT OF DATE!
 Catalog Guide: https://github.com/iiab/iiab/blob/master/roles/maps/MAPS_CATALOG_DETAILS.md
 Full Documentation: https://github.com/iiab/iiab/blob/master/roles/maps/README.md
 Raw file listing: https://iiab.switnet.org/maps/2/
