@@ -1,15 +1,23 @@
 #!/usr/bin/python3
 
-import json, subprocess, sys
+import json, requests, subprocess, sys
 from pathlib import Path
 
 maps_serve_path = Path('{{ maps_serve_path }}')
 maps_fallback_path = Path('{{ maps_fallback_path }}')
 
-# NOTE - Our intention is to (very) soon read the latest version of this file
-# from github.com rather than within the repository. This is an intermediary
-# step.
-catalog = json.load(open("/opt/iiab/iiab/roles/maps/maps-catalog.json", "r"))["data"]
+CATALOG_URL = "{{ maps_catalog_url }}"
+
+# Unlike the global data, FQRs always stay up to date, so it downloads
+# the latest catalog.
+catalog_response = requests.get(CATALOG_URL)
+if catalog_response.status_code != 200:
+    raise Exception("Cannot find map data catalog")
+
+try:
+    catalog = catalog_response.json()["data"]
+except json.decoder.JSONDecodeError:
+    raise Exception("Error reading map data catalog")
 
 VECTOR_FALLBACK_ZOOM = "{{ maps_fallback_vector_zoom }}"
 SATELLITE_FALLBACK_ZOOM = "{{ maps_fallback_satellite_zoom }}"
