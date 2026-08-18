@@ -127,10 +127,10 @@ def validate_extract_name(extract_name):
     except AssertionError:
         raise ValueError("extract_name has invalid length or characters: ", extract_name)
 
-def validate_extract_box(extract_box):
+def clean_extract_box(extract_box_str):
     try:
         # `float` is important here even if just as a parsing check.
-        min_lon, min_lat, max_lon, max_lat = [float(n) for n in extract_box.split(",")]
+        min_lon, min_lat, max_lon, max_lat = [float(n) for n in extract_box_str.split(",")]
 
         # I am concerned about longitudes in particular because -180 and 180 refer to the same place.
         # I expect to get all all positives or all negatives for longitudes (see the big comment in
@@ -141,7 +141,26 @@ def validate_extract_box(extract_box):
         assert max_lon - min_lon < 360, "FQR can't wrap around the world"
 
     except Exception:
-        raise ValueError("extract_box is malformed: ", extract_box)
+        raise ValueError("extract_box_str is malformed: ", extract_box_str)
+
+    # We want min_lon to be from -180 to 180. We want to performa modulo 360
+    # to give it an equivalent longitude, but starting at -180 instead of 180
+    new_min_lon = (
+      (                 # start off assuming that min_lon "ought to be" in the range of -180 < x < 180
+        (min_lon + 180) # thus this "ought to be" in the range of 0 < x < 360
+        % 360           # Modulo 360 will in fact change our range to 0 < x < 360
+      )
+    ) - 180             # Finally subtracting 180 will set our range to -180 < x < 180
+
+    # Set min_lon and max_lon, adjusting by the same amount as necessary
+    # Because of our previous assurances, we know that max_lon > min_lon,
+    # and that the width of the FQR is less than the width of the whole earth (360).
+    # Thus, max_lon has a potential range of -180 < x < 540, which the system can
+    # hopefully deal with. This normalizes things nicely for us as well, which we
+    # see below.
+    min_lon, max_lon = new_min_lon, max_lon + (new_min_lon - min_lon)
+
+    return [min_lon, min_lat, max_lon, max_lat]
 
 def validate_noninteractive(noninteractive):
     assert noninteractive in ("", "noninteractive"), f"`noninteractive` (optional) should only be set to \"noninteractive\". Got {noninteractive}"
@@ -279,29 +298,7 @@ def delete_extract(extract_name):
         os.remove(path)
 
 def set_region_geojson(extract_box, geojson_file):
-    # TODO maybe move the "cleaning" of min_lon and max_lon to `validate_extract_box`
-    # (and rename the function) since all the logic is related
-
-    # These values come straight from the region drawing tool, and may not be
-    # friendly for pmtiles
-    [min_lon, min_lat, max_lon, max_lat] = map(float, extract_box.split(",") )
-
-    # We want min_lon to be from -180 to 180. We want to performa modulo 360
-    # to give it an equivalent longitude, but starting at -180 instead of 180
-    new_min_lon = (
-      (                 # start off assuming that min_lon "ought to be" in the range of -180 < x < 180
-        (min_lon + 180) # thus this "ought to be" in the range of 0 < x < 360
-        % 360           # Modulo 360 will in fact change our range to 0 < x < 360
-      )
-    ) - 180             # Finally subtracting 180 will set our range to -180 < x < 180
-
-    # Set min_lon and max_lon, adjusting by the same amount as necessary
-    # Because of our previous assurances, we know that max_lon > min_lon,
-    # and that the width of the FQR is less than the width of the whole earth (360).
-    # Thus, max_lon has a potential range of -180 < x < 540, which the system can
-    # hopefully deal with. This normalizes things nicely for us as well, which we
-    # see below.
-    min_lon, max_lon = new_min_lon, max_lon + (new_min_lon - min_lon)
+    [min_lon, min_lat, max_lon, max_lat] = extract_box
 
     # Since we know that now -180 < min_lon < 180, and max_lon > min_lon, crossing the antimeridian
     # will always come in the form of max_lon > 180 and not min_lon < -180.
@@ -466,21 +463,19 @@ def check_for_existing_name(extract_name, noninteractive):
         return True
 
 def check_for_overlaps(new_box):
-    [new_min_long, new_min_lat, new_max_long, new_max_lat] = [
-        float(n) for n in new_box.split(",")
-    ]
+    [new_min_lon, new_min_lat, new_max_lon, new_max_lat] = new_box
 
     existing_region_extracts = json.loads(open(EXTRACTS_JSON).read())["regions"]
     for existing in existing_region_extracts.values():
         [long_1, lat_1, long_2, lat_2] = existing['ui_bounds']
-        existing_min_long = min([long_1, long_2])
-        existing_max_long = max([long_1, long_2])
+        existing_min_lon = min([long_1, long_2])
+        existing_max_lon = max([long_1, long_2])
         existing_min_lat = min([lat_1, lat_2])
         existing_max_lat = max([lat_1, lat_2])
 
         if (
-            new_min_long < existing_max_long and
-            new_max_long > existing_min_long and
+            new_min_lon < existing_max_lon and
+            new_max_lon > existing_min_lon and
             new_min_lat  < existing_max_lat and
             new_max_lat  > existing_min_lat
         ):
@@ -563,11 +558,11 @@ if __name__ == "__main__":
             )
 
             extract_name = sys.argv[2]
-            extract_box = sys.argv[3]
+            extract_box_str = sys.argv[3]
             noninteractive = sys.argv[4] if len(sys.argv) > 4 else ""
 
             validate_extract_name(extract_name)
-            validate_extract_box(extract_box)
+            extract_box = clean_extract_box(extract_box_str)
             validate_noninteractive(noninteractive)
             noninteractive = bool(noninteractive)
 
