@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-import json, glob, os, random, re, requests, shutil, string, subprocess, sys, tempfile, xmltodict, xml
+import json, glob, os, random, re, requests, shutil, string, subprocess, sys, xmltodict, xml
 from pprint import pprint
 from collections import defaultdict
 
@@ -30,14 +30,14 @@ def get_bounds(full_path):
     # At this point we have a pmtiles file that reports to span -180 to 180, i.e. the entire
     # logical width of the map. While this might actually be the case, it's more likely that
     # it's a normal sized region that crosses the antimeridian, i.e. starts before 180 and
-    # wraps around to end after -180. But pmtiles doesn't have a concept of wrapping around
-    # the map. We were only able to create this region in the first place using a multipolygon
-    # with one part of the region after -180 and another part of the region before 180.
-    # For instance, if we created a region with longitudes from 165 to 190, we would turn it
-    # into a multipolygon from 165 to 180 and from -180 to -170. This spans from -180 to 180,
-    # and that's what gets recorded in the header (and we just got it with render_bounds).
-    # For ui_bounds, we want 165 and 190 so maplibre can draw the rectangle. And to find those
-    # numbers, we need to inspect the file to see where all of the tiles are.
+    # wraps around to end after -180. But pmtiles doesn't like the concept of wrapping
+    # around the map. We're able to create such regions by asking pmtiles to make an extract
+    # across the antimeridian, and it grabs the right tiles for the requested bbox, but in
+    # the header it still says -180 to 180 (and we just got it with render_bounds).
+    #
+    # For ui_bounds, we want the coordinates of the actual tiles (something like 165 to 190)
+    # so maplibre can draw the rectangle. And to find those numbers, we need to inspect the
+    # file to see where all of the tiles are.
 
     with open(full_path, "r+b") as f:
         source = MmapSource(f)
@@ -127,10 +127,10 @@ def validate_extract_name(extract_name):
     except AssertionError:
         raise ValueError("extract_name has invalid length or characters: ", extract_name)
 
-def validate_extract_box(extract_box):
+def clean_extract_box(extract_box_str):
     try:
         # `float` is important here even if just as a parsing check.
-        min_lon, min_lat, max_lon, max_lat = [float(n) for n in extract_box.split(",")]
+        min_lon, min_lat, max_lon, max_lat = [float(n) for n in extract_box_str.split(",")]
 
         # I am concerned about longitudes in particular because -180 and 180 refer to the same place.
         # I expect to get all all positives or all negatives for longitudes (see the big comment in
@@ -140,8 +140,20 @@ def validate_extract_box(extract_box):
         assert min_lat < max_lat, "latitudes seem to be out of order"
         assert max_lon - min_lon < 360, "FQR can't wrap around the world"
 
-    except Exception:
-        raise ValueError("extract_box is malformed: ", extract_box)
+    except Exception as e:
+        raise ValueError(f"extract_box_str is malformed ({e}): ", extract_box_str)
+
+    def lon_modulo(lon):
+        # We want the longitudes to be from -180 to just under 180. We want to perform a
+        # modulo 360 to give it an equivalent longitude, but starting at -180 instead of 0.
+        return (
+          (                 # Start off assuming that lon "ought to be" in the range of -180 <= x < 180
+            (lon + 180)     # Thus, lon + 180 "ought to be" in the range of 0 <= x < 360
+            % 360           # Modulo 360 will *in fact* change our range to 0 <= x < 360
+          )
+        ) - 180             # Finally subtracting 180 will *in fact* set our range to -180 <= x < 180
+
+    return [lon_modulo(min_lon), min_lat, lon_modulo(max_lon), max_lat]
 
 def validate_noninteractive(noninteractive):
     assert noninteractive in ("", "noninteractive"), f"`noninteractive` (optional) should only be set to \"noninteractive\". Got {noninteractive}"
@@ -278,96 +290,14 @@ def delete_extract(extract_name):
             raise Exception("Unknown error. Stopping before we delete the wrong file!", path)
         os.remove(path)
 
-def set_region_geojson(extract_box, geojson_file):
-    # TODO maybe move the "cleaning" of min_lon and max_lon to `validate_extract_box`
-    # (and rename the function) since all the logic is related
-
-    # These values come straight from the region drawing tool, and may not be
-    # friendly for pmtiles
-    [min_lon, min_lat, max_lon, max_lat] = map(float, extract_box.split(",") )
-
-    # We want min_lon to be from -180 to 180. We want to performa modulo 360
-    # to give it an equivalent longitude, but starting at -180 instead of 180
-    new_min_lon = (
-      (                 # start off assuming that min_lon "ought to be" in the range of -180 < x < 180
-        (min_lon + 180) # thus this "ought to be" in the range of 0 < x < 360
-        % 360           # Modulo 360 will in fact change our range to 0 < x < 360
-      )
-    ) - 180             # Finally subtracting 180 will set our range to -180 < x < 180
-
-    # Set min_lon and max_lon, adjusting by the same amount as necessary
-    # Because of our previous assurances, we know that max_lon > min_lon,
-    # and that the width of the FQR is less than the width of the whole earth (360).
-    # Thus, max_lon has a potential range of -180 < x < 540, which the system can
-    # hopefully deal with. This normalizes things nicely for us as well, which we
-    # see below.
-    min_lon, max_lon = new_min_lon, max_lon + (new_min_lon - min_lon)
-
-    # Since we know that now -180 < min_lon < 180, and max_lon > min_lon, crossing the antimeridian
-    # will always come in the form of max_lon > 180 and not min_lon < -180.
-    if max_lon <= 180:
-        # Normal case, one rectangle
-        coordinates = [
-          [
-            [
-              # 5 points because we have to trace out a closed square. The first and last points are the same.
-              [min_lon, min_lat],
-              [min_lon, max_lat],
-              [max_lon, max_lat],
-              [max_lon, min_lat],
-              [min_lon, min_lat],
-            ]
-          ]
-        ]
-    else:
-        # Crossing the antimeridian, split into two rectangles.
-        coordinates = [
-          [
-            [
-              # The western rectangle is on the eastern part of the -180 to 180 map.
-              # We want the part that starts at min_lon and ends at 180, since max_lon > 180
-              [min_lon, min_lat],
-              [min_lon, max_lat],
-              [180, max_lat],
-              [180, min_lat],
-              [min_lon, min_lat],
-            ],
-          ],
-          [
-            [
-              # The eastern rectangle is on the western part of the -180 to 180 map.
-              # We want the part that starts at -180 and ends at max_lon. Since
-              # max_lon > 180, we subtract 360 to get the equivalent that's within
-              # -180 and 180.
-              [-180, min_lat],
-              [-180, max_lat],
-              [max_lon - 360, max_lat],
-              [max_lon - 360, min_lat],
-              [-180, min_lat],
-            ]
-          ]
-        ]
-
-    region = {
-      "type": "MultiPolygon",
-      "coordinates": coordinates
-    }
-
-    geojson_file.write(json.dumps(region))
-
-
 def create_extract(extract_box, extract_paths):
-    with tempfile.NamedTemporaryFile(delete_on_close=False, mode="w") as geojson_file:
-        set_region_geojson(extract_box, geojson_file)
-        geojson_file.close()
-
-        # Extract them all successfully before moving them.
-        for paths in extract_paths.values():
-            result = subprocess.run(
-                [PMTILES, "extract", paths["source"], paths["tmp"], f"--region={geojson_file.name}"],
-            )
-            if result.returncode != 0:
-                raise Exception(f"Region download failed. Double-check your Internet connection. (error code {result.returncode})")
+    # Extract them all successfully before moving them.
+    for paths in extract_paths.values():
+        result = subprocess.run(
+            [PMTILES, "extract", paths["source"], paths["tmp"], "--bbox=" + ",".join(map(repr, extract_box))],
+        )
+        if result.returncode != 0:
+            raise Exception(f"Region download failed. Double-check your Internet connection. (error code {result.returncode})")
 
     for paths in extract_paths.values():
         shutil.move(paths["tmp"], paths["extract"])
@@ -384,47 +314,43 @@ UNIT_MULT = {
 def get_estimates(extract_box, extract_paths):
     extract_sizes = {}
 
-    with tempfile.NamedTemporaryFile(delete_on_close=False, mode="w") as geojson_file:
-        set_region_geojson(extract_box, geojson_file)
-        geojson_file.close()
+    for paths in extract_paths.values():
+        result = subprocess.run(
+            [PMTILES, "extract", paths["source"], paths["tmp"], "--bbox=" + ",".join(map(repr, extract_box)), "--dry-run"],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            raise Exception(f"Download size check failed. Double-check your Internet connection. (error code {result.returncode})")
 
-        for paths in extract_paths.values():
-            result = subprocess.run(
-                [PMTILES, "extract", paths["source"], paths["tmp"], f"--region={geojson_file.name}", "--dry-run"],
-                capture_output=True,
-                text=True,
-            )
-            if result.returncode != 0:
-                raise Exception(f"Download size check failed. Double-check your Internet connection. (error code {result.returncode})")
+        # Parse transfer and archive sizes from the last line of --dry-run output.
+        # (Though we'll check every line to make it a bit more robust)
+        #
+        # NOTE: The reason this is two different sizes is due to something
+        # called "overfetching" which is making fewer requests at the cost of
+        # grabbing some extra data we don't need. This is actually a ratio we
+        # can control and will likely look into for optimizing user experience.
+        pattern = (
+            r'\d+/\d+/\d+ \d+:\d+:\d+ extract.go:\d*: '
+            r'Extract transferred (\d*\.?\d*) (kB|MB|GB|TB) '
+            r'\(overfetch \d*\.?\d*\) '
+            r'for an archive size of (\d*\.?\d*) (kB|MB|GB|TB)'
+        )
+        for line in result.stdout.split('\n'):
+            re_match = re.match(pattern, line)
+            if re_match is not None:
+                break
 
-            # Parse transfer and archive sizes from the last line of --dry-run output.
-            # (Though we'll check every line to make it a bit more robust)
-            #
-            # NOTE: The reason this is two different sizes is due to something
-            # called "overfetching" which is making fewer requests at the cost of
-            # grabbing some extra data we don't need. This is actually a ratio we
-            # can control and will likely look into for optimizing user experience.
-            pattern = (
-                r'\d+/\d+/\d+ \d+:\d+:\d+ extract.go:\d*: '
-                r'Extract transferred (\d*\.?\d*) (kB|MB|GB|TB) '
-                r'\(overfetch \d*\.?\d*\) '
-                r'for an archive size of (\d*\.?\d*) (kB|MB|GB|TB)'
-            )
-            for line in result.stdout.split('\n'):
-                re_match = re.match(pattern, line)
-                if re_match is not None:
-                    break
+        if re_match is None:
+            return None
 
-            if re_match is None:
-                return None
+        (transfer_num, transfer_unit, archive_num, archive_unit) = re_match.groups()
 
-            (transfer_num, transfer_unit, archive_num, archive_unit) = re_match.groups()
-
-            # Determine the sizes of all of the pmtiles files in bytes
-            extract_sizes[paths['source']] = {
-                "transfer": float(transfer_num) * UNIT_MULT[transfer_unit],
-                "archive":  float(archive_num)  * UNIT_MULT[archive_unit],
-            }
+        # Determine the sizes of all of the pmtiles files in bytes
+        extract_sizes[paths['source']] = {
+            "transfer": float(transfer_num) * UNIT_MULT[transfer_unit],
+            "archive":  float(archive_num)  * UNIT_MULT[archive_unit],
+        }
 
     return extract_sizes
 
@@ -466,21 +392,19 @@ def check_for_existing_name(extract_name, noninteractive):
         return True
 
 def check_for_overlaps(new_box):
-    [new_min_long, new_min_lat, new_max_long, new_max_lat] = [
-        float(n) for n in new_box.split(",")
-    ]
+    [new_min_lon, new_min_lat, new_max_lon, new_max_lat] = new_box
 
     existing_region_extracts = json.loads(open(EXTRACTS_JSON).read())["regions"]
     for existing in existing_region_extracts.values():
         [long_1, lat_1, long_2, lat_2] = existing['ui_bounds']
-        existing_min_long = min([long_1, long_2])
-        existing_max_long = max([long_1, long_2])
+        existing_min_lon = min([long_1, long_2])
+        existing_max_lon = max([long_1, long_2])
         existing_min_lat = min([lat_1, lat_2])
         existing_max_lat = max([lat_1, lat_2])
 
         if (
-            new_min_long < existing_max_long and
-            new_max_long > existing_min_long and
+            new_min_lon < existing_max_lon and
+            new_max_lon > existing_min_lon and
             new_min_lat  < existing_max_lat and
             new_max_lat  > existing_min_lat
         ):
@@ -563,11 +487,11 @@ if __name__ == "__main__":
             )
 
             extract_name = sys.argv[2]
-            extract_box = sys.argv[3]
+            extract_box_str = sys.argv[3]
             noninteractive = sys.argv[4] if len(sys.argv) > 4 else ""
 
             validate_extract_name(extract_name)
-            validate_extract_box(extract_box)
+            extract_box = clean_extract_box(extract_box_str)
             validate_noninteractive(noninteractive)
             noninteractive = bool(noninteractive)
 
