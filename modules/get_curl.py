@@ -18,6 +18,7 @@ def run_module():
         timeout=dict(type='int', default=60),
         retries=dict(type='int', default=10),
         force=dict(type='bool', default=False),
+        http_version=dict(type='str', choices=['0.9', '1.0', '1.1', '2', '2-prior-knowledge', '3', '3-only']),
     )
 
     module = AnsibleModule(argument_spec=argument_spec, add_file_common_args=True, supports_check_mode=True)
@@ -29,6 +30,7 @@ def run_module():
     timeout = module.params['timeout']
     retries = module.params['retries']
     force = module.params['force']
+    http_version = module.params['http_version']
 
     if dest.endswith('/'):
         try:
@@ -80,6 +82,8 @@ def run_module():
             "--retry-max-time",
             "1200",
         ]
+        if http_version:
+            cmd.append(f"--http{http_version}")
         if headers:
             for key, value in headers.items():
                 cmd.extend(["-H", f"{key}: {value}"])
