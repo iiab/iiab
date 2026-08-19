@@ -204,14 +204,14 @@ def get_new_extract_paths(extract_name):
 
     def get_paths(source):
         match (source.split('/')[-1].split('.')):
-            case [base, date, _zoom_range, "pmtiles"]:
+            case [region_extract_type, date, _zoom_range, "pmtiles"]:
                 return {
                     "source":
                         get_mirror(source),
                     "extract":
-                        os.path.join(HOSTING_DIR, f"{base}.{date}.full-region.{extract_name}.pmtiles"),
+                        os.path.join(HOSTING_DIR, f"{region_extract_type}.{date}.full-region.{extract_name}.pmtiles"),
                     "tmp":
-                        os.path.join(TMP_DIR, f"{base}.{date}.full-region.{extract_name}.pmtiles"),
+                        os.path.join(TMP_DIR, f"{region_extract_type}.{date}.full-region.{extract_name}.pmtiles"),
                 }
             case _:
                 raise Exception("Oops got unexpected pmtiles file name:", source)
@@ -228,11 +228,11 @@ def iter_region_files():
     """
     for full_path in glob.glob(os.path.join(HOSTING_DIR, "*.full-region.*.pmtiles")):
         match (os.path.basename(full_path).split('.')):
-            case [region_extract_type, date, "full-region", name, "pmtiles"]:
+            case [region_extract_type, date, "full-region", extract_name, "pmtiles"]:
                 pass
             case _:
                 raise Exception("Oops can't parse pmtiles file name:", full_path)
-        yield full_path, region_extract_type, date, name
+        yield full_path, region_extract_type, date, extract_name
 
 def yes_no(prompt, noninteractive=False, noninteractive_response=None):
     if noninteractive:
@@ -262,8 +262,8 @@ def delete_extract(extract_name):
 
     region_extract_types_for_name = defaultdict(list)
     all_paths = []
-    for full_path, region_extract_type, date, name in iter_region_files():
-        if name != extract_name:
+    for full_path, region_extract_type, date, cmp_extract_name in iter_region_files():
+        if cmp_extract_name != extract_name:
             continue
         all_paths.append(full_path)
         region_extract_types_for_name[region_extract_type].append(date)
@@ -418,7 +418,7 @@ def update_extracts_json():
     # the -180 to 180 range, and one outside. render_bounds on the other hand would have lng
     # bounds of -180 to 180: two partial regions on opposite sides of the map.
     #
-    # region_extracts[name] = {
+    # region_extracts[extract_name] = {
     #   "render_bounds": coordinates,
     #   "ui_bounds": coordinates,
     #   "dates": {
@@ -430,39 +430,39 @@ def update_extracts_json():
     region_extracts = defaultdict(
         lambda: dict(dates=defaultdict(dict)),
     )
-    # region_extract_types[name] = {extract_type_1, extract_type_2, etc}
+    # region_extract_types[extract_name] = {extract_type_1, extract_type_2, etc}
     region_extract_types = defaultdict(set)
 
-    for full_path, region_extract_type, date, name in iter_region_files():
+    for full_path, region_extract_type, date, extract_name in iter_region_files():
         render_bounds, ui_bounds = get_bounds(full_path)
         if render_bounds is None:
             continue # Something went really haywire. Skip this pmtiles file.
 
         # Add coordinates unless it's for some reason inconsistent between satellite, vector, terrain.
-        if name in region_extracts:
+        if extract_name in region_extracts:
             # Let's be lenient and let these happen with a warning. Better to have
             # something that works. Hopefully it's close to what they need and expect.
-            old, new = region_extracts[name]['render_bounds'], render_bounds
+            old, new = region_extracts[extract_name]['render_bounds'], render_bounds
             if old != new:
-                print (f"Warning: inconsistent render_bounds between different region extracts for '{name}'", '\n* ', old, '\n* ', new)
-            old, new = region_extracts[name]['ui_bounds'], ui_bounds
+                print (f"Warning: inconsistent render_bounds between different region extracts for '{extract_name}'", '\n* ', old, '\n* ', new)
+            old, new = region_extracts[extract_name]['ui_bounds'], ui_bounds
             if old != new:
-                print (f"Warning: inconsistent ui_bounds between different region extracts for '{name}'",     '\n* ', old, '\n* ', new)
+                print (f"Warning: inconsistent ui_bounds between different region extracts for '{extract_name}'",     '\n* ', old, '\n* ', new)
         if not re.match(r'\d{4}-\d{2}-\d{2}', date):
-            raise Exception(f"Invalid date for {name}: {date}")
-        region_extracts[name]["ui_bounds"] = ui_bounds
-        region_extracts[name]["render_bounds"] = render_bounds
+            raise Exception(f"Invalid date for {extract_name}: {date}")
+        region_extracts[extract_name]["ui_bounds"] = ui_bounds
+        region_extracts[extract_name]["render_bounds"] = render_bounds
         region_type_for_date = {
             's2maps-sentinel2-2023': 'satellite',
             'terrarium': 'terrain',
             'openstreetmap-openmaptiles': 'vector',
         }[region_extract_type]
-        region_extracts[name]["dates"][region_type_for_date] = date
-        region_extract_types[name].add(region_extract_type)
+        region_extracts[extract_name]["dates"][region_type_for_date] = date
+        region_extract_types[extract_name].add(region_extract_type)
 
-    for name in region_extract_types:
-        if region_extract_types[name] != {'s2maps-sentinel2-2023', 'terrarium', 'openstreetmap-openmaptiles'}:
-            print ("Warning: don't have all three types of ptiles files for:", name, "Have:", region_extract_types[name])
+    for extract_name in region_extract_types:
+        if region_extract_types[extract_name] != {'s2maps-sentinel2-2023', 'terrarium', 'openstreetmap-openmaptiles'}:
+            print ("Warning: don't have all three types of ptiles files for:", extract_name, "Have:", region_extract_types[extract_name])
     extracts = {"regions": region_extracts}
     open(EXTRACTS_JSON, "w").write(json.dumps(extracts))
 
@@ -477,7 +477,7 @@ if __name__ == "__main__":
             extract_name = sys.argv[2]
             validate_extract_name(extract_name)
 
-            delete_extract(extract_name=extract_name)
+            delete_extract(extract_name)
             update_extracts_json()
 
         case "extract":
