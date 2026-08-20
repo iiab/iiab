@@ -39,20 +39,23 @@
 #    state: present
 #  when: php_version is version('8.0', '<')
 
-- name: Download {{ mediawiki_download_base_url }}/{{ mediawiki_src }} to {{ downloads_dir }}
-  get_curl:
-    url: "{{ mediawiki_download_base_url }}/{{ mediawiki_src }}"
-    dest: "{{ downloads_dir }}"    # /opt/iiab/downloads
-    timeout: "{{ download_timeout }}"
-
-- name: Unarchive (unpack) it to permanent location {{ mediawiki_abs_path }} ({{ apache_user }}:{{ apache_user }}, u+rw,g+r,o+r)
-  unarchive:
-    src: "{{ downloads_dir }}/{{ mediawiki_src }}"
-    dest: "{{ mediawiki_install_path }}"    # /library
+- name: Create {{ mediawiki_abs_path }} for the MediaWiki checkout
+  file:
+    path: "{{ mediawiki_abs_path }}"
+    state: directory
     owner: "{{ apache_user }}"    # www-data on debuntu
     group: "{{ apache_user }}"
-    mode: u+rw,g+r,o+r    # '0755' forced executable bits on files
-    keep_newer: yes
+
+- name: Checkout MediaWiki {{ mediawiki_version }} from Gerrit to {{ mediawiki_abs_path }}
+  git:
+    repo: "{{ mediawiki_repo_url }}"
+    dest: "{{ mediawiki_abs_path }}"
+    version: "{{ mediawiki_version }}"
+    depth: 1
+    recursive: yes
+    update: yes
+  become: yes
+  become_user: "{{ apache_user }}"
 
 - name: Symlink {{ doc_root }}/{{ mediawiki_symlink }} -> {{ mediawiki_abs_path }}
   file:
