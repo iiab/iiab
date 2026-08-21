@@ -131,10 +131,15 @@
     url: "{{ matomo_full_url }}index.php?action=welcome"    # e.g. http://box.lan/matomo
     method: GET
     status_code: 200
+    timeout: 120
   register: matomo_welcome
+  until: matomo_welcome.status == 200
+  retries: 3
+  delay: 5
 
-- debug:
-    var: matomo_welcome
+- name: Show Matomo Welcome page HTTP status
+  debug:
+    msg: "Matomo welcome page returned HTTP {{ matomo_welcome.status }} for {{ matomo_welcome.url }} (after {{ matomo_welcome.attempts }} attempt{{ 's' if matomo_welcome.attempts != 1 else '' }})"
 
 - name: Set a variable for the MATOMO_SESSID cookie
   set_fact:
@@ -154,9 +159,9 @@
     timeout: 120
     status_code: 200
   register: matomo_system_check
-
-- debug:
-    var: matomo_system_check
+  until: matomo_system_check.status == 200
+  retries: 3
+  delay: 5
 
 - name: Matomo Database Setup
   uri:
@@ -180,7 +185,11 @@
     body_format: form-urlencoded
     status_code: [200, 302]
     follow_redirects: all
-  #register: matomo_database_setup
+    timeout: 120
+  register: matomo_database_setup
+  until: matomo_database_setup.status in [200, 302]
+  retries: 3
+  delay: 5
 
 - name: Matomo Table Creation
   uri:
@@ -208,9 +217,6 @@
   loop_control:
     loop_var: cookie
 
-- debug:
-    var: matomo_table_creation
-
 - name: Matomo User Setup
   uri:
     url: "{{ matomo_full_url }}index.php?action=setupSuperUser&module=Installation"
@@ -226,7 +232,11 @@
       subscribe_newsletter_professionalservices: 0
     body_format: form-urlencoded
     status_code: 302
-  #register: matomo_setup_superuser
+    timeout: 120
+  register: matomo_setup_superuser
+  until: matomo_setup_superuser.status == 302
+  retries: 3
+  delay: 5
 
 - name: Configure Matomo to track IIAB
   uri:
@@ -240,7 +250,11 @@
       ecommerce: 0
     body_format: form-urlencoded
     status_code: [200, 302]
+    timeout: 120
   register: _result
+  until: _result.status in [200, 302]
+  retries: 3
+  delay: 5
 
 - name: Fallback Configure Matomo to track IIAB
   uri:
@@ -255,6 +269,11 @@
       ecommerce: 0
     body_format: form-urlencoded
     status_code: 302
+    timeout: 120
+  register: _fallback_result
+  until: _fallback_result.status == 302
+  retries: 3
+  delay: 5
   when: _result.status == 200
 
 - name: Matomo Tracking Code
@@ -265,7 +284,11 @@
       Cookie: "{{ matomo_session_cookie }}"
     return_content: true
     status_code: 200
-  #register: matomo_tracking_code
+    timeout: 120
+  register: matomo_tracking_code
+  until: matomo_tracking_code.status == 200
+  retries: 3
+  delay: 5
 
 - name: Finish Matomo Setup
   uri:
@@ -279,6 +302,11 @@
       submit: "Continue to Matomo"
     body_format: form-urlencoded
     status_code: 302
+    timeout: 120
+  register: matomo_finished
+  until: matomo_finished.status == 302
+  retries: 3
+  delay: 5
 
 - name: Start Collecting Matomo Data
   cron:
