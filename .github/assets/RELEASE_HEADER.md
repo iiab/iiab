@@ -28,7 +28,7 @@
 
 6. Continue through the wizard with `NEXT`; do not click `SKIP CUSTOMISATION`. Be sure to set a username and password -- you will need them to log in to the IIAB Admin Console. Enable [SSH](https://www.baeldung.com/cs/ssh-intro) if you want shell access to IIAB later; otherwise leave it off.
 
-7. Write the image to the microSD card, insert the card into your Raspberry Pi, and boot it.
+7. Write the image to the microSD card, insert the card into your Raspberry Pi, and power it on (boot it).
 
 The first boot may take a few minutes but generally no more than that.
 
@@ -47,6 +47,8 @@ sudo reboot
 ```
 
 </details>
+
+## Documentation & Resources
 
 - FAQ: [FAQ.IIAB.IO](https://FAQ.IIAB.IO)
 - Release Notes: https://github.com/iiab/iiab/wiki/IIAB-8.3-Release-Notes
