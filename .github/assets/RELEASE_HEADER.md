@@ -26,6 +26,18 @@
 
 <img width="670" height="471" alt="Image" src="https://raw.githubusercontent.com/iiab/iiab/master/.github/assets/rpi-imager-step5-customise.png" />
 
+6. Write the image to the microSD card, insert the card into your Raspberry Pi, and boot it.
+
+The first boot may take a few minutes but generally no more than that.
+
+If you do not see the `Internet in a Box` SSID, connect through SSH and run:
+
+```sh
+sudo iiab-hotspot-on
+sudo iiab-network
+sudo reboot
+```
+
 </details>
 
 - FAQ: [FAQ.IIAB.IO](https://FAQ.IIAB.IO)
