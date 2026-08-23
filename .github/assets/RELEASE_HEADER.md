@@ -4,7 +4,7 @@
 2. Click a `.rpi-imager-manifest` link in the "Assets" section below.
 
 <details>
-<summary>Using Raspberry Pi Imager</summary>
+<summary>CLICK HERE for Raspberry Pi Imager instructions</summary>
 
 1. Click a `.rpi-imager-manifest` link under "Assets", then double-click the downloaded file to open it in Raspberry Pi Imager. If nothing happens, right-click the file and choose "Open With: Raspberry Pi Imager".
 
