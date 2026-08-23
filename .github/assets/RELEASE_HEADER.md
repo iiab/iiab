@@ -22,24 +22,23 @@
 
 <img width="677" height="474" alt="Image" src="https://raw.githubusercontent.com/iiab/iiab/master/.github/assets/rpi-imager-step4-select-storage.png" />
 
-5. Fill in the hostname as "box".
+5. Set the hostname to `box`.
 
 <img width="670" height="471" alt="Image" src="https://raw.githubusercontent.com/iiab/iiab/master/.github/assets/rpi-imager-step5-customise.png" />
 
-6. Keep clicking `NEXT` and optionally filling in the wizard; do not click `SKIP CUSTOMISATION`. It is important to set a username and password -- these are used to log in to the IIAB Admin Console. Enable [SSH](https://www.baeldung.com/cs/ssh-intro) if you want shell access to IIAB later; otherwise leave it off.
+6. Continue through the wizard with `NEXT`; do not click `SKIP CUSTOMISATION`. Be sure to set a username and password -- you will need them to log in to the IIAB Admin Console. Enable [SSH](https://www.baeldung.com/cs/ssh-intro) if you want shell access to IIAB later; otherwise leave it off.
 
 7. Write the image to the microSD card, insert the card into your Raspberry Pi, and boot it.
 
 The first boot may take a few minutes but generally no more than that.
 
-If you do not see the `Internet in a Box` SSID immediately:
+If the `Internet in a Box` Wi-Fi network does not appear within a few minutes:
 
-1. If you are using an older Raspberry Pi or large microSD try waiting an additional 15 minutes
+1. On an older Raspberry Pi or a large microSD card, first boot can take up to 15 minutes -- try waiting.
 
-2. Try unplugging power, wait 5 seconds, and plug it back in
+2. Unplug power, wait 5 seconds, and plug it back in.
 
-3. Login via keyboard and HDMI or connect through wired Ethernet cable to a router and [SSH](https://www.baeldung.com/cs/ssh-intro) with your username `ssh username@box.local` (or [ssh @ip-address](https://www.raspberrypi.com/documentation/computers/remote-access.html#ip-address)) to run the following commands:
-
+3. Connect a keyboard and HDMI monitor, or plug into your router with wired Ethernet, then [SSH](https://www.baeldung.com/cs/ssh-intro) in as the user you created: `ssh username@box.local` (or [use its IP address](https://www.raspberrypi.com/documentation/computers/remote-access.html#ip-address)) and run:
 
 ```sh
 sudo iiab-hotspot-on
