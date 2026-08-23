@@ -38,7 +38,7 @@ If the `Internet in a Box` Wi-Fi network does not appear within a few minutes:
 
 2. Unplug power, wait 5 seconds, and plug it back in.
 
-3. Connect a keyboard and HDMI monitor, or plug into your router with wired Ethernet, then [SSH](https://www.baeldung.com/cs/ssh-intro) in as the user you created: `ssh username@box.local` (or [use its IP address](https://www.raspberrypi.com/documentation/computers/remote-access.html#ip-address)) and run:
+3. Connect a keyboard and HDMI monitor, or plug into your router with wired Ethernet, then [SSH](https://www.baeldung.com/cs/ssh-intro) in as the user you created: `ssh username@box.local` (or `@box.lan`; or [use its IP address](https://www.raspberrypi.com/documentation/computers/remote-access.html#ip-address)) and run:
 
 ```sh
 sudo iiab-hotspot-on
