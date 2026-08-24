@@ -35,11 +35,11 @@ The first boot may take a few minutes but generally no more than that.
 
 If the `Internet in a Box` Wi-Fi network does not appear within a few minutes:
 
-1. On an older Raspberry Pi or a large microSD card, first boot can take up to 15 minutes — try waiting.
+* On an older Raspberry Pi or a large microSD card, first boot can take up to 15 minutes — try waiting.
 
-2. Unplug power, wait 5 seconds, and plug it back in.
+* Unplug power, wait 5 seconds, and plug it back in.
 
-3. Connect a keyboard and HDMI monitor, or plug into your router with wired Ethernet, then [SSH](https://www.baeldung.com/cs/ssh-intro) in as the user you created: `ssh username@box.local` (or `@box.lan`; or [use its IP address](https://www.raspberrypi.com/documentation/computers/remote-access.html#ip-address)).  Then run:
+* Connect a keyboard and HDMI monitor, or plug into your router with wired Ethernet, then [SSH](https://www.baeldung.com/cs/ssh-intro) in as the user you created: `ssh username@box.local` (or `@box.lan`; or [use its IP address](https://www.raspberrypi.com/documentation/computers/remote-access.html#ip-address)).  Then run:
 
    ```sh
    sudo iiab-hotspot-on
