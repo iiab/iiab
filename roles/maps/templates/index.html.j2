@@ -79,6 +79,9 @@
 
         <script src="maps.black-component.js" type="module"></script>
         <script>
+            // Make sure this matches get_new_extract_paths in tile-extract.py
+            makeFqrSourceId = (fqrName, baseId, dataDate) => `${baseId}.${dataDate}.full-region.${fqrName}`
+
             // we want style choice to survive the map reset that happens when a maps.black
             // feature or style changes, so we rely on this instead of the select tag value
             let mapStyleChoice
@@ -114,13 +117,13 @@
                             const pmtilesDates = downloadedFQRegions.regions[fqrName].dates
 
                             const s2Id = "s2maps-sentinel2-2023"
-                            const s2FqrId = `${s2Id}.${pmtilesDates.satellite}.full-region.${fqrName}`
+                            const s2FqrId = makeFqrSourceId(fqrName, s2Id, pmtilesDates.satellite)
                             const osmId = "openstreetmap-openmaptiles"
-                            const osmFqrId = `${osmId}.${pmtilesDates.vector}.full-region.${fqrName}`
+                            const osmFqrId = makeFqrSourceId(fqrName, osmId, pmtilesDates.vector)
                             const terrariumId = "terrarium"
-                            const terrariumFqrId = `${terrariumId}.${pmtilesDates.terrain}.full-region.${fqrName}`
+                            const terrariumFqrId = makeFqrSourceId(fqrName, terrariumId, pmtilesDates.terrain)
                             const hillshadeId = "hillshade"
-                            const hillshadeFqrId = `${hillshadeId}.${pmtilesDates.terrain}.full-region.${fqrName}`
+                            const hillshadeFqrId = makeFqrSourceId(fqrName, hillshadeId, pmtilesDates.terrain)
                             const naturalEarth6Id = "naturalearth6-NE2_HR_SR_W_DR-WEBP"
                             const backgroundLayerId = "background"
 
@@ -550,7 +553,7 @@
                         // awkward situation to be looking at multiple regions,
                         // so take the first one (which is the closest to the
                         // map center, see sorting above)
-                        return `terrarium.${downloadedFQRegions.regions[regionsOnScreen[0]].dates.terrain}.full-region.${regionsOnScreen[0]}`
+                        return makeFqrSourceId(regionsOnScreen[0], 'terrarium', downloadedFQRegions.regions[regionsOnScreen[0]].dates.terrain)
                     }
                     if (WORLD_MAP_TERRAIN_MAX_ZOOM > 0) {
                         // If no FQRs are on screen and we have a world map terrain, return to it
@@ -584,6 +587,7 @@
             }
 
             // Hide FQRs that we aren't looking at, and hide the world map if we're looking at an FQR.
+            /*
             async function hideUnseenFQRs(regionsOnScreen) {
                 // THIS FUNCTION IS UNUSED for now (also commented out at the function call)
                 //
@@ -614,7 +618,6 @@
                 // current version) instead of looking to see if the `...~click` layer is being rendered.
                 // This was my initial guess before I considered `setBestTerrainSource`. Still, maybe
                 // `hideUnseenFQRs` would compound it? And maybe a better `regionsOnScreen` would fix it.
-                return
 
                 await until(mapStyleLoaded)
 
@@ -622,20 +625,22 @@
                 const regionsOnScreenSet = new Set(regionsOnScreen)
                 const regionsOffScreenSet = regionsSet.difference(regionsOnScreenSet)
 
-                // TODO optimization ideas:
-                //   Just use `worldMapOSMLayers` and determine the region layer names
-                //   Keep track of which regions are hidden or visible so I only update the necessary ones.
-                mb.map.getLayersOrder().forEach(layerName => {
-                    [_, _, fullRegion, regionName] = layerName.split('.')
-                    if (fullRegion !== "full-region") return
-                    if (regionsOnScreenSet.has(regionName)) {
-                        mb.map.setLayoutProperty(layerName, "visibility", "visible")
-                    }
-                    if (regionsOffScreenSet.has(regionName)) {
-                        mb.map.setLayoutProperty(layerName, "visibility", "none")
-                    }
-                })
+                // TODO
+                //   Define a func makeFqrLayerId next to makeFqrSourceId that's does something like this:
+                //     (worldLayerId, regionName, ...) => makeFqrSourceId(regionName, ...) + '.' + worldMapOSMLayers
+                //   Use it where we define the layer ID. But also use it here. Something like:
+                //
+                //   regions(On/Off)ScreenSet.forEach(regionName => {
+                //     worldMapOSMLayers.forEach(worldLayerId => {
+                //       mb.map.setLayoutProperty(
+                //         makeFqrLayerId(worldLayerId, regionName, ...), "visibility", "visible" / "none"
+                //       )
+                //     }
+                //   }
+                //
+                //   But for optimization, keep track of which regions are already hidden or visible so I only update the necessary ones.
             }
+            */
 
             async function hideWorldMapIfObscured(regionsOnScreen) {
                 await until(mapStyleLoaded)
