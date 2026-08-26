@@ -118,6 +118,27 @@ TMP_DIR = "/library/downloads/maps"
 
 # Helpers
 
+# `REGION_TYPES_FOR_DATE` maps the region types seen in the pmtiles file names
+# to the keys in the "dates" substructure in the extracts file:
+#
+# {
+#   extract_name: {
+#     "render_bounds": coordinates,
+#     "ui_bounds": coordinates,
+#     "dates": {
+#       "terrain": terrain_date,
+#       "vector": vector_date,
+#       "satellite": satellite_date,
+#     },
+#   }
+# }
+REGION_TYPES_FOR_DATE = {
+    's2maps-sentinel2-2023': 'satellite',
+    'terrarium': 'terrain',
+    'openstreetmap-openmaptiles': 'vector',
+}
+VALID_REGION_EXTRACT_TYPES = set(REGION_TYPES_FOR_DATE.keys())
+
 def check_extract_name_error(extract_name):
     if not (set(extract_name) < set(string.ascii_letters + string.digits + "-_")):
         return "name contains invalid characters"
@@ -258,8 +279,6 @@ def get_region_files_for_fqr(extract_name, fqr):
 
     Files with .pmtiles extension that are otherwise invalid are skipped with a warning.
     """
-    # TODO these values are repeated in the code, factor it out somewhere
-    VALID_REGION_EXTRACT_TYPES = {"s2maps-sentinel2-2023", "terrarium", "openstreetmap-openmaptiles"}
 
     for full_path in fqr.glob("*.pmtiles"):
         match (full_path.name.split('.')):
@@ -349,7 +368,7 @@ def delete_extract(extract_name):
     # files.
     if has_region_extract_type_dupes or has_extra_files:
         print (f"Warning: there are unexpected files for the region '{extract_name}'")
-        print ("(expected at most one 'openstreetmap', one 's2maps', and one 'terrarium', and nothing else)")
+        print ("(expected at most one 'openstreetmap-openmaptiles', one 's2maps-sentinel2-2023', and one 'terrarium', and nothing else)")
         print ()
     print ("Files to be deleted:")
     list_files(fqr)
@@ -536,16 +555,11 @@ def update_extracts_json():
             raise Exception(f"Invalid date for {extract_name}: {date}")
         region_extracts[extract_name]["ui_bounds"] = ui_bounds
         region_extracts[extract_name]["render_bounds"] = render_bounds
-        region_type_for_date = {
-            's2maps-sentinel2-2023': 'satellite',
-            'terrarium': 'terrain',
-            'openstreetmap-openmaptiles': 'vector',
-        }[region_extract_type]
-        region_extracts[extract_name]["dates"][region_type_for_date] = date
+        region_extracts[extract_name]["dates"][REGION_TYPES_FOR_DATE[region_extract_type]] = date
         region_extract_types[extract_name].add(region_extract_type)
 
     for extract_name in region_extract_types:
-        if region_extract_types[extract_name] != {'s2maps-sentinel2-2023', 'terrarium', 'openstreetmap-openmaptiles'}:
+        if region_extract_types[extract_name] != VALID_REGION_EXTRACT_TYPES:
             print ("Warning: don't have all three types of ptiles files for:", extract_name, "Have:", region_extract_types[extract_name])
     extracts = {"regions": region_extracts}
     open(EXTRACTS_JSON, "w").write(json.dumps(extracts))
