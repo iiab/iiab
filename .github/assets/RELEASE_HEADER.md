@@ -35,7 +35,7 @@ The first boot may take a few minutes but generally no more than that.
 
 If the `Internet in a Box` Wi-Fi network does not appear within a few minutes:
 
-* On an older Raspberry Pi or a large microSD card, first boot can take up to 15 minutes — try waiting.
+* On an older Raspberry Pi or a large microSD card, first boot can take 5-to-10 minutes — try waiting.
 
 * Unplug power, wait 5 seconds, and plug it back in.
 
