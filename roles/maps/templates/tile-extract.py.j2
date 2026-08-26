@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 
-import json, glob, os, random, re, requests, shutil, string, subprocess, sys, xmltodict, xml
-from pprint import pprint
+import json, os, random, re, requests, shutil, string, subprocess, sys, xmltodict, xml
+from pathlib import Path
 from collections import defaultdict
 
 sys.path.insert(1, "{{ maps_tools.tile_extract.working_dir }}/pmtiles-python/python/pmtiles")
@@ -13,7 +13,7 @@ from pmtiles.reader import MmapSource, all_tiles
 # Technically true, but there's of course the massive gap in the middle.
 # So here we inspect the file to find where that hole is.
 def get_bounds(full_path):
-    output = subprocess.getoutput(PMTILES + " show " + full_path + " --header-json")
+    output = subprocess.getoutput(f"{PMTILES} show {full_path} --header-json")
     try:
         render_bounds = [float(coord) for coord in json.loads(output)["bounds"]]
     except:
@@ -39,7 +39,7 @@ def get_bounds(full_path):
     # so maplibre can draw the rectangle. And to find those numbers, we need to inspect the
     # file to see where all of the tiles are.
 
-    with open(full_path, "r+b") as f:
+    with full_path.open("r+b") as f:
         source = MmapSource(f)
         # all_tiles(source) = generator of [((z,x,y), tile_data)]
         # tiles = [(z,x,y)]
@@ -180,11 +180,19 @@ def get_mirror(path):
 
     raise Exception(f"Failed to download {path} from any of the available mirrors.")
 
+def get_extract_dir(extract_name):
+    """
+    Make sure this matches makeFqrSourceId in index.html
+    """
+    return Path(HOSTING_DIR) / f"{extract_name}.fqr"
+
 def get_new_extract_paths(extract_name):
     """
     Get the paths for *new* FQRs. I.e. what we expect to be able to download
     from the server. Existing FQRs on the file system may have different dates,
     so we can't rely on this function for getting an inventory or deletion.
+
+    Make sure this matches makeFqrSourceId in index.html
     """
 
     # Unlike the global data, FQRs always stay up to date, so it downloads
@@ -204,14 +212,14 @@ def get_new_extract_paths(extract_name):
 
     def get_paths(source):
         match (source.split('/')[-1].split('.')):
-            case [base, date, _zoom_range, "pmtiles"]:
+            case [region_extract_type, date, _zoom_range, "pmtiles"]:
                 return {
                     "source":
                         get_mirror(source),
                     "extract":
-                        os.path.join(HOSTING_DIR, f"{base}.{date}.full-region.{extract_name}.pmtiles"),
+                        str(get_extract_dir(extract_name) / f"{region_extract_type}.{date}.pmtiles"),
                     "tmp":
-                        os.path.join(TMP_DIR, f"{base}.{date}.full-region.{extract_name}.pmtiles"),
+                        os.path.join(TMP_DIR, f"{region_extract_type}.{date}.full-region.{extract_name}.pmtiles"),
                 }
             case _:
                 raise Exception("Oops got unexpected pmtiles file name:", source)
@@ -222,17 +230,50 @@ def get_new_extract_paths(extract_name):
         "terrain": get_paths(catalog["terrain"][TERRAIN_MAX_ZOOM]),
     }
 
+def get_fqrs():
+    """
+    List FQRs based on directory names.
+
+    Directories with .fqr extension that are otherwise invalid are skipped with a warning.
+    """
+    fqrs = {}
+    for fqr in Path(HOSTING_DIR).glob("*.fqr"):
+        match (fqr.name.split('.')):
+            case [extract_name, "fqr"]:
+                # TODO - validate extract_name?
+                fqrs[extract_name] = fqr
+            case _:
+                print(f"Warning: can't parse possible fqr dir name: {fqr}")
+    return fqrs
+
+def get_region_files_for_fqr(extract_name, fqr):
+    """
+    List pmtiles files for an FQR. `fqr` is a `Path` object.
+
+    Files with .pmtiles extension that are otherwise invalid are skipped with a warning.
+    """
+    # TODO these values are repeated in the code, factor it out somewhere
+    VALID_REGION_EXTRACT_TYPES = {"s2maps-sentinel2-2023", "terrarium", "openstreetmap-openmaptiles"}
+
+    for full_path in fqr.glob("*.pmtiles"):
+        match (full_path.name.split('.')):
+            case [region_extract_type, date, "pmtiles"]:
+                # TODO - validate date?
+                if region_extract_type not in VALID_REGION_EXTRACT_TYPES:
+                    print(f"Warning: invalid region extract type in existing file: {full_path}")
+                    continue
+            case _:
+                print(f"Warning: can't parse possible pmtiles name in existing file: {full_path}")
+                continue
+        yield full_path, region_extract_type, date, extract_name
+
 def iter_region_files():
     """
-    Get an inventory of exsting FQRs on the file system.
+    Get an inventory of existing pmtiles FQR files.
     """
-    for full_path in glob.glob(os.path.join(HOSTING_DIR, "*.full-region.*.pmtiles")):
-        match (os.path.basename(full_path).split('.')):
-            case [region_extract_type, date, "full-region", name, "pmtiles"]:
-                pass
-            case _:
-                raise Exception("Oops can't parse pmtiles file name:", full_path)
-        yield full_path, region_extract_type, date, name
+    for extract_name, fqr in get_fqrs().items():
+        for line in get_region_files_for_fqr(extract_name, fqr):
+            yield line
 
 def yes_no(prompt, noninteractive=False, noninteractive_response=None):
     if noninteractive:
@@ -249,49 +290,71 @@ def yes_no(prompt, noninteractive=False, noninteractive_response=None):
 
 def delete_extract(extract_name):
     """
-    Delete all full-region files whose name matches `extract_name`.
+    Delete the Full Quality Region named `extract_name` if it exists.
 
     In the normal case, we will have one of each type (vector, terrain,
     satellite). If we are missing one, or if we have multiple of a given type
     (with different dates), confirm with the user before deleting.
+
+    Also confirm with them if there are unexpected files in the directory.
     """
 
-    # We could have used the extracts json for this. However, that one might
-    # skip over duplicates. So long as we're deleting, let's show everything we
-    # have so the user can really clean things up.
-
-    region_extract_types_for_name = defaultdict(list)
-    all_paths = []
-    for full_path, region_extract_type, date, name in iter_region_files():
-        if name != extract_name:
-            continue
-        all_paths.append(full_path)
-        region_extract_types_for_name[region_extract_type].append(date)
-
-    if len(all_paths) == 0:
+    fqrs = get_fqrs()
+    if extract_name not in fqrs:
         print (f"Found no Full Quality Regions with the name '{extract_name}'")
         return
 
-    # Something weird happened, maybe a mixture of dates or something.
-    if [len(dates) for dates in region_extract_types_for_name.values()] != [1, 1, 1]:
-        print (f"There are an unexpected set of files for the region '{extract_name}'")
-        print ("(expected exactly one 'openstreetmap', one 's2maps', and one 'terranium'):")
-        print ()
-        for path in all_paths:
-            print("*", path)
-        print ()
-        if not yes_no("Confirm delete?"):
-            return
+    fqr = fqrs[extract_name]
+    fqr_files = list(get_region_files_for_fqr(extract_name, fqr))
 
-    for path in all_paths:
-        if os.path.dirname(path) != HOSTING_DIR or f".{extract_name}." not in path:
+    fqr_region_extract_types = [region_extract_type for (_, region_extract_type, _, _) in fqr_files]
+    fqr_file_paths = [full_path for (full_path, _, _, _) in fqr_files]
+
+    all_file_paths = list(fqr.glob("*"))
+
+    has_region_extract_type_dupes = {
+        fqr_region_extract_types.count(region_extract_type)
+        for region_extract_type
+        in fqr_region_extract_types
+    } != {1}
+    has_extra_files = bool(set(all_file_paths) - set(fqr_file_paths))
+    # TODO - Right now if the user adds an unexpected subdirectory to their
+    # FQR directory, they will get an error when it passes path.unlink()
+    # below. If they are adding directories it's a them problem, not worth
+    # handling. Just give them a warning to fix it. (Adding unexpected files
+    # may be more plausibly normal behavior than adding directories)
+
+    # The user might have messed around with the files. Either there's more
+    # than one of satellite, terrain, or vector, or there are other unknown
+    # files.
+    if has_region_extract_type_dupes or has_extra_files:
+        print (f"Warning: there are unexpected files for the region '{extract_name}'")
+        print ("(expected at most one 'openstreetmap', one 's2maps', and one 'terrarium', and nothing else)")
+        print ()
+    print ("Files to be deleted:")
+    f_list = [
+        "*" + str(f)
+        for f
+        in (all_file_paths + [f"{fqr} (directory)"])
+    ]
+    print("\n".join(f_list))
+    print ()
+    if not yes_no("Confirm delete?"):
+        return
+
+    for path in all_file_paths:
+        if path.parent.parent != Path(HOSTING_DIR) or path.parent.name != f"{extract_name}.fqr":
             # Last-minute sanity check before deleting files in case some other
             # error is introduced before we get to this point.
             raise Exception("Unknown error. Stopping before we delete the wrong file!", path)
-        os.remove(path)
+        path.unlink()
 
-def create_extract(extract_box, extract_paths):
+    fqr.rmdir()
+    print(f"Full Quality Region data for {extract_name} has been deleted.")
+
+def create_extract(extract_box, extract_name, extract_paths):
     # Extract them all successfully before moving them.
+    # Assumes it doesn't exist yet
     for paths in extract_paths.values():
         result = subprocess.run(
             [PMTILES, "extract", paths["source"], paths["tmp"], "--bbox=" + ",".join(map(repr, extract_box))],
@@ -299,6 +362,7 @@ def create_extract(extract_box, extract_paths):
         if result.returncode != 0:
             raise Exception(f"Region download failed. Double-check your Internet connection. (error code {result.returncode})")
 
+    get_extract_dir(extract_name).mkdir()
     for paths in extract_paths.values():
         shutil.move(paths["tmp"], paths["extract"])
 
@@ -380,14 +444,21 @@ def approve_download_size(extract_box, extract_paths):
     return yes_no(
         f'\nNew region will be {display(transfer_total)} downloaded, {display(archive_total)} on disk. This will'
         f'\nleave about {display(free_b - archive_total)} free space on this partition. Continue?',
-        noninteractive, True,
     )
 
+def check_for_existing_name(extract_name):
+    # For simplicity, we will fail if there is a directory called `get_extract_dir(extract_name)`
+    # even if it's empty. Let the user sort it out, i.e. delete it if they want.
 
-def check_for_existing_name(extract_name, noninteractive):
-    existing_extracts = json.loads(open(EXTRACTS_JSON).read())
-    if extract_name in existing_extracts["regions"].keys():
-        return yes_no(f'Already have a full quality region called \"{extract_name}\". Overwrite it?', noninteractive, False)
+    if get_extract_dir(extract_name).exists():
+        # TODO - Offer to send the user into the deletion sequence
+        # automatically. It's a separate non-trivial task because the deletion
+        # sequence itself has yes/no logic related to unexpected files. And so
+        # the deletion may not happen, which we then have to account for here.
+        print(f'Already have a full quality region called \"{extract_name}\". If you would like to overwrite it, please delete it first:')
+        print("")
+        print(f"sudo {{ maps_tools.tile_extract.working_dir }}/tile-extract.py delete {extract_name}")
+        return False
     else:
         return True
 
@@ -418,7 +489,7 @@ def update_extracts_json():
     # the -180 to 180 range, and one outside. render_bounds on the other hand would have lng
     # bounds of -180 to 180: two partial regions on opposite sides of the map.
     #
-    # region_extracts[name] = {
+    # region_extracts[extract_name] = {
     #   "render_bounds": coordinates,
     #   "ui_bounds": coordinates,
     #   "dates": {
@@ -430,43 +501,43 @@ def update_extracts_json():
     region_extracts = defaultdict(
         lambda: dict(dates=defaultdict(dict)),
     )
-    # region_extract_types[name] = {extract_type_1, extract_type_2, etc}
+    # region_extract_types[extract_name] = {extract_type_1, extract_type_2, etc}
     region_extract_types = defaultdict(set)
 
-    for full_path, region_extract_type, date, name in iter_region_files():
+    for full_path, region_extract_type, date, extract_name in iter_region_files():
         render_bounds, ui_bounds = get_bounds(full_path)
         if render_bounds is None:
             continue # Something went really haywire. Skip this pmtiles file.
 
         # Add coordinates unless it's for some reason inconsistent between satellite, vector, terrain.
-        if name in region_extracts:
+        if extract_name in region_extracts:
             # Let's be lenient and let these happen with a warning. Better to have
             # something that works. Hopefully it's close to what they need and expect.
-            old, new = region_extracts[name]['render_bounds'], render_bounds
+            old, new = region_extracts[extract_name]['render_bounds'], render_bounds
             if old != new:
-                print (f"Warning: inconsistent render_bounds between different region extracts for '{name}'", '\n* ', old, '\n* ', new)
-            old, new = region_extracts[name]['ui_bounds'], ui_bounds
+                print (f"Warning: inconsistent render_bounds between different region extracts for '{extract_name}'", '\n* ', old, '\n* ', new)
+            old, new = region_extracts[extract_name]['ui_bounds'], ui_bounds
             if old != new:
-                print (f"Warning: inconsistent ui_bounds between different region extracts for '{name}'",     '\n* ', old, '\n* ', new)
+                print (f"Warning: inconsistent ui_bounds between different region extracts for '{extract_name}'",     '\n* ', old, '\n* ', new)
         if not re.match(r'\d{4}-\d{2}-\d{2}', date):
-            raise Exception(f"Invalid date for {name}: {date}")
-        region_extracts[name]["ui_bounds"] = ui_bounds
-        region_extracts[name]["render_bounds"] = render_bounds
+            raise Exception(f"Invalid date for {extract_name}: {date}")
+        region_extracts[extract_name]["ui_bounds"] = ui_bounds
+        region_extracts[extract_name]["render_bounds"] = render_bounds
         region_type_for_date = {
             's2maps-sentinel2-2023': 'satellite',
             'terrarium': 'terrain',
             'openstreetmap-openmaptiles': 'vector',
         }[region_extract_type]
-        region_extracts[name]["dates"][region_type_for_date] = date
-        region_extract_types[name].add(region_extract_type)
+        region_extracts[extract_name]["dates"][region_type_for_date] = date
+        region_extract_types[extract_name].add(region_extract_type)
 
-    for name in region_extract_types:
-        if region_extract_types[name] != {'s2maps-sentinel2-2023', 'terrarium', 'openstreetmap-openmaptiles'}:
-            print ("Warning: don't have all three types of ptiles files for:", name, "Have:", region_extract_types[name])
+    for extract_name in region_extract_types:
+        if region_extract_types[extract_name] != {'s2maps-sentinel2-2023', 'terrarium', 'openstreetmap-openmaptiles'}:
+            print ("Warning: don't have all three types of ptiles files for:", extract_name, "Have:", region_extract_types[extract_name])
     extracts = {"regions": region_extracts}
     open(EXTRACTS_JSON, "w").write(json.dumps(extracts))
 
-if __name__ == "__main__":
+def main():
     match sys.argv[1]:
         case "update-json":
             assert len(sys.argv) == 2, "update-json takes no extra arguments"
@@ -477,7 +548,7 @@ if __name__ == "__main__":
             extract_name = sys.argv[2]
             validate_extract_name(extract_name)
 
-            delete_extract(extract_name=extract_name)
+            delete_extract(extract_name)
             update_extracts_json()
 
         case "extract":
@@ -502,7 +573,8 @@ if __name__ == "__main__":
                     sys.exit(0)
                 else:
                     sys.exit("error: you cannot download overlapping full quality regions")
-            if not check_for_existing_name(extract_name, noninteractive):
+
+            if not check_for_existing_name(extract_name):
                 if noninteractive:
                     sys.exit(0)
                 else:
@@ -515,8 +587,11 @@ if __name__ == "__main__":
                 sys.exit(1)
 
             # Do the extracts
-            create_extract(extract_box, extract_paths)
+            create_extract(extract_box, extract_name, extract_paths)
             update_extracts_json() # Add the newly added extract
 
         case unknown:
             raise Exception("Unknown option:", unknown)
+
+if __name__ == "__main__":
+    main()

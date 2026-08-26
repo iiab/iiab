@@ -10,6 +10,7 @@ How map data files are named
 | s2maps-sentinel2-2023      . 2025-12-10 . z00-z07       . pmtiles
 | naturalearth-openmaptiles  . 2025-12-10 . z00-z08       . pmtiles
 | openstreetmap-openmaptiles . 2026-07-01 . z00-z14       . pmtiles
+| terrarium                  . 2025-12-10 . z00-z08       . pmtiles
 | static-search              . 2026-04-22 . pop-1k-cities . tar.gz (*)
 | static-search              . 2026-04-22 . pop-1k-cities
 | nominatim                  . 2025-12-10 . basic         . sqlite
@@ -24,13 +25,15 @@ How map data files are named
 ## Full Quality Regions:
 
 ```
-type                       | date       | region | ...         | extension (for files)
+region | ... | type                       | date       | extension (for files)
 ---------------------------------------------------------------------------
-openstreetmap-openmaptiles . 2026-07-01 . africa . full-region . pmtiles
+africa . fqr / openstreetmap-openmaptiles . 2026-07-01 . pmtiles
+africa . fqr / s2maps-sentinel2-2023      . 2025-12-10 . pmtiles
+africa . fqr / terrarium                  . 2025-12-10 . pmtiles
 ```
 
 ```
-[type].[date].full-region.[region].[extension (for files)]
+[region].fqr/[type].[date].[extension (for files)]
 ```
 
 # Key
