@@ -147,6 +147,10 @@ def check_extract_name_error(extract_name):
     if len(extract_name) >= 35:
         return "name is too long"
 
+def check_date_error(date):
+    if not re.fullmatch(r'\d{4}-\d{2}-\d{2}', date, re.ASCII):
+        return "malformed"
+
 def validate_extract_name(extract_name):
     error = check_extract_name_error(extract_name)
     if error:
@@ -283,7 +287,10 @@ def get_region_files_for_fqr(extract_name, fqr):
     for full_path in fqr.glob("*.pmtiles"):
         match (full_path.name.split('.')):
             case [region_extract_type, date, "pmtiles"]:
-                # TODO - validate date?
+                error = check_date_error(date)
+                if error:
+                    print(f"Warning: invalid date in existing file ({full_path}): {error}")
+                    continue
                 if region_extract_type not in VALID_REGION_EXTRACT_TYPES:
                     print(f"Warning: invalid region extract type in existing file: {full_path}")
                     continue
@@ -434,7 +441,7 @@ def get_estimates(extract_box, extract_paths):
             r'for an archive size of (\d*\.?\d*) (kB|MB|GB|TB)'
         )
         for line in result.stdout.split('\n'):
-            re_match = re.match(pattern, line)
+            re_match = re.match(pattern, line, re.ASCII)
             if re_match is not None:
                 break
 
@@ -552,8 +559,6 @@ def update_extracts_json():
             old, new = region_extracts[extract_name]['ui_bounds'], ui_bounds
             if old != new:
                 print (f"Warning: inconsistent ui_bounds between different region extracts for '{extract_name}'",     '\n* ', old, '\n* ', new)
-        if not re.match(r'\d{4}-\d{2}-\d{2}', date):
-            raise Exception(f"Invalid date for {extract_name}: {date}")
         region_extracts[extract_name]["ui_bounds"] = ui_bounds
         region_extracts[extract_name]["render_bounds"] = render_bounds
         region_extracts[extract_name]["dates"][REGION_TYPES_FOR_DATE[region_extract_type]] = date
