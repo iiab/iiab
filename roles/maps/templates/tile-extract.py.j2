@@ -118,14 +118,18 @@ TMP_DIR = "/library/downloads/maps"
 
 # Helpers
 
+def check_extract_name_error(extract_name):
+    if not (set(extract_name) < set(string.ascii_letters + string.digits + "-_")):
+        return "name contains invalid characters"
+    if len(extract_name) == 0:
+        return "no name provided"
+    if len(extract_name) >= 35:
+        return "name is too long"
+
 def validate_extract_name(extract_name):
-    # Make sure the extract_name has only valid characters
-    try:
-        assert set(extract_name) < set(string.ascii_letters + string.digits + "-_")
-        assert len(extract_name) > 0
-        assert len(extract_name) < 35
-    except AssertionError:
-        raise ValueError("extract_name has invalid length or characters: ", extract_name)
+    error = check_extract_name_error(extract_name)
+    if error:
+        raise ValueError(f"Invalid FQR name ({extract_name}): {error}")
 
 def clean_extract_box(extract_box_str):
     try:
@@ -141,7 +145,7 @@ def clean_extract_box(extract_box_str):
         assert max_lon - min_lon < 360, "FQR can't wrap around the world"
 
     except Exception as e:
-        raise ValueError(f"extract_box_str is malformed ({e}): ", extract_box_str)
+        raise ValueError(f"Extract box ({extract_box_str}) is malformed: {e}")
 
     def lon_modulo(lon):
         # We want the longitudes to be from -180 to just under 180. We want to perform a
@@ -238,12 +242,14 @@ def get_fqrs():
     """
     fqrs = {}
     for fqr in Path(HOSTING_DIR).glob("*.fqr"):
-        match (fqr.name.split('.')):
-            case [extract_name, "fqr"]:
-                # TODO - validate extract_name?
-                fqrs[extract_name] = fqr
-            case _:
-                print(f"Warning: can't parse possible fqr dir name: {fqr}")
+        extract_name = fqr.name.rsplit('.')[0]
+        error = check_extract_name_error(extract_name)
+        if error:
+            print(f"Warning: Can't parse possible FQR dir name ({fqr}) - {error}")
+        elif not fqr.is_dir():
+            print(f"Warning: not a directory - {fqr}")
+        else:
+            fqrs[extract_name] = fqr
     return fqrs
 
 def get_region_files_for_fqr(extract_name, fqr):
