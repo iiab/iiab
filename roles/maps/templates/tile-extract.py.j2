@@ -286,6 +286,26 @@ def yes_no(prompt, noninteractive=False, noninteractive_response=None):
             return False
         print ("Invalid response.")
 
+def list_files(root):
+    """
+    Walk the `root` directory and list all of the files up to `MAX_LEN`
+    (defined below) and give count of unlisted files.
+    """
+
+    listing = []
+    for directory, _, files in os.walk(root):
+        listing.append(f"* {directory}")
+        for file in files:
+            listing.append(f"* {directory}/{file}")
+
+    MAX_LEN = 20
+    print('\n'.join(listing[:MAX_LEN]))
+    unlisted = listing[MAX_LEN:]
+
+    if unlisted:
+        print('...')
+        print(f'(and {len(unlisted)} more)')
+
 # Main functions
 
 def delete_extract(extract_name):
@@ -318,11 +338,6 @@ def delete_extract(extract_name):
         in fqr_region_extract_types
     } != {1}
     has_extra_files = bool(set(all_file_paths) - set(fqr_file_paths))
-    # TODO - Right now if the user adds an unexpected subdirectory to their
-    # FQR directory, they will get an error when it passes path.unlink()
-    # below. If they are adding directories it's a them problem, not worth
-    # handling. Just give them a warning to fix it. (Adding unexpected files
-    # may be more plausibly normal behavior than adding directories)
 
     # The user might have messed around with the files. Either there's more
     # than one of satellite, terrain, or vector, or there are other unknown
@@ -332,24 +347,17 @@ def delete_extract(extract_name):
         print ("(expected at most one 'openstreetmap', one 's2maps', and one 'terrarium', and nothing else)")
         print ()
     print ("Files to be deleted:")
-    f_list = [
-        "*" + str(f)
-        for f
-        in (all_file_paths + [f"{fqr} (directory)"])
-    ]
-    print("\n".join(f_list))
-    print ()
+    list_files(fqr)
+
     if not yes_no("Confirm delete?"):
         return
 
-    for path in all_file_paths:
-        if path.parent.parent != Path(HOSTING_DIR) or path.parent.name != f"{extract_name}.fqr":
-            # Last-minute sanity check before deleting files in case some other
-            # error is introduced before we get to this point.
-            raise Exception("Unknown error. Stopping before we delete the wrong file!", path)
-        path.unlink()
+    if fqr.parent != Path(HOSTING_DIR) or fqr.name != f"{extract_name}.fqr":
+        # Last-minute sanity check before deleting fqr directory in case a new
+        # bug is introduced before we get to this point.
+        raise Exception("Unknown error. Stopping before we delete the wrong directory!", fqr)
+    shutil.rmtree(fqr)
 
-    fqr.rmdir()
     print(f"Full Quality Region data for {extract_name} has been deleted.")
 
 def create_extract(extract_box, extract_name, extract_paths):
