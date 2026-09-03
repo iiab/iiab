@@ -7,8 +7,8 @@ from collections import defaultdict
 sys.path.insert(1, "{{ maps_tools.tile_extract.working_dir }}/pmtiles-python/python/pmtiles")
 
 CATALOG_URL = "{{ maps_catalog_url }}"
-HOSTING_DIR = "{{ maps_serve_path }}"
-EXTRACTS_JSON = os.path.join(HOSTING_DIR, "{{ maps_tools.tile_extract.info_file }}")
+HOSTING_DIR = Path("{{ maps_serve_path }}")
+EXTRACTS_JSON = HOSTING_DIR / "{{ maps_tools.tile_extract.info_file }}"
 PMTILES = "{{ maps_tools.pmtiles.executable_path }}"
 TMP_DIR = "/library/downloads/maps"
 
@@ -31,9 +31,8 @@ def get_fqr_bbox(extract_name, fqr_dir):
     # pmtiles files don't match their fqr's bbox), see the version of
     # `get_bounds` at commit 351399c7fdc534d6ea6ce7f64dae9757d695ceaf
     try:
-        bbox = json.load(
-            get_meta_file_path(fqr_dir).open("r")
-        )["bbox"]
+        with get_meta_file_path(fqr_dir).open("r") as f:
+            bbox = json.load(f)["bbox"]
     except FileNotFoundError:
         # TODO nov 2026 or so we can remove "updated your IIAB recently". This
         # refers to the transition of adding the meta.json file to the fqr directory.
@@ -217,7 +216,7 @@ def get_extract_dir(extract_name):
     """
     Make sure this matches makeFqrSourceId in index.html
     """
-    return Path(HOSTING_DIR) / f"{extract_name}.fqr"
+    return HOSTING_DIR / f"{extract_name}.fqr"
 
 def get_meta_file_path(fqr_dir):
     return fqr_dir / "meta.json"
@@ -273,7 +272,7 @@ def get_fqrs():
     Directories with .fqr extension that are otherwise invalid are skipped with a warning.
     """
     fqrs = {}
-    for fqr_dir in Path(HOSTING_DIR).glob("*.fqr"):
+    for fqr_dir in HOSTING_DIR.glob("*.fqr"):
         extract_name = fqr_dir.name.rsplit('.')[0]
         error = check_extract_name_error(extract_name)
         if error:
@@ -390,7 +389,7 @@ def delete_extract(extract_name):
     if not yes_no("Confirm delete?"):
         return
 
-    if fqr_dir.parent != Path(HOSTING_DIR) or fqr_dir.name != f"{extract_name}.fqr":
+    if fqr_dir.parent != HOSTING_DIR or fqr_dir.name != f"{extract_name}.fqr":
         # Last-minute sanity check before deleting fqr_dir in case a new
         # bug is introduced before we get to this point.
         raise Exception("Unknown error. Stopping before we delete the wrong directory!", fqr_dir)
@@ -420,10 +419,8 @@ def create_extract(extract_box, extract_name, extract_paths):
     # file but before the pmtiles files, they can at least delete it and
     # try again. (or eventually, they can "update" it which will grab any
     # missing pmtiles files).
-    json.dump(
-        {"bbox": extract_box},
-        get_meta_file_path(fqr_dir).open("w")
-    )
+    with get_meta_file_path(fqr_dir).open("w") as f:
+        json.dump({"bbox": extract_box}, f)
     for paths in extract_paths.values():
         shutil.move(paths["tmp"], paths["extract"])
 
@@ -606,7 +603,8 @@ def update_extracts_json():
             print() # Extra line because we may list multiple incomplete FQRs here
 
     extracts = {"regions": region_extracts}
-    open(EXTRACTS_JSON, "w").write(json.dumps(extracts))
+    with EXTRACTS_JSON.open("w") as f:
+        json.dump(extracts, f)
 
 def main():
     match sys.argv[1]:
