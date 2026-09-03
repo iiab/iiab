@@ -26,7 +26,7 @@ def delete_command(extract_name):
         f"sudo {{ maps_tools.tile_extract.working_dir }}/tile-extract.py delete {extract_name}"
     )
 
-def get_bounds(extract_name, fqr_dir):
+def get_fqr_bbox(extract_name, fqr_dir):
     # If we want to inspect the actual files (perhaps to inform users if their
     # pmtiles files don't match their fqr's bbox), see the version of
     # `get_bounds` at commit 351399c7fdc534d6ea6ce7f64dae9757d695ceaf
@@ -37,40 +37,44 @@ def get_bounds(extract_name, fqr_dir):
     except FileNotFoundError:
         # TODO nov 2026 or so we can remove "updated your IIAB recently". This
         # refers to the transition of adding the meta.json file to the fqr directory.
-        print (f"Warning: not displaying '{extract_name}' on the map - meta.json not found. This might be because of an incomplete download, or a recent IIAB update.")
+        return None, "meta.json not found. This might be because of an incomplete download, or a recent IIAB update."
+    except (json.decoder.JSONDecodeError, KeyError):
+        return None, "malformed meta.json"
+    else:
+        error = check_bbox_error(bbox)
+        if error:
+            error = f"bbox error - {error}"
+        return bbox, error
+
+def get_frontend_bounds(extract_name, fqr_dir):
+    bbox, error = get_fqr_bbox(extract_name, fqr_dir)
+    if error:
+        print (f"Warning: not displaying '{extract_name}' on the map - {error}")
         print ("You may need to delete this region and download it again. The command to delete it is:")
         print()
         print(delete_command(extract_name))
         print() # Extra line because we may list multiple incomplete FQRs here
-    except (json.decoder.JSONDecodeError, KeyError):
-        print (f"Warning: not displaying '{extract_name}' on the map - malformed meta.json")
+        return None, None
+
+    if bbox[0] < bbox[2]:
+        # normal
+        ui_bounds = render_bounds = bbox
     else:
-        error = check_bbox_error(bbox)
-        if error:
-            print (f"Warning: not displaying '{extract_name}' on the map - bbox error - {error}")
-            return None, None
+        # cross antimeridian
+        ui_bounds = [
+            bbox[0],
+            bbox[1],
+            bbox[2] + 360,
+            bbox[3],
+        ]
+        render_bounds = [
+            -180,
+            bbox[1],
+            180,
+            bbox[3],
+        ]
 
-        if bbox[0] < bbox[2]:
-            # normal
-            ui_bounds = render_bounds = bbox
-        else:
-            # cross antimeridian
-            ui_bounds = [
-                bbox[0],
-                bbox[1],
-                bbox[2] + 360,
-                bbox[3],
-            ]
-            render_bounds = [
-                -180,
-                bbox[1],
-                180,
-                bbox[3],
-            ]
-
-        return render_bounds, ui_bounds
-
-    return None, None
+    return render_bounds, ui_bounds
 
 # `REGION_TYPES_FOR_DATE` maps the region types seen in the pmtiles file names
 # to the keys in the "dates" substructure in the extracts file:
@@ -555,11 +559,9 @@ def check_for_overlaps(new_bbox):
     """
     Assumes new_box and existing boxes are validated
     """
-
-    existing_region_extracts = json.loads(open(EXTRACTS_JSON).read())["regions"]
-
-    for existing_region in existing_region_extracts.values():
-        if _has_overlap(new_bbox, existing_region["ui_bounds"]):
+    for extract_name, fqr_dir in get_fqrs().items():
+        existing_bbox, error = get_fqr_bbox(extract_name, fqr_dir)
+        if not error and _has_overlap(new_bbox, existing_bbox):
             return False
 
     return True
@@ -584,7 +586,7 @@ def update_extracts_json():
     )
 
     for extract_name, fqr_dir in get_fqrs().items():
-        render_bounds, ui_bounds = get_bounds(extract_name, fqr_dir)
+        render_bounds, ui_bounds = get_frontend_bounds(extract_name, fqr_dir)
         if render_bounds is None:
             continue # Something went really haywire. Skip this pmtiles file.
         region_extracts[extract_name]["ui_bounds"] = ui_bounds
@@ -636,7 +638,6 @@ def main():
             noninteractive = bool(noninteractive)
 
             # Check arguments against existing data
-            update_extracts_json() # Make sure we have updated data before we check for overlaps
             if not check_for_overlaps(extract_box):
                 if noninteractive:
                     sys.exit(0)
