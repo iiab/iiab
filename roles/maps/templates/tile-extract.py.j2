@@ -270,25 +270,25 @@ def get_fqrs():
     Directories with .fqr extension that are otherwise invalid are skipped with a warning.
     """
     fqrs = {}
-    for fqr in Path(HOSTING_DIR).glob("*.fqr"):
-        extract_name = fqr.name.rsplit('.')[0]
+    for fqr_dir in Path(HOSTING_DIR).glob("*.fqr"):
+        extract_name = fqr_dir.name.rsplit('.')[0]
         error = check_extract_name_error(extract_name)
         if error:
-            print(f"Warning: Can't parse possible FQR dir name ({fqr}) - {error}")
-        elif not fqr.is_dir():
-            print(f"Warning: not a directory - {fqr}")
+            print(f"Warning: Can't parse possible FQR dir name ({fqr_dir}) - {error}")
+        elif not fqr_dir.is_dir():
+            print(f"Warning: not a directory - {fqr_dir}")
         else:
-            fqrs[extract_name] = fqr
+            fqrs[extract_name] = fqr_dir
     return fqrs
 
-def get_region_files_for_fqr(extract_name, fqr):
+def get_region_files_for_fqr(extract_name, fqr_dir):
     """
-    List pmtiles files for an FQR. `fqr` is a `Path` object.
+    List pmtiles files for an FQR. `fqr_dir` is a `Path` object.
 
     Files with .pmtiles extension that are otherwise invalid are skipped with a warning.
     """
 
-    for full_path in fqr.glob("*.pmtiles"):
+    for full_path in fqr_dir.glob("*.pmtiles"):
         match (full_path.name.split('.')):
             case [region_extract_type, date, "pmtiles"]:
                 error = check_date_error(date)
@@ -307,8 +307,8 @@ def iter_region_files():
     """
     Get an inventory of existing pmtiles FQR files.
     """
-    for extract_name, fqr in get_fqrs().items():
-        for line in get_region_files_for_fqr(extract_name, fqr):
+    for extract_name, fqr_dir in get_fqrs().items():
+        for line in get_region_files_for_fqr(extract_name, fqr_dir):
             yield line
 
 def yes_no(prompt, noninteractive=False, noninteractive_response=None):
@@ -360,13 +360,13 @@ def delete_extract(extract_name):
         print (f"Found no Full Quality Regions with the name '{extract_name}'")
         return
 
-    fqr = fqrs[extract_name]
-    fqr_files = list(get_region_files_for_fqr(extract_name, fqr))
+    fqr_dir = fqrs[extract_name]
+    fqr_files = list(get_region_files_for_fqr(extract_name, fqr_dir))
 
     fqr_region_extract_types = [region_extract_type for (_, region_extract_type, _, _) in fqr_files]
     fqr_file_paths = [full_path for (full_path, _, _, _) in fqr_files]
 
-    all_file_paths = list(fqr.glob("*"))
+    all_file_paths = list(fqr_dir.glob("*"))
 
     # At most one of each type, or nothing at all
     has_region_extract_type_dupes = fqr_region_extract_types and ({
@@ -384,17 +384,17 @@ def delete_extract(extract_name):
         print ("(expected at most one 'openstreetmap-openmaptiles', one 's2maps-sentinel2-2023', and one 'terrarium', and nothing else)")
         print ()
     print ("Files and directories to be deleted:")
-    list_files(fqr)
+    list_files(fqr_dir)
     print()
 
     if not yes_no("Confirm delete?"):
         return
 
-    if fqr.parent != Path(HOSTING_DIR) or fqr.name != f"{extract_name}.fqr":
-        # Last-minute sanity check before deleting fqr directory in case a new
+    if fqr_dir.parent != Path(HOSTING_DIR) or fqr_dir.name != f"{extract_name}.fqr":
+        # Last-minute sanity check before deleting fqr_dir in case a new
         # bug is introduced before we get to this point.
-        raise Exception("Unknown error. Stopping before we delete the wrong directory!", fqr)
-    shutil.rmtree(fqr)
+        raise Exception("Unknown error. Stopping before we delete the wrong directory!", fqr_dir)
+    shutil.rmtree(fqr_dir)
 
     print(f"Full Quality Region data for {extract_name} has been deleted.")
 
