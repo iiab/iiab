@@ -702,10 +702,32 @@
                     })
                     .then((json) => {
                         if (json && json.regions) {
-                            downloadedFQRegions = {regions: json.regions};
+                            downloadedFQRegions = {
+                                // copy the regions from extracts.json, but generate ui_bounds and render_bounds from bbox
+                                regions: Object.fromEntries(
+                                  Object.entries(json.regions).map(([regionName, regionData]) =>
+                                      [regionName,
+                                        regionData.bbox[0] <= regionData.bbox[2] ? {
+                                          // if we're not crossing the antimeridian, `ui_bounds` and `render_bounds` are the same as `bbox`
+                                          ...regionData,
+                                          ui_bounds: regionData.bbox,
+                                          render_bounds: regionData.bbox,
+                                        } : {
+                                          // if we are crossing the antimeridian, `ui_bounds` should add 360 to the east so that
+                                          // east > west, and `render_bounds` should be the entire width of the world because
+                                          // it's actually two partial regions on opposite sides of the map
+                                          ...regionData,
+                                          ui_bounds: [regionData.bbox[0], regionData.bbox[1], regionData.bbox[2] + 360, regionData.bbox[3]],
+                                          render_bounds: [-179.99999999, regionData.bbox[1], 180, regionData.bbox[3]],
+                                        }
+                                      ]
+                                  )
+                                )
+                            }
                         } else {
                             downloadedFQRegions = {error: true, regions: {}}
                         }
+
                     });
             }
             setFQRegions()

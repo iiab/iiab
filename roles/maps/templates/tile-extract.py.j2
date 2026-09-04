@@ -47,43 +47,12 @@ def get_fqr_bbox(extract_name, fqr_dir):
             error = f"bbox error - {error}"
         return bbox, error
 
-def get_frontend_bounds(extract_name, fqr_dir):
-    bbox, error = get_fqr_bbox(extract_name, fqr_dir)
-    if error:
-        print (f"Warning: not displaying '{extract_name}' on the map - {error}")
-        print ("You may need to delete this region and download it again. The command to delete it is:")
-        print()
-        print(delete_command(extract_name))
-        print() # Extra line because we may list multiple incomplete FQRs here
-        return None, None
-
-    if bbox[0] < bbox[2]:
-        # normal
-        ui_bounds = render_bounds = bbox
-    else:
-        # cross antimeridian
-        ui_bounds = [
-            bbox[0],
-            bbox[1],
-            bbox[2] + 360,
-            bbox[3],
-        ]
-        render_bounds = [
-            -180,
-            bbox[1],
-            180,
-            bbox[3],
-        ]
-
-    return render_bounds, ui_bounds
-
 # `REGION_TYPES_FOR_DATE` maps the region types seen in the pmtiles file names
 # to the keys in the "dates" substructure in the extracts file:
 #
 # {
 #   extract_name: {
-#     "render_bounds": coordinates,
-#     "ui_bounds": coordinates,
+#     "bbox": coordinates,
 #     "dates": {
 #       "terrain": terrain_date,
 #       "vector": vector_date,
@@ -540,14 +509,8 @@ def check_for_overlaps(new_bbox):
     return True
 
 def update_extracts_json():
-    # render_bounds and ui_bounds are the same unless the region crosses the 180/-180 boundary.
-    # If it does cross, ui_bounds is what you'd expect, with one end of the bounds inside of
-    # the -180 to 180 range, and one outside. render_bounds on the other hand would have lng
-    # bounds of -180 to 180: two partial regions on opposite sides of the map.
-    #
     # region_extracts[extract_name] = {
-    #   "render_bounds": coordinates,
-    #   "ui_bounds": coordinates,
+    #   "bbox": coordinates,
     #   "dates": {
     #     "terrain": terrain_date,
     #     "vector": vector_date,
@@ -559,11 +522,15 @@ def update_extracts_json():
     )
 
     for extract_name, fqr_dir in get_fqrs().items():
-        render_bounds, ui_bounds = get_frontend_bounds(extract_name, fqr_dir)
-        if render_bounds is None:
+        bbox, error = get_fqr_bbox(extract_name, fqr_dir)
+        if error:
+            print (f"Warning: not displaying '{extract_name}' on the map - {error}")
+            print ("You may need to delete this region and download it again. The command to delete it is:")
+            print()
+            print(delete_command(extract_name))
+            print() # Extra line because we may list multiple incomplete FQRs here
             continue # Something went really haywire. Skip this pmtiles file.
-        region_extracts[extract_name]["ui_bounds"] = ui_bounds
-        region_extracts[extract_name]["render_bounds"] = render_bounds
+        region_extracts[extract_name]["bbox"] = bbox
 
         for _, region_extract_type, date in get_region_files_for_fqr(fqr_dir):
             region_extracts[extract_name]["dates"][REGION_TYPES_FOR_DATE[region_extract_type]] = date
