@@ -79,8 +79,8 @@
 
         <script src="maps.black-component.js" type="module"></script>
         <script>
-	    // MapLibre sources have IDs and URLs. For FQRs we use the ID to generate the URL,
-	    // which is why it looks sort of like a URL path.
+            // MapLibre sources have IDs and URLs. For FQRs we use the ID to generate the URL,
+            // which is why it looks sort of like a URL path.
             // Make sure this matches get_extract_dir and get_new_extract_paths in tile-extract.py
             makeFqrSourceId = (fqrName, baseId, dataDate) => `${fqrName}.fqr/${baseId}.${dataDate}`
 
@@ -1065,18 +1065,36 @@
                         //
                         // Therefore, the min/max sorting should work as intended even if the bounding box straddles the
                         // 180/-180 line. Furthermore, a lot of the downstream headaches with displaying regions go away.
+                        //
+                        // That said, when we pass these coordinates to the downloader tool, we "wrap" the numbers at
+                        // -180/180. We avoid my initial concern (above) by preserving the order of the coordinates.
                         const lats = shape.map( ([lon, lat]) => lat)
                         const lons = shape.map( ([lon, lat]) => lon)
 
-                        const min_lon = Math.min.apply(null, lons)
-                        const min_lat = Math.min.apply(null, lats)
-                        const max_lon = Math.max.apply(null, lons)
-                        const max_lat = Math.max.apply(null, lats)
+                        // As returned by the drawing tool. Useful for finding coordinates in the UI.
+                        const drawnBounds = new maplibregl.LngLatBounds([
+                          [Math.min.apply(null, lons), Math.min.apply(null, lats)],
+                          [Math.max.apply(null, lons), Math.max.apply(null, lats)],
+                        ])
 
-                        const center = [
-                            min_lon + (max_lon - min_lon) / 2,
-                            min_lat + (max_lat - min_lat) / 2,
-                        ]
+                        // With longitude within (-180 + epsilon, 180). Useful for passing to the downloader tool.
+                        const wrappedBounds = (() => {
+                            // Convert from the UI's coordinate system to our standard -180 to 180 longitude.
+                            if (drawnBounds.getEast() - drawnBounds.getWest() >= 360) {
+                                // If we naively wrape() after the user draws a region that covers *more* than the
+                                // width of the world, we would lose information and get the wrong region. Instead, if
+                                // the user does this, we'll more deliberately select the whole width of the world.
+                                return new maplibregl.LngLatBounds([
+                                  [-179.99999999, drawnBounds.getSouth()],
+                                  [180, drawnBounds.getNorth()],
+                                ])
+                            } else {
+                                return new maplibregl.LngLatBounds([
+                                  drawnBounds.getSouthWest().wrap(),
+                                  drawnBounds.getNorthEast().wrap(),
+                                ])
+                            }
+                        })()
 
                         function popupButton(textContent, onclick) {
                             const button = document.createElement('button')
@@ -1104,6 +1122,7 @@
 
                         const downloadCommand = document.createElement('div');
                         downloadCommand.set = function(downloadName) {
+                            const [[min_lon, min_lat], [max_lon, max_lat]] = wrappedBounds.toArray()
                             const downloadCommandString = `sudo {{ maps_tools.tile_extract.working_dir }}/tile-extract.py extract ${downloadName} ${min_lon},${min_lat},${max_lon},${max_lat}`
                             this.innerHTML = `<pre
                                 style="font-size:0.8em; background-color:#DDD; padding:1em; border-style:dashed; border-color:#FFF; border-width:2px; white-space: pre-wrap; word-wrap: break-word; line-height:1em;"
@@ -1177,7 +1196,7 @@
                         popupContainer.appendChild(popupFinish)
 
                         downloadPopup = new maplibregl.Popup({closeOnClick: false, closeButton: false})
-                            .setLngLat(center)
+                            .setLngLat(drawnBounds.getCenter())
                             .setDOMContent(popupContainer)
                             .addTo(mb.map);
                     })

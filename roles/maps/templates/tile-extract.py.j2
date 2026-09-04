@@ -40,6 +40,8 @@ def get_fqr_bbox(extract_name, fqr_dir):
     except (json.decoder.JSONDecodeError, KeyError):
         return None, "malformed meta.json"
     else:
+        # We don't necessarily trust our own meta.json files because the
+        # implementer may have been gotten it informally from a third party.
         error = check_bbox_error(bbox)
         if error:
             error = f"bbox error - {error}"
@@ -115,11 +117,8 @@ def validate_extract_name(extract_name):
 
 def check_bbox_error(bbox):
     """
-    What gets passed here ought to be ready to save to meta.json or pass to the
-    pmtiles tool (i.e. not directly from the ui tool). So here we make sure
-    that it is indeed so. We'll try not to make assumptions about where it came
-    from (whether a post-cleaning ui tool, or from a meta.json file, or maybe
-    someplace else), so we'll check the structure of everything as well.
+    Check if `bbox` meets our standard format, including the basic structure.
+    It should be ready to save to meta.json or pass to the pmtiles tool.
     """
 
     if not isinstance(bbox, list):
@@ -148,43 +147,20 @@ def check_bbox_error(bbox):
         if lat < -90:
             return "latitude < -90"
 
-def clean_bbox_from_ui_tool(extract_box_str):
+def parse_bbox(extract_box_str):
     """
-    This function converts the bbox string that comes from the UI tool to a
-    bbox ready to save to meta.json or pass to the pmtiles tool. It asserts a
-    few assumptions that are specific to the bbox coming out of the UI tool,
-    then "cleans" the numbers and does a final check for other errors in the
-    numbers to make sure it's fit for saving or pmtiles tool.
+    This function parses and validates the bbox string that comes from the UI tool
     """
     try:
         # `float` is important here even if just as a parsing check.
         min_lon, min_lat, max_lon, max_lat = [float(n) for n in extract_box_str.split(",")]
-
-        # I am concerned about longitudes in particular because -180 and 180 refer to the same place.
-        # I expect to get all all positives or all negatives for longitudes (see the big comment in
-        # index.html, inside `terraDrawInstance.on("finish"` for details) but this is just based on
-        # observation. I would like to confirm it here.
-        assert min_lon < max_lon, "longitudes seem to be out of order"
-        assert min_lat < max_lat, "latitudes seem to be out of order"
-        assert max_lon - min_lon < 360, "FQR can't wrap around the world"
-
     except Exception as e:
         raise ValueError(f"Extract box ({extract_box_str}) is malformed: {e}")
 
-    def lon_modulo(lon):
-        # We want the longitudes to be from -180 to just under 180. We want to perform a
-        # modulo 360 to give it an equivalent longitude, but starting at -180 instead of 0.
-        return (
-          (                 # Start off assuming that lon "ought to be" in the range of -180 <= x < 180
-            (lon + 180)     # Thus, lon + 180 "ought to be" in the range of 0 <= x < 360
-            % 360           # Modulo 360 will *in fact* change our range to 0 <= x < 360
-          )
-        ) - 180             # Finally subtracting 180 will *in fact* set our range to -180 <= x < 180
-
-    bbox = [lon_modulo(min_lon), min_lat, lon_modulo(max_lon), max_lat]
+    bbox = [min_lon, min_lat, max_lon, max_lat]
     error = check_bbox_error(bbox)
     if error:
-        raise ValueError(f"Extract box ({extract_box_str}) is invalid after cleaning ({bbox}) : {error}")
+        raise ValueError(f"Extract box ({extract_box_str}) is invalid: {error}")
     return bbox
 
 def validate_noninteractive(noninteractive):
@@ -631,7 +607,7 @@ def main():
             noninteractive = sys.argv[4] if len(sys.argv) > 4 else ""
 
             validate_extract_name(extract_name)
-            extract_box = clean_bbox_from_ui_tool(extract_box_str)
+            extract_box = parse_bbox(extract_box_str)
             validate_noninteractive(noninteractive)
             noninteractive = bool(noninteractive)
 
