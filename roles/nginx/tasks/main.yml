@@ -30,15 +30,35 @@
   include_tasks: install.yml
   when: nginx_installed is undefined
 
-# Ubuntu 26.10 moved the legacy uwsgi.service and apps-enabled support into a separate package: uwsgi-initscripts
-# IIAB uses this aggregate service for Admin Console and Captive Portal
-- name: Install legacy uWSGI service support (if available; for changes in Ubuntu 26.10+)
-  package:
-    name: uwsgi-initscripts
-    state: present
-  ignore_errors: true
+# Ubuntu 26.10's 'uwsgi' package no longer ships /etc/uwsgi/apps-enabled (nor a
+# SysV init script that systemd auto-converts into 'uwsgi.service').  So IIAB
+# (a) creates the /etc/uwsgi app dirs + (b) installs a native uWSGI Emperor
+# unit itself if it dosen't exist already.
+- name: Ensure uWSGI's /etc/uwsgi 2 app dirs exist
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - /etc/uwsgi/apps-available
+    - /etc/uwsgi/apps-enabled
 
-- name: Reload systemd after installing uWSGI packages
+- name: Check whether a 'uwsgi.service' unit already exists
+  command: systemctl cat uwsgi.service
+  register: uwsgi_service_check
+  changed_when: false
+  failed_when: false    # rc=1 if no such unit, is normal
+  when: not is_proot
+
+- name: Install /etc/systemd/system/uwsgi.service (uWSGI Emperor over /etc/uwsgi/apps-enabled), if distro provides no uwsgi.service (e.g. Ubuntu 26.10+)
+  template:
+    src: uwsgi.service.j2
+    dest: /etc/systemd/system/uwsgi.service
+  when:
+    - not is_proot
+    - uwsgi_service_check.rc != 0    # unit not found
+
+- name: Reload systemd
   systemd:
     daemon_reload: yes
   when: not is_proot
