@@ -146,7 +146,15 @@ satellite_tiles = {
         Super-low quality satellite, up to zoom level 4
       """)
     },
-  }, ["none", "4-ci", 7, 9, 11, 12, 13]),
+    "13-iiab": {
+      "url": "https://iiab.io/content/iiab-sentinel2.2026-07-25.z00-z13.pmtiles",
+      "details": fix_multiline_spacing("""
+        FOR TESTING ONLY - NOT AVAILABLE YET FOR WORLD MAP
+
+        Highest available quality IIAB satellite, up to zoom level 13
+      """)
+    },
+  }, ["none", "4-ci", 7, 9, 11, 12, 13, "13-iiab"]),
 }
 
 terrain_tiles = {

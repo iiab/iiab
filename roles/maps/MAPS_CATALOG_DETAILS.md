@@ -44,6 +44,12 @@ Pretty high quality satellite, up to zoom level 12
 
 Highest available quality satellite, up to zoom level 13
 
+## `maps_satellite_zoom: 13-iiab` (268.1 GB)
+
+FOR TESTING ONLY - NOT AVAILABLE YET FOR WORLD MAP
+
+Highest available quality IIAB satellite, up to zoom level 13
+
 # terrain
 
 Terrain (i.e. elevation) data from Terrarium. Maximum zoom level available is 10.
