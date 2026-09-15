@@ -682,63 +682,65 @@
                 }
             }
 
+            async function getJson(url, skipCache) {
+                try {
+                    const response = await fetch(url, skipCache ? { cache: 'no-store' } : undefined)
+                    if (response.status >= 400) {
+                        return [null, `${response.status}: ${response.statusText}`]
+                    }
+                    return [await response.json()]
+                } catch (error) {
+                    return [null, error]
+                }
+            }
+
             let fqRegionsControl
             let downloadedFQRegions = null;
 
             const fqrLoaded = () => !!downloadedFQRegions
 
             async function setFQRegions() {
-                let dirList
-                try {
-                    const response = await fetch('/maps/data/', { cache: 'no-store' })
-                    if (response.status >= 400) {
-                        downloadedFQRegions = {error: true, regions: {}}
-                        console.error("Failed to load Full Quality Regions:", response.status, response.statusText)
-                        return
-                    }
-                    dirList = await response.json()
-                } catch (error) {
+                const [dirList, error] = await getJson('/maps/data/', true)
+                if (error) {
                     downloadedFQRegions = {error: true, regions: {}}
                     console.error("Failed to load Full Quality Regions:", error)
                     return
                 }
+
                 regionNames = dirList
                     .filter(entry => entry.type === "directory" && entry.name.endsWith('.fqr'))
                     .map(entry => entry.name.slice(0, -4))
                 const regionInfo = await Promise.allSettled(
                     regionNames.map(async regionName => {
+                        const metaPromise = (async () => {
+                            // Should we cache this? It will change less often, presumably, than a given FQR's bbox. Not impossible though.
+                            const [meta, error] = await getJson(`/maps/data/${regionName}.fqr/meta.json`, false)
+                            if (error) {
+                                console.error("Failed to load meta.json for Full Quality Region ${regionName}:", error)
+                                return
+                            }
+                            return meta
+                        })()
+
+                        const listingPromise = (async () => {
+                            // Not going to cache because updating FQR data we hope is not so uncommon.
+                            const [listing, error] = await getJson(`/maps/data/${regionName}.fqr`, true)
+                            if (error) {
+                                console.error("Failed to load Full Quality Region file listing: ${regionName}:", error)
+                                return
+                            }
+                            return listing
+                        })()
+
+                        let meta, listing
                         try {
-                            const metaPromise = (async () => {
-                                // Should we cache this? It will change less often, presumably, than a given FQR's bbox. Not impossible though.
-                                metaResponse = await fetch(`/maps/data/${regionName}.fqr/meta.json`) // , { cache: 'no-store' }
-                                if (metaResponse.status >= 400) {
-                                    console.error(`Failed to load meta.json for Full Quality Region: ${regionName}`, metaResponse.status, metaResponse.statusText)
-                                    return
-                                }
-                                return metaResponse.json()
-                            })()
-
-                            const listingPromise = (async () => {
-                                // Not going to cache because updating FQR data we hope is not so uncommon.
-                                listingResponse = await fetch(`/maps/data/${regionName}.fqr`, { cache: 'no-store' })
-                                if (listingResponse.status >= 400) {
-                                    console.error(`Failed to load Full Quality Region file listing: ${regionName}`, listingResponse.status, listingResponse.statusText)
-                                    return
-                                }
-                                return await listingResponse.json()
-                            })()
-
-                            try {
-                                [meta, listing] = await Promise.all([metaPromise, listingPromise])
-                            } catch (error) {
-                                console.error(`Failed to get Full Quality Region: ${regionName}`, error)
-                            }
-
-                            if (meta && listing) {
-                                return [regionName, {meta, listing}]
-                            }
+                            [meta, listing] = await Promise.all([metaPromise, listingPromise])
                         } catch (error) {
-                            console.error(`Failed to load Full Quality Region: ${regionName}`, error)
+                            console.error(`Failed to get Full Quality Region: ${regionName}`, error)
+                        }
+
+                        if (meta && listing) {
+                            return [regionName, {meta, listing}]
                         }
                     })
                 )
