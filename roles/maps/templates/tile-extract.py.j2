@@ -50,25 +50,12 @@ def get_fqr(extract_name, fqr_dir):
         except Exception as e:
             return None, f"meta.json bbox error: {e}"
 
-# `REGION_TYPES_FOR_DATE` maps the region types seen in the pmtiles file names
-# to the keys in the "dates" substructure in the extracts file:
-#
-# {
-#   extract_name: {
-#     "bbox": coordinates,
-#     "dates": {
-#       "terrain": terrain_date,
-#       "vector": vector_date,
-#       "satellite": satellite_date,
-#     },
-#   }
-# }
-REGION_TYPES_FOR_DATE = {
+FAMILIAR_REGION_TYPES = {
     's2maps-sentinel2-2023': 'satellite',
     'terrarium': 'terrain',
     'openstreetmap-openmaptiles': 'vector',
 }
-VALID_REGION_EXTRACT_TYPES = set(REGION_TYPES_FOR_DATE.keys())
+VALID_REGION_EXTRACT_TYPES = set(FAMILIAR_REGION_TYPES.keys())
 
 def check_extract_name_error(extract_name):
     if not set(extract_name) < set(string.ascii_letters + string.digits + "-_"):
@@ -468,11 +455,12 @@ def check_for_overlaps(new_fqr):
 
     return True
 
+# TODO - move these warnings to the front end
 def debug_extracts_json():
     print () # Give space in case this is run after another command
     print ("Checking FQRs...")
     region_extracts = defaultdict(
-        lambda: dict(dates=defaultdict(dict)),
+        lambda: dict(region_types=defaultdict(set)),
     )
 
     for extract_name, fqr_dir in get_all_fqr_dirs().items():
@@ -487,15 +475,14 @@ def debug_extracts_json():
             print()
             print(delete_command(extract_name))
             continue # Something went really haywire. Skip this pmtiles file.
-        region_extracts[extract_name]["bbox"] = fqr.to_bbox()
 
-        for _, region_extract_type, date in get_region_files_for_fqr(fqr_dir):
-            region_type_for_date = REGION_TYPES_FOR_DATE[region_extract_type]
-            region_extracts[extract_name]["dates"][region_type_for_date] = date
+        for _, region_extract_type, _ in get_region_files_for_fqr(fqr_dir):
+            region_type_for_date = FAMILIAR_REGION_TYPES[region_extract_type]
+            region_extracts[extract_name]["region_types"].add(region_type_for_date)
 
         missing_region_types = (
-            set(REGION_TYPES_FOR_DATE.values()) -
-            set(region_extracts[extract_name]["dates"].keys())
+            set(FAMILIAR_REGION_TYPES.values()) -
+            region_extracts[extract_name]["region_types"]
         )
 
         if missing_region_types:
@@ -503,7 +490,7 @@ def debug_extracts_json():
             print (f"Warning: don't have all three types of pmtiles files for '{extract_name}'.")
             print (
                 "Have:",
-                set(region_extracts[extract_name]["dates"].keys()) or "(none)",
+                region_extracts[extract_name]["region_types"] or "(none)",
                 "Missing:",
                 missing_region_types
             )
