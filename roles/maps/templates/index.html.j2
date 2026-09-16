@@ -529,8 +529,20 @@
                 return regionsOnScreen
                 .map(regionName => new maplibregl.LngLatBounds(downloadedFQRegions.regions[regionName].ui_bounds))
                 .some(regionBounds =>
-                    // Since ui_bounds can have eastern coordinates past 360 (when it crosses the antimeridian),
-                    // try shifting the mapCorners east by 360 to try all possibilities.
+                    // region.ui_bounds, like region.bbox, has its western coordinate "wrapped" (i.e. -180 to 180).
+                    // However unlike bbox, if it crosses the antimeridian, the eastern coordinate does not wrap:
+                    //
+                    // * west < 180 < east
+                    //
+                    // mapCorners is the same. It "wraps" its western coordinate but not its eastern coordinate.
+                    // As you scroll around the antimeridian, mapCorners switches between:
+                    //
+                    // * west < 180 < east
+                    // * west < -180 < east
+                    //
+                    // So, we should just need to try as-is (for the first case), or adding 360 to the longitudes
+                    // (for the second case). We could reduce the number of checks by doing more complicated logic,
+                    // but I would rather keep it simple for now.
                     mapCorners
                       .every(lngLat => regionBounds.contains(lngLat)) ||
                     mapCorners
