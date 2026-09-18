@@ -1,0 +1,100 @@
+# forgejo_install: True
+# forgejo_enabled: True
+
+# Sibling of the 'gitea' role. Forgejo is a community fork of Gitea, so its
+# app.ini and CLI are compatible.
+
+# --- Version and download ---------------------------------------------------
+
+# Forgejo has no "latest patch of a branch" URL like dl.gitea.com, so install
+# pins the full LTS version below for a deterministic, offline-reproducible build.
+# Bump it consciously, or let tasks/update.yml resolve the newest patch of the LTS
+# major from the Codeberg API (uri module, filter tags v{{ forgejo_lts_major }}.*).
+forgejo_lts_major: 15             # current LTS line (v15.x); change when the LTS major moves
+forgejo_version: "15.0.9"         # pinned patch used at install time
+forgejo_track_latest_lts: false   # if true, tasks/update.yml auto-resolves the newest v15.x
+
+# uname -m -> Forgejo asset suffix. Forgejo ships amd64, arm64 and arm-6 only.
+# 32-bit ARM (arm-6) IS supported; there is NO 32-bit x86 (i386) build, so i386
+# is left out on purpose and resolves to 'unknown' -> the install fails clearly.
+iset_suffixes:
+  x86_64: amd64
+  aarch64: arm64
+  armv7l: arm-6
+  armv6l: arm-6
+
+forgejo_iset_suffix: "{{ iset_suffixes[ansible_facts.machine] | default('unknown') }}"
+
+forgejo_download_base: "https://codeberg.org/forgejo/forgejo/releases/download/v{{ forgejo_version }}"
+forgejo_download_url: "{{ forgejo_download_base }}/forgejo-{{ forgejo_version }}-linux-{{ forgejo_iset_suffix }}"
+forgejo_asc_url: "{{ forgejo_download_url }}.asc"
+forgejo_sha256_url: "{{ forgejo_download_url }}.sha256"
+
+# Forgejo release signing key (keys.openpgp.org). Upstream rotates it regularly
+# and recommends re-fetching each time; GPG verify is best-effort (non-fatal),
+# same approach as the gitea role.
+forgejo_gpg_key: EB114F5E6C0DC2BCDD183550A4B61A2DC5923710
+
+# --- Filesystem layout ------------------------------------------------------
+
+forgejo_root_directory: "{{ content_base }}/forgejo"    # /library/forgejo
+forgejo_subdirectories:
+  - bin
+  - custom
+  - data
+  - log
+  - backups
+
+forgejo_install_path: "{{ forgejo_root_directory }}/bin/forgejo-{{ forgejo_version }}"
+forgejo_asc_path: "{{ forgejo_root_directory }}/bin/forgejo-{{ forgejo_version }}.asc"
+forgejo_link_path: "{{ forgejo_root_directory }}/forgejo"    # stable symlink -> versioned binary
+
+# Data locations (git repos and LFS live on disk, NOT in the database)
+forgejo_repo_root: "{{ forgejo_root_directory }}/data/repositories"
+forgejo_lfs_root: "{{ forgejo_root_directory }}/data/lfs"
+forgejo_db_path: "{{ forgejo_root_directory }}/data/forgejo.db"    # sqlite only
+forgejo_log_root: "{{ forgejo_root_directory }}/log"
+forgejo_backups_root: "{{ forgejo_root_directory }}/backups"       # used by tasks/update.yml
+
+# --- Config (/etc/forgejo) --------------------------------------------------
+
+forgejo_config_dir: /etc/forgejo
+forgejo_config_path: "{{ forgejo_config_dir }}/app.ini"
+
+# Secrets are generated once into these files and referenced by *_URI in app.ini
+# (better than gitea's hard-coded keys). See tasks/install.yml (guarded by creates).
+forgejo_secret_key_path: "{{ forgejo_config_dir }}/secret_key"
+forgejo_internal_token_path: "{{ forgejo_config_dir }}/internal_token"
+forgejo_jwt_secret_path: "{{ forgejo_config_dir }}/jwt_secret"
+forgejo_lfs_jwt_secret_path: "{{ forgejo_config_dir }}/lfs_jwt_secret"
+
+forgejo_display_name: Forgejo
+forgejo_run_mode: prod            # gitea uses 'dev'
+forgejo_install_lock: true        # skip the web install screen; first user becomes admin
+
+# --- Database ---------------------------------------------------------------
+
+# 'sqlite' (default, zero extra services, required under proot) or 'mariadb'.
+# The DB only stores metadata, so repo size does not drive this choice; write
+# concurrency does. MariaDB is wired but its engine migration lands in a later PR.
+forgejo_db_engine: sqlite
+forgejo_db_name: forgejo
+forgejo_db_user: forgejo
+forgejo_db_password: changeme     # only when forgejo_db_engine == mariadb; override in local_vars.yml
+
+# --- Runtime user and network ----------------------------------------------
+
+forgejo_user: forgejo
+forgejo_home: "/home/{{ forgejo_user }}"
+forgejo_run_directory: "{{ forgejo_root_directory }}"
+
+forgejo_url: /forgejo
+forgejo_port: 3300                # avoids the kiwix 3000 clash under proot
+
+# Git LFS on by default (helps with large IDE binaries; objects live on disk)
+forgejo_lfs: true
+
+# Built-in SSH server: on for systemd (x86_64/arm64)
+forgejo_enable_ssh: "{{ not is_proot }}"
+forgejo_ssh_port: 2222
+

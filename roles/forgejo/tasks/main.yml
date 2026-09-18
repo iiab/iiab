@@ -1,0 +1,48 @@
+- name: Assert that "forgejo_install is sameas true" (boolean not string etc)
+  assert:
+    that: forgejo_install is sameas true
+    fail_msg: "PLEASE SET 'forgejo_install: True' e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+
+- name: Assert that "forgejo_enabled | type_debug == 'bool'" (boolean not string etc)
+  assert:
+    that: forgejo_enabled | type_debug == 'bool'
+    fail_msg: "PLEASE GIVE VARIABLE 'forgejo_enabled' A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+
+
+- block:
+
+    - name: Install Forgejo if 'forgejo_installed' not defined, e.g. in {{ iiab_state_file }}    # /etc/iiab/iiab_state.yml
+      include_tasks: install.yml
+      when: forgejo_installed is undefined
+
+    - name: Enable/Disable Forgejo (systemd or pdsm) and NGINX
+      include_tasks: enable-or-disable.yml
+
+    - name: Add 'forgejo' variable values to {{ iiab_ini_file }}
+      ini_file:
+        path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+        section: forgejo
+        option: "{{ item.option }}"
+        value: "{{ item.value | string }}"
+      with_items:
+        - option: name
+          value: Forgejo
+        - option: description
+          value: 'Forgejo, self-hosted Git service.'
+        - option: forgejo_install
+          value: "{{ forgejo_install }}"
+        - option: forgejo_enabled
+          value: "{{ forgejo_enabled }}"
+        - option: forgejo_url
+          value: "{{ forgejo_url }}"
+        - option: forgejo_port
+          value: "{{ forgejo_port }}"
+
+  rescue:
+
+    - name: 'SEE ERROR ABOVE (skip_role_on_error: {{ skip_role_on_error }})'
+      fail:
+        msg: ""
+      when: not skip_role_on_error
