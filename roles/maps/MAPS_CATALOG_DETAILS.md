@@ -22,33 +22,47 @@ NOTE: This will not necessarily delete any satellite files you have downloaded p
 
 FOR TESTING ONLY
 
-Super-low quality satellite, up to zoom level 4
+Super-low quality "s2maps" satellite, up to zoom level 4
+
+[CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) s2maps (see more [here](https://maps.black/#data) and [here](https://maps.black/#licenses))
 
 ## `maps_satellite_zoom: 7` (88.8 MB)
 
-Low quality satellite, up to zoom level 7
+Low quality "s2maps" satellite, up to zoom level 7
+
+[CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) s2maps (see more [here](https://maps.black/#data) and [here](https://maps.black/#licenses))
 
 ## `maps_satellite_zoom: 9` (1.2 GB)
 
-Moderately high quality satellite, up to zoom level 9
+Moderately high quality "s2maps" satellite, up to zoom level 9
+
+[CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) s2maps (see more [here](https://maps.black/#data) and [here](https://maps.black/#licenses))
 
 ## `maps_satellite_zoom: 11` (22.3 GB)
 
-Pretty high quality satellite, up to zoom level 11
+Pretty high quality "s2maps" satellite, up to zoom level 11
+
+[CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) s2maps (see more [here](https://maps.black/#data) and [here](https://maps.black/#licenses))
 
 ## `maps_satellite_zoom: 12` (85.7 GB)
 
-Pretty high quality satellite, up to zoom level 12
+Pretty high quality "s2maps" satellite, up to zoom level 12
+
+[CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) s2maps (see more [here](https://maps.black/#data) and [here](https://maps.black/#licenses))
 
 ## `maps_satellite_zoom: 13` (290.3 GB)
 
-Highest available quality satellite, up to zoom level 13
+Highest available quality "s2maps" satellite, up to zoom level 13
+
+[CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) s2maps (see more [here](https://maps.black/#data) and [here](https://maps.black/#licenses))
 
 ## `maps_satellite_zoom: 13-iiab` (268.1 GB)
 
 FOR TESTING ONLY - NOT AVAILABLE YET FOR WORLD MAP
 
-Highest available quality IIAB satellite, up to zoom level 13
+Highest available quality "IIAB" satellite, up to zoom level 13
+
+[CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) IIAB
 
 # terrain
 
