@@ -119,13 +119,13 @@
                             const pmtilesDates = downloadedFQRegions.regions[fqrName].dates
 
                             const s2Id = "s2maps-sentinel2-2023"
-                            const s2FqrId = makeFqrSourceId(fqrName, s2Id, pmtilesDates.satellite)
+                            const s2FqrId = makeFqrSourceId(fqrName, s2Id, pmtilesDates[s2Id])
                             const osmId = "openstreetmap-openmaptiles"
-                            const osmFqrId = makeFqrSourceId(fqrName, osmId, pmtilesDates.vector)
+                            const osmFqrId = makeFqrSourceId(fqrName, osmId, pmtilesDates[osmId])
                             const terrariumId = "terrarium"
-                            const terrariumFqrId = makeFqrSourceId(fqrName, terrariumId, pmtilesDates.terrain)
+                            const terrariumFqrId = makeFqrSourceId(fqrName, terrariumId, pmtilesDates[terrariumId])
                             const hillshadeId = "hillshade"
-                            const hillshadeFqrId = makeFqrSourceId(fqrName, hillshadeId, pmtilesDates.terrain)
+                            const hillshadeFqrId = makeFqrSourceId(fqrName, hillshadeId, pmtilesDates[terrariumId])
                             const naturalEarth6Id = "naturalearth6-NE2_HR_SR_W_DR-WEBP"
                             const backgroundLayerId = "background"
 
@@ -575,7 +575,7 @@
                         // awkward situation to be looking at multiple regions,
                         // so take the first one (which is the closest to the
                         // map center, see sorting above)
-                        return makeFqrSourceId(regionsOnScreen[0], 'terrarium', downloadedFQRegions.regions[regionsOnScreen[0]].dates.terrain)
+                        return makeFqrSourceId(regionsOnScreen[0], 'terrarium', downloadedFQRegions.regions[regionsOnScreen[0]].dates.terrarium)
                     }
                     if (WORLD_MAP_TERRAIN_MAX_ZOOM > 0) {
                         // If no FQRs are on screen and we have a world map terrain, return to it
@@ -702,53 +702,136 @@
                 }
             }
 
+            async function getJson(url, skipCache) {
+                try {
+                    const response = await fetch(url, skipCache ? { cache: 'no-store' } : undefined)
+                    if (response.status >= 400) {
+                        return [null, `${response.status}: ${response.statusText}`]
+                    }
+                    return [await response.json(), null]
+                } catch (error) {
+                    return [null, error]
+                }
+            }
+
             let fqRegionsControl
             let downloadedFQRegions = null;
 
             const fqrLoaded = () => !!downloadedFQRegions
 
-            function setFQRegions() {
-                return fetch('{{ maps_tools.tile_extract.info_file }}', { cache: 'no-store' })
-                    .then((response) => {
-                        if (response.status < 400) {
-                            return response.json()
-                        } else {
-                            console.error("Failed to load Full Quality Regions:", response.status, response.statusText)
-                        }
-                    })
-                    .catch((error) => {
-                        downloadedFQRegions = {error: true, regions: {}}
-                        console.error("Failed to load Full Quality Regions:", error)
-                    })
-                    .then((json) => {
-                        if (json && json.regions) {
-                            downloadedFQRegions = {
-                                // copy the regions from extracts.json, but generate ui_bounds and render_bounds from bbox
-                                regions: Object.fromEntries(
-                                  Object.entries(json.regions).map(([regionName, regionData]) =>
-                                      [regionName,
-                                        regionData.bbox[0] <= regionData.bbox[2] ? {
-                                          // if we're not crossing the antimeridian, `ui_bounds` and `render_bounds` are the same as `bbox`
-                                          ...regionData,
-                                          ui_bounds: regionData.bbox,
-                                          render_bounds: regionData.bbox,
-                                        } : {
-                                          // if we are crossing the antimeridian, `ui_bounds` should add 360 to the east so that
-                                          // east > west, and `render_bounds` should be the entire width of the world because
-                                          // it's actually two partial regions on opposite sides of the map
-                                          ...regionData,
-                                          ui_bounds: [regionData.bbox[0], regionData.bbox[1], regionData.bbox[2] + 360, regionData.bbox[3]],
-                                          render_bounds: [-179.99999999, regionData.bbox[1], 180, regionData.bbox[3]],
-                                        }
-                                      ]
-                                  )
-                                )
-                            }
-                        } else {
-                            downloadedFQRegions = {error: true, regions: {}}
-                        }
+            async function setFQRegions() {
+                const [dirList, error] = await getJson('/maps/data/', true)
+                if (error) {
+                    downloadedFQRegions = {error: true, regions: {}}
+                    console.error("Failed to load Full Quality Regions:", error)
+                    return
+                }
 
-                    });
+                regionNames = dirList
+                    .filter(entry => entry.type === "directory" && entry.name.endsWith('.fqr'))
+                    .map(entry => entry.name.slice(0, -4))
+                const regionInfo = await Promise.allSettled(
+                    regionNames.map(async regionName => {
+                        const metaPromise = (async () => {
+                            // Should we cache this? It will change less often, presumably, than a given FQR's bbox. Not impossible though.
+                            const [meta, error] = await getJson(`/maps/data/${regionName}.fqr/meta.json`, false)
+                            if (error) {
+                                console.error(`Failed to load meta.json for Full Quality Region ${regionName}:`, error)
+                                return
+                            }
+                            return meta
+                        })()
+
+                        const listingPromise = (async () => {
+                            // Not going to cache because updating FQR data we hope is not so uncommon.
+                            const [listing, error] = await getJson(`/maps/data/${regionName}.fqr`, true)
+                            if (error) {
+                                console.error(`Failed to load Full Quality Region file listing: ${regionName}:`, error)
+                                return
+                            }
+                            return listing
+                        })()
+
+                        const [meta, listing] = await Promise.all([metaPromise, listingPromise])
+                        if (meta && listing) {
+                            return [regionName, {meta, listing}]
+                        }
+                    })
+                )
+
+                // At this point we're done making requests. We should have all of the data we need to set up our FQRs here.
+                //
+                // regions = {regionName: {meta, listing}, ...}
+                downloadedFQRegions = {
+                  regions: Object.fromEntries(
+                      regionInfo
+                      .map(res=>res.value)  // [regionName, {meta, listing}] (see above)
+                      .filter(Boolean)      // remove errors in getting meta or listing
+                      .map(([regionName, {meta, listing}]) => {
+                          // some basic checks
+                          if (!meta.bbox) {
+                              console.log(`bbox missing for Full Quality Region: ${regionName}`)
+                              return
+                          }
+                          if (meta.bbox.length != 4) {
+                              console.log(`bbox malformed for Full Quality Region: ${regionName}`)
+                              return
+                          }
+
+                          const dates = {}
+                          const REGION_EXTRACT_TYPES = [
+                              's2maps-sentinel2-2023',
+                              'terrarium',
+                              'openstreetmap-openmaptiles',
+                          ]
+
+                          // Each valid pmtiles file in an FQR has the format:
+                          //
+                          // [regionExtractType].[date].pmtiles
+                          //
+                          // Let's identify all of them and sort them by date. That way,
+                          // if we have multiple pmtiles for a given regionExtractType (a
+                          // botched FQR update, etc), the latest one always ends up in `dates`.
+                          listing.map(entry => {
+                              if (entry.type !== "file") {
+                                      return
+                              }
+
+                              const [regionExtractType, date, pmtiles, ...rest] = entry.name.split(".")
+                              if (
+                                REGION_EXTRACT_TYPES.includes(regionExtractType)            &&
+                                date.match(/^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]$/)  &&
+                                pmtiles === "pmtiles"                                       &&
+                                !rest.length
+                              ) {
+                                  return {regionExtractType, date}
+                              }
+                          })
+                          .filter(Boolean)      // remove anything that isn't a properly formatted pmtiles file name
+                          .sort((a, b) => a.date.localeCompare(b.date))
+                          .forEach(({regionExtractType, date}) => {
+                              dates[regionExtractType] = date
+                          })
+
+                          const fqrData = meta.bbox[0] <= meta.bbox[2] ? {
+                            // if we're not crossing the antimeridian, `ui_bounds` and `render_bounds` are the same as `bbox`
+                            dates,
+                            bbox: meta.bbox,
+                            ui_bounds: meta.bbox,
+                            render_bounds: meta.bbox,
+                          } : {
+                            // if we are crossing the antimeridian, `ui_bounds` should add 360 to the east so that
+                            // east > west, and `render_bounds` should be the entire width of the world because
+                            // it's actually two partial regions on opposite sides of the map
+                            dates,
+                            bbox: meta.bbox,
+                            ui_bounds: [meta.bbox[0], meta.bbox[1], meta.bbox[2] + 360, meta.bbox[3]],
+                            render_bounds: [-179.99999999, meta.bbox[1], 180, meta.bbox[3]],
+                          }
+                          return [regionName, fqrData]
+                      })
+                      .filter(Boolean)      // remove errors in finishing setting up the region
+                )}
             }
             setFQRegions()
 
