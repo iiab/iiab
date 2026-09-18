@@ -688,7 +688,7 @@
                     if (response.status >= 400) {
                         return [null, `${response.status}: ${response.statusText}`]
                     }
-                    return [await response.json()]
+                    return [await response.json(), null]
                 } catch (error) {
                     return [null, error]
                 }
@@ -759,25 +759,24 @@
                           }
 
                           const dates = {}
+                          const REGION_EXTRACT_TYPES = [
+                              's2maps-sentinel2-2023',
+                              'terrarium',
+                              'openstreetmap-openmaptiles',
+                          ]
 
                           // Each valid pmtiles file in an FQR has the format:
+                          //
                           // [regionExtractType].[date].pmtiles
-                          // We want the latest date for each regionExtractType, assuming there are
-                          // (for some reason) multiple. If we sort it in alphabetical order, the
-                          // pmtiles for each regionExtractType should also be listed in chronological
-                          // order. So long as we overwrite, the latest date for each regionExtractType
-                          // should end up in `dates`.
-                          listing.sort()
-                          listing.forEach(entry => {
+                          //
+                          // Let's identify all of them and sort them by date. That way,
+                          // if we have multiple pmtiles for a given regionExtractType (a
+                          // botched FQR update, etc), the latest one always ends up in `dates`.
+                          listing.map(entry => {
                               if (entry.type !== "file") {
                                       return
                               }
 
-                              const REGION_EXTRACT_TYPES = [
-                                  's2maps-sentinel2-2023',
-                                  'terrarium',
-                                  'openstreetmap-openmaptiles',
-                              ]
                               const [regionExtractType, date, pmtiles, ...rest] = entry.name.split(".")
                               if (
                                 REGION_EXTRACT_TYPES.includes(regionExtractType)            &&
@@ -785,8 +784,13 @@
                                 pmtiles === "pmtiles"                                       &&
                                 !rest.length
                               ) {
-                                  dates[regionExtractType] = date
+                                  return {regionExtractType, date}
                               }
+                          })
+                          .filter(Boolean)      // remove anything that isn't a properly formatted pmtiles file name
+                          .sort((a, b) => a.date.localeCompare(b.date))
+                          .forEach(({regionExtractType, date}) => {
+                              dates[regionExtractType] = date
                           })
 
                           const fqrData = meta.bbox[0] <= meta.bbox[2] ? {
