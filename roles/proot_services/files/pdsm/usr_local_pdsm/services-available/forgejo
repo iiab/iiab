@@ -9,22 +9,19 @@ PDSM_COMMON="/usr/local/pdsm/lib/pdsm-common.sh"
 
 SERVICE_NAME="forgejo"
 
+FORGEJO_USER="forgejo"
+FORGEJO_HOME="/home/forgejo"
 FORGEJO_BIN="/library/forgejo/forgejo"          # stable symlink -> versioned binary
 FORGEJO_CONFIG="/etc/forgejo/app.ini"
 FORGEJO_WORK_DIR="/library/forgejo"
 FORGEJO_LOG="/library/forgejo/log/forgejo.log"
-FORGEJO_RUN_DIR="/run/forgejo"
-FORGEJO_PIDFILE="$FORGEJO_RUN_DIR/forgejo.pid"
 
-# NOTE (proot test item): Forgejo checks RUN_USER against the running user. Under
-# proot the process runs as the login user, so make sure app.ini RUN_USER matches
-# (or adjust) during Termux testing. See roles/forgejo/ADR.md D4/D8.
+# Forgejo refuses to run as root. Under proot the login shell is root, so we drop
+# to the unprivileged 'forgejo' user (created by the forgejo role) to start it.
+# The process is tracked by its command line (pgrep); no pidfile needed.
 
 running() {
-  [ -s "$FORGEJO_PIDFILE" ] || return 1
-  pid="$(cat "$FORGEJO_PIDFILE" 2>/dev/null || echo '')"
-  [ -n "$pid" ] || return 1
-  kill -0 "$pid" 2>/dev/null
+  pgrep -f "$FORGEJO_BIN web" >/dev/null 2>&1
 }
 
 start() {
@@ -37,11 +34,11 @@ start() {
   require_service "nginx" 2>/dev/null || true
 
   echo "[pdsm:$SERVICE_NAME] starting..."
-  mkdir -p "$FORGEJO_RUN_DIR"
 
-  FORGEJO_WORK_DIR="$FORGEJO_WORK_DIR" nohup "$FORGEJO_BIN" web --config "$FORGEJO_CONFIG" \
+  # Drop from root to the 'forgejo' user (Forgejo won't run as root).
+  setsid su -s /bin/sh "$FORGEJO_USER" -c \
+    "HOME=$FORGEJO_HOME FORGEJO_WORK_DIR=$FORGEJO_WORK_DIR exec $FORGEJO_BIN web --config $FORGEJO_CONFIG" \
     >>"$FORGEJO_LOG" 2>&1 &
-  echo $! > "$FORGEJO_PIDFILE"
 
   for i in $(seq 1 "${PDSM_START_TIMEOUT:-15}"); do
     if running; then
@@ -62,15 +59,10 @@ stop() {
   fi
 
   echo "[pdsm:$SERVICE_NAME] stopping..."
-  pid="$(cat "$FORGEJO_PIDFILE" 2>/dev/null || echo '')"
-  [ -n "$pid" ] && kill "$pid" 2>/dev/null || true
-
-  # Fallback: kill any leftover Forgejo web process
-  pgrep -f "$FORGEJO_BIN web" >/dev/null 2>&1 && pkill -f "$FORGEJO_BIN web" || true
+  pkill -f "$FORGEJO_BIN web" >/dev/null 2>&1 || true
 
   for i in $(seq 1 "${PDSM_START_TIMEOUT:-15}"); do
     if ! running; then
-      rm -f "$FORGEJO_PIDFILE"
       echo "[pdsm:$SERVICE_NAME] stopped"
       return 0
     fi
