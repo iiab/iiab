@@ -109,12 +109,32 @@ satellite_tiles = {
         [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) s2maps (see more [here](https://maps.black/#data) and [here](https://maps.black/#licenses))
       """)
     },
+    "7-iiab": {
+      "url": "https://iiab.io/content/iiab-sentinel2.2026-07-25.z00-z07.pmtiles",
+      "details": fix_multiline_spacing("""
+        FOR TESTING ONLY
+
+        Low quality "IIAB" satellite, up to zoom level 7
+
+        [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) IIAB
+      """)
+    },
     9: {
       "url": f"{iiab_map_host_url}/s2maps-sentinel2-2023.{maps_satellite_data_date}.z00-z09.pmtiles",
       "details": fix_multiline_spacing("""
         Moderately high quality "s2maps" satellite, up to zoom level 9
 
         [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) s2maps (see more [here](https://maps.black/#data) and [here](https://maps.black/#licenses))
+      """)
+    },
+    "9-iiab": {
+      "url": "https://iiab.io/content/iiab-sentinel2.2026-07-25.z00-z09.pmtiles",
+      "details": fix_multiline_spacing("""
+        FOR TESTING ONLY
+
+        Moderately high quality "IIAB" satellite, up to zoom level 9
+
+        [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) IIAB
       """)
     },
     11: {
@@ -161,14 +181,14 @@ satellite_tiles = {
     "13-iiab": {
       "url": "https://iiab.io/content/iiab-sentinel2.2026-07-25.z00-z13.pmtiles",
       "details": fix_multiline_spacing("""
-        FOR TESTING ONLY - NOT AVAILABLE YET FOR WORLD MAP
+        FOR TESTING ONLY
 
         Highest available quality "IIAB" satellite, up to zoom level 13
 
         [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) IIAB
       """)
     },
-  }, ["none", "4-ci", 7, 9, 11, 12, 13, "13-iiab"]),
+  }, ["none", "4-ci", 7, "7-iiab", 9, "9-iiab", 11, 12, 13, "13-iiab"]),
 }
 
 terrain_tiles = {

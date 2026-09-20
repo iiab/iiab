@@ -32,11 +32,27 @@ Low quality "s2maps" satellite, up to zoom level 7
 
 [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) s2maps (see more [here](https://maps.black/#data) and [here](https://maps.black/#licenses))
 
+## `maps_satellite_zoom: 7-iiab` (227.2 MB)
+
+FOR TESTING ONLY
+
+Low quality "IIAB" satellite, up to zoom level 7
+
+[CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) IIAB
+
 ## `maps_satellite_zoom: 9` (1.2 GB)
 
 Moderately high quality "s2maps" satellite, up to zoom level 9
 
 [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) s2maps (see more [here](https://maps.black/#data) and [here](https://maps.black/#licenses))
+
+## `maps_satellite_zoom: 9-iiab` (2.6 GB)
+
+FOR TESTING ONLY
+
+Moderately high quality "IIAB" satellite, up to zoom level 9
+
+[CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) IIAB
 
 ## `maps_satellite_zoom: 11` (22.3 GB)
 
@@ -58,7 +74,7 @@ Highest available quality "s2maps" satellite, up to zoom level 13
 
 ## `maps_satellite_zoom: 13-iiab` (268.1 GB)
 
-FOR TESTING ONLY - NOT AVAILABLE YET FOR WORLD MAP
+FOR TESTING ONLY
 
 Highest available quality "IIAB" satellite, up to zoom level 13
 
