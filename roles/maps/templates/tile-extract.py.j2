@@ -50,12 +50,13 @@ def get_fqr(extract_name, fqr_dir):
         except Exception as e:
             return None, f"meta.json bbox error: {e}"
 
-FAMILIAR_REGION_TYPES = {
+REGION_CATEGORIES_BY_REGION_TYPE = {
+    'iiab-sentinel2': 'satellite',
     's2maps-sentinel2-2023': 'satellite',
     'terrarium': 'terrain',
     'openstreetmap-openmaptiles': 'vector',
 }
-VALID_REGION_EXTRACT_TYPES = set(FAMILIAR_REGION_TYPES.keys())
+VALID_REGION_EXTRACT_TYPES = set(REGION_CATEGORIES_BY_REGION_TYPE.keys())
 
 def check_extract_name_error(extract_name):
     if not set(extract_name) < set(string.ascii_letters + string.digits + "-_"):
@@ -120,20 +121,29 @@ def get_new_extract_paths(extract_name):
     Make sure this matches makeFqrSourceId in index.html
     """
 
-    # Unlike the global data, FQRs always stay up to date, so it downloads
-    # the latest catalog.
-    catalog_response = requests.get(CATALOG_URL)
-    if catalog_response.status_code != 200:
-        raise Exception("Cannot find map data catalog")
-
+    CATALOG_DEBUG = "{{ maps_catalog_debug }}" == "True"
     try:
-        catalog = catalog_response.json()["data"]
+        if not CATALOG_DEBUG:
+            # Unlike the global data, FQRs always stay up to date, so it downloads
+            # the latest catalog.
+            catalog_response = requests.get(CATALOG_URL)
+            if catalog_response.status_code != 200:
+                raise Exception("Cannot find map data catalog")
+
+            catalog = catalog_response.json()["data"]
+        else:
+            # In debug mode we take whatever is in the repo since it may include
+            # stuff related to what we're currently working on.
+            catalog = json.loads(open("/opt/iiab/iiab/roles/maps/maps-catalog.json").read())["data"]
     except json.decoder.JSONDecodeError:
         raise Exception("Error reading map data catalog")
 
-    VECTOR_MAX_ZOOM = "{{ maps_vector_fqr_max_zoom }}"
-    SATELLITE_MAX_ZOOM = "{{ maps_satellite_fqr_max_zoom }}"
-    TERRAIN_MAX_ZOOM = "{{ maps_terrain_fqr_max_zoom }}"
+    VECTOR_CATALOG_KEY = "{{ maps_vector_fqr_max_zoom }}"
+    if "{{ maps_satellite_fqr_type }}" == "iiab":
+        SATELLITE_CATALOG_KEY = "{{ maps_satellite_fqr_max_zoom }}" + "-iiab"
+    else:
+        SATELLITE_CATALOG_KEY = "{{ maps_satellite_fqr_max_zoom }}"
+    TERRAIN_CATALOG_KEY = "{{ maps_terrain_fqr_max_zoom }}"
 
     def get_paths(source):
         match (source.split('/')[-1].split('.')):
@@ -151,9 +161,9 @@ def get_new_extract_paths(extract_name):
                 raise Exception("Oops got unexpected pmtiles file name:", source)
 
     return {
-        "vector": get_paths(catalog["vector"][VECTOR_MAX_ZOOM]),
-        "satellite": get_paths(catalog["satellite"][SATELLITE_MAX_ZOOM]),
-        "terrain": get_paths(catalog["terrain"][TERRAIN_MAX_ZOOM]),
+        "vector": get_paths(catalog["vector"][VECTOR_CATALOG_KEY]),
+        "satellite": get_paths(catalog["satellite"][SATELLITE_CATALOG_KEY]),
+        "terrain": get_paths(catalog["terrain"][TERRAIN_CATALOG_KEY]),
     }
 
 def get_all_fqr_dirs():
@@ -460,7 +470,7 @@ def debug_extracts_json():
     print () # Give space in case this is run after another command
     print ("Checking FQRs...")
     region_extracts = defaultdict(
-        lambda: dict(region_types=set()),
+        lambda: dict(region_categories=set()),
     )
 
     for extract_name, fqr_dir in get_all_fqr_dirs().items():
@@ -477,22 +487,22 @@ def debug_extracts_json():
             continue # Something went really haywire. Skip this pmtiles file.
 
         for _, region_extract_type, _ in get_region_files_for_fqr(fqr_dir):
-            region_type_for_date = FAMILIAR_REGION_TYPES[region_extract_type]
-            region_extracts[extract_name]["region_types"].add(region_type_for_date)
+            region_type_for_date = REGION_CATEGORIES_BY_REGION_TYPE[region_extract_type]
+            region_extracts[extract_name]["region_categories"].add(region_type_for_date)
 
-        missing_region_types = (
-            set(FAMILIAR_REGION_TYPES.values()) -
-            region_extracts[extract_name]["region_types"]
+        missing_region_categories = (
+            set(REGION_CATEGORIES_BY_REGION_TYPE.values()) -
+            region_extracts[extract_name]["region_categories"]
         )
 
-        if missing_region_types:
+        if missing_region_categories:
             print() # Extra line because we may list multiple incomplete FQRs here
             print (f"Warning: don't have all three types of pmtiles files for '{extract_name}'.")
             print (
                 "Have:",
-                region_extracts[extract_name]["region_types"] or "(none)",
+                region_extracts[extract_name]["region_categories"] or "(none)",
                 "Missing:",
-                missing_region_types
+                missing_region_categories
             )
             print (
                 "To get the missing files, delete this region and download it again. "
