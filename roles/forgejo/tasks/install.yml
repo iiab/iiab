@@ -47,6 +47,40 @@
     - backups
 
 
+# 1b. In-place upgrade safety. install.yml only runs when 'forgejo_installed' is
+# undefined, i.e. on a fresh install OR on 'runrole --reinstall forgejo' (which
+# clears that flag). This is how a reinstall doubles as the UPDATE path. When an
+# install already exists (app.ini present), back up the DB + repos with 'forgejo
+# dump' BEFORE swapping the binary, so a bad schema migration on the next restart
+# can be recovered. /library/forgejo/data (repos, DB) is never wiped, so user work
+# is preserved. Skipped on a fresh install (nothing to back up).
+
+- name: Check whether Forgejo is already installed (app.ini present)
+  stat:
+    path: "{{ forgejo_config_path }}"
+  register: forgejo_existing_config
+
+- name: Back up Forgejo before an in-place upgrade
+  when: forgejo_existing_config.stat.exists
+  block:
+    # ansible_date_time is NOT populated under the proot fact subset
+    # (all,!hardware,!network), so derive the timestamp from 'date' instead.
+    - name: Compute a backup timestamp (proot-safe, no fact dependency)
+      command: date -u +%Y%m%dT%H%M%SZ
+      register: forgejo_backup_ts
+      changed_when: false
+
+    - name: "Back up Forgejo (forgejo dump) to {{ forgejo_backups_root }} before swapping the binary"
+      command: >
+        {{ forgejo_link_path }} dump
+        --config {{ forgejo_config_path }}
+        --file {{ forgejo_backups_root }}/forgejo-dump-{{ forgejo_backup_ts.stdout }}.zip
+      args:
+        chdir: "{{ forgejo_backups_root }}"
+      become: yes
+      become_user: "{{ forgejo_user }}"
+
+
 # 2. Download, verify, and link the Forgejo binary
 
 - name: Fail if we detect an unsupported CPU architecture
