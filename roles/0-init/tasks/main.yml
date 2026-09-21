@@ -28,6 +28,30 @@
   command: dpkg --print-architecture
   register: dpkg_arch
 
+# 2026-09-21: Ubuntu 26.10 (systemd v260+) removed systemd-sysv-generator, and
+# package postinsts auto-start their services at ill-advised moments anyway:
+# e.g. Ubuntu 26.10's mosquitto starts before its runtime lib is configured
+# (=> 6 rapid 'Failed to start mosquitto.service' + 'start-limit-hit'), and the
+# Kolibri .deb starts via an /etc/init.d wrapper that can't run because IIAB
+# sets the kolibri user's shell to /bin/false.  Per Debian policy, a
+# /usr/sbin/policy-rc.d that exits 101 ('action not allowed') makes
+# invoke-rc.d / deb-systemd-invoke skip these package-time service starts, so
+# IIAB -- which starts/enables every service via its own enable-or-disable.yml
+# tasks -- remains in sole control.  Removed again at the end of each playbook:
+- name: "Install /usr/sbin/policy-rc.d that skips package install-time service (auto)starts (so IIAB's enable-or-disable.yml stays in sole control)"
+  copy:
+    dest: /usr/sbin/policy-rc.d
+    owner: root
+    group: root
+    mode: '0755'
+    content: |
+      #!/bin/sh
+      # IIAB: deny every package install-time service action (101 = 'not allowed'
+      # per LSB / Debian policy), so postinst auto-starts never trip over
+      # not-yet-configured runtime libs, legacy SysV wrappers, start-limits, etc.
+      # IIAB's per-role enable-or-disable.yml tasks start/enable each service.
+      exit 101
+
 - name: Fakeout detection for image building
   set_fact:
     rpi_model: "fake"
