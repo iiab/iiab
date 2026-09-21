@@ -116,6 +116,19 @@
   #   KOLIBRI_USER: "{{ kolibri_user }}"    # for now.
 
 
+# 2026-09-21: The Kolibri .deb's own /lib/systemd/system/kolibri.service wraps
+# its legacy SysV /etc/init.d/kolibri: 'runuser kolibri -c "kolibri start"'.
+# That can't succeed because IIAB sets {{ kolibri_user }}'s shell to /bin/false
+# (it's a daemon-only account, above), so the deb's postinst auto-start leaves
+# 'kolibri.service' in a failed / start-limit-hit state each time apt installs
+# Kolibri.  IIAB's own /etc/systemd/system/kolibri.service (installed below)
+# starts Kolibri fine -- so just clear the stale failed state here, so the
+# 'Enable & Start' task in enable-or-disable.yml is robust & predictable:
+- name: "Clear failed 'kolibri' systemd state left by the Kolibri .deb's legacy SysV auto-start (see journal: 'Failed to start kolibri.service - LSB: kolibri daemon')"
+  command: systemctl reset-failed kolibri
+  ignore_errors: true    # No error occurs when kolibri.service has no failed state (e.g. fresh systemd state).
+  when: not is_proot
+
 - name: Run 'rm -rf /root/.kolibri' to remove "unavoidable" pollution created above
   file:
     state: absent
