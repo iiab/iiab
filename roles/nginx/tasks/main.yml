@@ -30,10 +30,10 @@
   include_tasks: install.yml
   when: nginx_installed is undefined
 
-# Ubuntu 26.10's 'uwsgi' package no longer ships /etc/uwsgi/apps-enabled (nor a
-# SysV init script that systemd auto-converts into 'uwsgi.service').  So IIAB
-# (a) creates the /etc/uwsgi app dirs + (b) installs a native uWSGI Emperor
-# unit itself if it doesn't exist already.
+# Ubuntu 26.10's 'uwsgi' package does not provide /etc/uwsgi/apps-enabled or a
+# SysV init script that generates 'uwsgi.service'. IIAB uses the distro's
+# 'uwsgi-emperor.service' and configures it to manage the vassals in
+# /etc/uwsgi/apps-enabled: admin-console.ini and captiveportal.ini.
 - name: Ensure uWSGI's /etc/uwsgi 2 app dirs exist
   file:
     path: "{{ item }}"
@@ -43,20 +43,19 @@
     - /etc/uwsgi/apps-available
     - /etc/uwsgi/apps-enabled
 
-- name: Check whether a 'uwsgi.service' unit already exists
-  command: systemctl cat uwsgi.service
-  register: uwsgi_service_check
-  changed_when: false
-  failed_when: false    # rc=1 if no such unit, is normal
+- name: Install /etc/uwsgi-emperor/emperor.ini from template (uWSGI Emperor over /etc/uwsgi/apps-enabled, as {{ apache_user }})
+  template:
+    src: emperor.ini.j2
+    dest: /etc/uwsgi-emperor/emperor.ini
   when: not is_proot
 
-- name: Install /etc/systemd/system/uwsgi.service (uWSGI Emperor over /etc/uwsgi/apps-enabled), if distro provides no uwsgi.service (e.g. Ubuntu 26.10+)
-  template:
-    src: uwsgi.service.j2
-    dest: /etc/systemd/system/uwsgi.service
-  when:
-    - not is_proot
-    - uwsgi_service_check.rc != 0    # unit not found
+- name: Stop & Disable legacy 'uwsgi' systemd service (superseded by 'uwsgi-emperor.service')
+  systemd:
+    name: uwsgi
+    state: stopped
+    enabled: no
+  ignore_errors: true    # No error occurs when the legacy unit is absent.
+  when: not is_proot
 
 - name: Reload systemd
   systemd:
