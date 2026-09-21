@@ -9,7 +9,6 @@ ASSUME ALL OTHER COPIES (INCLUDING THE ONE ON YOUR IIAB) ARE STALE (OUT OF DATE!
 
 
 # Satellite
-
 Satellite imagery from s2maps or IIAB.  Maximum zoom level available is 13.
 
 ---
@@ -86,7 +85,6 @@ Highest available quality "IIAB" satellite, up to zoom level 13
 
 ---
 
-
 # Terrain
 Terrain (i.e. elevation) data from Terrarium. Maximum zoom level available is 10.
 
@@ -104,21 +102,20 @@ Low quality terrain, up to zoom level 7
 
 ## `maps_terrain_zoom: 8` (6.4 GB)
 
+
 ---
 
 ## `maps_terrain_zoom: 9` (28.6 GB)
 
+
 ---
 
 ## `maps_terrain_zoom: 10` (106.2 GB)
-
 (This is the highest quality that maps.black offers in pmtiles format.  They offer 11, 12, and 13 in squashfs format, but they are massive files.)
 
 ---
 
-
 # Vector
-
 Map features in a vector format from OpenStreetMap or Natural Earth.  Maximum zoom level available is 14.
 
 ---
@@ -145,9 +142,7 @@ FOR TESTING OR FALLBACK ONLY
 
 ---
 
-
 # Natural Earth 6
-
 Backdrop imagery in raster format, used in conjunction with vector maps in some styles.
 
 ---
@@ -162,9 +157,7 @@ Normal, default value
 
 ---
 
-
 # Static Search
-
 Search database for the statically hosted search engine.  Requires `maps_search_engine: static`.
 
 ---
@@ -181,9 +174,7 @@ Large cities-only static database
 
 ---
 
-
 # Nominatim
-
 Search database for the Nominatim search engine.  Requires `maps_search_engine: nominatim`.
 
 ---
@@ -194,7 +185,7 @@ Basic nominatim database. (California admin+natural for now.)
 ---
 
 ## `maps_search_nominatim_db: full` (67.0 GB)
+Full nominatim database
 
 ---
-Full nominatim database
 
