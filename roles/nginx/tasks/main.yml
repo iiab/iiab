@@ -34,6 +34,10 @@
 # SysV init script that generates 'uwsgi.service'. IIAB uses the distro's
 # 'uwsgi-emperor.service' and configures it to manage the vassals in
 # /etc/uwsgi/apps-enabled: admin-console.ini and captiveportal.ini.
+#
+# External consumers (e.g. iiab-admin-console's roles/console) still
+# enable/restart a 'uwsgi' service, so IIAB aliases 'uwsgi.service' to the
+# distro's 'uwsgi-emperor.service' below -- both names then work everywhere.
 - name: Ensure uWSGI's /etc/uwsgi 2 app dirs exist
   file:
     path: "{{ item }}"
@@ -49,12 +53,12 @@
     dest: /etc/uwsgi-emperor/emperor.ini
   when: not is_proot
 
-- name: Stop & Disable legacy 'uwsgi' systemd service (superseded by 'uwsgi-emperor.service')
-  systemd:
-    name: uwsgi
-    state: stopped
-    enabled: no
-  ignore_errors: true    # No error occurs when the legacy unit is absent.
+- name: Alias 'uwsgi.service' -> distro's 'uwsgi-emperor.service' (legacy name, still used by iiab-admin-console)
+  file:
+    src: /usr/lib/systemd/system/uwsgi-emperor.service
+    path: /etc/systemd/system/uwsgi.service
+    state: link
+    force: yes    # Replace IIAB's legacy uwsgi.service unit, if upgrading
   when: not is_proot
 
 - name: Reload systemd
