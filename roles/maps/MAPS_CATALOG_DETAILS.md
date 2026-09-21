@@ -1,6 +1,6 @@
 
 This guide is for [`maps-catalog.json`](https://github.com/iiab/iiab/blob/master/roles/maps/maps-catalog.json),
-which is the catalog of the latest data available for IIAB Maps. The only truly valid version of this
+which is the catalog of the latest data available for IIAB Maps.  The only truly valid version of this
 guide is is [here](https://github.com/iiab/iiab/blob/master/roles/maps/MAPS_CATALOG_DETAILS.md).
 ASSUME ALL OTHER COPIES (INCLUDING THE ONE ON YOUR IIAB) ARE STALE (OUT OF DATE!)
 
@@ -8,159 +8,193 @@ ASSUME ALL OTHER COPIES (INCLUDING THE ONE ON YOUR IIAB) ARE STALE (OUT OF DATE!
 * [Raw file listing](https://iiab.switnet.org/maps/2/)
 
 
-# satellite
+# Satellite
 
-Satellite imagery from s2maps. Maximum zoom level available is 13.
+Satellite imagery from s2maps or IIAB.  Maximum zoom level available is 13.
+
+---
 
 ## `maps_satellite_zoom: none`
-
 Disable satellite. There is no URL associated with this option because it doesn't download anything.
 
 NOTE: This will not necessarily delete any satellite files you have downloaded previously.
 
-## `maps_satellite_zoom: 4-ci` (2.0 MB)
+---
 
+## `maps_satellite_zoom: 4-ci` (2.0 MB)
 FOR TESTING ONLY
 
 Super-low quality "s2maps" satellite, up to zoom level 4
 
 [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) s2maps (see more [here](https://maps.black/#data) and [here](https://maps.black/#licenses))
 
-## `maps_satellite_zoom: 7` (88.8 MB)
+---
 
+## `maps_satellite_zoom: 7` (88.8 MB)
 Low quality "s2maps" satellite, up to zoom level 7
 
 [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) s2maps (see more [here](https://maps.black/#data) and [here](https://maps.black/#licenses))
 
+---
+
 ## `maps_satellite_zoom: 7-iiab` (227.2 MB)
-
-FOR TESTING ONLY
-
 Low quality "IIAB" satellite, up to zoom level 7
 
 [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) IIAB
 
-## `maps_satellite_zoom: 9` (1.2 GB)
+---
 
+## `maps_satellite_zoom: 9` (1.2 GB)
 Moderately high quality "s2maps" satellite, up to zoom level 9
 
 [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) s2maps (see more [here](https://maps.black/#data) and [here](https://maps.black/#licenses))
 
+---
+
 ## `maps_satellite_zoom: 9-iiab` (2.6 GB)
-
-FOR TESTING ONLY
-
 Moderately high quality "IIAB" satellite, up to zoom level 9
 
 [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) IIAB
 
-## `maps_satellite_zoom: 11` (22.3 GB)
+---
 
+## `maps_satellite_zoom: 11` (22.3 GB)
 Pretty high quality "s2maps" satellite, up to zoom level 11
 
 [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) s2maps (see more [here](https://maps.black/#data) and [here](https://maps.black/#licenses))
 
-## `maps_satellite_zoom: 12` (85.7 GB)
+---
 
+## `maps_satellite_zoom: 12` (85.7 GB)
 Pretty high quality "s2maps" satellite, up to zoom level 12
 
 [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) s2maps (see more [here](https://maps.black/#data) and [here](https://maps.black/#licenses))
 
-## `maps_satellite_zoom: 13` (290.3 GB)
+---
 
+## `maps_satellite_zoom: 13` (290.3 GB)
 Highest available quality "s2maps" satellite, up to zoom level 13
 
 [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) s2maps (see more [here](https://maps.black/#data) and [here](https://maps.black/#licenses))
 
+---
+
 ## `maps_satellite_zoom: 13-iiab` (268.1 GB)
-
-FOR TESTING ONLY
-
 Highest available quality "IIAB" satellite, up to zoom level 13
 
 [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) IIAB
 
-# terrain
+---
 
+
+# Terrain
 Terrain (i.e. elevation) data from Terrarium. Maximum zoom level available is 10.
 
-## `maps_terrain_zoom: 0-none` (107.2 kB)
+---
 
+## `maps_terrain_zoom: 0-none` (107.2 kB)
 A 'dummy' maxzoom=0 world map terrain file to fill a role that maps.black/maplibre needs if we have FQRs and the user enables terrain.
 
-## `maps_terrain_zoom: 7` (978.2 MB)
+---
 
+## `maps_terrain_zoom: 7` (978.2 MB)
 Low quality terrain, up to zoom level 7
+
+---
 
 ## `maps_terrain_zoom: 8` (6.4 GB)
 
-
+---
 
 ## `maps_terrain_zoom: 9` (28.6 GB)
 
-
+---
 
 ## `maps_terrain_zoom: 10` (106.2 GB)
 
-(This is the highest quality that maps.black offers in pmtiles format. They offer 11, 12, and 13 in squashfs format, but they are massive files.)
+(This is the highest quality that maps.black offers in pmtiles format.  They offer 11, 12, and 13 in squashfs format, but they are massive files.)
 
-# vector
+---
 
-Map features in a vector format from OpenStreetMap or Natural Earth. Maximum zoom level available is 14.
+
+# Vector
+
+Map features in a vector format from OpenStreetMap or Natural Earth.  Maximum zoom level available is 14.
+
+---
 
 ## `maps_vector_zoom: 1-ci` (1.2 MB)
-
 FOR TESTING OR FALLBACK ONLY
 
 'skeleton' osm, up to zoom level 1
 
-## `maps_vector_zoom: nat-z8` (89.4 MB)
+---
 
+## `maps_vector_zoom: nat-z8` (89.4 MB)
 'low res' - mostly borders, rivers, country names, large roads. (Uses Natural Earth instead of OpenStreetMap)
 
-## `maps_vector_zoom: 11` (9.0 GB)
+---
 
+## `maps_vector_zoom: 11` (9.0 GB)
 'medium res' osm, up to zoom level 11
 
-## `maps_vector_zoom: 14` (87.4 GB)
+---
 
+## `maps_vector_zoom: 14` (87.4 GB)
 'high res' aka 'full quality' osm, including 3d buildings.
 
-# naturalearth6
+---
+
+
+# Natural Earth 6
 
 Backdrop imagery in raster format, used in conjunction with vector maps in some styles.
 
-## `maps_ne6_zoom: 4-ci` (7.0 MB)
+---
 
+## `maps_ne6_zoom: 4-ci` (7.0 MB)
 FOR TESTING ONLY
 
-## `maps_ne6_zoom: 6` (60.4 MB)
+---
 
+## `maps_ne6_zoom: 6` (60.4 MB)
 Normal, default value
 
-# static_search
+---
 
-Search database for the statically hosted search engine. Requires `maps_search_engine: static`.
+
+# Static Search
+
+Search database for the statically hosted search engine.  Requires `maps_search_engine: static`.
+
+---
 
 ## `maps_search_static_db: pop-1k-cities` (16.1 MB)
-
 Cities-only static database
 
-## `maps_search_static_db: pop-100k-cities` (926.0 kB)
+---
 
+## `maps_search_static_db: pop-100k-cities` (926.0 kB)
 FOR TESTING ONLY
 
 Large cities-only static database
 
-# nominatim
+---
 
-Search database for the Nominatim search engine. Requires `maps_search_engine: nominatim`.
+
+# Nominatim
+
+Search database for the Nominatim search engine.  Requires `maps_search_engine: nominatim`.
+
+---
 
 ## `maps_search_nominatim_db: basic` (639.8 MB)
-
 Basic nominatim database. (California admin+natural for now.)
+
+---
 
 ## `maps_search_nominatim_db: full` (67.0 GB)
 
+---
 Full nominatim database
 
