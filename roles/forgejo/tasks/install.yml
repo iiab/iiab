@@ -60,6 +60,29 @@
     path: "{{ forgejo_config_path }}"
   register: forgejo_existing_config
 
+# The role sets up a FRESH DB for the chosen engine but never migrates data between
+# engines. Refuse a sqlite<->mariadb switch on an existing install, else we'd silently
+# start on an empty DB and orphan the old data. Manual migration path: see defaults/main.yml.
+- name: Detect the existing install's DB engine (engine-change guard)
+  when: forgejo_existing_config.stat.exists
+  command: "grep -oE '^DB_TYPE[[:space:]]*=[[:space:]]*[A-Za-z0-9]+' {{ forgejo_config_path }}"
+  register: forgejo_existing_db_type
+  changed_when: false
+  failed_when: false
+
+- name: Refuse an unsupported DB engine change on an existing install
+  vars:
+    _cur: "{{ forgejo_existing_db_type.stdout | default('') }}"
+  fail:
+    msg: >-
+      Existing Forgejo install uses '{{ _cur }}' but forgejo_db_engine='{{ forgejo_db_engine }}'.
+      The role does not migrate data between engines. Migrate manually (see
+      roles/forgejo/defaults/main.yml), then set forgejo_db_engine to match and re-run.
+  when:
+    - forgejo_existing_config.stat.exists
+    - (forgejo_db_engine == 'mariadb' and 'sqlite' in _cur) or
+      (forgejo_db_engine == 'sqlite'  and 'mysql'  in _cur)
+
 - name: Back up Forgejo before an in-place upgrade
   when: forgejo_existing_config.stat.exists
   block:
