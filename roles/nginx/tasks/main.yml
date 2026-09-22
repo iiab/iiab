@@ -30,16 +30,52 @@
   include_tasks: install.yml
   when: nginx_installed is undefined
 
-# Ubuntu 26.10 moved the legacy uwsgi.service and apps-enabled support into a separate package: uwsgi-initscripts
-# IIAB uses this aggregate service for Admin Console and Captive Portal
-- name: Install legacy uWSGI service support (if available; for changes in Ubuntu 26.10+)
-  package:
-    name: uwsgi-initscripts
-    state: present
-  ignore_errors: true
+# The distro-provided uwsgi-app@.service manages one app per systemd instance.
+- name: Ensure uWSGI's app config directory exists
+  file:
+    path: /etc/uwsgi/apps-available
+    state: directory
+    mode: "0755"
 
-- name: Reload systemd after installing uWSGI packages
-  systemd:
+- name: Check for the distro-provided uWSGI app service template
+  stat:
+    path: "{{ systemd_location }}/uwsgi-app@.service"
+  register: uwsgi_app_service
+  when: not is_proot
+
+- name: Require the distro-provided uWSGI app service template
+  assert:
+    that: uwsgi_app_service.stat.exists
+    fail_msg: "The installed uwsgi package must provide uwsgi-app@.service"
+  when: not is_proot
+
+- name: Stop and disable obsolete uWSGI services
+  systemd_service:
+    name: "{{ item }}"
+    state: stopped
+    enabled: no
+  loop:
+    - uwsgi-emperor
+    - uwsgi
+  ignore_errors: yes
+  when: not is_proot
+
+- name: Install uWSGI app service override for the existing Apache user
+  file:
+    path: /etc/systemd/system/uwsgi-app@.service.d
+    state: directory
+    mode: "0755"
+  when: not is_proot
+
+- name: Configure uWSGI app instances to run as {{ apache_user }}
+  template:
+    src: uwsgi-app@.service.d/iiab.conf.j2
+    dest: /etc/systemd/system/uwsgi-app@.service.d/iiab.conf
+    mode: "0644"
+  when: not is_proot
+
+- name: Reload systemd
+  systemd_service:
     daemon_reload: yes
   when: not is_proot
 

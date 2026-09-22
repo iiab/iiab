@@ -15,10 +15,9 @@ with open('checkurls','r') as urls:
       outstr += '    location / {\n'
       outstr += '        proxy_set_header   X-Forwarded-For $remote_addr;\n'
       outstr += '        proxy_set_header   Host $http_host;\n'
-      outstr += '        proxy_pass         "http://127.0.0.1:9090";\n'
+      outstr += '        proxy_pass         "http://127.0.0.1:{{ captiveportal_port }}";\n'
       outstr += '    }\n' 
       outstr += '}\n'
 #print(outstr)
 with open('/etc/nginx/sites-available/capture.conf','w') as config:
    config.write(outstr)
-

@@ -13,12 +13,27 @@ _Please Also See: http://FAQ.IIAB.IO > ["Captive Portal Administration: What tip
     1. iiab-divert-to-nginx -- Bash script writes dnsmasq config file which points to IIAB server
     1. iiab-make-cp-servers.py -- Python script writes nginx configuration file to /etc/nginx/sites-enabled
     1. capture-wsgi.py -- the script which determines the client agent, records it in sqlite database, and responds with redirects as appropriate for each OS.
-    1. captiveportal.ini.j2 -- config file for uwsgi service, which in turn runs the capture-wsgi.py script.
-    1. uwsgi.service -- systemd unit file which runs python3 programs --permits captive portal and admin-console python scripts to function.
+    1. captiveportal.ini.j2 -- config file for the `uwsgi-app@captiveportal.service` instance, which runs the capture-wsgi.py script.
+    1. `uwsgi-app@captiveportal.service` -- the distro-provided per-application systemd unit for the Captive Portal.
     
+### uWSGI service and port mapping
+
+The service name does not assign a port. The `uwsgi-app@captiveportal.service`
+instance uses the instance name `captiveportal` to load
+`/etc/uwsgi/apps-available/captiveportal.ini`. That INI sets
+`http-socket = :<captiveportal_port>`, which defaults to port `9090`.
+NGINX's generated Captive Portal configuration proxies to the same port.
+
+The Admin Console is a separate uWSGI instance,
+`uwsgi-app@admin-console.service`, and listens on the Unix socket
+`/tmp/admin-console.sock`; it does not use port `9090`. Port `9091` is the
+Transmission web interface and is unrelated to either uWSGI instance.
+
  ## Extending and Debugging Captive Portal
  * Running the capture-wsgi.py python script interactively will expose any python errors easily. 
- * The python capture script can be run interactively in terminal rather than automatically by uwsgi -- (use "systemctl stop uwsgi" to free up the port used by captive portal: 9090). The uwsgi service for captive portal grabs port 9090, and two programs cannot share the same port. NOTE: that while the uwsgi service is stopped, the admin-console will not function).
+ * The Python capture script can be run interactively instead of automatically by uWSGI. Stop the Captive Portal instance first to free its configured port (`9090` by default):
+   `sudo systemctl stop uwsgi-app@captiveportal.service`
+   Two programs cannot listen on the same port. Stopping this instance does not stop the Admin Console instance; restart it afterward with `sudo systemctl start uwsgi-app@captiveportal.service`.
  * Run the capture-wsgi.py with "-l" in a terminal to increase logging to /var/log/captiveportal/captiveportal.log
  * To discover untrapped urls, "apt-get install tcpdump", and "tcpdump -i br0 capture.tcp". I transfer this file to a machine with a GUI, and wireshark to interpret the conversations on the wire. The DNS packets are the ones to look for.
  

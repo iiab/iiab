@@ -2,24 +2,16 @@
 # Captive Portal (responds to browsers trying to detect a Captive Portal) and
 # also for Admin Console.
 
-# IIAB makes the 'uwsgi' service mandatory for now (see Line 45) but this could
-# perhaps be auto-disabled in future (or never installed?)  e.g. if Captive
-# Portal + Admin Console are both unneeded...and impact of uWSGI is too high ?
-
-- name: Stop 'uwsgi' systemd service (may include 3 child processes for Captive Portal, and 3 child processes for Admin Console)
-  systemd:
-    name: uwsgi
-    state: stopped
-
-- name: Install /etc/uwsgi/apps-enabled/captiveportal.ini from template (if captiveportal_enabled)
+# The distro-provided uwsgi-app@.service runs this app as its own instance.
+- name: Install /etc/uwsgi/apps-available/captiveportal.ini from template (if captiveportal_enabled)
   template:
     src: captiveportal.ini.j2
-    dest: /etc/uwsgi/apps-enabled/captiveportal.ini
+    dest: /etc/uwsgi/apps-available/captiveportal.ini
   when: captiveportal_enabled
 
-- name: Delete /etc/uwsgi/apps-enabled/captiveportal.ini (if not captiveportal_enabled)
+- name: Delete Captive Portal configuration when not captiveportal_enabled
   file:
-    path: /etc/uwsgi/apps-enabled/captiveportal.ini
+    path: /etc/uwsgi/apps-available/captiveportal.ini
     state: absent
   when: not captiveportal_enabled
 
@@ -46,14 +38,39 @@
     state: absent
   when: not captiveportal_enabled
 
-# Let's assume (for now) that Admin Console was/will be installed. Disabling of
-# uWSGI's service can be implemented later as nec, e.g. if CP+AC both disabled?
-- name: Start & Enable 'uwsgi' systemd service (may include 3 child processes for Captive Portal, and 3 child processes for Admin Console)
-  systemd:
-    name: uwsgi
+- name: Enable Captive Portal uWSGI app instance at boot
+  file:
+    src: "{{ systemd_location }}/uwsgi-app@.service"
+    path: /etc/systemd/system/multi-user.target.wants/uwsgi-app@captiveportal.service
+    state: link
+  when:
+    - captiveportal_enabled
+    - not is_proot
+
+- name: Disable Captive Portal uWSGI app instance at boot
+  file:
+    path: /etc/systemd/system/multi-user.target.wants/uwsgi-app@captiveportal.service
+    state: absent
+  when:
+    - not captiveportal_enabled
+    - not is_proot
+
+- name: Start Captive Portal uWSGI app instance
+  systemd_service:
+    name: uwsgi-app@captiveportal.service
     daemon_reload: yes
-    state: started
-    enabled: true
+    state: restarted
+  when:
+    - captiveportal_enabled
+    - not is_proot
+
+- name: Stop Captive Portal uWSGI app instance
+  systemd_service:
+    name: uwsgi-app@captiveportal.service
+    state: stopped
+  when:
+    - not captiveportal_enabled
+    - not is_proot
 
 # Unify 2 stanzas below ('state: restarted') when we end Ubuntu 16.04 support.
 - name: Stop 'dnsmasq' systemd service (if dnsmasq_enabled)
