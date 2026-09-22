@@ -43,23 +43,23 @@ def url_only(tiles):
         if "url" in file
     }
 
-def confirm_meta4(path):
+def confirm_meta4(content_url):
     """
-    The original path (as listed in the catalog) should be somewhere in the list of mirrors.
+    The original content url (as listed in the catalog) should be somewhere in the list of mirrors.
     """
 
-    meta4 = xmltodict.parse(requests.get(path + ".meta4").content, force_list=('url',))
+    meta4 = xmltodict.parse(requests.get(content_url + ".meta4").content, force_list=('url',))
     urls = [url['#text'] for url in meta4['metalink']['file']['url']]
-    assert path in urls, f"meta4 does not contain main url for {path}"
+    assert content_url in urls, f"meta4 does not contain main url for {content_url}"
 
-def confirm_torrent(path):
+def confirm_torrent(content_url):
     """
     The name of the file should be somewhere in the torrent, which is otherwise binary.
     Just do a quick sanity check to confirm it.
     """
 
-    torrent = str(requests.get(path + ".torrent").content)
-    assert path in torrent, f"torrent does not contain url for {path}"
+    torrent = requests.get(content_url + ".torrent").content
+    assert content_url.encode('utf-8') in torrent, f"torrent does not contain url for {content_url}"
 
 def add_file_sizes(tiles):
     for (zoom, file) in tiles.items():
