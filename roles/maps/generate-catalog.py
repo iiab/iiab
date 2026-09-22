@@ -54,7 +54,7 @@ def confirm_meta4(content_url):
 
 def confirm_torrent(content_url):
     """
-    The name of the file should be somewhere in the torrent, which is otherwise binary.
+    The content url should be somewhere in the torrent, which is otherwise binary.
     Just do a quick sanity check to confirm it.
     """
 
