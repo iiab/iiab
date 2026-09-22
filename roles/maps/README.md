@@ -340,7 +340,7 @@ What I hope to be working on in the next few months
   * https://github.com/jacopofar/static-osm-indexer/?tab=readme-ov-file#licensing-anc-crediting (some pieces and inspiration taken from this project)
 * Tiles:
   * Maps.black tiles: See [here](https://maps.black/#data) and [here](https://maps.black/#licenses)
-  * IIAB Satellite tiles: [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/)
+  * IIAB Satellite tiles: [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/)
 * Tile processing:
   * https://github.com/protomaps/go-pmtiles
 * Other credits: https://github.com/iiab/iiab/blob/master/roles/www_base/files/html/html/credits.html
