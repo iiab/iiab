@@ -2,7 +2,8 @@
 # Captive Portal (responds to browsers trying to detect a Captive Portal) and
 # also for Admin Console.
 
-# The distro-provided uwsgi-app@.service runs this app as its own instance.
+# The distro-provided uwsgi-app@.service and uwsgi-app@.socket run this app as
+# its own systemd instance.
 - name: Install /etc/uwsgi/apps-available/captiveportal.ini from template (if captiveportal_enabled)
   template:
     src: captiveportal.ini.j2
@@ -38,35 +39,20 @@
     state: absent
   when: not captiveportal_enabled
 
-- name: Enable Captive Portal uWSGI app instance at boot
-  file:
-    src: "{{ systemd_location }}/uwsgi-app@.service"
-    path: /etc/systemd/system/multi-user.target.wants/uwsgi-app@captiveportal.service
-    state: link
-  when:
-    - captiveportal_enabled
-    - not is_proot
-
-- name: Disable Captive Portal uWSGI app instance at boot
-  file:
-    path: /etc/systemd/system/multi-user.target.wants/uwsgi-app@captiveportal.service
-    state: absent
-  when:
-    - not captiveportal_enabled
-    - not is_proot
-
-- name: Start Captive Portal uWSGI app instance
+- name: Enable and start Captive Portal uWSGI socket
   systemd_service:
-    name: uwsgi-app@captiveportal.service
+    name: uwsgi-app@captiveportal.socket
     daemon_reload: yes
-    state: restarted
+    enabled: true
+    state: started
   when:
     - captiveportal_enabled
     - not is_proot
 
-- name: Stop Captive Portal uWSGI app instance
+- name: Stop and disable Captive Portal uWSGI socket
   systemd_service:
-    name: uwsgi-app@captiveportal.service
+    name: uwsgi-app@captiveportal.socket
+    enabled: false
     state: stopped
   when:
     - not captiveportal_enabled

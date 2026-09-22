@@ -30,7 +30,8 @@
   include_tasks: install.yml
   when: nginx_installed is undefined
 
-# The distro-provided uwsgi-app@.service manages one app per systemd instance.
+# The distro-provided uwsgi-app@.service and uwsgi-app@.socket templates manage
+# one app per systemd instance.
 - name: Ensure uWSGI's app config directory exists
   file:
     path: /etc/uwsgi/apps-available
@@ -43,10 +44,18 @@
   register: uwsgi_app_service
   when: not is_proot
 
+- name: Check for the distro-provided uWSGI app socket template
+  stat:
+    path: "{{ systemd_location }}/uwsgi-app@.socket"
+  register: uwsgi_app_socket
+  when: not is_proot
+
 - name: Require the distro-provided uWSGI app service template
   assert:
-    that: uwsgi_app_service.stat.exists
-    fail_msg: "The installed uwsgi package must provide uwsgi-app@.service"
+    that:
+      - uwsgi_app_service.stat.exists
+      - uwsgi_app_socket.stat.exists
+    fail_msg: "The installed uwsgi package must provide uwsgi-app@.service and uwsgi-app@.socket"
   when: not is_proot
 
 - name: Stop and disable obsolete uWSGI services

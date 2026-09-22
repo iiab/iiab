@@ -14,26 +14,31 @@ _Please Also See: http://FAQ.IIAB.IO > ["Captive Portal Administration: What tip
     1. iiab-make-cp-servers.py -- Python script writes nginx configuration file to /etc/nginx/sites-enabled
     1. capture-wsgi.py -- the script which determines the client agent, records it in sqlite database, and responds with redirects as appropriate for each OS.
     1. captiveportal.ini.j2 -- config file for the `uwsgi-app@captiveportal.service` instance, which runs the capture-wsgi.py script.
-    1. `uwsgi-app@captiveportal.service` -- the distro-provided per-application systemd unit for the Captive Portal.
+    1. `uwsgi-app@captiveportal.service` and `uwsgi-app@captiveportal.socket` -- the distro-provided per-application systemd units for the Captive Portal.
     
-### uWSGI service and port mapping
+### uWSGI service and socket
 
-The service name does not assign a port. The `uwsgi-app@captiveportal.service`
-instance uses the instance name `captiveportal` to load
-`/etc/uwsgi/apps-available/captiveportal.ini`. That INI sets
-`http-socket = :<captiveportal_port>`, which defaults to port `9090`.
-NGINX's generated Captive Portal configuration proxies to the same port.
+The `uwsgi-app@captiveportal.service` instance uses the instance name
+`captiveportal` to load `/etc/uwsgi/apps-available/captiveportal.ini`.
+The matching socket unit listens on
+`/run/uwsgi/captiveportal.socket`, and NGINX's generated Captive Portal
+configuration uses the native uWSGI protocol over that socket.
 
-The Admin Console is a separate uWSGI instance,
+The `captiveportal_port` variable is retained only for running
+`capture-wsgi.py` directly for debugging; it is not used by the systemd
+service.
+
+The Admin Console is a separate socket-activated uWSGI instance,
 `uwsgi-app@admin-console.service`, and listens on the Unix socket
-`/tmp/admin-console.sock`; it does not use port `9090`. Port `9091` is the
-Transmission web interface and is unrelated to either uWSGI instance.
+`/run/uwsgi/admin-console.socket`. Neither uWSGI instance uses TCP port
+`9090`; port `9091` is the Transmission web interface and is unrelated to
+either uWSGI instance.
 
  ## Extending and Debugging Captive Portal
  * Running the capture-wsgi.py python script interactively will expose any python errors easily. 
- * The Python capture script can be run interactively instead of automatically by uWSGI. Stop the Captive Portal instance first to free its configured port (`9090` by default):
-   `sudo systemctl stop uwsgi-app@captiveportal.service`
-   Two programs cannot listen on the same port. Stopping this instance does not stop the Admin Console instance; restart it afterward with `sudo systemctl start uwsgi-app@captiveportal.service`.
+ * The Python capture script can be run interactively instead of automatically by uWSGI. Stop the Captive Portal socket and service first:
+   `sudo systemctl stop uwsgi-app@captiveportal.socket uwsgi-app@captiveportal.service`
+   Stopping this instance does not stop the Admin Console instance.
  * Run the capture-wsgi.py with "-l" in a terminal to increase logging to /var/log/captiveportal/captiveportal.log
  * To discover untrapped urls, "apt-get install tcpdump", and "tcpdump -i br0 capture.tcp". I transfer this file to a machine with a GUI, and wireshark to interpret the conversations on the wire. The DNS packets are the ones to look for.
  
