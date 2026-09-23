@@ -32,7 +32,8 @@ in the journal. Service startup and application errors can be inspected with:
 
 The service stores its client-state database as `users.sqlite` in the
 systemd-provided `STATE_DIRECTORY` (the distro unit declares
-`StateDirectory=uwsgi/%i`). Direct runs use
+`StateDirectory=uwsgi/%i`). For the `captiveportal` instance, the visible
+path is `/var/lib/uwsgi/captiveportal/users.sqlite`. Direct runs use
 `/opt/iiab/captiveportal/users.sqlite` as a fallback.
 
 The `captiveportal_port` variable is retained only for running
