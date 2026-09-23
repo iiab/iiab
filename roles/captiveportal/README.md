@@ -24,6 +24,12 @@ The matching socket unit listens on
 `/run/uwsgi/captiveportal.socket`, and NGINX's generated Captive Portal
 configuration uses the native uWSGI protocol over that socket.
 
+The Captive Portal service uses the distro uWSGI unit's `DynamicUser=yes`
+hardening and writes its application logs to stderr, which systemd captures
+in the journal. Service startup and application errors can be inspected with:
+
+    sudo journalctl -u uwsgi-app@captiveportal.service
+
 The `captiveportal_port` variable is retained only for running
 `capture-wsgi.py` directly for debugging; it is not used by the systemd
 service.
@@ -39,7 +45,10 @@ either uWSGI instance.
  * The Python capture script can be run interactively instead of automatically by uWSGI. Stop the Captive Portal socket and service first:
    `sudo systemctl stop uwsgi-app@captiveportal.socket uwsgi-app@captiveportal.service`
    Stopping this instance does not stop the Admin Console instance.
- * Run the capture-wsgi.py with "-l" in a terminal to increase logging to /var/log/captiveportal/captiveportal.log
+ * Run `capture-wsgi.py -v` in a terminal for debug-level logging. To also
+   write a rotating file log during direct debugging, pass
+   `--log-file /tmp/captiveportal.log` or set
+   `CAPTIVE_PORTAL_LOG_FILE=/tmp/captiveportal.log`.
  * To discover untrapped urls, "apt-get install tcpdump", and "tcpdump -i br0 capture.tcp". I transfer this file to a machine with a GUI, and wireshark to interpret the conversations on the wire. The DNS packets are the ones to look for.
  
  ## Known Problems

@@ -3,6 +3,7 @@
 # using Python's bundled WSGI server
 
 from wsgiref.simple_server import make_server
+import argparse
 import subprocess
 from dateutil.tz import *
 import datetime
@@ -38,20 +39,28 @@ PORTAL_TO = 20 # delay after triggered by ajax upon click of link to home page
 doc_root = get_iiab_env("WWWROOT")
 fully_qualified_domain_name = get_iiab_env("FQDN")
 
+def configure_logging():
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("-v", "--verbose", action="store_true")
+    parser.add_argument("--log-file", default=os.environ.get("CAPTIVE_PORTAL_LOG_FILE"))
+    args, _ = parser.parse_known_args()
 
-# 2020-01-23: @georgejhunt explained that "ERROR" does not log enough details.
-# So we're changing IIAB's default to "DEBUG", til Captive Portal proves solid.
-#loggingLevel = "ERROR"
-loggingLevel = "DEBUG"
-if len(sys.argv) > 1:
-   if sys.argv[1] == '-l':
-      loggingLevel = "DEBUG"
-      
-# set up some logging -- selectable for diagnostics
-logging.basicConfig(filename='/var/log/captiveportal/captiveportal.log',format='%(asctime)s.%(msecs)03d:%(name)s:%(message)s', datefmt='%M:%S',level=loggingLevel)
-logger = logging.getLogger('/var/log/captiveportal/captiveportal.log')
-handler = RotatingFileHandler("/var/log/captiveportal/captiveportal.log", maxBytes=100000, backupCount=2)
-logger.addHandler(handler)
+    handlers = [logging.StreamHandler(sys.stderr)]
+    if args.log_file:
+        handlers.append(
+            RotatingFileHandler(args.log_file, maxBytes=100000, backupCount=2)
+        )
+
+    logging.basicConfig(
+        format='%(asctime)s.%(msecs)03d:%(name)s:%(message)s',
+        datefmt='%M:%S',
+        level=logging.DEBUG if args.verbose else logging.INFO,
+        handlers=handlers,
+    )
+    return logging.getLogger(__name__)
+
+
+logger = configure_logging()
 
 # Direct runs use this port; the systemd service does not.
 PORT={{ captiveportal_port }}
