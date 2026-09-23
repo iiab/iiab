@@ -30,6 +30,11 @@ in the journal. Service startup and application errors can be inspected with:
 
     sudo journalctl -u uwsgi-app@captiveportal.service
 
+The service stores its client-state database as `users.sqlite` in the
+systemd-provided `STATE_DIRECTORY` (the distro unit declares
+`StateDirectory=uwsgi/%i`). Direct runs use
+`/opt/iiab/captiveportal/users.sqlite` as a fallback.
+
 The `captiveportal_port` variable is retained only for running
 `capture-wsgi.py` directly for debugging; it is not used by the systemd
 service.
