@@ -139,6 +139,27 @@
     state: link
     force: yes
 
+# An update (runrole --reinstall forgejo) downloads a new bin/forgejo-<ver> and repoints
+# the symlink above; the superseded binary (~110 MB each) would otherwise pile up in bin/.
+# Keep only the active version and its .asc, so disk growth per update stays bounded.
+- name: Find installed Forgejo binaries in {{ forgejo_install_path | dirname }}
+  find:
+    paths: "{{ forgejo_install_path | dirname }}"    # /library/forgejo/bin
+    patterns: "forgejo-*"
+  register: forgejo_bin_files
+
+- name: Remove superseded Forgejo binaries (keep only {{ forgejo_version }})
+  file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ forgejo_bin_files.files }}"
+  loop_control:
+    label: "{{ item.path | basename }}"
+  when:
+    - forgejo_version | string | length > 0        # never prune when the version is unset
+    - (item.path | basename) != ('forgejo-' ~ forgejo_version)
+    - (item.path | basename) != ('forgejo-' ~ forgejo_version ~ '.asc')
+
 
 # 3. Configure Forgejo (/etc/forgejo)
 
