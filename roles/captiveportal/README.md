@@ -24,17 +24,19 @@ The matching socket unit listens on
 `/run/uwsgi/captiveportal.socket`, and NGINX's generated Captive Portal
 configuration uses the native uWSGI protocol over that socket.
 
-The Captive Portal service uses the distro uWSGI unit's `DynamicUser=yes`
-hardening and writes its application logs to stderr, which systemd captures
-in the journal. Service startup and application errors can be inspected with:
+The Captive Portal service uses the distro-provided uWSGI unit; IIAB does not
+override that unit's service user or hardening settings. The application
+writes its logs to stderr, which systemd captures in the journal. Service
+startup and application errors can be inspected with:
 
     sudo journalctl -u uwsgi-app@captiveportal.service
 
-The service stores its client-state database as `users.sqlite` in the
-systemd-provided `STATE_DIRECTORY` (the distro unit declares
-`StateDirectory=uwsgi/%i`). For the `captiveportal` instance, the visible
-path is `/var/lib/uwsgi/captiveportal/users.sqlite`. Direct runs use
-`/opt/iiab/captiveportal/users.sqlite` as a fallback.
+The service stores its client-state database as `users.sqlite` in
+`STATE_DIRECTORY` which distributions usually provide as
+`StateDirectory=uwsgi/%i`. For the `captiveportal` instance, that path is
+`/var/lib/uwsgi/captiveportal/users.sqlite`. If `STATE_DIRECTORY` is not
+available, including during direct runs, the script falls back to
+`/opt/iiab/captiveportal/users.sqlite`.
 
 The `captiveportal_port` variable is retained only for running
 `capture-wsgi.py` directly for debugging; it is not used by the systemd
