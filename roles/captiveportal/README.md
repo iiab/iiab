@@ -38,9 +38,10 @@ The service stores its client-state database as `users.sqlite` in
 available, including during direct runs, the script falls back to
 `/opt/iiab/captiveportal/users.sqlite`.
 
-The `captiveportal_port` variable is retained only for running
-`capture-wsgi.py` directly for debugging; it is not used by the systemd
-service.
+When running `capture-wsgi.py` directly for debugging, it listens on TCP
+port `9090` by default. Override the port with `--port`, or set
+`CAPTIVE_PORTAL_PORT`; the command-line flag takes precedence. The systemd
+service does not use TCP.
 
 The Admin Console is a separate socket-activated uWSGI instance,
 `uwsgi-app@admin-console.service`, and listens on the Unix socket
@@ -53,7 +54,8 @@ either uWSGI instance.
  * The Python capture script can be run interactively instead of automatically by uWSGI. Stop the Captive Portal socket and service first:
    `sudo systemctl stop uwsgi-app@captiveportal.socket uwsgi-app@captiveportal.service`
    Stopping this instance does not stop the Admin Console instance.
- * Run `capture-wsgi.py -v` in a terminal for debug-level logging. To also
+ * Run `capture-wsgi.py -v --port 9090` in a terminal for debug-level logging.
+   You can alternatively set `CAPTIVE_PORTAL_PORT=9090`. To also
    write a rotating file log during direct debugging, pass
    `--log-file /tmp/captiveportal.log` or set
    `CAPTIVE_PORTAL_LOG_FILE=/tmp/captiveportal.log`.
