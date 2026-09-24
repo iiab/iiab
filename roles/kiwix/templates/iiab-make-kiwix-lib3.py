@@ -38,6 +38,17 @@ def main():
     if not args.no_tmp: # don't append .tmp
         kiwix_library_xml += ".tmp"
 
+    zim_files, zim_versions = iiab.get_zim_list(zim_path)
+
+    # 2025-11-17 Patch for broken remove in kiwix-manage still not fixed
+    if not args.force:
+        zims_installed, path_to_id_map = iiab.read_library_xml(kiwix_library_xml)
+        for item in path_to_id_map:
+            if item not in zim_files: # would be removed which is broken
+                print("Forcing rebuild of library.xml due to known kiwix-manage remove issue")
+                args.force = True
+                break
+
     # remove existing file if force
     if args.force:
         try:
@@ -49,7 +60,7 @@ def main():
     else:
         zims_installed, path_to_id_map = iiab.read_library_xml(kiwix_library_xml)
 
-    zim_files, zim_versions = iiab.get_zim_list(zim_path)
+    # zim_files, zim_versions = iiab.get_zim_list(zim_path)
 
     # Remove zims not in file system from library.xml
     # remove_list_str = ""
