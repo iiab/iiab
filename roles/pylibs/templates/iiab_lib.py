@@ -49,10 +49,85 @@ def get_zim_list(path):
                 zim_versions[perma_ref] = zim_info # if there are multiples, last should win
     return files_processed, zim_versions
 
+KIWIX_OPDS_ACQUISITION_REL = 'http://opds-spec.org/acquisition/open-access'
+KIWIX_OPDS_THUMBNAIL_REL = 'http://opds-spec.org/image/thumbnail'
+# OPDS entry elements named after the classic book attribute holding the same zim property
+KIWIX_OPDS_SAME_NAME_PROPS = ['title', 'language', 'name', 'flavour', 'category', 'tags', 'articleCount', 'mediaCount']
+
+def xml_local_tag(tag):
+    '''Strip any XML namespace off an element tag, eg. {http://www.w3.org/2005/Atom}entry -> entry'''
+    return tag.split('}')[-1]
+
+def opds_sub_element_text(element, sub_name):
+    '''Return the text of the first child of element with the given namespace free name, '' if none'''
+    for child in element:
+        if xml_local_tag(child.tag) == sub_name:
+            return (child.text or '').strip()
+    return ''
+
+def opds_link_to_book_attrs(link, attributes):
+    '''Record the zim property carried by an OPDS link, if any, in attributes'''
+    rel = link.attrib.get('rel', '')
+    href = link.attrib.get('href', '')
+    if rel == KIWIX_OPDS_ACQUISITION_REL:
+        if href.startswith('http://') or href.startswith('https://'):
+            attributes['url'] = href # a remote copy of the zim
+        else:
+            attributes['path'] = href # the zim on this box, relative to the library file
+        length = link.attrib.get('length', '')
+        if length.isdigit():
+            attributes['size'] = str(int(length) >> 10) # OPDS is bytes, classic book records are KiB
+    elif rel == KIWIX_OPDS_THUMBNAIL_REL:
+        attributes['faviconMimeType'] = link.attrib.get('type', '').split(';')[0]
+        if href.startswith('data:') and 'base64,' in href:
+            attributes['favicon'] = href.split('base64,', 1)[1] # same bare base64 as classic book records
+        else:
+            attributes['faviconUrl'] = href
+
+def opds_entry_to_book_attrs(entry):
+    '''
+    Convert an OPDS entry to the dict of zim properties kiwix-manage would have
+    written as the attributes of a classic book record, so that callers need
+    not know which of the 2 library.xml formats they are reading
+    '''
+    attributes = {}
+    issued_date = ''
+    updated_date = ''
+    for child in entry:
+        name = xml_local_tag(child.tag)
+        text = (child.text or '').strip()
+        if name == 'id':
+            attributes['id'] = text[len('urn:uuid:'):] if text.startswith('urn:uuid:') else text
+        elif name == 'summary':
+            attributes['description'] = text
+        elif name in KIWIX_OPDS_SAME_NAME_PROPS:
+            attributes[name] = text
+        elif name == 'author':
+            attributes['creator'] = opds_sub_element_text(child, 'name')
+        elif name == 'publisher':
+            attributes['publisher'] = opds_sub_element_text(child, 'name')
+        elif name == 'issued': # dc:issued, the zim date, kiwix dumps the same date in updated
+            issued_date = text[:10]
+        elif name == 'updated':
+            updated_date = text[:10]
+        elif name == 'link':
+            opds_link_to_book_attrs(child, attributes)
+    date = issued_date or updated_date
+    if date != '':
+        attributes['date'] = date
+    # classic book records omit empty properties, and so do we
+    return {prop: value for prop, value in attributes.items() if value != ''}
+
 def read_library_xml(lib_xml_file, kiwix_exclude_attr=["favicon"]): # duplicated from iiab-cmdsrv but changed
     '''
     Read zim properties from library.xml
     Returns dict of library.xml and map of zim id to zim file name (under <dev>/library/zims)
+
+    Handles both library.xml formats:
+      classic  <library><book id=".." path=".." title=".." .../></library>
+      OPDS     <feed><entry><id>urn:uuid:..</id><title>..</title>...</entry></feed>
+    Recent kiwix-tools (nightly builds of 2026-09 onwards) create a NEW library
+    file in OPDS format, and rewrite an existing one in the format it found it.
 
     Args:
       lib_xml_file (str): Path to file to read. Can be on removable device
@@ -69,20 +144,31 @@ def read_library_xml(lib_xml_file, kiwix_exclude_attr=["favicon"]): # duplicated
     path_to_id_map = {}
     try:
         tree = ET.parse(lib_xml_file)
-        root = tree.getroot()
-        for child in root:
-            attributes = {}
-            if 'id' not in child.attrib: # is this necessary? implies there are records with no book id which would break index for removal
-                print("xml record missing Book Id")
+    except OSError: # not there yet, which is normal the first time round
+        return zims_installed, path_to_id_map
+    except ET.ParseError as e:
+        print("Cannot parse Kiwix library file " + str(lib_xml_file) + " (" + str(e) + ")")
+        return zims_installed, path_to_id_map
+    root = tree.getroot()
+    for child in root:
+        if 'id' in child.attrib: # classic book record, all properties are attributes
             zim_id = child.attrib['id']
+            attributes = {}
             for attr in child.attrib:
                 if attr not in excluded_attr:
                     attributes[attr] = child.attrib[attr] # copy if not id or in exclusion list
-            zims_installed[zim_id] = attributes
-            path_to_id_map[child.attrib['path']] = zim_id
-    except: # though I try how can I carry on
-        zims_installed = {}
-        path_to_id_map = {}
+        else: # OPDS entry, properties are child elements
+            attributes = opds_entry_to_book_attrs(child)
+            zim_id = attributes.get('id', '')
+            if zim_id == '': # without an id it can neither be shown nor removed
+                print("Skipping " + xml_local_tag(child.tag) + " record with no id in " + str(lib_xml_file))
+                continue
+            for attr in excluded_attr:
+                attributes.pop(attr, None)
+        zims_installed[zim_id] = attributes
+        path = attributes.get('path', '')
+        if path != '': # remote only zims have no local path
+            path_to_id_map[path] = zim_id
     return zims_installed, path_to_id_map
 
 def rem_libr_xml(zim_id, kiwix_library_xml):
