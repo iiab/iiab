@@ -94,11 +94,21 @@
             let mb = null
             let shouldSetDefaultView = false
 
+            // We could add this stuff to `downloadedFQRegions` instead. It will require
+            // reworking how that object is constructed so I'll put it off.
+            const dataFileAlerts = {}
+            const newDataFileAlert = dfAlert => {
+                if (!(dfAlert.fqrName in dataFileAlerts)) {
+                    dataFileAlerts[dfAlert.fqrName] = []
+                }
+                dataFileAlerts[dfAlert.fqrName].push(dfAlert)
+            }
+
             // One namespace for all changes
             iiabMapsDotBlackPatch = {
                 patchResource: async handlerResult => {
                     const style = handlerResult && handlerResult.data
-                    if (style && style.sources && !style.iiabPatched) {
+                    if (style && style.sources && !stylePatched) {
                         await until(fqrLoaded, 100)
 
                         // Grab the sources and layers as they are so we can replicate them in FQRs
@@ -147,7 +157,11 @@
                                             minzoom: WORLD_MAP_SATELLITE_MAX_ZOOM + 1
                                         }
                                     } else {
-                                        console.warn("Missing satellite source for", fqrName)
+                                        newDataFileAlert({
+                                          fqrName,
+                                          warning: "Incomplete region",
+                                          message: "No valid satellite pmtiles file ('s2maps-sentinel2-2023' or 'iiab-sentinel2') found",
+                                        })
                                     }
                                 } else if (worldSourceId === osmId) {
                                     if (vectorFqrId) {
@@ -158,7 +172,11 @@
                                             minzoom: WORLD_MAP_VECTOR_MAX_ZOOM + 1
                                         }
                                     } else {
-                                        console.warn("Missing vector source for", fqrName)
+                                        newDataFileAlert({
+                                          fqrName,
+                                          warning: "Incomplete region",
+                                          message: "No valid vector pmtiles file ('openstreetmap-openmaptiles') found",
+                                        })
                                     }
                                 } else if (worldSourceId === terrariumId) {
                                     if (terrainFqrId) {
@@ -172,11 +190,13 @@
                                         }
                                         if (hillshadeFqrId) {
                                             style.sources[hillshadeFqrId] = style.sources[terrainFqrId]
-                                        } else {
-                                            console.warn("Missing hillshade source for", fqrName)
                                         }
                                     } else {
-                                        console.warn("Missing terrain source for", fqrName)
+                                        newDataFileAlert({
+                                          fqrName,
+                                          warning: "Incomplete region",
+                                          message: "No valid terrain pmtiles file ('terrarium') found",
+                                        })
                                     }
                                 } else if (worldSourceId === naturalEarth6Id) {
                                     // pass, only world map
@@ -264,7 +284,7 @@
                         // okay without adjusting, and we should stress that this only changes for CI so
                         // we won't bother for now.
 
-                        style.iiabPatched = true
+                        stylePatched = true
                     }
                     return handlerResult
                 },
@@ -729,19 +749,30 @@
             }
 
             async function getJson(url, skipCache) {
+                let response
                 try {
-                    const response = await fetch(url, skipCache ? { cache: 'no-store' } : undefined)
-                    if (response.status >= 400) {
+                    response = await fetch(url, skipCache ? { cache: 'no-store' } : undefined)
+                    if (response.status === 404) {
+                        return [null, {isNotFound: true}]
+                    } else if (response.status >= 400) {
                         return [null, `${response.status}: ${response.statusText}`]
                     }
+                } catch (error) {
+                    return [null, error]
+                }
+                try {
                     return [await response.json(), null]
                 } catch (error) {
+                    if (error.name === "SyntaxError") {
+                        return [null, {isJsonParse: true}]
+                    }
                     return [null, error]
                 }
             }
 
             let fqRegionsControl
             let downloadedFQRegions = null;
+            let stylePatched = false;
 
             const fqrLoaded = () => !!downloadedFQRegions
 
@@ -762,7 +793,28 @@
                             // Should we cache this? It will change less often, presumably, than a given FQR's bbox. Not impossible though.
                             const [meta, error] = await getJson(`/maps/data/${regionName}.fqr/meta.json`, false)
                             if (error) {
-                                console.error(`Failed to load meta.json for Full Quality Region ${regionName}:`, error)
+                                if (error.isNotFound) {
+                                    // TODO nov 2026 or so we can remove "recent IIAB update". This
+                                    // refers to the transition of adding the meta.json file to the fqr directory.
+                                    newDataFileAlert({
+                                      fqrName: regionName,
+                                      error: "Can't display this region",
+                                      message: "meta.json not found in ${regionName}.fqr. This might be because of an incomplete download, or a recent IIAB update.",
+                                    })
+                                } else if (error.isJsonParse) {
+                                    newDataFileAlert({
+                                      fqrName: regionName,
+                                      error: "Can't display this region",
+                                      message: "There is a formatting error in meta.json.",
+                                    })
+                                } else {
+                                    newDataFileAlert({
+                                      fqrName: regionName,
+                                      error: "Can't display this region",
+                                      message: "There was an unknown error.",
+                                    })
+                                    console.error(`Failed to load meta.json for Full Quality Region ${regionName}:`, error)
+                                }
                                 return
                             }
                             return meta
@@ -795,12 +847,36 @@
                       .filter(Boolean)      // remove errors in getting meta or listing
                       .map(([regionName, {meta, listing}]) => {
                           // some basic checks
-                          if (!meta.bbox) {
-                              console.log(`bbox missing for Full Quality Region: ${regionName}`)
+                          if (!meta.bbox || meta.bbox.length != 4) {
+                              newDataFileAlert({
+                                fqrName: regionName,
+                                error: "Can't display this region",
+                                message: "Formatting error in meta.json: expecting bbox to be an array of four numbers.",
+                              })
                               return
                           }
-                          if (meta.bbox.length != 4) {
-                              console.log(`bbox malformed for Full Quality Region: ${regionName}`)
+                          if (meta.bbox[0] > 180 || meta.bbox[0] < -180 || meta.bbox[2] > 180 || meta.bbox[2] < -180) {
+                              newDataFileAlert({
+                                fqrName: regionName,
+                                error: "Can't display this region",
+                                message: "Error in meta.json: expecting bbox latitudes to be between -180 and 180.",
+                              })
+                              return
+                          }
+                          if (meta.bbox[1] > 90 || meta.bbox[1] < -90 || meta.bbox[3] > 90 || meta.bbox[3] < -90) {
+                              newDataFileAlert({
+                                fqrName: regionName,
+                                error: "Can't display this region",
+                                message: "Error in meta.json: expecting bbox longitudes to be between -90 and 90.",
+                              })
+                              return
+                          }
+                          if (meta.bbox[1] > meta.bbox[3]) {
+                              newDataFileAlert({
+                                fqrName: regionName,
+                                error: "Can't display this region",
+                                message: "Error in meta.json: bbox latitudes are out of order.",
+                              })
                               return
                           }
 
@@ -1047,8 +1123,16 @@
                     this.deleteButton.innerHTML = "&#128465;&#65039;" // wastebasket
                     this.deleteButton.onclick = this.toggleDeleteMode.bind(this)
 
+                    this.alertsButton = document.createElement('button');
+                    this.alertsButton.type = "button"
+                    this.alertsButton.title = "List FQR alerts"
+                    this.alertsButton.innerHTML = "&#10071;" // exclamation
+                    this.alertsButton.onclick = this.toggleAlertsPopup
+                    this.handleShowAlertsButton()
+
                     this._container.appendChild(this.drawButton)
                     this._container.appendChild(this.deleteButton)
+                    this._container.appendChild(this.alertsButton)
 
                     this._container.className = 'maplibregl-ctrl maplibregl-ctrl-group';
                     this._container.style = 'cursor: pointer;'
@@ -1116,6 +1200,69 @@
                     } else {
                         this.setDrawMode()
                     }
+                }
+                toggleAlertsPopup() {
+                    const hidePopup = () => {
+                        if (this.alertsPopup) { // Check it here in case of "onstart" (see below)
+                            this.alertsPopup.remove()
+                            this.alertsPopup = null
+                        }
+                    }
+                    if (this.alertsPopup) { // Check it here to make it toggle
+                        hidePopup()
+                        return
+                    }
+
+                    const alertList = document.createElement('div');
+                    alertList.style['overflow-y'] = 'scroll';
+                    alertList.style['max-width'] = '500px';
+                    alertList.style['max-height'] = '500px';
+                    alertList.style['padding'] = '20px';
+
+                    alertList.innerHTML = "<h1>Full Quality Region issues</h1>"
+
+                    for (let [fqrName, fqrAlerts] of Object.entries(dataFileAlerts)) {
+                        alertList.innerHTML += `<h2>${fqrName}</h2>`
+                        alertList.innerHTML += `<ul>`
+                        for (let dfAlert of fqrAlerts) {
+                            let alertHeader
+                            if (dfAlert.warning) {
+                                alertHeader = `Warning: ${dfAlert.warning}`
+                            } else if (dfAlert.error) {
+                                alertHeader = `Error: ${dfAlert.error}`
+                            } else {
+                                alertHeader = "Alert"
+                                console.warn("Invalid fqr alert type")
+                            }
+                            alertList.innerHTML += `<li><b>${alertHeader}</b><br>${dfAlert.message}<br></li>`
+                        }
+                        alertList.innerHTML += `</ul>`
+                    }
+
+                    this.alertsPopup = new maplibregl.Popup()
+                      .setLngLat({
+                        lng: mb.map.getCenter().lng,
+                        lat: mb.map.getBounds().getNorth(),
+                      })
+                      .setDOMContent(alertList)
+                      .setMaxWidth("100%") // real max width set in `alertList` div
+                      .addTo(mb.map);
+
+                    // Make it seem like it's not even attached to the map. As soon as they scroll, it disappears.
+                    mb.map.once('movestart', hidePopup)
+                }
+                handleShowAlertsButton() {
+                    this.alertsButton.style['display'] = 'none';
+                    (async () => {
+                        // After FQRs are loaded, show the button if there are errors
+
+                        await until(fqrLoaded, 100)
+                        await until(() => stylePatched, 100)
+
+                        if (Object.keys(dataFileAlerts).length) {
+                            this.alertsButton.style['display'] = ''
+                        }
+                    })()
                 }
                 endDeleteMode() {
                     if (this._mode === this.DELETE_MODE) {
