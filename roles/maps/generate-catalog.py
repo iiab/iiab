@@ -63,7 +63,7 @@ def add_file_sizes(tiles):
             file["size"] = humanize.naturalsize(response.headers["Content-Length"])
 
 vector_tiles = {
-  "title": "Vector",
+  "title": "Vector (OSM)",
   "setting_name": "maps_vector_zoom",
   "details": fix_multiline_spacing("""
     Map features in a vector format from OpenStreetMap or Natural Earth.  Maximum zoom level available is 14.
@@ -123,6 +123,9 @@ satellite_tiles = {
       "url": "https://iiab.io/content/iiab-sentinel2.2026-07-25.z00-z07.pmtiles",
       "details": fix_multiline_spacing("""
         Low quality "IIAB" satellite, up to zoom level 7
+
+        NOTE: `maps_satellite_zoom: 7-iiab` has tiles that are twice as wide (and twice as tall) as `maps_satellite_zoom: 7`,
+        making it equivalent (in resolution) to `maps_satellite_zoom: 8`.
       """),
       "license": CC_BY_NC_SA_IIAB,
     },
@@ -137,6 +140,9 @@ satellite_tiles = {
       "url": "https://iiab.io/content/iiab-sentinel2.2026-07-25.z00-z09.pmtiles",
       "details": fix_multiline_spacing("""
         Moderately high quality "IIAB" satellite, up to zoom level 9
+
+        NOTE: `maps_satellite_zoom: 9-iiab` has tiles that are twice as wide (and twice as tall) as `maps_satellite_zoom: 9`,
+        making it equivalent (in resolution) to `maps_satellite_zoom: 10`.
       """),
       "license": CC_BY_NC_SA_IIAB,
     },
@@ -181,6 +187,9 @@ satellite_tiles = {
       "url": "https://iiab.io/content/iiab-sentinel2.2026-07-25.z00-z13.pmtiles",
       "details": fix_multiline_spacing("""
         Highest available quality "IIAB" satellite, up to zoom level 13
+
+        NOTE: `maps_satellite_zoom: 13-iiab` has tiles that are twice as wide (and twice as tall) as `maps_satellite_zoom: 13`,
+        making it equivalent (in resolution) to a hypothetical `maps_satellite_zoom: 14`.
       """),
       "license": CC_BY_NC_SA_IIAB,
     },
@@ -319,9 +328,9 @@ ASSUME ALL OTHER COPIES (INCLUDING THE ONE ON YOUR IIAB) ARE STALE (OUT OF DATE!
 """
 
 catalog = {
+    "vector": vector_tiles,
     "satellite": satellite_tiles,
     "terrain": terrain_tiles,
-    "vector": vector_tiles,
     "naturalearth6": naturalearth6_tiles,
     "static_search": static_search_data,
     "nominatim": nominatim_data,
