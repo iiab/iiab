@@ -1,7 +1,6 @@
 #!/usr/bin/python3
-import humanize, requests, json
+import json, humanize, requests, os, xml, xmltodict
 
-import os
 os.chdir(os.path.dirname(__file__))
 
 # This file is for generating:
@@ -51,6 +50,24 @@ def url_only(tiles):
         if "url" in file
     }
 
+def confirm_meta4(content_url):
+    """
+    The original content url (as listed in the catalog) should be somewhere in the list of mirrors.
+    """
+
+    meta4 = xmltodict.parse(requests.get(content_url + ".meta4").content, force_list=('url',))
+    urls = [url['#text'] for url in meta4['metalink']['file']['url']]
+    assert content_url in urls, f"meta4 does not contain main url for {content_url}"
+
+def confirm_torrent(content_url):
+    """
+    The content url should be somewhere in the torrent, which is otherwise binary.
+    Just do a quick sanity check to confirm it.
+    """
+
+    torrent = requests.get(content_url + ".torrent").content
+    assert content_url.encode('utf-8') in torrent, f"torrent does not contain url for {content_url}"
+
 def add_file_sizes(tiles):
     for (zoom, file) in tiles.items():
         if "url" in file:
@@ -61,6 +78,9 @@ def add_file_sizes(tiles):
             assert response.status_code == 200, "Error with URL: " + url
 
             file["size"] = humanize.naturalsize(response.headers["Content-Length"])
+
+            confirm_meta4(url)
+            confirm_torrent(url)
 
 vector_tiles = {
   "title": "Vector",
