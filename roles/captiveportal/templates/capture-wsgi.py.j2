@@ -3,6 +3,7 @@
 # using Python's bundled WSGI server
 
 from wsgiref.simple_server import make_server
+import argparse
 import subprocess
 from dateutil.tz import *
 import datetime
@@ -38,23 +39,38 @@ PORTAL_TO = 20 # delay after triggered by ajax upon click of link to home page
 doc_root = get_iiab_env("WWWROOT")
 fully_qualified_domain_name = get_iiab_env("FQDN")
 
+def parse_args():
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("-v", "--verbose", action="store_true")
+    parser.add_argument("--log-file", default=os.environ.get("CAPTIVE_PORTAL_LOG_FILE"))
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=os.environ.get("CAPTIVE_PORTAL_PORT", "9090"),
+    )
+    return parser.parse_known_args()[0]
 
-# 2020-01-23: @georgejhunt explained that "ERROR" does not log enough details.
-# So we're changing IIAB's default to "DEBUG", til Captive Portal proves solid.
-#loggingLevel = "ERROR"
-loggingLevel = "DEBUG"
-if len(sys.argv) > 1:
-   if sys.argv[1] == '-l':
-      loggingLevel = "DEBUG"
-      
-# set up some logging -- selectable for diagnostics
-logging.basicConfig(filename='/var/log/captiveportal/captiveportal.log',format='%(asctime)s.%(msecs)03d:%(name)s:%(message)s', datefmt='%M:%S',level=loggingLevel)
-logger = logging.getLogger('/var/log/captiveportal/captiveportal.log')
-handler = RotatingFileHandler("/var/log/captiveportal/captiveportal.log", maxBytes=100000, backupCount=2)
-logger.addHandler(handler)
+def configure_logging(args):
+    handlers = [logging.StreamHandler(sys.stderr)]
+    if args.log_file:
+        handlers.append(
+            RotatingFileHandler(args.log_file, maxBytes=100000, backupCount=2)
+        )
 
-PORT={{ captiveportal_port }}
-#PORT=9090
+    logging.basicConfig(
+        format='%(asctime)s.%(msecs)03d:%(name)s:%(message)s',
+        datefmt='%M:%S',
+        level=logging.DEBUG if args.verbose else logging.INFO,
+        handlers=handlers,
+    )
+    return logging.getLogger(__name__)
+
+
+args = parse_args()
+logger = configure_logging(args)
+
+# Direct runs use this port; the systemd service does not.
+PORT = args.port
 
 
 # Define globals
@@ -74,7 +90,8 @@ def tstamp(dtime):
 
 # ##########database operations ##############
 # Use a sqlite database to store per client information
-user_db = os.path.join(CAPTIVE_PORTAL_BASE,"users.sqlite")
+state_dir = os.environ.get("STATE_DIRECTORY") or CAPTIVE_PORTAL_BASE
+user_db = os.path.join(state_dir, "users.sqlite")
 conn = sqlite3.connect(user_db)
 if not os.path.exists(user_db):
     conn.close()
@@ -520,4 +537,3 @@ if __name__ == "__main__":
 
     httpd.serve_forever()
 #vim: tabstop=4 expandtab shiftwidth=4 softtabstop=4 background=dark
-

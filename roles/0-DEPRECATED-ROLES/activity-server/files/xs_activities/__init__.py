@@ -75,7 +75,7 @@ class Bundle(object):
         self.description = description
 
     def __cmp__(self, other):
-        """Alphabetical sort (locale dependant of course)"""
+        """Alphabetical sort (locale dependent of course)"""
         if self.bundle_id == other.bundle_id:
             return cmp(self.version, other.version)
         return cmp(self.name, other.name)
@@ -85,7 +85,7 @@ class Bundle(object):
         self.older_versions = ', '.join('<a href="%s">%s</a>' % (v.url, v.version) for v in versions)
 
     def to_html(self, locale, template=None):
-        """Fill in the template with data approriate for the locale."""
+        """Fill in the template with data appropriate for the locale."""
         if template is None:
             template = read_template('activity', locale)
 
@@ -528,7 +528,6 @@ def make_html(bundles, locale, filename):
     f = open(filename, 'w')
     f.write(s)
     f.close()
-
 
 
 

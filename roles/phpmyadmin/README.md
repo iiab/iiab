@@ -17,7 +17,7 @@
 
 #### Testing phpMyAdmin
 1. It is possible to quickly test your phpMyAdmin installation. 
-3. There is a small table already created in your MySQL databaase by the Admin Console called `iiab_feedback`
+3. There is a small table already created in your MySQL database by the Admin Console called `iiab_feedback`
 4. A small script can be run, that creates user "Admin" with password "changeme" and has access to this table only:
    ```
    sudo mysql < /opt/iiab/iiab/roles/phpmyadmin/templates/mkuser
