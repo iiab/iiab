@@ -61,7 +61,7 @@ def xml_local_tag(tag):
 def opds_sub_element_text(element, sub_name):
     '''Return the text of the first child of element with the given namespace free name, '' if none'''
     for child in element:
-        if xml_local_tag(child.tag) == sub_name:
+        if isinstance(child.tag, str) and xml_local_tag(child.tag) == sub_name:
             return (child.text or '').strip()
     return ''
 
@@ -70,8 +70,8 @@ def opds_link_to_book_attrs(link, attributes):
     rel = link.attrib.get('rel', '')
     href = link.attrib.get('href', '')
     if rel == KIWIX_OPDS_ACQUISITION_REL:
-        if href.startswith('http://') or href.startswith('https://'):
-            attributes['url'] = href # a remote copy of the zim
+        if '://' in href: # a URI scheme (eg. http, https, file), the same test libkiwix makes - a remote copy of the zim
+            attributes['url'] = href
         else:
             attributes['path'] = href # the zim on this box, relative to the library file
         length = link.attrib.get('length', '')
@@ -94,6 +94,8 @@ def opds_entry_to_book_attrs(entry):
     issued_date = ''
     updated_date = ''
     for child in entry:
+        if not isinstance(child.tag, str): # XML comments and processing instructions aren't elements
+            continue
         name = xml_local_tag(child.tag)
         text = (child.text or '').strip()
         if name == 'id':
@@ -117,6 +119,25 @@ def opds_entry_to_book_attrs(entry):
         attributes['date'] = date
     # classic book records omit empty properties, and so do we
     return {prop: value for prop, value in attributes.items() if value != ''}
+
+def normalize_kiwix_lib_path(path, lib_xml_file):
+    '''
+    Return a local zim path the way read_library_xml callers expect it,
+    ie. relative to the directory of library.xml (eg. content/<name>.zim),
+    or '' if the path is not a local zim inside the library directory.
+    The OPDS writer emits local acquisition hrefs already relative to the
+    library file, but also tolerate ./ and .. forms and absolute paths.
+    Paths that resolve outside the library directory (eg. a tampered href
+    such as /etc/passwd) are rejected, not escaped past with '..'.
+    '''
+    lib_dir = os.path.dirname(os.path.abspath(lib_xml_file))
+    norm = os.path.normpath(path)
+    if os.path.isabs(norm):
+        norm = os.path.relpath(norm, lib_dir)
+    abs_norm = os.path.abspath(os.path.join(lib_dir, norm))
+    if os.path.commonpath([abs_norm, lib_dir]) != lib_dir:
+        return ''
+    return norm
 
 def read_library_xml(lib_xml_file, kiwix_exclude_attr=["favicon"]): # duplicated from iiab-cmdsrv but changed
     '''
@@ -151,13 +172,15 @@ def read_library_xml(lib_xml_file, kiwix_exclude_attr=["favicon"]): # duplicated
         return zims_installed, path_to_id_map
     root = tree.getroot()
     for child in root:
+        if not isinstance(child.tag, str): # XML comments and processing instructions aren't elements
+            continue
         if 'id' in child.attrib: # classic book record, all properties are attributes
             zim_id = child.attrib['id']
             attributes = {}
             for attr in child.attrib:
                 if attr not in excluded_attr:
                     attributes[attr] = child.attrib[attr] # copy if not id or in exclusion list
-        else: # OPDS entry, properties are child elements
+        elif xml_local_tag(child.tag) == 'entry': # OPDS entry, properties are child elements
             attributes = opds_entry_to_book_attrs(child)
             zim_id = attributes.get('id', '')
             if zim_id == '': # without an id it can neither be shown nor removed
@@ -165,10 +188,17 @@ def read_library_xml(lib_xml_file, kiwix_exclude_attr=["favicon"]): # duplicated
                 continue
             for attr in excluded_attr:
                 attributes.pop(attr, None)
+        else: # OPDS feed-level metadata, eg. <title>, <updated> and <link>, not a zim
+            continue
         zims_installed[zim_id] = attributes
         path = attributes.get('path', '')
         if path != '': # remote only zims have no local path
-            path_to_id_map[path] = zim_id
+            path = normalize_kiwix_lib_path(path, lib_xml_file)
+            if path == '': # not a local zim inside the library dir, eg. a tampered href
+                attributes.pop('path', None)
+            else:
+                attributes['path'] = path
+                path_to_id_map[path] = zim_id
     return zims_installed, path_to_id_map
 
 def rem_libr_xml(zim_id, kiwix_library_xml):
