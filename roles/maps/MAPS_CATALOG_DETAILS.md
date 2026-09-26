@@ -8,6 +8,33 @@ ASSUME ALL OTHER COPIES (INCLUDING THE ONE ON YOUR IIAB) ARE STALE (OUT OF DATE!
 * [Raw file listing](https://iiab.switnet.org/maps/2/)
 
 
+# Vector (OSM)
+Map features in a vector format from OpenStreetMap or Natural Earth.  Maximum zoom level available is 14.
+
+---
+
+## `maps_vector_zoom: 1-ci` (1.2 MB)
+FOR TESTING OR FALLBACK ONLY
+
+'skeleton' osm, up to zoom level 1
+
+---
+
+## `maps_vector_zoom: nat-z8` (89.4 MB)
+'low res' - mostly borders, rivers, country names, large roads. (Uses Natural Earth instead of OpenStreetMap)
+
+---
+
+## `maps_vector_zoom: 11` (9.0 GB)
+'medium res' osm, up to zoom level 11
+
+---
+
+## `maps_vector_zoom: 14` (87.4 GB)
+'high res' aka 'full quality' osm, including 3d buildings.
+
+---
+
 # Satellite
 Satellite imagery from s2maps or IIAB.  Maximum zoom level available is 13.
 
@@ -39,6 +66,9 @@ Low quality "s2maps" satellite, up to zoom level 7
 ## `maps_satellite_zoom: 7-iiab` (227.2 MB)
 Low quality "IIAB" satellite, up to zoom level 7
 
+NOTE: `maps_satellite_zoom: 7-iiab` has tiles that are twice as wide (and twice as tall) as `maps_satellite_zoom: 7`,
+making it equivalent (in resolution) to `maps_satellite_zoom: 8`.
+
 [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/) IIAB
 
 ---
@@ -52,6 +82,9 @@ Moderately high quality "s2maps" satellite, up to zoom level 9
 
 ## `maps_satellite_zoom: 9-iiab` (2.6 GB)
 Moderately high quality "IIAB" satellite, up to zoom level 9
+
+NOTE: `maps_satellite_zoom: 9-iiab` has tiles that are twice as wide (and twice as tall) as `maps_satellite_zoom: 9`,
+making it equivalent (in resolution) to `maps_satellite_zoom: 10`.
 
 [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/) IIAB
 
@@ -80,6 +113,9 @@ Highest available quality "s2maps" satellite, up to zoom level 13
 
 ## `maps_satellite_zoom: 13-iiab` (268.1 GB)
 Highest available quality "IIAB" satellite, up to zoom level 13
+
+NOTE: `maps_satellite_zoom: 13-iiab` has tiles that are twice as wide (and twice as tall) as `maps_satellite_zoom: 13`,
+making it equivalent (in resolution) to a hypothetical `maps_satellite_zoom: 14`.
 
 [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/) IIAB
 
@@ -112,33 +148,6 @@ Low quality terrain, up to zoom level 7
 
 ## `maps_terrain_zoom: 10` (106.2 GB)
 (This is the highest quality that maps.black offers in pmtiles format.  They offer 11, 12, and 13 in squashfs format, but they are massive files.)
-
----
-
-# Vector
-Map features in a vector format from OpenStreetMap or Natural Earth.  Maximum zoom level available is 14.
-
----
-
-## `maps_vector_zoom: 1-ci` (1.2 MB)
-FOR TESTING OR FALLBACK ONLY
-
-'skeleton' osm, up to zoom level 1
-
----
-
-## `maps_vector_zoom: nat-z8` (89.4 MB)
-'low res' - mostly borders, rivers, country names, large roads. (Uses Natural Earth instead of OpenStreetMap)
-
----
-
-## `maps_vector_zoom: 11` (9.0 GB)
-'medium res' osm, up to zoom level 11
-
----
-
-## `maps_vector_zoom: 14` (87.4 GB)
-'high res' aka 'full quality' osm, including 3d buildings.
 
 ---
 
