@@ -1137,16 +1137,8 @@
                     this.deleteButton.innerHTML = "&#128465;&#65039;" // wastebasket
                     this.deleteButton.onclick = this.toggleDeleteMode.bind(this)
 
-                    this.alertsButton = document.createElement('button');
-                    this.alertsButton.type = "button"
-                    this.alertsButton.title = "List FQR alerts"
-                    this.alertsButton.innerHTML = "&#10071;" // exclamation
-                    this.alertsButton.onclick = this.toggleAlertsPopup.bind(this)
-                    this.handleShowAlertsButton()
-
                     this._container.appendChild(this.drawButton)
                     this._container.appendChild(this.deleteButton)
-                    this._container.appendChild(this.alertsButton)
 
                     this._container.className = 'maplibregl-ctrl maplibregl-ctrl-group';
                     this._container.style = 'cursor: pointer;'
@@ -1214,68 +1206,6 @@
                     } else {
                         this.setDrawMode()
                     }
-                }
-                toggleAlertsPopup() {
-                    const hidePopup = () => {
-                        if (this.alertsPopup) { // Check it here in case of "onstart" (see below)
-                            this.alertsPopup.remove()
-                            this.alertsPopup = null
-                        }
-                    }
-                    if (this.alertsPopup) { // Check it here to make it toggle
-                        hidePopup()
-                        return
-                    }
-
-                    const alertList = document.createElement('div');
-                    alertList.style['overflow-y'] = 'scroll';
-                    alertList.style['max-width'] = '500px';
-                    alertList.style['max-height'] = '500px';
-                    alertList.style['padding'] = '20px';
-
-                    alertList.innerHTML = "<h1>Full Quality Region issues</h1>"
-
-                    for (let [fqrName, fqrAlerts] of Object.entries(dataFileAlerts)) {
-                        alertList.innerHTML += `<h2>${fqrName}</h2>`
-                        alertList.innerHTML += `<ul>`
-                        for (let dfAlert of fqrAlerts) {
-                            let alertHeader
-                            if (dfAlert.warning) {
-                                alertHeader = `Warning: ${dfAlert.warning}`
-                            } else if (dfAlert.error) {
-                                alertHeader = `Error: ${dfAlert.error}`
-                            } else {
-                                alertHeader = "Alert"
-                                console.warn("Invalid fqr alert type")
-                            }
-                            alertList.innerHTML += `<li><b>${alertHeader}</b><br>${dfAlert.message}<br></li>`
-                        }
-                        alertList.innerHTML += `</ul>`
-                    }
-
-                    this.alertsPopup = new maplibregl.Popup()
-                      .setLngLat({
-                        lng: mb.map.getCenter().lng,
-                        lat: mb.map.getBounds().getNorth(),
-                      })
-                      .setDOMContent(alertList)
-                      .setMaxWidth("100%") // real max width set in `alertList` div
-                      .addTo(mb.map);
-
-                    // Make it seem like it's not even attached to the map. As soon as they scroll, it disappears.
-                    mb.map.once('movestart', hidePopup)
-                }
-                handleShowAlertsButton() {
-                    this.alertsButton.style['display'] = 'none';
-                    (async () => {
-                        // After FQRs are loaded, show the button if there are errors
-
-                        await until(fqrLoaded, 100)
-
-                        if (Object.keys(dataFileAlerts).length) {
-                            this.alertsButton.style['display'] = ''
-                        }
-                    })()
                 }
                 endDeleteMode() {
                     if (this._mode === this.DELETE_MODE) {
@@ -1562,6 +1492,83 @@
                         .setLngLat(center)
                         .setDOMContent(popupContainer)
                         .addTo(mb.map);
+                }
+            }
+
+            class DataAlertsControl {
+                onAdd(map) {
+                    this._map = map;
+                    this._container = document.createElement('div');
+                    this._container.className = 'maplibregl-ctrl maplibregl-ctrl-group';
+
+                    this.alertsButton = document.createElement('button');
+                    this.alertsButton.type = "button"
+                    this.alertsButton.title = "List FQR alerts"
+                    this.alertsButton.innerHTML = "&#10071;" // exclamation
+                    this.alertsButton.onclick = this.toggleAlerts.bind(this)
+                    this._container.appendChild(this.alertsButton)
+
+                    this.alerts = document.createElement('div');
+                    this.alerts.style['display'] = 'none'
+                    this.alerts.onclick = this.toggleAlerts.bind(this)
+
+                    this._container.appendChild(this.alerts)
+
+                    this.handleDisplay()
+
+                    return this._container
+                }
+                toggleAlerts() {
+                    if (this.alerts.style['display'] === 'none') {
+                        this.alerts.style['display'] = ''
+                        this.alertsButton.style['display'] = 'none'
+                    } else {
+                        this.alerts.style['display'] = 'none'
+                        this.alertsButton.style['display'] = ''
+                    }
+                }
+                setupAlerts() {
+                    this.alerts.style['overflow-y'] = 'scroll';
+                    this.alerts.style['max-height'] = '50vh';
+                    this.alerts.style['padding'] = '20px';
+
+                    this.alerts.innerHTML = "<h1>Full Quality Region issues</h1>"
+
+                    for (let [fqrName, fqrAlerts] of Object.entries(dataFileAlerts)) {
+                        this.alerts.innerHTML += `<h2>${fqrName}</h2>`
+                        this.alerts.innerHTML += `<ul>`
+                        for (let dfAlert of fqrAlerts) {
+                            let alertHeader
+                            if (dfAlert.warning) {
+                                alertHeader = `Warning: ${dfAlert.warning}`
+                            } else if (dfAlert.error) {
+                                alertHeader = `Error: ${dfAlert.error}`
+                            } else {
+                                alertHeader = "Alert"
+                                console.warn("Invalid fqr alert type")
+                            }
+                            this.alerts.innerHTML += `<li><b>${alertHeader}</b><br>${dfAlert.message}<br></li>`
+                        }
+                        this.alerts.innerHTML += `</ul>`
+                    }
+                }
+
+                handleDisplay() {
+                    if (!REGION_DOWNLOADER_ENABLED) {
+                        return
+                    }
+
+                    this.alertsButton.style['display'] = 'none';
+                    (async () => {
+                        // After FQRs are loaded, show the button if there are errors
+
+                        await until(fqrLoaded, 100)
+
+                        if (Object.keys(dataFileAlerts).length) {
+                            this.alertsButton.style['display'] = ''
+                            this.setupAlerts()
+                        }
+                    })()
                 }
             }
 
@@ -1944,6 +1951,8 @@
 
                 fqRegionsControl = new FQRegionsControl(startFQRegionsControlWithDrawMode)
                 mb.map.addControl(fqRegionsControl, 'top-left');
+
+                mb.map.addControl(new DataAlertsControl(), 'top-left');
 
                 // Add all the right-side controls at once after we determine whether terrain is among them
                 terrainAvailable().then(showTerrainControl => {
