@@ -108,7 +108,7 @@
             iiabMapsDotBlackPatch = {
                 patchResource: async handlerResult => {
                     const style = handlerResult && handlerResult.data
-                    if (style && style.sources && !stylePatched) {
+                    if (style && style.sources && !style.iiabPatched) {
                         await until(fqrLoaded, 100)
 
                         // Grab the sources and layers as they are so we can replicate them in FQRs
@@ -156,12 +156,6 @@
                                             bounds: downloadedFQRegions.regions[fqrName].render_bounds,
                                             minzoom: WORLD_MAP_SATELLITE_MAX_ZOOM + 1
                                         }
-                                    } else {
-                                        newDataFileAlert({
-                                          fqrName,
-                                          warning: "Incomplete region",
-                                          message: "No valid satellite pmtiles file ('s2maps-sentinel2-2023' or 'iiab-sentinel2') found",
-                                        })
                                     }
                                 } else if (worldSourceId === osmId) {
                                     if (vectorFqrId) {
@@ -171,12 +165,6 @@
                                             bounds: downloadedFQRegions.regions[fqrName].render_bounds,
                                             minzoom: WORLD_MAP_VECTOR_MAX_ZOOM + 1
                                         }
-                                    } else {
-                                        newDataFileAlert({
-                                          fqrName,
-                                          warning: "Incomplete region",
-                                          message: "No valid vector pmtiles file ('openstreetmap-openmaptiles') found",
-                                        })
                                     }
                                 } else if (worldSourceId === terrariumId) {
                                     if (terrainFqrId) {
@@ -191,12 +179,6 @@
                                         if (hillshadeFqrId) {
                                             style.sources[hillshadeFqrId] = style.sources[terrainFqrId]
                                         }
-                                    } else {
-                                        newDataFileAlert({
-                                          fqrName,
-                                          warning: "Incomplete region",
-                                          message: "No valid terrain pmtiles file ('terrarium') found",
-                                        })
                                     }
                                 } else if (worldSourceId === naturalEarth6Id) {
                                     // pass, only world map
@@ -284,7 +266,9 @@
                         // okay without adjusting, and we should stress that this only changes for CI so
                         // we won't bother for now.
 
-                        stylePatched = true
+                        // NOTE: This handler needs to run every time the style changes, so this flag has to
+                        // be set per-`style`, not as a one-time global variable.
+                        style.iiabPatched = true
                     }
                     return handlerResult
                 },
@@ -772,7 +756,6 @@
 
             let fqRegionsControl
             let downloadedFQRegions = null;
-            let stylePatched = false;
 
             const fqrLoaded = () => !!downloadedFQRegions
 
@@ -935,6 +918,37 @@
                       })
                       .filter(Boolean)      // remove errors in finishing setting up the region
                 )}
+                for (regionName in downloadedFQRegions.regions) {
+                    const pmtilesDates = downloadedFQRegions.regions[regionName].dates
+
+                    // TODO consolidate constants
+                    const s2Id = "s2maps-sentinel2-2023"
+                    const s2IiabKey = "iiab-sentinel2"
+                    const osmId = "openstreetmap-openmaptiles"
+                    const terrariumId = "terrarium"
+
+                    if (!pmtilesDates[s2IiabKey] && !pmtilesDates[s2Id]) {
+                        newDataFileAlert({
+                          fqrName: regionName,
+                          warning: "Incomplete region",
+                          message: "No valid satellite pmtiles file ('s2maps-sentinel2-2023' or 'iiab-sentinel2') found",
+                        })
+                    }
+                    if (!pmtilesDates[osmId]) {
+                        newDataFileAlert({
+                          fqrName: regionName,
+                          warning: "Incomplete region",
+                          message: "No valid vector pmtiles file ('openstreetmap-openmaptiles') found",
+                        })
+                    }
+                    if (!pmtilesDates[terrariumId]) {
+                        newDataFileAlert({
+                          fqrName: regionName,
+                          warning: "Incomplete region",
+                          message: "No valid terrain pmtiles file ('terrarium') found",
+                        })
+                    }
+                }
             }
             setFQRegions()
 
@@ -1257,7 +1271,6 @@
                         // After FQRs are loaded, show the button if there are errors
 
                         await until(fqrLoaded, 100)
-                        await until(() => stylePatched, 100)
 
                         if (Object.keys(dataFileAlerts).length) {
                             this.alertsButton.style['display'] = ''
