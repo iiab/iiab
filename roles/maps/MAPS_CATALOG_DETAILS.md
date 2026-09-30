@@ -52,14 +52,14 @@ FOR TESTING ONLY
 
 Super-low quality "s2maps" satellite, up to zoom level 4
 
-[CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/) s2maps (see more [here](https://maps.black/#data) and [here](https://maps.black/#licenses))
+"[CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/): Sentinel-2 cloudless - https://s2maps.eu by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2023)" (see more [here](https://maps.black/#data) and [here](https://maps.black/#licenses))
 
 ---
 
 ## `maps_satellite_zoom: 7` (88.8 MB)
 Low quality "s2maps" satellite, up to zoom level 7
 
-[CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/) s2maps (see more [here](https://maps.black/#data) and [here](https://maps.black/#licenses))
+"[CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/): Sentinel-2 cloudless - https://s2maps.eu by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2023)" (see more [here](https://maps.black/#data) and [here](https://maps.black/#licenses))
 
 ---
 
@@ -69,14 +69,14 @@ Low quality "IIAB" satellite, up to zoom level 7
 NOTE: `maps_satellite_zoom: 7-iiab` has tiles that are twice as wide (and twice as tall) as `maps_satellite_zoom: 7`,
 making it equivalent (in resolution) to `maps_satellite_zoom: 8`.
 
-[CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/) IIAB
+[CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/): Sentinel-2 cloudless by IIAB (Contains modified Copernicus Sentinel data 2025)
 
 ---
 
 ## `maps_satellite_zoom: 9` (1.2 GB)
 Moderately high quality "s2maps" satellite, up to zoom level 9
 
-[CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/) s2maps (see more [here](https://maps.black/#data) and [here](https://maps.black/#licenses))
+"[CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/): Sentinel-2 cloudless - https://s2maps.eu by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2023)" (see more [here](https://maps.black/#data) and [here](https://maps.black/#licenses))
 
 ---
 
@@ -86,28 +86,28 @@ Moderately high quality "IIAB" satellite, up to zoom level 9
 NOTE: `maps_satellite_zoom: 9-iiab` has tiles that are twice as wide (and twice as tall) as `maps_satellite_zoom: 9`,
 making it equivalent (in resolution) to `maps_satellite_zoom: 10`.
 
-[CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/) IIAB
+[CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/): Sentinel-2 cloudless by IIAB (Contains modified Copernicus Sentinel data 2025)
 
 ---
 
 ## `maps_satellite_zoom: 11` (22.3 GB)
 Pretty high quality "s2maps" satellite, up to zoom level 11
 
-[CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/) s2maps (see more [here](https://maps.black/#data) and [here](https://maps.black/#licenses))
+"[CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/): Sentinel-2 cloudless - https://s2maps.eu by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2023)" (see more [here](https://maps.black/#data) and [here](https://maps.black/#licenses))
 
 ---
 
 ## `maps_satellite_zoom: 12` (85.7 GB)
 Pretty high quality "s2maps" satellite, up to zoom level 12
 
-[CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/) s2maps (see more [here](https://maps.black/#data) and [here](https://maps.black/#licenses))
+"[CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/): Sentinel-2 cloudless - https://s2maps.eu by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2023)" (see more [here](https://maps.black/#data) and [here](https://maps.black/#licenses))
 
 ---
 
 ## `maps_satellite_zoom: 13` (290.3 GB)
 Highest available quality "s2maps" satellite, up to zoom level 13
 
-[CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/) s2maps (see more [here](https://maps.black/#data) and [here](https://maps.black/#licenses))
+"[CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/): Sentinel-2 cloudless - https://s2maps.eu by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2023)" (see more [here](https://maps.black/#data) and [here](https://maps.black/#licenses))
 
 ---
 
@@ -117,7 +117,7 @@ Highest available quality "IIAB" satellite, up to zoom level 13
 NOTE: `maps_satellite_zoom: 13-iiab` has tiles that are twice as wide (and twice as tall) as `maps_satellite_zoom: 13`,
 making it equivalent (in resolution) to a hypothetical `maps_satellite_zoom: 14`.
 
-[CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/) IIAB
+[CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/): Sentinel-2 cloudless by IIAB (Contains modified Copernicus Sentinel data 2025)
 
 ---
 

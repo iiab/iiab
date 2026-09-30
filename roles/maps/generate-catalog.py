@@ -23,11 +23,12 @@ maps_static_search_data_date = "2026-04-22"
 maps_slow_data_date = "2025-12-10"
 
 CC_BY_NC_SA_MAPS_DOT_BLACK = """
-[CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/) s2maps
+"[CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/): Sentinel-2 cloudless - https://s2maps.eu by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2023)"
 (see more [here](https://maps.black/#data) and [here](https://maps.black/#licenses))
 """.strip().replace("\n", " ")
 
-CC_BY_NC_SA_IIAB = "[CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/) IIAB"
+CC_BY_NC_SA_IIAB = "[CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/): Sentinel-2 cloudless by IIAB (Contains modified Copernicus Sentinel data 2025)"
+
 
 # The order that makes sense for explanation in this file may not make as much
 # sense in the generated file. So here, we can reorder it before it gets generated.
