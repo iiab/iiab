@@ -14,7 +14,7 @@ iiab_map_host_url = "https://iiab.switnet.org/maps/2"
 
 # "data dates" refer to how recent a certain type of data is
 
-maps_vector_data_date = "2026-07-01"
+maps_vector_data_date = "2026-09-01"
 maps_satellite_data_date = "2025-12-10"
 maps_static_search_data_date = "2026-04-22"
 
