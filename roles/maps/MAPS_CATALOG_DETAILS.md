@@ -69,7 +69,7 @@ Low quality "IIAB" satellite, up to zoom level 7
 NOTE: `maps_satellite_zoom: 7-iiab` has tiles that are twice as wide (and twice as tall) as `maps_satellite_zoom: 7`,
 making it equivalent (in resolution) to `maps_satellite_zoom: 8`.
 
-[CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/): Sentinel-2 cloudless by IIAB (Contains modified Copernicus Sentinel data 2025)
+[CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/): IIAB Satellite (Contains (Contains modified Copernicus Sentinel data 2025)
 
 ---
 
@@ -86,7 +86,7 @@ Moderately high quality "IIAB" satellite, up to zoom level 9
 NOTE: `maps_satellite_zoom: 9-iiab` has tiles that are twice as wide (and twice as tall) as `maps_satellite_zoom: 9`,
 making it equivalent (in resolution) to `maps_satellite_zoom: 10`.
 
-[CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/): Sentinel-2 cloudless by IIAB (Contains modified Copernicus Sentinel data 2025)
+[CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/): IIAB Satellite (Contains (Contains modified Copernicus Sentinel data 2025)
 
 ---
 
@@ -117,7 +117,7 @@ Highest available quality "IIAB" satellite, up to zoom level 13
 NOTE: `maps_satellite_zoom: 13-iiab` has tiles that are twice as wide (and twice as tall) as `maps_satellite_zoom: 13`,
 making it equivalent (in resolution) to a hypothetical `maps_satellite_zoom: 14`.
 
-[CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/): Sentinel-2 cloudless by IIAB (Contains modified Copernicus Sentinel data 2025)
+[CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/): IIAB Satellite (Contains (Contains modified Copernicus Sentinel data 2025)
 
 ---
 

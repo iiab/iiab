@@ -27,7 +27,7 @@ CC_BY_NC_SA_MAPS_DOT_BLACK = """
 (see more [here](https://maps.black/#data) and [here](https://maps.black/#licenses))
 """.strip().replace("\n", " ")
 
-CC_BY_NC_SA_IIAB = "[CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/): Sentinel-2 cloudless by IIAB (Contains modified Copernicus Sentinel data 2025)"
+CC_BY_NC_SA_IIAB = "[CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/): IIAB Satellite (Contains (Contains modified Copernicus Sentinel data 2025)"
 
 
 # The order that makes sense for explanation in this file may not make as much
