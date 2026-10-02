@@ -122,9 +122,9 @@
                             // that might need to be changed. "iiab-sentinel2" is just the name of a key in `pmtilesDates`, and will
                             // be part of the name of a new source for the FQR (and eventually probably the whole name of the source
                             // for the world map) that we will create for "iiab-sentinel2" imagery.
-                            const s2IiabKey = "iiab-sentinel2"
+                            const iiabSatKey = "iiab-sentinel2"
                             const satelliteFqrId = (
-                              makeFqrSourceId(fqrName, s2IiabKey, pmtilesDates[s2IiabKey]) ||
+                              makeFqrSourceId(fqrName, iiabSatKey, pmtilesDates[iiabSatKey]) ||
                               makeFqrSourceId(fqrName, s2Id, pmtilesDates[s2Id])
                             )
                             const osmId = "openstreetmap-openmaptiles"
@@ -675,7 +675,7 @@
 
                 // TODO
                 //   Define a func makeFqrLayerId next to makeFqrSourceId that's does something like this:
-                //     (worldLayerId, regionName, ...) => makeFqrSourceId(regionName, ...) + '.' + worldMapOSMLayers
+                //     (worldLayerId, regionName, ...) => makeFqrSourceId(regionName, ...) + '.' + worldLayerId
                 //   Use it where we define the layer ID. But also use it here. Something like:
                 //
                 //   regions(On/Off)ScreenSet.forEach(regionName => {
@@ -725,6 +725,112 @@
                 if (shouldSetDefaultView) {
                     mb.map.fitBounds([[-180, 30], [180, 30] ], {maxDuration: 0.1});
                     shouldSetDefaultView = false
+                }
+            }
+
+            IIAB_SATELLITE_LICENSE = "CC-BY-NC-SA: IIAB Satellite (Contains modified Copernicus Sentinel data 2025)"
+
+            // NE itself does not require attribution but upon closer examination some parts of this license may be necessary.
+            // Using maps.black's LICENSE.txt retrieval system would be more of a pain than just pasting this text here.
+            //
+            // https://github.com/maps-black/maps.black/blob/main/tilejson/naturalearth-openmaptiles.LICENSE.txt
+            NE_OMT_LICENSE = `
+              Public domain, made with Natural Earth.
+              Free vector and raster map data @ https://naturalearthdata.com/.
+              Additional data from Wikidata.org, CC0.
+              Processing done by https://maps.black/.
+              Released under https://creativecommons.org/public-domain/cc0/ public domain license.
+
+              Schema:
+
+              Copyright (c) 2024, MapTiler.com & OpenMapTiles contributors.
+              All rights reserved.
+
+              The vector tile schema has been developed by Klokan Technologies GmbH and
+              was initially modelled after the cartography of the CARTO's Positron basemap
+              with permission from CartoDB Inc.
+              The vector tile schema has been refined and improved in cooperation with
+              the Wikimedia Foundation and is heavily influenced by years of
+              Paul Norman's experience of creating maps from OpenStreetMap data.
+
+              The cartography and visual design features of the map tile schema (also known as
+              the "look and feel" of the map) are licensed under the Creative Commons
+              Attribution 4.0 license.
+              To view a copy of the license, visit http://creativecommons.org/licenses/by/4.0/.
+
+              Products or services using maps derived from OpenMapTiles schema need to visibly
+              credit "OpenMapTiles.org" or reference "OpenMapTiles" with a link to
+              http://openmaptiles.org/.
+
+              For a browsable electronic map based on OpenMapTiles and OpenStreetMap data, the
+              credit should appear in the corner of the map. For example:
+
+              [© OpenMapTiles](http://openmaptiles.org/) [© OpenStreetMap contributors](http://www.openstreetmap.org/copyright)
+
+              For printed and static maps a similar attribution should be made in a textual
+              description near the image, in the same fashion as if you cite a photograph.
+
+              Exceptions to OpenMapTiles attribution requirement can be in a written form granted
+              by MapTiler (info@maptiler.com).
+              The project contributors grant MapTiler AG the license to give such
+              exceptions on a commercial basis.`.trim().split('\n').map(line => line.trim()).join('\n')
+
+
+            async function fixLicenses() {
+                // Given the multi step process between setting mapStyleChoice and the map displaying, this might have race conditions if users
+                // change styles really quickly. Not sure what else to do but also not sure if that's a high priority. But also, maybe this is
+                // the least bad, since `mapStyleChoice` is early in the chain of events, and perhaps the race condition would thus be in favor
+                // of acting on the newest user change early and repeatedly which would get us the right answer in the end. But in case that's
+                // wrong and we decide we want to go based on the end of the chain of events, we should look at mb.map.getStyle().sources
+
+                await until(fqrLoaded)
+
+                // Probably enough for maps.black to set all of the licenses after a style switch or first page load
+                await until(mapStyleLoaded)
+
+                // Probably not needed given mapStyleLoaded but if mb.licenses.data isn't there nothing here will work.
+                await until(() => mb.licenses && mb.licenses.data)
+
+                if (geocoderAlternatives[MAP_SEARCH_ENGINE]) {
+                    mb.licenses.search = geocoderAlternatives[MAP_SEARCH_ENGINE].licenses
+                }
+
+                // TODO consolidate IDs
+                const s2Id = "s2maps-sentinel2-2023"
+                const osmId = "openstreetmap-openmaptiles"
+                const neId = "naturalearth-openmaptiles"
+                const iiabSatKey = "iiab-sentinel2"
+
+                // region.dates will directly say if the source is used (assuming the currently displayed mapstyle calls for it)
+                const fqrHasSource = key => Object.values(downloadedFQRegions.regions).some(r => key in r.dates)
+
+                // maps.black.js adds the s2maps and osm licenses based on whether the mapstyle requires it, irrespective of whether the pmtiles
+                // file is altogether missing.
+                const satelliteShowing = [STYLE_SATELLITE, STYLE_HYBRID].includes(mapStyleChoice)
+                const vectorShowing = [STYLE_POLITICAL, STYLE_NATURAL, STYLE_HYBRID].includes(mapStyleChoice)
+
+                if (satelliteShowing) {
+                    // If neither FQRs nor world map are using s2maps, remove the attribution
+                    if (!fqrHasSource(s2Id) && WORLD_MAP_SATELLITE_IS_IIAB) {
+                        delete mb.licenses.data[s2Id]
+                    }
+
+                    // If either FQRs or world map are using IIAB Satellite, add the attribution
+                    if (fqrHasSource(iiabSatKey) || WORLD_MAP_SATELLITE_IS_IIAB) {
+                        mb.licenses.data[iiabSatKey] = IIAB_SATELLITE_LICENSE
+                    }
+                }
+
+                if (vectorShowing) {
+                    // If neither FQRs nor world map are using osm, remove the attribution
+                    if (!fqrHasSource(osmId) && WORLD_MAP_VECTOR_IS_NE) {
+                        delete mb.licenses.data[osmId]
+                    }
+
+                    // If either FQRs or world map are using Natural Earth vector, add the attribution
+                    if (WORLD_MAP_VECTOR_IS_NE) {
+                        mb.licenses.data[neId] = NE_OMT_LICENSE
+                    }
                 }
             }
 
@@ -1760,27 +1866,9 @@
                 if (geocoder) {
                     mb.map.addControl(geocoder, 'top-left');
 
-                    // Initialize the same way as maps.black
-                    // https://github.com/maps-black/maps.black/blob/12205728ceb0672682381088c6c1e7ad05fdc4f5/client/maps.black.js#L120
-                    mb.licenses = mb.licenses || { data: {}, styles: {}, fonts: {} }
-                    mb.licenses.search = geocoderAlternatives[MAP_SEARCH_ENGINE].licenses
-
                     geocoderAlternatives[MAP_SEARCH_ENGINE].onMapRefresh()
                 }
                 mb.map.addControl(scaleControl);
-
-                // in case of nat-z8 and no FQRs, get rid of OSM attribution.
-                (async () => {
-                    await until(fqrLoaded)
-                    if (WORLD_MAP_IS_NATURAL_EARTH && !fqRegionsExist()) {
-                        await until(() =>
-                          mb.licenses &&
-                          mb.licenses.data &&
-                          mb.licenses.data['openstreetmap-openmaptiles']
-                        )
-                        delete mb.licenses.data['openstreetmap-openmaptiles']
-                    }
-                })()
 
                 fqRegionsControl = new FQRegionsControl(startFQRegionsControlWithDrawMode)
                 mb.map.addControl(fqRegionsControl, 'top-left');
@@ -1805,6 +1893,8 @@
                 drawFQRegionOutlines()
 
                 setDefaultView()
+
+                fixLicenses()
             }
 
             window.addEventListener("load", async () => {
