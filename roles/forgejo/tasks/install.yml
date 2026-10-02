@@ -1,0 +1,269 @@
+- name: Record (initial) disk space used
+  shell: df -B1 --output=used / | tail -1
+  register: df1
+
+
+# 1. Prepare to install Forgejo: stop any running instance, create user and dirs
+
+- name: Stop existing Forgejo systemd service (if reinstalling, not proot)
+  systemd:
+    name: forgejo
+    state: stopped
+  when: not is_proot
+  ignore_errors: yes
+
+- name: Stop existing Forgejo via pdsm (if reinstalling, proot)
+  command: pdsm stop forgejo
+  when: is_proot
+  ignore_errors: yes
+
+- name: Ensure group 'forgejo' exists
+  group:
+    name: "{{ forgejo_user }}"
+    state: present
+
+- name: Create user 'forgejo'
+  user:
+    name: "{{ forgejo_user }}"
+    comment: Forgejo daemon account
+    group: "{{ forgejo_user }}"
+    home: "{{ forgejo_home }}"    # /home/forgejo
+
+- name: Create {{ forgejo_root_directory }} directory structure
+  file:
+    path: "{{ forgejo_root_directory }}/{{ item }}"    # /library/forgejo
+    state: directory
+    owner: "{{ forgejo_user }}"
+    group: "{{ forgejo_user }}"
+  with_items: "{{ forgejo_subdirectories }}"
+
+- name: Make directories data, log, backups writable (0750)
+  file:
+    path: "{{ forgejo_root_directory }}/{{ item }}"
+    mode: '0750'
+  with_items:
+    - data
+    - log
+    - backups
+
+
+# 1b. In-place upgrade safety. install.yml only runs when 'forgejo_installed' is
+# undefined, i.e. on a fresh install OR on 'runrole --reinstall forgejo' (which
+# clears that flag). This is how a reinstall doubles as the UPDATE path. When an
+# install already exists (app.ini present), back up the DB + repos with 'forgejo
+# dump' BEFORE swapping the binary, so a bad schema migration on the next restart
+# can be recovered. /library/forgejo/data (repos, DB) is never wiped, so user work
+# is preserved. Skipped on a fresh install (nothing to back up).
+
+- name: Check whether Forgejo is already installed (app.ini present)
+  stat:
+    path: "{{ forgejo_config_path }}"
+  register: forgejo_existing_config
+
+# The role sets up a FRESH DB for the chosen engine but never migrates data between
+# engines. Refuse a sqlite<->mariadb switch on an existing install, else we'd silently
+# start on an empty DB and orphan the old data. Manual migration path: see defaults/main.yml.
+- name: Detect the existing install's DB engine (engine-change guard)
+  when: forgejo_existing_config.stat.exists
+  command: "grep -oE '^DB_TYPE[[:space:]]*=[[:space:]]*[A-Za-z0-9]+' {{ forgejo_config_path }}"
+  register: forgejo_existing_db_type
+  changed_when: false
+  failed_when: false
+
+- name: Refuse an unsupported DB engine change on an existing install
+  vars:
+    _cur: "{{ forgejo_existing_db_type.stdout | default('') }}"
+  fail:
+    msg: >-
+      Existing Forgejo install uses '{{ _cur }}' but forgejo_db_engine='{{ forgejo_db_engine }}'.
+      The role does not migrate data between engines. Migrate manually (see
+      roles/forgejo/defaults/main.yml), then set forgejo_db_engine to match and re-run.
+  when:
+    - forgejo_existing_config.stat.exists
+    - (forgejo_db_engine == 'mariadb' and 'sqlite' in _cur) or
+      (forgejo_db_engine == 'sqlite'  and 'mysql'  in _cur)
+
+- name: Back up Forgejo before an in-place upgrade
+  when: forgejo_existing_config.stat.exists
+  block:
+    # ansible_date_time is NOT populated under the proot fact subset
+    # (all,!hardware,!network), so derive the timestamp from 'date' instead.
+    - name: Compute a backup timestamp (proot-safe, no fact dependency)
+      command: date -u +%Y%m%dT%H%M%SZ
+      register: forgejo_backup_ts
+      changed_when: false
+
+    - name: "Back up Forgejo (forgejo dump) to {{ forgejo_backups_root }} before swapping the binary"
+      command: >
+        {{ forgejo_link_path }} dump
+        --config {{ forgejo_config_path }}
+        --file {{ forgejo_backups_root }}/forgejo-dump-{{ forgejo_backup_ts.stdout }}.zip
+      args:
+        chdir: "{{ forgejo_backups_root }}"
+      become: yes
+      become_user: "{{ forgejo_user }}"
+
+
+# 2. Download, verify, and link the Forgejo binary
+
+- name: Fail if we detect an unsupported CPU architecture
+  fail:
+    msg: "No Forgejo binary for CPU architecture \"{{ ansible_facts.machine }}\" (Forgejo ships amd64, arm64, arm-6 only; 32-bit x86 is unsupported)"
+  when: forgejo_iset_suffix == "unknown"
+
+- name: Download Forgejo binary {{ forgejo_download_url }} to {{ forgejo_install_path }} (0775, ~100 MB, SLOW)
+  get_url:
+    url: "{{ forgejo_download_url }}"
+    dest: "{{ forgejo_install_path }}"    # /library/forgejo/bin/forgejo-<ver>
+    mode: "0775"
+    timeout: "{{ download_timeout }}"
+
+- name: Download Forgejo GPG signature {{ forgejo_asc_url }} to {{ forgejo_asc_path }}
+  get_curl:
+    url: "{{ forgejo_asc_url }}"
+    dest: "{{ forgejo_asc_path }}"
+    timeout: "{{ download_timeout }}"
+
+- name: Verify Forgejo binary with GPG signature (best-effort, non-fatal like the gitea role)
+  shell: |
+    gpg --keyserver keys.openpgp.org --recv {{ forgejo_gpg_key }}
+    gpg --verify {{ forgejo_asc_path }} {{ forgejo_install_path }}
+  ignore_errors: yes
+
+- name: Symlink {{ forgejo_link_path }} -> {{ forgejo_install_path }}
+  file:
+    src: "{{ forgejo_install_path }}"
+    path: "{{ forgejo_link_path }}"    # /library/forgejo/forgejo
+    owner: "{{ forgejo_user }}"
+    group: "{{ forgejo_user }}"
+    state: link
+    force: yes
+
+# An update (runrole --reinstall forgejo) downloads a new bin/forgejo-<ver> and repoints
+# the symlink above; the superseded binary (~110 MB each) would otherwise pile up in bin/.
+# Keep only the active version and its .asc, so disk growth per update stays bounded.
+- name: Find installed Forgejo binaries in {{ forgejo_install_path | dirname }}
+  find:
+    paths: "{{ forgejo_install_path | dirname }}"    # /library/forgejo/bin
+    patterns: "forgejo-*"
+  register: forgejo_bin_files
+
+- name: Remove superseded Forgejo binaries (keep only {{ forgejo_version }})
+  file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ forgejo_bin_files.files }}"
+  loop_control:
+    label: "{{ item.path | basename }}"
+  when:
+    - forgejo_version | string | length > 0        # never prune when the version is unset
+    - (item.path | basename) != ('forgejo-' ~ forgejo_version)
+    - (item.path | basename) != ('forgejo-' ~ forgejo_version ~ '.asc')
+
+
+# 3. Configure Forgejo (/etc/forgejo)
+
+- name: mkdir {{ forgejo_config_dir }} (0770 root:forgejo)
+  file:
+    state: directory
+    path: "{{ forgejo_config_dir }}"
+    owner: root
+    group: "{{ forgejo_user }}"
+    mode: "0770"
+
+- name: Generate Forgejo secrets once (guarded by 'creates'), referenced by *_URI in app.ini
+  shell: "umask 027; {{ forgejo_link_path }} generate secret {{ item.kind }} > {{ item.path }}"
+  args:
+    creates: "{{ item.path }}"
+  with_items:
+    - { kind: SECRET_KEY, path: "{{ forgejo_secret_key_path }}" }
+    - { kind: INTERNAL_TOKEN, path: "{{ forgejo_internal_token_path }}" }
+    - { kind: JWT_SECRET, path: "{{ forgejo_jwt_secret_path }}" }
+    - { kind: LFS_JWT_SECRET, path: "{{ forgejo_lfs_jwt_secret_path }}" }
+
+- name: Secure the generated secret files (0640 root:forgejo)
+  file:
+    path: "{{ item }}"
+    owner: root
+    group: "{{ forgejo_user }}"
+    mode: "0640"
+  with_items:
+    - "{{ forgejo_secret_key_path }}"
+    - "{{ forgejo_internal_token_path }}"
+    - "{{ forgejo_jwt_secret_path }}"
+    - "{{ forgejo_lfs_jwt_secret_path }}"
+
+
+# 3b. MariaDB backend (wired option; default engine is sqlite). Engine migration
+#     from an existing sqlite DB is a later PR - this only sets up a fresh DB.
+
+- name: Set up MariaDB backend for Forgejo
+  when: forgejo_db_engine == 'mariadb'
+  block:
+    - name: "Set 'mysql_install: True' and 'mysql_enabled: True'"
+      set_fact:
+        mysql_install: True
+        mysql_enabled: True
+
+    - name: MYSQL - run 'mysql' role
+      include_role:
+        name: mysql
+
+    - name: FAIL (STOP THE INSTALL) IF 'mysql_installed is undefined'
+      fail:
+        msg: "Forgejo needs MariaDB but the 'mysql' role did not install it."
+      when: mysql_installed is undefined
+
+    - name: "Create MySQL database for Forgejo: {{ forgejo_db_name }}"
+      ansible.mariadb.mariadb_db:
+        name: "{{ forgejo_db_name }}"
+
+    - name: Create MySQL username ({{ forgejo_db_user }}) with password, for above database
+      ansible.mariadb.mariadb_user:
+        name: "{{ forgejo_db_user }}"
+        password: "{{ forgejo_db_password }}"
+        priv: "{{ forgejo_db_name }}.*:ALL,GRANT"
+
+- name: Install {{ forgejo_config_path }} from template (0664 root:forgejo)
+  template:
+    src: app.ini.j2
+    dest: "{{ forgejo_config_path }}"
+    owner: root
+    group: "{{ forgejo_user }}"
+    mode: "0664"
+
+
+# 4. Service unit (systemd platforms only)
+# Under proot the pdsm wrapper is provided by the 'proot_services' role
+# (roles/proot_services/files/pdsm/usr_local_pdsm/services-available/forgejo,
+# listed in its 'pdsm_installed_services'); this role only enables/starts it.
+
+- name: "Install systemd unit /etc/systemd/system/forgejo.service (not proot)"
+  template:
+    src: forgejo.service.j2
+    dest: /etc/systemd/system/forgejo.service
+  when: not is_proot
+
+
+# 5. RECORD Forgejo AS INSTALLED
+
+- name: Record (final) disk space used
+  shell: df -B1 --output=used / | tail -1
+  register: df2
+
+- name: Add 'forgejo_disk_usage = {{ df2.stdout | int - df1.stdout | int }}' to {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+    section: forgejo
+    option: forgejo_disk_usage
+    value: "{{ df2.stdout | int - df1.stdout | int }}"
+
+- name: "Set 'forgejo_installed: True'"
+  set_fact:
+    forgejo_installed: True
+
+- name: "Add 'forgejo_installed: True' to {{ iiab_state_file }}"
+  lineinfile:
+    path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
+    regexp: '^forgejo_installed'
+    line: 'forgejo_installed: True'

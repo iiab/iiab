@@ -23,11 +23,25 @@ running() {
   kill -0 "$pid" 2>/dev/null
 }
 
+responds() {
+  # This proves the server actually accepts a client connection.
+  mysql --protocol=socket --socket="$MARIADB_SOCKET" -N -e 'SELECT 1' >/dev/null 2>&1
+}
+
 start() {
-  if running; then
+  # Treat the service as up only if it is alive AND actually answers.
+  if running && responds; then
     echo "[pdsm:$SERVICE_NAME] already running"
     return 0
   fi
+
+  # Alive but not answering: a stale orphan. Stop it (and clear the stale pidfile) so we
+  # never launch a second mariadbd on the same datadir.
+  if running; then
+    echo "[pdsm:$SERVICE_NAME] stale instance (alive but not responding) - cleaning up"
+    stop
+  fi
+  rm -f "$MARIADB_PIDFILE"
 
   echo "[pdsm:$SERVICE_NAME] starting..."
 
@@ -47,9 +61,10 @@ start() {
     --log-error="$MARIADB_LOG" \
     >>"$MARIADB_LOG" 2>&1 &
 
-  # Small wait loop so 'start' only returns when it's actually alive
+  # Wait loop returns only when MariaDB actually ANSWERS (not merely PID-alive), so
+  # callers that run DB ops right after 'start' don't race a still-initialising server.
   for i in $(seq 1 "$PDSM_START_TIMEOUT"); do
-    if running; then
+    if responds; then
       echo "[pdsm:$SERVICE_NAME] started"
       return 0
     fi
@@ -91,7 +106,9 @@ stop() {
 }
 
 status() {
-  if running; then
+  # Report running only if it is alive AND actually answers, so a broken orphan is not
+  # misreported as healthy (and so pdsm's require_service restarts a stale dependency).
+  if running && responds; then
     echo "[pdsm:$SERVICE_NAME] running"
     return 0
   fi

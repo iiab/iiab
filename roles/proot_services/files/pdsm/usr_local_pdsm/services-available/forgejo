@@ -1,0 +1,97 @@
+#!/bin/sh
+# /usr/local/pdsm/services-available/forgejo
+# Simple PDSM service wrapper for Forgejo (IIAB, proot).
+# Installed by roles/proot_services (listed in pdsm_installed_services);
+# the forgejo role only enables/starts it (tasks/enable-or-disable.yml).
+
+PDSM_COMMON="/usr/local/pdsm/lib/pdsm-common.sh"
+[ -r "$PDSM_COMMON" ] && . "$PDSM_COMMON"
+
+SERVICE_NAME="forgejo"
+
+FORGEJO_USER="forgejo"
+FORGEJO_HOME="/home/forgejo"
+FORGEJO_BIN="/library/forgejo/forgejo"          # stable symlink -> versioned binary
+FORGEJO_CONFIG="/etc/forgejo/app.ini"
+FORGEJO_WORK_DIR="/library/forgejo"
+FORGEJO_LOG="/library/forgejo/log/forgejo.log"
+
+# Forgejo refuses to run as root. Under proot the login shell is root, so we drop
+# to the unprivileged 'forgejo' user (created by the forgejo role) to start it.
+# The process is tracked by its command line (pgrep); no pidfile needed.
+
+running() {
+  pgrep -f "$FORGEJO_BIN web" >/dev/null 2>&1
+}
+
+start() {
+  if running; then
+    echo "[pdsm:$SERVICE_NAME] already running"
+    return 0
+  fi
+
+  # nginx is the reverse proxy in front of Forgejo
+  require_service "nginx" 2>/dev/null || true
+
+  echo "[pdsm:$SERVICE_NAME] starting..."
+
+  # Drop from root to the 'forgejo' user (Forgejo won't run as root).
+  setsid su -s /bin/sh "$FORGEJO_USER" -c \
+    "HOME=$FORGEJO_HOME FORGEJO_WORK_DIR=$FORGEJO_WORK_DIR exec $FORGEJO_BIN web --config $FORGEJO_CONFIG" \
+    >>"$FORGEJO_LOG" 2>&1 &
+
+  for i in $(seq 1 "${PDSM_START_TIMEOUT:-15}"); do
+    if running; then
+      echo "[pdsm:$SERVICE_NAME] started"
+      return 0
+    fi
+    sleep 1
+  done
+
+  echo "[pdsm:$SERVICE_NAME] failed to start (check $FORGEJO_LOG)" >&2
+  return 1
+}
+
+stop() {
+  if ! running; then
+    echo "[pdsm:$SERVICE_NAME] already stopped"
+    return 0
+  fi
+
+  echo "[pdsm:$SERVICE_NAME] stopping..."
+  pkill -f "$FORGEJO_BIN web" >/dev/null 2>&1 || true
+
+  for i in $(seq 1 "${PDSM_START_TIMEOUT:-15}"); do
+    if ! running; then
+      echo "[pdsm:$SERVICE_NAME] stopped"
+      return 0
+    fi
+    sleep 1
+  done
+
+  echo "[pdsm:$SERVICE_NAME] did not fully stop" >&2
+  return 1
+}
+
+status() {
+  if running; then
+    echo "[pdsm:$SERVICE_NAME] running"
+    return 0
+  fi
+  echo "[pdsm:$SERVICE_NAME] not running"
+  return 3
+}
+
+case "$1" in
+  start|stop|status)
+    "$1"
+    ;;
+  restart)
+    stop
+    start
+    ;;
+  *)
+    echo "Usage: $0 {start|stop|restart|status}" >&2
+    exit 1
+    ;;
+esac
