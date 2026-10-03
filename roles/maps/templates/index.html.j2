@@ -37,6 +37,64 @@
             const STYLE_SATELLITE = "satellite"
             const STYLE_HYBRID = "hybrid"
 
+            // Appropriating maps.black's term, "dataKey", to refer to these identifiers and
+            // substrings that show up in various places. They are used to identify a file or a source.
+            //
+            // There's not a 1-1 (or even a clean 1-many) relationship between these things (HILLSHADE
+            // is a source but not a file. IIABSAT is a valid source file but not a valid world source
+            // ID. We could fix this last part but it would require hacking maps.black some more.) All
+            // the same, there is an overarching theme that is implied by these names so let's initially
+            // define them here.
+            const DATA_KEYS = {
+              OSM: "openstreetmap-openmaptiles",
+              TERRARIUM: "terrarium",
+              HILLSHADE: "hillshade",
+              NE: "naturalearth-openmaptiles",
+              NE6: "naturalearth6-NE2_HR_SR_W_DR-WEBP",
+              S2: "s2maps-sentinel2-2023",
+              IIABSAT: 'iiab-sentinel2',
+            }
+
+            // Which data keys are used for world map file name segments?
+            // "NE" is not going to be one of them so long as we have
+            // symlinks pointing from from the DATA_KEYS.OSM file to the
+            // DATA_KEYS.NE file.
+            const WORLD_FILE_DATA_KEYS = new Set([
+              DATA_KEYS.OSM,
+              DATA_KEYS.TERRARIUM,
+              DATA_KEYS.S2,
+              DATA_KEYS.NE6,
+            ])
+
+            // Which data keys are used for actual world map source IDs?
+            const WORLD_SOURCE_DATA_KEYS = new Set([
+              DATA_KEYS.OSM,
+              DATA_KEYS.TERRARIUM,
+              DATA_KEYS.S2,
+              DATA_KEYS.NE6,
+
+              // The only one not based on a dataKey from a file
+              DATA_KEYS.HILLSHADE,
+            ])
+
+            // Which data keys are used for FQR file name segments?
+            const FQR_FILE_DATA_KEYS = new Set([
+              DATA_KEYS.OSM,
+              DATA_KEYS.TERRARIUM,
+              DATA_KEYS.S2,
+              DATA_KEYS.IIABSAT,
+            ])
+
+            const FQR_SOURCE_DATA_KEYS = new Set([
+              DATA_KEYS.OSM,
+              DATA_KEYS.TERRARIUM,
+              DATA_KEYS.S2,
+              DATA_KEYS.IIABSAT,
+
+              // The only one not based on a dataKey from a file
+              DATA_KEYS.HILLSHADE,
+            ])
+
             /****************
              *    configs   *
              ****************/
@@ -127,51 +185,41 @@
                         Object.keys(downloadedFQRegions.regions).forEach(fqrName => {
                             const pmtilesDates = downloadedFQRegions.regions[fqrName].dates
 
-                            const s2Id = "s2maps-sentinel2-2023"
-                            // "Key" instead of "Id" here because right now maps.black actually has a source "s2maps-sentinel2-2023"
-                            // that might need to be changed. "iiab-sentinel2" is just the name of a key in `pmtilesDates`, and will
-                            // be part of the name of a new source for the FQR (and eventually probably the whole name of the source
-                            // for the world map) that we will create for "iiab-sentinel2" imagery.
-                            const iiabSatKey = "iiab-sentinel2"
                             const satelliteFqrId = (
-                              makeFqrSourceId(fqrName, iiabSatKey, pmtilesDates[iiabSatKey]) ||
-                              makeFqrSourceId(fqrName, s2Id, pmtilesDates[s2Id])
+                              makeFqrSourceId(fqrName, DATA_KEYS.IIABSAT, pmtilesDates[DATA_KEYS.IIABSAT]) ||
+                              makeFqrSourceId(fqrName, DATA_KEYS.S2, pmtilesDates[DATA_KEYS.S2])
                             )
-                            const osmId = "openstreetmap-openmaptiles"
-                            const vectorFqrId = makeFqrSourceId(fqrName, osmId, pmtilesDates[osmId])
-                            const terrariumId = "terrarium"
-                            const terrainFqrId = makeFqrSourceId(fqrName, terrariumId, pmtilesDates[terrariumId])
-                            const hillshadeId = "hillshade"
-                            const hillshadeFqrId = makeFqrSourceId(fqrName, hillshadeId, pmtilesDates[terrariumId])
-                            const naturalEarth6Id = "naturalearth6-NE2_HR_SR_W_DR-WEBP"
+                            const vectorFqrId = makeFqrSourceId(fqrName, DATA_KEYS.OSM, pmtilesDates[DATA_KEYS.OSM])
+                            const terrainFqrId = makeFqrSourceId(fqrName, DATA_KEYS.TERRARIUM, pmtilesDates[DATA_KEYS.TERRARIUM])
+                            const hillshadeFqrId = makeFqrSourceId(fqrName, DATA_KEYS.HILLSHADE, pmtilesDates[DATA_KEYS.TERRARIUM])
                             const backgroundLayerId = "background"
 
                             // Make an FQR version of each source
                             worldMapSourceIds.forEach(worldSourceId => {
-                                if (worldSourceId === s2Id) {
+                                if (worldSourceId === DATA_KEYS.S2) {
                                     if (satelliteFqrId) {
                                         style.sources[satelliteFqrId] = {
-                                            ...style.sources[s2Id],
-                                            url: style.sources[s2Id].url.replace(s2Id, satelliteFqrId),
+                                            ...style.sources[DATA_KEYS.S2],
+                                            url: style.sources[DATA_KEYS.S2].url.replace(DATA_KEYS.S2, satelliteFqrId),
                                             bounds: downloadedFQRegions.regions[fqrName].render_bounds,
                                             minzoom: WORLD_MAP_SATELLITE_MAX_ZOOM + 1
                                         }
                                     }
-                                } else if (worldSourceId === osmId) {
+                                } else if (worldSourceId === DATA_KEYS.OSM) {
                                     if (vectorFqrId) {
                                         style.sources[vectorFqrId] = {
-                                            ...style.sources[osmId],
-                                            url: style.sources[osmId].url.replace(osmId, vectorFqrId),
+                                            ...style.sources[DATA_KEYS.OSM],
+                                            url: style.sources[DATA_KEYS.OSM].url.replace(DATA_KEYS.OSM, vectorFqrId),
                                             bounds: downloadedFQRegions.regions[fqrName].render_bounds,
                                             minzoom: WORLD_MAP_VECTOR_MAX_ZOOM + 1
                                         }
                                     }
-                                } else if (worldSourceId === terrariumId) {
+                                } else if (worldSourceId === DATA_KEYS.TERRARIUM) {
                                     if (terrainFqrId) {
                                         style.sources[terrainFqrId] = {
-                                            ...style.sources[terrariumId],
-                                            url: style.sources[terrariumId].url
-                                                .replace(terrariumId, terrainFqrId)
+                                            ...style.sources[DATA_KEYS.TERRARIUM],
+                                            url: style.sources[DATA_KEYS.TERRARIUM].url
+                                                .replace(DATA_KEYS.TERRARIUM, terrainFqrId)
                                                 .replace(/\-z0\-z10\.pmtiles$/, '.pmtiles'),
                                             bounds: downloadedFQRegions.regions[fqrName].render_bounds,
                                             minzoom: WORLD_MAP_TERRAIN_MAX_ZOOM + 1
@@ -180,7 +228,7 @@
                                             style.sources[hillshadeFqrId] = style.sources[terrainFqrId]
                                         }
                                     }
-                                } else if (worldSourceId === naturalEarth6Id) {
+                                } else if (worldSourceId === DATA_KEYS.NE6) {
                                     // pass, only world map
                                 } else {
                                     console.warn(`Unhandled world map source for ${fqrName}: ${worldSourceId}`)
@@ -189,7 +237,7 @@
 
                             // Make an FQR version of each layer
                             worldMapLayers.map(worldLayer => {
-                                if (worldLayer.source === s2Id) {
+                                if (worldLayer.source === DATA_KEYS.S2) {
                                     if (satelliteFqrId) {
                                         return {
                                             ...worldLayer,
@@ -197,7 +245,7 @@
                                             source: satelliteFqrId,
                                         }
                                     }
-                                } else if (worldLayer.source === osmId) {
+                                } else if (worldLayer.source === DATA_KEYS.OSM) {
                                     // This is unrelated to copying FQR layers. It could be in a different loop.
                                     worldMapOSMLayers.add(worldLayer.id)
 
@@ -208,7 +256,7 @@
                                             source: vectorFqrId,
                                         }
                                     }
-                                } else if (worldLayer.source === hillshadeId) {
+                                } else if (worldLayer.source === DATA_KEYS.HILLSHADE) {
                                     if (hillshadeFqrId) {
                                         return {
                                             ...worldLayer,
@@ -216,7 +264,7 @@
                                           source: hillshadeFqrId,
                                         }
                                     }
-                                } else if (worldLayer.source === naturalEarth6Id) {
+                                } else if (worldLayer.source === DATA_KEYS.NE6) {
                                     // pass, only world map
                                 } else if (worldLayer.id === backgroundLayerId) {
                                     // pass, only world map (note that we're testing the *layer id* here; there is no source used)
@@ -237,8 +285,8 @@
                             layer.__sortOrder = index
                         }
                         style.layers.sort((a, b) => {
-                            const a_s2maps = a.id.startsWith('s2maps-sentinel2-2023') || a.id.startsWith('iiab-sentinel2')
-                            const b_s2maps = b.id.startsWith('s2maps-sentinel2-2023') || b.id.startsWith('iiab-sentinel2')
+                            const a_s2maps = a.id.startsWith(DATA_KEYS.S2) || a.id.startsWith(DATA_KEYS.IIABSAT)
+                            const b_s2maps = b.id.startsWith(DATA_KEYS.S2) || b.id.startsWith(DATA_KEYS.IIABSAT)
                             if (a_s2maps !== b_s2maps) {
                                 return b_s2maps - a_s2maps
                             } else {
@@ -252,17 +300,19 @@
                                 style.sources[field].maxzoom = maxzoom
                             }
                         }
-                        setMaxZoom('openstreetmap-openmaptiles', WORLD_MAP_VECTOR_MAX_ZOOM)
-                        setMaxZoom('s2maps-sentinel2-2023', WORLD_MAP_SATELLITE_MAX_ZOOM)
-                        setMaxZoom('iiab-sentinel2', WORLD_MAP_SATELLITE_MAX_ZOOM)
+                        setMaxZoom(DATA_KEYS.OSM, WORLD_MAP_VECTOR_MAX_ZOOM)
+                        setMaxZoom(DATA_KEYS.S2, WORLD_MAP_SATELLITE_MAX_ZOOM)
+
+                        // TODO I think this line was a (harmless) mistake, because iiab-sentinel2 actually goes into the s2 slot?
+                        setMaxZoom(DATA_KEYS.IIABSAT, WORLD_MAP_SATELLITE_MAX_ZOOM)
 
                         // Sources that use the terrarium file. We don't necessarily even use all of them
                         // but we'll change them here in case we do.
-                        setMaxZoom('terrarium', WORLD_MAP_TERRAIN_MAX_ZOOM)
-                        setMaxZoom('hillshade', WORLD_MAP_TERRAIN_MAX_ZOOM)
+                        setMaxZoom(DATA_KEYS.TERRARIUM, WORLD_MAP_TERRAIN_MAX_ZOOM)
+                        setMaxZoom(DATA_KEYS.HILLSHADE, WORLD_MAP_TERRAIN_MAX_ZOOM)
                         setMaxZoom('contours',  WORLD_MAP_TERRAIN_MAX_ZOOM)
 
-                        // We could `setMaxZoom` for 'naturalearth6-NE2_HR_SR_W_DR-WEBP' as well, but it looks
+                        // We could `setMaxZoom` for DATA_KEYS.NE6 as well, but it looks
                         // okay without adjusting, and we should stress that this only changes for CI so
                         // we won't bother for now.
 
@@ -599,17 +649,21 @@
                 const newTerrainSource = (() => {
                     if (WORLD_MAP_TERRAIN_MAX_ZOOM === 10) {
                         // If the world map is maximum zoom, don't bother with FQR terrain
-                        return 'terrarium'
+                        return DATA_KEYS.TERRARIUM
                     }
                     if (regionsOnScreen.length) {
                         // awkward situation to be looking at multiple regions,
                         // so take the first one (which is the closest to the
                         // map center, see sorting above)
-                        return makeFqrSourceId(regionsOnScreen[0], 'terrarium', downloadedFQRegions.regions[regionsOnScreen[0]].dates.terrarium)
+                        return makeFqrSourceId(
+                          regionsOnScreen[0],
+                          DATA_KEYS.TERRARIUM,
+                          downloadedFQRegions.regions[regionsOnScreen[0]].dates[DATA_KEYS.TERRARIUM],
+                        )
                     }
                     if (WORLD_MAP_TERRAIN_MAX_ZOOM > 0) {
                         // If no FQRs are on screen and we have a world map terrain, return to it
-                        return 'terrarium'
+                        return DATA_KEYS.TERRARIUM
                     }
                     if (curTerrainSource) {
                         // If no FQRs are on screen and we have no world map terrain, but we have some terrain
@@ -623,10 +677,10 @@
                         return Object.keys(downloadedFQRegions.regions)[0]
                     }
                     // If we have no FQRs at all, and we have no world map terrain, report a bug because
-                    // terrain should never be turned on in this case. And then, pick "terrarium" anyway,
-                    // I think it would just use the dummy terrain file.
+                    // terrain should never be turned on in this case. And then, pick
+                    // DATA_KEYS.TERRARIUM anyway, I think it would just use the dummy terrain file.
                     console.warn("Trying to choose a terrain source when we have none!")
-                    return 'terrarium'
+                    return DATA_KEYS.TERRARIUM
                 })()
 
                 // Set the new terrain if there is no currently set terrain, or if the new one is different
@@ -799,12 +853,6 @@
                     mb.licenses.search = geocoderAlternatives[MAP_SEARCH_ENGINE].licenses
                 }
 
-                // TODO consolidate IDs
-                const s2Id = "s2maps-sentinel2-2023"
-                const osmId = "openstreetmap-openmaptiles"
-                const neId = "naturalearth-openmaptiles"
-                const iiabSatKey = "iiab-sentinel2"
-
                 // region.dates will directly say if the source is used (assuming the currently displayed mapstyle calls for it)
                 const fqrHasSource = key => Object.values(downloadedFQRegions.regions).some(r => key in r.dates)
 
@@ -815,25 +863,25 @@
 
                 if (satelliteShowing) {
                     // If neither FQRs nor world map are using s2maps, remove the attribution
-                    if (!fqrHasSource(s2Id) && WORLD_MAP_SATELLITE_IS_IIAB) {
-                        delete mb.licenses.data[s2Id]
+                    if (!fqrHasSource(DATA_KEYS.S2) && WORLD_MAP_SATELLITE_IS_IIAB) {
+                        delete mb.licenses.data[DATA_KEYS.S2]
                     }
 
                     // If either FQRs or world map are using IIAB Satellite, add the attribution
-                    if (fqrHasSource(iiabSatKey) || WORLD_MAP_SATELLITE_IS_IIAB) {
-                        mb.licenses.data[iiabSatKey] = IIAB_SATELLITE_LICENSE
+                    if (fqrHasSource(DATA_KEYS.IIABSAT) || WORLD_MAP_SATELLITE_IS_IIAB) {
+                        mb.licenses.data[DATA_KEYS.IIABSAT] = IIAB_SATELLITE_LICENSE
                     }
                 }
 
                 if (vectorShowing) {
                     // If neither FQRs nor world map are using osm, remove the attribution
-                    if (!fqrHasSource(osmId) && WORLD_MAP_VECTOR_IS_NE) {
-                        delete mb.licenses.data[osmId]
+                    if (!fqrHasSource(DATA_KEYS.OSM) && WORLD_MAP_VECTOR_IS_NE) {
+                        delete mb.licenses.data[DATA_KEYS.OSM]
                     }
 
                     // If either FQRs or world map are using Natural Earth vector, add the attribution
                     if (WORLD_MAP_VECTOR_IS_NE) {
-                        mb.licenses.data[neId] = NE_OMT_LICENSE
+                        mb.licenses.data[DATA_KEYS.NE] = NE_OMT_LICENSE
                     }
                 }
             }
@@ -970,39 +1018,33 @@
                           }
 
                           const dates = {}
-                          const REGION_EXTRACT_TYPES = [
-                              's2maps-sentinel2-2023',
-                              'iiab-sentinel2',
-                              'terrarium',
-                              'openstreetmap-openmaptiles',
-                          ]
 
                           // Each valid pmtiles file in an FQR has the format:
                           //
-                          // [regionExtractType].[date].pmtiles
+                          // [dataKey].[date].pmtiles
                           //
                           // Let's identify all of them and sort them by date. That way,
-                          // if we have multiple pmtiles for a given regionExtractType (a
+                          // if we have multiple pmtiles for a given dataKey (a
                           // botched FQR update, etc), the latest one always ends up in `dates`.
                           listing.map(entry => {
                               if (entry.type !== "file") {
                                       return
                               }
 
-                              const [regionExtractType, date, pmtiles, ...rest] = entry.name.split(".")
+                              const [dataKey, date, pmtiles, ...rest] = entry.name.split(".")
                               if (
-                                REGION_EXTRACT_TYPES.includes(regionExtractType)            &&
+                                FQR_FILE_DATA_KEYS.has(dataKey)                             &&
                                 date.match(/^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]$/)  &&
                                 pmtiles === "pmtiles"                                       &&
                                 !rest.length
                               ) {
-                                  return {regionExtractType, date}
+                                  return {dataKey, date}
                               }
                           })
                           .filter(Boolean)      // remove anything that isn't a properly formatted pmtiles file name
                           .sort((a, b) => a.date.localeCompare(b.date))
-                          .forEach(({regionExtractType, date}) => {
-                              dates[regionExtractType] = date
+                          .forEach(({dataKey, date}) => {
+                              dates[dataKey] = date
                           })
 
                           const fqrData = meta.bbox[0] <= meta.bbox[2] ? {
@@ -1027,27 +1069,21 @@
                 for (regionName in downloadedFQRegions.regions) {
                     const pmtilesDates = downloadedFQRegions.regions[regionName].dates
 
-                    // TODO consolidate constants
-                    const s2Id = "s2maps-sentinel2-2023"
-                    const s2IiabKey = "iiab-sentinel2"
-                    const osmId = "openstreetmap-openmaptiles"
-                    const terrariumId = "terrarium"
-
-                    if (!pmtilesDates[s2IiabKey] && !pmtilesDates[s2Id]) {
+                    if (!pmtilesDates[DATA_KEYS.IIABSAT] && !pmtilesDates[DATA_KEYS.S2]) {
                         newDataFileAlert({
                           fqrName: regionName,
                           warning: "Incomplete region",
                           message: "No valid satellite pmtiles file ('s2maps-sentinel2-2023' or 'iiab-sentinel2') found",
                         })
                     }
-                    if (!pmtilesDates[osmId]) {
+                    if (!pmtilesDates[DATA_KEYS.OSM]) {
                         newDataFileAlert({
                           fqrName: regionName,
                           warning: "Incomplete region",
                           message: "No valid vector pmtiles file ('openstreetmap-openmaptiles') found",
                         })
                     }
-                    if (!pmtilesDates[terrariumId]) {
+                    if (!pmtilesDates[DATA_KEYS.TERRARIUM]) {
                         newDataFileAlert({
                           fqrName: regionName,
                           warning: "Incomplete region",
