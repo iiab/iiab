@@ -5,7 +5,7 @@ How map data files are named
 ## Global map data files:
 
 ```
-| type                       | date       | depth         | extension (for files)
+| data_key                   | date       | depth         | extension (for files)
 |---------------------------------------------------------------
 | s2maps-sentinel2-2023      . 2025-12-10 . z00-z07       . pmtiles
 | naturalearth-openmaptiles  . 2025-12-10 . z00-z08       . pmtiles
@@ -17,7 +17,7 @@ How map data files are named
 ```
 
 ```
-[type].[date].[depth].[extension (for files)]
+[data_key].[date].[depth].[extension (for files)]
 ```
 
 (*) Note that in the case of `.tar.gz` files (currently only static-search), the extension will be in the catalog and on the file server, but when installed locally it will be expanded into a directory with no extension.
@@ -25,7 +25,7 @@ How map data files are named
 ## Full Quality Regions:
 
 ```
-region | ... | type                       | date       | extension (for files)
+region | ... | data_key                   | date       | extension (for files)
 ---------------------------------------------------------------------------
 africa . fqr / openstreetmap-openmaptiles . 2026-07-01 . pmtiles
 africa . fqr / s2maps-sentinel2-2023      . 2025-12-10 . pmtiles
@@ -33,12 +33,12 @@ africa . fqr / terrarium                  . 2025-12-10 . pmtiles
 ```
 
 ```
-[region].fqr/[type].[date].[extension (for files)]
+[region].fqr/[data_key].[date].[extension (for files)]
 ```
 
 ## Key
 
-* `type` refers to the data source for pmtiles files, or the search engine for search
+* `data_key` refers to the data source for pmtiles files, or the search engine for search
 * `date` refers to the date that the data was generated
 * `depth` refers to the zoom level range for pmtiles files, or in the case of search it refers to the type or amount of search data available. Depth should not be named "full-region".
 * `region` is the user-defined name of the FQR
