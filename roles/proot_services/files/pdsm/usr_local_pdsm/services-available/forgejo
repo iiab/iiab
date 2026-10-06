@@ -30,8 +30,22 @@ start() {
     return 0
   fi
 
-  # nginx is the reverse proxy in front of Forgejo
-  require_service "nginx" 2>/dev/null || true
+  # Bring up dependencies first, and abort if one is unavailable (don't report a
+  # "started" service that cannot actually serve). PDSM starts services in lexical
+  # order, so 'forgejo' would otherwise come up before 'mariadb' after a reboot.
+  # When this instance is configured for MariaDB (DB_TYPE = mysql in app.ini), start it.
+  if grep -qE '^[[:space:]]*DB_TYPE[[:space:]]*=[[:space:]]*mysql([[:space:]]|$)' "$FORGEJO_CONFIG" 2>/dev/null; then
+    if ! require_service "mariadb"; then
+      echo "[pdsm:$SERVICE_NAME] required database service 'mariadb' is unavailable; aborting" >&2
+      return 1
+    fi
+  fi
+
+  # nginx is the reverse proxy in front of Forgejo.
+  if ! require_service "nginx"; then
+    echo "[pdsm:$SERVICE_NAME] required service 'nginx' is unavailable; aborting" >&2
+    return 1
+  fi
 
   echo "[pdsm:$SERVICE_NAME] starting..."
 
