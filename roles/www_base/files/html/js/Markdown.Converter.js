@@ -112,7 +112,7 @@ else
         // given a URL that was encountered by itself (without markup), should return the link text that's to be given to this link
         pluginHooks.addNoop("plainLinkText");
         
-        // called with the orignal text as given to makeHtml. The result of this plugin hook is the actual markdown source that will be cooked
+        // called with the original text as given to makeHtml. The result of this plugin hook is the actual markdown source that will be cooked
         pluginHooks.addNoop("preConversion");
         
         // called with the text once all normalizations have been completed (tabs to spaces, line endings, etc.), but before any conversions have
@@ -255,7 +255,7 @@ else
 
             // attacklab: Replace ~ with ~T
             // This lets us use tilde as an escape char to avoid md5 hashes
-            // The choice of character is arbitray; anything that isn't
+            // The choice of character is arbitrary; anything that isn't
             // magic in Markdown will work.
             text = text.replace(/~/g, "~T");
 
@@ -679,7 +679,7 @@ else
         function writeAnchorTag(wholeMatch, m1, m2, m3, m4, m5, m6, m7) {
             if (m7 == undefined) m7 = "";
             var whole_match = m1;
-            var link_text = m2.replace(/:\/\//g, "~P"); // to prevent auto-linking withing the link. will be converted back after the auto-linker runs
+            var link_text = m2.replace(/:\/\//g, "~P"); // to prevent auto-linking within the link. will be converted back after the auto-linker runs
             var link_id = m3.toLowerCase();
             var url = m4;
             var title = m7;
@@ -1116,7 +1116,7 @@ else
             //      <p>Just type <code>foo `bar` baz</code> at the prompt.</p>
             //     
             //   There's no arbitrary limit to the number of backticks you
-            //   can use as delimters. If you need three consecutive backticks
+            //   can use as delimiters. If you need three consecutive backticks
             //   in your code, use four for delimiters, etc.
             //
             // * You can use spaces to get literal backticks at the edges:
@@ -1283,7 +1283,7 @@ else
             //     (?=                          (lookahead; we're not capturing this, just listing legal possibilities)
             //         \W_                      If the delimiter is _, then this last character must be non-word non-underscore (extra-word emphasis only)
             //         |
-            //         (?!\*)                   otherwise, we list two possiblities for * as the delimiter; in either case, the last characters cannot be an asterisk itself
+            //         (?!\*)                   otherwise, we list two possibilities for * as the delimiter; in either case, the last characters cannot be an asterisk itself
             //         (?:
             //             [\W_]\*              this last character can be non-word (extra-word emphasis)...
             //             |

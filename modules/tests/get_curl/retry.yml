@@ -1,0 +1,51 @@
+---
+- name: Fail once for an HTTP 404 without retrying
+  get_curl:
+    url: "http://127.0.0.1:{{ retry_server_port }}/404"
+    dest: "{{ test_dir }}/404.txt"
+    tmp_dest: "{{ tmp_dir }}"
+    retries: 3
+  register: not_found_result
+  failed_when: false
+
+- name: Retry a transient HTTP 500 and download the file
+  get_curl:
+    url: "http://127.0.0.1:{{ retry_server_port }}/500-then-200"
+    dest: "{{ test_dir }}/recovered.txt"
+    tmp_dest: "{{ tmp_dir }}"
+    retries: 2
+  register: recovered_result
+
+- name: Exhaust retries for a persistent HTTP 500
+  get_curl:
+    url: "http://127.0.0.1:{{ retry_server_port }}/always-500"
+    dest: "{{ test_dir }}/always-500.txt"
+    tmp_dest: "{{ tmp_dir }}"
+    retries: 2
+  register: persistent_result
+  failed_when: false
+
+- name: Read retry test request counts
+  slurp:
+    src: "{{ test_dir }}/retry-counts.json"
+  register: retry_counts_file
+
+- name: Assert retry behavior
+  assert:
+    that:
+      - not_found_result.rc != 0
+      - recovered_result.changed
+      - persistent_result.rc != 0
+      - (retry_counts_file.content | b64decode | from_json)["/404"] == 1
+      - (retry_counts_file.content | b64decode | from_json)["/500-then-200"] == 2
+      - (retry_counts_file.content | b64decode | from_json)["/always-500"] == 3
+
+- name: Read the recovered download
+  slurp:
+    src: "{{ test_dir }}/recovered.txt"
+  register: recovered_content
+
+- name: Assert the recovered download is correct
+  assert:
+    that:
+      - recovered_content.content | b64decode == "success\n"

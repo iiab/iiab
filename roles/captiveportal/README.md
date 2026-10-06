@@ -13,13 +13,52 @@ _Please Also See: http://FAQ.IIAB.IO > ["Captive Portal Administration: What tip
     1. iiab-divert-to-nginx -- Bash script writes dnsmasq config file which points to IIAB server
     1. iiab-make-cp-servers.py -- Python script writes nginx configuration file to /etc/nginx/sites-enabled
     1. capture-wsgi.py -- the script which determines the client agent, records it in sqlite database, and responds with redirects as appropriate for each OS.
-    1. captiveportal.ini.j2 -- config file for uwsgi service, which in turn runs the capture-wsgi.py script.
-    1. uwsgi.service -- systemd unit file which runs python3 programs --permits captive portal and admin-console python scripts to function.
+    1. captiveportal.ini.j2 -- config file for the `uwsgi-app@captiveportal.service` instance, which runs the capture-wsgi.py script.
+    1. `uwsgi-app@captiveportal.service` and `uwsgi-app@captiveportal.socket` -- the distro-provided per-application systemd units for the Captive Portal.
     
+### uWSGI service and socket
+
+The `uwsgi-app@captiveportal.service` instance uses the instance name
+`captiveportal` to load `/etc/uwsgi/apps-available/captiveportal.ini`.
+The matching socket unit listens on
+`/run/uwsgi/captiveportal.socket`, and NGINX's generated Captive Portal
+configuration uses the native uWSGI protocol over that socket.
+
+The Captive Portal service uses the distro-provided uWSGI unit; IIAB does not
+override that unit's service user or hardening settings. The application
+writes its logs to stderr, which systemd captures in the journal. Service
+startup and application errors can be inspected with:
+
+    sudo journalctl -u uwsgi-app@captiveportal.service
+
+The service stores its client-state database as `users.sqlite` in
+`STATE_DIRECTORY` which distributions usually provide as
+`StateDirectory=uwsgi/%i`. For the `captiveportal` instance, that path is
+`/var/lib/uwsgi/captiveportal/users.sqlite`. If `STATE_DIRECTORY` is not
+available, including during direct runs, the script falls back to
+`/opt/iiab/captiveportal/users.sqlite`.
+
+When running `capture-wsgi.py` directly for debugging, it listens on TCP
+port `9090` by default. Override the port with `--port`, or set
+`CAPTIVE_PORTAL_PORT`; the command-line flag takes precedence. The systemd
+service does not use TCP.
+
+The Admin Console is a separate socket-activated uWSGI instance,
+`uwsgi-app@admin-console.service`, and listens on the Unix socket
+`/run/uwsgi/admin-console.socket`. Neither uWSGI instance uses TCP port
+`9090`; port `9091` is the Transmission web interface and is unrelated to
+either uWSGI instance.
+
  ## Extending and Debugging Captive Portal
  * Running the capture-wsgi.py python script interactively will expose any python errors easily. 
- * The python capture script can be run interactively in terminal rather than automatically by uwsgi -- (use "systemctl stop uwsgi" to free up the port used by captive portal: 9090). The uwsgi service for captive portal grabs port 9090, and two programs cannot share the same port. NOTE: that while the uwsgi service is stopped, the admin-console will not function).
- * Run the capture-wsgi.py with "-l" in a terminal to increase logging to /var/log/captiveportal/captiveportal.log
+ * The Python capture script can be run interactively instead of automatically by uWSGI. Stop the Captive Portal socket and service first:
+   `sudo systemctl stop uwsgi-app@captiveportal.socket uwsgi-app@captiveportal.service`
+   Stopping this instance does not stop the Admin Console instance.
+ * Run `capture-wsgi.py -v --port 9090` in a terminal for debug-level logging.
+   You can alternatively set `CAPTIVE_PORTAL_PORT=9090`. To also
+   write a rotating file log during direct debugging, pass
+   `--log-file /tmp/captiveportal.log` or set
+   `CAPTIVE_PORTAL_LOG_FILE=/tmp/captiveportal.log`.
  * To discover untrapped urls, "apt-get install tcpdump", and "tcpdump -i br0 capture.tcp". I transfer this file to a machine with a GUI, and wireshark to interpret the conversations on the wire. The DNS packets are the ones to look for.
  
  ## Known Problems

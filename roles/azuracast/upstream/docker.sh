@@ -76,7 +76,7 @@ __dotenv_cmd=.env
 .env.generate() {
   .env::arg "key required for generate" "$@" || return
   .env.get "$1" && return || REPLY=$("${@:2}") || return
-  .env::one "generate: ouptut of '${*:2}' has more than one line" "$REPLY" || return
+  .env::one "generate: output of '${*:2}' has more than one line" "$REPLY" || return
   .env.puts "$1=$REPLY"
 }
 
