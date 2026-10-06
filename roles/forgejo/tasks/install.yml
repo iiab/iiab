@@ -1,3 +1,12 @@
+- name: Assert forgejo_db_engine is a supported value ('sqlite' or 'mariadb')
+  assert:
+    that: forgejo_db_engine in ['sqlite', 'mariadb']
+    fail_msg: >-
+      forgejo_db_engine='{{ forgejo_db_engine }}' is not supported — use 'sqlite' or 'mariadb'.
+      Any other value would silently fall back to SQLite and bypass the engine-change
+      guard, orphaning an existing database.
+    quiet: true
+
 - name: Record (initial) disk space used
   shell: df -B1 --output=used / | tail -1
   register: df1
@@ -124,11 +133,14 @@
     dest: "{{ forgejo_asc_path }}"
     timeout: "{{ download_timeout }}"
 
-- name: Verify Forgejo binary with GPG signature (best-effort, non-fatal like the gitea role)
+- name: Verify the downloaded Forgejo binary against its GPG signature (fail closed)
+  # This binary becomes a long-running network service, so a bad or unverifiable
+  # signature must stop the install rather than continue silently. 'set -e' makes the
+  # task fail if the key cannot be fetched OR the signature does not verify.
   shell: |
+    set -e
     gpg --keyserver keys.openpgp.org --recv {{ forgejo_gpg_key }}
     gpg --verify {{ forgejo_asc_path }} {{ forgejo_install_path }}
-  ignore_errors: yes
 
 - name: Symlink {{ forgejo_link_path }} -> {{ forgejo_install_path }}
   file:
