@@ -78,11 +78,15 @@ def opds_link_to_book_attrs(link, attributes):
         if length.isdigit():
             attributes['size'] = str(int(length) >> 10) # OPDS is bytes, classic book records are KiB
     elif rel == KIWIX_OPDS_THUMBNAIL_REL:
-        attributes['faviconMimeType'] = link.attrib.get('type', '').split(';')[0]
+        # Prefer the inline base64 favicon over a URL, and never mix fields
+        # if an entry should carry more than one thumbnail link
         if href.startswith('data:') and 'base64,' in href:
             attributes['favicon'] = href.split('base64,', 1)[1] # same bare base64 as classic book records
-        else:
+            attributes.pop('faviconUrl', None)
+            attributes['faviconMimeType'] = link.attrib.get('type', '').split(';')[0]
+        elif 'favicon' not in attributes:
             attributes['faviconUrl'] = href
+            attributes['faviconMimeType'] = link.attrib.get('type', '').split(';')[0]
 
 def opds_entry_to_book_attrs(entry):
     '''
