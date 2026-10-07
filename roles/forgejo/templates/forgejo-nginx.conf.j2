@@ -1,0 +1,24 @@
+# Reverse proxy for Forgejo at http://box{{ forgejo_url }}
+# Installed by roles/forgejo (tasks/enable-or-disable.yml) into nginx conf.d.
+
+location = {{ forgejo_url }} {
+    return 302 {{ forgejo_url }}/;
+}
+
+location {{ forgejo_url }}/ {
+    proxy_pass http://127.0.0.1:{{ forgejo_port }}/;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+
+    # Large-repo tuning: allow big clone/push (e.g. CodeOnTheGo ~1.2 GB).
+    # nginx default client_max_body_size is 1m, which would fail large pushes.
+    client_max_body_size 0;
+    proxy_request_buffering off;
+    # Keep the proxy timeout >= Forgejo's [git.timeout] MIGRATE, else nginx drops a
+    # long migrate/clone mid-flight and Forgejo rolls the partial repo back. The +300s
+    # margin keeps Forgejo's own timeout authoritative (clean abort, not an nginx 504).
+    proxy_read_timeout {{ forgejo_migrate_timeout + 300 }}s;
+    proxy_send_timeout {{ forgejo_migrate_timeout + 300 }}s;
+}
