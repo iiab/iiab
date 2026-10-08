@@ -102,6 +102,18 @@
               DATA_KEYS.HILLSHADE,
             ])
 
+            // Since we have multiple dataKeys that perform the same function
+            // (ex: IIAB Satellite and s2maps), and since have no reason to use
+            // both at the same time in the same region or world map, for
+            // convenience we will organize region pmtiles files by "category"
+            const DATA_KEY_CATEGORIES = {
+              [DATA_KEYS.IIABSAT]: "satellite",
+              [DATA_KEYS.S2]: "satellite",
+              [DATA_KEYS.OSM]: "vector",
+              [DATA_KEYS.NE]: "vector",
+              [DATA_KEYS.TERRARIUM]: "terrain",
+            }
+
             /****************
              *    configs   *
              ****************/
@@ -146,7 +158,8 @@
             // MapLibre sources have IDs and URLs. For FQRs we use the ID to generate the URL,
             // which is why it looks sort of like a URL path.
             // Make sure this matches get_extract_dir and get_new_extract_paths in tile-extract.py
-            const makeFqrSourceId = (fqrName, baseId, dataDate) => dataDate ? `${fqrName}.fqr/${baseId}.${dataDate}` : null
+            const makeFqrSourceId = (fqrName, dataKey) => `${fqrName}.${dataKey}`
+            const makeFqrLayerId = (fqrName, dataKey, worldLayerId) => `${fqrName}.${dataKey}.${worldLayerId}`
 
             // we want style choice to survive the map reset that happens when a maps.black
             // feature or style changes, so we rely on this instead of the select tag value
@@ -190,49 +203,43 @@
                         // to be the bottom layers. This is because the world vector may in some cases be
                         // on top of an FQR satellite in hybrid mode.
                         Object.keys(downloadedFQRegions.regions).forEach(fqrName => {
-                            const pmtilesDates = downloadedFQRegions.regions[fqrName].dates
+                            const region = downloadedFQRegions.regions[fqrName]
 
-                            const satelliteFqrId = (
-                              makeFqrSourceId(fqrName, DATA_KEYS.IIABSAT, pmtilesDates[DATA_KEYS.IIABSAT]) ||
-                              makeFqrSourceId(fqrName, DATA_KEYS.S2, pmtilesDates[DATA_KEYS.S2])
-                            )
-                            const vectorFqrId = makeFqrSourceId(fqrName, DATA_KEYS.OSM, pmtilesDates[DATA_KEYS.OSM])
-                            const terrainFqrId = makeFqrSourceId(fqrName, DATA_KEYS.TERRARIUM, pmtilesDates[DATA_KEYS.TERRARIUM])
-                            const hillshadeFqrId = makeFqrSourceId(fqrName, DATA_KEYS.HILLSHADE, pmtilesDates[DATA_KEYS.TERRARIUM])
-                            const backgroundLayerId = "background"
+                            const hillshadeFqrId = makeFqrSourceId(fqrName, DATA_KEYS.HILLSHADE)
+                            const BACKGROUND_LAYER_ID = "background"
 
                             // Make an FQR version of each source
                             worldMapSourceIds.forEach(worldSourceId => {
                                 if (worldSourceId === DATA_KEYS.S2) {
-                                    if (satelliteFqrId) {
-                                        style.sources[satelliteFqrId] = {
+                                    if (region.pmtilesFiles.satellite) {
+                                        style.sources[region.pmtilesFiles.satellite.sourceId] = {
                                             ...style.sources[DATA_KEYS.S2],
-                                            url: style.sources[DATA_KEYS.S2].url.replace(DATA_KEYS.S2, satelliteFqrId),
-                                            bounds: downloadedFQRegions.regions[fqrName].render_bounds,
+                                            url: pmtilesUrl(region.pmtilesFiles.satellite.url),
+                                            bounds: region.render_bounds,
                                             minzoom: WORLD_MAP_SATELLITE_MAX_ZOOM + 1
                                         }
                                     }
                                 } else if (worldSourceId === DATA_KEYS.OSM) {
-                                    if (vectorFqrId) {
-                                        style.sources[vectorFqrId] = {
+                                    if (region.pmtilesFiles.vector) {
+                                        style.sources[region.pmtilesFiles.vector.sourceId] = {
                                             ...style.sources[DATA_KEYS.OSM],
-                                            url: style.sources[DATA_KEYS.OSM].url.replace(DATA_KEYS.OSM, vectorFqrId),
-                                            bounds: downloadedFQRegions.regions[fqrName].render_bounds,
+                                            url: pmtilesUrl(region.pmtilesFiles.vector.url),
+                                            bounds: region.render_bounds,
                                             minzoom: WORLD_MAP_VECTOR_MAX_ZOOM + 1
                                         }
                                     }
                                 } else if (worldSourceId === DATA_KEYS.TERRARIUM) {
-                                    if (terrainFqrId) {
-                                        style.sources[terrainFqrId] = {
+                                    if (region.pmtilesFiles.terrain) {
+                                        style.sources[region.pmtilesFiles.terrain.sourceId] = {
                                             ...style.sources[DATA_KEYS.TERRARIUM],
-                                            url: style.sources[DATA_KEYS.TERRARIUM].url
-                                                .replace(DATA_KEYS.TERRARIUM, terrainFqrId)
-                                                .replace(/\-z0\-z10\.pmtiles$/, '.pmtiles'),
-                                            bounds: downloadedFQRegions.regions[fqrName].render_bounds,
+                                            url: pmtilesUrl(region.pmtilesFiles.terrain.url),
+                                            bounds: region.render_bounds,
                                             minzoom: WORLD_MAP_TERRAIN_MAX_ZOOM + 1
                                         }
-                                        if (hillshadeFqrId) {
-                                            style.sources[hillshadeFqrId] = style.sources[terrainFqrId]
+                                        if (style.sources[DATA_KEYS.HILLSHADE]) {
+                                            // Only add FQR hillshade if there is a world map hillshade as well
+                                            // (I think some styles don't call for it)
+                                            style.sources[hillshadeFqrId] = style.sources[region.pmtilesFiles.terrain.sourceId]
                                         }
                                     }
                                 } else if (worldSourceId === DATA_KEYS.NE6) {
@@ -245,35 +252,35 @@
                             // Make an FQR version of each layer
                             worldMapLayers.map(worldLayer => {
                                 if (worldLayer.source === DATA_KEYS.S2) {
-                                    if (satelliteFqrId) {
+                                    if (region.pmtilesFiles.satellite) {
                                         return {
-                                            ...worldLayer,
-                                            id: satelliteFqrId + '.' + worldLayer.id,
-                                            source: satelliteFqrId,
+                                          ...worldLayer,
+                                          id: makeFqrLayerId(fqrName, region.pmtilesFiles.satellite.dataKey, worldLayer.id),
+                                          source: region.pmtilesFiles.satellite.sourceId,
                                         }
                                     }
                                 } else if (worldLayer.source === DATA_KEYS.OSM) {
                                     // This is unrelated to copying FQR layers. It could be in a different loop.
                                     worldMapOSMLayers.add(worldLayer.id)
 
-                                    if (vectorFqrId) {
+                                    if (region.pmtilesFiles.vector) {
                                         return {
-                                            ...worldLayer,
-                                            id: vectorFqrId + '.' + worldLayer.id,
-                                            source: vectorFqrId,
+                                          ...worldLayer,
+                                          id: makeFqrLayerId(fqrName, region.pmtilesFiles.vector.dataKey, worldLayer.id),
+                                          source: region.pmtilesFiles.vector.sourceId,
                                         }
                                     }
                                 } else if (worldLayer.source === DATA_KEYS.HILLSHADE) {
-                                    if (hillshadeFqrId) {
+                                    if (region.pmtilesFiles.terrain) {
                                         return {
-                                            ...worldLayer,
-                                          id: hillshadeFqrId + '.' + worldLayer.id,
+                                          ...worldLayer,
+                                          id: makeFqrLayerId(fqrName, region.pmtilesFiles.terrain.dataKey, worldLayer.id),
                                           source: hillshadeFqrId,
                                         }
                                     }
                                 } else if (worldLayer.source === DATA_KEYS.NE6) {
                                     // pass, only world map
-                                } else if (worldLayer.id === backgroundLayerId) {
+                                } else if (worldLayer.id === BACKGROUND_LAYER_ID) {
                                     // pass, only world map (note that we're testing the *layer id* here; there is no source used)
                                 } else {
                                     console.warn(`Unhandled world map layer for ${fqrName}: ${worldLayer}`)
@@ -659,11 +666,7 @@
                         // awkward situation to be looking at multiple regions,
                         // so take the first one (which is the closest to the
                         // map center, see sorting above)
-                        return makeFqrSourceId(
-                          regionsOnScreen[0],
-                          DATA_KEYS.TERRARIUM,
-                          downloadedFQRegions.regions[regionsOnScreen[0]].dates[DATA_KEYS.TERRARIUM],
-                        )
+                        return downloadedFQRegions.regions[regionsOnScreen[0]].pmtilesFiles.terrain.sourceId
                     }
                     if (WORLD_MAP_TERRAIN_MAX_ZOOM > 0) {
                         // If no FQRs are on screen and we have a world map terrain, return to it
@@ -678,7 +681,7 @@
                     if (fqRegionsExist()) {
                         // If no FQRs are on screen, and we have no world map terrain, and no terrain is
                         // currently loaded, (probably initializing) just pick an arbitrary FQR to start with.
-                        return Object.keys(downloadedFQRegions.regions)[0]
+                        return Object.values(downloadedFQRegions.regions)[0].pmtilesFiles.terrain.sourceId
                     }
                     // If we have no FQRs at all, and we have no world map terrain, report a bug because
                     // terrain should never be turned on in this case. And then, pick
@@ -736,14 +739,10 @@
                 const regionsOffScreenSet = regionsSet.difference(regionsOnScreenSet)
 
                 // TODO
-                //   Define a func makeFqrLayerId next to makeFqrSourceId that's does something like this:
-                //     (worldLayerId, regionName, ...) => makeFqrSourceId(regionName, ...) + '.' + worldLayerId
-                //   Use it where we define the layer ID. But also use it here. Something like:
-                //
                 //   regions(On/Off)ScreenSet.forEach(regionName => {
                 //     worldMapOSMLayers.forEach(worldLayerId => {
                 //       mb.map.setLayoutProperty(
-                //         makeFqrLayerId(worldLayerId, regionName, ...), "visibility", "visible" / "none"
+                //         makeFqrLayerId(regionName, DATAKEY.OSM, worldLayerId), "visibility", "visible" / "none"
                 //       )
                 //     }
                 //   }
@@ -857,8 +856,9 @@
                     mb.licenses.search = geocoderAlternatives[MAP_SEARCH_ENGINE].licenses
                 }
 
-                // region.dates will directly say if the source is used (assuming the currently displayed mapstyle calls for it)
-                const fqrHasSource = key => Object.values(downloadedFQRegions.regions).some(r => key in r.dates)
+                // Does *any* FQR use the given dataKey?
+                const regions = Object.values(downloadedFQRegions.regions)
+                const fqrHasSource = dataKey => Object.values(downloadedFQRegions.regions).some(r => r.dataKeys.includes(dataKey))
 
                 // maps.black.js adds the s2maps and osm licenses based on whether the mapstyle requires it, irrespective of whether the pmtiles
                 // file is altogether missing.
@@ -871,7 +871,7 @@
                         delete mb.licenses.data[DATA_KEYS.S2]
                     }
 
-                    // If either FQRs or world map are using IIAB Satellite, add the attribution
+                    // If world map is using Natural Earth vector, add the attribution (FQRs don't use it)
                     if (fqrHasSource(DATA_KEYS.IIABSAT) || WORLD_MAP_SATELLITE_IS_IIAB) {
                         mb.licenses.data[DATA_KEYS.IIABSAT] = IIAB_SATELLITE_LICENSE
                     }
@@ -912,19 +912,126 @@
                 }
             }
 
+            const homeDirListPromise = getJson('/maps/data/', true)
+
+            function warnIncompleteRegion(pmtilesFiles, fqrName) {
+                const warning = "Missing data file"
+                if (!pmtilesFiles.satellite) {
+                    newDataFileAlert({
+                      fqrName,
+                      warning,
+                      message: "No valid satellite pmtiles file ('s2maps-sentinel2-2023' or 'iiab-sentinel2') found",
+                    })
+                }
+                if (!pmtilesFiles.vector) {
+                    newDataFileAlert({
+                      fqrName,
+                      warning,
+                      message: "No valid vector pmtiles file ('openstreetmap-openmaptiles') found",
+                    })
+                }
+                if (!pmtilesFiles.terrain) {
+                    newDataFileAlert({
+                      fqrName,
+                      warning,
+                      message: "No valid terrain pmtiles file ('terrarium') found",
+                    })
+                }
+            }
+
+            // For normal requests
+            const mapsUrl = path => `/maps/${path}`
+            const regionUrl = (regionName, fileName) => mapsUrl(`${regionName}.fqr/${fileName}`)
+            const regionMetaUrl = regionName => regionUrl(regionName, "meta.json")
+            const regionListingUrl = regionName => mapsUrl(`/data/${regionName}.fqr`) // listing needs the /data/ part
+
+            // For maps.black's sources setup. Formatted in the same way that maps.black does it.
+            const pmtilesUrl = path => `pmtiles://${window.location.origin}/${path}`
+
+            function parsePmtilesFileNames(listing, validDataKeys, parseFileName) {
+                return listing.map(entry => {
+                    if (entry.type !== "file") {
+                            return
+                    }
+
+                    const {dataKey, date, extension, rest} = parseFileName(entry.name)
+                    if (
+                      validDataKeys.has(dataKey)                                  &&
+                      date.match(/^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]$/)  &&
+                      extension === "pmtiles"                                     &&
+                      rest.length === 0
+                    ) {
+                        return {
+                          dataKey,
+                          date,
+                          fileName: entry.name,
+                      }
+                    }
+                })
+                .filter(Boolean)      // remove anything that isn't a properly formatted pmtiles file name
+            }
+
+            // Preferred files first (more recent date, etc)
+            function pmtilesPreferenceSort(a, b) {
+                const cmpNewest = b.date.localeCompare(a.date)
+
+                // We prefer DATA_KEYS.IIABSAT to come before DATA_KEYS.S2 so we just sort it before everything else
+                const cmpIIAB = (b.dataKey === DATA_KEYS.IIABSAT) - (a.dataKey === DATA_KEYS.IIABSAT)
+
+                // Each comparison returns 1, 0, or -1. -1 still counts as non-zero for
+                // the || operator, so this implements our preference.
+                return (cmpNewest || cmpIIAB)
+            }
+
+            function validateMeta(regionName, meta) {
+                // some basic checks
+                if (!meta.bbox || meta.bbox.length != 4) {
+                    newDataFileAlert({
+                      fqrName: regionName,
+                      error: "Can't display this region",
+                      message: "Formatting error in meta.json: expecting bbox to be an array of four numbers.",
+                    })
+                    return false
+                }
+                if (meta.bbox[0] > 180 || meta.bbox[0] < -180 || meta.bbox[2] > 180 || meta.bbox[2] < -180) {
+                    newDataFileAlert({
+                      fqrName: regionName,
+                      error: "Can't display this region",
+                      message: "Error in meta.json: expecting bbox latitudes to be between -180 and 180.",
+                    })
+                    return false
+                }
+                if (meta.bbox[1] > 90 || meta.bbox[1] < -90 || meta.bbox[3] > 90 || meta.bbox[3] < -90) {
+                    newDataFileAlert({
+                      fqrName: regionName,
+                      error: "Can't display this region",
+                      message: "Error in meta.json: expecting bbox longitudes to be between -90 and 90.",
+                    })
+                    return false
+                }
+                if (meta.bbox[1] > meta.bbox[3]) {
+                    newDataFileAlert({
+                      fqrName: regionName,
+                      error: "Can't display this region",
+                      message: "Error in meta.json: bbox latitudes are out of order.",
+                    })
+                    return false
+                }
+                return true
+            }
+
             let fqRegionsControl
             let downloadedFQRegions = null;
 
             const fqrLoaded = () => !!downloadedFQRegions
 
             async function setFQRegions() {
-                const [dirList, error] = await getJson('/maps/data/', true)
+                const [dirList, error] = await homeDirListPromise
                 if (error) {
                     downloadedFQRegions = {error: true, regions: {}}
                     console.error("Failed to load Full Quality Regions:", error)
                     return
                 }
-
                 regionNames = dirList
                     .filter(entry => entry.type === "directory" && entry.name.endsWith('.fqr'))
                     .map(entry => entry.name.slice(0, -4))
@@ -932,7 +1039,7 @@
                     regionNames.map(async regionName => {
                         const metaPromise = (async () => {
                             // Should we cache this? It will change less often, presumably, than a given FQR's bbox. Not impossible though.
-                            const [meta, error] = await getJson(`/maps/data/${regionName}.fqr/meta.json`, false)
+                            const [meta, error] = await getJson(`${regionMetaUrl(regionName)}`, false)
                             if (error) {
                                 if (error.isNotFound) {
                                     // TODO nov 2026 or so we can remove "recent IIAB update". This
@@ -963,7 +1070,7 @@
 
                         const listingPromise = (async () => {
                             // Not going to cache because updating FQR data we hope is not so uncommon.
-                            const [listing, error] = await getJson(`/maps/data/${regionName}.fqr`, true)
+                            const [listing, error] = await getJson(regionListingUrl(regionName), true)
                             if (error) {
                                 console.error(`Failed to load Full Quality Region file listing: ${regionName}:`, error)
                                 return
@@ -987,73 +1094,53 @@
                       .map(res=>res.value)  // [regionName, {meta, listing}] (see above)
                       .filter(Boolean)      // remove errors in getting meta or listing
                       .map(([regionName, {meta, listing}]) => {
-                          // some basic checks
-                          if (!meta.bbox || meta.bbox.length != 4) {
-                              newDataFileAlert({
-                                fqrName: regionName,
-                                error: "Can't display this region",
-                                message: "Formatting error in meta.json: expecting bbox to be an array of four numbers.",
-                              })
-                              return
-                          }
-                          if (meta.bbox[0] > 180 || meta.bbox[0] < -180 || meta.bbox[2] > 180 || meta.bbox[2] < -180) {
-                              newDataFileAlert({
-                                fqrName: regionName,
-                                error: "Can't display this region",
-                                message: "Error in meta.json: expecting bbox latitudes to be between -180 and 180.",
-                              })
-                              return
-                          }
-                          if (meta.bbox[1] > 90 || meta.bbox[1] < -90 || meta.bbox[3] > 90 || meta.bbox[3] < -90) {
-                              newDataFileAlert({
-                                fqrName: regionName,
-                                error: "Can't display this region",
-                                message: "Error in meta.json: expecting bbox longitudes to be between -90 and 90.",
-                              })
-                              return
-                          }
-                          if (meta.bbox[1] > meta.bbox[3]) {
-                              newDataFileAlert({
-                                fqrName: regionName,
-                                error: "Can't display this region",
-                                message: "Error in meta.json: bbox latitudes are out of order.",
-                              })
+                          if (!validateMeta(regionName, meta)) {
                               return
                           }
 
-                          const dates = {}
+                          const pmtilesFiles = {}
 
-                          // Each valid pmtiles file in an FQR has the format:
-                          //
-                          // [dataKey].[date].pmtiles
-                          //
-                          // Let's identify all of them and sort them by date. That way,
-                          // if we have multiple pmtiles for a given dataKey (a
-                          // botched FQR update, etc), the latest one always ends up in `dates`.
-                          listing.map(entry => {
-                              if (entry.type !== "file") {
-                                      return
-                              }
+                          parsePmtilesFileNames(listing, FQR_FILE_DATA_KEYS, fileName => {
+                              // Each valid pmtiles file in an FQR has the format:
+                              //
+                              // [dataKey].[date].pmtiles
+                              const [dataKey, date, extension, ...rest] = fileName.split(".")
+                              return {dataKey, date, extension, rest}
+                          })
+                          .sort(pmtilesPreferenceSort)
+                          .map(({dataKey, date, fileName}) => ({
+                              dataKey,
+                              date,
+                              fileName,
+                              url: regionUrl(regionName, fileName),
+                              sourceId: makeFqrSourceId(regionName, dataKey),
+                          }))
+                          .forEach(({dataKey, date, fileName, url, sourceId}) => {
+                              // Note that the "category" makes sure that the FQR only has one satellite source, even
+                              // if both DATA_KEYS.IIABSAT and DATA_KEYS.S2 are found in the directory.
+                              // "vector", "satellite", or "terrain"
+                              const category = DATA_KEY_CATEGORIES[dataKey]
 
-                              const [dataKey, date, pmtiles, ...rest] = entry.name.split(".")
-                              if (
-                                FQR_FILE_DATA_KEYS.has(dataKey)                             &&
-                                date.match(/^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]$/)  &&
-                                pmtiles === "pmtiles"                                       &&
-                                !rest.length
-                              ) {
-                                  return {dataKey, date}
+                              if (category in pmtilesFiles) {
+                                  // pmtilesPreferenceSort puts our preferred files (older, IIABSAT > S2) first, so if
+                                  // there's already something added for this dataKey it has higher priority.
+                                  newDataFileAlert({
+                                    fqrName: regionName,
+                                    error: `Extra pmtiles file for ${category}`,
+                                    message: `This Full Quality Region contains an unused pmtiles file: ${fileName}`,
+                                  })
+                              } else {
+                                  pmtilesFiles[category] = {dataKey, url, sourceId}
                               }
                           })
-                          .filter(Boolean)      // remove anything that isn't a properly formatted pmtiles file name
-                          .sort((a, b) => a.date.localeCompare(b.date))
-                          .forEach(({dataKey, date}) => {
-                              dates[dataKey] = date
-                          })
+
+                          // For convenience
+                          const dataKeys = Object.values(pmtilesFiles).map(({dataKey}) => dataKey)
 
                           const fqrData = meta.bbox[0] <= meta.bbox[2] ? {
                             // if we're not crossing the antimeridian, `ui_bounds` and `render_bounds` are the same as `bbox`
-                            dates,
+                            pmtilesFiles,
+                            dataKeys,
                             bbox: meta.bbox,
                             ui_bounds: meta.bbox,
                             render_bounds: meta.bbox,
@@ -1061,7 +1148,8 @@
                             // if we are crossing the antimeridian, `ui_bounds` should add 360 to the east so that
                             // east > west, and `render_bounds` should be the entire width of the world because
                             // it's actually two partial regions on opposite sides of the map
-                            dates,
+                            pmtilesFiles,
+                            dataKeys,
                             bbox: meta.bbox,
                             ui_bounds: [meta.bbox[0], meta.bbox[1], meta.bbox[2] + 360, meta.bbox[3]],
                             render_bounds: [-179.99999999, meta.bbox[1], 180, meta.bbox[3]],
@@ -1071,29 +1159,8 @@
                       .filter(Boolean)      // remove errors in finishing setting up the region
                 )}
                 for (regionName in downloadedFQRegions.regions) {
-                    const pmtilesDates = downloadedFQRegions.regions[regionName].dates
-
-                    if (!pmtilesDates[DATA_KEYS.IIABSAT] && !pmtilesDates[DATA_KEYS.S2]) {
-                        newDataFileAlert({
-                          fqrName: regionName,
-                          warning: "Incomplete region",
-                          message: "No valid satellite pmtiles file ('s2maps-sentinel2-2023' or 'iiab-sentinel2') found",
-                        })
-                    }
-                    if (!pmtilesDates[DATA_KEYS.OSM]) {
-                        newDataFileAlert({
-                          fqrName: regionName,
-                          warning: "Incomplete region",
-                          message: "No valid vector pmtiles file ('openstreetmap-openmaptiles') found",
-                        })
-                    }
-                    if (!pmtilesDates[DATA_KEYS.TERRARIUM]) {
-                        newDataFileAlert({
-                          fqrName: regionName,
-                          warning: "Incomplete region",
-                          message: "No valid terrain pmtiles file ('terrarium') found",
-                        })
-                    }
+                    const pmtilesFiles = downloadedFQRegions.regions[regionName].pmtilesFiles
+                    warnIncompleteRegion(pmtilesFiles, regionName)
                 }
             }
             setFQRegions()
