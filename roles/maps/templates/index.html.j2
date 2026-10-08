@@ -192,7 +192,7 @@
                         // Grab the sources and layers as they are so we can replicate them in FQRs
                         const worldMapLayers = [...style.layers]
                         worldMapOSMLayers = new Set()
-                        const worldMapSourceIds = Object.keys(style.sources)
+                        const activeWorldMapSourceIds = Object.keys(style.sources)
 
                         // Create FQR sources and layers by copying the same from the world map.
                         // Order of layers matters. We want the FQR layers to be after the world map layers
@@ -206,45 +206,37 @@
                             const region = downloadedFQRegions.regions[fqrName]
 
                             const hillshadeFqrId = makeFqrSourceId(fqrName, DATA_KEYS.HILLSHADE)
-                            const BACKGROUND_LAYER_ID = "background"
+                            const BACKGROUND_LAYER_ID = "background";
 
-                            // Make an FQR version of each source
-                            worldMapSourceIds.forEach(worldSourceId => {
-                                if (worldSourceId === DATA_KEYS.S2) {
-                                    if (region.pmtilesFiles.satellite) {
-                                        style.sources[region.pmtilesFiles.satellite.sourceId] = {
-                                            ...style.sources[DATA_KEYS.S2],
-                                            url: pmtilesUrl(region.pmtilesFiles.satellite.url),
-                                            bounds: region.render_bounds,
-                                            minzoom: WORLD_MAP_SATELLITE_MAX_ZOOM + 1
-                                        }
+                            // For each currently active world map source, make a corresponding FQR source
+                            ([
+                              [DATA_KEYS.S2, WORLD_MAP_SATELLITE_MAX_ZOOM],
+                              [DATA_KEYS.OSM, WORLD_MAP_VECTOR_MAX_ZOOM],
+                              [DATA_KEYS.TERRARIUM, WORLD_MAP_TERRAIN_MAX_ZOOM],
+                            ]).forEach(([worldSourceId, worldMaxZoom]) => {
+                                // "vector", "satellite", or "terrain"
+                                const category = DATA_KEY_CATEGORIES[worldSourceId]
+                                const fqrPmtilesFile = region.pmtilesFiles[category]
+
+                                if (fqrPmtilesFile && activeWorldMapSourceIds.includes(worldSourceId)) {
+                                    style.sources[fqrPmtilesFile.sourceId] = {
+                                        ...style.sources[worldSourceId],
+                                        url: pmtilesUrl(fqrPmtilesFile.url),
+                                        bounds: region.render_bounds,
+                                        minzoom: worldMaxZoom + 1
                                     }
-                                } else if (worldSourceId === DATA_KEYS.OSM) {
-                                    if (region.pmtilesFiles.vector) {
-                                        style.sources[region.pmtilesFiles.vector.sourceId] = {
-                                            ...style.sources[DATA_KEYS.OSM],
-                                            url: pmtilesUrl(region.pmtilesFiles.vector.url),
-                                            bounds: region.render_bounds,
-                                            minzoom: WORLD_MAP_VECTOR_MAX_ZOOM + 1
-                                        }
-                                    }
-                                } else if (worldSourceId === DATA_KEYS.TERRARIUM) {
-                                    if (region.pmtilesFiles.terrain) {
-                                        style.sources[region.pmtilesFiles.terrain.sourceId] = {
-                                            ...style.sources[DATA_KEYS.TERRARIUM],
-                                            url: pmtilesUrl(region.pmtilesFiles.terrain.url),
-                                            bounds: region.render_bounds,
-                                            minzoom: WORLD_MAP_TERRAIN_MAX_ZOOM + 1
-                                        }
-                                        if (style.sources[DATA_KEYS.HILLSHADE]) {
-                                            // Only add FQR hillshade if there is a world map hillshade as well
-                                            // (I think some styles don't call for it)
-                                            style.sources[hillshadeFqrId] = style.sources[region.pmtilesFiles.terrain.sourceId]
-                                        }
-                                    }
-                                } else if (worldSourceId === DATA_KEYS.NE6) {
-                                    // pass, only world map
-                                } else {
+                                }
+                            })
+
+                            // For world map, Hillshade isn't a copy of the struct, it's another pointer to the
+                            // same struct. So, we'll do the same for FQRs.
+                            if (region.pmtilesFiles.terrain && activeWorldMapSourceIds.includes(DATA_KEYS.HILLSHADE)) {
+                                style.sources[hillshadeFqrId] = style.sources[region.pmtilesFiles.terrain.sourceId]
+                            }
+
+                            // In case of updating maps.black or something, make sure we didn't miss any new sources.
+                            activeWorldMapSourceIds.forEach(worldSourceId => {
+                                if (!WORLD_SOURCE_DATA_KEYS.has(worldSourceId)) {
                                     console.warn(`Unhandled world map source for ${fqrName}: ${worldSourceId}`)
                                 }
                             })
