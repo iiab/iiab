@@ -80,7 +80,7 @@ install -d -m 0755 "${DEST_PDSM_SAVAIL}"
 install -d -m 0755 "${DEST_PDSM_SENABLED}"
 
 
-log "Proceding to install / update scripts to the latest available."
+log "Proceeding to install / update scripts to the latest available."
 echo "> Please note that custom changes will be overwritten <"
 
 # Install profile.d script
