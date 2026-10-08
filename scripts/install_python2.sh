@@ -25,7 +25,7 @@ ARCH=$(dpkg --print-architecture)
 # us with /usr/bin/virtualenv 20.23 once again, i.e. preventing Python 2.
 # Whereas pip (which installs /usr/local/bin/virtualvenv) at least works:
 #
-#iif grep -qi ubuntu /etc/os-release; then    # Ubuntu 23.10+ (and Mint 22+ ?) needs this.  Ubuntu 23.04 tolerates it.
+#if grep -qi ubuntu /etc/os-release; then    # Ubuntu 23.10+ (and Mint 22+ ?) needs this.  Ubuntu 23.04 tolerates it.
 #    apt -y install python3-pip
 #    pip install virtualenv==20.21.1 --break-system-packages
 #else
