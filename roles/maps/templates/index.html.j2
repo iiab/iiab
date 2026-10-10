@@ -37,6 +37,22 @@
             const STYLE_SATELLITE = "satellite"
             const STYLE_HYBRID = "hybrid"
 
+            const VALID_STYLES = [
+              STYLE_NATURAL,
+              STYLE_POLITICAL,
+              STYLE_SATELLITE,
+              STYLE_HYBRID,
+            ]
+
+            const noUndefinedKeys = obj => new Proxy(obj, {
+                // One point of these constants is to avoid mistakes, so let's
+                // make it throw an error if we access a nonexistent property.
+                get(target, property) {
+                    if (!(property in target)) throw new Error(`Invalid data key: ${property}`)
+                    return target[property]
+                }
+            })
+
             // Appropriating maps.black's term, "dataKey", to refer to these identifiers and
             // substrings that show up in various places. They are used to identify a file or a source.
             //
@@ -45,7 +61,7 @@
             // ID. We could fix this last part but it would require hacking maps.black some more.) All
             // the same, there is an overarching theme that is implied by these names so let's initially
             // define them here.
-            const DATA_KEYS = new Proxy({
+            const DATA_KEYS = noUndefinedKeys({
               OSM: "openstreetmap-openmaptiles",
               TERRARIUM: "terrarium",
               HILLSHADE: "hillshade",
@@ -53,23 +69,21 @@
               NE6: "naturalearth6-NE2_HR_SR_W_DR-WEBP",
               S2: "s2maps-sentinel2-2023",
               IIABSAT: 'iiab-sentinel2',
-            }, {
-              // One point of these constants is to avoid mistakes, so let's
-              // make it throw an error if we access a nonexistent property.
-              get(target, property) {
-                  if (!(property in target)) throw new Error(`Invalid data key: ${property}`)
-                  return target[property]
-              }
             })
 
-            // Which data keys are used for world map file name segments?
-            // "NE" is not going to be one of them so long as we have
-            // symlinks pointing from the DATA_KEYS.OSM file to the
-            // DATA_KEYS.NE file.
-            const WORLD_FILE_DATA_KEYS = new Set([
+            // Which data keys are used for world map file name segments,
+            // which the implementer can configure (other than CI and testing)?
+            const WORLD_FILE_CONFIGURABLE_DATA_KEYS = new Set([
               DATA_KEYS.OSM,
+              DATA_KEYS.NE,
               DATA_KEYS.TERRARIUM,
               DATA_KEYS.S2,
+              DATA_KEYS.IIABSAT,
+            ])
+
+            // Which data keys are used for world map file name segments,
+            // which only CI and testing are meant to configure?
+            const WORLD_FILE_NONCONFIGURABLE_DATA_KEYS = new Set([
               DATA_KEYS.NE6,
             ])
 
@@ -106,15 +120,22 @@
             // (ex: IIAB Satellite and s2maps), and since have no reason to use
             // both at the same time in the same region or world map, for
             // convenience we will organize region pmtiles files by "category"
-            const DATA_KEY_CATEGORIES = {
-              [DATA_KEYS.IIABSAT]: "satellite",
-              [DATA_KEYS.S2]: "satellite",
-              [DATA_KEYS.OSM]: "vector",
-              [DATA_KEYS.NE]: "vector",
-              [DATA_KEYS.TERRARIUM]: "terrain",
+            const DATA_KEY_CATEGORIES = noUndefinedKeys({
+              SATELLITE: "satellite",
+              VECTOR: "vector",
+              TERRAIN: "terrain",
+            })
+
+            const CATEGORY_FOR_DATA_KEY = {
+              [DATA_KEYS.IIABSAT]: DATA_KEY_CATEGORIES.SATELLITE,
+              [DATA_KEYS.S2]: DATA_KEY_CATEGORIES.SATELLITE,
+              [DATA_KEYS.OSM]: DATA_KEY_CATEGORIES.VECTOR,
+              [DATA_KEYS.NE]: DATA_KEY_CATEGORIES.VECTOR,
+              [DATA_KEYS.TERRARIUM]: DATA_KEY_CATEGORIES.TERRAIN,
             }
 
             const BACKGROUND_LAYER_ID = "background";
+            const TERRARIUM_NONE_PMTILES = "terrarium-none.pmtiles"
 
             /****************
              *    configs   *
@@ -122,9 +143,6 @@
 
             const MAP_SEARCH_ENGINE = "{{ maps_search_engine }}"
             const REGION_DOWNLOADER_ENABLED = "{{ maps_region_downloader }}" === "True"
-        </script>
-        <script src='maps-config.js'>
-            // Various MAX_ZOOM and other configs are found in this file
         </script>
         <script type="module">
             import { AddressTextualIndex } from "./{{ maps_static_search_dir }}/static_search.js"
@@ -178,10 +196,12 @@
             // reworking how that object is constructed so I'll put it off.
             const dataFileAlerts = {}
             const newDataFileAlert = dfAlert => {
+                // FQR names cannot have spaces so "World Map" should be distinct.
+                const regionName = dfAlert.fqrName || "World Map"
                 if (!(dfAlert.fqrName in dataFileAlerts)) {
-                    dataFileAlerts[dfAlert.fqrName] = []
+                    dataFileAlerts[regionName] = []
                 }
-                dataFileAlerts[dfAlert.fqrName].push(dfAlert)
+                dataFileAlerts[regionName].push(dfAlert)
             }
 
             // One namespace for all changes
@@ -195,6 +215,7 @@
                         const worldMapLayers = [...style.layers]
                         worldMapOSMLayers = new Set()
                         const activeWorldMapSourceIds = Object.keys(style.sources)
+                        worldPmtilesFiles = await worldMap.pmtilesFiles
 
                         // Create FQR sources and layers by copying the same from the world map.
                         // Order of layers matters. We want the FQR layers to be after the world map layers
@@ -210,25 +231,26 @@
                             const hillshadeFqrId = makeFqrSourceId(fqrName, DATA_KEYS.HILLSHADE);
 
                             // For each currently active world map source, make a corresponding FQR source
-                            ([
-                              [DATA_KEYS.S2, WORLD_MAP_SATELLITE_MAX_ZOOM],
-                              [DATA_KEYS.OSM, WORLD_MAP_VECTOR_MAX_ZOOM],
-                              [DATA_KEYS.TERRARIUM, WORLD_MAP_TERRAIN_MAX_ZOOM],
-                            ]).forEach(([worldSourceId, worldMaxZoom]) => {
-                                // "vector", "satellite", or "terrain"
-                                const category = DATA_KEY_CATEGORIES[worldSourceId]
-                                const fqrPmtilesFile = region.pmtilesFiles[category]
+                            activeWorldMapSourceIds.forEach(dataKey => {
+                                // If there's no category it's not a dataKey that we need to copy
+                                const category = CATEGORY_FOR_DATA_KEY[dataKey]
+                                if (!category) return
 
-                                // If the FQR actually has a file for this category, and if this particular
-                                // worldSourceId is being used in the currently visible mapstyle, then copy
-                                // the world map source to the FQR.
-                                if (fqrPmtilesFile && activeWorldMapSourceIds.includes(worldSourceId)) {
-                                    style.sources[fqrPmtilesFile.sourceId] = {
-                                        ...style.sources[worldSourceId],
-                                        url: pmtilesUrl(fqrPmtilesFile.url),
-                                        bounds: region.render_bounds,
-                                        minzoom: worldMaxZoom + 1
-                                    }
+                                // If there's no fqrPmtilesFile for this category, there's nothing to copy
+                                const fqrPmtilesFile = region.pmtilesFiles[category]
+                                if (!fqrPmtilesFile) return
+
+                                // FRQs should handle zoom levels just after the world map stops handling it.
+                                // If there's no world map, FQR should handle all zoom levels.
+                                const worldPmtilesFile = worldPmtilesFiles[category]
+                                const minzoom = worldPmtilesFile ? (worldPmtilesFile.maxzoom + 1) : 0
+
+                                // Copy the source, but with our new url, bounds, and minzoom
+                                style.sources[fqrPmtilesFile.sourceId] = {
+                                    ...style.sources[dataKey],
+                                    url: pmtilesUrl(fqrPmtilesFile.url),
+                                    bounds: region.render_bounds,
+                                    minzoom,
                                 }
                             })
 
@@ -304,24 +326,29 @@
                             }
                         })
 
-                        // set max zooms of world maps
-                        const setMaxZoom = (field, maxzoom) => {
-                            if (style.sources[field]) {
-                                style.sources[field].maxzoom = maxzoom
+                        // For each currently active world map source, set the maxzoom and url for the
+                        // worldPmtilesFile that we detected (if it exists) rather than what maps.black
+                        // expects.
+                        //
+                        // `style.sources[DATA_KEYS.TERRARIUM]` and `style.sources[DATA_KEYS.HILLSHADE`]
+                        // refer to the same object so we only have to set it once.
+                        //
+                        // We could `setMaxZoom` for DATA_KEYS.NE6 as well in case of the tiny CI variant,
+                        // (4-ci) but it looks good enough for CI without adjusting.
+                        activeWorldMapSourceIds.forEach(dataKey => {
+                            // If there's no category, it's not part of worldPmtilesFiles and thus not a
+                            // world map file we're trying to override here (i.e. NE6 or HILLSHADE).
+                            const category = CATEGORY_FOR_DATA_KEY[dataKey]
+                            if (!category) return
+                            const worldPmtilesFile = worldPmtilesFiles[category]
+
+                            // If there's no `worldPmtilesFile`, there's nothing to display regardless so
+                            // don't bother overriding.
+                            if (worldPmtilesFile) {
+                                style.sources[dataKey].url = pmtilesUrl(worldPmtilesFile.url)
+                                style.sources[dataKey].maxzoom = worldPmtilesFile.maxzoom
                             }
-                        }
-                        setMaxZoom(DATA_KEYS.OSM, WORLD_MAP_VECTOR_MAX_ZOOM)
-                        setMaxZoom(DATA_KEYS.S2, WORLD_MAP_SATELLITE_MAX_ZOOM)
-
-                        // Sources that use the terrarium file. We don't necessarily even use all of them
-                        // but we'll change them here in case we do.
-                        setMaxZoom(DATA_KEYS.TERRARIUM, WORLD_MAP_TERRAIN_MAX_ZOOM)
-                        setMaxZoom(DATA_KEYS.HILLSHADE, WORLD_MAP_TERRAIN_MAX_ZOOM)
-                        setMaxZoom('contours',  WORLD_MAP_TERRAIN_MAX_ZOOM)
-
-                        // We could `setMaxZoom` for DATA_KEYS.NE6 as well, but it looks
-                        // okay without adjusting, and we should stress that this only changes for CI so
-                        // we won't bother for now.
+                        })
 
                         // NOTE: This handler needs to run every time the style changes, so this flag has to
                         // be set per-`style`, not as a one-time global variable.
@@ -353,7 +380,12 @@
             function readHash() {
                 const [lat, lon, pitch, bearing, zoom, globe, terrain, _mapStyleChoice] = window.location.hash.slice(1).split('/')
 
-                mapStyleChoice = tryAvailableStyle(_mapStyleChoice)
+                // If someone puts in a junk value, default to hybrid.
+                //
+                // We don't want to deal with valid-but-unavailable styles here because we want to load
+                // ASAP and hope for the best (the expected 99% case). For the cases where the style is
+                // unavailable, it will be handled by `fixStyle`.
+                mapStyleChoice = VALID_STYLES.includes(_mapStyleChoice) ? _mapStyleChoice : STYLE_HYBRID
 
                 if (window.location.hash) {
                     return {
@@ -643,6 +675,7 @@
                 // terrain turned on.
 
                 await until(mapStyleLoaded)
+                worldMapTerrain = (await worldMap.pmtilesFiles).terrain
 
                 if (!mb.terrain) {
                     return
@@ -654,7 +687,7 @@
                 // Pick a terrain source. Basically: if we're looking at a region, pick that.
                 // If not, pick the world map terrain. There are many edge cases though.
                 const newTerrainSource = (() => {
-                    if (WORLD_MAP_TERRAIN_MAX_ZOOM === 10) {
+                    if (worldMapTerrain && worldMapTerrain.maxzoom === 10) {
                         // If the world map is maximum zoom, don't bother with FQR terrain
                         return DATA_KEYS.TERRARIUM
                     }
@@ -664,7 +697,7 @@
                         // map center, see sorting above)
                         return downloadedFQRegions.regions[regionsOnScreen[0]].pmtilesFiles.terrain.sourceId
                     }
-                    if (WORLD_MAP_TERRAIN_MAX_ZOOM > 0) {
+                    if (worldMapTerrain && worldMapTerrain.maxzoom > 0) {
                         // If no FQRs are on screen and we have a world map terrain, return to it
                         return DATA_KEYS.TERRARIUM
                     }
@@ -749,8 +782,13 @@
 
             async function hideWorldMapIfObscured(regionsOnScreen) {
                 await until(mapStyleLoaded)
+                worldMapVector = (await worldMap.pmtilesFiles).vector
 
-                const shouldHideWorldMap = (mb.map.getZoom() >= WORLD_MAP_VECTOR_MAX_ZOOM + 1) && isWorldMapObscuredByFQR(regionsOnScreen)
+                const shouldHideWorldMap = (
+                  worldMapVector &&
+                  (mb.map.getZoom() >= worldMapVector.maxzoom + 1) &&
+                  isWorldMapObscuredByFQR(regionsOnScreen)
+                )
                 const worldLayerVisibility = shouldHideWorldMap ? "none" : "visible"
                 if (mb.terrain) {
                     mb.map.setLayoutProperty("hillshade", "visibility", worldLayerVisibility)
@@ -841,6 +879,7 @@
                 // wrong and we decide we want to go based on the end of the chain of events, we should look at mb.map.getStyle().sources
 
                 await until(fqrLoaded)
+                worldDataKeys = await worldMap.dataKeys
 
                 // Probably enough for maps.black to set all of the licenses after a style switch or first page load
                 await until(mapStyleLoaded)
@@ -862,24 +901,24 @@
 
                 if (satelliteShowing) {
                     // If neither FQRs nor world map are using s2maps, remove the attribution
-                    if (!fqrHasSource(DATA_KEYS.S2) && WORLD_MAP_SATELLITE_IS_IIAB) {
+                    if (!fqrHasSource(DATA_KEYS.S2) && !worldDataKeys.includes(DATA_KEYS.S2)) {
                         delete mb.licenses.data[DATA_KEYS.S2]
                     }
 
                     // If world map is using Natural Earth vector, add the attribution (FQRs don't use it)
-                    if (fqrHasSource(DATA_KEYS.IIABSAT) || WORLD_MAP_SATELLITE_IS_IIAB) {
+                    if (fqrHasSource(DATA_KEYS.IIABSAT) || worldDataKeys.includes(DATA_KEYS.IIABSAT)) {
                         mb.licenses.data[DATA_KEYS.IIABSAT] = IIAB_SATELLITE_LICENSE
                     }
                 }
 
                 if (vectorShowing) {
                     // If neither FQRs nor world map are using osm, remove the attribution
-                    if (!fqrHasSource(DATA_KEYS.OSM) && WORLD_MAP_VECTOR_IS_NE) {
+                    if (!fqrHasSource(DATA_KEYS.OSM) && !worldDataKeys.includes(DATA_KEYS.OSM)) {
                         delete mb.licenses.data[DATA_KEYS.OSM]
                     }
 
                     // If either FQRs or world map are using Natural Earth vector, add the attribution
-                    if (WORLD_MAP_VECTOR_IS_NE) {
+                    if (worldDataKeys.includes(DATA_KEYS.NE)) {
                         mb.licenses.data[DATA_KEYS.NE] = NE_OMT_LICENSE
                     }
                 }
@@ -926,34 +965,62 @@
                             return
                     }
 
-                    const {dataKey, date, extension, rest} = parseFileName(entry.name)
+                    // A special case (which perhaps we should rename to conform with everything else)
+                    if (entry.name === TERRARIUM_NONE_PMTILES) {
+                        return {
+                            dataKey: DATA_KEYS.TERRARIUM,
+                            maxzoom: 0,
+                            date: "1970-01-01",
+                            fileName: entry.name,
+                        }
+                    }
+
+                    // parse the file name according to the passed-in parsing function
+                    // (FQR and world map have slightly different file name formats)
+                    const {dataKey, date, zoomRange, extension, rest} = parseFileName(entry.name)
+
                     if (
-                      validDataKeys.has(dataKey)                                  &&
-                      date.match(/^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]$/)  &&
-                      extension === "pmtiles"                                     &&
+                      dataKey    && validDataKeys.has(dataKey)                                  &&
+                      date       && date.match(/^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]$/)  &&
+
+                      // zoomRange only applies for world map
+                      (!zoomRange || zoomRange.match(/^z[0-9][0-9]-z[0-9][0-9]$/))              &&
+
+                      extension === "pmtiles"                                                   &&
                       rest.length === 0
                     ) {
+                        // `undefined` is for FQRs
+                        const maxzoom = zoomRange ? Number(zoomRange.split("-")[1].split("z")[1]) : undefined
+
                         return {
                           dataKey,
+                          maxzoom,
                           date,
                           fileName: entry.name,
-                      }
+                        }
                     }
                 })
                 .filter(Boolean)      // remove anything that isn't a properly formatted pmtiles file name
             }
 
-            // Preferred files first (more recent date, etc)
+            // Preferred files first (more recent date, etc). So if an implementer puts multiple in a directory
+            // (world or FQR) for whatever reason, we make the best choice. This also accounts for fallbacks.
             function pmtilesPreferenceSort(a, b) {
                 const cmpNewest = b.date.localeCompare(a.date)
+
+                // maxzoom is optional, but if it is undefined (as is the case for FQRs) this will still return zero
+                const cmpHighZoom = (b.maxzoom > a.maxzoom) - (a.maxzoom > b.maxzoom)
 
                 // We prefer DATA_KEYS.IIABSAT to come before DATA_KEYS.S2 so we just sort it before everything else
                 const cmpIIAB = (b.dataKey === DATA_KEYS.IIABSAT) - (a.dataKey === DATA_KEYS.IIABSAT)
 
+                // We prefer DATA_KEYS.OSM to come before DATA_KEYS.NE so we just sort it before everything else
+                const cmpOSM = (b.dataKey === DATA_KEYS.OSM) - (a.dataKey === DATA_KEYS.OSM)
+
                 // Each comparison returns 1, 0, or -1. -1 still counts as non-zero for
                 // the || operator. The first non-zero comparison is the one we go with.
                 // This implements our preference.
-                return (cmpNewest || cmpIIAB)
+                return (cmpNewest || cmpHighZoom || cmpIIAB || cmpOSM)
             }
 
             function validateMeta(regionName, meta) {
@@ -1020,7 +1087,62 @@
 
             let fqRegionsControl
             let downloadedFQRegions = null;
+            let worldMap = {}
+            worldMap.pmtilesFiles = (async () => {
+                const [dirList, error] = await homeDirListPromise
+                if (error) {
+                    console.error("Failed to load world map:", error)
+                    return {error: true, pmtilesFiles: {}}
+                }
 
+                const pmtilesFiles = {}
+
+                parsePmtilesFileNames(dirList, WORLD_FILE_CONFIGURABLE_DATA_KEYS, fileName => {
+                    // Each valid pmtiles file for the world map has the format:
+                    //
+                    // [dataKey].[date].[zoomRange].pmtiles
+                    //
+                    const [dataKey, date, zoomRange, extension, ...rest] = fileName.split(".")
+                    return {dataKey, date, zoomRange, extension, rest}
+                })
+                .filter(Boolean)      // remove anything that isn't a properly formatted pmtiles file name
+                .sort(pmtilesPreferenceSort)
+                .map(({dataKey, maxzoom, date, fileName}) => ({
+                    dataKey,
+                    date,
+                    fileName,
+                    maxzoom,
+                    url: mapsUrl(fileName),
+                }))
+                .forEach(({dataKey, date, maxzoom, fileName, url, sourceId}) => {
+                    // Note that the "category" makes sure that the world map has only has one satellite
+                    // source, even if both DATA_KEYS.IIABSAT and DATA_KEYS.S2 are found in the directory.
+                    // "vector", "satellite", or "terrain"
+                    const category = CATEGORY_FOR_DATA_KEY[dataKey]
+
+                    if (category in pmtilesFiles) {
+                        // pmtilesPreferenceSort puts our preferred files (newer, higher zoom, IIABSAT > S2)
+                        // first, so if there's already something added for this dataKey it has higher priority.
+                        newDataFileAlert({
+                          warning: `Extra pmtiles file for ${category}`,
+                          message: `The world map contains an unused pmtiles file: ${fileName}`,
+                        })
+                    } else {
+                        pmtilesFiles[category] = {dataKey, url, maxzoom, sourceId}
+                    }
+                })
+
+                warnIncompleteRegion(pmtilesFiles)
+
+                return pmtilesFiles
+            })()
+
+            worldMap.dataKeys = (async () =>
+                // For convenience if we want an array of all dataKeys used in the world map
+                Object.values(await worldMap.pmtilesFiles).map(({dataKey}) => dataKey)
+            )()
+
+            // TODO downloadedFQRegions should just be a Promise like worldMap.pmtilesFiles
             const fqrLoaded = () => !!downloadedFQRegions
 
             async function setFQRegions() {
@@ -1117,7 +1239,7 @@
                               // Note that the "category" makes sure that the FQR only has one satellite source, even
                               // if both DATA_KEYS.IIABSAT and DATA_KEYS.S2 are found in the directory.
                               // "vector", "satellite", or "terrain"
-                              const category = DATA_KEY_CATEGORIES[dataKey]
+                              const category = CATEGORY_FOR_DATA_KEY[dataKey]
 
                               if (category in pmtilesFiles) {
                                   // pmtilesPreferenceSort puts our preferred files (newer, IIABSAT > S2) first, so if
@@ -1183,15 +1305,23 @@
             //
             // As such, we will simply say that satellite is not available if
             // the user does not download it globally.
-            function satelliteAvailable() {
-                if (WORLD_MAP_SATELLITE_MAX_ZOOM) {
-                    return true
-                }
+
+            async function satelliteAvailable() {
+                // As of now, satellite is the one world map thing that an implementer can legitimately
+                // and explicitly skip. And (until we figure something out) if there is no world map
+                // satellite, we avoid showing the patches of FQR satellite.
+                const pmtilesFiles = await worldMap.pmtilesFiles;
+                return !!pmtilesFiles.satellite
             }
 
             async function terrainAvailable() {
+                // A user can choose "0-none" for terrain which gives them effectively no world terrain.
+                // However they can still have FQR terrain. So we return true if there is either a real
+                // world map terrain file or any FQRs. (TODO - check for missing terrain files in FQRs)
+                const pmtilesFiles = await worldMap.pmtilesFiles
+
                 // Check this first to return faster
-                if (WORLD_MAP_TERRAIN_MAX_ZOOM > 0) {
+                if (pmtilesFiles.terrain.maxzoom > 0) {
                     return true
                 }
 
@@ -1200,33 +1330,38 @@
                 return fqRegionsExist()
             }
 
-            function getAvailableStyles() {
+            async function getAvailableStyles() {
+                const _satelliteAvailable = await satelliteAvailable()
                 return [
                     STYLE_NATURAL,
                     STYLE_POLITICAL,
 
                     // Requires satellite tiles
-                    satelliteAvailable() ? STYLE_SATELLITE : null,
-                    satelliteAvailable() ? STYLE_HYBRID    : null,
+                    _satelliteAvailable ? STYLE_SATELLITE : null,
+                    _satelliteAvailable ? STYLE_HYBRID    : null,
                 ].filter(Boolean)
             }
 
-            function tryAvailableStyle(requestedStyle) {
-                const availableStyles = getAvailableStyles()
+            // If the user is on an invalid style due to readHash, send them to a valid one instead
+            // We don't want to do this ad readHash (anymore) because it risks slowing down the page
+            // load process for the happy path. At worst a user should experience this correction
+            // only one time because it will correct the hash.
+            async function fixStyle() {
+                const availableStyles = await getAvailableStyles()
 
                 // See if the one we want is available
-                if (availableStyles.includes(requestedStyle)) {
-                    return requestedStyle
+                if (availableStyles.includes(mapStyleChoice)) {
+                    return // All good!
                 }
 
-                // If the one we want is unavailable (or just a junk value someone
-                // typed into the hash), default to hybrid if we have satellite.
+                // If the one we want is unavailable, default to hybrid if we have satellite.
                 if (availableStyles.includes(STYLE_HYBRID)) {
-                    return STYLE_HYBRID
+                    mapStyleChoice = STYLE_HYBRID
+                } else {
+                    // Failing everything else, default to natural.
+                    mapStyleChoice = STYLE_NATURAL
                 }
-
-                // Failing everything else, default to natural.
-                return STYLE_NATURAL
+                applyMapStyle()
             }
 
             function getMdbMapStyle() {
@@ -1943,7 +2078,7 @@
                 maplibregl,
                 zoom: MAX_SEARCH_RESULT_ZOOM,
                 flyTo: {
-                    maxZoom: MAX_SEARCH_RESULT_ZOOM,
+                    maxZoom: MAX_SEARCH_RESULT_ZOOM, // TODO what is maxZoom? should it be maxzoom? or zoom?
                 },
                 popup: true,
                 limit: getMaxSearchResults(),
@@ -2151,14 +2286,19 @@
 
                 mb.map.addControl(new DataAlertsControl(), 'top-left');
 
-                // Add all the right-side controls at once after we determine whether terrain is among them
-                terrainAvailable().then(showTerrainControl => {
+                // Add all the right-side controls at once after we determine whether terrain is
+                // among them and what the available styles are
+                (async () => {
+                    const showTerrainControl = await terrainAvailable()
+                    const availableStyles = await getAvailableStyles()
+
                     mb.map.addControl(new MapsDotBlackGlobeControl(), 'top-right');
                     if (showTerrainControl) {
                         mb.map.addControl(new MapsDotBlackTerrainControl(), 'top-right');
                     }
-                    mb.map.addControl(new MapsDotBlackStyleControl(getAvailableStyles()), 'top-right');
-                })
+                    mb.map.addControl(new MapsDotBlackStyleControl(availableStyles), 'top-right');
+                })()
+
                 // NOTE Navigation control is added via `navigationcontrol` attribute on the maps-black tag
 
                 mb.map.off('moveend', onMoveEnd) // unsetting first, in case it's already there from a previous refresh
@@ -2199,6 +2339,7 @@
           })
 
           console.log("setting to", mapStyleChoice, "i.e.", mbAttributes.mapstyle)
+          fixStyle()
           document.body.prepend(mb)
         </script>
     </body>
