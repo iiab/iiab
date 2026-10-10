@@ -198,14 +198,21 @@
             const newDataFileAlert = dfAlert => {
                 // FQR names cannot have spaces so "World Map" should be distinct.
                 const regionName = dfAlert.fqrName || "World Map"
-                if (!(dfAlert.fqrName in dataFileAlerts)) {
+                if (!(regionName in dataFileAlerts)) {
                     dataFileAlerts[regionName] = []
                 }
                 dataFileAlerts[regionName].push(dfAlert)
             }
 
+            let setPMTiles = null
+            let PMTilesPromise = new Promise(resolve => {setPMTiles = resolve})
+
             // One namespace for all changes
             iiabMapsDotBlackPatch = {
+                getPMTilesClass: async _PMTiles => {
+                    // https://www.npmjs.com/package/pmtiles
+                    setPMTiles(_PMTiles)
+                },
                 patchResource: async handlerResult => {
                     const style = handlerResult && handlerResult.data
                     if (style && style.sources && !style.iiabPatched) {
@@ -384,7 +391,7 @@
                 //
                 // We don't want to deal with valid-but-unavailable styles here because we want to load
                 // ASAP and hope for the best (the expected 99% case). For the cases where the style is
-                // unavailable, it will be handled by `fixStyle`.
+                // unavailable, it will be handled by `fixStyleOnStartup`.
                 mapStyleChoice = VALID_STYLES.includes(_mapStyleChoice) ? _mapStyleChoice : STYLE_HYBRID
 
                 if (window.location.hash) {
@@ -408,28 +415,6 @@
                     return {
                       "mapstyle": getMdbMapStyle(),
                     }
-                }
-            }
-
-            // If the user sets terrain to true via the hash, make sure terrain
-            // is actually available. If it's not, unset it. This is a slightly
-            // bumpy experience for the user but it's a rare case (either the
-            // user is messing around, someone sent them a link from another
-            // box, or the implementer changed the map setup). The hash should
-            // be corrected along with this, so the next page load won't have
-            // this problem.
-            //
-            // We take this "set first, check later" approach to terrain because
-            // we'd rather have the map set up quickly in the usual case, and
-            // let it correct itself in the rare case.
-            async function correctTerrainSetting() {
-                // it would be faster with mapStylePresent but that doesn't seem
-                // to avoid an error
-                await until(mapStyleLoaded)
-
-                if (mb.terrain && !(await terrainAvailable())) {
-                    mb.terrain = false
-                    setUpMap() // set it up again after this change
                 }
             }
 
@@ -1137,6 +1122,31 @@
                 return pmtilesFiles
             })()
 
+            // Query for the pmtiles file headers to get the "real" maxZoom. If any of the files
+            // don't match, resolve to `true` so that we know to reload the page.
+            worldMap.pmtilesFilesCorrected = (async () => {
+                const PMTiles = await PMTilesPromise
+                worldPmtilesFiles = await worldMap.pmtilesFiles
+                const headers = {}
+                let corrected = false
+
+                // Start all the header requests
+                for (category in worldPmtilesFiles) {
+                    headers[category] = (new PMTiles(worldPmtilesFiles[category].url)).getHeader()
+                }
+
+                // Collect all the maxzooms from the headers as they resolve
+                for (category in worldPmtilesFiles) {
+                    const maxzoom = (await (headers[category])).maxZoom
+                    if (maxzoom !== worldPmtilesFiles[category].maxzoom) {
+                        corrected = true
+                        worldPmtilesFiles[category].maxzoom = maxzoom
+                    }
+                }
+
+                return corrected
+            })()
+
             worldMap.dataKeys = (async () =>
                 // For convenience if we want an array of all dataKeys used in the world map
                 Object.values(await worldMap.pmtilesFiles).map(({dataKey}) => dataKey)
@@ -1342,26 +1352,56 @@
                 ].filter(Boolean)
             }
 
-            // If the user is on an invalid style due to readHash, send them to a valid one instead
-            // We don't want to do this ad readHash (anymore) because it risks slowing down the page
-            // load process for the happy path. At worst a user should experience this correction
-            // only one time because it will correct the hash.
-            async function fixStyle() {
+            // If the user is on an invalid style or terrain status due to readHash, send them to a
+            // valid one instead. We don't want to do this in readHash (anymore) because (now that
+            // our setup process involves waiting for file listings to be read) it risks slowing
+            // down the page load process for the happy path. At worst a user should experience this
+            // correction only one time because it will correct the hash. After this, reload the
+            // page.
+            //
+            // Also, wait for the pmtiles file headers to be read and correct their maxZooms. Again, if
+            // any changes were made, reload the page. Unlike the above, this correction won't show up
+            // in the hash so it will happen every page load, which isn't great, but it will also
+            // instruct the implementer to fix this by renaming the files with the correct zoom levels.
+            //
+            // The reason we couple these two things together is that we only want to reload the
+            // page one time after checking everything.
+            //
+            // Also note that this only applies to the *page* load (not subsequent "map refreshes").
+            // After the page load, the user will not be able to switch to an invalid style or turn on
+            // terrain if it's unavailable. The zoom levels will also have been corrected so it will
+            // set up the map correctly next time a style is changed.
+            //
+            async function fixStyleOnStartup() {
                 const availableStyles = await getAvailableStyles()
+                let styleChanged = false
 
-                // See if the one we want is available
-                if (availableStyles.includes(mapStyleChoice)) {
-                    return // All good!
+                if (!availableStyles.includes(mapStyleChoice)) {
+                    // If the one we want is unavailable, go to a default:
+                    // STYLE_HYBRID if we have satellite, STYLE_NATURAL if we do not.
+                    if (availableStyles.includes(STYLE_HYBRID)) {
+                        mapStyleChoice = STYLE_HYBRID
+                    } else {
+                        mapStyleChoice = STYLE_NATURAL
+                    }
+                    styleChanged = true
                 }
 
-                // If the one we want is unavailable, default to hybrid if we have satellite.
-                if (availableStyles.includes(STYLE_HYBRID)) {
-                    mapStyleChoice = STYLE_HYBRID
-                } else {
-                    // Failing everything else, default to natural.
-                    mapStyleChoice = STYLE_NATURAL
+                // If the user sets terrain to true via the hash, make sure terrain is actually available.
+                if (mb.terrain && !(await terrainAvailable())) {
+                    mb.terrain = false
+                    styleChanged = true
                 }
-                applyMapStyle()
+
+                // If a pmtiles file was corrected via reading the header, we need to refresh the map with applyMapStyle
+                // so that it can be rebuilt with the correct maxzoom values.
+                if (await worldMap.pmtilesFilesCorrected) {
+                    styleChanged = true
+                }
+
+                if (styleChanged) {
+                    applyMapStyle()
+                }
             }
 
             function getMdbMapStyle() {
@@ -1383,9 +1423,12 @@
             }
 
             async function applyMapStyle() {
+                // Prevent too many reloads in quick succession that shows errors on the console
+                await until(mapStyleLoaded)
+
                 mb.mapstyle = getMdbMapStyle()
 
-                console.log("setting to", mapStyleChoice, "i.e.", mb.mapstyle)
+                console.log("setting to", mapStyleChoice, "i.e.", mb.mapstyle, "and reloading the page")
 
                 setUpMap() // The above will reset the map so we have to add controls and other things again.
             }
@@ -2316,7 +2359,6 @@
             }
 
             window.addEventListener("load", async () => {
-                correctTerrainSetting()
                 setUpMap()
             });
 
@@ -2339,7 +2381,7 @@
           })
 
           console.log("setting to", mapStyleChoice, "i.e.", mbAttributes.mapstyle)
-          fixStyle()
+          fixStyleOnStartup()
           document.body.prepend(mb)
         </script>
     </body>
