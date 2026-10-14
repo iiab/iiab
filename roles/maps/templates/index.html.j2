@@ -1137,10 +1137,24 @@
 
                 // Collect all the maxzooms from the headers as they resolve
                 for (category in worldPmtilesFiles) {
-                    const maxzoom = (await (headers[category])).maxZoom
-                    if (maxzoom !== worldPmtilesFiles[category].maxzoom) {
+                    // This function should only be run once, after the file names are parsed, and it should be the
+                    // only thing correcting the zoom levels, so we assume that the zoom level here came from the fname.
+                    const fnameMaxZoom = worldPmtilesFiles[category].maxzoom
+                    const headerMaxZoom = (await (headers[category])).maxZoom
+
+                    if (headerMaxZoom !== fnameMaxZoom) {
+                        worldPmtilesFiles[category].maxzoom = headerMaxZoom
+
                         corrected = true
-                        worldPmtilesFiles[category].maxzoom = maxzoom
+                        const fname = worldPmtilesFiles[category].url.split("/").slice(-1)[0]
+                        const fnameZoomSegment = fnameMaxZoom > 9 ? "z00-z" + fnameMaxZoom.toString() : "z00-z0" + fnameMaxZoom.toString()
+                        const headerZoomSegment = headerMaxZoom > 9 ? "z00-z" + headerMaxZoom.toString() : "z00-z0" + headerMaxZoom.toString()
+
+                        const correctedFname = fname.split(fnameZoomSegment + ".pmtiles")[0] + (headerZoomSegment + ".pmtiles")
+                        newDataFileAlert({
+                          warning: "Incorrect zoom level in file name",
+                          message: `The file ${fname} has max zoom level ${headerMaxZoom}, even though the file name implies max zoom level ${fnameMaxZoom}. You can correct this by renaming the file to match: ${correctedFname}`,
+                        })
                     }
                 }
 
