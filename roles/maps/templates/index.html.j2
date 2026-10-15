@@ -218,6 +218,9 @@
                                 const category = DATA_KEY_CATEGORIES[worldSourceId]
                                 const fqrPmtilesFile = region.pmtilesFiles[category]
 
+                                // If the FQR actually has a file for this category, and if this particular
+                                // worldSourceId is being used in the currently visible mapstyle, then copy
+                                // the world map source to the FQR.
                                 if (fqrPmtilesFile && activeWorldMapSourceIds.includes(worldSourceId)) {
                                     style.sources[fqrPmtilesFile.sourceId] = {
                                         ...style.sources[worldSourceId],
@@ -849,7 +852,6 @@
                 }
 
                 // Does *any* FQR use the given dataKey?
-                const regions = Object.values(downloadedFQRegions.regions)
                 const fqrHasSource = dataKey => Object.values(downloadedFQRegions.regions).some(r => r.dataKeys.includes(dataKey))
 
                 // maps.black.js adds the s2maps and osm licenses based on whether the mapstyle requires it, irrespective of whether the pmtiles
@@ -906,31 +908,6 @@
 
             const homeDirListPromise = getJson('/maps/data/', true)
 
-            function warnIncompleteRegion(pmtilesFiles, fqrName) {
-                const warning = "Missing data file"
-                if (!pmtilesFiles.satellite) {
-                    newDataFileAlert({
-                      fqrName,
-                      warning,
-                      message: "No valid satellite pmtiles file ('s2maps-sentinel2-2023' or 'iiab-sentinel2') found",
-                    })
-                }
-                if (!pmtilesFiles.vector) {
-                    newDataFileAlert({
-                      fqrName,
-                      warning,
-                      message: "No valid vector pmtiles file ('openstreetmap-openmaptiles') found",
-                    })
-                }
-                if (!pmtilesFiles.terrain) {
-                    newDataFileAlert({
-                      fqrName,
-                      warning,
-                      message: "No valid terrain pmtiles file ('terrarium') found",
-                    })
-                }
-            }
-
             // For normal requests
             const mapsUrl = path => `/maps/${path}`
             const regionUrl = (regionName, fileName) => mapsUrl(`${regionName}.fqr/${fileName}`)
@@ -940,6 +917,8 @@
             // For maps.black's sources setup. Formatted in the same way that maps.black does it.
             const pmtilesUrl = path => `pmtiles://${window.location.origin}/${path}`
 
+            // parseFileName is passed in as a function, so that this can be used for pmtiles file names
+            // that are formatted in different ways.
             function parsePmtilesFileNames(listing, validDataKeys, parseFileName) {
                 return listing.map(entry => {
                     if (entry.type !== "file") {
@@ -971,7 +950,8 @@
                 const cmpIIAB = (b.dataKey === DATA_KEYS.IIABSAT) - (a.dataKey === DATA_KEYS.IIABSAT)
 
                 // Each comparison returns 1, 0, or -1. -1 still counts as non-zero for
-                // the || operator, so this implements our preference.
+                // the || operator. The first non-zero comparison is the one we go with.
+                // This implements our preference.
                 return (cmpNewest || cmpIIAB)
             }
 
@@ -1010,6 +990,31 @@
                     return false
                 }
                 return true
+            }
+
+            function warnIncompleteRegion(pmtilesFiles, fqrName) {
+                const warning = "Missing data file"
+                if (!pmtilesFiles.satellite) {
+                    newDataFileAlert({
+                      fqrName,
+                      warning,
+                      message: "No valid satellite pmtiles file ('s2maps-sentinel2-2023' or 'iiab-sentinel2') found",
+                    })
+                }
+                if (!pmtilesFiles.vector) {
+                    newDataFileAlert({
+                      fqrName,
+                      warning,
+                      message: "No valid vector pmtiles file ('openstreetmap-openmaptiles') found",
+                    })
+                }
+                if (!pmtilesFiles.terrain) {
+                    newDataFileAlert({
+                      fqrName,
+                      warning,
+                      message: "No valid terrain pmtiles file ('terrarium') found",
+                    })
+                }
             }
 
             let fqRegionsControl
@@ -1114,7 +1119,7 @@
                               const category = DATA_KEY_CATEGORIES[dataKey]
 
                               if (category in pmtilesFiles) {
-                                  // pmtilesPreferenceSort puts our preferred files (older, IIABSAT > S2) first, so if
+                                  // pmtilesPreferenceSort puts our preferred files (newer, IIABSAT > S2) first, so if
                                   // there's already something added for this dataKey it has higher priority.
                                   newDataFileAlert({
                                     fqrName: regionName,
@@ -1126,7 +1131,7 @@
                               }
                           })
 
-                          // For convenience
+                          // For convenience if we want an array of all dataKeys used in this FQR
                           const dataKeys = Object.values(pmtilesFiles).map(({dataKey}) => dataKey)
 
                           const fqrData = meta.bbox[0] <= meta.bbox[2] ? {
