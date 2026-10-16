@@ -99,6 +99,7 @@ samba_tcp_mports=$(iiab_var_value samba_tcp_mports)
 squid_enabled=$(iiab_var_value squid_enabled)
 captiveportal_enabled=$(iiab_var_value captiveportal_enabled)
 captiveportal_probe_ip=$(iiab_var_value captiveportal_probe_ip)
+captiveportal_aggressive=$(iiab_var_value captiveportal_aggressive)
 
 echo -e "\nports_externally_visible: "$ports_externally_visible"\n"
 if ! [ "$ports_externally_visible" -eq "$ports_externally_visible" ] 2> /dev/null; then
@@ -227,13 +228,18 @@ fi
 
 # if [ "$HTTPCACHE_ON" == "True" ]; then    # Via /etc/iiab/iiab.env
 # Captive Portal probe hostnames resolve to an unroutable public address
-# (captiveportal_probe_ip, e.g. 198.51.100.1). Catch HTTP destined *only to that
-# address* so the client reaches the portal after the DNS lookup, without
-# hijacking other LAN HTTP (which squid transparently proxies below). This rule
-# MUST precede the squid rule, so probe traffic is DNAT'd to nginx (port 80)
-# rather than squid (port 3128) when both are enabled.
+# (captiveportal_probe_ip, e.g. 198.51.100.1). By default, only HTTP destined to
+# that probe address is diverted, so other LAN HTTP (e.g. squid transparent
+# caching) is left alone. Setting 'captiveportal_aggressive: True' instead
+# diverts ALL LAN HTTP (port 80) regardless of destination -- useful for devices
+# (e.g. Samsung) that resolve probe hostnames via their own DNS to arbitrary
+# public addresses, and then skip the portal when it looks like "no Internet".
 if [ "$captiveportal_enabled" == "True" ]; then
-    $IPTABLES -t nat -A PREROUTING -i $lan -p tcp --dport 80 -d $captiveportal_probe_ip -j DNAT --to $lan_ip:80
+    if [ "$captiveportal_aggressive" == "True" ]; then
+        $IPTABLES -t nat -A PREROUTING -i $lan -p tcp --dport 80 -j DNAT --to $lan_ip:80
+    else
+        $IPTABLES -t nat -A PREROUTING -i $lan -p tcp --dport 80 -d $captiveportal_probe_ip -j DNAT --to $lan_ip:80
+    fi
 fi
 
 if [ "$squid_enabled" == "True" ]; then     # Direct from default_vars.yml and local_vars.yml
