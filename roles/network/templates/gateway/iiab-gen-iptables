@@ -97,6 +97,8 @@ samba_udp_ports=$(iiab_var_value samba_udp_ports)
 samba_tcp_mports=$(iiab_var_value samba_tcp_mports)
 
 squid_enabled=$(iiab_var_value squid_enabled)
+captiveportal_enabled=$(iiab_var_value captiveportal_enabled)
+captiveportal_probe_ip=$(iiab_var_value captiveportal_probe_ip)
 
 echo -e "\nports_externally_visible: "$ports_externally_visible"\n"
 if ! [ "$ports_externally_visible" -eq "$ports_externally_visible" ] 2> /dev/null; then
@@ -224,6 +226,16 @@ if [ "$block_DNS" == "True" ]; then
 fi
 
 # if [ "$HTTPCACHE_ON" == "True" ]; then    # Via /etc/iiab/iiab.env
+# Captive Portal probe hostnames resolve to an unroutable public address
+# (captiveportal_probe_ip, e.g. 198.51.100.1). Catch HTTP destined *only to that
+# address* so the client reaches the portal after the DNS lookup, without
+# hijacking other LAN HTTP (which squid transparently proxies below). This rule
+# MUST precede the squid rule, so probe traffic is DNAT'd to nginx (port 80)
+# rather than squid (port 3128) when both are enabled.
+if [ "$captiveportal_enabled" == "True" ]; then
+    $IPTABLES -t nat -A PREROUTING -i $lan -p tcp --dport 80 -d $captiveportal_probe_ip -j DNAT --to $lan_ip:80
+fi
+
 if [ "$squid_enabled" == "True" ]; then     # Direct from default_vars.yml and local_vars.yml
     $IPTABLES -t nat -A PREROUTING -i $lan -p tcp --dport 80 ! -d $lan_ip -j DNAT --to $lan_ip:3128
 fi
