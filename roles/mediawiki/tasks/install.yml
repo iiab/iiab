@@ -48,53 +48,101 @@
 
 - block:
 
-    - name: Checkout MediaWiki {{ mediawiki_version }} from {{ mediawiki_repo_url }} to {{ mediawiki_abs_path }}
-      git:
-        repo: "{{ mediawiki_repo_url }}"
-        dest: "{{ mediawiki_abs_path }}"
-        version: "{{ mediawiki_version }}"
-        depth: 1
-        recursive: no
-        update: yes
-      become: yes
-      become_user: "{{ apache_user }}"
-      environment:
-        HOME: "{{ mediawiki_abs_path }}"
+    - name: Download {{ mediawiki_download_base_url }}/{{ mediawiki_src }} to {{ downloads_dir }}
+      get_curl:
+        url: "{{ mediawiki_download_base_url }}/{{ mediawiki_src }}"
+        dest: "{{ downloads_dir }}"
+        timeout: "{{ download_timeout }}"
+        retries: 3
 
-    - name: Initialize MediaWiki submodules from GitHub mirrors
-      command:
-        argv:
-          - git
-          - "-c"
-          - "url.https://github.com/wikimedia/mediawiki-extensions-.insteadOf=https://gerrit.wikimedia.org/r/mediawiki/extensions/"
-          - "-c"
-          - "url.https://github.com/wikimedia/mediawiki-skins-.insteadOf=https://gerrit.wikimedia.org/r/mediawiki/skins/"
-          - "-c"
-          - "url.https://github.com/wikimedia/mediawiki-vendor.insteadOf=https://gerrit.wikimedia.org/r/mediawiki/vendor"
-          - submodule
-          - update
-          - --init
-          - --recursive
-        chdir: "{{ mediawiki_abs_path }}"
-      become: yes
-      become_user: "{{ apache_user }}"
-      environment:
-        HOME: "{{ mediawiki_abs_path }}"
+    - name: Unarchive {{ downloads_dir }}/{{ mediawiki_src }} to {{ mediawiki_install_path }}
+      unarchive:
+        src: "{{ downloads_dir }}/{{ mediawiki_src }}"
+        dest: "{{ mediawiki_install_path }}"
+        owner: "{{ apache_user }}"
+        group: "{{ apache_user }}"
+        mode: u+rw,g+r,o+r
+        keep_newer: yes
 
   rescue:
 
-    - name: Checkout MediaWiki {{ mediawiki_version }} from backup {{ mediawiki_repo_backup_url }} to {{ mediawiki_abs_path }}
-      git:
-        repo: "{{ mediawiki_repo_backup_url }}"
-        dest: "{{ mediawiki_abs_path }}"
-        version: "{{ mediawiki_version }}"
-        depth: 1
-        recursive: yes
-        update: yes
-      become: yes
-      become_user: "{{ apache_user }}"
-      environment:
-        HOME: "{{ mediawiki_abs_path }}"
+    - name: Remove incomplete MediaWiki checkout before Git fallback
+      file:
+        path: "{{ mediawiki_abs_path }}"
+        state: absent
+
+    - block:
+
+        - name: Checkout MediaWiki {{ mediawiki_version }} from {{ mediawiki_repo_url }} to {{ mediawiki_abs_path }}
+          git:
+            repo: "{{ mediawiki_repo_url }}"
+            dest: "{{ mediawiki_abs_path }}"
+            version: "{{ mediawiki_version }}"
+            depth: 1
+            recursive: no
+            update: yes
+          become: yes
+          become_user: "{{ apache_user }}"
+          environment:
+            HOME: "{{ mediawiki_abs_path }}"
+
+        - name: Initialize MediaWiki submodules from GitHub mirrors
+          command:
+            argv:
+              - git
+              - "-c"
+              - "url.https://github.com/wikimedia/mediawiki-extensions-.insteadOf=https://gerrit.wikimedia.org/r/mediawiki/extensions/"
+              - "-c"
+              - "url.https://github.com/wikimedia/mediawiki-skins-.insteadOf=https://gerrit.wikimedia.org/r/mediawiki/skins/"
+              - "-c"
+              - "url.https://github.com/wikimedia/mediawiki-vendor.insteadOf=https://gerrit.wikimedia.org/r/mediawiki/vendor"
+              - submodule
+              - update
+              - --init
+              - --recursive
+              - --depth
+              - "1"
+            chdir: "{{ mediawiki_abs_path }}"
+          become: yes
+          become_user: "{{ apache_user }}"
+          environment:
+            HOME: "{{ mediawiki_abs_path }}"
+
+      rescue:
+
+        - name: Remove incomplete MediaWiki checkout before Gerrit fallback
+          file:
+            path: "{{ mediawiki_abs_path }}"
+            state: absent
+
+        - name: Checkout MediaWiki {{ mediawiki_version }} from {{ mediawiki_repo_backup_url }} to {{ mediawiki_abs_path }}
+          git:
+            repo: "{{ mediawiki_repo_backup_url }}"
+            dest: "{{ mediawiki_abs_path }}"
+            version: "{{ mediawiki_version }}"
+            depth: 1
+            recursive: no
+            update: yes
+          become: yes
+          become_user: "{{ apache_user }}"
+          environment:
+            HOME: "{{ mediawiki_abs_path }}"
+
+        - name: Initialize MediaWiki submodules from Gerrit
+          command:
+            argv:
+              - git
+              - submodule
+              - update
+              - --init
+              - --recursive
+              - --depth
+              - "1"
+            chdir: "{{ mediawiki_abs_path }}"
+          become: yes
+          become_user: "{{ apache_user }}"
+          environment:
+            HOME: "{{ mediawiki_abs_path }}"
 
 - name: Symlink {{ doc_root }}/{{ mediawiki_symlink }} -> {{ mediawiki_abs_path }}
   file:
