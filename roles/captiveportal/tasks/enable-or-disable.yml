@@ -30,6 +30,12 @@
     state: absent
   when: not captiveportal_enabled
 
+- name: Install or update /usr/sbin/iiab-divert-to-nginx
+  template:
+    src: iiab-divert-to-nginx.j2
+    dest: /usr/sbin/iiab-divert-to-nginx
+    mode: '0755'
+
 - name: Install and update Captive Portal generated files
   include_tasks: update-files.yml
   when: captiveportal_enabled
@@ -95,13 +101,23 @@
 # /usr/bin/iiab-gen-iptables), but it does NOT re-run during a standalone
 # './runrole captiveportal'. So refresh iptables here too, keeping the
 # captive-portal port-80 DNAT in sync with 'captiveportal_enabled' and
-# 'iiab_gateway_enabled'. During a fresh install the network role runs last and
-# has not installed this script yet, so the stat guard below skips cleanly.
+# 'iiab_gateway_enabled'. Deploy the generator first: otherwise a checkout
+# updated since the last network run would execute a stale /usr/bin/iiab-gen-iptables
+# that writes the probe DNS (via iiab-divert-to-nginx) without the matching DNAT.
+# During a fresh install the network role runs last and has not installed this
+# script yet, so the stat guards below skip cleanly.
 - name: Record whether /usr/bin/iiab-gen-iptables exists (installed by the network role)
   stat:
     path: /usr/bin/iiab-gen-iptables
   register: gen_iptables
 
-- name: Regenerate iptables firewall to match 'captiveportal_enabled'
+- name: Install the current Captive Portal firewall generator before running it (full path needed)
+  template:
+    src: roles/network/templates/gateway/iiab-gen-iptables
+    dest: /usr/bin/iiab-gen-iptables
+    mode: "0755"
+  when: gen_iptables.stat.exists
+
+- name: Regenerate iptables firewall to match 'captiveportal_enabled' and 'iiab_gateway_enabled'
   command: /usr/bin/iiab-gen-iptables
   when: gen_iptables.stat.exists
