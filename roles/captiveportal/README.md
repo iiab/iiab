@@ -5,6 +5,7 @@ _Please Also See: http://FAQ.IIAB.IO > ["Captive Portal Administration: What tip
 * The captive portal function is a feature of most modern operating systems. With the increased use of https/ssl (secure sockets layer), the automatic diversion to a specific web page runs the risk of being detected as a "man in the middle" attack.
 * Each Operating System (OS) provides a mechanism that IIAB can use to break into a conversation, when SSL is not being used. This is an initial attempt by the OS to talk to one of its own web sites, to determine if the host os is connected to the internet. It is always performed without SSL.
 * The IIAB captive portal uses a list of these OS supported web sites, and diverts these requests to the IIAB server, which in turn forwards to the IIAB home page.
+* While the portal is active -- `captiveportal_enabled: True`, a LAN interface is present, and `iiab_gateway_enabled` is not True (i.e. IIAB is not providing Internet to client devices) -- probe hostnames resolve to `198.51.100.1` by default (`captiveportal_probe_ip`), an unroutable TEST-NET-2 address reserved by RFC 5737, and all LAN TCP port 80 traffic is redirected to the IIAB server regardless of destination, including devices such as Samsung clients that resolve probes using their own DNS. `iiab-divert-to-nginx` (dnsmasq) and `iiab-gen-iptables` (firewall) apply the same condition, so the DNS diversion and the port-80 redirect always switch together.
 
 ## Components of the IIAB Captive Portal
 

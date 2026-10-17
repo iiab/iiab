@@ -46,6 +46,17 @@ iiab_var_value() {
     [ "$v2" != "" ] && echo $v2 || echo $v1    # [ "$v2" ] ALSO WORKS
 }
 
+# iiab_var_value preserves the YAML spelling, but Ansible accepts true/yes/on/1
+# (any case) as boolean True.  Match those too, so a portal enabled in Ansible
+# is also enabled by the bash-generated dnsmasq & firewall rules.  Keep this in
+# sync with iiab-divert-to-nginx.
+is_true() {
+    case "$1" in
+        [Tt][Rr][Uu][Ee]|[Yy][Ee][Ss]|[Oo][Nn]|1) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
 source /etc/iiab/iiab.env
 lan=$IIAB_LAN_DEVICE
 wan=$IIAB_WAN_DEVICE
@@ -97,6 +108,7 @@ samba_udp_ports=$(iiab_var_value samba_udp_ports)
 samba_tcp_mports=$(iiab_var_value samba_tcp_mports)
 
 squid_enabled=$(iiab_var_value squid_enabled)
+captiveportal_enabled=$(iiab_var_value captiveportal_enabled)
 
 echo -e "\nports_externally_visible: "$ports_externally_visible"\n"
 if ! [ "$ports_externally_visible" -eq "$ports_externally_visible" ] 2> /dev/null; then
@@ -224,6 +236,24 @@ if [ "$block_DNS" == "True" ]; then
 fi
 
 # if [ "$HTTPCACHE_ON" == "True" ]; then    # Via /etc/iiab/iiab.env
+# While the portal is active (captiveportal_enabled and IIAB is NOT providing
+# Internet to client devices, i.e. iiab_gateway_enabled is not True), divert all
+# LAN HTTP (port 80) regardless of destination. This is needed for devices that
+# resolve probes via their own DNS and would otherwise skip the portal.
+# /usr/sbin/iiab-divert-to-nginx applies the matching probe-hostname DNS
+# diversion using the same condition, so the two always switch together.
+if is_true "$captiveportal_enabled" && [ "$lan" != "none" ] && ! is_true "$iiab_gateway_enabled"; then
+    $IPTABLES -t nat -A PREROUTING -i $lan -p tcp --dport 80 -j DNAT --to $lan_ip:80
+fi
+
+# Keep the captive-portal DNS diversion in sync with the DNAT above, including
+# after 'iiab-internet-on|off', which only re-runs this script (not the
+# captiveportal role). The helper is only present once the captiveportal role
+# has run.
+if [ -x /usr/sbin/iiab-divert-to-nginx ]; then
+    /usr/sbin/iiab-divert-to-nginx
+fi
+
 if [ "$squid_enabled" == "True" ]; then     # Direct from default_vars.yml and local_vars.yml
     $IPTABLES -t nat -A PREROUTING -i $lan -p tcp --dport 80 ! -d $lan_ip -j DNAT --to $lan_ip:3128
 fi

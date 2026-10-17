@@ -1,4 +1,60 @@
-#!/bin/bash -x
-awk '{print("address=/" $1 "/{{ lan_ip }}")}' /opt/iiab/captiveportal/checkurls > /etc/dnsmasq.d/capture
-echo "#following tells windows 7 that captive portal is active" >> /etc/dnsmasq.d/capture
-echo "address=/dns.msftncsi.com/131.107.255.255" >> /etc/dnsmasq.d/capture
+#!/bin/bash
+# Owns the captive portal's DNS diversion: writes /etc/dnsmasq.d/capture while
+# the portal is active, and removes it otherwise. Run by the captiveportal role
+# and by iiab-gen-iptables (which adds the matching port-80 DNAT), so the DNS
+# diversion and the firewall redirect always switch together.
+
+# Read a variable from default_vars.yml, overridden by local_vars.yml (same
+# emulation of Ansible's .yml parsing as iiab-gen-iptables).
+iiab_var_value() {
+    v1=$(grep "^$1:\s" /opt/iiab/iiab/vars/default_vars.yml | tail -1 | sed "s/^$1:\s\+//; s/#.*//; s/\s*$//; s/^\(['\"]\)\(.*\)\1$/\2/")
+    v2=$(grep "^$1:\s" /etc/iiab/local_vars.yml | tail -1 | sed "s/^$1:\s\+//; s/#.*//; s/\s*$//; s/^\(['\"]\)\(.*\)\1$/\2/")
+    [ "$v2" != "" ] && echo "$v2" || echo "$v1"
+}
+
+# Ansible accepts true/yes/on/1 (any case) as boolean True, but iiab_var_value
+# preserves the YAML spelling.  Match those spellings too.  Keep this in sync
+# with iiab-gen-iptables.
+is_true() {
+    case "$1" in
+        [Tt][Rr][Uu][Ee]|[Yy][Ee][Ss]|[Oo][Nn]|1) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+source /etc/iiab/iiab.env
+captiveportal_enabled=$(iiab_var_value captiveportal_enabled)
+dnsmasq_enabled=$(iiab_var_value dnsmasq_enabled)
+capture=/etc/dnsmasq.d/capture
+
+# The portal is active only when it is enabled, a LAN interface exists, and IIAB
+# is not providing Internet to client devices (iiab_gateway_enabled: True).
+# Keep this condition identical to the DNAT in iiab-gen-iptables.
+new=""
+if is_true "$captiveportal_enabled" && [ "$IIAB_LAN_DEVICE" != "none" ] && ! is_true "$IIAB_GATEWAY_ENABLED" && [ -f /opt/iiab/captiveportal/checkurls ]; then
+    # Use an unroutable public address so clients do not conclude that the portal
+    # is merely a local network with no Internet access.
+    # 'captive.lan' is IIAB's own hostname (used by the splash page's "go to browser"
+    # link), so it must keep resolving to the IIAB server itself rather than the
+    # unroutable probe address above.
+    new=$(awk '{ if ($1 == "captive.lan") print "address=/" $1 "/{{ lan_ip }}"; else print "address=/" $1 "/{{ captiveportal_probe_ip }}" }' /opt/iiab/captiveportal/checkurls)
+    # Windows NCSI treats a DNS answer of 131.107.255.255 for dns.msftncsi.com as
+    # "captive portal active" (a Microsoft-owned magic address used only as a DNS
+    # signal, so it is intentionally NOT diverted to the probe address above).
+    new="${new}
+#following tells windows 7 that captive portal is active
+address=/dns.msftncsi.com/131.107.255.255"
+fi
+
+# Touch dnsmasq only when the diversion actually changes. Command substitution
+# strips trailing newlines on both sides, so reruns stay idempotent.
+if [ "$(cat "$capture" 2>/dev/null)" != "$new" ]; then
+    if [ -n "$new" ]; then
+        printf '%s\n' "$new" > "$capture"
+    else
+        rm -f "$capture"
+    fi
+    if is_true "$dnsmasq_enabled"; then
+        systemctl reload dnsmasq 2>/dev/null || systemctl restart dnsmasq 2>/dev/null || true
+    fi
+fi

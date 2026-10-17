@@ -4,8 +4,9 @@
 import os
 outstr = ''
 
-#os.chdir('{{ iiab_dir }}/roles/captiveportal/templates')
-os.chdir('/opt/iiab/iiab/roles/captiveportal/templates')
+# Read the deployed list so role reruns use the same checkurls file as
+# iiab-divert-to-nginx.
+os.chdir('/opt/iiab/captiveportal')
 with open('checkurls','r') as urls:
    for line in urls:
       line = line.replace('*','.*')
