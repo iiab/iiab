@@ -12,15 +12,26 @@ iiab_var_value() {
     [ "$v2" != "" ] && echo "$v2" || echo "$v1"
 }
 
+# Ansible accepts true/yes/on/1 (any case) as boolean True, but iiab_var_value
+# preserves the YAML spelling.  Match those spellings too.  Keep this in sync
+# with iiab-gen-iptables.
+is_true() {
+    case "$1" in
+        [Tt][Rr][Uu][Ee]|[Yy][Ee][Ss]|[Oo][Nn]|1) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
 source /etc/iiab/iiab.env
 captiveportal_enabled=$(iiab_var_value captiveportal_enabled)
+dnsmasq_enabled=$(iiab_var_value dnsmasq_enabled)
 capture=/etc/dnsmasq.d/capture
 
 # The portal is active only when it is enabled, a LAN interface exists, and IIAB
 # is not providing Internet to client devices (iiab_gateway_enabled: True).
 # Keep this condition identical to the DNAT in iiab-gen-iptables.
 new=""
-if [ "$captiveportal_enabled" == "True" ] && [ "$IIAB_LAN_DEVICE" != "none" ] && [ "$IIAB_GATEWAY_ENABLED" != "True" ] && [ -f /opt/iiab/captiveportal/checkurls ]; then
+if is_true "$captiveportal_enabled" && [ "$IIAB_LAN_DEVICE" != "none" ] && ! is_true "$IIAB_GATEWAY_ENABLED" && [ -f /opt/iiab/captiveportal/checkurls ]; then
     # Use an unroutable public address so clients do not conclude that the portal
     # is merely a local network with no Internet access.
     # 'captive.lan' is IIAB's own hostname (used by the splash page's "go to browser"
@@ -43,5 +54,7 @@ if [ "$(cat "$capture" 2>/dev/null)" != "$new" ]; then
     else
         rm -f "$capture"
     fi
-    systemctl reload dnsmasq 2>/dev/null || systemctl restart dnsmasq 2>/dev/null || true
+    if is_true "$dnsmasq_enabled"; then
+        systemctl reload dnsmasq 2>/dev/null || systemctl restart dnsmasq 2>/dev/null || true
+    fi
 fi
