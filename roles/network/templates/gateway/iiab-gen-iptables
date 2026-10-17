@@ -112,7 +112,6 @@ fi
 $IPTABLES -F
 $IPTABLES -t nat -F
 $IPTABLES -X
-$IPTABLES -t nat -N IIAB_CAPTIVEPORTAL 2>/dev/null || true
 
 # FIRST MATCH WINS - establish iptable rules, starting at the top:
 # (verify the resulting rule set by running 'iptables -L -v')
@@ -226,25 +225,22 @@ if [ "$block_DNS" == "True" ]; then
 fi
 
 # if [ "$HTTPCACHE_ON" == "True" ]; then    # Via /etc/iiab/iiab.env
-# When upstream Internet is unavailable, divert all LAN HTTP (port 80)
-# regardless of destination. This is needed for devices that resolve probes via
-# their own DNS and skip the portal when the probe looks like "no Internet".
-if [ "$captiveportal_enabled" == "True" ] && [ "$lan" != "none" ]; then
-    $IPTABLES -t nat -A PREROUTING -i $lan -p tcp --dport 80 -j IIAB_CAPTIVEPORTAL
+# While the portal is active (captiveportal_enabled and IIAB is NOT providing
+# Internet to client devices, i.e. iiab_gateway_enabled is not True), divert all
+# LAN HTTP (port 80) regardless of destination. This is needed for devices that
+# resolve probes via their own DNS and would otherwise skip the portal.
+# /usr/sbin/iiab-divert-to-nginx applies the matching probe-hostname DNS
+# diversion using the same condition, so the two always switch together.
+if [ "$captiveportal_enabled" == "True" ] && [ "$lan" != "none" ] && [ "$iiab_gateway_enabled" != "True" ]; then
+    $IPTABLES -t nat -A PREROUTING -i $lan -p tcp --dport 80 -j DNAT --to $lan_ip:80
 fi
 
-# Populate the dedicated chain now. The systemd timer keeps it current after
-# the initial firewall generation without flushing the rest of the firewall.
-if [ -x /usr/bin/iiab-update-captiveportal-dnat ]; then
-    /usr/bin/iiab-update-captiveportal-dnat
-elif [ "$captiveportal_enabled" == "True" ] && [ "$lan" != "none" ]; then
-    # Keep firewall regeneration usable during an upgrade before the updater
-    # has been installed by the network role.
-    if ! curl --ipv4 --interface "$wan" --noproxy '*' \
-        --connect-timeout 3 --max-time 5 --silent --output /dev/null \
-        --insecure https://1.1.1.1/cdn-cgi/trace; then
-        $IPTABLES -t nat -A IIAB_CAPTIVEPORTAL -j DNAT --to $lan_ip:80
-    fi
+# Keep the captive-portal DNS diversion in sync with the DNAT above, including
+# after 'iiab-internet-on|off', which only re-runs this script (not the
+# captiveportal role). The helper is only present once the captiveportal role
+# has run.
+if [ -x /usr/sbin/iiab-divert-to-nginx ]; then
+    /usr/sbin/iiab-divert-to-nginx
 fi
 
 if [ "$squid_enabled" == "True" ]; then     # Direct from default_vars.yml and local_vars.yml
