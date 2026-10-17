@@ -98,7 +98,6 @@ samba_tcp_mports=$(iiab_var_value samba_tcp_mports)
 
 squid_enabled=$(iiab_var_value squid_enabled)
 captiveportal_enabled=$(iiab_var_value captiveportal_enabled)
-captiveportal_aggressive=$(iiab_var_value captiveportal_aggressive)
 
 echo -e "\nports_externally_visible: "$ports_externally_visible"\n"
 if ! [ "$ports_externally_visible" -eq "$ports_externally_visible" ] 2> /dev/null; then
@@ -113,6 +112,7 @@ fi
 $IPTABLES -F
 $IPTABLES -t nat -F
 $IPTABLES -X
+$IPTABLES -t nat -N IIAB_CAPTIVEPORTAL 2>/dev/null || true
 
 # FIRST MATCH WINS - establish iptable rules, starting at the top:
 # (verify the resulting rule set by running 'iptables -L -v')
@@ -226,11 +226,25 @@ if [ "$block_DNS" == "True" ]; then
 fi
 
 # if [ "$HTTPCACHE_ON" == "True" ]; then    # Via /etc/iiab/iiab.env
-# When aggressive mode is enabled, divert all LAN HTTP (port 80) regardless of
-# destination. This is needed for devices that resolve probes via their own DNS
-# and skip the portal when the probe looks like "no Internet".
-if [ "$captiveportal_enabled" == "True" ] && [ "$captiveportal_aggressive" == "True" ]; then
-    $IPTABLES -t nat -A PREROUTING -i $lan -p tcp --dport 80 -j DNAT --to $lan_ip:80
+# When upstream Internet is unavailable, divert all LAN HTTP (port 80)
+# regardless of destination. This is needed for devices that resolve probes via
+# their own DNS and skip the portal when the probe looks like "no Internet".
+if [ "$captiveportal_enabled" == "True" ] && [ "$lan" != "none" ]; then
+    $IPTABLES -t nat -A PREROUTING -i $lan -p tcp --dport 80 -j IIAB_CAPTIVEPORTAL
+fi
+
+# Populate the dedicated chain now. The systemd timer keeps it current after
+# the initial firewall generation without flushing the rest of the firewall.
+if [ -x /usr/bin/iiab-update-captiveportal-dnat ]; then
+    /usr/bin/iiab-update-captiveportal-dnat
+elif [ "$captiveportal_enabled" == "True" ] && [ "$lan" != "none" ]; then
+    # Keep firewall regeneration usable during an upgrade before the updater
+    # has been installed by the network role.
+    if ! curl --ipv4 --interface "$wan" --noproxy '*' \
+        --connect-timeout 3 --max-time 5 --silent --output /dev/null \
+        --insecure https://1.1.1.1/cdn-cgi/trace; then
+        $IPTABLES -t nat -A IIAB_CAPTIVEPORTAL -j DNAT --to $lan_ip:80
+    fi
 fi
 
 if [ "$squid_enabled" == "True" ]; then     # Direct from default_vars.yml and local_vars.yml
