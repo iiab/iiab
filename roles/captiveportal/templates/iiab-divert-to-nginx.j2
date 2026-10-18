@@ -36,13 +36,22 @@ if is_true "$captiveportal_enabled" && [ "$IIAB_LAN_DEVICE" != "none" ] && ! is_
     # 'captive.lan' is IIAB's own hostname (used by the splash page's "go to browser"
     # link), so it must keep resolving to the IIAB server itself rather than the
     # unroutable probe address above.
-    new=$(awk '{ if ($1 == "captive.lan") print "address=/" $1 "/{{ lan_ip }}"; else print "address=/" $1 "/{{ captiveportal_probe_ip }}" }' /opt/iiab/captiveportal/checkurls)
-    # Windows NCSI treats a DNS answer of 131.107.255.255 for dns.msftncsi.com as
-    # "captive portal active" (a Microsoft-owned magic address used only as a DNS
-    # signal, so it is intentionally NOT diverted to the probe address above).
-    new="${new}
-#following tells windows 7 that captive portal is active
-address=/dns.msftncsi.com/131.107.255.255"
+    # Generate all dnsmasq entries together so they are written to capture as one
+    # list. Windows NCSI requires its specific magic address rather than the
+    # generic captive portal probe address.
+    new=$(awk '
+        {
+            if ($1 == "captive.lan") {
+                print "address=/" $1 "/{{ lan_ip }}"
+            } else {
+                print "address=/" $1 "/{{ captiveportal_probe_ip }}"
+            }
+        }
+        END {
+            print "# Windows NCSI captive portal detection"
+            print "address=/dns.msftncsi.com/131.107.255.255"
+        }
+    ' /opt/iiab/captiveportal/checkurls)
 fi
 
 # Touch dnsmasq only when the diversion actually changes. Command substitution
