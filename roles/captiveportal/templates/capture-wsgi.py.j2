@@ -42,6 +42,16 @@ fully_qualified_domain_name = get_iiab_env("FQDN")
 def parse_args():
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument("-v", "--verbose", action="store_true")
+    parser.add_argument(
+        "--log-probes",
+        "--log-urls",
+        dest="log_probes",
+        action="store_true",
+        default=os.environ.get(
+            "CAPTIVE_PORTAL_LOG_PROBES",
+            "{{ captiveportal_log_probes | default(false) | string }}",
+        ).lower() in ("1", "true", "yes", "on"),
+    )
     parser.add_argument("--log-file", default=os.environ.get("CAPTIVE_PORTAL_LOG_FILE"))
     parser.add_argument(
         "--port",
@@ -396,6 +406,14 @@ def parse_agent(agent):
         system_version = "8"
     return (system, system_version)
 
+def requested_url(environ):
+    host = environ.get("HTTP_HOST") or environ.get("SERVER_NAME", "")
+    path = environ.get("PATH_INFO", "")
+    query = environ.get("QUERY_STRING", "")
+    if query:
+        path += "?" + query
+    return "http://{}{}".format(host, path)
+
 #
 # ================== Start serving the wsgi application  =================
 def application (environ, start_response):
@@ -403,6 +421,9 @@ def application (environ, start_response):
    global CATCH
    global LIST
    global INACTIVITY_TO
+
+   if args.log_probes:
+      logger.info("probe URL requested: %s", requested_url(environ))
 
    if  'HTTP_X_FORWARDED_FOR' in environ:
       ip = environ['HTTP_X_FORWARDED_FOR'].strip()
