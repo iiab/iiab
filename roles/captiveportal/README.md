@@ -44,6 +44,16 @@ port `9090` by default. Override the port with `--port`, or set
 `CAPTIVE_PORTAL_PORT`; the command-line flag takes precedence. The systemd
 service does not use TCP.
 
+Set `captiveportal_log_probes: True` to log each probe URL received by the
+portal at INFO level. The log entry includes the probe host, path, and query
+string and is written to the uWSGI service journal:
+
+    sudo journalctl -u uwsgi-app@captiveportal.service
+
+For direct runs, use `--log-probes` (or `--log-urls`) or set
+`CAPTIVE_PORTAL_LOG_PROBES=1`. The existing `--log-file` option can be used to
+write these entries to a rotating file.
+
 The Admin Console is a separate socket-activated uWSGI instance,
 `uwsgi-app@admin-console.service`, and listens on the Unix socket
 `/run/uwsgi/admin-console.socket`. Neither uWSGI instance uses TCP port
