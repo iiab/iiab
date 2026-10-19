@@ -71,6 +71,7 @@ echo
 #network_mode=`grep iiab_network_mode_applied /etc/iiab/iiab.ini | gawk '{print $3}'`
 #echo -e "Network Mode: $network_mode\n"
 lan_ip=$(iiab_var_value lan_ip)    # e.g. 10.10.10.10
+lan_netmask=$(iiab_var_value lan_netmask)
 
 ports_externally_visible=$(iiab_var_value ports_externally_visible)
 gw_block_https=$(iiab_var_value gw_block_https)
@@ -237,13 +238,15 @@ fi
 
 # if [ "$HTTPCACHE_ON" == "True" ]; then    # Via /etc/iiab/iiab.env
 # While the portal is active (captiveportal_enabled and IIAB is NOT providing
-# Internet to client devices, i.e. iiab_gateway_enabled is not True), divert all
-# LAN HTTP (port 80) regardless of destination. This is needed for devices that
-# resolve probes via their own DNS and would otherwise skip the portal.
+# Internet to client devices, i.e. iiab_gateway_enabled is not True), divert
+# external LAN HTTP (port 80). This is needed for devices that resolve probes
+# via their own DNS and would otherwise skip the portal. Exclude the LAN
+# subnet so local HTTP services remain reachable.
 # /usr/sbin/iiab-divert-to-nginx applies the matching probe-hostname DNS
 # diversion using the same condition, so the two always switch together.
 if is_true "$captiveportal_enabled" && [ "$lan" != "none" ] && ! is_true "$iiab_gateway_enabled"; then
-    $IPTABLES -t nat -A PREROUTING -i $lan -p tcp --dport 80 -j DNAT --to $lan_ip:80
+    $IPTABLES -t nat -A PREROUTING -i $lan -p tcp --dport 80 \
+        ! -d "$lan_ip/$lan_netmask" -j DNAT --to "$lan_ip:80"
 fi
 
 # Keep the captive-portal DNS diversion in sync with the DNAT above, including
