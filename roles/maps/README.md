@@ -292,6 +292,18 @@ sudo ./runrole maps --reinstall
 * IIAB integration thanks to [Dan Krol](https://github.com/orblivion)
 * [Details on data file specs and naming conventions](https://github.com/iiab/iiab/blob/master/roles/maps/FORMAT.md)
 
+### Customizing Full Quality Region rectangles
+
+Full Quality Regions are indicated by a bright green rectangle (see above). If this isn't the color scheme you're looking for, you can adjust it by looking for the following lines in `/library/www/maps/index.html` on your IIAB, (_after_ maps installation):
+
+https://github.com/iiab/iiab/blob/1eb38ad417f4e0c28062fdc4e47e3b2e5cdcadaf/roles/maps/templates/index.html.j2#L479-L493
+
+(hint: search for `~`, there's not much of that in this file)
+
+The first `addLayer` command describes the main colored rectangle. The second `addLayer` is a slightly thinner black rectangle on top of it, just to make sure there's enough contrast to see it. You can adjust `line-color` (hex colors, just like HTML), `line-width`, and even `line-opacity` (on a scale from 0 - 1) to make it more faded out or altogether invisible.
+
+NOTE: If you `sudo runrole --reinstall maps` afterwards, you will lose your changes.
+
 ## Next Steps
 
 What I hope to be working on in the next few months
