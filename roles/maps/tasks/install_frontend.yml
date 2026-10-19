@@ -25,17 +25,11 @@
     symlink_name: "{{ maps_dot_black_naturalearth6_symlink_name }}"
     dest_base_path: "{{ maps_serve_path }}"
 
-# This helps avoid silent errors transitioning between variable names. It can be deleted 2026/09/04.
-- name: Error on deprecated maps_vector_quality
-  assert:
-    that: maps_vector_quality is not defined
-    msg:
-      - "'maps_vector_quality' has been renamed to 'maps_vector_zoom' with new valid values. Please update your"
-      - "/etc/iiab/local_vars.yml and see https://github.com/iiab/iiab/blob/master/roles/maps/MAPS_CATALOG_DETAILS.md for valid values."
 
 
 - name: Get vector from catalog
   include_tasks: download_from_catalog.yml
+  when: maps_vector_zoom != maps_fallback_vector_zoom
   vars:
     catalog_item: vector
     catalog_item_config_var: maps_vector_zoom
@@ -44,14 +38,13 @@
 
 - name: Download fallback vector tiles
   include_tasks: download_large_file.yml
-  when: maps_vector_zoom != maps_fallback_vector_zoom
   vars:
-    dest_base_path: "{{ maps_serve_path }}"
+    dest_base_path: "{{ maps_fallback_path }}"
     item: "{{ maps_catalog.data.vector[maps_fallback_vector_zoom | string] }}"
 
 - name: Get satellite from catalog
-  when: maps_satellite_zoom != "none"
   include_tasks: download_from_catalog.yml
+  when: (maps_satellite_zoom != "none") and (maps_satellite_zoom != maps_fallback_satellite_zoom)
   vars:
     catalog_item: satellite
     catalog_item_config_var: maps_satellite_zoom
@@ -59,10 +52,10 @@
     dest_base_path: "{{ maps_serve_path }}"
 
 - name: Download fallback satellite tiles
-  when: (maps_satellite_zoom != "none") and (maps_satellite_zoom != maps_fallback_satellite_zoom)
   include_tasks: download_large_file.yml
+  when: maps_satellite_zoom != "none"
   vars:
-    dest_base_path: "{{ maps_serve_path }}"
+    dest_base_path: "{{ maps_fallback_path }}"
     item: "{{ maps_catalog.data.satellite[maps_fallback_satellite_zoom | string] }}"
 
 - name: Remove unused satellite symlink
@@ -74,6 +67,7 @@
 # Unlike with satellite, if the user selects "none" for terrain, we download a dummy file
 - name: Get terrain from catalog
   include_tasks: download_from_catalog.yml
+  when: maps_terrain_zoom != maps_fallback_terrain_zoom
   vars:
     catalog_item: terrain
     catalog_item_config_var: maps_terrain_zoom
@@ -82,9 +76,8 @@
 
 - name: Download fallback terrain tiles
   include_tasks: download_large_file.yml
-  when: maps_terrain_zoom != maps_fallback_terrain_zoom
   vars:
-    dest_base_path: "{{ maps_serve_path }}"
+    dest_base_path: "{{ maps_fallback_path }}"
     item: "{{ maps_catalog.data.terrain[maps_fallback_terrain_zoom | string] }}"
 
 # maps-update.py is used here but it can also be run independently. As we use
