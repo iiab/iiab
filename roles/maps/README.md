@@ -302,6 +302,12 @@ https://github.com/iiab/iiab/blob/1eb38ad417f4e0c28062fdc4e47e3b2e5cdcadaf/roles
 
 The first `addLayer` command describes the main colored rectangle. The second `addLayer` is a slightly thinner black rectangle on top of it, just to make sure there's enough contrast to see it. You can adjust `line-color` (hex colors, just like HTML), `line-width`, and even `line-opacity` (on a scale from 0 - 1) to make it more faded out or altogether invisible.
 
+Examples:
+
+* Set `'line-color': '#FF0000'` on the first `addLayer` to make the rectangles red.
+* Set `'line-opacity': 0` on the second `addLayer` to get rid of the black rectangle.
+* Set `'line-opacity': 0` on both `addLayer`s to get rid of the rectangle entirely.
+
 NOTE: If you `sudo runrole --reinstall maps` afterwards, you will lose your changes.
 
 ## Next Steps
