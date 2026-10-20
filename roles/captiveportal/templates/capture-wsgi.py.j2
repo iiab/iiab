@@ -134,6 +134,10 @@ def platform_info(ip):
     row = c.fetchone()
     if row is None: return ('','',)
     return (row['os'],row['os_version'])
+
+def parse_android_major_version(version):
+    match = re.match(r"^(\d+)", version or "")
+    return int(match.group(1)) if match else None
         
 def timeout_info(ip):
     sql = "select * FROM users WHERE ip = ?"
@@ -225,21 +229,19 @@ def android(environ, start_response):
     else: 
         ip = environ['REMOTE_ADDR'].strip()
     system,system_version = platform_info(ip)
-    if system_version is None:
-       return  put_302(environ, start_response)
-    try:
-        android_major_version = int(system_version.split(".", 1)[0])
-    except (TypeError, ValueError):
-        android_major_version = 0
-    if android_major_version < 6:
+    android_major_version = parse_android_major_version(system_version)
+    if android_major_version is None:
+        logger.warning("unrecognized Android version %r; using captive portal splash", system_version)
+        location = CAPTIVE_PORTAL_SPLASH
+    elif android_major_version < 6:
         logger.debug("system < 6:{}".format(system_version))
         location = '/android_splash'
         set_204after(ip,0)
-    elif android_major_version >= 7:
-        location = CAPTIVE_PORTAL_SPLASH
-    else:
+    elif android_major_version == 6:
         #set_204after(ip,20)
         location = '/android_https'
+    else:
+        location = CAPTIVE_PORTAL_SPLASH
     agent = environ.get('HTTP_USER_AGENT','default_agent')
     response_body = b"hello"
     status = '302 Moved Temporarily'
