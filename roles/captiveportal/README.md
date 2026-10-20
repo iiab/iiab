@@ -56,14 +56,21 @@ messages use the `WWW-ATTEMPT:` prefix and can be viewed with:
 
     sudo dmesg | grep 'WWW-ATTEMPT:'
 
-Clients that would otherwise be redirected directly to the configured homepage
-first receive a captive-portal instruction page. It explains how to dismiss
-the OS sign-in window -- e.g. Android's **Use this network as is** -- and open
-the configured FQDN (such as `http://box.lan`) in a regular browser. The
-wording is tailored to the client's OS (Android, iOS, macOS, or a generic
-fallback). The page's button records the existing portal completion event and
-opens the configured IIAB homepage; web pages cannot reliably close the
-operating system's sign-in window themselves.
+Desktop probe requests redirect directly to the configured IIAB homepage.
+Android clients first receive a captive-portal instruction page. It explains
+how to dismiss the OS sign-in window -- e.g. Android's **Use this network as
+is** -- and open the configured FQDN (such as `http://box.lan`) in a regular
+browser. The URL is shown as large, non-clickable text so it can be entered
+after the sign-in window is dismissed. The page's button records the portal
+completion event and opens the configured IIAB homepage; web pages cannot
+reliably close the operating system's sign-in window themselves.
+
+After the portal completion event, Android connectivity probes receive an HTTP
+204 response for that client instead of being redirected back to the splash
+page. This suppresses repeated sign-in prompts on devices that use the HTTP
+probe for captive-portal validation. Some Android versions also perform HTTPS
+validation, which requires a trusted certificate and is not intercepted by
+IIAB.
 
 For direct runs, use `--log-probes` (or `--log-urls`) or set
 `CAPTIVE_PORTAL_LOG_PROBES=1`. The existing `--log-file` option can be used to
