@@ -66,11 +66,12 @@ completion event and opens the configured IIAB homepage; web pages cannot
 reliably close the operating system's sign-in window themselves.
 
 After the portal completion event, Android connectivity probes receive an HTTP
-204 response for that client instead of being redirected back to the splash
-page. This suppresses repeated sign-in prompts on devices that use the HTTP
-probe for captive-portal validation. Some Android versions also perform HTTPS
-validation, which requires a trusted certificate and is not intercepted by
-IIAB.
+204 response for that client while probe traffic continues, instead of being
+redirected back to the splash page. This suppresses repeated sign-in prompts
+during the active connection without persisting completion forever: after the
+existing 30-second inactivity window, the next probe starts a new portal
+session. Some Android versions also perform HTTPS validation, which requires a
+trusted certificate and is not intercepted by IIAB.
 
 For direct runs, use `--log-probes` (or `--log-urls`) or set
 `CAPTIVE_PORTAL_LOG_PROBES=1`. The existing `--log-file` option can be used to
