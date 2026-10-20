@@ -50,6 +50,12 @@ string and is written to the uWSGI service journal:
 
     sudo journalctl -u uwsgi-app@captiveportal.service
 
+When the captive portal is active, the same setting also logs new external LAN
+HTTP attempts before they are redirected to the portal. These kernel firewall
+messages use the `WWW-ATTEMPT:` prefix and can be viewed with:
+
+    sudo dmesg | grep 'WWW-ATTEMPT:'
+
 For direct runs, use `--log-probes` (or `--log-urls`) or set
 `CAPTIVE_PORTAL_LOG_PROBES=1`. The existing `--log-file` option can be used to
 write these entries to a rotating file.

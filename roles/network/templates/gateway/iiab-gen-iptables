@@ -110,6 +110,7 @@ samba_tcp_mports=$(iiab_var_value samba_tcp_mports)
 
 squid_enabled=$(iiab_var_value squid_enabled)
 captiveportal_enabled=$(iiab_var_value captiveportal_enabled)
+captiveportal_log_probes=$(iiab_var_value captiveportal_log_probes)
 
 echo -e "\nports_externally_visible: "$ports_externally_visible"\n"
 if ! [ "$ports_externally_visible" -eq "$ports_externally_visible" ] 2> /dev/null; then
@@ -245,6 +246,11 @@ fi
 # /usr/sbin/iiab-divert-to-nginx applies the matching probe-hostname DNS
 # diversion using the same condition, so the two always switch together.
 if is_true "$captiveportal_enabled" && [ "$lan" != "none" ] && ! is_true "$iiab_gateway_enabled"; then
+    if is_true "$captiveportal_log_probes"; then
+        $IPTABLES -t nat -A PREROUTING -i $lan -p tcp --dport 80 \
+            -m state --state NEW ! -d "$lan_ip/$lan_netmask" \
+            -j LOG --log-prefix "WWW-ATTEMPT: "
+    fi
     $IPTABLES -t nat -A PREROUTING -i $lan -p tcp --dport 80 \
         ! -d "$lan_ip/$lan_netmask" -j DNAT --to "$lan_ip:80"
 fi
