@@ -18,12 +18,9 @@ import sqlite3
 import re
 from iiab.iiab_lib import get_iiab_env
 
-# Notes on timeout strategy
-# every client timestamp is recorded into current_ts
-# When splash page is clicked , return 204 timeout starts (via ajax call),
-# Return 204 is android (may be different for different versions)
-# captive portal redirect is triggered after inactivity timeout, 
-# which needs to be longer than period of normal connecetivity checks by OS
+# Client timestamps are recorded in current_ts. Modern Android clients use
+# portal_completed to receive 204 responses after the splash is completed.
+# send204after and the inactivity timeout remain for the legacy client flows.
 # 
 
 # Create the jinja2 environment.
@@ -32,9 +29,7 @@ j2_env = Environment(loader=FileSystemLoader(CAPTIVE_PORTAL_BASE),trim_blocks=Tr
 
 # Define time outs
 INACTIVITY_TO = 30
-PORTAL_TO = 20 # delay after triggered by ajax upon click of link to home page
-# I had hoped that returning 204 status after some delay 
-#  would dispense with android's "sign-in to network" (no work)
+PORTAL_TO = 20 # legacy delay after the home-page click
 MAC_CACHE_TTL = 300
 
 
@@ -42,7 +37,7 @@ MAC_CACHE_TTL = 300
 doc_root = get_iiab_env("WWWROOT")
 fully_qualified_domain_name = get_iiab_env("FQDN")
 CAPTIVE_PORTAL_HOME = "http://" + fully_qualified_domain_name + "{{ captiveportal_splash_page }}"
-CAPTIVE_PORTAL_SPLASH = "/captive_splash"
+ANDROID_CAPTIVE_SPLASH = "/android_captive_splash"
 
 def parse_args():
     parser = argparse.ArgumentParser(add_help=False)
@@ -116,8 +111,15 @@ c.row_factory = sqlite3.Row
 c.execute( """create table IF NOT EXISTS users 
             (ip text PRIMARY KEY, mac text, current_ts integer,
             lasttimestamp integer, send204after integer,
+            portal_completed integer NOT NULL DEFAULT 0,
             os text, os_version text,
             ymd text)""")
+columns = {row[1] for row in c.execute("PRAGMA table_info(users)")}
+if "portal_completed" not in columns:
+    c.execute(
+        "ALTER TABLE users ADD COLUMN portal_completed integer NOT NULL DEFAULT 0"
+    )
+    conn.commit()
 mac_cache = {}
 
 def update_user(ip, mac, system, system_version, ymd):
@@ -128,8 +130,15 @@ def update_user(ip, mac, system, system_version, ymd):
         sql = "INSERT INTO users (ip,mac,os,os_version,ymd) VALUES (?,?,?,?,?)" 
         c.execute(sql,(ip, mac, system, system_version, ymd ))
     else:
-        sql = "UPDATE users SET  (mac,os,os_version,ymd) = ( ?, ?, ?, ? ) WHERE ip = ?"
-        c.execute(sql,(mac, system, system_version, ymd, ip,))
+        if row['mac'] and mac and row['mac'] != mac:
+            sql = """UPDATE users
+                     SET (mac, os, os_version, ymd, portal_completed) =
+                         (?, ?, ?, ?, 0)
+                     WHERE ip = ?"""
+            c.execute(sql,(mac, system, system_version, ymd, ip,))
+        else:
+            sql = "UPDATE users SET (mac,os,os_version,ymd) = ( ?, ?, ?, ? ) WHERE ip = ?"
+            c.execute(sql,(mac, system, system_version, ymd, ip,))
 
 def get_mac(ip):
     now = time.monotonic()
@@ -196,36 +205,54 @@ def set_lasttimestamp(ip):
     c.execute(sql,(ts,ip,))
     conn.commit()
 
+def set_portal_completed(ip):
+    sql = 'UPDATE users SET portal_completed = 1 where ip = ?'
+    c.execute(sql,(ip,))
+    conn.commit()
+
+def is_portal_completed(ip):
+    sql = "SELECT portal_completed FROM users WHERE ip = ?"
+    c.execute(sql,(ip,))
+    row = c.fetchone()
+    return bool(row and row['portal_completed'])
+
 #  ###################  Action routines based on OS  ################3
 def microsoft(environ,start_response):
     logger.debug('in microsoft')
-    # firefox -- seems both mac and Windows use it
-    agent = environ.get('HTTP_USER_AGENT','default_agent')
-    if agent.startswith('Mozilla'):
-       logger.debug("sending captive portal instructions for agent Mozilla")
-       return captive_splash(environ, start_response)
-    response_body = b""
-    status = '302 Moved Temporarily'
-    response_headers = [('Location',CAPTIVE_PORTAL_SPLASH),
-            ('Content-type','text/html'),
-            ('Content-Length',str(len(response_body)))]
-    start_response(status, response_headers)
-    logger.debug("redirect to captive portal instructions. Status: %s Headers: %s"%(status,repr(response_headers)))
-    return [response_body]
+    if is_android_flow(environ):
+        logger.debug("sending captive portal instructions for Android")
+        return android_captive_splash(environ, start_response)
+    return put_302(environ, start_response)
 
-def captive_splash(environ, start_response):
+def android_captive_splash(environ, start_response):
+    android_flow = is_android_flow(environ)
+    if not android_flow:
+        return put_302(environ, start_response)
     en_txt = {
         'message': "This network uses an offline IIAB server.",
         'btn1': "I UNDERSTAND - OPEN IIAB HOME PAGE",
         'HOME_URL': CAPTIVE_PORTAL_HOME,
+        'manual_home_prompt': "Open a regular browser and enter:",
+        'manual_home_url': "http://" + fully_qualified_domain_name,
         'doc_root': get_iiab_env("WWWROOT"),
     }
     es_txt = {
         'message': "Esta red utiliza un servidor IIAB sin conexión.",
         'btn1': "ENTIENDO - ABRIR LA PÁGINA DE INICIO DE IIAB",
         'HOME_URL': CAPTIVE_PORTAL_HOME,
+        'manual_home_prompt': "Abra un navegador normal e introduzca:",
+        'manual_home_url': "http://" + fully_qualified_domain_name,
         'doc_root': get_iiab_env("WWWROOT"),
     }
+    if android_flow:
+        en_txt['message'] = (
+            'On Android, tap the three dots at the top right and select '
+            '"Use this network as is".'
+        )
+        es_txt['message'] = (
+            'En Android, toque los tres puntos de la esquina superior derecha '
+            'y seleccione "Usar esta red tal como está".'
+        )
     txt = en_txt if lang == "en" else es_txt if lang == "es" else en_txt
     txt['instructions'] = portal_instructions(environ)
     response_body = str(j2_env.get_template("simple.template").render(**txt))
@@ -247,7 +274,7 @@ def android(environ, start_response):
     android_major_version = parse_android_major_version(system_version)
     if android_major_version is None:
         logger.warning("unrecognized Android version %r; using captive portal splash", system_version)
-        location = CAPTIVE_PORTAL_SPLASH
+        location = ANDROID_CAPTIVE_SPLASH
     elif android_major_version < 6:
         logger.debug("system < 6:{}".format(system_version))
         location = '/android_splash'
@@ -256,7 +283,7 @@ def android(environ, start_response):
         #set_204after(ip,20)
         location = '/android_https'
     else:
-        location = CAPTIVE_PORTAL_SPLASH
+        location = ANDROID_CAPTIVE_SPLASH
     agent = environ.get('HTTP_USER_AGENT','default_agent')
     response_body = b"hello"
     status = '302 Moved Temporarily'
@@ -336,6 +363,12 @@ def macintosh(environ, start_response):
     logger.debug('in macintosh')
     global ip
     logger.debug("in function mcintosh")
+    agent = environ.get('HTTP_USER_AGENT', '')
+    system, system_version = parse_agent(agent)
+    if is_android_flow(environ):
+        return android_captive_splash(environ, start_response)
+    if system != 'iPhone OS':
+        return put_302(environ, start_response)
     #print >> sys.stderr , "Geo Print to stderr" + environ['HTTP_HOST']
     if not is_inactive(ip):
         set_lasttimestamp(ip)
@@ -401,7 +434,7 @@ def success(environ, start_response):
     return [html]
 
 def put_204(environ, start_response):
-    status = '204 No Data'
+    status = '204 No Content'
     response_body = b''
     response_headers = [('Content-type','text/html'),
             ('Content-Length',str(len(response_body)))]
@@ -445,40 +478,48 @@ def parse_agent(agent):
         system_version = "8"
     return (system, system_version)
 
+def is_android_flow(environ):
+    agent = environ.get('HTTP_USER_AGENT', '')
+    system, system_version = parse_agent(agent)
+    return (
+        environ.get("PATH_INFO") == ANDROID_CAPTIVE_SPLASH
+        or system == "Android"
+    )
+
 def portal_instructions(environ):
     '''Return OS-appropriate text explaining how to dismiss the captive
     sign-in window and open the IIAB homepage in a regular browser.'''
     agent = environ.get('HTTP_USER_AGENT','default_agent')
     system, system_version = parse_agent(agent)
-    url = 'http://{}'.format(fully_qualified_domain_name)
-    if system == 'Android':
-        en = ("If this sign-in window does not close automatically, tap the "
-              "three dots at the top right, select \"Use this network as is\", "
-              "then open any browser and enter " + url + ".")
+    android_flow = is_android_flow(environ)
+    if android_flow:
+        en = ("After selecting \"Use this network as is\", close this window, "
+              "then open a regular browser and enter the address shown below.")
         es = ("Si esta ventana de inicio de sesión no se cierra automáticamente, "
-              "toque los tres puntos de la esquina superior derecha, seleccione "
-              "\"Usar esta red tal como está\", abra cualquier navegador e "
-              "introduzca " + url + ".")
+              "después de seleccionar \"Usar esta red tal como está\", ciérrela, "
+              "abra un navegador normal e introduzca la dirección que aparece "
+              "abajo.")
     elif system == 'iPhone OS':
         en = ("If this sign-in window does not close automatically, tap Cancel "
-              "(or swipe down) to dismiss it, then open Safari and enter "
-              + url + ".")
+              "(or swipe down) to dismiss it, then open Safari and enter the "
+              "address shown below.")
         es = ("Si esta ventana de inicio de sesión no se cierra automáticamente, "
               "toque Cancelar (o deslice hacia abajo) para cerrarla, abra "
-              "Safari e introduzca " + url + ".")
+              "Safari e introduzca la dirección que aparece abajo.")
     elif system == 'OS X':
         en = ("If this sign-in window does not close automatically, close it "
-              "(Command-W or the close button), then open Safari and enter "
-              + url + ".")
+              "(Command-W or the close button), then open Safari and enter the "
+              "address shown below.")
         es = ("Si esta ventana de inicio de sesión no se cierra automáticamente, "
               "ciérrela (Command-W o el botón de cierre), abra Safari e "
-              "introduzca " + url + ".")
+              "introduzca la dirección que aparece abajo.")
     else:
         en = ("If this sign-in window does not close automatically, close or "
-              "ignore it, then open any browser and enter " + url + ".")
+              "ignore it, then open any browser and enter the address shown "
+              "below.")
         es = ("Si esta ventana de inicio de sesión no se cierra automáticamente, "
-              "ciérrela o ignórela, abra cualquier navegador e introduzca "
-              + url + ".")
+              "ciérrela o ignórela, abra cualquier navegador e introduzca la "
+              "dirección que aparece abajo.")
     if lang == "es":
         return es
     return en
@@ -561,6 +602,7 @@ def application (environ, start_response):
       #print("setting flag to return_204")
       set_204after(ip,PORTAL_TO)
       set_lasttimestamp(ip)
+      set_portal_completed(ip)
       status = '200 OK'
       response_body = b''
       response_headers = [('Content-type','text/html'),
@@ -568,8 +610,8 @@ def application (environ, start_response):
       start_response(status, response_headers)
       return [response_body]
 
-   if environ['PATH_INFO'] == CAPTIVE_PORTAL_SPLASH:
-      return captive_splash(environ, start_response)
+   if environ['PATH_INFO'] == ANDROID_CAPTIVE_SPLASH:
+      return android_captive_splash(environ, start_response)
 
    #### parse OS platform based upon URL  ##################
    # mac
@@ -608,7 +650,9 @@ def application (environ, start_response):
       environ['HTTP_HOST'] == "connectivitycheck.gstatic.com":
       current_ts, last_ts, send204after = timeout_info(ip) 
       logger.debug("current_ts: {} last_ts: {} send204after: {}".format(current_ts, last_ts, send204after,))
-      if not last_ts or (ts - int(last_ts) > INACTIVITY_TO):
+      if is_portal_completed(ip):
+          return put_204(environ,start_response)
+      if not last_ts:
           return android(environ, start_response) 
       elif is_after204_timeout(ip):
           return put_204(environ,start_response)
