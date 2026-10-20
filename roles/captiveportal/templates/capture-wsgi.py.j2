@@ -224,6 +224,15 @@ def is_portal_completed(ip):
     state = client_states.get(ip)
     return bool(state and state["portal_completed"])
 
+def client_ip(environ):
+    '''Single source of the client address.  nginx overrides X-Forwarded-For
+    with the real peer address (uwsgi_param HTTP_X_FORWARDED_FOR $remote_addr);
+    direct runs fall back to the peer address itself.'''
+    forwarded = environ.get('HTTP_X_FORWARDED_FOR')
+    if forwarded:
+        return forwarded.strip()
+    return environ['REMOTE_ADDR'].strip()
+
 #  ###################  Action routines based on OS  ################3
 def microsoft(environ,start_response):
     logger.debug('in microsoft')
@@ -274,10 +283,7 @@ def android_captive_splash(environ, start_response):
     return [response_body]
 
 def android(environ, start_response):
-    if  environ.get('HTTP_X_FORWARDED_FOR'):
-        ip = environ['HTTP_X_FORWARDED_FOR'].strip()
-    else: 
-        ip = environ['REMOTE_ADDR'].strip()
+    ip = client_ip(environ)
     system,system_version = platform_info(ip)
     android_major_version = parse_android_major_version(system_version)
     if android_major_version is None:
@@ -345,6 +351,7 @@ def android_https(environ, start_response):
 def mac_splash(environ,start_response):
     logger.debug('in mac_splash')
     logger.debug("in function mac_splash")
+    ip = client_ip(environ)
     en_txt={ 'message': "Click on the button to go to the IIAB home page",\
             'btn1': "GO TO IIAB HOME PAGE",'success_token': 'Success',
             "HOME_URL": CAPTIVE_PORTAL_HOME, \
@@ -369,13 +376,18 @@ def mac_splash(environ,start_response):
 
 def macintosh(environ, start_response):
     logger.debug('in macintosh')
-    global ip
     logger.debug("in function mcintosh")
+    ip = client_ip(environ)
     agent = environ.get('HTTP_USER_AGENT', '')
     system, system_version = parse_agent(agent)
     if is_android_flow(environ):
         return android_captive_splash(environ, start_response)
-    if system != 'iPhone OS':
+    # Desktop browsers classifiable by OS user agent go straight to the
+    # homepage.  iOS/macOS sign-in assistants send "CaptiveNetworkSupport-..."
+    # user agents (parse_agent returns ''), and Safari sends "iPhone OS" --
+    # those clients need the sign-in-window instructions below, so only
+    # positively identified desktop systems are redirected away.
+    if system in ("OS X", "Windows NT", "Microsoft NCSI"):
         return put_302(environ, start_response)
     #print >> sys.stderr , "Geo Print to stderr" + environ['HTTP_HOST']
     if not is_inactive(ip):
@@ -543,7 +555,6 @@ def requested_url(environ):
 #
 # ================== Start serving the wsgi application  =================
 def application (environ, start_response):
-   global ip
    global CATCH
    global LIST
    global INACTIVITY_TO
@@ -567,10 +578,7 @@ def application (environ, start_response):
    if environ['PATH_INFO'] == "/favicon.ico":
       return null(environ, start_response)
 
-   if  'HTTP_X_FORWARDED_FOR' in environ:
-      ip = environ['HTTP_X_FORWARDED_FOR'].strip()
-   else:
-      ip = environ['REMOTE_ADDR'].strip()
+   ip = client_ip(environ)
    prune_client_states()
    mac = get_mac(ip)
    data = []
