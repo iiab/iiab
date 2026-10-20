@@ -19,8 +19,9 @@ import re
 from iiab.iiab_lib import get_iiab_env
 
 # Client timestamps are recorded in current_ts. Modern Android clients use
-# portal_completed to receive 204 responses after the splash is completed.
-# send204after and the inactivity timeout remain for the legacy client flows.
+# portal_completed to receive 204 responses after the splash is completed while
+# probe traffic continues. The inactivity timeout starts a new portal session.
+# send204after remains for the legacy client flows.
 # 
 
 # Create the jinja2 environment.
@@ -207,6 +208,13 @@ def set_lasttimestamp(ip):
 
 def set_portal_completed(ip):
     sql = 'UPDATE users SET portal_completed = 1 where ip = ?'
+    c.execute(sql,(ip,))
+    conn.commit()
+
+def clear_portal_completed(ip):
+    sql = """UPDATE users
+             SET portal_completed = 0, lasttimestamp = 0, send204after = 0
+             WHERE ip = ?"""
     c.execute(sql,(ip,))
     conn.commit()
 
@@ -651,7 +659,14 @@ def application (environ, start_response):
       current_ts, last_ts, send204after = timeout_info(ip) 
       logger.debug("current_ts: {} last_ts: {} send204after: {}".format(current_ts, last_ts, send204after,))
       if is_portal_completed(ip):
-          return put_204(environ,start_response)
+          if last_ts and ts - int(last_ts) <= INACTIVITY_TO:
+              # Keep completion scoped to an active client session. Without
+              # this heartbeat, the flag suppresses the portal forever.
+              set_lasttimestamp(ip)
+              return put_204(environ,start_response)
+          logger.debug("portal completion expired for %s; starting a new session", ip)
+          clear_portal_completed(ip)
+          return android(environ, start_response)
       if not last_ts:
           return android(environ, start_response) 
       elif is_after204_timeout(ip):
