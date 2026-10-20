@@ -5,12 +5,14 @@
 from wsgiref.simple_server import make_server
 import argparse
 import subprocess
+import time
 from dateutil.tz import *
 import datetime
 import logging
 from logging.handlers import RotatingFileHandler
 import os
 import sys
+from functools import lru_cache
 from jinja2 import Environment, FileSystemLoader
 import sqlite3
 import re
@@ -33,6 +35,7 @@ INACTIVITY_TO = 30
 PORTAL_TO = 20 # delay after triggered by ajax upon click of link to home page
 # I had hoped that returning 204 status after some delay 
 #  would dispense with android's "sign-in to network" (no work)
+MAC_CACHE_TTL = 300
 
 
 # Get the IIAB variables
@@ -115,6 +118,7 @@ c.execute( """create table IF NOT EXISTS users
             lasttimestamp integer, send204after integer,
             os text, os_version text,
             ymd text)""")
+mac_cache = {}
 
 def update_user(ip, mac, system, system_version, ymd):
     sql = "SELECT * FROM users WHERE ip = ?"
@@ -126,7 +130,18 @@ def update_user(ip, mac, system, system_version, ymd):
     else:
         sql = "UPDATE users SET  (mac,os,os_version,ymd) = ( ?, ?, ?, ? ) WHERE ip = ?"
         c.execute(sql,(mac, system, system_version, ymd, ip,))
-    conn.commit()
+
+def get_mac(ip):
+    now = time.monotonic()
+    cached = mac_cache.get(ip)
+    if cached and now - cached[0] < MAC_CACHE_TTL:
+        return cached[1]
+
+    output = subprocess.check_output(["arp", "-an", ip], text=True)
+    match = re.search(r"(?:[0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}", output)
+    mac = match.group(0) if match else ""
+    mac_cache[ip] = (now, mac)
+    return mac
 
 def platform_info(ip):
     sql = "select * FROM users WHERE ip = ?"
@@ -340,36 +355,37 @@ def macintosh(environ, start_response):
         return mac_splash(environ,start_response)
 
 # =============  Return html pages  ============================
+@lru_cache(maxsize=4)
+def read_static_asset(relative_path):
+    with open(os.path.join(doc_root, relative_path), "rb") as asset:
+        return asset.read()
+
+def static_asset(environ, start_response, relative_path, content_type):
+    asset = read_static_asset(relative_path)
+    headers = [
+        ('Content-type', content_type),
+        ('Content-Length', str(len(asset))),
+        ('Cache-Control', 'public, max-age=86400'),
+    ]
+    start_response('200 OK', headers)
+    return [asset]
+
 def banner(environ, start_response):
-    status = '200 OK'
-    headers = [('Content-type', 'image/png')]
-    start_response(status, headers)
-    image = open("{}/js-menu/menu-files/images/iiab_banner6.png".format(doc_root), "rb").read()
-    return [image]
+    return static_asset(
+        environ, start_response, "js-menu/menu-files/images/iiab_banner6.png", "image/png"
+    )
 
 def bootstrap(environ, start_response):
     logger.debug("in bootstrap")
-    status = '200 OK'
-    headers = [('Content-type', 'text/javascript')]
-    start_response(status, headers)
-    boot = open("{}/common/js/bootstrap.min.js".format(doc_root), "rb").read() 
-    return [boot]
+    return static_asset(environ, start_response, "common/js/bootstrap.min.js", "text/javascript")
 
 def jquery(environ, start_response):
     logger.debug("in jquery")
-    status = '200 OK'
-    headers = [('Content-type', 'text/javascript')]
-    start_response(status, headers)
-    boot = open("{}/common/js/jquery.min.js".format(doc_root), "rb").read() 
-    return [boot]
+    return static_asset(environ, start_response, "common/js/jquery.min.js", "text/javascript")
 
 def bootstrap_css(environ, start_response):
     logger.debug("in bootstrap_css")
-    status = '200 OK'
-    headers = [('Content-type', 'text/css')]
-    start_response(status, headers)
-    boot = open("{}/common/css/bootstrap.min.css".format(doc_root), "rb").read() 
-    return [boot]
+    return static_asset(environ, start_response, "common/css/bootstrap.min.css", "text/css")
 
 def null(environ, start_response):
     status = '404 Not Found'
@@ -490,14 +506,23 @@ def application (environ, start_response):
           environ.get("SERVER_NAME", ""),
       )
 
+   # These resources do not need client state, ARP lookup, or SQLite activity.
+   if environ['PATH_INFO'] == "/iiab_banner6.png":
+      return banner(environ, start_response)
+   if environ['PATH_INFO'] == "/bootstrap.min.js":
+      return bootstrap(environ, start_response)
+   if environ['PATH_INFO'] == "/bootstrap.min.css":
+      return bootstrap_css(environ, start_response)
+   if environ['PATH_INFO'] == "/jquery.min.js":
+      return jquery(environ, start_response)
+   if environ['PATH_INFO'] == "/favicon.ico":
+      return null(environ, start_response)
+
    if  'HTTP_X_FORWARDED_FOR' in environ:
       ip = environ['HTTP_X_FORWARDED_FOR'].strip()
    else:
-      data = ['{}: {}\n'.format(key, value) for key, value in sorted(environ.items()) ]
-      #logger.debug("need the correct ip:{}".format(data))
       ip = environ['REMOTE_ADDR'].strip()
-   cmd="arp -an %s|gawk \'{print $4}\'"%(ip)
-   mac = subprocess.check_output(cmd, shell=True)
+   mac = get_mac(ip)
    data = []
    data.append("host: {}\n".format(environ['HTTP_HOST']))
    data.append("path: {}\n".format(environ['PATH_INFO']))
@@ -518,30 +543,15 @@ def application (environ, start_response):
    c.execute(sql,(ts,ip,))
    if c.rowcount == 0:
       logger.debug("failed UPDATE  users SET current_ts = {} WHERE ip = {}".format(ts,ip,)) 
-   conn.commit()
    ymd=datetime.datetime.today().strftime("%y%m%d-%H%M")
 
    system,system_version = parse_agent(agent)
    if system != '':
       update_user(ip, mac, system, system_version, ymd)
+   conn.commit()
 
    #######   Return pages based upon PATH   ###############
    # do more specific stuff first
-   if  environ['PATH_INFO'] == "/iiab_banner6.png":
-      return banner(environ, start_response) 
-
-   if  environ['PATH_INFO'] == "/bootstrap.min.js":
-      return bootstrap(environ, start_response) 
-
-   if  environ['PATH_INFO'] == "/bootstrap.min.css":
-      return bootstrap_css(environ, start_response) 
-
-   if  environ['PATH_INFO'] == "/jquery.min.js":
-      return jquery(environ, start_response) 
-
-   if  environ['PATH_INFO'] == "/favicon.ico":
-      return null(environ, start_response) 
-
    if  environ['PATH_INFO'] == "/home_selected":
       # the js link to home page triggers this ajax url 
       # mark the sign-in conversation completed, return 204 or Success or Success
