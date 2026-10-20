@@ -33,6 +33,7 @@ PORTAL_SESSION_TO = 5 * 60
 PORTAL_TO = 20 # legacy delay after the home-page click
 CLIENT_STATE_TTL = PORTAL_SESSION_TO
 MAC_CACHE_TTL = INACTIVITY_TO
+NEIGHBOR_LOOKUP_TIMEOUT = 2 # seconds; a wedged netlink must not stall requests
 
 
 # Get the IIAB variables
@@ -123,6 +124,14 @@ def prune_client_states():
     ]
     for ip in expired:
         del client_states[ip]
+    # mac_cache entries past their TTL can never be served again; drop them
+    # so MACs do not outlive their usefulness in process memory
+    stale = [
+        ip for ip, cached in mac_cache.items()
+        if now - cached[0] > MAC_CACHE_TTL
+    ]
+    for ip in stale:
+        del mac_cache[ip]
 
 def get_client_state(ip):
     state = client_states.get(ip)
@@ -135,7 +144,11 @@ mac_cache = {}
 
 def update_client_state(ip, mac, system, system_version):
     state = get_client_state(ip)
-    if state["mac"] != mac and (state["mac"] or mac):
+    # Reset only on a genuine device change: two known, differing MACs.
+    # An empty MAC means the lookup degraded (no neighbor entry yet,
+    # timeout) -- "unknown" must not be treated as "changed" or a single
+    # transient failure would wipe portal_completed mid-session.
+    if mac and state["mac"] and state["mac"] != mac:
         state.update(
             mac=mac,
             os=system,
@@ -145,7 +158,9 @@ def update_client_state(ip, mac, system, system_version):
             portal_completed=False,
         )
     else:
-        state.update(mac=mac, os=system, os_version=system_version)
+        state.update(os=system, os_version=system_version)
+        if mac: # never overwrite a known MAC with an unknown one
+            state["mac"] = mac
 
 def get_mac(ip):
     now = time.monotonic()
@@ -153,7 +168,25 @@ def get_mac(ip):
     if cached and now - cached[0] < MAC_CACHE_TTL:
         return cached[1]
 
-    output = subprocess.check_output(["arp", "-an", ip], text=True)
+    # iproute2's `ip neigh` resolves IPv4 and IPv6 neighbors alike (net-tools'
+    # `arp` rejects IPv6 addresses with exit 255).  Anything unexpected --
+    # unparseable address, timeout, missing binary -- degrades to "no MAC"
+    # instead of failing the request.  Failed lookups are not cached, so the
+    # next request retries; successful ones (including "no entry") are.
+    try:
+        output = subprocess.check_output(
+            ["ip", "neigh", "show", "to", ip],
+            text=True,
+            stderr=subprocess.PIPE,
+            timeout=NEIGHBOR_LOOKUP_TIMEOUT,
+        )
+    except subprocess.CalledProcessError as exc:
+        logger.debug("neighbor lookup rejected %r: %s", ip, (exc.stderr or "").strip())
+        return ""
+    except (subprocess.SubprocessError, OSError) as exc:
+        logger.warning("neighbor lookup failed for %r: %s", ip, exc)
+        return ""
+
     match = re.search(r"(?:[0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}", output)
     mac = match.group(0) if match else ""
     mac_cache[ip] = (now, mac)
@@ -566,7 +599,7 @@ def application (environ, start_response):
           environ.get("SERVER_NAME", ""),
       )
 
-   # These resources do not need client state or ARP lookup.
+   # These resources do not need client state or neighbor lookup.
    if environ['PATH_INFO'] == "/iiab_banner6.png":
       return banner(environ, start_response)
    if environ['PATH_INFO'] == "/bootstrap.min.js":
