@@ -13,7 +13,7 @@ _Please Also See: http://FAQ.IIAB.IO > ["Captive Portal Administration: What tip
     1. checkurls -- the list of urls use by at least one of the OS's.
     1. iiab-divert-to-nginx -- Bash script writes dnsmasq config file which points to IIAB server
     1. iiab-make-cp-servers.py -- Python script writes nginx configuration file to /etc/nginx/sites-enabled
-    1. capture-wsgi.py -- the script which determines the client agent, records it in sqlite database, and responds with redirects as appropriate for each OS.
+    1. capture-wsgi.py -- the script which determines the client agent, keeps short-lived client state in memory, and responds with redirects as appropriate for each OS.
     1. captiveportal.ini.j2 -- config file for the `uwsgi-app@captiveportal.service` instance, which runs the capture-wsgi.py script.
     1. `uwsgi-app@captiveportal.service` and `uwsgi-app@captiveportal.socket` -- the distro-provided per-application systemd units for the Captive Portal.
     
@@ -32,12 +32,9 @@ startup and application errors can be inspected with:
 
     sudo journalctl -u uwsgi-app@captiveportal.service
 
-The service stores its client-state database as `users.sqlite` in
-`STATE_DIRECTORY` which distributions usually provide as
-`StateDirectory=uwsgi/%i`. For the `captiveportal` instance, that path is
-`/var/lib/uwsgi/captiveportal/users.sqlite`. If `STATE_DIRECTORY` is not
-available, including during direct runs, the script falls back to
-`/opt/iiab/captiveportal/users.sqlite`.
+The service keeps client state in memory only. Entries expire after 30 seconds
+without a request and all state is lost when the Captive Portal service
+restarts; no client-state database is used.
 
 When running `capture-wsgi.py` directly for debugging, it listens on TCP
 port `9090` by default. Override the port with `--port`, or set
