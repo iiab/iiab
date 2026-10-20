@@ -19,8 +19,8 @@ from iiab.iiab_lib import get_iiab_env
 
 # Client timestamps are recorded in current_ts. Modern Android clients use
 # portal_completed to receive 204 responses after the splash is completed while
-# probe traffic continues. The inactivity timeout starts a new portal session.
-# send204after remains for the legacy client flows.
+# probe traffic continues. The shorter inactivity timeout remains for legacy
+# client flows; completed Android sessions use PORTAL_SESSION_TO.
 # 
 
 # Create the jinja2 environment.
@@ -29,8 +29,10 @@ j2_env = Environment(loader=FileSystemLoader(CAPTIVE_PORTAL_BASE),trim_blocks=Tr
 
 # Define time outs
 INACTIVITY_TO = 30
+PORTAL_SESSION_TO = 5 * 60
 PORTAL_TO = 20 # legacy delay after the home-page click
-MAC_CACHE_TTL = 300
+CLIENT_STATE_TTL = PORTAL_SESSION_TO
+MAC_CACHE_TTL = INACTIVITY_TO
 
 
 # Get the IIAB variables
@@ -117,7 +119,7 @@ def prune_client_states():
     now = time.monotonic()
     expired = [
         ip for ip, state in client_states.items()
-        if now - state["last_seen"] > INACTIVITY_TO
+        if now - state["last_seen"] > CLIENT_STATE_TTL
     ]
     for ip in expired:
         del client_states[ip]
@@ -653,7 +655,7 @@ def application (environ, start_response):
       current_ts, last_ts, send204after = timeout_info(ip) 
       logger.debug("current_ts: {} last_ts: {} send204after: {}".format(current_ts, last_ts, send204after,))
       if is_portal_completed(ip):
-          if last_ts and ts - int(last_ts) <= INACTIVITY_TO:
+          if last_ts and ts - int(last_ts) <= PORTAL_SESSION_TO:
               # Keep completion scoped to an active client session. Without
               # this heartbeat, the flag suppresses the portal forever.
               set_lasttimestamp(ip)
