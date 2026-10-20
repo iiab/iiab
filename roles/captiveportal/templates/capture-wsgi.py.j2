@@ -39,8 +39,7 @@ PORTAL_TO = 20 # delay after triggered by ajax upon click of link to home page
 doc_root = get_iiab_env("WWWROOT")
 fully_qualified_domain_name = get_iiab_env("FQDN")
 CAPTIVE_PORTAL_HOME = "http://" + fully_qualified_domain_name + "{{ captiveportal_splash_page }}"
-CAPTIVE_PORTAL_HOME += "&" if "?" in CAPTIVE_PORTAL_HOME else "?"
-CAPTIVE_PORTAL_HOME += "iiab_captiveportal=1"
+CAPTIVE_PORTAL_SPLASH = "/captive_splash"
 
 def parse_args():
     parser = argparse.ArgumentParser(add_help=False)
@@ -184,26 +183,40 @@ def microsoft(environ,start_response):
     # firefox -- seems both mac and Windows use it
     agent = environ.get('HTTP_USER_AGENT','default_agent')
     if agent.startswith('Mozilla'):
-       logger.debug("sending microsoft redirect for agent Mozilla")
-       return home(environ, start_response) 
+       logger.debug("sending captive portal instructions for agent Mozilla")
+       return captive_splash(environ, start_response)
     response_body = b""
     status = '302 Moved Temporarily'
-    response_headers = [('Location',CAPTIVE_PORTAL_HOME),
+    response_headers = [('Location',CAPTIVE_PORTAL_SPLASH),
             ('Content-type','text/html'),
             ('Content-Length',str(len(response_body)))]
     start_response(status, response_headers)
-    logger.debug("redirect to home. Status: %s Headers: %s"%(status,repr(response_headers)))
+    logger.debug("redirect to captive portal instructions. Status: %s Headers: %s"%(status,repr(response_headers)))
     return [response_body]
 
-def home(environ,start_response):
-    logger.debug("sending direct to home")
-    response_body = b""
-    status = '302 Moved Temporarily'
-    response_headers = [('Location',CAPTIVE_PORTAL_HOME),
-            ('Content-type','text/html'),
-            ('Content-Length',str(len(response_body)))]
+def captive_splash(environ, start_response):
+    en_txt = {
+        'message': "This network uses an offline IIAB server.",
+        'btn1': "I UNDERSTAND - OPEN IIAB HOME PAGE",
+        'HOME_URL': CAPTIVE_PORTAL_HOME,
+        'doc_root': get_iiab_env("WWWROOT"),
+    }
+    es_txt = {
+        'message': "Esta red utiliza un servidor IIAB sin conexión.",
+        'btn1': "ENTIENDO - ABRIR LA PÁGINA DE INICIO DE IIAB",
+        'HOME_URL': CAPTIVE_PORTAL_HOME,
+        'doc_root': get_iiab_env("WWWROOT"),
+    }
+    txt = en_txt if lang == "en" else es_txt if lang == "es" else en_txt
+    txt['instructions'] = portal_instructions(environ)
+    response_body = str(j2_env.get_template("simple.template").render(**txt))
+    response_body = response_body.encode()
+    status = '200 OK'
+    response_headers = [
+        ('Content-type', 'text/html; charset=utf-8'),
+        ('Content-Length', str(len(response_body))),
+    ]
     start_response(status, response_headers)
-    logger.debug("redirect to home. Status: %s Headers: %s"%(status,repr(response_headers)))
     return [response_body]
 
 def android(environ, start_response):
@@ -219,7 +232,7 @@ def android(environ, start_response):
         location = '/android_splash'
         set_204after(ip,0)
     elif system_version[:1] >= '7':
-        location = CAPTIVE_PORTAL_HOME
+        location = CAPTIVE_PORTAL_SPLASH
     else:
         #set_204after(ip,20)
         location = '/android_https'
@@ -288,11 +301,12 @@ def mac_splash(environ,start_response):
         txt = en_txt
     elif lang == "es":
         txt = es_txt
+    txt['instructions'] = portal_instructions(environ)
     set_lasttimestamp(ip)
     response_body = str(j2_env.get_template("mac.template").render(**txt))
     response_body = response_body.encode()
     status = '200 Success'
-    response_headers = [('Content-type','text/html'),
+    response_headers = [('Content-type','text/html; charset=utf-8'),
             ('Content-Length',str(len(response_body)))]
     start_response(status, response_headers)
     return [response_body]
@@ -376,7 +390,7 @@ def put_204(environ, start_response):
 def put_302(environ, start_response):
     status = '302 Moved Temporarily'
     response_body = b''
-    location = CAPTIVE_PORTAL_HOME
+    location = CAPTIVE_PORTAL_SPLASH
     response_headers = [('Content-type','text/html'),
             ('Location',location), 
             ('Content-Length',str(len(response_body)))]
@@ -408,6 +422,44 @@ def parse_agent(agent):
         system = match.group(1)
         system_version = "8"
     return (system, system_version)
+
+def portal_instructions(environ):
+    '''Return OS-appropriate text explaining how to dismiss the captive
+    sign-in window and open the IIAB homepage in a regular browser.'''
+    agent = environ.get('HTTP_USER_AGENT','default_agent')
+    system, system_version = parse_agent(agent)
+    url = 'http://{}'.format(fully_qualified_domain_name)
+    if system == 'Android':
+        en = ("If this sign-in window does not close automatically, tap the "
+              "three dots at the top right, select \"Use this network as is\", "
+              "then open any browser and enter " + url + ".")
+        es = ("Si esta ventana de inicio de sesión no se cierra automáticamente, "
+              "toque los tres puntos de la esquina superior derecha, seleccione "
+              "\"Usar esta red tal como está\", abra cualquier navegador e "
+              "introduzca " + url + ".")
+    elif system == 'iPhone OS':
+        en = ("If this sign-in window does not close automatically, tap Cancel "
+              "(or swipe down) to dismiss it, then open Safari and enter "
+              + url + ".")
+        es = ("Si esta ventana de inicio de sesión no se cierra automáticamente, "
+              "toque Cancelar (o deslice hacia abajo) para cerrarla, abra "
+              "Safari e introduzca " + url + ".")
+    elif system == 'OS X':
+        en = ("If this sign-in window does not close automatically, close it "
+              "(Command-W or the close button), then open Safari and enter "
+              + url + ".")
+        es = ("Si esta ventana de inicio de sesión no se cierra automáticamente, "
+              "ciérrela (Command-W o el botón de cierre), abra Safari e "
+              "introduzca " + url + ".")
+    else:
+        en = ("If this sign-in window does not close automatically, close or "
+              "ignore it, then open any browser and enter " + url + ".")
+        es = ("Si esta ventana de inicio de sesión no se cierra automáticamente, "
+              "ciérrela o ignórela, abra cualquier navegador e introduzca "
+              + url + ".")
+    if lang == "es":
+        return es
+    return en
 
 def requested_url(environ):
     host = environ.get("HTTP_HOST") or environ.get("SERVER_NAME", "")
@@ -499,6 +551,9 @@ def application (environ, start_response):
             ('Content-Length',str(len(response_body)))]
       start_response(status, response_headers)
       return [response_body]
+
+   if environ['PATH_INFO'] == CAPTIVE_PORTAL_SPLASH:
+      return captive_splash(environ, start_response)
 
    #### parse OS platform based upon URL  ##################
    # mac

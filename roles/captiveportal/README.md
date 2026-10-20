@@ -56,6 +56,15 @@ messages use the `WWW-ATTEMPT:` prefix and can be viewed with:
 
     sudo dmesg | grep 'WWW-ATTEMPT:'
 
+Clients that would otherwise be redirected directly to the configured homepage
+first receive a captive-portal instruction page. It explains how to dismiss
+the OS sign-in window -- e.g. Android's **Use this network as is** -- and open
+the configured FQDN (such as `http://box.lan`) in a regular browser. The
+wording is tailored to the client's OS (Android, iOS, macOS, or a generic
+fallback). The page's button records the existing portal completion event and
+opens the configured IIAB homepage; web pages cannot reliably close the
+operating system's sign-in window themselves.
+
 For direct runs, use `--log-probes` (or `--log-urls`) or set
 `CAPTIVE_PORTAL_LOG_PROBES=1`. The existing `--log-file` option can be used to
 write these entries to a rotating file.
