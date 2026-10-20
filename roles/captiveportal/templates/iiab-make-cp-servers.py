@@ -5,7 +5,7 @@ import os
 outstr = ''
 
 outstr += 'server {\n'
-outstr += '    listen 80 default_server;\n'
+outstr += '    listen {{ nginx_port }} default_server;\n'
 outstr += '    server_name _;\n'
 outstr += '    location / {\n'
 outstr += '        include uwsgi_params;\n'
@@ -23,7 +23,7 @@ with open('checkurls','r') as urls:
    for line in urls:
       line = line.replace('*','.*')
       outstr += 'server {\n'
-      outstr += '    listen 80;\n'
+      outstr += '    listen {{ nginx_port }};\n'
       outstr += '    server_name {};\n'.format(line.strip())
       outstr += '    location / {\n'
       outstr += '        include uwsgi_params;\n'
