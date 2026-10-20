@@ -4,6 +4,18 @@
 import os
 outstr = ''
 
+outstr += 'server {\n'
+outstr += '    listen 80 default_server;\n'
+outstr += '    server_name _;\n'
+outstr += '    location / {\n'
+outstr += '        include uwsgi_params;\n'
+outstr += '        uwsgi_param HTTP_HOST $http_host;\n'
+outstr += '        uwsgi_param SERVER_NAME $server_name;\n'
+outstr += '        uwsgi_param HTTP_X_FORWARDED_FOR $remote_addr;\n'
+outstr += '        uwsgi_pass unix:///run/uwsgi/captiveportal.socket;\n'
+outstr += '    }\n'
+outstr += '}\n'
+
 # Read the deployed list so role reruns use the same checkurls file as
 # iiab-divert-to-nginx.
 os.chdir('/opt/iiab/captiveportal')
