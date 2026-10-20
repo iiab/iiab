@@ -14,7 +14,6 @@ import os
 import sys
 from functools import lru_cache
 from jinja2 import Environment, FileSystemLoader
-import sqlite3
 import re
 from iiab.iiab_lib import get_iiab_env
 
@@ -99,47 +98,52 @@ def tstamp(dtime):
     since_epoch_delta = newdtime - epoch
     return since_epoch_delta.total_seconds()
 
-# ##########database operations ##############
-# Use a sqlite database to store per client information
-state_dir = os.environ.get("STATE_DIRECTORY") or CAPTIVE_PORTAL_BASE
-user_db = os.path.join(state_dir, "users.sqlite")
-conn = sqlite3.connect(user_db)
-if not os.path.exists(user_db):
-    conn.close()
-    conn = sqlite3.connect(user_db)
-c = conn.cursor()
-c.row_factory = sqlite3.Row
-c.execute( """create table IF NOT EXISTS users 
-            (ip text PRIMARY KEY, mac text, current_ts integer,
-            lasttimestamp integer, send204after integer,
-            portal_completed integer NOT NULL DEFAULT 0,
-            os text, os_version text,
-            ymd text)""")
-columns = {row[1] for row in c.execute("PRAGMA table_info(users)")}
-if "portal_completed" not in columns:
-    c.execute(
-        "ALTER TABLE users ADD COLUMN portal_completed integer NOT NULL DEFAULT 0"
-    )
-    conn.commit()
+# ########## transient client state ##############
+client_states = {}
+
+def new_client_state():
+    return {
+        "mac": "",
+        "current_ts": 0,
+        "lasttimestamp": 0,
+        "send204after": 0,
+        "portal_completed": False,
+        "os": "",
+        "os_version": "",
+        "last_seen": time.monotonic(),
+    }
+
+def prune_client_states():
+    now = time.monotonic()
+    expired = [
+        ip for ip, state in client_states.items()
+        if now - state["last_seen"] > INACTIVITY_TO
+    ]
+    for ip in expired:
+        del client_states[ip]
+
+def get_client_state(ip):
+    state = client_states.get(ip)
+    if state is None:
+        state = new_client_state()
+        client_states[ip] = state
+    return state
+
 mac_cache = {}
 
-def update_user(ip, mac, system, system_version, ymd):
-    sql = "SELECT * FROM users WHERE ip = ?"
-    c.execute(sql,(ip,))
-    row = c.fetchone()
-    if row == None:
-        sql = "INSERT INTO users (ip,mac,os,os_version,ymd) VALUES (?,?,?,?,?)" 
-        c.execute(sql,(ip, mac, system, system_version, ymd ))
+def update_client_state(ip, mac, system, system_version):
+    state = get_client_state(ip)
+    if state["mac"] != mac and (state["mac"] or mac):
+        state.update(
+            mac=mac,
+            os=system,
+            os_version=system_version,
+            lasttimestamp=0,
+            send204after=0,
+            portal_completed=False,
+        )
     else:
-        if row['mac'] and mac and row['mac'] != mac:
-            sql = """UPDATE users
-                     SET (mac, os, os_version, ymd, portal_completed) =
-                         (?, ?, ?, ?, 0)
-                     WHERE ip = ?"""
-            c.execute(sql,(mac, system, system_version, ymd, ip,))
-        else:
-            sql = "UPDATE users SET (mac,os,os_version,ymd) = ( ?, ?, ?, ? ) WHERE ip = ?"
-            c.execute(sql,(mac, system, system_version, ymd, ip,))
+        state.update(mac=mac, os=system, os_version=system_version)
 
 def get_mac(ip):
     now = time.monotonic()
@@ -154,22 +158,24 @@ def get_mac(ip):
     return mac
 
 def platform_info(ip):
-    sql = "select * FROM users WHERE ip = ?"
-    c.execute(sql,(ip,))
-    row = c.fetchone()
-    if row is None: return ('','',)
-    return (row['os'],row['os_version'])
+    state = client_states.get(ip)
+    if state is None:
+        return ('','',)
+    return (state["os"], state["os_version"])
 
 def parse_android_major_version(version):
     match = re.match(r"^(\d+)", version or "")
     return int(match.group(1)) if match else None
         
 def timeout_info(ip):
-    sql = "select * FROM users WHERE ip = ?"
-    c.execute(sql,(ip,))
-    row = c.fetchone()
-    if row is None: return (0,0,0,)
-    return [row['current_ts'],row['lasttimestamp'],row['send204after']]
+    state = client_states.get(ip)
+    if state is None:
+        return (0,0,0,)
+    return [
+        state["current_ts"],
+        state["lasttimestamp"],
+        state["send204after"],
+    ]
         
 def is_inactive(ip):
     ts=tstamp(datetime.datetime.now(tzutc()))
@@ -196,33 +202,25 @@ def is_after204_timeout(ip):
 
 def set_204after(ip,value):
     ts=tstamp(datetime.datetime.now(tzutc()))
-    sql = 'UPDATE users SET send204after = ?  where ip = ?'
-    c.execute(sql,(ts + value,ip,))
-    conn.commit()
+    get_client_state(ip)["send204after"] = ts + value
 
 def set_lasttimestamp(ip):
     ts=tstamp(datetime.datetime.now(tzutc()))
-    sql = 'UPDATE users SET lasttimestamp = ?  where ip = ?'
-    c.execute(sql,(ts,ip,))
-    conn.commit()
+    get_client_state(ip)["lasttimestamp"] = ts
 
 def set_portal_completed(ip):
-    sql = 'UPDATE users SET portal_completed = 1 where ip = ?'
-    c.execute(sql,(ip,))
-    conn.commit()
+    get_client_state(ip)["portal_completed"] = True
 
 def clear_portal_completed(ip):
-    sql = """UPDATE users
-             SET portal_completed = 0, lasttimestamp = 0, send204after = 0
-             WHERE ip = ?"""
-    c.execute(sql,(ip,))
-    conn.commit()
+    get_client_state(ip).update(
+        portal_completed=False,
+        lasttimestamp=0,
+        send204after=0,
+    )
 
 def is_portal_completed(ip):
-    sql = "SELECT portal_completed FROM users WHERE ip = ?"
-    c.execute(sql,(ip,))
-    row = c.fetchone()
-    return bool(row and row['portal_completed'])
+    state = client_states.get(ip)
+    return bool(state and state["portal_completed"])
 
 #  ###################  Action routines based on OS  ################3
 def microsoft(environ,start_response):
@@ -555,7 +553,7 @@ def application (environ, start_response):
           environ.get("SERVER_NAME", ""),
       )
 
-   # These resources do not need client state, ARP lookup, or SQLite activity.
+   # These resources do not need client state or ARP lookup.
    if environ['PATH_INFO'] == "/iiab_banner6.png":
       return banner(environ, start_response)
    if environ['PATH_INFO'] == "/bootstrap.min.js":
@@ -571,6 +569,7 @@ def application (environ, start_response):
       ip = environ['HTTP_X_FORWARDED_FOR'].strip()
    else:
       ip = environ['REMOTE_ADDR'].strip()
+   prune_client_states()
    mac = get_mac(ip)
    data = []
    data.append("host: {}\n".format(environ['HTTP_HOST']))
@@ -584,20 +583,15 @@ def application (environ, start_response):
    found = False
    return_204_flag = "False"
 
-   # record the activity with this ip
+   # Record activity for this client in transient in-memory state.
    ts=tstamp(datetime.datetime.now(tzutc()))
-   sql = "INSERT or IGNORE INTO users (current_ts,ip) VALUES (?,?)" 
-   c.execute(sql,(ts,ip,))
-   sql = "UPDATE users SET current_ts = ? where ip = ?" 
-   c.execute(sql,(ts,ip,))
-   if c.rowcount == 0:
-      logger.debug("failed UPDATE  users SET current_ts = {} WHERE ip = {}".format(ts,ip,)) 
-   ymd=datetime.datetime.today().strftime("%y%m%d-%H%M")
+   state = get_client_state(ip)
+   state["current_ts"] = ts
+   state["last_seen"] = time.monotonic()
 
    system,system_version = parse_agent(agent)
    if system != '':
-      update_user(ip, mac, system, system_version, ymd)
-   conn.commit()
+      update_client_state(ip, mac, system, system_version)
 
    #######   Return pages based upon PATH   ###############
    # do more specific stuff first
@@ -667,7 +661,7 @@ def application (environ, start_response):
           logger.debug("portal completion expired for %s; starting a new session", ip)
           clear_portal_completed(ip)
           return android(environ, start_response)
-      if not last_ts:
+      if not last_ts or ts - int(last_ts) > INACTIVITY_TO:
           return android(environ, start_response) 
       elif is_after204_timeout(ip):
           return put_204(environ,start_response)
