@@ -939,6 +939,8 @@
             const regionMetaUrl = regionName => regionUrl(regionName, "meta.json")
             const regionListingUrl = regionName => mapsUrl(`/data/${regionName}.fqr`) // listing needs the /data/ part
 
+            const worldMapFallbackUrl = path => `/maps/fallback/${path}`
+
             // For maps.black's sources setup. Formatted in the same way that maps.black does it.
             const pmtilesUrl = path => `pmtiles://${window.location.origin}/${path}`
 
@@ -957,6 +959,7 @@
                             maxzoom: 0,
                             date: "1970-01-01",
                             fileName: entry.name,
+                            fallback: entry.fallback,
                         }
                     }
 
@@ -982,6 +985,7 @@
                           maxzoom,
                           date,
                           fileName: entry.name,
+                          fallback: entry.fallback,
                         }
                     }
                 })
@@ -1046,38 +1050,27 @@
             }
 
             function warnIncompleteRegion(pmtilesFiles, fqrName) {
-                const header = "Missing data file"
+                const warning = "Missing data file"
                 if (!pmtilesFiles.satellite) {
                     newDataFileAlert({
                       fqrName,
-                      warning: header,
+                      warning,
                       message: "No valid satellite pmtiles file ('s2maps-sentinel2-2023' or 'iiab-sentinel2') found",
                     })
                 }
                 if (!pmtilesFiles.vector) {
                     newDataFileAlert({
                       fqrName,
-                      warning: header,
+                      warning,
                       message: "No valid vector pmtiles file ('openstreetmap-openmaptiles') found",
                     })
                 }
                 if (!pmtilesFiles.terrain) {
-                    if (fqrName) {
-                        newDataFileAlert({
-                          fqrName,
-                          warning: header,
-                          message: "No valid terrain pmtiles file ('terrarium') found",
-                        })
-                    } else {
-                        // For world map, this is an *error* because it breaks terrain functionality for FQRs. Otherwise we
-                        // wouldn't care, world maps aren't expected to be "full quality" and can skip terrain, but for
-                        // FQRs we at least need TERRARIUM_NONE_PMTILES.
-                        newDataFileAlert({
-                          fqrName,
-                          error: header,
-                          message: "No valid terrain pmtiles file ('terrarium') found. Because of this, terrain will not be visible in Full Quality Regions.",
-                        })
-                    }
+                    newDataFileAlert({
+                      fqrName,
+                      warning,
+                      message: "No valid terrain pmtiles file ('terrarium') found",
+                    })
                 }
             }
 
@@ -1085,15 +1078,25 @@
             let downloadedFQRegions = null;
             let worldMap = {}
             worldMap.pmtilesFiles = (async () => {
-                const [dirList, error] = await homeDirListPromise
-                if (error) {
-                    console.error("Failed to load world map:", error)
+                const [mainDirList, mainError] = await homeDirListPromise
+                if (mainError) {
+                    console.error("Failed to load world map:", mainError)
                     return {error: true, pmtilesFiles: {}}
                 }
+                const [fallbackDirList, fallbackError] = await getJson('/maps/data/fallback/', false)
+                if (fallbackError) {
+                    console.error("Failed to load fallback pmtiles files:", fallbackError)
+                    // Don't bail out just yet. We might not be using fallbacks anyway, in which case why break
+                    // everything deliberately? If we are using them, it'll probably break naturally.
+                }
+
+                // Mark fallbacks so we can sort them properly (after normal files)
+                // and set the url correctly.
+                const combinedDirList = mainDirList.concat(fallbackDirList.map(entry => ({...entry, fallback: true})))
 
                 const pmtilesFiles = {}
 
-                parsePmtilesFileNames(dirList, WORLD_FILE_CONFIGURABLE_DATA_KEYS, fileName => {
+                parsePmtilesFileNames(combinedDirList, WORLD_FILE_CONFIGURABLE_DATA_KEYS, fileName => {
                     // Each valid pmtiles file for the world map has the format:
                     //
                     // [dataKey].[date].[zoomRange].pmtiles
@@ -1103,12 +1106,12 @@
                 })
                 .filter(Boolean)      // remove anything that isn't a properly formatted pmtiles file name
                 .sort(pmtilesPreferenceSort)
-                .map(({dataKey, maxzoom, date, fileName}) => ({
+                .map(({dataKey, maxzoom, date, fileName, fallback}) => ({
                     dataKey,
                     date,
                     fileName,
                     maxzoom,
-                    url: mapsUrl(fileName),
+                    url: fallback ? worldMapFallbackUrl(fileName) : mapsUrl(fileName),
                 }))
                 .forEach(({dataKey, date, maxzoom, fileName, url, sourceId}) => {
                     // Note that the "category" makes sure that the world map has only has one satellite
@@ -1128,7 +1131,10 @@
                     }
                 })
 
-                warnIncompleteRegion(pmtilesFiles)
+                // Don't bother with `warnIncompleteRegion` for world map because the users were warned against
+                // messing with the /fallback directory. If we do decide to do it, make sure that missing terrain
+                // is an *error* rather than a warning because it breaks terrain for FQRs. Also if the user
+                // explicitly says no satellite, that shouldn't be a reported issue.
 
                 return pmtilesFiles
             })()
