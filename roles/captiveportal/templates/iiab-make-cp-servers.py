@@ -16,6 +16,7 @@ with open('checkurls','r') as urls:
       outstr += '    location / {\n'
       outstr += '        include uwsgi_params;\n'
       outstr += '        uwsgi_param HTTP_HOST $http_host;\n'
+      outstr += '        uwsgi_param SERVER_NAME $server_name;\n'
       outstr += '        uwsgi_param HTTP_X_FORWARDED_FOR $remote_addr;\n'
       outstr += '        uwsgi_pass unix:///run/uwsgi/captiveportal.socket;\n'
       outstr += '    }\n' 
