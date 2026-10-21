@@ -40,7 +40,7 @@ africa . fqr / terrarium                  . 2025-12-10 . pmtiles
 
 * `data_key` refers to the data source for pmtiles files, or the search engine for search
 * `date` refers to the date that the data was generated
-* `zoom_range` refers to the zoom level range for pmtiles files, or in the case of search it refers to the type or amount of search data available. Depth should not be named "full-region".
+* `zoom_range` refers to the zoom level range for pmtiles files, or in the case of search it refers to the type or amount of search data available.
 * `region` is the user-defined name of the FQR
 * `extension` is a file extension in the case of files, or nothing in the case of directories.
 
