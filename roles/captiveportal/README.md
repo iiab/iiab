@@ -6,7 +6,7 @@ _Please Also See: http://FAQ.IIAB.IO > ["Captive Portal Administration: What tip
 * Each Operating System (OS) provides a mechanism that IIAB can use to break into a conversation, when SSL is not being used. This is an initial attempt by the OS to talk to one of its own web sites, to determine if the host os is connected to the internet. It is always performed without SSL.
 * The IIAB captive portal uses a list of these OS supported web sites, and diverts these requests to the IIAB server, which in turn forwards to the IIAB home page.
 * While the portal is active -- `captiveportal_enabled: True`, a LAN interface is present, and `iiab_gateway_enabled` is not True (i.e. IIAB is not providing Internet to client devices) -- probe hostnames resolve to `198.51.100.1` by default (`captiveportal_probe_ip`), an unroutable TEST-NET-2 address reserved by RFC 5737. External LAN TCP port 80 traffic is redirected to the IIAB server, including devices such as Samsung clients that resolve probes using their own DNS; destinations within the configured LAN subnet are excluded so local HTTP services remain reachable. `iiab-divert-to-nginx` (dnsmasq) and `iiab-gen-iptables` (firewall) apply the same condition, so the DNS diversion and the port-80 redirect always switch together.
-* The normal IIAB NGINX server explicitly handles the configured LAN IP and local aliases (`box.lan` and `box.local`) before the portal's default server. This preserves the captive portal for unmatched probe traffic while allowing `http://<lan-ip>/` and mDNS clients to reach IIAB without resolving the canonical FQDN. `box.lan` remains IIAB's canonical DNS name; `box.local` is also accepted as an mDNS/Avahi alias when clients support it.
+* The normal IIAB NGINX server explicitly handles the configured LAN IP and local aliases (`box.lan` and `box.local`) before the portal's default server. This preserves the captive portal for unmatched probe traffic while allowing `http://<lan-ip>/` and mDNS clients to reach IIAB without resolving the canonical FQDN. `box.lan` is IIAB's canonical DNS name; `box.local` is also accepted as an mDNS/Avahi alias when clients support it.
 
 ## Components of the IIAB Captive Portal
 
@@ -14,7 +14,7 @@ _Please Also See: http://FAQ.IIAB.IO > ["Captive Portal Administration: What tip
     1. checkurls -- the list of urls use by at least one of the OS's.
     1. iiab-divert-to-nginx -- Bash script writes dnsmasq config file which points to IIAB server
     1. iiab-make-cp-servers.py -- Python script writes nginx configuration file to /etc/nginx/sites-available
-    1. capture-wsgi.py -- the script which determines the client agent, keeps short-lived client state in memory, and responds with redirects as appropriate for each OS.
+    1. capture-wsgi.py -- determines the client agent, stores short-lived client state in memory, and responds with redirects as appropriate for each OS.
     1. captiveportal.ini.j2 -- config file for the `uwsgi-app@captiveportal.service` instance, which runs the capture-wsgi.py script.
     1. `uwsgi-app@captiveportal.service` and `uwsgi-app@captiveportal.socket` -- the distro-provided per-application systemd units for the Captive Portal.
     
@@ -33,10 +33,10 @@ startup and application errors can be inspected with:
 
     sudo journalctl -u uwsgi-app@captiveportal.service
 
-The service keeps client state in memory only. Entries expire after one hour
+The service stores client state in memory only. Entries expire after one hour
 without a request and all state is lost when the Captive Portal service
 restarts; no client-state database is used. The 30-second inactivity threshold
-still applies to legacy, incomplete portal flows.
+applies to incomplete portal flows.
 
 When running `capture-wsgi.py` directly for debugging, it listens on TCP
 port `9090` by default. Override the port with `--port`, or set
@@ -49,8 +49,8 @@ string and is written to the uWSGI service journal:
 
     sudo journalctl -u uwsgi-app@captiveportal.service
 
-When the captive portal is active, the same setting also logs new external LAN
-HTTP attempts before they are redirected to the portal. These kernel firewall
+When the captive portal is active, the same setting also logs external LAN HTTP
+requests before redirection to the portal. These kernel firewall
 messages use the `WWW-ATTEMPT:` prefix and can be viewed with:
 
     sudo dmesg | grep 'WWW-ATTEMPT:'
@@ -58,7 +58,7 @@ messages use the `WWW-ATTEMPT:` prefix and can be viewed with:
 Desktop probe requests redirect directly to the configured IIAB homepage.
 Android clients first receive a captive-portal instruction page. It explains
 how to dismiss the OS sign-in window and open the configured FQDN (such as
-`http://box.lan`) in a regular browser. iOS/macOS Safari and recent Android
+`http://box.lan`) in a regular browser. iOS/macOS Safari and supported Android
 offer **"Use Without Internet"** in the three-dots menu; choosing it dismisses
 the sign-in window without opening the IIAB page, so the splash shows that
 wording in red as a caution. The splash also lists two manual addresses --
@@ -74,13 +74,13 @@ Some desktop clients never surface a sign-in window at all: macOS Safari
 handles `captive.apple.com` silently even when the URL is typed by hand, so a
 macOS user should open `http://box.local` (mDNS) or `http://box` directly in a
 regular browser. GNOME's portal check fetches
-`http://fedoraproject.org/static/hotspot.txt`, which is now handled like the
-other portal probes instead of being redirected to homepage HTML that can
+`http://fedoraproject.org/static/hotspot.txt`, which the portal handles like
+the other portal probes rather than redirecting to homepage HTML that can
 leave the embedded browser tab hanging.
 
-After the portal completion event, every recognized client connectivity probe
-receives the success answer its operating system expects, for that client while
-probe traffic continues, instead of being redirected back to the splash page:
+For a client with a completed portal session, every recognized connectivity
+probe receives the success answer its operating system expects while probe
+traffic continues, rather than a redirect back to the splash page:
 
 * Android/Chromium (`generate_204`, `clients3.google.com`, gstatic, MIUI,
   Huawei/Honor, Samsung): `204 No Content`.
@@ -91,18 +91,17 @@ probe traffic continues, instead of being redirected back to the splash page:
   `Success` for `/library/test/success.html`.
 
 This suppresses repeated sign-in prompts *and* any "Limited connection" /
-"No internet access" verdict during the active connection, without persisting
-completion forever: after one hour without a request, the completion is
-dropped and the next request starts a new portal session. A probe under an
-unknown hostname (e.g. a newer OEM fork, or a client resolving probes with its
-own DNS) also receives `204 No Content` once the portal is completed, as long
-as its path looks like a probe. Some Android versions additionally perform
-HTTPS validation, which requires a trusted certificate and is not intercepted
-by IIAB.
+"No internet access" verdict during the active connection. Completion expires
+after one hour without a request, and the following request starts another
+portal session. A probe under an unknown hostname (e.g. an unrecognized OEM
+fork, or a client resolving probes with its own DNS) also receives
+`204 No Content` when the portal session is complete, as long as its path looks
+like a probe. Some Android versions additionally perform HTTPS validation,
+which requires a trusted certificate and is not intercepted by IIAB.
 
-If the portal backend is unavailable, its nginx server blocks answer probe
-requests with a `302` to the IIAB homepage instead of a `502`, so a stopped or
-wedged uWSGI instance does not read to clients as "no Internet".
+If the portal backend is unavailable, its nginx server answers probe requests
+with a `302` to the IIAB homepage rather than a `502`, so a stopped or wedged
+uWSGI instance does not read to clients as "no Internet".
 
 For direct runs, use `--log-probes` (or `--log-urls`) or set
 `CAPTIVE_PORTAL_LOG_PROBES=1`. The existing `--log-file` option can be used to

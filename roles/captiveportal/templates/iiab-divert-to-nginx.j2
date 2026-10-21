@@ -4,8 +4,8 @@
 # and by iiab-gen-iptables (which adds the matching port-80 DNAT), so the DNS
 # diversion and the firewall redirect always switch together.
 
-# Read a variable from default_vars.yml, overridden by local_vars.yml (same
-# emulation of Ansible's .yml parsing as iiab-gen-iptables).
+# The script reads variables from default_vars.yml, overridden by local_vars.yml
+# with the same emulation of Ansible's .yml parsing as iiab-gen-iptables.
 iiab_var_value() {
     v1=$(grep "^$1:\s" /opt/iiab/iiab/vars/default_vars.yml | tail -1 | sed "s/^$1:\s\+//; s/#.*//; s/\s*$//; s/^\(['\"]\)\(.*\)\1$/\2/")
     v2=$(grep "^$1:\s" /etc/iiab/local_vars.yml | tail -1 | sed "s/^$1:\s\+//; s/#.*//; s/\s*$//; s/^\(['\"]\)\(.*\)\1$/\2/")
@@ -13,8 +13,8 @@ iiab_var_value() {
 }
 
 # Ansible accepts true/yes/on/1 (any case) as boolean True, but iiab_var_value
-# preserves the YAML spelling.  Match those spellings too.  Keep this in sync
-# with iiab-gen-iptables.
+# preserves the YAML spelling. The parser matches those spellings, as does
+# iiab-gen-iptables.
 is_true() {
     case "$1" in
         [Tt][Rr][Uu][Ee]|[Yy][Ee][Ss]|[Oo][Nn]|1) return 0 ;;
@@ -28,17 +28,17 @@ capture=/etc/dnsmasq.d/capture
 
 # The portal is active only when it is enabled, a LAN interface exists, and IIAB
 # is not providing Internet to client devices (iiab_gateway_enabled: True).
-# Keep this condition identical to the DNAT in iiab-gen-iptables.
+# This condition matches the DNAT condition in iiab-gen-iptables.
 new=""
 if is_true "$captiveportal_enabled" && [ "$IIAB_LAN_DEVICE" != "none" ] && ! is_true "$IIAB_GATEWAY_ENABLED" && [ -f /opt/iiab/captiveportal/checkurls ]; then
-    # Use an unroutable public address so clients do not conclude that the portal
-    # is merely a local network with no Internet access.
-    # IIAB's own names must keep resolving to the IIAB server itself: 'captive.lan'
+    # An unroutable public address prevents clients from concluding that the
+    # portal is merely a local network with no Internet access.
+    # IIAB's own names resolve to the IIAB server itself: 'captive.lan'
     # (used by the splash page's "go to browser" link) and the 'box' / 'box.local'
     # hostnames, which the splash page offers as manual addresses and which some
     # clients (e.g. Safari failing to walk Safari's captive.apple.com redirect back
     # to the network's DHCP domain) must be able to reach by mDNS.
-    # Generate all dnsmasq entries together so they are written to capture as one
+    # All dnsmasq entries are generated together and written to capture as one
     # list. Windows NCSI requires its specific magic address rather than the
     # generic captive portal probe address.
     new=$(awk '
@@ -58,8 +58,9 @@ if is_true "$captiveportal_enabled" && [ "$IIAB_LAN_DEVICE" != "none" ] && ! is_
     ' /opt/iiab/captiveportal/checkurls)
 fi
 
-# Touch dnsmasq only when the diversion actually changes. Command substitution
-# strips trailing newlines on both sides, so reruns stay idempotent.
+# dnsmasq is updated only when the diversion content differs. Command
+# substitution strips trailing newlines on both sides, so repeated runs are
+# idempotent.
 if [ "$(cat "$capture" 2>/dev/null)" != "$new" ]; then
     if [ -n "$new" ]; then
         printf '%s\n' "$new" > "$capture"
