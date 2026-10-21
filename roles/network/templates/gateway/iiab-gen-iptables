@@ -216,8 +216,20 @@ if [ "$wan" != "none" ]; then
         if [ "$gw_block_https" == "True" ]; then
             $IPTABLES -A FORWARD -p tcp ! -d $lan_ip --dport 443 -j DROP
         fi
-        # Allow outgoing connections from the LAN side
-        $IPTABLES -A FORWARD -i $lan -o $wan -j ACCEPT
+        # Allow outgoing connections from the LAN side -- but only when IIAB
+        # provides Internet to clients (iiab_gateway_enabled: True, the only
+        # mode with the MASQUERADE above).  Without MASQUERADE the old
+        # unconditional ACCEPT let client packets leave with an unroutable
+        # RFC1918 source and their replies never returned, so every client
+        # connectivity probe timed out -- the classic "Limited connection"
+        # with no portal prompt.  Offline appliance mode now REJECTs instead
+        # of silently black-holing: the client stack fails fast and the
+        # captive portal (probe DNS diversion + port-80 DNAT) answers probes.
+        if [ "$iiab_gateway_enabled" == "True" ]; then
+            $IPTABLES -A FORWARD -i $lan -o $wan -j ACCEPT
+        else
+            $IPTABLES -A FORWARD -i $lan -o $wan -j REJECT --reject-with icmp-host-unreachable
+        fi
         # Don't forward from the outside to the inside
         $IPTABLES -A FORWARD -i $wan -o $lan -j DROP
         # Enable routing (kernel IP forwarding)

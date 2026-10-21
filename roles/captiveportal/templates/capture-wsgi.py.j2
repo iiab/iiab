@@ -17,11 +17,15 @@ from jinja2 import Environment, FileSystemLoader
 import re
 from iiab.iiab_lib import get_iiab_env
 
-# Client timestamps are recorded in current_ts. Modern Android clients use
-# portal_completed to receive 204 responses after the splash is completed while
-# probe traffic continues. The shorter inactivity timeout remains for legacy
-# client flows; completed Android sessions use PORTAL_SESSION_TO.
-# 
+# Client timestamps are recorded in current_ts. portal_completed records that
+# a client finished the sign-in flow (/home_selected). While that completion
+# is fresh, every known OS connectivity probe receives the success answer its
+# OS expects -- 204 for Android/Chromium, "success" for Firefox, "Microsoft
+# Connect Test" for Windows NCSI, Apple's Success page for iOS/macOS -- so the
+# client shows a clean connected status instead of "Limited connection" once
+# the portal has been completed. The shorter inactivity timeout remains for
+# legacy client flows; completed sessions last PORTAL_SESSION_TO after the
+# client's last request.
 
 # Create the jinja2 environment.
 CAPTIVE_PORTAL_BASE = "/opt/iiab/captiveportal"
@@ -29,7 +33,11 @@ j2_env = Environment(loader=FileSystemLoader(CAPTIVE_PORTAL_BASE),trim_blocks=Tr
 
 # Define time outs
 INACTIVITY_TO = 30
-PORTAL_SESSION_TO = 5 * 60
+# How long a completed portal session (and its client state) survives without
+# any request from that client.  1 hour so a device that is in active use is
+# never re-prompted: Windows/Android usually probe at least every few minutes,
+# but a client that goes quiet must not be sent back through the splash page.
+PORTAL_SESSION_TO = 60 * 60
 PORTAL_TO = 20 # legacy delay after the home-page click
 CLIENT_STATE_TTL = PORTAL_SESSION_TO
 MAC_CACHE_TTL = INACTIVITY_TO
@@ -257,6 +265,21 @@ def is_portal_completed(ip):
     state = client_states.get(ip)
     return bool(state and state["portal_completed"])
 
+def portal_session_active(ip):
+    '''True while this client's portal completion is fresh.  last_seen is
+    refreshed by every request from the client, so the session survives as
+    long as the device keeps talking to the portal; after PORTAL_SESSION_TO
+    of silence the completion is dropped (state pruning gives up at the same
+    moment), so a later connection must complete the portal again.'''
+    if not is_portal_completed(ip):
+        return False
+    state = client_states[ip]
+    if time.monotonic() - state["last_seen"] <= PORTAL_SESSION_TO:
+        return True
+    logger.debug("portal completion expired for %s; starting a new session", ip)
+    clear_portal_completed(ip)
+    return False
+
 def client_ip(environ):
     '''Single source of the client address.  nginx overrides X-Forwarded-For
     with the real peer address (uwsgi_param HTTP_X_FORWARDED_FOR $remote_addr);
@@ -269,6 +292,10 @@ def client_ip(environ):
 #  ###################  Action routines based on OS  ################3
 def microsoft(environ,start_response):
     logger.debug('in microsoft')
+    ip = client_ip(environ)
+    if portal_session_active(ip):
+        set_lasttimestamp(ip)
+        return probe_success(environ, start_response)
     if is_android_flow(environ):
         logger.debug("sending captive portal instructions for Android")
         return android_captive_splash(environ, start_response)
@@ -408,6 +435,9 @@ def macintosh(environ, start_response):
     ip = client_ip(environ)
     agent = environ.get('HTTP_USER_AGENT', '')
     system, system_version = parse_agent(agent)
+    if portal_session_active(ip):
+        set_lasttimestamp(ip)
+        return probe_success(environ, start_response)
     if is_android_flow(environ):
         return android_captive_splash(environ, start_response)
     # Desktop browsers classifiable by OS user agent go straight to the
@@ -500,6 +530,48 @@ def put_302(environ, start_response):
     start_response(status, response_headers)
     logger.debug("in function  put_302: sending 302 html response")
     return [response_body]
+
+def plain_200(environ, start_response, body):
+    payload = body.encode()
+    start_response('200 OK', [
+        ('Content-type', 'text/plain; charset=utf-8'),
+        ('Content-Length', str(len(payload))),
+        ('Cache-Control', 'no-store'),
+    ])
+    return [payload]
+
+# Path shapes of connectivity probes that reach us under a hostname we have
+# no explicit entry for (newer OEM forks, clients using their own DNS...).
+# Regular browsing keeps its redirect to the IIAB homepage.
+PROBE_PATH_HINTS = ('generate_204', 'gen_204', 'connecttest', 'success.txt',
+                    'hotspot-detect', 'ncsi.txt', 'connectivitycheck')
+
+def looks_like_probe(path):
+    return any(hint in path for hint in PROBE_PATH_HINTS)
+
+def probe_success(environ, start_response):
+    '''Answer a connectivity probe with exactly what its OS expects, once the
+    client has completed the portal -- this is what keeps the client showing
+    a clean "connected" verdict instead of "Limited connection" / "No internet
+    access" on an offline IIAB box.  Unrecognized probes fall back to the
+    generic success answer, 204 No Content.'''
+    host = environ.get('HTTP_HOST', '')
+    path = environ.get('PATH_INFO', '')
+    logger.debug("probe_success host: {} path: {}".format(host, path))
+    if 'firefox' in host:
+        # http://detectportal.firefox.com/success.txt wants the literal word
+        return plain_200(environ, start_response, 'success')
+    if 'msftconnecttest' in host or 'msftncsi' in host or \
+       path.endswith(('connecttest.txt', 'ncsi.txt')):
+        # Windows NCSI: http://www.msftconnecttest.com/connecttest.txt
+        return plain_200(environ, start_response, 'Microsoft Connect Test')
+    if 'apple' in host:
+        # iOS/macOS: /library/test/success.html wants the bare word "Success",
+        # /hotspot-detect.html wants the classic Success HTML page.
+        if 'success.html' in path:
+            return plain_200(environ, start_response, 'Success')
+        return success(environ, start_response)
+    return put_204(environ, start_response)
 
 def parse_agent(agent):
     system = ''
@@ -667,19 +739,16 @@ def application (environ, start_response):
       environ['HTTP_HOST'] == "connectivitycheck.platform.hicloud.com" or\
       environ['HTTP_HOST'] == "connectivitycheck.platform.hihonorcloud.com" or\
       environ['HTTP_HOST'] == "connect.rom.miui.com" or\
+      environ['HTTP_HOST'] == "connectivitycheck.samsungwifi.com" or\
+      environ['HTTP_HOST'] == "connectivitycheck.samsung.com" or\
       environ['PATH_INFO'] == "/gen_204" or\
+      environ['PATH_INFO'] == "/generate_204" or\
       environ['HTTP_HOST'] == "connectivitycheck.gstatic.com":
       current_ts, last_ts, send204after = timeout_info(ip) 
       logger.debug("current_ts: {} last_ts: {} send204after: {}".format(current_ts, last_ts, send204after,))
-      if is_portal_completed(ip):
-          if last_ts and ts - int(last_ts) <= PORTAL_SESSION_TO:
-              # Keep completion scoped to an active client session. Without
-              # this heartbeat, the flag suppresses the portal forever.
-              set_lasttimestamp(ip)
-              return put_204(environ,start_response)
-          logger.debug("portal completion expired for %s; starting a new session", ip)
-          clear_portal_completed(ip)
-          return android(environ, start_response)
+      if portal_session_active(ip):
+          set_lasttimestamp(ip)
+          return put_204(environ,start_response)
       if not last_ts or ts - int(last_ts) > INACTIVITY_TO:
           return android(environ, start_response) 
       elif is_after204_timeout(ip):
@@ -698,6 +767,14 @@ def application (environ, start_response):
      environ['HTTP_HOST'] == "teredo.ipv6.microsoft.com.nsatc.net": 
      return microsoft(environ, start_response) 
 
+   # Unknown hostname: probes (any OEM fork or a client resolving probes via
+   # its own DNS) get the generic success answer once the portal is completed
+   # so the OS stops reporting "Limited connection"; anything else keeps the
+   # redirect to the IIAB homepage.
+   if portal_session_active(ip):
+      set_lasttimestamp(ip)
+      if looks_like_probe(environ.get('PATH_INFO', '')):
+         return put_204(environ, start_response)
    logger.debug("executing the default 302 response. [{}".format(data))
    return put_302(environ,start_response)
 
