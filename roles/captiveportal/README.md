@@ -33,8 +33,8 @@ startup and application errors can be inspected with:
 
     sudo journalctl -u uwsgi-app@captiveportal.service
 
-The service keeps client state in memory only. Entries expire after five
-minutes without a request and all state is lost when the Captive Portal service
+The service keeps client state in memory only. Entries expire after one hour
+without a request and all state is lost when the Captive Portal service
 restarts; no client-state database is used. The 30-second inactivity threshold
 still applies to legacy, incomplete portal flows.
 
@@ -64,13 +64,31 @@ after the sign-in window is dismissed. The page's button records the portal
 completion event and opens the configured IIAB homepage; web pages cannot
 reliably close the operating system's sign-in window themselves.
 
-After the portal completion event, Android connectivity probes receive an HTTP
-204 response for that client while probe traffic continues, instead of being
-redirected back to the splash page. This suppresses repeated sign-in prompts
-during the active connection without persisting completion forever: after five
-minutes without a probe, the next request starts a new portal session. Some
-Android versions also perform HTTPS validation, which requires a trusted
-certificate and is not intercepted by IIAB.
+After the portal completion event, every recognized client connectivity probe
+receives the success answer its operating system expects, for that client while
+probe traffic continues, instead of being redirected back to the splash page:
+
+* Android/Chromium (`generate_204`, `clients3.google.com`, gstatic, MIUI,
+  Huawei/Honor, Samsung): `204 No Content`.
+* Firefox (`detectportal.firefox.com/success.txt`): the literal body `success`.
+* Windows NCSI (`www.msftconnecttest.com/connecttest.txt`): the literal body
+  `Microsoft Connect Test`.
+* iOS/macOS (Apple hosts): the classic `Success` page, or the bare word
+  `Success` for `/library/test/success.html`.
+
+This suppresses repeated sign-in prompts *and* any "Limited connection" /
+"No internet access" verdict during the active connection, without persisting
+completion forever: after one hour without a request, the completion is
+dropped and the next request starts a new portal session. A probe under an
+unknown hostname (e.g. a newer OEM fork, or a client resolving probes with its
+own DNS) also receives `204 No Content` once the portal is completed, as long
+as its path looks like a probe. Some Android versions additionally perform
+HTTPS validation, which requires a trusted certificate and is not intercepted
+by IIAB.
+
+If the portal backend is unavailable, its nginx server blocks answer probe
+requests with a `302` to the IIAB homepage instead of a `502`, so a stopped or
+wedged uWSGI instance does not read to clients as "no Internet".
 
 For direct runs, use `--log-probes` (or `--log-urls`) or set
 `CAPTIVE_PORTAL_LOG_PROBES=1`. The existing `--log-file` option can be used to
