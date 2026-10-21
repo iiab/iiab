@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-# Read the list of online portal checkers and make nginx server blocks.
+# The script reads the list of online portal checkers and generates nginx
+# server blocks.
 
 from pathlib import Path
 
@@ -17,8 +18,8 @@ SERVER_BLOCK = '''server {
         uwsgi_pass unix:///run/uwsgi/captiveportal.socket;
         # If the Captive Portal backend (uWSGI) is down or wedged, probes must
         # not receive 502/504: client operating systems read that as "no
-        # Internet" ("Limited connection").  Send them to the IIAB homepage,
-        # which nginx serves independently of the portal backend.
+        # Internet" ("Limited connection"). The server returns a 302 to the
+        # IIAB homepage, which nginx serves independently of the portal backend.
         error_page 502 503 504 =302 http://{{ iiab_fqdn }}/;
     }
 }
@@ -29,7 +30,7 @@ def iter_server_entries():
     """Yield the default server and one entry for each captive portal probe."""
     yield ' default_server', '_'
 
-    # Read the deployed list so role reruns use the same checkurls file as
+    # The deployed list lets role runs use the same checkurls file as
     # iiab-divert-to-nginx.
     with CHECK_URLS_PATH.open(encoding='utf-8') as checkurls:
         for line in checkurls:

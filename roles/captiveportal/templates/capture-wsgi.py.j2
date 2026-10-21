@@ -17,15 +17,13 @@ from jinja2 import Environment, FileSystemLoader
 import re
 from iiab.iiab_lib import get_iiab_env
 
-# Client timestamps are recorded in current_ts. portal_completed records that
-# a client finished the sign-in flow (/home_selected). While that completion
-# is fresh, every known OS connectivity probe receives the success answer its
-# OS expects -- 204 for Android/Chromium, "success" for Firefox, "Microsoft
-# Connect Test" for Windows NCSI, Apple's Success page for iOS/macOS -- so the
-# client shows a clean connected status instead of "Limited connection" once
-# the portal has been completed. The shorter inactivity timeout remains for
-# legacy client flows; completed sessions last PORTAL_SESSION_TO after the
-# client's last request.
+# Client timestamps are recorded in current_ts. portal_completed marks a
+# completed sign-in flow (/home_selected). A completed client receives the
+# success answer its OS expects -- 204 for Android/Chromium, "success" for
+# Firefox, "Microsoft Connect Test" for Windows NCSI, and Apple's Success page
+# for iOS/macOS -- and shows a clean connected status. Incomplete flows use
+# the shorter inactivity timeout; completed sessions last PORTAL_SESSION_TO
+# after the client's last request.
 
 # Create the jinja2 environment.
 CAPTIVE_PORTAL_BASE = "/opt/iiab/captiveportal"
@@ -38,7 +36,7 @@ INACTIVITY_TO = 30
 # never re-prompted: Windows/Android usually probe at least every few minutes,
 # but a client that goes quiet must not be sent back through the splash page.
 PORTAL_SESSION_TO = 60 * 60
-PORTAL_TO = 20 # legacy delay after the home-page click
+PORTAL_TO = 20 # delay after the home-page click
 CLIENT_STATE_TTL = PORTAL_SESSION_TO
 MAC_CACHE_TTL = INACTIVITY_TO
 NEIGHBOR_LOOKUP_TIMEOUT = 2 # seconds; a wedged netlink must not stall requests
@@ -142,8 +140,8 @@ def prune_client_states():
     ]
     for ip in expired:
         del client_states[ip]
-    # mac_cache entries past their TTL can never be served again; drop them
-    # so MACs do not outlive their usefulness in process memory
+    # Expired mac_cache entries are removed so MACs do not outlive their
+    # usefulness in process memory.
     stale = [
         ip for ip, cached in mac_cache.items()
         if now - cached[0] > MAC_CACHE_TTL
@@ -162,7 +160,7 @@ mac_cache = {}
 
 def update_client_state(ip, mac, system, system_version):
     state = get_client_state(ip)
-    # Reset only on a genuine device change: two known, differing MACs.
+    # State resets only on a genuine device change: two known, differing MACs.
     # An empty MAC means the lookup degraded (no neighbor entry yet,
     # timeout) -- "unknown" must not be treated as "changed" or a single
     # transient failure would wipe portal_completed mid-session.
@@ -187,10 +185,10 @@ def get_mac(ip):
         return cached[1]
 
     # iproute2's `ip neigh` resolves IPv4 and IPv6 neighbors alike (net-tools'
-    # `arp` rejects IPv6 addresses with exit 255).  Anything unexpected --
-    # unparseable address, timeout, missing binary -- degrades to "no MAC"
-    # instead of failing the request.  Failed lookups are not cached, so the
-    # next request retries; successful ones (including "no entry") are.
+    # `arp` rejects IPv6 addresses with exit 255). Unexpected input, timeouts,
+    # and missing binaries yield "no MAC" and let the request continue. Failed
+    # lookups are not cached; subsequent requests retry, and successful
+    # lookups (including "no entry") are cached.
     try:
         output = subprocess.check_output(
             ["ip", "neigh", "show", "to", ip],
@@ -276,11 +274,10 @@ def is_portal_completed(ip):
     return bool(state and state["portal_completed"])
 
 def portal_session_active(ip):
-    '''True while this client's portal completion is fresh.  last_seen is
-    refreshed by every request from the client, so the session survives as
-    long as the device keeps talking to the portal; after PORTAL_SESSION_TO
-    of silence the completion is dropped (state pruning gives up at the same
-    moment), so a later connection must complete the portal again.'''
+    '''True while this client's portal completion remains active. Each request
+    refreshes last_seen, so the session survives while the device talks to the
+    portal. Silence lasting PORTAL_SESSION_TO expires the completion and its
+    state together, and a later connection must complete the portal again.'''
     if not is_portal_completed(ip):
         return False
     state = client_states[ip]
@@ -550,9 +547,9 @@ def plain_200(environ, start_response, body):
     ])
     return [payload]
 
-# Path shapes of connectivity probes that reach us under a hostname we have
-# no explicit entry for (newer OEM forks, clients using their own DNS...).
-# Regular browsing keeps its redirect to the IIAB homepage.
+# Path shapes of connectivity probes that reach us under an unrecognized
+# hostname (OEM forks, clients using their own DNS, and similar cases).
+# Regular browsing redirects to the IIAB homepage.
 PROBE_PATH_HINTS = ('generate_204', 'gen_204', 'connecttest', 'success.txt',
                     'hotspot-detect', 'ncsi.txt', 'connectivitycheck')
 
@@ -560,17 +557,20 @@ def looks_like_probe(path):
     return any(hint in path for hint in PROBE_PATH_HINTS)
 
 def probe_success(environ, start_response):
-    '''Answer a connectivity probe with exactly what its OS expects, once the
-    client has completed the portal -- this is what keeps the client showing
-    a clean "connected" verdict instead of "Limited connection" / "No internet
-    access" on an offline IIAB box.  Unrecognized probes fall back to the
-    generic success answer, 204 No Content.'''
+    '''Answer a connectivity probe with exactly what its OS expects for a
+    completed portal session. The client shows a clean "connected" verdict
+    rather than "Limited connection" / "No internet access" on an offline
+    IIAB box. Unrecognized probes receive the generic success answer,
+    204 No Content.'''
     host = environ.get('HTTP_HOST', '')
     path = environ.get('PATH_INFO', '')
     logger.debug("probe_success host: {} path: {}".format(host, path))
     if 'firefox' in host:
         # http://detectportal.firefox.com/success.txt wants the literal word
         return plain_200(environ, start_response, 'success')
+    if host in ('fedoraproject.org', 'www.fedoraproject.org'):
+        # NetworkManager Fedora connectivity check: expects "OK"
+        return plain_200(environ, start_response, 'OK')
     if 'msftconnecttest' in host or 'msftncsi' in host or \
        path.endswith(('connecttest.txt', 'ncsi.txt')):
         # Windows NCSI: http://www.msftconnecttest.com/connecttest.txt
@@ -634,8 +634,8 @@ def dismiss_hint(environ):
         phrase = 'Usar sin Internet' if lang == "es" else 'Use Without Internet'
         return (es if lang == "es" else en), phrase, True
     if is_android_flow(environ):
-        # Recent Android offers the same label; older builds say "Use this
-        # network as is".  No red here.
+        # Android clients offer the same label; some versions say "Use this
+        # network as is". No red here.
         en = 'If this page stays open, tap the three dots and choose "Use Without Internet" (older Android: "Use this network as is").'
         es = 'Si esta página permanece abierta, toque los tres puntos y elija "Usar sin Internet" (Android antiguo: "Usar esta red tal como está").'
         return (es if lang == "es" else en), '', False
@@ -692,7 +692,7 @@ def application (environ, start_response):
    found = False
    return_204_flag = "False"
 
-   # Record activity for this client in transient in-memory state.
+   # Client activity is recorded in transient in-memory state.
    ts=tstamp(datetime.datetime.now(tzutc()))
    state = get_client_state(ip)
    state["current_ts"] = ts
@@ -789,21 +789,20 @@ def application (environ, start_response):
      environ['HTTP_HOST'] == "teredo.ipv6.microsoft.com.nsatc.net": 
      return microsoft(environ, start_response) 
 
-   # A path that any OS uses to probe for a portal, under a hostname we do not
-   # recognize: answer it like every other portal probe instead of falling
-   # through to the homepage redirect, whose HTML a client may load in a tab
-   # that then hangs (e.g. GNOME's Fedora portal check).  Only /generate_204
-   # *without* the Android user agent stays a redirect, to avoid breaking the
+   # A path that any OS uses to probe for a portal, under an unrecognized
+   # hostname, receives the portal-probe response. This prevents homepage HTML
+   # from loading in a tab that can hang (e.g. GNOME's Fedora portal check).
+   # /generate_204 without the Android user agent receives a redirect for the
    # Chromium "Open in browser" fallback.
    if environ['PATH_INFO'] == "/generate_204" and not is_android_flow(environ):
       return put_302(environ, start_response)
    if looks_like_probe(environ['PATH_INFO']):
       return microsoft(environ, start_response)
 
-   # Unknown hostname: probes (any OEM fork or a client resolving probes via
-   # its own DNS) get the generic success answer once the portal is completed
-   # so the OS stops reporting "Limited connection"; anything else keeps the
-   # redirect to the IIAB homepage.
+   # Under an unknown hostname, a probe from any OEM fork or client using its
+   # own DNS gets the generic success answer for a completed portal session,
+   # so the OS reports a connected state. Other requests redirect to the IIAB
+   # homepage.
    if portal_session_active(ip):
       set_lasttimestamp(ip)
       if looks_like_probe(environ.get('PATH_INFO', '')):
