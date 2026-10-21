@@ -275,8 +275,7 @@ def microsoft(environ,start_response):
     return put_302(environ, start_response)
 
 def android_captive_splash(environ, start_response):
-    android_flow = is_android_flow(environ)
-    if not android_flow:
+    if not is_android_flow(environ):
         return put_302(environ, start_response)
     en_txt = {
         'message': "This network uses an offline IIAB server.",
@@ -294,17 +293,8 @@ def android_captive_splash(environ, start_response):
         'manual_home_url': "http://" + fully_qualified_domain_name,
         'doc_root': get_iiab_env("WWWROOT"),
     }
-    if android_flow:
-        en_txt['message'] = (
-            'On Android, tap the three dots at the top right and select '
-            '"Use this network as is".'
-        )
-        es_txt['message'] = (
-            'En Android, toque los tres puntos de la esquina superior derecha '
-            'y seleccione "Usar esta red tal como está".'
-        )
     txt = en_txt if lang == "en" else es_txt if lang == "es" else en_txt
-    txt['instructions'] = portal_instructions(environ)
+    txt['dismiss_hint'] = dismiss_hint(environ)
     response_body = str(j2_env.get_template("simple.template").render(**txt))
     response_body = response_body.encode()
     status = '200 OK'
@@ -388,16 +378,21 @@ def mac_splash(environ,start_response):
     en_txt={ 'message': "Click on the button to go to the IIAB home page",\
             'btn1': "GO TO IIAB HOME PAGE",'success_token': 'Success',
             "HOME_URL": CAPTIVE_PORTAL_HOME, \
+            'manual_home_prompt': "Open a regular browser and enter:", \
+            'manual_home_url': "http://" + fully_qualified_domain_name, \
             'doc_root':get_iiab_env("WWWROOT")}
     es_txt={ 'message':"Haga clic en el botón para ir a la página de inicio de IIAB",\
             "HOME_URL": CAPTIVE_PORTAL_HOME, \
-            'btn1':"IIAB",'doc_root':get_iiab_env("WWWROOT")}
+            'btn1':"IIAB", \
+            'manual_home_prompt':"Abra un navegador normal e introduzca:", \
+            'manual_home_url': "http://" + fully_qualified_domain_name, \
+            'doc_root':get_iiab_env("WWWROOT")}
     txt = en_txt
     if lang == "en":
         txt = en_txt
     elif lang == "es":
         txt = es_txt
-    txt['instructions'] = portal_instructions(environ)
+    txt['dismiss_hint'] = dismiss_hint(environ)
     set_lasttimestamp(ip)
     response_body = str(j2_env.get_template("mac.template").render(**txt))
     response_body = response_body.encode()
@@ -418,8 +413,8 @@ def macintosh(environ, start_response):
     # Desktop browsers classifiable by OS user agent go straight to the
     # homepage.  iOS/macOS sign-in assistants send "CaptiveNetworkSupport-..."
     # user agents (parse_agent returns ''), and Safari sends "iPhone OS" --
-    # those clients need the sign-in-window instructions below, so only
-    # positively identified desktop systems are redirected away.
+    # those clients get the sign-in splash page below, so only positively
+    # identified desktop systems are redirected away.
     if system in ("OS X", "Windows NT", "Microsoft NCSI"):
         return put_302(environ, start_response)
     #print >> sys.stderr , "Geo Print to stderr" + environ['HTTP_HOST']
@@ -539,43 +534,24 @@ def is_android_flow(environ):
         or system == "Android"
     )
 
-def portal_instructions(environ):
-    '''Return OS-appropriate text explaining how to dismiss the captive
-    sign-in window and open the IIAB homepage in a regular browser.'''
+def dismiss_hint(environ):
+    '''One concise sentence telling the user how to dismiss the OS sign-in
+    window when it does not close on its own.'''
     agent = environ.get('HTTP_USER_AGENT','default_agent')
     system, system_version = parse_agent(agent)
-    android_flow = is_android_flow(environ)
-    if android_flow:
-        en = ("After selecting \"Use this network as is\", close this window, "
-              "then open a regular browser and enter the address shown below.")
-        es = ("Si esta ventana de inicio de sesión no se cierra automáticamente, "
-              "después de seleccionar \"Usar esta red tal como está\", ciérrela, "
-              "abra un navegador normal e introduzca la dirección que aparece "
-              "abajo.")
+    if is_android_flow(environ):
+        en = 'If this page stays open, tap the three dots and choose "Use this network as is".'
+        es = 'Si esta página permanece abierta, toque los tres puntos y elija "Usar esta red tal como está".'
     elif system == 'iPhone OS':
-        en = ("If this sign-in window does not close automatically, tap Cancel "
-              "(or swipe down) to dismiss it, then open Safari and enter the "
-              "address shown below.")
-        es = ("Si esta ventana de inicio de sesión no se cierra automáticamente, "
-              "toque Cancelar (o deslice hacia abajo) para cerrarla, abra "
-              "Safari e introduzca la dirección que aparece abajo.")
+        en = "If this page stays open, tap Cancel (or swipe down) to dismiss it."
+        es = "Si esta página permanece abierta, toque Cancelar (o deslice hacia abajo) para cerrarla."
     elif system == 'OS X':
-        en = ("If this sign-in window does not close automatically, close it "
-              "(Command-W or the close button), then open Safari and enter the "
-              "address shown below.")
-        es = ("Si esta ventana de inicio de sesión no se cierra automáticamente, "
-              "ciérrela (Command-W o el botón de cierre), abra Safari e "
-              "introduzca la dirección que aparece abajo.")
+        en = "If this page stays open, close it (Command-W)."
+        es = "Si esta página permanece abierta, ciérrela (Command-W)."
     else:
-        en = ("If this sign-in window does not close automatically, close or "
-              "ignore it, then open any browser and enter the address shown "
-              "below.")
-        es = ("Si esta ventana de inicio de sesión no se cierra automáticamente, "
-              "ciérrela o ignórela, abra cualquier navegador e introduzca la "
-              "dirección que aparece abajo.")
-    if lang == "es":
-        return es
-    return en
+        en = "If this page stays open, you can close or ignore it."
+        es = "Si esta página permanece abierta, puede cerrarla o ignorarla."
+    return es if lang == "es" else en
 
 def requested_url(environ):
     host = environ.get("HTTP_HOST") or environ.get("SERVER_NAME", "")
