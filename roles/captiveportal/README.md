@@ -57,12 +57,26 @@ messages use the `WWW-ATTEMPT:` prefix and can be viewed with:
 
 Desktop probe requests redirect directly to the configured IIAB homepage.
 Android clients first receive a captive-portal instruction page. It explains
-how to dismiss the OS sign-in window -- e.g. Android's **Use this network as
-is** -- and open the configured FQDN (such as `http://box.lan`) in a regular
-browser. The URL is shown as large, non-clickable text so it can be entered
-after the sign-in window is dismissed. The page's button records the portal
-completion event and opens the configured IIAB homepage; web pages cannot
-reliably close the operating system's sign-in window themselves.
+how to dismiss the OS sign-in window and open the configured FQDN (such as
+`http://box.lan`) in a regular browser. iOS/macOS Safari and recent Android
+offer **"Use Without Internet"** in the three-dots menu; choosing it dismisses
+the sign-in window without opening the IIAB page, so the splash shows that
+wording in red as a caution. The splash also lists two manual addresses --
+`http://box.lan` and `http://box` -- as large text that can be tapped to copy;
+while the portal is active both resolve to the IIAB server (see
+`iiab-divert-to-nginx`), which matters for clients that cannot resolve the
+FQDN by mDNS (`box.local` is also offered by mDNS/Avahi when the client
+supports it). The page's button records the portal completion event and opens
+the configured IIAB homepage; web pages cannot reliably close the operating
+system's sign-in window themselves.
+
+Some desktop clients never surface a sign-in window at all: macOS Safari
+handles `captive.apple.com` silently even when the URL is typed by hand, so a
+macOS user should open `http://box.local` (mDNS) or `http://box` directly in a
+regular browser. GNOME's portal check fetches
+`http://fedoraproject.org/static/hotspot.txt`, which is now handled like the
+other portal probes instead of being redirected to homepage HTML that can
+leave the embedded browser tab hanging.
 
 After the portal completion event, every recognized client connectivity probe
 receives the success answer its operating system expects, for that client while

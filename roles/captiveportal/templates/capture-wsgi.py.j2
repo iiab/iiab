@@ -48,7 +48,17 @@ NEIGHBOR_LOOKUP_TIMEOUT = 2 # seconds; a wedged netlink must not stall requests
 doc_root = get_iiab_env("WWWROOT")
 fully_qualified_domain_name = get_iiab_env("FQDN")
 CAPTIVE_PORTAL_HOME = "http://" + fully_qualified_domain_name + "{{ captiveportal_splash_page }}"
-ANDROID_CAPTIVE_SPLASH = "/android_captive_splash"
+CAPTIVE_SPLASH = "/captive_splash"
+
+# Alternate addresses for the splash page, in case a client cannot resolve the
+# FQDN.  captiveportal_alt_hostnames defaults to "box.local" (see
+# vars/default_vars.yml); any entry equal to the FQDN is dropped so the page
+# never shows the same address twice.
+manual_addresses = ["http://" + fully_qualified_domain_name]
+for _host in "{{ captiveportal_alt_hostnames | default('box.local') }}".split():
+    _addr = "http://" + _host
+    if _addr not in manual_addresses:
+        manual_addresses.append(_addr)
 
 def parse_args():
     parser = argparse.ArgumentParser(add_help=False)
@@ -298,30 +308,30 @@ def microsoft(environ,start_response):
         return probe_success(environ, start_response)
     if is_android_flow(environ):
         logger.debug("sending captive portal instructions for Android")
-        return android_captive_splash(environ, start_response)
+        return captive_splash(environ, start_response)
     return put_302(environ, start_response)
 
-def android_captive_splash(environ, start_response):
+def captive_splash(environ, start_response):
     if not is_android_flow(environ):
         return put_302(environ, start_response)
     en_txt = {
         'message': "This network uses an offline IIAB server.",
         'btn1': "I UNDERSTAND - OPEN IIAB HOME PAGE",
         'HOME_URL': CAPTIVE_PORTAL_HOME,
-        'manual_home_prompt': "Open a regular browser and enter:",
-        'manual_home_url': "http://" + fully_qualified_domain_name,
+        'manual_home_prompt': "Open a regular browser and enter one of these:",
+        'manual_addresses': manual_addresses,
         'doc_root': get_iiab_env("WWWROOT"),
     }
     es_txt = {
         'message': "Esta red utiliza un servidor IIAB sin conexión.",
         'btn1': "ENTIENDO - ABRIR LA PÁGINA DE INICIO DE IIAB",
         'HOME_URL': CAPTIVE_PORTAL_HOME,
-        'manual_home_prompt': "Abra un navegador normal e introduzca:",
-        'manual_home_url': "http://" + fully_qualified_domain_name,
+        'manual_home_prompt': "Abra un navegador normal e introduzca una de estas:",
+        'manual_addresses': manual_addresses,
         'doc_root': get_iiab_env("WWWROOT"),
     }
     txt = en_txt if lang == "en" else es_txt if lang == "es" else en_txt
-    txt['dismiss_hint'] = dismiss_hint(environ)
+    txt['dismiss_hint'], txt['dismiss_warning_phrase'], txt['dismiss_is_warning'] = dismiss_hint(environ)
     response_body = str(j2_env.get_template("simple.template").render(**txt))
     response_body = response_body.encode()
     status = '200 OK'
@@ -338,7 +348,7 @@ def android(environ, start_response):
     android_major_version = parse_android_major_version(system_version)
     if android_major_version is None:
         logger.warning("unrecognized Android version %r; using captive portal splash", system_version)
-        location = ANDROID_CAPTIVE_SPLASH
+        location = CAPTIVE_SPLASH
     elif android_major_version < 6:
         logger.debug("system < 6:{}".format(system_version))
         location = '/android_splash'
@@ -347,7 +357,7 @@ def android(environ, start_response):
         #set_204after(ip,20)
         location = '/android_https'
     else:
-        location = ANDROID_CAPTIVE_SPLASH
+        location = CAPTIVE_SPLASH
     agent = environ.get('HTTP_USER_AGENT','default_agent')
     response_body = b"hello"
     status = '302 Moved Temporarily'
@@ -405,21 +415,21 @@ def mac_splash(environ,start_response):
     en_txt={ 'message': "Click on the button to go to the IIAB home page",\
             'btn1': "GO TO IIAB HOME PAGE",'success_token': 'Success',
             "HOME_URL": CAPTIVE_PORTAL_HOME, \
-            'manual_home_prompt': "Open a regular browser and enter:", \
-            'manual_home_url': "http://" + fully_qualified_domain_name, \
+            'manual_home_prompt': "Open a regular browser and enter one of these:", \
+            'manual_addresses': manual_addresses, \
             'doc_root':get_iiab_env("WWWROOT")}
     es_txt={ 'message':"Haga clic en el botón para ir a la página de inicio de IIAB",\
             "HOME_URL": CAPTIVE_PORTAL_HOME, \
             'btn1':"IIAB", \
-            'manual_home_prompt':"Abra un navegador normal e introduzca:", \
-            'manual_home_url': "http://" + fully_qualified_domain_name, \
+            'manual_home_prompt':"Abra un navegador normal e introduzca una de estas:", \
+            'manual_addresses': manual_addresses, \
             'doc_root':get_iiab_env("WWWROOT")}
     txt = en_txt
     if lang == "en":
         txt = en_txt
     elif lang == "es":
         txt = es_txt
-    txt['dismiss_hint'] = dismiss_hint(environ)
+    txt['dismiss_hint'], txt['dismiss_warning_phrase'], txt['dismiss_is_warning'] = dismiss_hint(environ)
     set_lasttimestamp(ip)
     response_body = str(j2_env.get_template("mac.template").render(**txt))
     response_body = response_body.encode()
@@ -439,7 +449,7 @@ def macintosh(environ, start_response):
         set_lasttimestamp(ip)
         return probe_success(environ, start_response)
     if is_android_flow(environ):
-        return android_captive_splash(environ, start_response)
+        return captive_splash(environ, start_response)
     # Desktop browsers classifiable by OS user agent go straight to the
     # homepage.  iOS/macOS sign-in assistants send "CaptiveNetworkSupport-..."
     # user agents (parse_agent returns ''), and Safari sends "iPhone OS" --
@@ -602,28 +612,36 @@ def is_android_flow(environ):
     agent = environ.get('HTTP_USER_AGENT', '')
     system, system_version = parse_agent(agent)
     return (
-        environ.get("PATH_INFO") == ANDROID_CAPTIVE_SPLASH
+        environ.get("PATH_INFO") == CAPTIVE_SPLASH
         or system == "Android"
     )
 
 def dismiss_hint(environ):
-    '''One concise sentence telling the user how to dismiss the OS sign-in
-    window when it does not close on its own.'''
+    '''How to dismiss the OS sign-in window when it does not close on its own.
+
+    Returns (text, warning_phrase, is_warning).  When is_warning is true the
+    template renders only warning_phrase -- the exact menu label the client
+    offers -- in red; the rest of the sentence stays in the normal colour, so
+    the red is limited to the wording the user must actually look for.  iOS and
+    macOS go through this red path (hard to target them separately here);
+    Android gets the same wording without the red.'''
     agent = environ.get('HTTP_USER_AGENT','default_agent')
     system, system_version = parse_agent(agent)
+    if system in ('iPhone OS', 'OS X'):
+        # iOS 14+/macOS 11+ Safari's Wi-Fi assistant offers this exact label.
+        en = 'If this page stays open, tap the three dots and choose "Use Without Internet".'
+        es = 'Si esta página permanece abierta, toque los tres puntos y elija "Usar sin Internet".'
+        phrase = 'Usar sin Internet' if lang == "es" else 'Use Without Internet'
+        return (es if lang == "es" else en), phrase, True
     if is_android_flow(environ):
-        en = 'If this page stays open, tap the three dots and choose "Use this network as is".'
-        es = 'Si esta página permanece abierta, toque los tres puntos y elija "Usar esta red tal como está".'
-    elif system == 'iPhone OS':
-        en = "If this page stays open, tap Cancel (or swipe down) to dismiss it."
-        es = "Si esta página permanece abierta, toque Cancelar (o deslice hacia abajo) para cerrarla."
-    elif system == 'OS X':
-        en = "If this page stays open, close it (Command-W)."
-        es = "Si esta página permanece abierta, ciérrela (Command-W)."
-    else:
-        en = "If this page stays open, you can close or ignore it."
-        es = "Si esta página permanece abierta, puede cerrarla o ignorarla."
-    return es if lang == "es" else en
+        # Recent Android offers the same label; older builds say "Use this
+        # network as is".  No red here.
+        en = 'If this page stays open, tap the three dots and choose "Use Without Internet" (older Android: "Use this network as is").'
+        es = 'Si esta página permanece abierta, toque los tres puntos y elija "Usar sin Internet" (Android antiguo: "Usar esta red tal como está").'
+        return (es if lang == "es" else en), '', False
+    en = "If this page stays open, you can close or ignore it."
+    es = "Si esta página permanece abierta, puede cerrarla o ignorarla."
+    return (es if lang == "es" else en), '', False
 
 def requested_url(environ):
     host = environ.get("HTTP_HOST") or environ.get("SERVER_NAME", "")
@@ -703,8 +721,8 @@ def application (environ, start_response):
       start_response(status, response_headers)
       return [response_body]
 
-   if environ['PATH_INFO'] == ANDROID_CAPTIVE_SPLASH:
-      return android_captive_splash(environ, start_response)
+   if environ['PATH_INFO'] == CAPTIVE_SPLASH:
+      return captive_splash(environ, start_response)
 
    #### parse OS platform based upon URL  ##################
    # mac
@@ -763,9 +781,24 @@ def application (environ, start_response):
      environ['HTTP_HOST'] == "www.msftncsi.com.edgesuite.net" or\
      environ['HTTP_HOST'] == "www.msftconnecttest.com" or\
      environ['HTTP_HOST'] == "www.msn.com" or\
+     environ['HTTP_HOST'] == "fedoraproject.org" or\
+     environ['HTTP_HOST'] == "www.fedoraproject.org" or\
+     environ['HTTP_HOST'] == "fedoraproject.org.static" or\
+     environ['PATH_INFO'] == "/static/hotspot.txt" or\
      environ['HTTP_HOST'] == "teredo.ipv6.microsoft.com" or\
      environ['HTTP_HOST'] == "teredo.ipv6.microsoft.com.nsatc.net": 
      return microsoft(environ, start_response) 
+
+   # A path that any OS uses to probe for a portal, under a hostname we do not
+   # recognize: answer it like every other portal probe instead of falling
+   # through to the homepage redirect, whose HTML a client may load in a tab
+   # that then hangs (e.g. GNOME's Fedora portal check).  Only /generate_204
+   # *without* the Android user agent stays a redirect, to avoid breaking the
+   # Chromium "Open in browser" fallback.
+   if environ['PATH_INFO'] == "/generate_204" and not is_android_flow(environ):
+      return put_302(environ, start_response)
+   if looks_like_probe(environ['PATH_INFO']):
+      return microsoft(environ, start_response)
 
    # Unknown hostname: probes (any OEM fork or a client resolving probes via
    # its own DNS) get the generic success answer once the portal is completed
