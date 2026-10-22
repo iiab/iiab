@@ -193,13 +193,11 @@ def update_dnsmasq():
     subprocess.run(
         ('systemctl', 'reload', 'dnsmasq'),
         check=False,
-        stdout=subprocess.STDOUT,
         stderr=subprocess.STDOUT,
     )
     subprocess.run(
         ('systemctl', 'restart', 'dnsmasq'),
         check=True,
-        stdout=subprocess.STDOUT,
         stderr=subprocess.STDOUT,
     )
 
