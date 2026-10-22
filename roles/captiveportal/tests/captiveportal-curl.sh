@@ -152,6 +152,14 @@ request \
     /hotspot-detect.html "$MACOS_UA"
 assert_status 200
 assert_body_contains 'Success'
+assert_header_contains 'text/html'
+
+request \
+    macos-library-completed "$(client_ip 0)" "$PORTAL_HOST" \
+    /library/test/success.html "$MACOS_UA"
+assert_status 200
+assert_body_contains 'Success'
+assert_header_contains 'text/html'
 
 request \
     android-precompletion-probe "$(client_ip 1)" "$ANDROID_HOST" \

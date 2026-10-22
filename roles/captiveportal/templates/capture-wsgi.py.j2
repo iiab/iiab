@@ -7,8 +7,6 @@ import argparse
 import json
 import subprocess
 import time
-from dateutil.tz import *
-import datetime
 import logging
 from logging.handlers import RotatingFileHandler
 import os
@@ -18,30 +16,29 @@ from jinja2 import Environment, FileSystemLoader
 import re
 from iiab.iiab_lib import get_iiab_env
 
-# Client timestamps are recorded in current_ts. portal_completed marks a
-# client that has completed the automatic splash flow. A completed client receives the
-# success answer its OS expects -- 204 for Android/Chromium, "success" for
-# Firefox, "Microsoft Connect Test" for Windows NCSI, and Apple's Success page
-# for iOS/macOS -- and shows a clean connected status. Incomplete clients
-# receive the shared informational splash or an OS-specific redirect.
+# portal_completed marks a client that has completed the automatic splash flow.
+# A completed client receives the success answer its OS expects -- 204 for
+# Android/Chromium, "success" for Firefox, "Microsoft Connect Test" for
+# Windows NCSI, and Apple's Success page for iOS/macOS -- and shows a clean
+# connected status. Incomplete clients receive the shared informational splash
+# or an OS-specific redirect.
 
 # Create the jinja2 environment.
 CAPTIVE_PORTAL_BASE = "/opt/iiab/captiveportal"
 j2_env = Environment(loader=FileSystemLoader(CAPTIVE_PORTAL_BASE),trim_blocks=True)
 
-# Define time outs
-INACTIVITY_TO = 30
 # How long a completed portal session (and its client state) survives without
 # any request from that client.  1 hour so a device that is in active use is
 # never re-prompted: Windows/Android usually probe at least every few minutes,
 # but a client that goes quiet must not be sent back through the splash page.
 PORTAL_SESSION_TO = 60 * 60
-PORTAL_TO = 20 # delay after the home-page click
 # Keep the shared informational page visible long enough for a captive assistant to
 # render it before its next probe completes the client.
 SPLASH_DISPLAY_TO = 5
 CLIENT_STATE_TTL = PORTAL_SESSION_TO
-MAC_CACHE_TTL = INACTIVITY_TO
+# Neighbor lookups are short-lived because a client can change networks while
+# retaining the same address.
+MAC_CACHE_TTL = 30
 NEIGHBOR_LOOKUP_TIMEOUT = 2 # seconds; a wedged netlink must not stall requests
 
 
@@ -113,22 +110,12 @@ logger.debug('##########################################')
 lang = os.environ['LANG'][0:2]
 logger.debug('speaking: {}'.format(lang))
 
-def tstamp(dtime):
-    '''return a UNIX style seconds since 1970 for datetime input'''
-    epoch = datetime.datetime(1970, 1, 1,tzinfo=tzutc())
-    newdtime = dtime.astimezone(tzutc())
-    since_epoch_delta = newdtime - epoch
-    return since_epoch_delta.total_seconds()
-
 # ########## transient client state ##############
 client_states = {}
 
 def new_client_state():
     return {
         "mac": "",
-        "current_ts": 0,
-        "lasttimestamp": 0,
-        "send204after": 0,
         "portal_completed": False,
         "splash_until": 0,
         "os": "",
@@ -173,9 +160,8 @@ def update_client_state(ip, mac, system, system_version):
             mac=mac,
             os=system,
             os_version=system_version,
-            lasttimestamp=0,
-            send204after=0,
             portal_completed=False,
+            splash_until=0,
         )
     else:
         state.update(os=system, os_version=system_version)
@@ -212,50 +198,6 @@ def get_mac(ip):
     mac_cache[ip] = (now, mac)
     return mac
 
-def timeout_info(ip):
-    state = client_states.get(ip)
-    if state is None:
-        return (0,0,0,)
-    return [
-        state["current_ts"],
-        state["lasttimestamp"],
-        state["send204after"],
-    ]
-        
-def is_inactive(ip):
-    ts=tstamp(datetime.datetime.now(tzutc()))
-    current_ts, last_ts, send204after = timeout_info(ip) 
-    logger.debug("In is_inactive. current_ts:{}. last_ts:{}. send204after:{}".format(current_ts,last_ts,send204after,))
-    if not last_ts:
-        return True
-    if ts - int(last_ts) > INACTIVITY_TO:
-        return True
-    else:
-        return False
-
-def is_after204_timeout(ip):
-    ts=tstamp(datetime.datetime.now(tzutc()))
-    current_ts, last_ts, send204after = timeout_info(ip) 
-    if send204after == 0: return False
-    logger.debug("function: is_after204_timeout send204after:{} current: {}".format(send204after,ts,))
-    if not send204after:
-        return False
-    if ts - int(send204after) > 0:
-        return True
-    else:
-        return False
-
-def set_204after(ip,value):
-    if value == 0:
-        get_client_state(ip)["send204after"] = 0
-    else:
-        ts=tstamp(datetime.datetime.now(tzutc()))
-        get_client_state(ip)["send204after"] = ts + value
-
-def set_lasttimestamp(ip):
-    ts=tstamp(datetime.datetime.now(tzutc()))
-    get_client_state(ip)["lasttimestamp"] = ts
-
 def set_portal_completed(ip):
     get_client_state(ip)["portal_completed"] = True
 
@@ -263,8 +205,6 @@ def clear_portal_completed(ip):
     get_client_state(ip).update(
         portal_completed=False,
         splash_until=0,
-        lasttimestamp=0,
-        send204after=0,
     )
 
 def is_portal_completed(ip):
@@ -293,7 +233,6 @@ def splash_waiting(ip):
         if time.monotonic() < deadline:
             return True
         state["splash_until"] = 0
-        set_204after(ip, PORTAL_TO)
         set_portal_completed(ip)
         return False
     state["splash_until"] = time.monotonic() + SPLASH_DISPLAY_TO
@@ -313,7 +252,6 @@ def microsoft(environ,start_response):
     logger.debug('in microsoft')
     ip = client_ip(environ)
     if portal_session_active(ip):
-        set_lasttimestamp(ip)
         return probe_success(environ, start_response)
     if is_android_flow(environ):
         logger.debug("sending captive portal instructions for Android")
@@ -323,11 +261,9 @@ def microsoft(environ,start_response):
 def informational_splash(environ, start_response):
     ip = client_ip(environ)
     if portal_session_active(ip):
-        set_lasttimestamp(ip)
         return probe_success(environ, start_response)
     splash_waiting(ip)
     if portal_session_active(ip):
-        set_lasttimestamp(ip)
         return probe_success(environ, start_response)
     system, _ = parse_agent(environ.get('HTTP_USER_AGENT', ''))
     close_hint = "You may close this window." if system == "OS X" else "You may close this page."
@@ -378,23 +314,19 @@ def mac_splash(environ,start_response):
 
 def macintosh(environ, start_response):
     logger.debug('in macintosh')
-    logger.debug("in function mcintosh")
     ip = client_ip(environ)
-    agent = environ.get('HTTP_USER_AGENT', '')
-    system, system_version = parse_agent(agent)
     if portal_session_active(ip):
-        set_lasttimestamp(ip)
         return probe_success(environ, start_response)
     if is_android_flow(environ):
         return captive_splash(environ, start_response)
     if splash_waiting(ip):
         return put_302(environ, start_response, CAPTIVE_SPLASH)
     if portal_session_active(ip):
-        set_lasttimestamp(ip)
         return probe_success(environ, start_response)
     # Windows/NCSI browsers go straight to the homepage.  iOS/macOS sign-in
     # assistants and Safari need the sign-in splash page below, so macOS
     # follows the same flow as iPhone OS.
+    system, _ = parse_agent(environ.get('HTTP_USER_AGENT', ''))
     if system in ("Windows NT", "Microsoft NCSI"):
         return put_302(environ, start_response)
     # Nodogsplash keeps a pre-authenticated client on the splash page until
@@ -525,10 +457,7 @@ def probe_success(environ, start_response):
         # Windows NCSI: http://www.msftconnecttest.com/connecttest.txt
         return plain_200(environ, start_response, 'Microsoft Connect Test')
     if 'apple' in host:
-        # iOS/macOS: /library/test/success.html wants the bare word "Success",
-        # /hotspot-detect.html wants the classic Success HTML page.
-        if 'success.html' in path:
-            return plain_200(environ, start_response, 'Success')
+        # iOS/macOS expect Apple's classic Success HTML page.
         return success(environ, start_response)
     return put_204(environ, start_response)
 
@@ -576,10 +505,6 @@ def requested_url(environ):
 #
 # ================== Start serving the wsgi application  =================
 def application (environ, start_response):
-   global CATCH
-   global LIST
-   global INACTIVITY_TO
-
    if args.log_probes:
       logger.info(
           "probe URL requested: %s (server name: %s)",
@@ -602,22 +527,10 @@ def application (environ, start_response):
    ip = client_ip(environ)
    prune_client_states()
    mac = get_mac(ip)
-   data = []
-   data.append("host: {}\n".format(environ['HTTP_HOST']))
-   data.append("path: {}\n".format(environ['PATH_INFO']))
-   data.append("query: {}\n".format(environ['QUERY_STRING']))
-   data.append("ip: {}\n".format(ip))
    agent = environ.get('HTTP_USER_AGENT','default_agent')
-   data.append("AGENT: {}\n".format(agent))
-   logger.debug(data)
-   #print(data)
-   found = False
-   return_204_flag = "False"
 
    # Client activity is recorded in transient in-memory state.
-   ts=tstamp(datetime.datetime.now(tzutc()))
    state = get_client_state(ip)
-   state["current_ts"] = ts
    state["last_seen"] = time.monotonic()
 
    system,system_version = parse_agent(agent)
@@ -626,12 +539,10 @@ def application (environ, start_response):
 
    #######   Return pages based upon PATH   ###############
    # do more specific stuff first
-   if  environ['PATH_INFO'] == "/home_selected":
+   if environ['PATH_INFO'] == "/home_selected":
       # Keep this legacy endpoint idempotent for clients with a cached splash
       # page; current splash pages complete clients automatically.
       logger.debug("function: home_selected. Marking client portal complete")
-      set_204after(ip,PORTAL_TO)
-      set_lasttimestamp(ip)
       set_portal_completed(ip)
       system, _ = parse_agent(agent)
       if system in ("OS X", "iPhone OS"):
@@ -643,7 +554,6 @@ def application (environ, start_response):
 
    if environ['PATH_INFO'] == CAPTIVE_SPLASH:
       if portal_session_active(ip):
-         set_lasttimestamp(ip)
          return probe_success(environ, start_response)
       return captive_splash(environ, start_response)
 
@@ -651,12 +561,8 @@ def application (environ, start_response):
    # mac
    if  environ['PATH_INFO'] == "/mac_splash":
       if portal_session_active(ip):
-         set_lasttimestamp(ip)
          return probe_success(environ, start_response)
       return mac_splash(environ, start_response) 
-
-   if  environ['PATH_INFO'] == "/step2":
-      return step2(environ, start_response) 
 
    if environ['HTTP_HOST'] == "captive.apple.com" or\
      environ['HTTP_HOST'] == "appleiphonecell.com" or\
@@ -664,10 +570,6 @@ def application (environ, start_response):
      environ['HTTP_HOST'] == "gsp1.apple.com" or\
      environ['HTTP_HOST'] == "apple.com" or\
      environ['HTTP_HOST'] == "www.apple.com": 
-     current_ts, last_ts, send204after = timeout_info(ip) 
-     if not send204after:
-          # take care of uninitialized state
-          set_204after(ip,0)
      return macintosh(environ, start_response) 
 
    # android
@@ -688,16 +590,9 @@ def application (environ, start_response):
       environ['PATH_INFO'] == "/gen_204" or\
       environ['PATH_INFO'] == "/generate_204" or\
       environ['HTTP_HOST'] == "connectivitycheck.gstatic.com":
-      current_ts, last_ts, send204after = timeout_info(ip) 
-      logger.debug("current_ts: {} last_ts: {} send204after: {}".format(current_ts, last_ts, send204after,))
       if portal_session_active(ip):
-          set_lasttimestamp(ip)
           return put_204(environ,start_response)
-      if not last_ts or ts - int(last_ts) > INACTIVITY_TO:
-          return android(environ, start_response) 
-      elif is_after204_timeout(ip):
-          return put_204(environ,start_response)
-      return android(environ, start_response) 
+      return android(environ, start_response)
 
    # microsoft
    if environ['HTTP_HOST'] == "ipv6.msftncsi.com" or\
@@ -730,10 +625,9 @@ def application (environ, start_response):
    # so the OS reports a connected state. Other requests redirect to the IIAB
    # homepage.
    if portal_session_active(ip):
-      set_lasttimestamp(ip)
       if looks_like_probe(environ.get('PATH_INFO', '')):
          return put_204(environ, start_response)
-   logger.debug("executing the default 302 response. [{}".format(data))
+   logger.debug("executing the default 302 response")
    return put_302(environ,start_response)
 
 # Instantiate the server

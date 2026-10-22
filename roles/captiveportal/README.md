@@ -34,8 +34,8 @@ startup and application errors can be inspected with:
 
 The service stores client state in memory only. Entries expire after one hour
 without a request and all state is lost when the Captive Portal service
-restarts; no client-state database is used. The 30-second inactivity threshold
-applies to incomplete portal flows.
+restarts; no client-state database is used. A shared splash page is displayed
+for a short grace period before the client is marked complete.
 
 When running `capture-wsgi.py` directly for debugging, it listens on TCP
 port `9090` by default. Override the port with `--port`, or set
@@ -110,8 +110,7 @@ traffic continues, rather than a redirect back to the splash page:
 * Firefox (`detectportal.firefox.com/success.txt`): the literal body `success`.
 * Windows NCSI (`www.msftconnecttest.com/connecttest.txt`): the literal body
   `Microsoft Connect Test`.
-* iOS/macOS (Apple hosts): the classic `Success` page, or the bare word
-  `Success` for `/library/test/success.html`.
+* iOS/macOS (Apple hosts): the classic HTML `Success` page.
 
 This suppresses repeated sign-in prompts *and* any "Limited connection" /
 "No internet access" verdict during the active connection. Completion expires
