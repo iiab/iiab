@@ -19,12 +19,11 @@ import re
 from iiab.iiab_lib import get_iiab_env
 
 # Client timestamps are recorded in current_ts. portal_completed marks a
-# completed sign-in flow (/home_selected). A completed client receives the
+# client that has completed the automatic splash flow. A completed client receives the
 # success answer its OS expects -- 204 for Android/Chromium, "success" for
 # Firefox, "Microsoft Connect Test" for Windows NCSI, and Apple's Success page
-# for iOS/macOS -- and shows a clean connected status. Incomplete flows use
-# the shorter inactivity timeout; completed sessions last PORTAL_SESSION_TO
-# after the client's last request.
+# for iOS/macOS -- and shows a clean connected status. Incomplete clients
+# receive the shared informational splash or an OS-specific redirect.
 
 # Create the jinja2 environment.
 CAPTIVE_PORTAL_BASE = "/opt/iiab/captiveportal"
@@ -38,6 +37,9 @@ INACTIVITY_TO = 30
 # but a client that goes quiet must not be sent back through the splash page.
 PORTAL_SESSION_TO = 60 * 60
 PORTAL_TO = 20 # delay after the home-page click
+# Keep the shared informational page visible long enough for a captive assistant to
+# render it before its next probe completes the client.
+SPLASH_DISPLAY_TO = 5
 CLIENT_STATE_TTL = PORTAL_SESSION_TO
 MAC_CACHE_TTL = INACTIVITY_TO
 NEIGHBOR_LOOKUP_TIMEOUT = 2 # seconds; a wedged netlink must not stall requests
@@ -128,6 +130,7 @@ def new_client_state():
         "lasttimestamp": 0,
         "send204after": 0,
         "portal_completed": False,
+        "splash_until": 0,
         "os": "",
         "os_version": "",
         "last_seen": time.monotonic(),
@@ -209,16 +212,6 @@ def get_mac(ip):
     mac_cache[ip] = (now, mac)
     return mac
 
-def platform_info(ip):
-    state = client_states.get(ip)
-    if state is None:
-        return ('','',)
-    return (state["os"], state["os_version"])
-
-def parse_android_major_version(version):
-    match = re.match(r"^(\d+)", version or "")
-    return int(match.group(1)) if match else None
-        
 def timeout_info(ip):
     state = client_states.get(ip)
     if state is None:
@@ -269,6 +262,7 @@ def set_portal_completed(ip):
 def clear_portal_completed(ip):
     get_client_state(ip).update(
         portal_completed=False,
+        splash_until=0,
         lasttimestamp=0,
         send204after=0,
     )
@@ -291,6 +285,20 @@ def portal_session_active(ip):
     clear_portal_completed(ip)
     return False
 
+def splash_waiting(ip):
+    '''Keep an informational splash visible briefly, then complete the client.'''
+    state = get_client_state(ip)
+    deadline = state["splash_until"]
+    if deadline:
+        if time.monotonic() < deadline:
+            return True
+        state["splash_until"] = 0
+        set_204after(ip, PORTAL_TO)
+        set_portal_completed(ip)
+        return False
+    state["splash_until"] = time.monotonic() + SPLASH_DISPLAY_TO
+    return True
+
 def client_ip(environ):
     '''Single source of the client address.  nginx overrides X-Forwarded-For
     with the real peer address (uwsgi_param HTTP_X_FORWARDED_FOR $remote_addr);
@@ -312,27 +320,34 @@ def microsoft(environ,start_response):
         return captive_splash(environ, start_response)
     return put_302(environ, start_response)
 
-def captive_splash(environ, start_response):
-    if not is_android_flow(environ):
-        return put_302(environ, start_response)
+def informational_splash(environ, start_response):
+    ip = client_ip(environ)
+    if portal_session_active(ip):
+        set_lasttimestamp(ip)
+        return probe_success(environ, start_response)
+    splash_waiting(ip)
+    if portal_session_active(ip):
+        set_lasttimestamp(ip)
+        return probe_success(environ, start_response)
+    system, _ = parse_agent(environ.get('HTTP_USER_AGENT', ''))
+    close_hint = "You may close this window." if system == "OS X" else "You may close this page."
     en_txt = {
-        'message': "This network uses an offline IIAB server.",
-        'btn1': "I UNDERSTAND - SIGN IN",
+        'message': "This network provides offline access.",
+        'close_hint': close_hint,
         'HOME_URL': CAPTIVE_PORTAL_HOME,
         'manual_home_prompt': "Open a regular browser and enter one of these:",
         'manual_addresses': manual_addresses,
         'doc_root': get_iiab_env("WWWROOT"),
     }
     es_txt = {
-        'message': "Esta red utiliza un servidor IIAB sin conexión.",
-        'btn1': "ENTIENDO - INICIAR SESIÓN",
+        'message': "Esta red ofrece acceso sin conexión.",
+        'close_hint': "Puede cerrar esta ventana." if system == "OS X" else "Puede cerrar esta página.",
         'HOME_URL': CAPTIVE_PORTAL_HOME,
         'manual_home_prompt': "Abra un navegador normal e introduzca una de estas:",
         'manual_addresses': manual_addresses,
         'doc_root': get_iiab_env("WWWROOT"),
     }
     txt = en_txt if lang == "en" else es_txt if lang == "es" else en_txt
-    txt['dismiss_hint'], txt['dismiss_warning_phrase'], txt['dismiss_is_warning'] = dismiss_hint(environ)
     response_body = str(j2_env.get_template("simple.template").render(**txt))
     response_body = response_body.encode()
     status = '200 OK'
@@ -343,102 +358,23 @@ def captive_splash(environ, start_response):
     start_response(status, response_headers)
     return [response_body]
 
+def captive_splash(environ, start_response):
+    return informational_splash(environ, start_response)
+
 def android(environ, start_response):
     ip = client_ip(environ)
-    system,system_version = platform_info(ip)
-    android_major_version = parse_android_major_version(system_version)
-    if android_major_version is None:
-        logger.warning("unrecognized Android version %r; using captive portal splash", system_version)
-        location = CAPTIVE_SPLASH
-    elif android_major_version < 6:
-        logger.debug("system < 6:{}".format(system_version))
-        location = '/android_splash'
-        set_204after(ip,0)
-    elif android_major_version == 6:
-        #set_204after(ip,20)
-        location = '/android_https'
-    else:
-        location = CAPTIVE_SPLASH
-    agent = environ.get('HTTP_USER_AGENT','default_agent')
-    response_body = b"hello"
-    status = '302 Moved Temporarily'
-    response_headers = [('Location',location)]
-    start_response(status, response_headers)
-    return [response_body]
+    if splash_waiting(ip):
+        return put_302(environ, start_response, CAPTIVE_SPLASH)
+    return put_204(environ, start_response)
 
 def android_splash(environ, start_response):
-    en_txt={ 'message':"Click the button to sign in to this network.",\
-            'btn1':"I UNDERSTAND - SIGN IN", \
-            "HOME_URL": CAPTIVE_PORTAL_HOME, \
-            'doc_root':get_iiab_env("WWWROOT") }
-    es_txt={ 'message':"Haga clic en el botón para iniciar sesión en esta red.",\
-            "HOME_URL": CAPTIVE_PORTAL_HOME, \
-            'btn1':"ENTIENDO - INICIAR SESIÓN",'doc_root':get_iiab_env("WWWROOT")}
-    txt = en_txt
-    if lang == "en":
-        txt = en_txt
-    elif lang == "es":
-        txt = es_txt
-    response_body = str(j2_env.get_template("simple.template").render(**txt))
-    response_body = response_body.encode()
-    status = '200 OK'
-    response_headers = [('Content-type','text/html'),
-            ('Content-Length',str(len(response_body)))]
-    start_response(status, response_headers)
-    return [response_body]
+    return informational_splash(environ, start_response)
 
 def android_https(environ, start_response):
-    en_txt={ 'message':"""Please ignore the SECURITY warning which appears after clicking the first button""",\
-             'btn2':'Click this first Go to the browser we need',\
-             'btn1':'Then click this to sign in',\
-             "HOME_URL": CAPTIVE_PORTAL_HOME, \
-            'doc_root':get_iiab_env("WWWROOT") }
-    es_txt={ 'message':"Haga clic en el botón para iniciar sesión en esta red.",\
-            "HOME_URL": CAPTIVE_PORTAL_HOME, \
-            'btn1':"ENTIENDO - INICIAR SESIÓN",'doc_root':get_iiab_env("WWWROOT")}
-    txt = en_txt
-    if lang == "en":
-        txt = en_txt
-    elif lang == "es":
-        txt = es_txt
-    response_body = str(j2_env.get_template("simple.template").render(**txt))
-    response_body = response_body.encode()
-    status = '200 OK'
-    response_headers = [('Content-type','text/html'),
-            ('Content-Length',str(len(response_body)))]
-    start_response(status, response_headers)
-    return [response_body]
+    return informational_splash(environ, start_response)
 
 def mac_splash(environ,start_response):
-    logger.debug('in mac_splash')
-    logger.debug("in function mac_splash")
-    ip = client_ip(environ)
-    en_txt={ 'message': "Click the button to sign in to this network.",\
-            'btn1': "I UNDERSTAND - SIGN IN",'success_token': 'Success',
-            "HOME_URL": CAPTIVE_PORTAL_HOME, \
-            'manual_home_prompt': "Open a regular browser and enter one of these:", \
-            'manual_addresses': manual_addresses, \
-            'doc_root':get_iiab_env("WWWROOT")}
-    es_txt={ 'message':"Haga clic en el botón para iniciar sesión en esta red.",\
-            "HOME_URL": CAPTIVE_PORTAL_HOME, \
-            'btn1':"ENTIENDO - INICIAR SESIÓN", \
-            'manual_home_prompt':"Abra un navegador normal e introduzca una de estas:", \
-            'manual_addresses': manual_addresses, \
-            'doc_root':get_iiab_env("WWWROOT")}
-    txt = en_txt
-    if lang == "en":
-        txt = en_txt
-    elif lang == "es":
-        txt = es_txt
-    txt['dismiss_hint'], txt['dismiss_warning_phrase'], txt['dismiss_is_warning'] = dismiss_hint(environ)
-    set_lasttimestamp(ip)
-    response_body = str(j2_env.get_template("mac.template").render(**txt))
-    response_body = response_body.encode()
-    status = '200 OK'
-    response_headers = [('Content-type','text/html; charset=utf-8'),
-            ('Content-Length',str(len(response_body)))]
-    start_response(status, response_headers)
-    return [response_body]
+    return informational_splash(environ, start_response)
 
 def macintosh(environ, start_response):
     logger.debug('in macintosh')
@@ -451,28 +387,21 @@ def macintosh(environ, start_response):
         return probe_success(environ, start_response)
     if is_android_flow(environ):
         return captive_splash(environ, start_response)
+    if splash_waiting(ip):
+        return put_302(environ, start_response, CAPTIVE_SPLASH)
+    if portal_session_active(ip):
+        set_lasttimestamp(ip)
+        return probe_success(environ, start_response)
     # Windows/NCSI browsers go straight to the homepage.  iOS/macOS sign-in
     # assistants and Safari need the sign-in splash page below, so macOS
     # follows the same flow as iPhone OS.
     if system in ("Windows NT", "Microsoft NCSI"):
         return put_302(environ, start_response)
-    #print >> sys.stderr , "Geo Print to stderr" + environ['HTTP_HOST']
-    if not is_inactive(ip):
-        set_lasttimestamp(ip)
-        return success(environ,start_response)
-    # determine if it is time to redirect again
-    if is_after204_timeout(ip):
-        set_204after(ip,10)
-        response_body = """<html><head><script>
-            window.location.reload(true)
-            </script></body></html>"""
-        response_body = response_body.encode()
-        status = '302 Moved Temporarily'
-        response_headers = [('content','text/html')]
-        start_response(status, response_headers)
-        return [response_body]
-    else:
-        return mac_splash(environ,start_response)
+    # Nodogsplash keeps a pre-authenticated client on the splash page until
+    # that client authenticates.  Do not infer completion from a repeated
+    # connectivity probe; redirect the probe to the splash page first so
+    # Apple clients invoke their captive-network assistant.
+    return put_302(environ, start_response, CAPTIVE_SPLASH)
 
 # =============  Return html pages  ============================
 @lru_cache(maxsize=4)
@@ -529,10 +458,11 @@ def put_204(environ, start_response):
     logger.debug("in function  put_204: sending 204 html response")
     return [response_body]
 
-def put_302(environ, start_response):
+def put_302(environ, start_response, location=None):
     status = '302 Moved Temporarily'
     response_body = b''
-    location = CAPTIVE_PORTAL_HOME
+    if location is None:
+        location = CAPTIVE_PORTAL_HOME
     response_headers = [('Content-type','text/html'),
             ('Location',location), 
             ('Content-Length',str(len(response_body)))]
@@ -544,6 +474,23 @@ def plain_200(environ, start_response, body):
     payload = body.encode()
     start_response('200 OK', [
         ('Content-type', 'text/plain; charset=utf-8'),
+        ('Content-Length', str(len(payload))),
+        ('Cache-Control', 'no-store'),
+    ])
+    return [payload]
+
+def captive_portal_api(environ, start_response):
+    ip = client_ip(environ)
+    if not portal_session_active(ip) and get_client_state(ip)["splash_until"]:
+        splash_waiting(ip)
+    captive = not portal_session_active(ip)
+    response = {
+        "captive": captive,
+        "user-portal-url": "http://captive.lan/captive_splash",
+    }
+    payload = json.dumps(response, separators=(",", ":")).encode()
+    start_response('200 OK', [
+        ('Content-type', 'application/captive+json'),
         ('Content-Length', str(len(payload))),
         ('Cache-Control', 'no-store'),
     ])
@@ -618,35 +565,6 @@ def is_android_flow(environ):
         or system == "Android"
     )
 
-def dismiss_hint(environ):
-    '''How to dismiss the OS sign-in window when it does not close on its own.
-
-    Returns (text, warning_phrase, is_warning).  When is_warning is true the
-    template renders only warning_phrase -- the exact menu label the client
-    offers -- in red; the rest of the sentence stays in the normal colour, so
-    the red is limited to the wording the user must actually look for.'''
-    agent = environ.get('HTTP_USER_AGENT','default_agent')
-    system, system_version = parse_agent(agent)
-    if system == 'iPhone OS':
-        # iOS 14+ Wi-Fi assistant offers this exact label.
-        en = 'If this page stays open, tap the three dots and choose "Use Without Internet".'
-        es = 'Si esta página permanece abierta, toque los tres puntos y elija "Usar sin Internet".'
-        phrase = 'Usar sin Internet' if lang == "es" else 'Use Without Internet'
-        return (es if lang == "es" else en), phrase, True
-    if system == 'OS X':
-        en = 'If this page stays open, close the window.'
-        es = 'Si esta página permanece abierta, cierre la ventana.'
-        return (es if lang == "es" else en), '', False
-    if is_android_flow(environ):
-        # Android clients offer the same label; some versions say "Use this
-        # network as is". No red here.
-        en = 'If this page stays open, tap the three dots and choose "Use Without Internet" (older Android: "Use this network as is").'
-        es = 'Si esta página permanece abierta, toque los tres puntos y elija "Usar sin Internet" (Android antiguo: "Usar esta red tal como está").'
-        return (es if lang == "es" else en), '', False
-    en = "If this page stays open, you can close or ignore it."
-    es = "Si esta página permanece abierta, puede cerrarla o ignorarla."
-    return (es if lang == "es" else en), '', False
-
 def requested_url(environ):
     host = environ.get("HTTP_HOST") or environ.get("SERVER_NAME", "")
     path = environ.get("PATH_INFO", "")
@@ -709,21 +627,19 @@ def application (environ, start_response):
    #######   Return pages based upon PATH   ###############
    # do more specific stuff first
    if  environ['PATH_INFO'] == "/home_selected":
-      # the js link to home page triggers this ajax url 
-      # mark the sign-in conversation completed, return 204 or Success or Success
-      #data = ['{}: {}\n'.format(key, value) for key, value in sorted(environ.items()) ]
-      #logger.debug("need the correct ip:{}".format(data))
-      logger.debug("function: home_selected. Setting flag to return_204")
-      #print("setting flag to return_204")
+      # Keep this legacy endpoint idempotent for clients with a cached splash
+      # page; current splash pages complete clients automatically.
+      logger.debug("function: home_selected. Marking client portal complete")
       set_204after(ip,PORTAL_TO)
       set_lasttimestamp(ip)
       set_portal_completed(ip)
-      status = '200 OK'
-      response_body = b''
-      response_headers = [('Content-type','text/html'),
-            ('Content-Length',str(len(response_body)))]
-      start_response(status, response_headers)
-      return [response_body]
+      system, _ = parse_agent(agent)
+      if system in ("OS X", "iPhone OS"):
+         return put_302(environ, start_response, "/hotspot-detect.html")
+      return put_204(environ, start_response)
+
+   if environ['PATH_INFO'] == "/.well-known/captive-portal":
+      return captive_portal_api(environ, start_response)
 
    if environ['PATH_INFO'] == CAPTIVE_SPLASH:
       if portal_session_active(ip):
@@ -734,6 +650,9 @@ def application (environ, start_response):
    #### parse OS platform based upon URL  ##################
    # mac
    if  environ['PATH_INFO'] == "/mac_splash":
+      if portal_session_active(ip):
+         set_lasttimestamp(ip)
+         return probe_success(environ, start_response)
       return mac_splash(environ, start_response) 
 
    if  environ['PATH_INFO'] == "/step2":

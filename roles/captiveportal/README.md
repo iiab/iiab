@@ -54,21 +54,30 @@ messages use the `WWW-ATTEMPT:` prefix and can be viewed with:
 
     sudo dmesg | grep 'WWW-ATTEMPT:'
 
+When the portal is active, DHCP advertises the RFC 8910 Captive Portal API at
+`http://captive.lan/.well-known/captive-portal`. The API returns per-client
+`captive` state and the shared informational splash URL, so current iOS and macOS versions
+can discover the portal even when they do not issue the legacy Apple HTTP
+probe. Legacy probe interception remains enabled for clients that do not
+support the API.
+
 Windows/NCSI desktop probe requests redirect directly to the configured IIAB
-homepage. macOS/iOS sign-in assistants and Android clients first receive a
-captive-portal instruction page. It explains how to dismiss the OS sign-in
-window and open the configured FQDN (such as `http://box.lan`) in a regular
-browser. macOS/iOS and supported Android offer **"Use Without Internet"** in
-the three-dots menu; choosing it dismisses the sign-in window without opening
-the IIAB page, so the splash shows that wording in red as a caution. The
-splash also lists two manual addresses --
+homepage. macOS/iOS and Android clients receive one shared informational
+splash, matching Nodogsplash's pre-authentication flow. The page says that
+the network provides offline access, lists manual IIAB addresses --
 `http://box.lan` and `http://box` -- as large text that can be tapped to copy;
 while the portal is active both resolve to the IIAB server (see
 `iiab-make-cp-servers.py`), which matters for clients that cannot resolve the
 FQDN by mDNS (`box.local` is also offered by mDNS/Avahi when the client
-supports it). The page's button records the portal completion event and opens
-the configured IIAB homepage; web pages cannot reliably close the operating
-system's sign-in window themselves.
+supports it). Desktop Apple clients may close the window and mobile clients
+may close the page. After a short display grace period, every client completes
+automatically; Apple clients are redirected back to their connectivity probe
+so the assistant receives Apple's `Success` response, while Android clients
+receive the no-content response expected by their connectivity check. As in
+Nodogsplash, repeating a pre-authentication request keeps that client in the
+splash flow, while completion changes only that client's subsequent probe
+responses. Web pages cannot reliably close the operating system's sign-in
+window themselves.
 
 If macOS Safari does not surface a sign-in window, it handles
 `captive.apple.com` silently even when the URL is typed by hand, so a macOS
@@ -140,4 +149,7 @@ either uWSGI instance.
  * To discover untrapped urls, "apt-get install tcpdump", and "tcpdump -i br0 capture.tcp". I transfer this file to a machine with a GUI, and wireshark to interpret the conversations on the wire. The DNS packets are the ones to look for.
  
  ## Known Problems
- 1. On Android 5-7, the browser which is brought up, during the association process, is a 'walled garden' and I cannot find a way out. This browser is not very modern, and continuously displays the "sign in to Wi-Fi network" button -- with an annoying beep.
+  1. Some Android versions perform an HTTPS connectivity check after the
+     captive portal flow. IIAB does not intercept HTTPS, so that check requires
+     a trusted certificate and may continue to report limited connectivity even
+     after the HTTP portal session completes.
