@@ -112,7 +112,10 @@ def render_dnsmasq_config():
     ]
     entries.extend(
         (
-            f'address=/box/{LAN_IP}',
+            # 'box' already resolves to the IIAB via /etc/hosts.dnsmasq
+            # (addn-hosts) and 'box.lan' via expand-hosts. An 'address=/box/'
+            # entry would additionally answer for every name below '.box',
+            # which is not what is meant here.
             f'address=/box.local/{LAN_IP}',
             '# RFC 8910 Captive Portal Identification for iOS/macOS',
             'dhcp-option=114,http://captive.lan/.well-known/captive-portal',
@@ -124,7 +127,12 @@ def render_dnsmasq_config():
 
 
 def iiab_var_value(name):
-    """Read an IIAB variable, with local_vars overriding default_vars."""
+    """Read an IIAB variable, with local_vars overriding default_vars.
+
+    A variable that cannot be found is reported on stderr: an empty return
+    value looks like 'False' to the caller, which would silently disable the
+    Captive Portal instead of pointing at the misconfiguration.
+    """
     values = {}
     pattern = re.compile(rf'^{re.escape(name)}:\s+(.*)$')
     for path in (DEFAULT_VARS_PATH, LOCAL_VARS_PATH):
@@ -139,6 +147,13 @@ def iiab_var_value(name):
                 if len(value) >= 2 and value[0] == value[-1] and value[0] in "'\"":
                     value = value[1:-1]
                 values[path] = value
+    if not values:
+        print(
+            f'iiab-make-cp-servers: variable {name!r} not found in '
+            f'{DEFAULT_VARS_PATH} or {LOCAL_VARS_PATH}',
+            file=sys.stderr,
+        )
+        return ''
     local_value = values.get(LOCAL_VARS_PATH, '')
     return local_value if local_value else values.get(DEFAULT_VARS_PATH, '')
 
@@ -174,6 +189,31 @@ def portal_is_active():
     )
 
 
+def reload_dnsmasq():
+    """Ask dnsmasq to re-read its configuration.
+
+    A failure here (dnsmasq not installed, masked, or a broken config) must
+    not abort the Captive Portal role: the diversion file is already in place
+    and takes effect the next time dnsmasq starts. Report the failure
+    instead of raising.
+    """
+    for action in ('reload', 'restart'):
+        result = subprocess.run(
+            ('systemctl', action, 'dnsmasq'),
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+        if result.returncode != 0:
+            output = (result.stdout or '').strip()
+            print(
+                f'iiab-make-cp-servers: systemctl {action} dnsmasq failed '
+                f'(exit {result.returncode}): {output}',
+                file=sys.stderr,
+            )
+
+
 def update_dnsmasq():
     """Create or remove the dnsmasq diversion and reload dnsmasq if needed."""
     new_config = render_dnsmasq_config() if portal_is_active() else ''
@@ -192,16 +232,7 @@ def update_dnsmasq():
             CAPTURE_PATH.unlink()
         except FileNotFoundError:
             pass
-    subprocess.run(
-        ('systemctl', 'reload', 'dnsmasq'),
-        check=False,
-        stderr=subprocess.STDOUT,
-    )
-    subprocess.run(
-        ('systemctl', 'restart', 'dnsmasq'),
-        check=True,
-        stderr=subprocess.STDOUT,
-    )
+    reload_dnsmasq()
 
 
 def render_server_block(listen_suffix, server_name):
@@ -215,6 +246,7 @@ def main():
     nginx_config = ''.join(
         render_server_block(listen_suffix, server_name) for listen_suffix, server_name in iter_server_entries()
     )
+    NGINX_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
     NGINX_CONFIG_PATH.write_text(nginx_config, encoding='utf-8')
     update_dnsmasq()
 

@@ -65,8 +65,8 @@ Windows/NCSI desktop probe requests redirect directly to the configured IIAB
 homepage. macOS/iOS and Android clients receive one shared informational
 splash, matching Nodogsplash's pre-authentication flow. The page says that
 the network provides offline access, lists manual IIAB addresses --
-`http://box.lan` and `http://box` -- as large text that can be tapped to copy;
-while the portal is active both resolve to the IIAB server (see
+`http://box.lan` and `http://box.local` -- as large text that can be tapped to
+copy; while the portal is active both resolve to the IIAB server (see
 `iiab-make-cp-servers.py`), which matters for clients that cannot resolve the
 FQDN by mDNS (`box.local` is also offered by mDNS/Avahi when the client
 supports it). Desktop Apple clients may close the window and mobile clients
