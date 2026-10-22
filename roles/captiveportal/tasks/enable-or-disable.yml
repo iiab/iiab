@@ -30,18 +30,23 @@
     state: absent
   when: not captiveportal_enabled
 
-- name: Install or update /usr/sbin/iiab-divert-to-nginx
+- name: Install or update the Captive Portal NGINX and dnsmasq generator
   template:
-    src: iiab-divert-to-nginx.j2
-    dest: /usr/sbin/iiab-divert-to-nginx
+    src: iiab-make-cp-servers.py
+    dest: /usr/sbin/iiab-make-cp-servers.py
     mode: '0755'
+
+- name: Remove the obsolete Captive Portal dnsmasq helper
+  file:
+    path: /usr/sbin/iiab-divert-to-nginx
+    state: absent
 
 - name: Install and update Captive Portal generated files
   include_tasks: update-files.yml
   when: captiveportal_enabled
 
-- name: Run /usr/sbin/iiab-divert-to-nginx to generate or clear diversion lists
-  command: /usr/sbin/iiab-divert-to-nginx
+- name: Generate NGINX captive portal servers and update dnsmasq diversion
+  command: /usr/sbin/iiab-make-cp-servers.py
 
 - name: Update NGINX server host aliases used by captive portal handoffs
   template:
@@ -92,7 +97,7 @@
 # /usr/bin/iiab-gen-iptables. A standalone './runrole captiveportal' does not
 # run it, so this task regenerates the firewall as well.
 # The generator is deployed before execution so the probe DNS
-# (via iiab-divert-to-nginx) and port-80 DNAT use matching rules. During
+# (via iiab-make-cp-servers.py) and port-80 DNAT use matching rules. During
 # installation, the network role runs last and the generator may be absent, so
 # the stat guards below skip cleanly.
 - name: Record whether /usr/bin/iiab-gen-iptables exists (installed by the network role)

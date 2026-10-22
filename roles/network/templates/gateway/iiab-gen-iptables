@@ -49,7 +49,7 @@ iiab_var_value() {
 # iiab_var_value preserves the YAML spelling, but Ansible accepts true/yes/on/1
 # (any case) as boolean True. The parser matches those spellings, so a portal
 # enabled in Ansible is also enabled by the bash-generated dnsmasq and firewall
-# rules. The parsing matches iiab-divert-to-nginx.
+# rules. The parsing matches iiab-make-cp-servers.py.
 is_true() {
     case "$1" in
         [Tt][Rr][Uu][Ee]|[Yy][Ee][Ss]|[Oo][Nn]|1) return 0 ;;
@@ -240,8 +240,22 @@ if [ "$wan" != "none" ]; then
     fi
 fi
 
-# TCP & UDP block of DNS port 53 if truly nec
-if [ "$block_DNS" == "True" ]; then
+# Redirect client DNS to the IIAB's dnsmasq.
+# This is a DNAT, not a block: the client still believes it asked its own
+# resolver (e.g. 8.8.8.8) and conntrack rewrites the reply's source
+# accordingly, so the client accepts the answer.
+#
+# In offline/captive-portal mode (iiab_gateway_enabled is not True), the
+# redirect is ALWAYS enabled so that clients using their own DNS (e.g. 8.8.8.8)
+# still resolve the portal probe hostnames via dnsmasq and get diverted to
+# the splash page.  The user cannot disable this in that mode.
+#
+# In online/gateway mode (iiab_gateway_enabled is True), clients have full
+# Internet access through the IIAB.  Redirecting DNS is unnecessary for the
+# portal (which is not active) but can be enabled on demand by setting
+# block_DNS: True in /etc/iiab/local_vars.yml to force all client DNS through
+# the IIAB's dnsmasq (e.g. for DNS filtering).
+if ! is_true "$iiab_gateway_enabled" || is_true "$block_DNS"; then
     $IPTABLES -t nat -A PREROUTING -i $lan -p tcp --dport 53 ! -d $lan_ip -j DNAT --to $lan_ip:53
     $IPTABLES -t nat -A PREROUTING -i $lan -p udp --dport 53 ! -d $lan_ip -j DNAT --to $lan_ip:53
 fi
@@ -252,7 +266,7 @@ fi
 # external LAN HTTP (port 80). This is needed for devices that resolve probes
 # via their own DNS and would otherwise skip the portal. Exclude the LAN
 # subnet so local HTTP services remain reachable.
-# /usr/sbin/iiab-divert-to-nginx applies the matching probe-hostname DNS
+# /usr/sbin/iiab-make-cp-servers.py applies the matching probe-hostname DNS
 # diversion using the same condition, so the two always switch together.
 if is_true "$captiveportal_enabled" && [ "$lan" != "none" ] && ! is_true "$iiab_gateway_enabled"; then
     if is_true "$captiveportal_log_probes"; then
@@ -266,9 +280,9 @@ fi
 
 # The captive-portal DNS diversion matches the DNAT above. The
 # 'iiab-internet-on|off' commands rerun this script but not the captiveportal
-# role. The helper is installed by the captiveportal role.
-if [ -x /usr/sbin/iiab-divert-to-nginx ]; then
-    /usr/sbin/iiab-divert-to-nginx
+# role. The generator is installed by the captiveportal role.
+if [ -x /usr/sbin/iiab-make-cp-servers.py ]; then
+    /usr/sbin/iiab-make-cp-servers.py
 fi
 
 if [ "$squid_enabled" == "True" ]; then     # Direct from default_vars.yml and local_vars.yml
