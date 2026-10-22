@@ -1,0 +1,36 @@
+- name: Enable and start zimantic.service
+  systemd:
+    name: zimantic
+    enabled: yes
+    state: started
+    daemon_reload: yes
+  when: zimantic_enabled
+
+- name: Disable and stop zimantic.service
+  systemd:
+    name: zimantic
+    enabled: no
+    state: stopped
+  when: not zimantic_enabled
+
+- name: Enable http://box{{ zimantic_url }} shortcut via NGINX
+  template:
+    src: zimantic-nginx.conf.j2
+    dest: "{{ nginx_conf_dir }}/zimantic-nginx.conf"
+  when: zimantic_enabled
+
+- name: Disable http://box{{ zimantic_url }} shortcut via NGINX
+  file:
+    path: "{{ nginx_conf_dir }}/zimantic-nginx.conf"
+    state: absent
+  when: not zimantic_enabled
+
+- name: Restart 'nginx' systemd service
+  systemd:
+    name: nginx
+    state: restarted
+  when: not is_proot
+
+- name: Restart 'nginx' via pdsm (proot)
+  command: pdsm restart nginx
+  when: is_proot
