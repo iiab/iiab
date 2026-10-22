@@ -54,13 +54,14 @@ messages use the `WWW-ATTEMPT:` prefix and can be viewed with:
 
     sudo dmesg | grep 'WWW-ATTEMPT:'
 
-Desktop probe requests redirect directly to the configured IIAB homepage.
-Android clients first receive a captive-portal instruction page. It explains
-how to dismiss the OS sign-in window and open the configured FQDN (such as
-`http://box.lan`) in a regular browser. iOS/macOS Safari and supported Android
-offer **"Use Without Internet"** in the three-dots menu; choosing it dismisses
-the sign-in window without opening the IIAB page, so the splash shows that
-wording in red as a caution. The splash also lists two manual addresses --
+Windows/NCSI desktop probe requests redirect directly to the configured IIAB
+homepage. macOS/iOS sign-in assistants and Android clients first receive a
+captive-portal instruction page. It explains how to dismiss the OS sign-in
+window and open the configured FQDN (such as `http://box.lan`) in a regular
+browser. macOS/iOS and supported Android offer **"Use Without Internet"** in
+the three-dots menu; choosing it dismisses the sign-in window without opening
+the IIAB page, so the splash shows that wording in red as a caution. The
+splash also lists two manual addresses --
 `http://box.lan` and `http://box` -- as large text that can be tapped to copy;
 while the portal is active both resolve to the IIAB server (see
 `iiab-make-cp-servers.py`), which matters for clients that cannot resolve the
@@ -69,13 +70,27 @@ supports it). The page's button records the portal completion event and opens
 the configured IIAB homepage; web pages cannot reliably close the operating
 system's sign-in window themselves.
 
-Some desktop clients never surface a sign-in window at all: macOS Safari
-handles `captive.apple.com` silently even when the URL is typed by hand, so a
-macOS user should open `http://box.local` (mDNS) or `http://box` directly in a
+If macOS Safari does not surface a sign-in window, it handles
+`captive.apple.com` silently even when the URL is typed by hand, so a macOS
+user should open `http://box.local` (mDNS) or `http://box` directly in a
 regular browser. GNOME's portal check fetches
 `http://fedoraproject.org/static/hotspot.txt`, which the portal handles like
 the other portal probes rather than redirecting to homepage HTML that can
 leave the embedded browser tab hanging.
+
+### Curl integration test
+
+Run the captive-portal integration test on the IIAB host while the portal is
+enabled:
+
+    bash roles/captiveportal/tests/captiveportal-curl.sh
+
+The test sends requests through the local NGINX listener and uses different
+loopback source addresses for each simulated client, so the portal's
+in-memory client state does not leak between cases. The defaults assume the
+canonical IIAB host is `box.lan`; override `CAPTIVE_PORTAL_TEST_HOME_URL` and
+the other `CAPTIVE_PORTAL_TEST_*` variables when testing a different
+configuration.
 
 For a client with a completed portal session, every recognized connectivity
 probe receives the success answer its operating system expects while probe

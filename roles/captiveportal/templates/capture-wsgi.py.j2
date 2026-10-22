@@ -252,8 +252,11 @@ def is_after204_timeout(ip):
         return False
 
 def set_204after(ip,value):
-    ts=tstamp(datetime.datetime.now(tzutc()))
-    get_client_state(ip)["send204after"] = ts + value
+    if value == 0:
+        get_client_state(ip)["send204after"] = 0
+    else:
+        ts=tstamp(datetime.datetime.now(tzutc()))
+        get_client_state(ip)["send204after"] = ts + value
 
 def set_lasttimestamp(ip):
     ts=tstamp(datetime.datetime.now(tzutc()))
@@ -447,12 +450,10 @@ def macintosh(environ, start_response):
         return probe_success(environ, start_response)
     if is_android_flow(environ):
         return captive_splash(environ, start_response)
-    # Desktop browsers classifiable by OS user agent go straight to the
-    # homepage.  iOS/macOS sign-in assistants send "CaptiveNetworkSupport-..."
-    # user agents (parse_agent returns ''), and Safari sends "iPhone OS" --
-    # those clients get the sign-in splash page below, so only positively
-    # identified desktop systems are redirected away.
-    if system in ("OS X", "Windows NT", "Microsoft NCSI"):
+    # Windows/NCSI browsers go straight to the homepage.  iOS/macOS sign-in
+    # assistants and Safari need the sign-in splash page below, so macOS
+    # follows the same flow as iPhone OS.
+    if system in ("Windows NT", "Microsoft NCSI"):
         return put_302(environ, start_response)
     #print >> sys.stderr , "Geo Print to stderr" + environ['HTTP_HOST']
     if not is_inactive(ip):
