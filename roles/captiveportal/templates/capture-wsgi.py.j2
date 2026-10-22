@@ -307,21 +307,26 @@ def generic_probe(environ, start_response):
     if is_android_flow(environ):
         logger.debug("sending captive portal instructions for Android")
         return informational_splash(environ, start_response)
-    return put_302(environ, start_response)
+    return put_302(environ, start_response, CAPTIVE_SPLASH)
 
 def informational_splash(environ, start_response):
     ip = client_ip(environ)
-    if portal_session_active(ip):
-        return probe_success(environ, start_response)
-    splash_waiting(ip)
-    if portal_session_active(ip):
-        return probe_success(environ, start_response)
     system, _ = parse_agent(environ.get('HTTP_USER_AGENT', ''))
+    redirect_home_after_timeout = system not in ("Android", "OS X", "iPhone OS")
+    if portal_session_active(ip):
+        return probe_success(environ, start_response)
+    if not splash_waiting(ip) and redirect_home_after_timeout:
+        return put_302(environ, start_response)
+    if portal_session_active(ip):
+        return probe_success(environ, start_response)
     close_hint = "You may close this window." if system == "OS X" else "You may close this page."
     en_txt = {
         'message': "This network provides offline access.",
         'close_hint': close_hint,
         'HOME_URL': CAPTIVE_PORTAL_HOME,
+        'auto_refresh': redirect_home_after_timeout,
+        'auto_refresh_seconds': SPLASH_DISPLAY_TO,
+        'auto_refresh_url': CAPTIVE_SPLASH,
         'manual_home_prompt': "Open a regular browser and enter one of these:",
         'manual_addresses': manual_addresses,
         'doc_root': get_iiab_env("WWWROOT"),
@@ -330,6 +335,9 @@ def informational_splash(environ, start_response):
         'message': "Esta red ofrece acceso sin conexión.",
         'close_hint': "Puede cerrar esta ventana." if system == "OS X" else "Puede cerrar esta página.",
         'HOME_URL': CAPTIVE_PORTAL_HOME,
+        'auto_refresh': redirect_home_after_timeout,
+        'auto_refresh_seconds': SPLASH_DISPLAY_TO,
+        'auto_refresh_url': CAPTIVE_SPLASH,
         'manual_home_prompt': "Abra un navegador normal e introduzca una de estas:",
         'manual_addresses': manual_addresses,
         'doc_root': get_iiab_env("WWWROOT"),
@@ -362,12 +370,12 @@ def macintosh(environ, start_response):
         return put_302(environ, start_response, CAPTIVE_SPLASH)
     if portal_session_active(ip):
         return probe_success(environ, start_response)
-    # Windows/NCSI browsers go straight to the homepage.  iOS/macOS sign-in
+    # Windows/NCSI browsers use the desktop splash flow. iOS/macOS sign-in
     # assistants and Safari need the sign-in splash page below, so macOS
     # follows the same flow as iPhone OS.
     system, _ = parse_agent(environ.get('HTTP_USER_AGENT', ''))
     if system in ("Windows NT", "Microsoft NCSI"):
-        return put_302(environ, start_response)
+        return put_302(environ, start_response, CAPTIVE_SPLASH)
     # Nodogsplash keeps a pre-authenticated client on the splash page until
     # that client authenticates.  Do not infer completion from a repeated
     # connectivity probe; redirect the probe to the splash page first so
@@ -622,7 +630,7 @@ def application (environ, start_response):
           return put_204(environ,start_response)
       # Non-Android /generate_204 gets a redirect for the Chromium "Open in browser" fallback.
       if path == "/generate_204" and not is_android_flow(environ):
-          return put_302(environ, start_response)
+          return put_302(environ, start_response, CAPTIVE_SPLASH)
       return android(environ, start_response)
 
    # desktop connectivity probes
