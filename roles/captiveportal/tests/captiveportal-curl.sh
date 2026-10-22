@@ -120,50 +120,123 @@ assert_location() {
 
 printf 'Captive portal curl integration tests against %s\n' "$BASE_URL"
 
-request \
-    macos-splash "$(client_ip 0)" "$PORTAL_HOST" \
-    /hotspot-detect.html "$MACOS_UA"
-assert_status 200
-assert_body_contains 'Welcome to IIAB'
-assert_body_contains '/home_selected'
-assert_body_contains 'close the window'
-
+# Client lifecycle:
+# - Apple and Android clients are completed after their informational splash
+#   has been displayed briefly;
+# - completion changes only that client's subsequent probe responses.
 request \
     macos-precompletion-probe "$(client_ip 0)" "$PORTAL_HOST" \
     /hotspot-detect.html "$MACOS_UA"
-assert_status 200
-assert_body_contains 'Welcome to IIAB'
+assert_status 302
+assert_location "$CAPTIVE_SPLASH"
 
 request \
-    iphone-splash "$(client_ip 1)" "$PORTAL_HOST" \
-    /hotspot-detect.html "$IPHONE_UA"
+    macos-precompletion-splash "$(client_ip 0)" "$PORTAL_HOST" \
+    "$CAPTIVE_SPLASH" "$MACOS_UA"
 assert_status 200
 assert_body_contains 'Welcome to IIAB'
-assert_body_contains 'Use Without Internet'
+assert_body_not_contains '/home_selected'
+assert_body_not_contains 'SIGN IN'
+assert_body_contains 'You may close this window.'
 
 request \
-    android-probe "$(client_ip 2)" "$ANDROID_HOST" \
+    macos-precompletion-repeat "$(client_ip 0)" "$PORTAL_HOST" \
+    /hotspot-detect.html "$MACOS_UA"
+assert_status 302
+assert_location "$CAPTIVE_SPLASH"
+
+sleep 6
+
+request \
+    macos-completed-after-splash "$(client_ip 0)" "$PORTAL_HOST" \
+    /hotspot-detect.html "$MACOS_UA"
+assert_status 200
+assert_body_contains 'Success'
+
+request \
+    android-precompletion-probe "$(client_ip 1)" "$ANDROID_HOST" \
     /generate_204 "$ANDROID_UA"
 assert_status 302
 assert_location "$CAPTIVE_SPLASH"
 
 request \
-    android-splash "$(client_ip 2)" "$ANDROID_HOST" \
+    android-precompletion-splash "$(client_ip 1)" "$ANDROID_HOST" \
     "$CAPTIVE_SPLASH" "$ANDROID_UA"
 assert_status 200
 assert_body_contains 'Welcome to IIAB'
-assert_body_contains 'I UNDERSTAND - SIGN IN'
+assert_body_not_contains '/home_selected'
+assert_body_not_contains 'SIGN IN'
+assert_body_contains 'You may close this page.'
 
 request \
-    android-completion-click "$(client_ip 2)" "$ANDROID_HOST" \
-    /home_selected "$ANDROID_UA" POST
+    android-precompletion-repeat "$(client_ip 1)" "$ANDROID_HOST" \
+    /generate_204 "$ANDROID_UA"
+assert_status 302
+assert_location "$CAPTIVE_SPLASH"
+
+sleep 6
+
+request \
+    android-completed-probe "$(client_ip 1)" "$ANDROID_HOST" \
+    /generate_204 "$ANDROID_UA"
 assert_status 204
 assert_body_empty
 
 request \
-    android-completed-splash "$(client_ip 2)" "$ANDROID_HOST" \
+    android-completed-splash "$(client_ip 1)" "$ANDROID_HOST" \
     "$CAPTIVE_SPLASH" "$ANDROID_UA"
 assert_status 204
+assert_body_empty
+
+# A different client remains pre-authenticated while Android completes.
+request \
+    iphone-precompletion-probe "$(client_ip 2)" "$PORTAL_HOST" \
+    /hotspot-detect.html "$IPHONE_UA"
+assert_status 302
+assert_location "$CAPTIVE_SPLASH"
+
+request \
+    iphone-capport-precompletion "$(client_ip 2)" captive.lan \
+    /.well-known/captive-portal "$IPHONE_UA"
+assert_status 200
+assert_header_contains 'application/captive+json'
+assert_body_contains '"captive":true'
+assert_body_contains '"user-portal-url":"http://captive.lan/captive_splash"'
+
+request \
+    iphone-precompletion-splash "$(client_ip 2)" "$PORTAL_HOST" \
+    "$CAPTIVE_SPLASH" "$IPHONE_UA"
+assert_status 200
+assert_body_contains 'Welcome to IIAB'
+assert_body_not_contains '/home_selected'
+assert_body_not_contains 'SIGN IN'
+assert_body_contains 'You may close this page.'
+
+request \
+    iphone-precompletion-repeat "$(client_ip 2)" "$PORTAL_HOST" \
+    /hotspot-detect.html "$IPHONE_UA"
+assert_status 302
+assert_location "$CAPTIVE_SPLASH"
+
+sleep 6
+
+request \
+    macos-completed-probe "$(client_ip 0)" "$PORTAL_HOST" \
+    /hotspot-detect.html "$MACOS_UA"
+assert_status 200
+assert_body_contains 'Success'
+
+request \
+    iphone-completed-probe "$(client_ip 2)" "$PORTAL_HOST" \
+    /hotspot-detect.html "$IPHONE_UA"
+assert_status 200
+assert_body_contains 'Success'
+
+request \
+    iphone-capport-completed "$(client_ip 2)" captive.lan \
+    /.well-known/captive-portal "$IPHONE_UA"
+assert_status 200
+assert_body_contains '"captive":false'
 
 request \
     windows-probe "$(client_ip 3)" "$WINDOWS_HOST" \
@@ -172,22 +245,10 @@ assert_status 302
 assert_location "$HOME_URL"
 
 request \
-    macos-completion-splash "$(client_ip 4)" "$PORTAL_HOST" \
-    /hotspot-detect.html "$MACOS_UA"
-assert_status 200
-assert_body_contains 'Welcome to IIAB'
-
-request \
-    macos-completion-click "$(client_ip 4)" "$PORTAL_HOST" \
-    /home_selected "$MACOS_UA"
-assert_status 200
-assert_body_empty
-
-request \
-    macos-completed-probe "$(client_ip 4)" "$PORTAL_HOST" \
-    /hotspot-detect.html "$MACOS_UA"
-assert_status 200
-assert_body_contains 'Success'
+    windows-precompletion-repeat "$(client_ip 3)" "$WINDOWS_HOST" \
+    /connecttest.txt "$WINDOWS_UA"
+assert_status 302
+assert_location "$HOME_URL"
 
 request \
     homepage-root "$(client_ip 5)" "$HOME_HOST" / "$BROWSER_UA"

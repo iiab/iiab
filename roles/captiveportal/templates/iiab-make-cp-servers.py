@@ -114,6 +114,8 @@ def render_dnsmasq_config():
         (
             f'address=/box/{LAN_IP}',
             f'address=/box.local/{LAN_IP}',
+            '# RFC 8910 Captive Portal Identification for iOS/macOS',
+            'dhcp-option=114,http://captive.lan/.well-known/captive-portal',
             '# Windows NCSI captive portal detection',
             'address=/dns.msftncsi.com/131.107.255.255',
         )
