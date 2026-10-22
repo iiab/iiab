@@ -1,0 +1,65 @@
+# "How do i fail a task in Ansible if the variable contains a boolean value?
+# I want to perform input validation for Ansible playbooks"
+
+- name: Assert that "zimantic_install is sameas true" (boolean not string etc)
+  assert:
+    that: zimantic_install is sameas true
+    fail_msg: "PLEASE SET 'zimantic_install: True' e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+
+- name: Assert that "zimantic_enabled | type_debug == 'bool'" (boolean not string etc)
+  assert:
+    that: zimantic_enabled | type_debug == 'bool'
+    fail_msg: "PLEASE GIVE VARIABLE 'zimantic_enabled' A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+
+- name: Assert that "zimantic_mode" is supported
+  assert:
+    that: zimantic_mode in ['fast', 'semantic']
+    fail_msg: "zimantic_mode must be either 'fast' or 'semantic'"
+    quiet: yes
+
+- block:
+
+    - name: Install Zimantic if 'zimantic_installed' not defined
+      include_tasks: install.yml
+      when: zimantic_installed is undefined
+
+    - include_tasks: enable-or-disable.yml
+
+    - name: Add 'zimantic' variable values to {{ iiab_ini_file }}
+      ini_file:
+        path: "{{ iiab_ini_file }}"
+        section: zimantic
+        option: "{{ item.option }}"
+        value: "{{ item.value | string }}"
+      with_items:
+        - option: name
+          value: Zimantic
+        - option: description
+          value: '"Meaning-based and full-text search for local Kiwix ZIM files."'
+        - option: zimantic_install
+          value: "{{ zimantic_install }}"
+        - option: zimantic_enabled
+          value: "{{ zimantic_enabled }}"
+        - option: zimantic_mode
+          value: "{{ zimantic_mode }}"
+        - option: zimantic_url
+          value: "{{ zimantic_url }}"
+        - option: zimantic_port
+          value: "{{ zimantic_port }}"
+        - option: zimantic_source_dir
+          value: "{{ zimantic_source_dir }}"
+        - option: zimantic_data_dir
+          value: "{{ zimantic_data_dir }}"
+        - option: zimantic_zim_dir
+          value: "{{ zimantic_zim_dir }}"
+        - option: zimantic_index_dir
+          value: "{{ zimantic_index_dir }}"
+
+  rescue:
+
+    - name: 'SEE ERROR ABOVE (skip_role_on_error: {{ skip_role_on_error }})'
+      fail:
+        msg: ""
+      when: not skip_role_on_error
