@@ -47,6 +47,57 @@ doc_root = get_iiab_env("WWWROOT")
 fully_qualified_domain_name = get_iiab_env("FQDN")
 CAPTIVE_PORTAL_HOME = "http://" + fully_qualified_domain_name + "{{ captiveportal_splash_page }}"
 CAPTIVE_SPLASH = "/captive_splash"
+INFORMATIONAL_SPLASH_PATHS = (
+    CAPTIVE_SPLASH,
+    "/mac_splash",
+    "/android_splash",
+    "/android_https",
+)
+APPLE_SUCCESS_BODY = "<HTML><HEAD><TITLE>Success</TITLE></HEAD><BODY>Success</BODY></HTML>"
+APPLE_PROBE_RESPONSES = {
+    "captive.apple.com": APPLE_SUCCESS_BODY,
+    "appleiphonecell.com": APPLE_SUCCESS_BODY,
+    "*.apple.com.edgekey.net": APPLE_SUCCESS_BODY,
+    "gsp1.apple.com": APPLE_SUCCESS_BODY,
+    "apple.com": APPLE_SUCCESS_BODY,
+    "www.apple.com": APPLE_SUCCESS_BODY,
+}
+ANDROID_PROBE_RESPONSES = {
+    "mtalk.google.com": None,
+    "alt7-mtalk.google.com": None,
+    "alt6-mtalk.google.com": None,
+    "connectivitycheck.android.com": None,
+    "connectivitycheck.platform.hicloud.com": None,
+    "connectivitycheck.platform.hihonorcloud.com": None,
+    "connect.rom.miui.com": None,
+    "connectivitycheck.samsungwifi.com": None,
+    "connectivitycheck.samsung.com": None,
+}
+ANDROID_PROBE_PATHS = {"/gen_204", "/generate_204"}
+LINUX_PROBE_RESPONSES = {
+    "connectivity-check.ubuntu.com": None,
+    "conncheck.opensuse.org": None,
+    "fedoraproject.org": "OK",
+    "www.fedoraproject.org": "OK",
+    "fedoraproject.org.static": "OK",
+    "nmcheck.gnome.org": "NetworkManager is online",
+    "networkcheck.kde.org": "OK",
+}
+BROWSER_PROBE_RESPONSES = {
+    "clients3.google.com": None,
+    "clients4.google.com": None,
+    "connectivitycheck.gstatic.com": None,
+}
+WINDOWS_PROBE_RESPONSES = {
+    "ipv6.msftncsi.com": "Microsoft NCSI",
+    "ipv6.msftncsi.com.edgesuite.net": "Microsoft NCSI",
+    "www.msftncsi.com": "Microsoft NCSI",
+    "www.msftncsi.com.edgesuite.net": "Microsoft NCSI",
+    "www.msftconnecttest.com": "Microsoft Connect Test",
+    "www.msn.com": None,
+    "teredo.ipv6.microsoft.com": "Microsoft NCSI",
+    "teredo.ipv6.microsoft.com.nsatc.net": "Microsoft NCSI",
+}
 
 # Alternate addresses for the splash page, in case a client cannot resolve the
 # FQDN.  captiveportal_alt_hostnames defaults to "box.local" (see
@@ -248,14 +299,14 @@ def client_ip(environ):
     return environ['REMOTE_ADDR'].strip()
 
 #  ###################  Action routines based on OS  ################3
-def microsoft(environ,start_response):
-    logger.debug('in microsoft')
+def generic_probe(environ, start_response):
+    logger.debug('in generic_probe')
     ip = client_ip(environ)
     if portal_session_active(ip):
         return probe_success(environ, start_response)
     if is_android_flow(environ):
         logger.debug("sending captive portal instructions for Android")
-        return captive_splash(environ, start_response)
+        return informational_splash(environ, start_response)
     return put_302(environ, start_response)
 
 def informational_splash(environ, start_response):
@@ -294,23 +345,11 @@ def informational_splash(environ, start_response):
     start_response(status, response_headers)
     return [response_body]
 
-def captive_splash(environ, start_response):
-    return informational_splash(environ, start_response)
-
 def android(environ, start_response):
     ip = client_ip(environ)
     if splash_waiting(ip):
         return put_302(environ, start_response, CAPTIVE_SPLASH)
     return put_204(environ, start_response)
-
-def android_splash(environ, start_response):
-    return informational_splash(environ, start_response)
-
-def android_https(environ, start_response):
-    return informational_splash(environ, start_response)
-
-def mac_splash(environ,start_response):
-    return informational_splash(environ, start_response)
 
 def macintosh(environ, start_response):
     logger.debug('in macintosh')
@@ -318,7 +357,7 @@ def macintosh(environ, start_response):
     if portal_session_active(ip):
         return probe_success(environ, start_response)
     if is_android_flow(environ):
-        return captive_splash(environ, start_response)
+        return informational_splash(environ, start_response)
     if splash_waiting(ip):
         return put_302(environ, start_response, CAPTIVE_SPLASH)
     if portal_session_active(ip):
@@ -351,11 +390,6 @@ def static_asset(environ, start_response, relative_path, content_type):
     start_response('200 OK', headers)
     return [asset]
 
-def banner(environ, start_response):
-    return static_asset(
-        environ, start_response, "js-menu/menu-files/images/iiab_banner6.png", "image/png"
-    )
-
 def bootstrap(environ, start_response):
     logger.debug("in bootstrap")
     return static_asset(environ, start_response, "common/js/bootstrap.min.js", "text/javascript")
@@ -374,9 +408,9 @@ def null(environ, start_response):
     start_response(status, headers)
     return [b""]
 
-def success(environ, start_response):
+def success(environ, start_response, body=APPLE_SUCCESS_BODY):
     status = '200 ok'
-    html = b'<html><head><title>Success</title></head><body>Success</body></html>'
+    html = body.encode()
     headers = [('Content-type', 'text/html')]
     start_response(status, headers)
     return [html]
@@ -390,7 +424,7 @@ def put_204(environ, start_response):
     logger.debug("in function  put_204: sending 204 html response")
     return [response_body]
 
-def put_302(environ, start_response, location=None):
+def put_302(environ, start_response, location=CAPTIVE_PORTAL_HOME):
     status = '302 Moved Temporarily'
     response_body = b''
     if location is None:
@@ -446,18 +480,30 @@ def probe_success(environ, start_response):
     host = environ.get('HTTP_HOST', '')
     path = environ.get('PATH_INFO', '')
     logger.debug("probe_success host: {} path: {}".format(host, path))
+    if host in BROWSER_PROBE_RESPONSES:
+        response_body = BROWSER_PROBE_RESPONSES[host]
+        if response_body is None:
+            return put_204(environ, start_response)
+        return plain_200(environ, start_response, response_body)
+    if host in LINUX_PROBE_RESPONSES:
+        response_body = LINUX_PROBE_RESPONSES[host]
+        if response_body is None:
+            return put_204(environ, start_response)
+        return plain_200(environ, start_response, response_body)
+    if host in WINDOWS_PROBE_RESPONSES:
+        response_body = WINDOWS_PROBE_RESPONSES[host]
+        if response_body is None:
+            return put_204(environ, start_response)
+        return plain_200(environ, start_response, response_body)
+    if host in APPLE_PROBE_RESPONSES:
+        return success(environ, start_response, APPLE_PROBE_RESPONSES[host])
+    # Substring matches cover CDN and regional hostnames not listed above.
     if 'firefox' in host:
-        # http://detectportal.firefox.com/success.txt wants the literal word
         return plain_200(environ, start_response, 'success')
-    if host in ('fedoraproject.org', 'www.fedoraproject.org'):
-        # NetworkManager Fedora connectivity check: expects "OK"
-        return plain_200(environ, start_response, 'OK')
     if 'msftconnecttest' in host or 'msftncsi' in host or \
        path.endswith(('connecttest.txt', 'ncsi.txt')):
-        # Windows NCSI: http://www.msftconnecttest.com/connecttest.txt
         return plain_200(environ, start_response, 'Microsoft Connect Test')
     if 'apple' in host:
-        # iOS/macOS expect Apple's classic Success HTML page.
         return success(environ, start_response)
     return put_204(environ, start_response)
 
@@ -488,7 +534,7 @@ def parse_agent(agent):
 
 def is_android_flow(environ):
     agent = environ.get('HTTP_USER_AGENT', '')
-    system, system_version = parse_agent(agent)
+    system, _ = parse_agent(agent)
     return (
         environ.get("PATH_INFO") == CAPTIVE_SPLASH
         or system == "Android"
@@ -512,16 +558,20 @@ def application (environ, start_response):
           environ.get("SERVER_NAME", ""),
       )
 
+   path = environ['PATH_INFO']
+
    # These resources do not need client state or neighbor lookup.
-   if environ['PATH_INFO'] == "/iiab_banner6.png":
-      return banner(environ, start_response)
-   if environ['PATH_INFO'] == "/bootstrap.min.js":
+   if path == "/iiab_banner6.png":
+      return static_asset(
+          environ, start_response, "js-menu/menu-files/images/iiab_banner6.png", "image/png"
+      )
+   if path == "/bootstrap.min.js":
       return bootstrap(environ, start_response)
-   if environ['PATH_INFO'] == "/bootstrap.min.css":
+   if path == "/bootstrap.min.css":
       return bootstrap_css(environ, start_response)
-   if environ['PATH_INFO'] == "/jquery.min.js":
+   if path == "/jquery.min.js":
       return jquery(environ, start_response)
-   if environ['PATH_INFO'] == "/favicon.ico":
+   if path == "/favicon.ico":
       return null(environ, start_response)
 
    ip = client_ip(environ)
@@ -539,82 +589,56 @@ def application (environ, start_response):
 
    #######   Return pages based upon PATH   ###############
    # do more specific stuff first
-   if environ['PATH_INFO'] == "/home_selected":
+   if path == "/home_selected":
       # Keep this legacy endpoint idempotent for clients with a cached splash
       # page; current splash pages complete clients automatically.
       logger.debug("function: home_selected. Marking client portal complete")
       set_portal_completed(ip)
-      system, _ = parse_agent(agent)
       if system in ("OS X", "iPhone OS"):
          return put_302(environ, start_response, "/hotspot-detect.html")
       return put_204(environ, start_response)
 
-   if environ['PATH_INFO'] == "/.well-known/captive-portal":
+   if path == "/.well-known/captive-portal":
       return captive_portal_api(environ, start_response)
 
-   if environ['PATH_INFO'] == CAPTIVE_SPLASH:
-      if portal_session_active(ip):
-         return probe_success(environ, start_response)
-      return captive_splash(environ, start_response)
+   if path in INFORMATIONAL_SPLASH_PATHS:
+      return informational_splash(environ, start_response)
+
+   host = environ['HTTP_HOST']
 
    #### parse OS platform based upon URL  ##################
-   # mac
-   if  environ['PATH_INFO'] == "/mac_splash":
+   if host in APPLE_PROBE_RESPONSES:
+      return macintosh(environ, start_response)
+
+   if host in BROWSER_PROBE_RESPONSES:
       if portal_session_active(ip):
-         return probe_success(environ, start_response)
-      return mac_splash(environ, start_response) 
+          return probe_success(environ, start_response)
+      if is_android_flow(environ):
+          return android(environ, start_response)
+      return generic_probe(environ, start_response)
 
-   if environ['HTTP_HOST'] == "captive.apple.com" or\
-     environ['HTTP_HOST'] == "appleiphonecell.com" or\
-     environ['HTTP_HOST'] == "*.apple.com.edgekey.net" or\
-     environ['HTTP_HOST'] == "gsp1.apple.com" or\
-     environ['HTTP_HOST'] == "apple.com" or\
-     environ['HTTP_HOST'] == "www.apple.com": 
-     return macintosh(environ, start_response) 
-
-   # android
-   if  environ['PATH_INFO'] == "/android_splash":
-     return android_splash(environ, start_response) 
-   if  environ['PATH_INFO'] == "/android_https":
-     return android_https(environ, start_response) 
-   if environ['HTTP_HOST'] == "clients3.google.com" or\
-      environ['HTTP_HOST'] == "mtalk.google.com" or\
-      environ['HTTP_HOST'] == "alt7-mtalk.google.com" or\
-      environ['HTTP_HOST'] == "alt6-mtalk.google.com" or\
-      environ['HTTP_HOST'] == "connectivitycheck.android.com" or\
-      environ['HTTP_HOST'] == "connectivitycheck.platform.hicloud.com" or\
-      environ['HTTP_HOST'] == "connectivitycheck.platform.hihonorcloud.com" or\
-      environ['HTTP_HOST'] == "connect.rom.miui.com" or\
-      environ['HTTP_HOST'] == "connectivitycheck.samsungwifi.com" or\
-      environ['HTTP_HOST'] == "connectivitycheck.samsung.com" or\
-      environ['PATH_INFO'] == "/gen_204" or\
-      environ['PATH_INFO'] == "/generate_204" or\
-      environ['HTTP_HOST'] == "connectivitycheck.gstatic.com":
+   if host in ANDROID_PROBE_RESPONSES or path in ANDROID_PROBE_PATHS:
       if portal_session_active(ip):
           return put_204(environ,start_response)
+      # Non-Android /generate_204 gets a redirect for the Chromium "Open in browser" fallback.
+      if path == "/generate_204" and not is_android_flow(environ):
+          return put_302(environ, start_response)
       return android(environ, start_response)
 
-   # microsoft
-   if environ['HTTP_HOST'] == "ipv6.msftncsi.com" or\
-     environ['HTTP_HOST'] == "detectportal.firefox.com" or\
-     environ['HTTP_HOST'] == "ipv6.msftncsi.com.edgesuite.net" or\
-     environ['HTTP_HOST'] == "www.msftncsi.com" or\
-     environ['HTTP_HOST'] == "www.msftncsi.com.edgesuite.net" or\
-     environ['HTTP_HOST'] == "www.msftconnecttest.com" or\
-     environ['HTTP_HOST'] == "www.msn.com" or\
-     environ['HTTP_HOST'] == "fedoraproject.org" or\
-     environ['HTTP_HOST'] == "www.fedoraproject.org" or\
-     environ['HTTP_HOST'] == "fedoraproject.org.static" or\
-     environ['PATH_INFO'] == "/static/hotspot.txt" or\
-     environ['HTTP_HOST'] == "teredo.ipv6.microsoft.com" or\
-     environ['HTTP_HOST'] == "teredo.ipv6.microsoft.com.nsatc.net": 
-     return microsoft(environ, start_response) 
+   # desktop connectivity probes
+   if (
+      host in WINDOWS_PROBE_RESPONSES
+      or host in LINUX_PROBE_RESPONSES
+      or host == "detectportal.firefox.com"
+      or path == "/static/hotspot.txt"
+   ):
+      return generic_probe(environ, start_response)
 
    # A path that any OS uses to probe for a portal, under an unrecognized
    # hostname, receives the portal-probe response. This prevents homepage HTML
    # from loading in a tab that can hang (e.g. GNOME's Fedora portal check).
-   if looks_like_probe(environ['PATH_INFO']):
-      return microsoft(environ, start_response)
+   if looks_like_probe(path):
+      return generic_probe(environ, start_response)
 
    # Under an unknown hostname, a request that is not a probe gets the IIAB
    # homepage.

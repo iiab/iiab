@@ -105,11 +105,17 @@ For a client with a completed portal session, every recognized connectivity
 probe receives the success answer its operating system expects while probe
 traffic continues, rather than a redirect back to the splash page:
 
-* Android/Chromium (`generate_204`, `clients3.google.com`, gstatic, MIUI,
-  Huawei/Honor, Samsung): `204 No Content`.
+* Chromium-family browsers (Chrome, Edge, Opera; Google and Edge
+  `generate_204` endpoints): `204 No Content`.
+* Android vendor probes (`generate_204`, MIUI, Huawei/Honor, Samsung):
+  `204 No Content`.
 * Firefox (`detectportal.firefox.com/success.txt`): the literal body `success`.
-* Windows NCSI (`www.msftconnecttest.com/connecttest.txt`): the literal body
-  `Microsoft Connect Test`.
+* Linux desktop checks: Ubuntu and openSUSE receive `204 No Content`;
+  Fedora and KDE receive `OK`; GNOME NetworkManager receives
+  `NetworkManager is online`.
+* Windows NCSI (`www.msftncsi.com/ncsi.txt`): the literal body `Microsoft NCSI`;
+  Windows Connect Test (`www.msftconnecttest.com/connecttest.txt`): the literal
+  body `Microsoft Connect Test`.
 * iOS/macOS (Apple hosts): the classic HTML `Success` page.
 
 This suppresses repeated sign-in prompts *and* any "Limited connection" /
