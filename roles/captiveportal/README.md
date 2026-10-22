@@ -61,16 +61,20 @@ can discover the portal even when they do not issue the legacy Apple HTTP
 probe. Legacy probe interception remains enabled for clients that do not
 support the API.
 
-Windows/NCSI desktop probe requests redirect directly to the configured IIAB
-homepage. macOS/iOS and Android clients receive one shared informational
-splash, matching Nodogsplash's pre-authentication flow. The page says that
-the network provides offline access, lists manual IIAB addresses --
+macOS/iOS and Android clients receive one shared informational splash,
+matching Nodogsplash's pre-authentication flow. Desktop probes, including
+Windows/NCSI, Firefox, and Linux desktop checks, first redirect to that same
+splash and then redirect to the configured IIAB homepage after the grace
+period. The page says that the network provides offline access, lists manual
+IIAB addresses --
 `http://box.lan` and `http://box.local` -- as large text that can be tapped to
 copy; while the portal is active both resolve to the IIAB server (see
 `iiab-make-cp-servers.py`), which matters for clients that cannot resolve the
 FQDN by mDNS (`box.local` is also offered by mDNS/Avahi when the client
-supports it). Desktop Apple clients may close the window and mobile clients
-may close the page. After a short display grace period, every client completes
+supports it). The shared splash refreshes after five seconds for desktop
+clients so the Captive Portal backend can return the final `302` to the IIAB
+homepage. Desktop Apple clients may close the window and mobile clients may
+close the page. After a short display grace period, every client completes
 automatically; Apple clients are redirected back to their connectivity probe
 so the assistant receives Apple's `Success` response, while Android clients
 receive the no-content response expected by their connectivity check. As in

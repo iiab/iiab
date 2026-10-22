@@ -7,6 +7,7 @@ BASE_URL="${BASE_URL%/}"
 PORTAL_HOST="${CAPTIVE_PORTAL_TEST_PORTAL_HOST:-captive.apple.com}"
 ANDROID_HOST="${CAPTIVE_PORTAL_TEST_ANDROID_HOST:-clients3.google.com}"
 WINDOWS_HOST="${CAPTIVE_PORTAL_TEST_WINDOWS_HOST:-www.msftconnecttest.com}"
+FEDORA_HOST="${CAPTIVE_PORTAL_TEST_FEDORA_HOST:-fedoraproject.org}"
 HOME_HOST="${CAPTIVE_PORTAL_TEST_HOME_HOST:-box.lan}"
 HOME_URL="${CAPTIVE_PORTAL_TEST_HOME_URL:-http://box.lan/}"
 CAPTIVE_SPLASH="${CAPTIVE_PORTAL_TEST_SPLASH_PATH:-/captive_splash}"
@@ -250,13 +251,58 @@ request \
     windows-probe "$(client_ip 3)" "$WINDOWS_HOST" \
     /connecttest.txt "$WINDOWS_UA"
 assert_status 302
+assert_location "$CAPTIVE_SPLASH"
+
+request \
+    windows-splash "$(client_ip 3)" "$WINDOWS_HOST" \
+    "$CAPTIVE_SPLASH" "$WINDOWS_UA"
+assert_status 200
+assert_body_contains 'Welcome to IIAB'
+assert_body_contains 'You may close this page.'
+assert_body_contains 'http-equiv="refresh"'
+assert_body_contains 'url=/captive_splash'
+
+sleep 6
+
+request \
+    windows-home-after-splash "$(client_ip 3)" "$WINDOWS_HOST" \
+    "$CAPTIVE_SPLASH" "$WINDOWS_UA"
+assert_status 302
 assert_location "$HOME_URL"
 
 request \
-    windows-precompletion-repeat "$(client_ip 3)" "$WINDOWS_HOST" \
+    windows-completed-probe "$(client_ip 3)" "$WINDOWS_HOST" \
     /connecttest.txt "$WINDOWS_UA"
+assert_status 200
+assert_body_equals 'Microsoft Connect Test'
+
+request \
+    fedora-probe "$(client_ip 4)" "$FEDORA_HOST" \
+    /static/hotspot.txt "$BROWSER_UA"
+assert_status 302
+assert_location "$CAPTIVE_SPLASH"
+
+request \
+    fedora-splash "$(client_ip 4)" "$FEDORA_HOST" \
+    "$CAPTIVE_SPLASH" "$BROWSER_UA"
+assert_status 200
+assert_body_contains 'Welcome to IIAB'
+assert_body_contains 'You may close this page.'
+assert_body_contains 'http-equiv="refresh"'
+
+sleep 6
+
+request \
+    fedora-home-after-splash "$(client_ip 4)" "$FEDORA_HOST" \
+    "$CAPTIVE_SPLASH" "$BROWSER_UA"
 assert_status 302
 assert_location "$HOME_URL"
+
+request \
+    fedora-completed-probe "$(client_ip 4)" "$FEDORA_HOST" \
+    /static/hotspot.txt "$BROWSER_UA"
+assert_status 200
+assert_body_equals 'OK'
 
 request \
     homepage-root "$(client_ip 5)" "$HOME_HOST" / "$BROWSER_UA"
