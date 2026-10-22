@@ -45,10 +45,12 @@ request() {
     local body="$TEST_DIR/$name.body"
     local headers="$TEST_DIR/$name.headers"
     local status
+    local method="${6:-GET}"
 
     if ! status="$(
         curl --silent --show-error --max-time "$TIMEOUT" \
             --interface "$source_ip" \
+            --request "$method" \
             --user-agent "$user_agent" \
             --header "Host: $host" \
             --dump-header "$headers" \
@@ -77,9 +79,29 @@ assert_body_contains() {
         fail "response did not contain: $expected"
 }
 
+assert_body_equals() {
+    local expected="$1"
+    local actual
+    actual="$(cat "$REQUEST_BODY")"
+    [[ "$actual" == "$expected" ]] ||
+        fail "expected response body '$expected', got '$actual'"
+}
+
 assert_body_empty() {
     [[ ! -s "$REQUEST_BODY" ]] ||
         fail "expected an empty response body"
+}
+
+assert_body_not_contains() {
+    local unexpected="$1"
+    ! grep -Fq "$unexpected" "$REQUEST_BODY" ||
+        fail "response unexpectedly contained: $unexpected"
+}
+
+assert_header_contains() {
+    local expected="$1"
+    grep -Fqi "$expected" "$REQUEST_HEADERS" ||
+        fail "response headers did not contain: $expected"
 }
 
 response_location() {
@@ -103,12 +125,21 @@ request \
     /hotspot-detect.html "$MACOS_UA"
 assert_status 200
 assert_body_contains 'Welcome to IIAB'
+assert_body_contains '/home_selected'
+assert_body_contains 'close the window'
+
+request \
+    macos-precompletion-probe "$(client_ip 0)" "$PORTAL_HOST" \
+    /hotspot-detect.html "$MACOS_UA"
+assert_status 200
+assert_body_contains 'Welcome to IIAB'
 
 request \
     iphone-splash "$(client_ip 1)" "$PORTAL_HOST" \
     /hotspot-detect.html "$IPHONE_UA"
 assert_status 200
 assert_body_contains 'Welcome to IIAB'
+assert_body_contains 'Use Without Internet'
 
 request \
     android-probe "$(client_ip 2)" "$ANDROID_HOST" \
@@ -121,6 +152,18 @@ request \
     "$CAPTIVE_SPLASH" "$ANDROID_UA"
 assert_status 200
 assert_body_contains 'Welcome to IIAB'
+assert_body_contains 'I UNDERSTAND - SIGN IN'
+
+request \
+    android-completion-click "$(client_ip 2)" "$ANDROID_HOST" \
+    /home_selected "$ANDROID_UA" POST
+assert_status 204
+assert_body_empty
+
+request \
+    android-completed-splash "$(client_ip 2)" "$ANDROID_HOST" \
+    "$CAPTIVE_SPLASH" "$ANDROID_UA"
+assert_status 204
 
 request \
     windows-probe "$(client_ip 3)" "$WINDOWS_HOST" \

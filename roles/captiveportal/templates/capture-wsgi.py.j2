@@ -4,6 +4,7 @@
 
 from wsgiref.simple_server import make_server
 import argparse
+import json
 import subprocess
 import time
 from dateutil.tz import *
@@ -316,7 +317,7 @@ def captive_splash(environ, start_response):
         return put_302(environ, start_response)
     en_txt = {
         'message': "This network uses an offline IIAB server.",
-        'btn1': "I UNDERSTAND - OPEN IIAB HOME PAGE",
+        'btn1': "I UNDERSTAND - SIGN IN",
         'HOME_URL': CAPTIVE_PORTAL_HOME,
         'manual_home_prompt': "Open a regular browser and enter one of these:",
         'manual_addresses': manual_addresses,
@@ -324,7 +325,7 @@ def captive_splash(environ, start_response):
     }
     es_txt = {
         'message': "Esta red utiliza un servidor IIAB sin conexión.",
-        'btn1': "ENTIENDO - ABRIR LA PÁGINA DE INICIO DE IIAB",
+        'btn1': "ENTIENDO - INICIAR SESIÓN",
         'HOME_URL': CAPTIVE_PORTAL_HOME,
         'manual_home_prompt': "Abra un navegador normal e introduzca una de estas:",
         'manual_addresses': manual_addresses,
@@ -366,13 +367,13 @@ def android(environ, start_response):
     return [response_body]
 
 def android_splash(environ, start_response):
-    en_txt={ 'message':"Click on the button to go to the IIAB home page",\
-            'btn1':"GO TO IIAB HOME PAGE", \
+    en_txt={ 'message':"Click the button to sign in to this network.",\
+            'btn1':"I UNDERSTAND - SIGN IN", \
             "HOME_URL": CAPTIVE_PORTAL_HOME, \
             'doc_root':get_iiab_env("WWWROOT") }
-    es_txt={ 'message':"Haga clic en el botón para ir a la página de inicio de IIAB",\
+    es_txt={ 'message':"Haga clic en el botón para iniciar sesión en esta red.",\
             "HOME_URL": CAPTIVE_PORTAL_HOME, \
-            'btn1':"IIAB",'doc_root':get_iiab_env("WWWROOT")}
+            'btn1':"ENTIENDO - INICIAR SESIÓN",'doc_root':get_iiab_env("WWWROOT")}
     txt = en_txt
     if lang == "en":
         txt = en_txt
@@ -389,12 +390,12 @@ def android_splash(environ, start_response):
 def android_https(environ, start_response):
     en_txt={ 'message':"""Please ignore the SECURITY warning which appears after clicking the first button""",\
              'btn2':'Click this first Go to the browser we need',\
-             'btn1':'Then click this to go to IIAB home page',\
+             'btn1':'Then click this to sign in',\
              "HOME_URL": CAPTIVE_PORTAL_HOME, \
             'doc_root':get_iiab_env("WWWROOT") }
-    es_txt={ 'message':"Haga clic en el botón para ir a la página de inicio de IIAB",\
+    es_txt={ 'message':"Haga clic en el botón para iniciar sesión en esta red.",\
             "HOME_URL": CAPTIVE_PORTAL_HOME, \
-            'btn1':"IIAB",'doc_root':get_iiab_env("WWWROOT")}
+            'btn1':"ENTIENDO - INICIAR SESIÓN",'doc_root':get_iiab_env("WWWROOT")}
     txt = en_txt
     if lang == "en":
         txt = en_txt
@@ -412,15 +413,15 @@ def mac_splash(environ,start_response):
     logger.debug('in mac_splash')
     logger.debug("in function mac_splash")
     ip = client_ip(environ)
-    en_txt={ 'message': "Click on the button to go to the IIAB home page",\
-            'btn1': "GO TO IIAB HOME PAGE",'success_token': 'Success',
+    en_txt={ 'message': "Click the button to sign in to this network.",\
+            'btn1': "I UNDERSTAND - SIGN IN",'success_token': 'Success',
             "HOME_URL": CAPTIVE_PORTAL_HOME, \
             'manual_home_prompt': "Open a regular browser and enter one of these:", \
             'manual_addresses': manual_addresses, \
             'doc_root':get_iiab_env("WWWROOT")}
-    es_txt={ 'message':"Haga clic en el botón para ir a la página de inicio de IIAB",\
+    es_txt={ 'message':"Haga clic en el botón para iniciar sesión en esta red.",\
             "HOME_URL": CAPTIVE_PORTAL_HOME, \
-            'btn1':"IIAB", \
+            'btn1':"ENTIENDO - INICIAR SESIÓN", \
             'manual_home_prompt':"Abra un navegador normal e introduzca una de estas:", \
             'manual_addresses': manual_addresses, \
             'doc_root':get_iiab_env("WWWROOT")}
@@ -433,7 +434,7 @@ def mac_splash(environ,start_response):
     set_lasttimestamp(ip)
     response_body = str(j2_env.get_template("mac.template").render(**txt))
     response_body = response_body.encode()
-    status = '200 Success'
+    status = '200 OK'
     response_headers = [('Content-type','text/html; charset=utf-8'),
             ('Content-Length',str(len(response_body)))]
     start_response(status, response_headers)
@@ -623,17 +624,19 @@ def dismiss_hint(environ):
     Returns (text, warning_phrase, is_warning).  When is_warning is true the
     template renders only warning_phrase -- the exact menu label the client
     offers -- in red; the rest of the sentence stays in the normal colour, so
-    the red is limited to the wording the user must actually look for.  iOS and
-    macOS go through this red path (hard to target them separately here);
-    Android gets the same wording without the red.'''
+    the red is limited to the wording the user must actually look for.'''
     agent = environ.get('HTTP_USER_AGENT','default_agent')
     system, system_version = parse_agent(agent)
-    if system in ('iPhone OS', 'OS X'):
-        # iOS 14+/macOS 11+ Safari's Wi-Fi assistant offers this exact label.
+    if system == 'iPhone OS':
+        # iOS 14+ Wi-Fi assistant offers this exact label.
         en = 'If this page stays open, tap the three dots and choose "Use Without Internet".'
         es = 'Si esta página permanece abierta, toque los tres puntos y elija "Usar sin Internet".'
         phrase = 'Usar sin Internet' if lang == "es" else 'Use Without Internet'
         return (es if lang == "es" else en), phrase, True
+    if system == 'OS X':
+        en = 'If this page stays open, close the window.'
+        es = 'Si esta página permanece abierta, cierre la ventana.'
+        return (es if lang == "es" else en), '', False
     if is_android_flow(environ):
         # Android clients offer the same label; some versions say "Use this
         # network as is". No red here.
@@ -723,6 +726,9 @@ def application (environ, start_response):
       return [response_body]
 
    if environ['PATH_INFO'] == CAPTIVE_SPLASH:
+      if portal_session_active(ip):
+         set_lasttimestamp(ip)
+         return probe_success(environ, start_response)
       return captive_splash(environ, start_response)
 
    #### parse OS platform based upon URL  ##################
