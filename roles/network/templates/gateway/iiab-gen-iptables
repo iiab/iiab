@@ -57,6 +57,17 @@ is_true() {
     esac
 }
 
+# A Captive Portal variable that cannot be found must not silently look like
+# "False": that would disable the portal, or its DNS diversion, without any
+# hint about the misconfiguration.
+captiveportal_var_value() {
+    value=$(iiab_var_value "$1")
+    if [ -z "$value" ]; then
+        echo "WARNING: '$1' not found in /opt/iiab/iiab/vars/default_vars.yml or /etc/iiab/local_vars.yml" >&2
+    fi
+    echo "$value"
+}
+
 source /etc/iiab/iiab.env
 lan=$IIAB_LAN_DEVICE
 wan=$IIAB_WAN_DEVICE
@@ -109,8 +120,8 @@ samba_udp_ports=$(iiab_var_value samba_udp_ports)
 samba_tcp_mports=$(iiab_var_value samba_tcp_mports)
 
 squid_enabled=$(iiab_var_value squid_enabled)
-captiveportal_enabled=$(iiab_var_value captiveportal_enabled)
-captiveportal_log_probes=$(iiab_var_value captiveportal_log_probes)
+captiveportal_enabled=$(captiveportal_var_value captiveportal_enabled)
+captiveportal_log_probes=$(captiveportal_var_value captiveportal_log_probes)
 
 echo -e "\nports_externally_visible: "$ports_externally_visible"\n"
 if ! [ "$ports_externally_visible" -eq "$ports_externally_visible" ] 2> /dev/null; then
@@ -186,7 +197,7 @@ if [ "$wan" != "none" ]; then
         $IPTABLES -A INPUT -p tcp --dport $mosquitto_port -m state --state NEW -i $wan -j ACCEPT
         $IPTABLES -A INPUT -p tcp --dport $nodered_port -m state --state NEW -i $wan -j ACCEPT
 
-        if [ "$pbx_enabled" == "True" ]; then
+        if is_true "$pbx_enabled"; then
             $IPTABLES -A INPUT -p tcp --dport $pbx_http_port -m state --state NEW -i $wan -j ACCEPT
             $IPTABLES -A INPUT -p udp --dport $pbx_signaling_ports_chan_sip -m state --state NEW -i $wan -j ACCEPT
             $IPTABLES -A INPUT -p udp --dport $pbx_signaling_ports_chan_pjsip -m state --state NEW -i $wan -j ACCEPT
@@ -206,14 +217,14 @@ if [ "$wan" != "none" ]; then
 
     if [ "$lan" != "none" ]; then
         # Typically False, to keep client machines (e.g. students) off the Internet
-        if [ "$iiab_gateway_enabled" == "True" ]; then
+        if is_true "$iiab_gateway_enabled"; then
             $IPTABLES -A POSTROUTING -t nat -o $wan -j MASQUERADE
         fi
 
         # 3 or 4 IP forwarding rules
         $IPTABLES -A FORWARD -i $wan -o $lan -m state --state ESTABLISHED,RELATED -j ACCEPT
         # Block https traffic except if directed at server
-        if [ "$gw_block_https" == "True" ]; then
+        if is_true "$gw_block_https"; then
             $IPTABLES -A FORWARD -p tcp ! -d $lan_ip --dport 443 -j DROP
         fi
         # Allow outgoing LAN connections only when IIAB provides Internet to
@@ -222,7 +233,7 @@ if [ "$wan" != "none" ]; then
         # replies and connectivity probes time out. Offline appliance mode
         # rejects these packets so the client fails fast and the captive portal
         # (probe DNS diversion + port-80 DNAT) answers probes.
-        if [ "$iiab_gateway_enabled" == "True" ]; then
+        if is_true "$iiab_gateway_enabled"; then
             $IPTABLES -A FORWARD -i $lan -o $wan -j ACCEPT
         else
             $IPTABLES -A FORWARD -i $lan -o $wan -j REJECT --reject-with icmp-host-unreachable
@@ -255,7 +266,10 @@ fi
 # portal (which is not active) but can be enabled on demand by setting
 # block_DNS: True in /etc/iiab/local_vars.yml to force all client DNS through
 # the IIAB's dnsmasq (e.g. for DNS filtering).
-if ! is_true "$iiab_gateway_enabled" || is_true "$block_DNS"; then
+#
+# The redirect needs a LAN to redirect on: in appliance mode (lan=none) there
+# are no clients to divert, and iptables would reject the rules.
+if [ "$lan" != "none" ] && { ! is_true "$iiab_gateway_enabled" || is_true "$block_DNS"; }; then
     $IPTABLES -t nat -A PREROUTING -i $lan -p tcp --dport 53 ! -d $lan_ip -j DNAT --to $lan_ip:53
     $IPTABLES -t nat -A PREROUTING -i $lan -p udp --dport 53 ! -d $lan_ip -j DNAT --to $lan_ip:53
 fi
@@ -285,7 +299,7 @@ if [ -x /usr/sbin/iiab-make-cp-servers.py ]; then
     /usr/sbin/iiab-make-cp-servers.py
 fi
 
-if [ "$squid_enabled" == "True" ]; then     # Direct from default_vars.yml and local_vars.yml
+if is_true "$squid_enabled"; then     # Direct from default_vars.yml and local_vars.yml
     $IPTABLES -t nat -A PREROUTING -i $lan -p tcp --dport 80 ! -d $lan_ip -j DNAT --to $lan_ip:3128
 fi
 
