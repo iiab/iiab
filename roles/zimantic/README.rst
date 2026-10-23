@@ -27,7 +27,8 @@ index has been built. Zimantic opens every archive below ``zimantic_zim_dir``;
 RSS therefore grows with the number and size of ZIMs. A test with 761 archives
 used about 646 MiB RSS, so a Pi Zero 2 W should use a small selected ZIM
 directory rather than the complete IIAB library. The server is available at
-``http://box:8090/``; ``http://box/zimantic`` redirects there.
+``http://box/zimantic`` through NGINX. The service also listens on
+``http://box:8090/`` for troubleshooting and direct access.
 
 Semantic mode requires a 64-bit ``aarch64`` or ``x86_64`` host with a
 compatible Python version and the approximately 123 MiB embedding model::
@@ -60,7 +61,9 @@ set::
     zimantic_enabled: True
 
 Zimantic continues to use its default port 8090 and URL
-``http://box/zimantic``. When ``kiwix_enabled: False`` and
+``http://box/zimantic``. NGINX proxies the URL to the loopback service, so the
+direct port can be firewalled while the application remains available through
+the main IIAB HTTP port. When ``kiwix_enabled: False`` and
 ``zimantic_enabled: True``, ``http://box/kiwix`` and ``/kiwix/`` also redirect
 to Zimantic. Disabling Kiwix stops and disables ``kiwix-serve``, removes its
 Nginx shortcut, and removes its scheduled restart; it does not uninstall an
