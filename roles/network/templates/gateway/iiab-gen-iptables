@@ -224,16 +224,12 @@ if [ "$wan" != "none" ]; then
         # 3 or 4 IP forwarding rules
         $IPTABLES -A FORWARD -i $wan -o $lan -m state --state ESTABLISHED,RELATED -j ACCEPT
         # HTTPS cannot be intercepted by the Captive Portal without breaking
-        # certificate validation. Reject external HTTPS promptly in offline
-        # mode instead of allowing clients to wait for a connection timeout.
+        # certificate validation. Reject external HTTPS promptly instead of
+        # allowing clients to wait for a connection timeout.
         # HTTP probe traffic remains handled by the port-80 DNAT below.
-        if ! is_true "$iiab_gateway_enabled"; then
+        if ! is_true "$iiab_gateway_enabled" || is_true "$gw_block_https"; then
             $IPTABLES -A FORWARD -i $lan -o $wan -p tcp --dport 443 \
                 -j REJECT --reject-with tcp-reset
-        fi
-        # Block https traffic except if directed at server
-        if is_true "$gw_block_https"; then
-            $IPTABLES -A FORWARD -p tcp ! -d $lan_ip --dport 443 -j DROP
         fi
         # Allow outgoing LAN connections only when IIAB provides Internet to
         # clients (iiab_gateway_enabled: True, the mode with MASQUERADE above).
