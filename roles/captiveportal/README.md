@@ -130,6 +130,9 @@ fork, or a client resolving probes with its own DNS) also receives
 `204 No Content` when the portal session is complete, as long as its path looks
 like a probe. Some Android versions additionally perform HTTPS validation,
 which requires a trusted certificate and is not intercepted by IIAB.
+In offline mode, forwarded external HTTPS connections are rejected promptly
+with a TCP reset; local IIAB HTTPS services remain reachable. The portal
+continues to intercept only HTTP connectivity probes.
 
 If the portal backend is unavailable, its nginx server answers probe requests
 with a `302` to the IIAB homepage rather than a `502`, so a stopped or wedged
