@@ -21,9 +21,32 @@
 
 - block:
 
-    - name: Install Zimantic if 'zimantic_installed' not defined
+    - name: Update Zimantic source to {{ zimantic_version }}
+      git:
+        repo: "{{ zimantic_repo }}"
+        dest: "{{ zimantic_source_dir }}"
+        version: "{{ zimantic_version }}"
+        depth: 1
+        update: yes
+        force: no
+      register: zimantic_source_update
+      when: zimantic_installed | default(false) | bool
+
+    - name: Check for the Zimantic executable
+      stat:
+        path: "{{ zimantic_venv }}/bin/zimantic"
+      register: zimantic_executable
+
+    - name: Determine whether Zimantic needs installation or upgrade
+      set_fact:
+        zimantic_needs_install: >-
+          {{ (not (zimantic_installed | default(false) | bool)) or
+             (zimantic_source_update.changed | default(false)) or
+             (not zimantic_executable.stat.exists) }}
+
+    - name: Install or upgrade Zimantic
       include_tasks: install.yml
-      when: zimantic_installed is undefined
+      when: zimantic_needs_install
 
     - name: Update Zimantic configuration
       template:
@@ -40,7 +63,7 @@
         state: restarted
       when:
         - zimantic_enabled
-        - zimantic_config_update.changed
+        - zimantic_needs_install or zimantic_config_update.changed
 
     - include_tasks: enable-or-disable.yml
 
