@@ -21,6 +21,25 @@ Set these variables in ``/etc/iiab/local_vars.yml`` and run the role::
     zimantic_enabled: True
     zimantic_mode: fast
 
+Upgrading
+---------
+
+The role checks out ``zimantic_version`` and automatically installs a new
+checkout when that value changes. After pulling a newer IIAB revision, run::
+
+    cd /opt/iiab/iiab
+    git pull
+    sudo ./runrole zimantic
+
+The service is restarted automatically when Zimantic code is upgraded. On
+older IIAB revisions that do not detect version changes, run
+``sudo ./runrole --reinstall zimantic`` once.
+
+``zimantic_version`` is a git tag, while pip reports the package version from
+Zimantic's ``pyproject.toml``. These values should match without manually
+editing the checkout; if pip reports an older version, use a corrected
+Zimantic tag or release rather than changing ``pyproject.toml`` on the device.
+
 The default ``fast`` mode uses about 66 MiB RSS with one small ZIM and needs no
 model. It uses ZIM-native full-text search and title-word search when a fast
 index has been built. Zimantic opens every archive below ``zimantic_zim_dir``;
