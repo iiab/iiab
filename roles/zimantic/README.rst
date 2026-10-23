@@ -24,21 +24,26 @@ Set these variables in ``/etc/iiab/local_vars.yml`` and run the role::
 Upgrading
 ---------
 
-The role checks out ``zimantic_version`` and automatically installs a new
-checkout when that value changes. After pulling a newer IIAB revision, run::
+The role checks out ``zimantic_version`` on every run and reinstalls the
+Python package when the checkout changes. After pulling a newer IIAB revision,
+run::
 
     cd /opt/iiab/iiab
     git pull
     sudo ./runrole zimantic
 
-The service is restarted automatically when Zimantic code is upgraded. On
-older IIAB revisions that do not detect version changes, run
-``sudo ./runrole --reinstall zimantic`` once.
+``sudo ./runrole --reinstall zimantic`` is not needed for upgrades: the role
+detects the new checkout itself. It only forces the Python package to be
+reinstalled.
 
 The source checkout under ``zimantic_source_dir`` is treated as disposable:
 the role discards local tracked changes there when checking out the requested
 version. Runtime data, indexes, and models are kept separately under
-``zimantic_data_dir``.
+``zimantic_data_dir`` and are never deleted automatically, including when
+``zimantic_mode`` changes. Changing the mode rewrites the configuration and
+systemd unit and restarts the service. Switching back to ``semantic`` does not
+re-download the model, and a ``fast`` index is upgraded in place when a
+semantic build is run.
 
 A full reset is normally unnecessary. If you intentionally want to start over
 with the default paths, stop the service and remove the source and runtime
