@@ -30,21 +30,28 @@
     state: absent
   when: not captiveportal_enabled
 
-- name: Run /usr/sbin/iiab-divert-to-nginx to generate diversion lists for NGINX
-  command: /usr/sbin/iiab-divert-to-nginx
+- name: Install or update the Captive Portal NGINX and dnsmasq generator
+  template:
+    src: iiab-make-cp-servers.py
+    dest: /usr/sbin/iiab-make-cp-servers.py
+    mode: '0755'
+
+- name: Remove the obsolete Captive Portal dnsmasq helper
+  file:
+    path: /usr/sbin/iiab-divert-to-nginx
+    state: absent
+
+- name: Install and update Captive Portal generated files
+  include_tasks: update-files.yml
   when: captiveportal_enabled
 
-- name: Delete /etc/dnsmasq.d/capture to make sure dnsmasq is not diverting (if not captiveportal_enabled)
-  file:
-    path: /etc/dnsmasq.d/capture
-    state: absent
-  when: not captiveportal_enabled
+- name: Generate NGINX captive portal servers and update dnsmasq diversion
+  command: /usr/sbin/iiab-make-cp-servers.py
 
-- name: Restart 'nginx' to pick up Captive Portal configuration
-  systemd_service:
+- name: Update NGINX files and restart NGINX
+  include_role:
     name: nginx
-    state: restarted
-  when: nginx_enabled
+    tasks_from: enable-or-disable
 
 - name: Enable and start Captive Portal uWSGI socket
   systemd_service:
@@ -60,6 +67,14 @@
     state: started
   when: captiveportal_enabled
 
+- name: Restart Captive Portal uWSGI service when its application changes
+  systemd_service:
+    name: uwsgi-app@captiveportal.service
+    state: restarted
+  when:
+    - captiveportal_enabled
+    - captiveportal_wsgi is changed
+
 - name: Stop and disable Captive Portal uWSGI socket
   systemd_service:
     name: uwsgi-app@captiveportal.socket
@@ -73,8 +88,25 @@
     state: stopped
   when: not captiveportal_enabled
 
-- name: Restart 'dnsmasq' systemd service (if dnsmasq_enabled)
-  systemd_service:
-    name: dnsmasq
-    state: restarted
-  when: dnsmasq_enabled
+# The network role normally regenerates the firewall by running
+# /usr/bin/iiab-gen-iptables. A standalone './runrole captiveportal' does not
+# run it, so this task regenerates the firewall as well.
+# The generator is deployed before execution so the probe DNS
+# (via iiab-make-cp-servers.py) and port-80 DNAT use matching rules. During
+# installation, the network role runs last and the generator may be absent, so
+# the stat guards below skip cleanly.
+- name: Record whether /usr/bin/iiab-gen-iptables exists (installed by the network role)
+  stat:
+    path: /usr/bin/iiab-gen-iptables
+  register: gen_iptables
+
+- name: Install the current Captive Portal firewall generator before running it (full path needed)
+  template:
+    src: roles/network/templates/gateway/iiab-gen-iptables
+    dest: /usr/bin/iiab-gen-iptables
+    mode: "0755"
+  when: gen_iptables.stat.exists
+
+- name: Regenerate iptables firewall to match 'captiveportal_enabled' and 'iiab_gateway_enabled'
+  command: /usr/bin/iiab-gen-iptables
+  when: gen_iptables.stat.exists

@@ -151,6 +151,10 @@ wifi_up_down: True    # AP+STA mode: Uses "ap0" WiFi adapter for upstream WiFi
 # (e.g. to Internet) in addition to downstream WiFi (e.g. classroom hotspot).
 
 # Set True if client machines should have "passthrough" access to WAN/Internet:
+# False (default) = offline appliance: iiab-gen-iptables does not MASQUERADE, and
+# LAN->WAN forwarding is REJECTed so client probes fail fast and the Captive
+# Portal (probe DNS diversion + port-80 DNAT) answers them. With WAN present and
+# this False, clients get no Internet by design.
 iiab_gateway_enabled: False
 # CAUTION: Setting 'squid_enabled: True' (BELOW) acts as a gateway for Port 80.
 
@@ -195,8 +199,6 @@ ports_externally_visible: 3     # ssh + http-or-https + common IIAB services
 # And then run: sudo iiab-network
 
 # dnsmasq - handles DHCP and DNS
-dnsmasq_install: True
-dnsmasq_enabled: True
 
 # UNMAINTAINED as of July 2021
 #dhcpd_install: False
@@ -206,6 +208,13 @@ dnsmasq_enabled: True
 # named (BIND)
 #named_install: False
 #named_enabled: False
+# Redirect client DNS to the IIAB's dnsmasq (transparent redirect, not a block:
+# the client still believes it asked its own resolver, e.g. 8.8.8.8).
+#
+# Always active in offline/captive-portal mode (iiab_gateway_enabled: False)
+# so that clients using public DNS are still diverted to the splash page.
+# In online/gateway mode (iiab_gateway_enabled: True) this is disabled by
+# default; set to True to force all client DNS through the IIAB's dnsmasq.
 block_DNS: False
 
 # Enable in local_vars.yml AFTER installing IIAB!  Then run: sudo iiab-network
@@ -640,7 +649,26 @@ vnstat_enabled: False
 # extensively later refined (PRs #1179, #1300, #1327, #2070).
 captiveportal_install: True
 captiveportal_enabled: False
+# Log the URLs received from client connectivity probes to the Captive Portal journal.
+captiveportal_log_probes: False
+# OS connectivity-probe hostnames (see roles/captiveportal/templates/checkurls)
+# resolve to this unroutable TEST-NET-2 address (RFC 5737), so client OSes don't
+# conclude they're merely on a "local network with no Internet". While the portal
+# is active (iiab_gateway_enabled is not True), iiab-make-cp-servers.py points the
+# probes here and iiab-gen-iptables DNATs external LAN HTTP to the portal,
+# excluding destinations within the configured LAN subnet.
+# A client with a completed portal session gets the success answer its OS
+# expects (204 / "success" / "Microsoft NCSI" / "Microsoft Connect Test" /
+# Apple's Success page)
+# and reports a clean connected status rather than "Limited connection".
+# The completion and its client state survive one hour without a request.
+captiveportal_probe_ip: 198.51.100.1
 captiveportal_splash_page: /
+# Alternate addresses offered on the splash page for clients that cannot reach
+# the FQDN (iiab_hostname.iiab_domain, e.g. box.lan). 'box.local' works via
+# mDNS/Avahi on clients that support it. The splash lists the FQDN plus these,
+# skipping any that duplicate the FQDN.
+captiveportal_alt_hostnames: "box.local"
 # You might also want to set iiab_home_url (above!)
 # In a pinch, disable Captive Portal using instructions in http://FAQ.IIAB.IO
 
