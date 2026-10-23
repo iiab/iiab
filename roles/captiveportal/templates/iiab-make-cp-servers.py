@@ -112,11 +112,8 @@ def render_dnsmasq_config():
     ]
     entries.extend(
         (
-            # 'box' already resolves to the IIAB via /etc/hosts.dnsmasq
-            # (addn-hosts) and 'box.lan' via expand-hosts. An 'address=/box/'
-            # entry would additionally answer for every name below '.box',
-            # which is not what is meant here.
-            f'address=/box.local/{LAN_IP}',
+            # Local IIAB aliases are in /etc/hosts.dnsmasq so they continue
+            # resolving when this captive-portal fragment is removed.
             '# RFC 8910 Captive Portal Identification for iOS/macOS',
             'dhcp-option=114,http://captive.lan/.well-known/captive-portal',
             '# Windows NCSI captive portal detection',
