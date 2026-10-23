@@ -35,6 +35,18 @@ The service is restarted automatically when Zimantic code is upgraded. On
 older IIAB revisions that do not detect version changes, run
 ``sudo ./runrole --reinstall zimantic`` once.
 
+The source checkout under ``zimantic_source_dir`` is treated as disposable:
+the role discards local tracked changes there when checking out the requested
+version. Runtime data, indexes, and models are kept separately under
+``zimantic_data_dir``.
+
+A full reset is normally unnecessary. If you intentionally want to start over
+with the default paths, stop the service and remove the source and runtime
+data directories::
+
+    sudo systemctl stop zimantic
+    sudo rm -rf /library/zimantic /opt/iiab/zimantic
+
 ``zimantic_version`` is a git tag, while pip reports the package version from
 Zimantic's ``pyproject.toml``. These values should match without manually
 editing the checkout; if pip reports an older version, use a corrected
