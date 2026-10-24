@@ -78,6 +78,9 @@ def run_module():
 
     checksum_algorithm = None
     expected_checksum = None
+    if checksum is not None and not checksum.strip():
+        module.warn(f"Empty checksum for {url}; the download will not be verified")
+        checksum = None
     if checksum:
         try:
             checksum_algorithm, expected_checksum = checksum.split(':', 1)

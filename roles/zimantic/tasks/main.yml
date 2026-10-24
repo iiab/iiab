@@ -44,6 +44,49 @@
         - zimantic_python_check.rc != 0 or
           ((zimantic_python_check.stdout ~ zimantic_python_check.stderr) is not search('Python 3\\.(1[1-4])\\.'))
 
+    - name: Check whether zimantic.service is installed
+      stat:
+        path: /etc/systemd/system/zimantic.service
+      register: zimantic_unit
+
+    - name: Check whether Zimantic is active before a reinstall
+      command: systemctl is-active zimantic
+      register: zimantic_active
+      changed_when: false
+      failed_when: false
+      when:
+        - reinstall
+        - zimantic_unit.stat.exists
+
+    - name: Stop Zimantic before a reinstall
+      systemd:
+        name: zimantic
+        state: stopped
+      when:
+        - reinstall
+        - zimantic_unit.stat.exists
+
+    # --force-reinstall removes the program and all runtime data.
+    # install.yml and the tasks below rebuild them.
+    - name: Remove Zimantic program files for --force-reinstall
+      file:
+        path: "{{ zimantic_source_dir }}"
+        state: absent
+      when: force_reinstall
+
+    - name: Remove Zimantic data, indexes, model, and settings for --force-reinstall
+      file:
+        path: "{{ zimantic_data_dir }}"
+        state: absent
+      when: force_reinstall
+
+    # A plain --reinstall recreates only the virtual environment.
+    - name: Remove Zimantic virtual environment for --reinstall
+      file:
+        path: "{{ zimantic_venv }}"
+        state: absent
+      when: reinstall
+
     - name: Create Linux user {{ zimantic_user }}
       user:
         name: "{{ zimantic_user }}"
@@ -89,7 +132,10 @@
       set_fact:
         zimantic_needs_install: >-
           {{ (not (zimantic_installed | default(false) | bool)) or
+             reinstall or
+             upgrade or
              (zimantic_source_update.changed | default(false)) or
+             ((zimantic_installed_version | default('')) != zimantic_version) or
              (not zimantic_executable.stat.exists) }}
 
     - name: Install or upgrade Zimantic
@@ -102,9 +148,7 @@
         dest: "{{ zimantic_model_dir }}/model.onnx"
         checksum: "{{ zimantic_model_checksum }}"
         timeout: "{{ download_timeout }}"
-      when:
-        - zimantic_mode == 'semantic'
-        - zimantic_download_model
+      when: zimantic_mode == 'semantic'
 
     - name: Download Zimantic tokenizer
       get_curl:
@@ -112,9 +156,7 @@
         dest: "{{ zimantic_model_dir }}/sentencepiece.bpe.model"
         checksum: "{{ zimantic_tokenizer_checksum }}"
         timeout: "{{ download_timeout }}"
-      when:
-        - zimantic_mode == 'semantic'
-        - zimantic_download_model
+      when: zimantic_mode == 'semantic'
 
     - name: Check for the Zimantic embedding model
       stat:
@@ -130,7 +172,7 @@
 
     - name: Fail if semantic mode has no embedding model
       fail:
-        msg: "Semantic mode needs model.onnx and sentencepiece.bpe.model in {{ zimantic_model_dir }}; set zimantic_download_model: True or install them manually"
+        msg: "Semantic mode needs model.onnx and sentencepiece.bpe.model in {{ zimantic_model_dir }}; the download failed or the files were removed"
       when:
         - zimantic_mode == 'semantic'
         - not (zimantic_model_file.stat.exists | default(false)) or
@@ -202,6 +244,14 @@
           value: "{{ zimantic_index_dir }}"
 
   rescue:
+
+    - name: Restart Zimantic after a failed reinstall
+      systemd:
+        name: zimantic
+        state: started
+      when:
+        - reinstall
+        - (zimantic_active.rc | default(1)) == 0
 
     - name: 'SEE ERROR ABOVE (skip_role_on_error: {{ skip_role_on_error }})'
       fail:

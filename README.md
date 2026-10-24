@@ -31,6 +31,35 @@ After you've installed the software, you should [add content](https://github.com
 
 Finally, you can [customize your Internet-in-a-Box home page](https://wiki.iiab.io/go/FAQ#How_do_I_customize_my_Internet-in-a-Box_home_page%3F) (typically http://box or http://box.lan) using our **drag-and-drop** Admin Console (http://box.lan/admin) &mdash; to arrange Content Packs and IIAB Apps (services) for your local community's needs.
 
+## Running roles individually
+
+`./runrole` applies one role from `/etc/iiab/local_vars.yml`. It is safe to
+repeat: the role is installed if missing, upgraded if needed, and otherwise
+only reconfigured.
+
+    sudo ./runrole captiveportal                    # apply
+    sudo ./runrole --add captiveportal              # apply despite captiveportal_install: False
+    sudo ./runrole --upgrade captiveportal          # force upgrade where supported
+    sudo ./runrole --reinstall captiveportal        # reinstall the program
+    sudo ./runrole --force-reinstall captiveportal  # also reset deps/caches/settings where supported
+    sudo ./runrole --status captiveportal           # show installed/desired state
+
+`./runroles` takes the same options with several roles, e.g.
+`sudo ./runroles --status captiveportal kiwix`.
+
+`--reinstall` and `--force-reinstall` delete the role's entries from
+`/etc/iiab/iiab_state.yml` before running, because most roles skip `install.yml`
+while their `*_installed` variable is defined. `runrole` stops if the role has
+no entry; `runroles` installs such roles normally and only fails if none of the
+listed roles are installed. `--force-reinstall` also sets
+`force_reinstall: True`, which only roles that implement it honor (currently
+`zimantic`).
+
+`--add` (`-a`) overrides `*_install: False` for that invocation only and does
+not change `local_vars.yml`.
+
+Safe runs do not prompt. `--force-reinstall` asks for `yes` unless `-y` is given.
+
 ## Community
 
 Global community updates and videos are regularly posted to: **[@internet_in_box](https://twitter.com/internet_in_box)**

@@ -1,27 +1,251 @@
 #!/bin/bash
 
+DEFAULT_VARS_FILE=/opt/iiab/iiab/vars/default_vars.yml
+LOCAL_VARS_FILE=/etc/iiab/local_vars.yml
+IIAB_STATE_FILE=/etc/iiab/iiab_state.yml
+IIAB_INI_FILE=/etc/iiab/iiab.ini
+REINSTALL=false
+FORCE_REINSTALL=false
+UPGRADE=false
+ASSUME_YES=false
+ADD=false
+CHECK=false
+STATUS=false
+ROLES=()
+EXTRA_VARS="{"
 INVENTORY=ansible_hosts
 PLAYBOOK=run-roles-tmp.yml
 
-CWD=`pwd`
 if [ ! -f iiab-stages.yml ]; then
     echo "Exiting: IIAB Playbook not found."
     echo "Please run this in /opt/iiab/iiab (top level of the git repo)."
     exit 1
 fi
 
-if [[ $# -eq 0 ]] ; then
-    echo "Usage: ./runroles <list of roles separated by spaces>"
+. scripts/runrole-common.sh
+
+usage() {
+    cat <<'EOF'
+Usage: ./runroles [options] <role> [role ...]
+
+Apply one or more roles using /etc/iiab/local_vars.yml. This is safe to
+repeat: roles are installed if missing, upgraded if needed, and otherwise
+only reconfigured.
+
+Options:
+  -y, --yes             Do not ask for confirmation
+  -a, --add             Run the roles even if '*_install: False'
+      --apply           Apply settings (the default)
+      --upgrade         Upgrade where the roles support it
+      --reinstall       Reinstall the programs
+      --force-reinstall Reinstall, and reset dependencies/caches/settings where supported
+      --check           Best-effort Ansible check mode (--check --diff)
+      --status          Show installed/desired state without changing anything
+  -h, --help            Show this help
+
+Examples:
+  ./runroles zimantic kiwix
+  ./runroles --upgrade zimantic
+  ./runroles --reinstall zimantic calibre-web
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --apply)
+            ;;    # Explicit apply is the default behavior
+        --reinstall)
+            REINSTALL=true
+            EXTRA_VARS="$EXTRA_VARS\"reinstall\":True,"
+            ;;
+        --force-reinstall)
+            REINSTALL=true
+            FORCE_REINSTALL=true
+            EXTRA_VARS="$EXTRA_VARS\"reinstall\":True,\"force_reinstall\":True,"
+            ;;
+        --upgrade)
+            UPGRADE=true
+            EXTRA_VARS="$EXTRA_VARS\"upgrade\":True,"
+            ;;
+        -y|--yes)
+            ASSUME_YES=true
+            ;;
+        -a|--add)
+            ADD=true
+            ;;
+        --check)
+            CHECK=true
+            ;;
+        --status)
+            STATUS=true
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        -*)
+            echo "Unknown option: $1"
+            echo
+            usage
+            exit 1
+            ;;
+        *)
+            ROLES+=("$1")
+            ;;
+    esac
+    shift
+done
+
+if [[ ${#ROLES[@]} -eq 0 ]]; then
+    usage
+    exit 1
+fi
+
+if $CHECK && $REINSTALL; then
+    echo "--check cannot be combined with --reinstall or --force-reinstall."
+    echo "Use --status to inspect the roles without changing anything."
+    exit 1
+fi
+
+if $STATUS; then
+    for role in "${ROLES[@]}"; do
+        status_role "$role"
+    done
     exit 0
+fi
+
+if [ ! -f "$LOCAL_VARS_FILE" ]; then
+    echo -e "\n\e[1mEXITING: /opt/iiab/iiab/runroles REQUIRES $LOCAL_VARS_FILE\e[0m\n" >&2
+    exit 1
+fi
+
+CHECK_STATE_FILE=""
+cleanup_check_state() {
+    if [ -n "$CHECK_STATE_FILE" ]; then
+        rm -f "$CHECK_STATE_FILE"
+    fi
+}
+trap cleanup_check_state EXIT
+
+if $CHECK; then
+    CHECK_STATE_FILE=$(mktemp /tmp/iiab-state.XXXXXX)
+    if [ -f "$IIAB_STATE_FILE" ]; then
+        cp "$IIAB_STATE_FILE" "$CHECK_STATE_FILE"
+    else
+        cat > "$CHECK_STATE_FILE" << EOF
+# DO *NOT* MANUALLY EDIT THIS, THANKS!
+# IIAB does NOT currently support uninstalling apps/services.
+
+EOF
+    fi
+    EXTRA_VARS="$EXTRA_VARS\"iiab_state_file\":\"$CHECK_STATE_FILE\","
+elif [ ! -f "$IIAB_STATE_FILE" ]; then
+    echo -e "\n\e[1mCreating... $IIAB_STATE_FILE\e[0m"
+    cat > "$IIAB_STATE_FILE" << EOF
+# DO *NOT* MANUALLY EDIT THIS, THANKS!
+# IIAB does NOT currently support uninstalling apps/services.
+
+EOF
+fi
+
+if ! command -v ansible > /dev/null; then
+    echo -e "\n\e[1mPlease install Ansible, by running:\n\nsudo /opt/iiab/iiab/scripts/ansible\e[0m\n"
+    exit 1
+fi
+
+if $REINSTALL; then
+    if $FORCE_REINSTALL; then
+        echo -e "\e[1;31mWARNING: --force-reinstall may delete the listed roles' data, caches, indexes, and settings where the roles support it.\e[0m"
+    fi
+    if $FORCE_REINSTALL && ! $ASSUME_YES; then
+        echo -n "Type 'yes' to continue: "
+        if [ -t 0 ]; then
+            read ans < /dev/tty
+        else
+            echo
+            echo "No TTY: refusing --force-reinstall without --yes."
+            exit 1
+        fi
+        echo
+        [ "$ans" = "yes" ] || { echo "Cancelled."; exit 1; }
+    fi
+    if ! $FORCE_REINSTALL; then
+        echo "Use --force-reinstall to also reset dependencies, caches, indexes, and settings where the roles support it."
+    fi
+
+    found=false
+    for role in "${ROLES[@]}"; do
+        var=$(role_var "$role")
+        if grep -q "^${var}_" "$IIAB_STATE_FILE"; then
+            found=true
+            echo "Reinstalling $role. Deleting from $IIAB_STATE_FILE:"
+            grep "^${var}_" "$IIAB_STATE_FILE" | sed 's/^/  /'
+            sed -i "/^${var}_/d" "$IIAB_STATE_FILE"
+        else
+            echo "$role is not installed; it will be installed normally."
+        fi
+    done
+    echo
+
+    if ! $found; then
+        echo -e "\e[1mERROR: none of the listed roles are installed in $IIAB_STATE_FILE\e[0m"
+        echo "Run without --reinstall to install them normally."
+        exit 1
+    fi
+elif $UPGRADE; then
+    echo "Upgrading listed role(s)."
+    echo
+elif ! $ASSUME_YES && ! $CHECK; then
+    installed=false
+    for role in "${ROLES[@]}"; do
+        var=$(role_var "$role")
+        if grep -q "^${var}_" "$IIAB_STATE_FILE"; then
+            installed=true
+            break
+        fi
+    done
+    if $installed; then
+        echo "Applying settings to already-installed role(s) from $LOCAL_VARS_FILE."
+        echo "This is safe to repeat."
+        echo
+    fi
 fi
 
 # make working playbook
 cp runroles-base.yml $PLAYBOOK
 
 # add desired roles from arguments
-for role in "$@"
-do
+for role in "${ROLES[@]}"; do
     echo "    - { role: $role }" >> $PLAYBOOK
+    if $ADD; then
+        var=$(role_var "$role")
+        if ! role_install_enabled "$role"; then
+            echo "WARNING: --add sets '${var}_install: True' for $role, for this run only."
+        fi
+        EXTRA_VARS="$EXTRA_VARS\"${var}_install\":True,"
+    fi
 done
 
-ansible-playbook -i $INVENTORY $PLAYBOOK --connection=local
+if ! $CHECK; then
+    mkdir -p /etc/ansible/facts.d
+    cp scripts/local_facts.fact /etc/ansible/facts.d/local_facts.fact
+fi
+
+# close the JSON object and drop the trailing comma
+if [ "$EXTRA_VARS" != "{" ]; then
+    EXTRA_VARS="${EXTRA_VARS%,}"
+    EXTRA_VARS="--extra-vars ${EXTRA_VARS}}"
+else
+    EXTRA_VARS=""
+fi
+
+CMD="ansible-playbook -i $INVENTORY $PLAYBOOK --connection=local"
+if [ -n "$EXTRA_VARS" ]; then
+    CMD="$CMD $EXTRA_VARS"
+fi
+if $CHECK; then
+    echo -e "\e[1;33mWARNING: --check is best-effort; not all roles are check-mode safe.\e[0m\n"
+    CMD="$CMD --check --diff"
+fi
+echo -e "\e[1mRunning:\e[0m\n\n$CMD\n"
+$CMD

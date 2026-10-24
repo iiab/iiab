@@ -3,17 +3,49 @@
 DEFAULT_VARS_FILE=/opt/iiab/iiab/vars/default_vars.yml
 LOCAL_VARS_FILE=/etc/iiab/local_vars.yml
 IIAB_STATE_FILE=/etc/iiab/iiab_state.yml
+IIAB_INI_FILE=/etc/iiab/iiab.ini
 #ROLE_NAME=""           # Don't initialize this
 #ROLE_VAR=""            # No need to initialize this
 #ANSIBLE_LOG_PATH=""    # Don't initialize this
 INSTALL=false
-ENABLED=false
 REINSTALL=false
+FORCE_REINSTALL=false
+UPGRADE=false
+ASSUME_YES=false
+ADD=false
+CHECK=false
+STATUS=false
 CWD=`pwd`
-#ARGS="--extra-vars {"
-ARGS="--extra-vars {\"skip_role_on_error\":False,"    # bash forces {...} to '{...}' for Ansible, SEE BOTTOM (IFS-like issue)
+# JSON object for --extra-vars, closed at the bottom of this file
+ARGS="--extra-vars {\"skip_role_on_error\":False,"
 INVENTORY=ansible_hosts
 PLAYBOOK=run-one-role.yml
+
+usage() {
+    cat <<'EOF'
+Usage: ./runrole [options] <role> [logfile]
+
+Apply a role using /etc/iiab/local_vars.yml. This is safe to repeat: the role
+is installed if missing, upgraded if needed, and otherwise only reconfigured.
+
+Options:
+  -y, --yes             Do not ask for confirmation
+  -a, --add             Run the role even if '*_install: False'
+      --apply           Apply settings (the default)
+      --upgrade         Upgrade where the role supports it
+      --reinstall       Reinstall the program
+      --force-reinstall Reinstall, and reset dependencies/caches/settings where supported
+      --check           Best-effort Ansible check mode (--check --diff)
+      --status          Show installed/desired state without changing anything
+  -h, --help            Show this help
+
+Examples:
+  ./runrole captiveportal
+  ./runrole --upgrade captiveportal
+  ./runrole --reinstall captiveportal
+  ./runrole --force-reinstall captiveportal
+EOF
+}
 
 if [ ! -f $PLAYBOOK ]; then
     echo "Exiting: IIAB Playbook not found."
@@ -21,12 +53,47 @@ if [ ! -f $PLAYBOOK ]; then
     exit 1
 fi
 
+. scripts/runrole-common.sh
+
 # https://stackoverflow.com/questions/192249/how-do-i-parse-command-line-arguments-in-bash/14203146#14203146
 while [[ $# -gt 0 ]]; do
     case $1 in    # if-else would do the job, but case statement allows for future changes...
+        --apply)
+            ;;    # Explicit apply is the default behavior
         --reinstall)
-            ARGS="$ARGS\"reinstall\":True,"    # Needs boolean not string so use JSON list
             REINSTALL=true
+            ARGS="$ARGS\"reinstall\":True,"    # Needs boolean not string so use JSON list
+            ;;
+        --force-reinstall)
+            REINSTALL=true
+            FORCE_REINSTALL=true
+            ARGS="$ARGS\"reinstall\":True,\"force_reinstall\":True,"
+            ;;
+        --upgrade)
+            UPGRADE=true
+            ARGS="$ARGS\"upgrade\":True,"
+            ;;
+        -y|--yes)
+            ASSUME_YES=true
+            ;;
+        -a|--add)
+            ADD=true
+            ;;
+        --check)
+            CHECK=true
+            ;;
+        --status)
+            STATUS=true
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        -*)
+            echo "Unknown option: $1"
+            echo
+            usage
+            exit 1
             ;;
         *)
             if [ ! -v ROLE_NAME ]; then    # Test whether var is not yet set
@@ -34,7 +101,7 @@ while [[ $# -gt 0 ]]; do
             elif [ ! -v ANSIBLE_LOG_PATH ]; then
                 export ANSIBLE_LOG_PATH="$1"
             else
-                echo "Too many argunments (ROLE_NAME and ANSIBLE_LOG_PATH already specified!)"
+                echo "Too many arguments (ROLE_NAME and ANSIBLE_LOG_PATH already specified!)"
                 exit 1
             fi
             ;;
@@ -43,11 +110,13 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [ ! -v ROLE_NAME ]; then    # Test whether var is STILL not set!
-    echo "Usage: ./runrole <name of role>"
-    echo "Usage: ./runrole <name of role> --reinstall"
-    echo
-    echo "Optional 2nd parameter is full PATH/FILENAME for logging."
-    echo "If omitted, <current directory>/iiab-debug.log is used."
+    usage
+    exit 1
+fi
+
+if $CHECK && $REINSTALL; then
+    echo "--check cannot be combined with --reinstall or --force-reinstall."
+    echo "Use --status to inspect the role without changing anything."
     exit 1
 fi
 
@@ -55,10 +124,18 @@ if [ ! -v ANSIBLE_LOG_PATH ]; then
     export ANSIBLE_LOG_PATH="$CWD/iiab-debug.log"    # Default log file location
 fi
 
+ROLE_VAR=$(role_var "$ROLE_NAME")
+
+if $STATUS; then
+    status_role "$ROLE_NAME"
+    exit 0
+fi
 
 # 4 snippets to guide -> bootstrap -> accelerate role debugging on bare OS's:
 
-mkdir -p /etc/iiab    # -p avoids errors, effectively like '|| true'
+if ! $CHECK; then
+    mkdir -p /etc/iiab    # -p avoids errors, effectively like '|| true'
+fi
 if [ ! -f /etc/iiab/local_vars.yml ]; then
     echo -e "\n\e[1mEXITING: /opt/iiab/iiab/runrole REQUIRES /etc/iiab/local_vars.yml\e[0m\n" >&2
 
@@ -71,11 +148,31 @@ if [ ! -f /etc/iiab/local_vars.yml ]; then
     exit 1
 fi
 
-# In comparison, ./iiab-network and ./iiab-configure warn operators (IN RED)
-# if run without the existence of /etc/iiab/iiab_state.yml
-if [ ! -f  $IIAB_STATE_FILE ]; then    # touch $IIAB_STATE_FILE
+CHECK_STATE_FILE=""
+cleanup_check_state() {
+    if [ -n "$CHECK_STATE_FILE" ]; then
+        rm -f "$CHECK_STATE_FILE"
+    fi
+}
+trap cleanup_check_state EXIT
+
+if $CHECK; then
+    CHECK_STATE_FILE=$(mktemp /tmp/iiab-state.XXXXXX)
+    if [ -f "$IIAB_STATE_FILE" ]; then
+        cp "$IIAB_STATE_FILE" "$CHECK_STATE_FILE"
+    else
+        cat > "$CHECK_STATE_FILE" << EOF
+# DO *NOT* MANUALLY EDIT THIS, THANKS!
+# IIAB does NOT currently support uninstalling apps/services.
+
+EOF
+    fi
+    ARGS="$ARGS\"iiab_state_file\":\"$CHECK_STATE_FILE\","
+elif [ ! -f "$IIAB_STATE_FILE" ]; then
+    # In comparison, ./iiab-network and ./iiab-configure warn operators (IN RED)
+    # if run without the existence of /etc/iiab/iiab_state.yml
     echo -e "\n\e[1mCreating... $IIAB_STATE_FILE\e[0m"
-    cat > $IIAB_STATE_FILE << EOF
+    cat > "$IIAB_STATE_FILE" << EOF
 # DO *NOT* MANUALLY EDIT THIS, THANKS!
 # IIAB does NOT currently support uninstalling apps/services.
 
@@ -87,83 +184,77 @@ if ! command -v ansible > /dev/null; then
     exit 1
 fi
 
-mkdir -p /etc/ansible/facts.d
-cp scripts/local_facts.fact /etc/ansible/facts.d/local_facts.fact
-
-
-# Ansible role name & var name sometimes differ :/
-if [ $ROLE_NAME == "calibre-web" ]; then
-    ROLE_VAR=calibreweb
-#elif [ $ROLE_NAME == "httpd" ]; then
-#    ROLE_VAR=apache
-elif [ $ROLE_NAME == "iiab-admin" ]; then
-    ROLE_VAR=iiab_admin
-elif [ $ROLE_NAME == "osm-vector-maps" ]; then    # TO BE REMOVED in 2026/2027
-    ROLE_VAR=osm_vector_maps
-else
-    ROLE_VAR="$ROLE_NAME"
+if ! $CHECK; then
+    mkdir -p /etc/ansible/facts.d
+    cp scripts/local_facts.fact /etc/ansible/facts.d/local_facts.fact
 fi
+
+role_install_enabled "$ROLE_NAME" && INSTALL=true
 
 echo
 if $REINSTALL; then   # Add '_' so '--reinstall calibre' doesn't zap calibreweb
     if grep -q "^${ROLE_VAR}_" $IIAB_STATE_FILE; then
-        echo -e "\e[1mThese line(s) in $IIAB_STATE_FILE are now being deleted:\e[0m\n"
+        if $FORCE_REINSTALL; then
+            echo -e "\e[1;31mWARNING: --force-reinstall may delete ${ROLE_NAME}'s data, caches, indexes, and settings where the role supports it.\e[0m"
+        fi
+        if $FORCE_REINSTALL && ! $ASSUME_YES; then
+            echo -n "Type 'yes' to continue: "
+            if [ -t 0 ]; then
+                read ans < /dev/tty
+            else
+                echo
+                echo "No TTY: refusing --force-reinstall without --yes."
+                exit 1
+            fi
+            echo
+            [ "$ans" = "yes" ] || { echo "Cancelled."; exit 1; }
+        fi
+
+        echo -e "\e[1mReinstalling ${ROLE_NAME}.\e[0m\n"
+        if ! $FORCE_REINSTALL; then
+            echo "Use --force-reinstall to also reset dependencies, caches, indexes, and settings where the role supports it."
+        fi
+        echo -e "\nDeleting these line(s) from $IIAB_STATE_FILE:\n"
         grep "^${ROLE_VAR}_" $IIAB_STATE_FILE; echo
         sed -i "/^${ROLE_VAR}_/d" $IIAB_STATE_FILE
     else
         echo -e "\e[1mERROR: $IIAB_STATE_FILE has no line(s) that begin with '${ROLE_VAR}_'\e[0m\n"
-        echo -e "Try again without the '--reinstall' flag?\n"
+        echo "Nothing to reinstall. Run without --reinstall to install it normally."
         exit 1
     fi
 else
+    if $UPGRADE; then
+        echo -e "\e[1mUpgrading ${ROLE_NAME}.\e[0m\n"
+    fi
     if grep -q "^${ROLE_VAR}_" $IIAB_STATE_FILE; then
-        echo -e "\e[1mWARNING: $IIAB_STATE_FILE already has these line(s):\e[0m\n"
-        grep "^${ROLE_VAR}_" $IIAB_STATE_FILE; echo
-        echo -e "If you prefer to reinstall it, run: ./runrole --reinstall $1\n"
-
-        grep -q "^${ROLE_VAR}_enabled:\s\+[Tt]rue\b" $DEFAULT_VARS_FILE && ENABLED=true
-        grep -q "^${ROLE_VAR}_enabled:\s\+[Ff]alse\b" $LOCAL_VARS_FILE && ENABLED=false
-        grep -q "^${ROLE_VAR}_enabled:\s\+[Tt]rue\b" $LOCAL_VARS_FILE && ENABLED=true
-        if $ENABLED; then
-            echo -n "Or just continue, to enforce var '${ROLE_VAR}_enabled: True' etc? [Y/n] "
-        else
-            echo -n "Or just continue, to enforce var '${ROLE_VAR}_enabled: False' etc? [Y/n] "
+        if ! $ASSUME_YES && ! $UPGRADE && ! $CHECK; then
+            echo -e "\e[1m${ROLE_NAME} is already installed.\e[0m"
+            echo "Applying settings from $LOCAL_VARS_FILE (safe to repeat)."
+            echo
         fi
-        read ans < /dev/tty
-        echo
-        [ "$ans" = "n" ] || [ "$ans" = "N" ] &&
-            exit 1
     fi
 fi
 
-grep -q "^${ROLE_VAR}_install:\s\+[Tt]rue\b" $DEFAULT_VARS_FILE && INSTALL=true
-grep -q "^${ROLE_VAR}_install:\s\+[Ff]alse\b" $LOCAL_VARS_FILE && INSTALL=false
-grep -q "^${ROLE_VAR}_install:\s\+[Tt]rue\b" $LOCAL_VARS_FILE && INSTALL=true
 if ! $INSTALL; then
-    echo -e "\e[1m'${ROLE_VAR}_install: True' MUST BE SET!\e[0m\n"
-    echo -e "Usually it's best to set variables in: $LOCAL_VARS_FILE\n"
-    echo -n "Just for now, force '${ROLE_VAR}_install: True' directly to Ansible? [Y/n] "
-    read ans < /dev/tty
-    echo
-    [ "$ans" = "n" ] || [ "$ans" = "N" ] &&
+    if ! $ADD; then
+        echo -e "\e[1m'${ROLE_VAR}_install: True' MUST BE SET!\e[0m\n"
+        echo -e "Set it in: $LOCAL_VARS_FILE\n"
+        echo "Or pass --add to run it once despite '${ROLE_VAR}_install: False'."
         exit 1
+    fi
+    echo "WARNING: --add sets '${ROLE_VAR}_install: True' for this run only."
     ARGS="$ARGS\"${ROLE_VAR}_install\":True,"
 fi
 
-
 ARGS="$ARGS\"role_to_run\":\"$ROLE_NAME\"}"    # $ROLE_NAME works like \"$ROLE_NAME\" if str type validated
 CMD="ansible-playbook -i $INVENTORY $PLAYBOOK --connection=local $ARGS"
-echo -e "\e[1mbash will now run this, adding single quotes around the {...} curly braces:\e[0m\n\n$CMD\n"
+if $CHECK; then
+    echo -e "\e[1;33mWARNING: --check is best-effort; not all roles are check-mode safe.\e[0m\n"
+    CMD="$CMD --check --diff"
+fi
+echo -e "\e[1mRunning:\e[0m\n\n$CMD\n"
 ansible -m setup -a 'gather_subset=!hardware,!network' -i $INVENTORY localhost --connection=local | grep python
 $CMD
 
-# bash forces (NECESSARY) single quotes around {} at runtime (if $ARGS contains
-# curly braces).  If you also add single quotes *within* $ARGS, Ansible will
-# FAIL as you will end up with 2-not-1 single-quotes on each side of the {}.
-# https://docs.ansible.com/ansible/latest/user_guide/playbooks_variables.html#json-string-format
-#
-# Change the top line of this file to 'bash -x' to see this happen live.  Or,
-# if you prefer the single quotes in the $ARGS var itself, run it this way:
-#
-# echo $CMD > /tmp/runrole-ansible-cmd
-# bash /tmp/runrole-ansible-cmd
+# $ARGS is deliberately unquoted so word splitting hands Ansible the JSON
+# object as one argument. It contains no spaces; do not add quotes around it.
