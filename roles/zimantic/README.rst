@@ -24,30 +24,40 @@ Set these variables in ``/etc/iiab/local_vars.yml`` and run the role::
 Upgrading
 ---------
 
-The role checks out ``zimantic_version`` on every run and reinstalls the
-Python package when the checkout changes. After pulling a newer IIAB revision,
-run::
+``./runrole zimantic`` is the normal command. It checks out
+``zimantic_version``, reinstalls the Python package when the checkout changes,
+re-templates the configuration and systemd unit, and restarts only when
+something changed. After pulling a newer IIAB revision, run::
 
     cd /opt/iiab/iiab
     git pull
     sudo ./runrole zimantic
 
-``sudo ./runrole --reinstall zimantic`` is not needed for upgrades: the role
-detects the new checkout itself. It only forces the Python package to be
-reinstalled.
+The other verbs are::
 
-The source checkout under ``zimantic_source_dir`` is treated as disposable:
-the role discards local tracked changes there when checking out the requested
-version. Runtime data, indexes, and models are kept separately under
-``zimantic_data_dir`` and are never deleted automatically, including when
-``zimantic_mode`` changes. Changing the mode rewrites the configuration and
-systemd unit and restarts the service. Switching back to ``semantic`` does not
-re-download the model, and a ``fast`` index is upgraded in place when a
-semantic build is run.
+    sudo ./runrole --upgrade zimantic          # force the upgrade/install path
+    sudo ./runrole --reinstall zimantic        # reinstall the program
+    sudo ./runrole --force-reinstall zimantic  # reset settings, indexes, and model
+    sudo ./runrole --status zimantic           # show installed/desired state
 
-A full reset is normally unnecessary. If you intentionally want to start over
-with the default paths, stop the service and remove the source and runtime
-data directories::
+``--reinstall`` recreates ``zimantic_venv`` and re-runs the Python package
+install, keeping data, indexes, and settings.
+
+``--force-reinstall`` also deletes ``zimantic_source_dir`` and
+``zimantic_data_dir`` (indexes, model, ``config.toml``) so the role rebuilds
+everything from scratch. In ``semantic`` mode this downloads the model again,
+so it needs network access. Both commands require an existing ``zimantic``
+entry in ``/etc/iiab/iiab_state.yml`` and ask for ``yes`` unless ``-y`` is
+given.
+
+The source directory under ``zimantic_source_dir`` is disposable: the role
+discards local tracked changes there when checking out the requested version.
+Runtime data, indexes, and models live under ``zimantic_data_dir``. Changing
+``zimantic_mode`` rewrites the configuration and systemd unit and restarts the
+service. Switching to ``semantic`` downloads the model if it is missing; a
+``fast`` index is upgraded in place when a semantic build is run.
+
+The same erase can be done manually, then rerun the role::
 
     sudo systemctl stop zimantic
     sudo rm -rf /library/zimantic /opt/iiab/zimantic
@@ -67,10 +77,10 @@ directory rather than the complete IIAB library. The server is available at
 ``http://box:8090/`` for troubleshooting and direct access.
 
 Semantic mode requires a 64-bit ``aarch64`` or ``x86_64`` host with a
-compatible Python version and the approximately 123 MiB embedding model::
+compatible Python version. The role downloads the approximately 123 MiB
+embedding model when it is missing::
 
     zimantic_mode: semantic
-    zimantic_download_model: True
 
 The semantic server benchmark is approximately 323 MiB RSS. A full semantic
 index build is intentionally not run by this role because it can be expensive
