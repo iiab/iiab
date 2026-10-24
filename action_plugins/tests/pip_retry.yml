@@ -1,0 +1,178 @@
+---
+# Integration test for action_plugins/pip_retry.py
+#
+# Run from the repo root:
+#   ANSIBLE_ACTION_PLUGINS=action_plugins ansible-playbook -i localhost, action_plugins/tests/pip_retry.yml
+#
+# No network access is required: a fake "pip" executable is installed and
+# driven with FAIL_MODE to simulate transient, permanent and flaky failures.
+- name: Exercise the pip_retry action plugin
+  hosts: localhost
+  gather_facts: false
+  vars:
+    test_dir: "{{ lookup('env', 'TMPDIR') | default('/tmp', true) }}/iiab-pip-retry-test"
+    fake_pip: "{{ test_dir }}/fakepip"
+    counter: "{{ test_dir }}/count"
+
+  tasks:
+    - name: Create the test directory
+      file:
+        path: "{{ test_dir }}"
+        state: directory
+        mode: "0700"
+
+    - name: Install a fake pip whose behaviour is driven by $FAIL_MODE
+      copy:
+        dest: "{{ fake_pip }}"
+        mode: "0755"
+        content: |
+          #!/bin/sh
+          # called as: fakepip install <package>   (or: fakepip list --format=freeze)
+          case "$1" in
+            list) exit 0 ;;
+          esac
+
+          n=$(cat "{{ counter }}" 2>/dev/null || echo 0)
+          n=$((n + 1))
+          echo "$n" > "{{ counter }}"
+
+          case "$FAIL_MODE" in
+            transient)
+              echo "ERROR: Could not install packages due to an OSError: Connection reset by peer" >&2
+              exit 1
+              ;;
+            permanent)
+              echo "ERROR: No matching distribution found for $2" >&2
+              exit 1
+              ;;
+            flaky)
+              if [ "$n" -lt 3 ]; then
+                echo "ERROR: Read timed out." >&2
+                exit 1
+              fi
+              echo "Successfully installed $2"
+              exit 0
+              ;;
+            *)
+              echo "FAIL_MODE not set" >&2
+              exit 2
+              ;;
+          esac
+
+    - name: Reset the attempt counter
+      file:
+        path: "{{ counter }}"
+        state: absent
+
+    - name: A permanent failure must NOT be retried
+      pip_retry:
+        name: nosuchpackage
+        executable: "{{ fake_pip }}"
+        retries: 5
+        delay: 0
+      environment:
+        FAIL_MODE: permanent
+      register: permanent
+      ignore_errors: true
+
+    - name: Check that the permanent failure was not retried
+      assert:
+        that:
+          - permanent is failed
+          - permanent.attempts | int == 1
+          - lookup('file', counter) | int == 1
+
+    - name: Reset the attempt counter
+      file:
+        path: "{{ counter }}"
+        state: absent
+
+    - name: A transient failure must be retried until the budget is exhausted
+      pip_retry:
+        name: nosuchpackage
+        executable: "{{ fake_pip }}"
+        retries: 2
+        delay: 0
+      environment:
+        FAIL_MODE: transient
+      register: transient
+      ignore_errors: true
+
+    - name: "Check retries semantics (retries: 2 means 3 total attempts)"
+      assert:
+        that:
+          - transient is failed
+          - transient.attempts | int == 3
+          - lookup('file', counter) | int == 3
+
+    - name: Reset the attempt counter
+      file:
+        path: "{{ counter }}"
+        state: absent
+
+    - name: A flaky failure must eventually succeed
+      pip_retry:
+        name: somepackage
+        executable: "{{ fake_pip }}"
+        retries: 3
+        delay: 0
+      environment:
+        FAIL_MODE: flaky
+      register: flaky
+
+    - name: Check that success on the third attempt is reported
+      assert:
+        that:
+          - flaky is success
+          - flaky is changed
+          - flaky.attempts | int == 3
+          - lookup('file', counter) | int == 3
+
+    - name: module_defaults must be able to set retries/delay
+      module_defaults:
+        pip_retry:
+          retries: 1
+          delay: 0
+      block:
+        - name: Reset the attempt counter
+          file:
+            path: "{{ counter }}"
+            state: absent
+
+        - name: Retries defaulted via module_defaults
+          pip_retry:
+            name: nosuchpackage
+            executable: "{{ fake_pip }}"
+          environment:
+            FAIL_MODE: transient
+          register: defaulted
+          ignore_errors: true
+
+        - name: Check that one retry was applied
+          assert:
+            that:
+              - defaulted is failed
+              - defaulted.attempts | int == 2
+              - lookup('file', counter) | int == 2
+
+    - name: Check mode must be passed through to ansible.builtin.pip
+      pip_retry:
+        name: somepackage
+        executable: "{{ fake_pip }}"
+        extra_args: "--quiet"
+      check_mode: true
+      environment:
+        FAIL_MODE: flaky
+      register: check
+
+    - name: Check that check mode reports a pending change without running pip
+      assert:
+        that:
+          - check is changed
+          - check.attempts | int == 1
+
+  post_tasks:
+    - name: Clean up the test directory
+      file:
+        path: "{{ test_dir }}"
+        state: absent
