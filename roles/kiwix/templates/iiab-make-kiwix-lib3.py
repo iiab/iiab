@@ -41,7 +41,7 @@ def main():
 
     # Fail loudly rather than silently producing an empty catalog.
     try:
-        import libzim    # noqa: F401
+        import libzim  # noqa: F401
     except ImportError:
         print('ERROR: python3-libzim is required (apt install python3-libzim)')
         return 1

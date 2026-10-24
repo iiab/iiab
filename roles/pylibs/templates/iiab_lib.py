@@ -2,12 +2,13 @@
 Common functions for IIAB
 Admin Console functions are in adm_lib.py
 '''
-import os
 import json
-import subprocess
-import shlex
+import os
 import re
+import shlex
+import subprocess
 import xml.etree.ElementTree as ET
+
 import iiab.iiab_const as CONST
 
 lang_codes = {}
@@ -103,7 +104,7 @@ def opds_entry_to_book_attrs(entry):
         name = xml_local_tag(child.tag)
         text = (child.text or '').strip()
         if name == 'id':
-            attributes['id'] = text[len('urn:uuid:'):] if text.startswith('urn:uuid:') else text
+            attributes['id'] = text.removeprefix('urn:uuid:')
         elif name == 'summary':
             attributes['description'] = text
         elif name in KIWIX_OPDS_SAME_NAME_PROPS:

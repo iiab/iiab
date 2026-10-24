@@ -32,9 +32,7 @@ import subprocess
 import sys
 import time
 import uuid
-
-import xml.sax.saxutils as saxutils
-
+from xml.sax import saxutils
 
 # Bump when the cache layout or the metadata derivation changes.  The cache is
 # disposable, so a mismatch simply triggers a full rescan.
@@ -154,7 +152,10 @@ def read_zim_metadata(abs_path, rel_path):
     archive = Archive(abs_path)
 
     try:
-        available = set(archive.metadata_keys)
+        available = {
+            key.decode('utf-8', 'replace') if isinstance(key, bytes) else str(key)
+            for key in archive.metadata_keys
+        }
     except Exception:
         available = set()
 
@@ -173,11 +174,17 @@ def read_zim_metadata(abs_path, rel_path):
         stem = stem[:-4]
 
     try:
-        article_count = int(archive.article_count)
+        article_count = getattr(archive, 'article_count', 0)
+        if callable(article_count):
+            article_count = article_count()
+        article_count = int(article_count or 0)
     except Exception:
         article_count = 0
     try:
-        media_count = int(archive.media_count)
+        media_count = getattr(archive, 'media_count', 0)
+        if callable(media_count):
+            media_count = media_count()
+        media_count = int(media_count or 0)
     except Exception:
         media_count = 0
 
@@ -289,10 +296,10 @@ class ZimCatalog:
         self.content_dir = (os.path.join(self.zim_path, 'content')
                             if self.zim_path else None)
         self.verbose = verbose
-        self.db = self._connect()
+        self.db: sqlite3.Connection | None = self._connect()
         self._ensure_schema()
 
-    def _connect(self):
+    def _connect(self) -> sqlite3.Connection:
         if self.db_path != ':memory:':
             parent = os.path.dirname(os.path.abspath(self.db_path))
             if parent:
@@ -305,14 +312,20 @@ class ZimCatalog:
         db.execute('PRAGMA busy_timeout=30000')
         return db
 
+    def _connection(self) -> sqlite3.Connection:
+        if self.db is None:
+            raise RuntimeError('catalog is closed')
+        return self.db
+
     def _ensure_schema(self):
-        version = self.db.execute('PRAGMA user_version').fetchone()[0]
+        version = self._connection().execute(
+            'PRAGMA user_version').fetchone()[0]
         if version == SCHEMA_VERSION:
             return
         if version != 0:
             log.warning('%s has schema version %s, rebuilding (wanted %s)',
                         self.db_path, version, SCHEMA_VERSION)
-        self.db.executescript('''
+        self._connection().executescript('''
             DROP TABLE IF EXISTS zims;
             CREATE TABLE zims (
                 path TEXT PRIMARY KEY,
@@ -340,8 +353,8 @@ class ZimCatalog:
             );
             CREATE INDEX zims_id ON zims(id);
         ''')
-        self.db.execute('PRAGMA user_version = %d' % SCHEMA_VERSION)
-        self.db.commit()
+        self._connection().execute('PRAGMA user_version = %d' % SCHEMA_VERSION)
+        self._connection().commit()
 
     def close(self):
         if self.db is not None:
@@ -350,7 +363,8 @@ class ZimCatalog:
 
     def _existing(self):
         return {row['path']: row['size']
-                for row in self.db.execute('SELECT path, size FROM zims')}
+                for row in self._connection().execute(
+                    'SELECT path, size FROM zims')}
 
     def _zim_files(self):
         '''Return {relative path: (size, mtime)} for every .zim under content/.'''
@@ -412,15 +426,16 @@ class ZimCatalog:
 
         for rel_path in stale:
             if rel_path in existing:
-                self.db.execute('DELETE FROM zims WHERE path = ?', (rel_path,))
+                self._connection().execute(
+                    'DELETE FROM zims WHERE path = ?', (rel_path,))
                 stats['removed'] += 1
 
-        self.db.commit()
+        self._connection().commit()
         log.info('catalog: %s', stats)
         return stats
 
     def _upsert(self, meta):
-        self.db.execute('''
+        self._connection().execute('''
             INSERT INTO zims (
                 path, id, size, mtime, title, description, long_description,
                 language, creator, publisher, date, tags, name, flavour,
@@ -452,7 +467,8 @@ class ZimCatalog:
         })
 
     def rows(self):
-        return self.db.execute('SELECT * FROM zims ORDER BY path').fetchall()
+        return self._connection().execute(
+            'SELECT * FROM zims ORDER BY path').fetchall()
 
     def book_dict(self, exclude_favicon=True):
         '''Return (zims keyed by id, map of relative path -> id).'''
