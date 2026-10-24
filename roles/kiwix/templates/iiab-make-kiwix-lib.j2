@@ -1,7 +1,6 @@
 #!/bin/bash
 
-KIWIXLIB="{{ kiwix_library_xml }}"
-TMP="${KIWIXLIB}.tmp"
+KIWIXLIB="{{ kiwix_library_path }}"
 
 LOCK_PATH="/run/lock/kiwix"
 LOCK_DIR="${LOCK_PATH}/make-kiwix-lib.lockdir"
@@ -40,19 +39,21 @@ done
 trap 'rmdir "$LOCK_DIR" 2>/dev/null || true' EXIT
 
 echo "Now running iiab-make-kiwix-lib.py"
-if [ -f "$KIWIXLIB" ]; then
-  /usr/bin/iiab-make-kiwix-lib.py "$@"
-else
-  /usr/bin/iiab-make-kiwix-lib.py -f
+/usr/bin/iiab-make-kiwix-lib.py "$@"
+rc=$?
+if [ $rc -ne 0 ]; then
+  echo "iiab-make-kiwix-lib.py failed (rc=$rc); keeping the previous library" >&2
+  exit $rc
 fi
 
-# Promote tmp -> final (Kiwix reads library.xml, not library.xml.tmp)
-if [ -s "$TMP" ]; then
+# The Python builder replaces the library atomically, so kiwix-serve can keep
+# serving while the catalog is rebuilt.  Restart it to load the new file.
+if [ -s "$KIWIXLIB" ]; then
   kiwix_stop
-  mv -f "$TMP" "$KIWIXLIB"
   kiwix_start
 else
-  echo "WARNING: expected tmp not found or empty: $TMP" >&2
+  echo "WARNING: expected library not found or empty: $KIWIXLIB" >&2
+  exit 1
 fi
-echo "Finished making Kiwix library.xml"
+echo "Finished making Kiwix library"
 exit 0

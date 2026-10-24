@@ -205,8 +205,47 @@ def read_library_xml(lib_xml_file, kiwix_exclude_attr=["favicon"]): # duplicated
                 path_to_id_map[path] = zim_id
     return zims_installed, path_to_id_map
 
+def read_library(lib_path=None, catalog_db=None, kiwix_exclude_attr=("favicon",)):
+    '''
+    Read installed ZIM metadata, preferring the SQLite catalog cache.
+
+    The ZIM directory is the source of truth; catalog.sqlite is a disposable
+    cache maintained by iiab-make-kiwix-lib.py.  When the cache is unavailable
+    (or lib_path is not the internal library, e.g. a USB stick), fall back to
+    parsing the OPDS/XML library file with read_library_xml().
+
+    Returns the same (zims_installed, path_to_id_map) tuple as
+    read_library_xml().
+    '''
+    default_lib = getattr(CONST, 'kiwix_library_path',
+                          getattr(CONST, 'kiwix_library_xml', ''))
+    if lib_path is None:
+        lib_path = default_lib
+    if catalog_db is None:
+        catalog_db = getattr(CONST, 'zim_catalog_db', '')
+
+    internal = (lib_path and default_lib and
+                os.path.abspath(lib_path) == os.path.abspath(default_lib))
+    if internal and catalog_db and os.path.exists(catalog_db):
+        try:
+            from iiab.iiab_zim_catalog import read_catalog
+            zims_installed, path_to_id_map = read_catalog(
+                catalog_db, kiwix_exclude_attr)
+            # An empty cache (e.g. after a schema bump) is not authoritative:
+            # fall back to the library file when it still has content.
+            if zims_installed or not os.path.exists(lib_path):
+                return zims_installed, path_to_id_map
+        except Exception as e:
+            print("Cannot read catalog cache " + str(catalog_db) + " (" +
+                  str(e) + "); falling back to " + str(lib_path))
+
+    return read_library_xml(lib_path, list(kiwix_exclude_attr))
+
 def rem_libr_xml(zim_id, kiwix_library_xml):
     '''
+    Deprecated: IIAB's catalog builder no longer uses kiwix-manage.
+    Kept for external scripts that still manipulate a kiwix library file.
+
     Remove a zim from library.xml
 
     Args:

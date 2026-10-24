@@ -19,6 +19,31 @@
     quiet: yes
 
 
+- name: Install python3-libzim (scans ZIM metadata into the IIAB catalog)
+  package:
+    name: python3-libzim
+    state: present
+  # Runs on every invocation (not just fresh installs), so upgrades get it.
+  # Available for all IIAB-supported OSes, including armhf.
+
+- name: Install/refresh kiwix-serve.service, iiab-make-kiwix-lib and its builder
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    mode: "{{ item.mode }}"
+  with_items:
+    - { src: 'kiwix-serve.service.j2', dest: '/etc/systemd/system/kiwix-serve.service', mode: '0644' }
+    - { src: 'iiab-make-kiwix-lib.j2', dest: '/usr/bin/iiab-make-kiwix-lib', mode: '0755' }
+    - { src: 'iiab-make-kiwix-lib3.py', dest: '/usr/bin/iiab-make-kiwix-lib.py', mode: '0755' }
+  # Runs on every invocation, so an upgrade also updates the service's
+  # --library path and the catalog builder.
+
+- name: daemon_reload, so systemd (re)reads newly installed kiwix-serve.service
+  systemd:
+    daemon_reload: yes
+  when: not (is_proot | default(false))
+
+
 - block:
 
     - name: Install Kiwix if 'kiwix_installed' not defined, e.g. in {{ iiab_state_file }}    # /etc/iiab/iiab_state.yml
@@ -54,8 +79,12 @@
           value: "{{ kiwix_port }}"
         - option: iiab_zim_path
           value: "{{ iiab_zim_path }}"
+        - option: kiwix_library_path
+          value: "{{ kiwix_library_path }}"
         - option: kiwix_library_xml
-          value: "{{ kiwix_library_xml }}"
+          value: "{{ kiwix_library_xml }}"    # legacy alias
+        - option: zim_catalog_db
+          value: "{{ zim_catalog_db }}"
 
   rescue:
 

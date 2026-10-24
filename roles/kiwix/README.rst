@@ -5,9 +5,13 @@ Kiwix README
 Kiwix develops ZIM file creation & rendering tools for offline action,
 as summarized at: https://wiki.kiwix.org/wiki/Software
 
-Internet-in-a-Box uses `kiwix-tools <https://github.com/kiwix/kiwix-tools>`_ executables like kiwix-manage, kiwix-serve and kiwix-search (in
-``/opt/iiab/kiwix/bin``) to set up and render ZIM files (such as Wikipedia, and
+Internet-in-a-Box uses `kiwix-tools <https://github.com/kiwix/kiwix-tools>`_ executables like kiwix-serve (in
+``/opt/iiab/kiwix/bin``) to render ZIM files (such as Wikipedia, and
 other educational materials) typically from https://download.kiwix.org/zim/
+
+IIAB's catalog builder (``iiab-make-kiwix-lib.py``) scans ZIM metadata with
+``python3-libzim`` directly; ``kiwix-manage`` remains available for debugging
+but is no longer called by IIAB.
 
 Locations
 ---------
@@ -17,7 +21,14 @@ Locations
 - The URL is http://box/kiwix or http://box.lan/kiwix (both proxied for AWStats, Matomo, ETC)
 - Use URL http://box:3000/kiwix if you want to avoid the proxy
 
-Your ``/library/zims/library.xml`` (containing essential metadata for the ZIM files you've installed) can be regenerated if necessary, by running:
+Your ``/library/zims/library.opds`` (containing essential metadata for the ZIM
+files you've installed) can be regenerated if necessary, by running:
 ``/usr/bin/iiab-make-kiwix-lib``
+
+The ZIM files in ``/library/zims/content`` are the source of truth. Metadata is
+cached in ``/library/zims/catalog.sqlite``; only new or resized ZIMs are
+reopened, invalid ZIMs are skipped with a warning, and the library file is
+written atomically. ``iiab-make-kiwix-lib.py`` writes OPDS when the installed
+libkiwix supports it (14.3+) and classic XML otherwise.
 
 See also "How do I add ZIM files, like Wikipedia?" at http://FAQ.IIAB.IO
