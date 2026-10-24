@@ -36,7 +36,7 @@ from xml.sax import saxutils
 
 # Bump when the cache layout or the metadata derivation changes.  The cache is
 # disposable, so a mismatch simply triggers a full rescan.
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 CATALOG_FILENAME = 'catalog.sqlite'
 LIBRARY_FILENAME = 'library.opds'
 MAX_FAVICON_BYTES = 1 << 20    # ignore pathological illustrations (> 1 MiB)
@@ -45,7 +45,7 @@ MAX_FAVICON_BYTES = 1 << 20    # ignore pathological illustrations (> 1 MiB)
 # separately, through get_illustration_item().
 META_KEYS = ('Title', 'Description', 'LongDescription', 'Language', 'Creator',
              'Publisher', 'Date', 'Tags', 'Name', 'Flavour', 'License',
-             'Scraper')
+             'Scraper', 'Source', 'Attribution', 'Relation', 'Counter')
 
 log = logging.getLogger(__name__)
 
@@ -55,6 +55,11 @@ def _text(value):
     if isinstance(value, bytes):
         value = value.decode('utf-8', 'replace')
     return str(value).strip()
+
+
+def _maybe(value):
+    '''Call value() when a libzim property is exposed as a method.'''
+    return value() if callable(value) else value
 
 
 def _norm_date(value):
@@ -187,6 +192,21 @@ def read_zim_metadata(abs_path, rel_path):
         media_count = int(media_count or 0)
     except Exception:
         media_count = 0
+    try:
+        entry_count = int(_maybe(getattr(archive, 'entry_count', 0)) or 0)
+    except Exception:
+        entry_count = 0
+    try:
+        has_fulltext_index = 1 if _maybe(
+            getattr(archive, 'has_fulltext_index', False)) else 0
+    except Exception:
+        has_fulltext_index = 0
+    homepage = ''
+    try:
+        if _maybe(getattr(archive, 'has_main_entry', False)):
+            homepage = archive.main_entry.path or ''
+    except Exception:
+        homepage = ''
 
     favicon = b''
     favicon_mime = ''
@@ -206,7 +226,7 @@ def read_zim_metadata(abs_path, rel_path):
 
     return {
         'path': rel_path,
-        'id': _archive_uuid(archive, abs_path),
+        'uuid': _archive_uuid(archive, abs_path),
         'size': stat.st_size,
         'mtime': stat.st_mtime,
         'title': metadata.get('Title', ''),
@@ -222,8 +242,15 @@ def read_zim_metadata(abs_path, rel_path):
         'category': category_from_tags(tags),
         'article_count': article_count,
         'media_count': media_count,
+        'entry_count': entry_count,
         'license': metadata.get('License', ''),
         'scraper': metadata.get('Scraper', ''),
+        'source': metadata.get('Source', ''),
+        'attribution': metadata.get('Attribution', ''),
+        'relation': metadata.get('Relation', ''),
+        'counter': metadata.get('Counter', ''),
+        'homepage': homepage,
+        'has_fulltext_index': has_fulltext_index,
         'favicon': favicon,
         'favicon_mime': favicon_mime,
         'scanned_at': time.time(),
@@ -237,7 +264,10 @@ def metadata_to_book_attrs(meta, exclude_favicon=True):
     size is KiB, articleCount/mediaCount/size are strings, favicon is base64.
     '''
     attrs = {
-        'id': meta.get('id') or meta.get('path', ''),
+        # ``id`` remains the legacy dict/OPDS/JSON key.  It is the ZIM UUID,
+        # the same value zimantic calls ``uuid``.
+        'id': meta.get('uuid') or meta.get('path', ''),
+        'uuid': meta.get('uuid') or '',
         'path': meta.get('path', ''),
         'title': meta.get('title', ''),
         'description': meta.get('description', ''),
@@ -257,6 +287,9 @@ def metadata_to_book_attrs(meta, exclude_favicon=True):
         attrs['license'] = meta['license']
     if meta.get('scraper'):
         attrs['scraper'] = meta['scraper']
+    for key in ('source', 'attribution', 'relation', 'counter', 'homepage'):
+        if meta.get(key):
+            attrs[key] = meta[key]
     if meta.get('favicon_mime'):
         attrs['faviconMimeType'] = meta['favicon_mime']
     if not exclude_favicon and meta.get('favicon'):
@@ -329,7 +362,7 @@ class ZimCatalog:
             DROP TABLE IF EXISTS zims;
             CREATE TABLE zims (
                 path TEXT PRIMARY KEY,
-                id TEXT NOT NULL,
+                uuid TEXT NOT NULL DEFAULT '',
                 size INTEGER NOT NULL,
                 mtime REAL NOT NULL,
                 title TEXT NOT NULL DEFAULT '',
@@ -345,13 +378,20 @@ class ZimCatalog:
                 category TEXT NOT NULL DEFAULT '',
                 article_count INTEGER NOT NULL DEFAULT 0,
                 media_count INTEGER NOT NULL DEFAULT 0,
+                entry_count INTEGER NOT NULL DEFAULT 0,
                 license TEXT NOT NULL DEFAULT '',
                 scraper TEXT NOT NULL DEFAULT '',
+                source TEXT NOT NULL DEFAULT '',
+                attribution TEXT NOT NULL DEFAULT '',
+                relation TEXT NOT NULL DEFAULT '',
+                counter TEXT NOT NULL DEFAULT '',
+                homepage TEXT NOT NULL DEFAULT '',
+                has_fulltext_index INTEGER NOT NULL DEFAULT 0,
                 favicon BLOB,
                 favicon_mime TEXT NOT NULL DEFAULT '',
                 scanned_at REAL NOT NULL
             );
-            CREATE INDEX zims_id ON zims(id);
+            CREATE INDEX zims_uuid ON zims(uuid);
         ''')
         self._connection().execute('PRAGMA user_version = %d' % SCHEMA_VERSION)
         self._connection().commit()
@@ -437,19 +477,21 @@ class ZimCatalog:
     def _upsert(self, meta):
         self._connection().execute('''
             INSERT INTO zims (
-                path, id, size, mtime, title, description, long_description,
+                path, uuid, size, mtime, title, description, long_description,
                 language, creator, publisher, date, tags, name, flavour,
-                category, article_count, media_count, license, scraper,
-                favicon, favicon_mime, scanned_at
+                category, article_count, media_count, entry_count, license,
+                scraper, source, attribution, relation, counter, homepage,
+                has_fulltext_index, favicon, favicon_mime, scanned_at
             ) VALUES (
-                :path, :id, :size, :mtime, :title, :description,
+                :path, :uuid, :size, :mtime, :title, :description,
                 :long_description, :language, :creator, :publisher, :date,
                 :tags, :name, :flavour, :category, :article_count,
-                :media_count, :license, :scraper, :favicon, :favicon_mime,
-                :scanned_at
+                :media_count, :entry_count, :license, :scraper, :source,
+                :attribution, :relation, :counter, :homepage,
+                :has_fulltext_index, :favicon, :favicon_mime, :scanned_at
             )
             ON CONFLICT(path) DO UPDATE SET
-                id=excluded.id, size=excluded.size, mtime=excluded.mtime,
+                uuid=excluded.uuid, size=excluded.size, mtime=excluded.mtime,
                 title=excluded.title, description=excluded.description,
                 long_description=excluded.long_description,
                 language=excluded.language, creator=excluded.creator,
@@ -457,8 +499,13 @@ class ZimCatalog:
                 tags=excluded.tags, name=excluded.name,
                 flavour=excluded.flavour, category=excluded.category,
                 article_count=excluded.article_count,
-                media_count=excluded.media_count, license=excluded.license,
-                scraper=excluded.scraper, favicon=excluded.favicon,
+                media_count=excluded.media_count,
+                entry_count=excluded.entry_count, license=excluded.license,
+                scraper=excluded.scraper, source=excluded.source,
+                attribution=excluded.attribution, relation=excluded.relation,
+                counter=excluded.counter, homepage=excluded.homepage,
+                has_fulltext_index=excluded.has_fulltext_index,
+                favicon=excluded.favicon,
                 favicon_mime=excluded.favicon_mime,
                 scanned_at=excluded.scanned_at
         ''', {
