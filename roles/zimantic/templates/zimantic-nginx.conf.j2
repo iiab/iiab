@@ -1,0 +1,27 @@
+# Zimantic serves absolute application routes below its configured base path.
+# NGINX strips that prefix before proxying to the root-mounted application.
+location = {{ zimantic_url_without_slash }} {
+    return 302 {{ zimantic_url }};
+}
+
+location ^~ {{ zimantic_url }} {
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-Prefix {{ zimantic_url_without_slash }};
+    proxy_set_header Host $http_host;
+    proxy_http_version 1.1;
+    proxy_set_header Connection "";
+    proxy_pass http://127.0.0.1:{{ zimantic_port }}/;
+}
+
+{% if not kiwix_enabled %}
+# When kiwix-serve is disabled, keep the familiar Kiwix URL pointed at Zimantic.
+location = {{ kiwix_url | default('/kiwix') }} {
+    return 302 {{ zimantic_url }};
+}
+
+location = {{ kiwix_url_plus_slash | default((kiwix_url | default('/kiwix')) ~ '/') }} {
+    return 302 {{ zimantic_url }};
+}
+{% endif %}

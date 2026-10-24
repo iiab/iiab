@@ -1,0 +1,47 @@
+- name: Record (initial) disk space used
+  shell: df -B1 --output=used / | tail -1
+  register: zimantic_df1
+  changed_when: false
+
+- name: Create Zimantic Python virtual environment
+  command:
+    cmd: "{{ zimantic_python }} -m venv {{ zimantic_venv }}"
+    creates: "{{ zimantic_venv }}/bin/python"
+
+- name: Install Zimantic and runtime dependencies
+  command:
+    cmd: "{{ zimantic_venv }}/bin/python -m pip install --disable-pip-version-check --no-cache-dir --upgrade {{ zimantic_source_dir }}"
+  register: zimantic_pip_install
+  changed_when: "'Successfully installed' in zimantic_pip_install.stdout"
+
+- name: Record (final) disk space used
+  shell: df -B1 --output=used / | tail -1
+  register: zimantic_df2
+  changed_when: false
+
+- name: Add 'zimantic_disk_usage' to {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"
+    section: zimantic
+    option: zimantic_disk_usage
+    value: "{{ zimantic_df2.stdout | int - zimantic_df1.stdout | int }}"
+
+- name: "Set 'zimantic_installed: True'"
+  set_fact:
+    zimantic_installed: True
+
+- name: "Set 'zimantic_installed_version' to {{ zimantic_version }}"
+  set_fact:
+    zimantic_installed_version: "{{ zimantic_version }}"
+
+- name: "Add 'zimantic_installed: True' to {{ iiab_state_file }}"
+  lineinfile:
+    path: "{{ iiab_state_file }}"
+    regexp: '^zimantic_installed'
+    line: 'zimantic_installed: True'
+
+- name: "Add 'zimantic_installed_version: {{ zimantic_version }}' to {{ iiab_state_file }}"
+  lineinfile:
+    path: "{{ iiab_state_file }}"
+    regexp: '^zimantic_installed_version:'
+    line: "zimantic_installed_version: {{ zimantic_version }}"
