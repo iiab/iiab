@@ -5,15 +5,16 @@ _Please Also See: http://FAQ.IIAB.IO > ["Captive Portal Administration: What tip
 * The captive portal function is a feature of most modern operating systems. With the increased use of https/ssl (secure sockets layer), the automatic diversion to a specific web page runs the risk of being detected as a "man in the middle" attack.
 * Each Operating System (OS) provides a mechanism that IIAB can use to break into a conversation, when SSL is not being used. This is an initial attempt by the OS to talk to one of its own web sites, to determine if the host os is connected to the internet. It is always performed without SSL.
 * The IIAB captive portal uses a list of these OS supported web sites, and diverts these requests to the IIAB server, which in turn forwards to the IIAB home page.
-* While the portal is active -- `captiveportal_enabled: True`, a LAN interface is present, and `iiab_gateway_enabled` is not True (i.e. IIAB is not providing Internet to client devices) -- probe hostnames resolve to `198.51.100.1` by default (`captiveportal_probe_ip`), an unroutable TEST-NET-2 address reserved by RFC 5737. External LAN TCP port 80 traffic is redirected to the IIAB server, including devices such as Samsung clients that resolve probes using their own DNS; destinations within the configured LAN subnet are excluded so local HTTP services remain reachable. `iiab-make-cp-servers.py` (dnsmasq) and `iiab-gen-iptables` (firewall) apply the same condition, so the DNS diversion and the port-80 redirect always switch together.
+* While the portal is active -- `captiveportal_enabled: True`, a LAN interface is present, and `iiab_gateway_enabled` is not True (i.e. IIAB is not providing Internet to client devices) -- probe hostnames resolve to `198.51.100.1` by default (`captiveportal_probe_ip`), an unroutable TEST-NET-2 address reserved by RFC 5737. External LAN TCP port 80 traffic is redirected to the IIAB server, including devices such as Samsung clients that resolve probes using their own DNS; destinations within the configured LAN subnet are excluded so local HTTP services remain reachable. The `capture-dnsmasq.j2` fragment and `iiab-gen-iptables` (firewall) apply the same condition, so the DNS diversion and the port-80 redirect always switch together.
 * Other hostnames fall back to the IIAB LAN address while the portal is active, so URLs such as `http://a` and unrecognized OEM probes also reach the portal. Names in `/etc/hosts.dnsmasq` or DHCP leases keep their real addresses, `localhost` stays on `127.0.0.1`, and names in the configured IIAB domain (`.lan` by default) are answered locally only. The fallback is removed with the rest of the generated dnsmasq fragment when the portal is inactive.
 * The normal IIAB NGINX server explicitly handles the configured LAN IP, any IPv4 address literal (including the host's WAN address and loopback), and local aliases (`box.lan` and `box.local`) before the portal's default server. This preserves the captive portal for unmatched probe traffic while allowing `http://<lan-ip>/`, `http://<wan-ip>/`, and mDNS clients to reach IIAB without resolving the canonical FQDN. `box.lan` is IIAB's canonical DNS name; `box.local` is also offered by mDNS/Avahi and is included in `/etc/hosts.dnsmasq` for clients that use unicast DNS.
 
 ## Components of the IIAB Captive Portal
 
 * Files used
-    1. checkurls -- the list of urls use by at least one of the OS's.
-    1. iiab-make-cp-servers.py -- Python script writes the nginx configuration file to /etc/nginx/sites-available and creates or removes the matching dnsmasq diversion
+    1. checkurls -- the source list of URLs used by at least one of the OS's.
+    1. capture.conf.j2 -- the NGINX default server for unmatched probe requests
+    1. capture-dnsmasq.j2 -- the dnsmasq diversion rendered from the checkurls list
     1. capture-wsgi.py -- determines the client agent, stores short-lived client state in memory, and responds with redirects as appropriate for each OS.
     1. captiveportal.ini.j2 -- config file for the `uwsgi-app@captiveportal.service` instance, which runs the capture-wsgi.py script.
     1. `uwsgi-app@captiveportal.service` and `uwsgi-app@captiveportal.socket` -- the distro-provided per-application systemd units for the Captive Portal.
@@ -70,7 +71,7 @@ period. The page says that the network provides offline access, lists manual
 IIAB addresses --
 `http://box.lan` and `http://box.local` -- as large text that can be tapped to
 copy; while the portal is active both resolve to the IIAB server (see
-`iiab-make-cp-servers.py`), which matters for clients that cannot resolve the
+`capture-dnsmasq.j2`), which matters for clients that cannot resolve the
 FQDN by mDNS (`box.local` is also offered by mDNS/Avahi when the client
 supports it). The shared splash refreshes after five seconds for desktop
 clients so the Captive Portal backend can return the final `302` to the IIAB
