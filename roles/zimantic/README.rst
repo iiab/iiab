@@ -49,11 +49,24 @@ Semantic mode
 
 The semantic server benchmark is approximately 323 MiB RSS. 64-bit
 ``aarch64`` and ``x86_64`` hosts use the PyPI wheels. 32-bit
-``armhf``/``armv7`` hosts have no wheels, so the role installs
+``armhf``/``armv7`` hosts have no wheels, so by default the role installs
 ``python3-onnxruntime``, ``python3-faiss``, ``python3-libzim``,
 ``python3-sentencepiece`` and the other native dependencies as distribution
 packages, then creates the virtual environment with ``--system-site-packages``.
 This requires Debian 13/trixie or newer.
+
+Native dependencies
+~~~~~~~~~~~~~~~~~~~
+
+``zimantic_use_system_packages`` controls where the native dependencies come
+from:
+
+- ``auto`` (default) uses PyPI wheels on 64-bit hosts and distribution
+  packages on ``armhf``/``armv7``.
+- ``always`` uses distribution packages on every architecture and therefore
+  requires Debian 13/trixie or newer.
+- ``never`` always uses PyPI wheels; this fails on ``armhf``/``armv7`` because
+  no wheels are published.
 
 Indexes
 ~~~~~~~

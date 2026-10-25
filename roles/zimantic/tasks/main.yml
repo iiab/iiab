@@ -26,6 +26,19 @@
         msg: "The Zimantic role currently requires regular systemd; PRoot/Android is not supported"
       when: is_proot
 
+    - name: Validate zimantic_use_system_packages
+      assert:
+        that: zimantic_use_system_packages in ['auto', 'always', 'never']
+        fail_msg: "zimantic_use_system_packages must be 'auto', 'always', or 'never'"
+        quiet: yes
+
+    - name: Determine whether to use distribution packages
+      set_fact:
+        zimantic_system_packages_enabled: >-
+          {{ zimantic_use_system_packages == 'always' or
+             (zimantic_use_system_packages == 'auto' and
+              ansible_facts.machine not in ['aarch64', 'x86_64']) }}
+
     - name: Check for a supported Python version
       command: "{{ zimantic_python }} --version"
       register: zimantic_python_check
@@ -39,13 +52,13 @@
         - zimantic_python_check.rc != 0 or
           ((zimantic_python_check.stdout ~ zimantic_python_check.stderr) is not search('Python 3\\.(1[1-4])\\.'))
 
-    - name: Install native dependencies from the distribution (32-bit hosts)
+    - name: Install native dependencies from the distribution
       apt:
         name: "{{ zimantic_system_packages }}"
         state: present
         update_cache: yes
         cache_valid_time: 3600
-      when: zimantic_use_system_packages | bool
+      when: zimantic_system_packages_enabled | bool
 
     - name: Check whether zimantic.service is installed
       stat:
