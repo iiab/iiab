@@ -57,7 +57,8 @@ messages use the `WWW-ATTEMPT:` prefix and can be viewed with:
     sudo dmesg | grep 'WWW-ATTEMPT:'
 
 When the portal is active, DHCP advertises the RFC 8910 Captive Portal API at
-`http://captive.lan/.well-known/captive-portal`. The API reports the per-client
+`http://captive.<iiab_domain>/.well-known/captive-portal` (by default,
+`http://captive.lan/.well-known/captive-portal`). The API reports the per-client
 `captive` state and the shared informational splash URL, so current iOS and
 macOS versions can discover the portal even when they do not issue the legacy
 Apple HTTP probe. Legacy probe interception remains enabled for clients that

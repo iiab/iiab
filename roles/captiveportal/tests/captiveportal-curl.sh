@@ -8,8 +8,10 @@ PORTAL_HOST="${CAPTIVE_PORTAL_TEST_PORTAL_HOST:-captive.apple.com}"
 ANDROID_HOST="${CAPTIVE_PORTAL_TEST_ANDROID_HOST:-clients3.google.com}"
 WINDOWS_HOST="${CAPTIVE_PORTAL_TEST_WINDOWS_HOST:-www.msftconnecttest.com}"
 FEDORA_HOST="${CAPTIVE_PORTAL_TEST_FEDORA_HOST:-fedoraproject.org}"
-HOME_HOST="${CAPTIVE_PORTAL_TEST_HOME_HOST:-box.lan}"
-HOME_URL="${CAPTIVE_PORTAL_TEST_HOME_URL:-http://box.lan/}"
+TEST_DOMAIN="${CAPTIVE_PORTAL_TEST_DOMAIN:-lan}"
+HOME_HOST="${CAPTIVE_PORTAL_TEST_HOME_HOST:-box.${TEST_DOMAIN}}"
+HOME_URL="${CAPTIVE_PORTAL_TEST_HOME_URL:-http://${HOME_HOST}/}"
+CAPPORT_HOST="${CAPTIVE_PORTAL_TEST_CAPPORT_HOST:-captive.${TEST_DOMAIN}}"
 # First IPv4 address the host reports, used only as a Host header to verify
 # that address literals reach the normal server instead of the portal
 # default_server. Fall back to 127.0.0.1 when no IPv4 address is available.
@@ -213,12 +215,12 @@ assert_status 302
 assert_location "$CAPTIVE_SPLASH"
 
 request \
-    iphone-capport-precompletion "$(client_ip 2)" captive.lan \
+    iphone-capport-precompletion "$(client_ip 2)" "$CAPPORT_HOST" \
     /.well-known/captive-portal "$IPHONE_UA"
 assert_status 200
 assert_header_contains 'application/captive+json'
 assert_body_contains '"captive":true'
-assert_body_contains '"user-portal-url":"http://captive.lan/captive_splash"'
+assert_body_contains "\"user-portal-url\":\"http://${CAPPORT_HOST}/captive_splash\""
 
 request \
     iphone-precompletion-splash "$(client_ip 2)" "$PORTAL_HOST" \
@@ -250,7 +252,7 @@ assert_status 200
 assert_body_contains 'Success'
 
 request \
-    iphone-capport-completed "$(client_ip 2)" captive.lan \
+    iphone-capport-completed "$(client_ip 2)" "$CAPPORT_HOST" \
     /.well-known/captive-portal "$IPHONE_UA"
 assert_status 200
 assert_body_contains '"captive":false'
