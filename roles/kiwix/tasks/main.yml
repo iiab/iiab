@@ -19,6 +19,14 @@
     quiet: yes
 
 
+- name: Refresh IIAB Python libraries (the catalog builder imports iiab.iiab_zim_catalog)
+  include_role:
+    name: pylibs
+  # Run here as well as in 4-server-options: ./runrole --reinstall kiwix does
+  # not run stage 4, so an existing install would otherwise keep the old
+  # module (or lack iiab_zim_catalog.py entirely).
+
+
 - name: Install python3-libzim (scans ZIM metadata into the IIAB catalog)
   package:
     name: python3-libzim
@@ -37,6 +45,16 @@
     - { src: 'iiab-make-kiwix-lib3.py', dest: '/usr/bin/iiab-make-kiwix-lib.py', mode: '0755' }
   # Runs on every invocation, so an upgrade also updates the service's
   # --library path and the catalog builder.
+
+- name: Refresh the PDSM Kiwix wrapper (Android upgrades skip proot_services)
+  copy:
+    src: "{{ role_path }}/../proot_services/files/pdsm/usr_local_pdsm/services-available/kiwix"
+    dest: /usr/local/pdsm/services-available/kiwix
+    mode: "0755"
+  when: is_proot | default(false)
+  # The wrapper is normally installed by the proot_services role, but that
+  # role's install.yml only runs on a fresh install.  Refresh it here as well
+  # so its KIWIX_LIBRARY path is updated before the builder runs.
 
 - name: daemon_reload, so systemd (re)reads newly installed kiwix-serve.service
   systemd:

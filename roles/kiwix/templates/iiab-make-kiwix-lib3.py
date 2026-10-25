@@ -73,7 +73,13 @@ def main():
     catalog = zim_catalog.ZimCatalog(catalog_path, zim_path,
                                      verbose=args.verbose)
     try:
-        stats = catalog.scan(force=args.force)
+        try:
+            stats = catalog.scan(force=args.force)
+        except FileNotFoundError as error:
+            # The ZIM directory (often an external drive) is not mounted.
+            # Leave the cache and the previous library untouched.
+            print('ERROR: %s; keeping the previous library' % error)
+            return 1
 
         if args.json:
             zims, _ = catalog.book_dict()

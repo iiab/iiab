@@ -13,6 +13,8 @@ The SQLite database is a disposable cache, not a system of record:
   * a ZIM whose size has not changed since the last scan is not reopened;
   * an unreadable (invalid, truncated, permission-denied) ZIM is skipped,
     logged and left out of the catalog;
+  * a missing content directory (unmounted drive, broken symlink) is an
+    error, so the previous cache and library are kept;
   * rows for ZIM files that disappeared are removed.
 
 The exported library file is also derived.  Recent libkiwix (14.3+) reads
@@ -36,7 +38,7 @@ from xml.sax import saxutils
 
 # Bump when the cache layout or the metadata derivation changes.  The cache is
 # disposable, so a mismatch simply triggers a full rescan.
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 CATALOG_FILENAME = 'catalog.sqlite'
 LIBRARY_FILENAME = 'library.opds'
 MAX_FAVICON_BYTES = 1 << 20    # ignore pathological illustrations (> 1 MiB)
@@ -67,6 +69,45 @@ def _norm_date(value):
     value = _text(value)
     match = re.match(r'^(\d{4}-\d{2}-\d{2})', value)
     return match.group(1) if match else ''
+
+
+def normalize_counter(value):
+    '''Sort a ZIM Counter (mime=count;...) from highest to lowest count.'''
+    entries = []
+    invalid = []
+    for entry in _text(value).split(';'):
+        entry = entry.strip()
+        if not entry:
+            continue
+        mime, sep, count = entry.partition('=')
+        mime = mime.strip()
+        count = count.strip()
+        if sep and mime and count.isdigit():
+            entries.append((mime, int(count)))
+        else:
+            invalid.append(entry)
+    entries.sort(key=lambda item: (-item[1], item[0]))
+    return ';'.join(
+        ['%s=%d' % (mime, count) for mime, count in entries] + invalid)
+
+
+def resolve_homepage(archive):
+    '''Return the resolved main-entry path (following ``mainPage`` redirects).'''
+    try:
+        if not _maybe(getattr(archive, 'has_main_entry', False)):
+            return ''
+        entry = archive.main_entry
+        seen = set()
+        for _ in range(32):
+            if not entry.is_redirect:
+                return entry.path or ''
+            if entry.path in seen:
+                return ''
+            seen.add(entry.path)
+            entry = entry.get_redirect_entry()
+    except Exception:
+        return ''
+    return ''
 
 
 def parse_tags(tags):
@@ -201,17 +242,14 @@ def read_zim_metadata(abs_path, rel_path):
             getattr(archive, 'has_fulltext_index', False)) else 0
     except Exception:
         has_fulltext_index = 0
-    homepage = ''
-    try:
-        if _maybe(getattr(archive, 'has_main_entry', False)):
-            homepage = archive.main_entry.path or ''
-    except Exception:
-        homepage = ''
+    homepage = resolve_homepage(archive)
 
     favicon = b''
     favicon_mime = ''
     try:
-        item = archive.get_illustration_item()
+        # Size 48 is the catalog thumbnail (libzim's default).  libzim also
+        # falls back to the legacy favicon entry for ZIMs without one.
+        item = archive.get_illustration_item(48)
         favicon = bytes(item.content)
         favicon_mime = item.mimetype or ''
         if len(favicon) > MAX_FAVICON_BYTES:
@@ -248,7 +286,7 @@ def read_zim_metadata(abs_path, rel_path):
         'source': metadata.get('Source', ''),
         'attribution': metadata.get('Attribution', ''),
         'relation': metadata.get('Relation', ''),
-        'counter': metadata.get('Counter', ''),
+        'counter': normalize_counter(metadata.get('Counter', '')),
         'homepage': homepage,
         'has_fulltext_index': has_fulltext_index,
         'favicon': favicon,
@@ -408,10 +446,13 @@ class ZimCatalog:
 
     def _zim_files(self):
         '''Return {relative path: (size, mtime)} for every .zim under content/.'''
-        files = {}
         if not self.content_dir or not os.path.isdir(self.content_dir):
-            log.warning('ZIM content directory does not exist: %s', self.content_dir)
-            return files
+            # Do not treat an absent content directory (unmounted drive,
+            # broken symlink, typo) as "every ZIM was removed": scan() would
+            # then delete the cache and publish an empty library.
+            raise FileNotFoundError(
+                'ZIM content directory does not exist: %s' % self.content_dir)
+        files = {}
         for root, dirs, names in os.walk(self.content_dir):
             dirs[:] = [name for name in dirs if not name.startswith('.')]
             for name in names:
@@ -518,20 +559,30 @@ class ZimCatalog:
             'SELECT * FROM zims ORDER BY path').fetchall()
 
     def book_dict(self, exclude_favicon=True):
-        '''Return (zims keyed by id, map of relative path -> id).'''
-        zims = {}
-        path_to_id = {}
+        '''Return (zims keyed by UUID, map of relative path -> UUID).'''
+        # The UUID is the book identity; the path is only the file identity.
+        # A ZIM copied under another filename has the same UUID, so keep one
+        # deterministic copy instead of publishing the same book twice.
+        candidates = {}
         for row in self.rows():
-            meta = dict(row)
-            attrs = metadata_to_book_attrs(meta, exclude_favicon)
-            zim_id = attrs.get('id') or attrs.get('path')
-            if zim_id in zims:
-                log.warning('duplicate ZIM id %s (%s); keying by path',
+            attrs = metadata_to_book_attrs(dict(row), exclude_favicon)
+            zim_id = attrs.get('uuid') or attrs.get('id') or attrs.get('path')
+            if not zim_id:
+                continue
+            key = (len(attrs.get('path', '')), attrs.get('path', ''))
+            current = candidates.get(zim_id)
+            if current is None:
+                candidates[zim_id] = (key, attrs)
+            elif key < current[0]:
+                log.warning('duplicate ZIM UUID %s: using %s instead of %s',
+                            zim_id, attrs.get('path'), current[1].get('path'))
+                candidates[zim_id] = (key, attrs)
+            else:
+                log.warning('duplicate ZIM UUID %s: ignoring %s',
                             zim_id, attrs.get('path'))
-                zim_id = attrs.get('path')
-                attrs['id'] = zim_id
-            zims[zim_id] = attrs
-            path_to_id[attrs['path']] = zim_id
+        zims = {zim_id: attrs for zim_id, (_, attrs) in candidates.items()}
+        path_to_id = {attrs['path']: zim_id
+                      for zim_id, attrs in zims.items()}
         return zims, path_to_id
 
     def write_opds(self, library_path, include_favicon=True):
@@ -699,7 +750,11 @@ def main(argv=None):
 
     catalog = ZimCatalog(catalog_path, zim_path, verbose=args.verbose)
     try:
-        stats = catalog.scan(force=args.force)
+        try:
+            stats = catalog.scan(force=args.force)
+        except FileNotFoundError as error:
+            print('ERROR: %s' % error, file=sys.stderr)
+            return 1
         if args.json:
             zims, _ = catalog.book_dict()
             try:
