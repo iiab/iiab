@@ -6,7 +6,8 @@ _Please Also See: http://FAQ.IIAB.IO > ["Captive Portal Administration: What tip
 * Each Operating System (OS) provides a mechanism that IIAB can use to break into a conversation, when SSL is not being used. This is an initial attempt by the OS to talk to one of its own web sites, to determine if the host os is connected to the internet. It is always performed without SSL.
 * The IIAB captive portal uses a list of these OS supported web sites, and diverts these requests to the IIAB server, which in turn forwards to the IIAB home page.
 * While the portal is active -- `captiveportal_enabled: True`, a LAN interface is present, and `iiab_gateway_enabled` is not True (i.e. IIAB is not providing Internet to client devices) -- probe hostnames resolve to `198.51.100.1` by default (`captiveportal_probe_ip`), an unroutable TEST-NET-2 address reserved by RFC 5737. External LAN TCP port 80 traffic is redirected to the IIAB server, including devices such as Samsung clients that resolve probes using their own DNS; destinations within the configured LAN subnet are excluded so local HTTP services remain reachable. `iiab-make-cp-servers.py` (dnsmasq) and `iiab-gen-iptables` (firewall) apply the same condition, so the DNS diversion and the port-80 redirect always switch together.
-* The normal IIAB NGINX server explicitly handles the configured LAN IP and local aliases (`box.lan` and `box.local`) before the portal's default server. This preserves the captive portal for unmatched probe traffic while allowing `http://<lan-ip>/` and mDNS clients to reach IIAB without resolving the canonical FQDN. `box.lan` is IIAB's canonical DNS name; `box.local` is also accepted as an mDNS/Avahi alias when clients support it.
+* Other hostnames fall back to the IIAB LAN address while the portal is active, so URLs such as `http://a` and unrecognized OEM probes also reach the portal. Names in `/etc/hosts.dnsmasq` or DHCP leases keep their real addresses, `localhost` stays on `127.0.0.1`, and names in the configured IIAB domain (`.lan` by default) are answered locally only. The fallback is removed with the rest of the generated dnsmasq fragment when the portal is inactive.
+* The normal IIAB NGINX server explicitly handles the configured LAN IP, any IPv4 address literal (including the host's WAN address and loopback), and local aliases (`box.lan` and `box.local`) before the portal's default server. This preserves the captive portal for unmatched probe traffic while allowing `http://<lan-ip>/`, `http://<wan-ip>/`, and mDNS clients to reach IIAB without resolving the canonical FQDN. `box.lan` is IIAB's canonical DNS name; `box.local` is also offered by mDNS/Avahi and is included in `/etc/hosts.dnsmasq` for clients that use unicast DNS.
 
 ## Components of the IIAB Captive Portal
 
@@ -103,7 +104,10 @@ loopback source addresses for each simulated client, so the portal's
 in-memory client state does not leak between cases. The defaults assume the
 canonical IIAB host is `box.lan`; override `CAPTIVE_PORTAL_TEST_HOME_URL` and
 the other `CAPTIVE_PORTAL_TEST_*` variables when testing a different
-configuration.
+configuration. `CAPTIVE_PORTAL_TEST_LOCAL_IP` (default: the host's first
+address from `hostname -I`, or `127.0.0.1`) is used to verify that requesting
+IIAB by one of the host's own addresses reaches the normal homepage instead of
+the Captive Portal default_server.
 
 For a client with a completed portal session, every recognized connectivity
 probe receives the success answer its operating system expects while probe

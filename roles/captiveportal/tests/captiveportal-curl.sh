@@ -10,6 +10,14 @@ WINDOWS_HOST="${CAPTIVE_PORTAL_TEST_WINDOWS_HOST:-www.msftconnecttest.com}"
 FEDORA_HOST="${CAPTIVE_PORTAL_TEST_FEDORA_HOST:-fedoraproject.org}"
 HOME_HOST="${CAPTIVE_PORTAL_TEST_HOME_HOST:-box.lan}"
 HOME_URL="${CAPTIVE_PORTAL_TEST_HOME_URL:-http://box.lan/}"
+# First IPv4 address the host reports, used only as a Host header to verify
+# that address literals reach the normal server instead of the portal
+# default_server. Fall back to 127.0.0.1 when no IPv4 address is available.
+first_host_ipv4() {
+    hostname -I 2>/dev/null | tr ' ' '\n' | awk '/^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/ { print; exit }'
+}
+LOCAL_IP="${CAPTIVE_PORTAL_TEST_LOCAL_IP:-$(first_host_ipv4 || true)}"
+LOCAL_IP="${LOCAL_IP:-127.0.0.1}"
 CAPTIVE_SPLASH="${CAPTIVE_PORTAL_TEST_SPLASH_PATH:-/captive_splash}"
 TIMEOUT="${CAPTIVE_PORTAL_TEST_TIMEOUT:-10}"
 CLIENT_BASE="${CAPTIVE_PORTAL_TEST_CLIENT_BASE:-$((20 + RANDOM % 180))}"
@@ -308,6 +316,19 @@ request \
     homepage-root "$(client_ip 5)" "$HOME_HOST" / "$BROWSER_UA"
 if [[ "$REQUEST_STATUS" == 3* ]] && [[ "$(response_location)" == "$HOME_URL" ]]; then
     fail "homepage root redirects to itself: $HOME_URL"
+fi
+
+# Requesting IIAB by an address that belongs to the host must reach the
+# normal NGINX server, not the Captive Portal default_server (which would
+# redirect to HOME_URL and fail for clients that cannot resolve it).
+request \
+    local-ip-homepage "$(client_ip 6)" "$LOCAL_IP" / "$BROWSER_UA"
+if [[ "$REQUEST_STATUS" == 3* ]]; then
+    local_ip_location="$(response_location)"
+    [[ "$local_ip_location" != "$HOME_URL" ]] ||
+        fail "local IP $LOCAL_IP redirects to $HOME_URL"
+    [[ "$local_ip_location" != "$CAPTIVE_SPLASH" ]] ||
+        fail "local IP $LOCAL_IP redirects to the captive splash"
 fi
 
 printf 'All captive portal curl integration tests passed.\n'

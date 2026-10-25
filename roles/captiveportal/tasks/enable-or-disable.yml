@@ -9,6 +9,7 @@
   template:
     src: captiveportal.ini.j2
     dest: /etc/uwsgi/apps-available/captiveportal.ini
+  register: captiveportal_ini
   when: captiveportal_enabled
 
 - name: Delete Captive Portal configuration when not captiveportal_enabled
@@ -53,7 +54,27 @@
     name: nginx
     tasks_from: enable-or-disable
 
-- name: Enable and start Captive Portal uWSGI socket
+# Stop the service before its socket, matching the Admin Console's uWSGI
+# ordering. This avoids stopping a socket out from under a still-running
+# service (and the reverse when disabling both).
+- name: Stop and disable Captive Portal uWSGI service when not captiveportal_enabled
+  systemd_service:
+    name: uwsgi-app@captiveportal.service
+    enabled: false
+    state: stopped
+  when: not captiveportal_enabled
+
+- name: Stop and disable Captive Portal uWSGI socket when not captiveportal_enabled
+  systemd_service:
+    name: uwsgi-app@captiveportal.socket
+    enabled: false
+    state: stopped
+  when: not captiveportal_enabled
+
+# This is an idempotent start, not a restart, so the running service can stay
+# up. If a socket restart is ever needed (e.g. its drop-in changed), stop
+# uwsgi-app@captiveportal.service first, as the Admin Console role does.
+- name: Enable and start Captive Portal uWSGI socket when captiveportal_enabled
   systemd_service:
     name: uwsgi-app@captiveportal.socket
     daemon_reload: yes
@@ -61,9 +82,10 @@
     state: started
   when: captiveportal_enabled
 
-- name: Start Captive Portal uWSGI service
+- name: Enable and start Captive Portal uWSGI service when captiveportal_enabled
   systemd_service:
     name: uwsgi-app@captiveportal.service
+    enabled: true
     state: started
   when: captiveportal_enabled
 
@@ -73,20 +95,7 @@
     state: restarted
   when:
     - captiveportal_enabled
-    - captiveportal_wsgi is changed
-
-- name: Stop and disable Captive Portal uWSGI socket
-  systemd_service:
-    name: uwsgi-app@captiveportal.socket
-    enabled: false
-    state: stopped
-  when: not captiveportal_enabled
-
-- name: Stop Captive Portal uWSGI service
-  systemd_service:
-    name: uwsgi-app@captiveportal.service
-    state: stopped
-  when: not captiveportal_enabled
+    - (captiveportal_wsgi is defined and captiveportal_wsgi is changed) or (captiveportal_ini is defined and captiveportal_ini is changed)
 
 # The network role normally regenerates the firewall by running
 # /usr/bin/iiab-gen-iptables. A standalone './runrole captiveportal' does not

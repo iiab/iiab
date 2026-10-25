@@ -100,7 +100,7 @@ def iter_server_entries():
 
 
 def render_dnsmasq_config():
-    """Render dnsmasq entries for the normalized captive portal probe list."""
+    """Render dnsmasq entries for probes plus a catch-all fallback."""
     domains = {
         server_name[2:] if server_name.startswith('*.') else server_name
         for server_name in iter_server_names()
@@ -114,6 +114,12 @@ def render_dnsmasq_config():
         (
             # Local IIAB aliases are in /etc/hosts.dnsmasq so they continue
             # resolving when this captive-portal fragment is removed.
+            #
+            # Fallback for everything else, e.g. http://a and OEM probes that
+            # are not in checkurls. More specific address= entries above win.
+            f'address=/#/{LAN_IP}',
+            # Keep loopback names local despite the catch-all.
+            'address=/localhost/127.0.0.1',
             '# RFC 8910 Captive Portal Identification for iOS/macOS',
             'dhcp-option=114,http://captive.lan/.well-known/captive-portal',
             '# Windows NCSI captive portal detection',
