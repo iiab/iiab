@@ -47,6 +47,21 @@
               echo "ERROR: No matching distribution found for $2" >&2
               exit 1
               ;;
+            build-permanent)
+              echo "ERROR: subprocess-exited-with-error" >&2
+              exit 1
+              ;;
+            network-resolver)
+              echo "WARNING: Retrying (Retry(total=0)) after connection broken by 'NameResolutionError': Failed to resolve 'pypi.org'" >&2
+              echo "ERROR: Could not find a version that satisfies the requirement $2 (from versions: none)" >&2
+              echo "ERROR: No matching distribution found for $2" >&2
+              exit 1
+              ;;
+            network-build)
+              echo "WARNING: Retrying (Retry(total=0)) after connection broken by 'ReadTimeoutError': Read timed out." >&2
+              echo "ERROR: subprocess-exited-with-error" >&2
+              exit 1
+              ;;
             flaky)
               if [ "$n" -lt 3 ]; then
                 echo "ERROR: Read timed out." >&2
@@ -83,6 +98,75 @@
           - permanent is failed
           - permanent.attempts | int == 1
           - lookup('file', counter) | int == 1
+
+    - name: Reset the attempt counter
+      file:
+        path: "{{ counter }}"
+        state: absent
+
+    - name: A build error with no network evidence must NOT be retried
+      pip_retry:
+        name: nosuchpackage
+        executable: "{{ fake_pip }}"
+        retries: 5
+        delay: 0
+      environment:
+        FAIL_MODE: build-permanent
+      register: build_permanent
+      ignore_errors: true
+
+    - name: Check that the permanent build error was not retried
+      assert:
+        that:
+          - build_permanent is failed
+          - build_permanent.attempts | int == 1
+          - lookup('file', counter) | int == 1
+
+    - name: Reset the attempt counter
+      file:
+        path: "{{ counter }}"
+        state: absent
+
+    - name: A resolver summary caused by a network failure MUST be retried
+      pip_retry:
+        name: nosuchpackage
+        executable: "{{ fake_pip }}"
+        retries: 2
+        delay: 0
+      environment:
+        FAIL_MODE: network-resolver
+      register: network_resolver
+      ignore_errors: true
+
+    - name: Check that network diagnostics take precedence over "No matching distribution found"
+      assert:
+        that:
+          - network_resolver is failed
+          - network_resolver.attempts | int == 3
+          - lookup('file', counter) | int == 3
+
+    - name: Reset the attempt counter
+      file:
+        path: "{{ counter }}"
+        state: absent
+
+    - name: A build summary caused by a network failure MUST be retried
+      pip_retry:
+        name: nosuchpackage
+        executable: "{{ fake_pip }}"
+        retries: 2
+        delay: 0
+      environment:
+        FAIL_MODE: network-build
+      register: network_build
+      ignore_errors: true
+
+    - name: Check that network diagnostics take precedence over "subprocess-exited-with-error"
+      assert:
+        that:
+          - network_build is failed
+          - network_build.attempts | int == 3
+          - lookup('file', counter) | int == 3
 
     - name: Reset the attempt counter
       file:

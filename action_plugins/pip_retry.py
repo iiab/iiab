@@ -46,8 +46,11 @@ Any ansible.builtin.pip argument may be passed through unchanged.
 
 Unlike `until: result is succeeded`, deterministic failures ("No matching
 distribution found", build errors, PEP 668 externally-managed environments,
-...) are NOT retried, because they can never succeed.  Override the default
-list with `retry_on:` (a list of substrings that ARE worth retrying).
+...) are NOT retried, because they can never succeed.  Explicit transient
+network diagnostics take precedence over that list: pip often appends "No
+matching distribution found" or "subprocess-exited-with-error" to a network
+failure, and those mixed failures ARE retried.  Override the default lists
+with `retry_on:` (a list of substrings that ARE worth retrying).
 """
 from __future__ import annotations
 
@@ -62,6 +65,38 @@ display = Display()
 DEFAULT_RETRIES = 5
 #: Seconds to wait between attempts.
 DEFAULT_DELAY = 10
+
+#: Transient network diagnostics.  These take precedence over the permanent
+#: list below because pip commonly prints one of those summaries after the
+#: real network error (e.g. "No matching distribution found" when the index
+#: was unreachable, or "subprocess-exited-with-error" when downloading an
+#: isolated build dependency failed).
+TRANSIENT_FAILURES = (
+    "Connection reset",
+    "Connection reset by peer",
+    "Connection aborted",
+    "Connection refused",
+    "Connection broken",
+    "ConnectionError",
+    "Connection timed out",
+    "ConnectTimeoutError",
+    "Connect timeout",
+    "ReadTimeoutError",
+    "Read timed out",
+    "timed out",
+    "TimeoutError",
+    "Temporary failure in name resolution",
+    "Name or service not known",
+    "Failed to resolve",
+    "NameResolutionError",
+    "NewConnectionError",
+    "Failed to establish a new connection",
+    "Network is unreachable",
+    "No route to host",
+    "RemoteDisconnected",
+    "IncompleteRead",
+    "Max retries exceeded",
+)
 
 #: Errors that will never succeed on a retry.  Matching on the message avoids
 #: burning the whole retry budget on a typo, a missing compiler or PEP 668.
@@ -128,9 +163,18 @@ class ActionModule(ActionBase):
             if retry_on is not None:
                 retryable = any(str(s) in failure_text for s in retry_on)
             else:
-                retryable = not any(
+                # Network diagnostics win over pip's summary lines: an
+                # unreachable index looks permanent ("No matching distribution
+                # found") and a failed build-dependency download looks like a
+                # build error ("subprocess-exited-with-error"), but both are
+                # worth retrying when the output also shows a network fault.
+                transient = any(
+                    str(s) in failure_text for s in TRANSIENT_FAILURES
+                )
+                permanent = any(
                     str(s) in failure_text for s in PERMANENT_FAILURES
                 )
+                retryable = transient or not permanent
 
             if not retryable or attempt >= attempts:
                 result["attempts"] = attempt
