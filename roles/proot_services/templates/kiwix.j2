@@ -10,9 +10,23 @@ SERVICE_NAME="kiwix"
 SERVICE_DAEMON_NAME="kiwix-serve"
 KIWIX_BIN="{{ iiab_base }}/kiwix/bin/kiwix-serve"
 KIWIX_PORT="{{ kiwix_port | default(3000) }}"
-KIWIX_LIBRARY="{{ kiwix_library_path | default(iiab_zim_path ~ '/library.opds') }}"
+# libkiwix 15+ reads OPDS (library.opds); libkiwix 14 reads classic XML
+# (library.xml).  This wrapper is rendered in stage 1, before kiwix-serve is
+# installed in stage 7, so the version is not known at render time: detect it
+# at start time instead.
+KIWIX_LIBRARY_OPDS="{{ iiab_zim_path }}/library.opds"
+KIWIX_LIBRARY_XML="{{ kiwix_library_xml | default(iiab_zim_path ~ '/library.xml') }}"
 KIWIX_URL_ROOT="/kiwix/"
 KIWIX_THREADS="4"
+
+kiwix_library() {
+  major="$("$KIWIX_BIN" --version 2>/dev/null | sed -n 's/.*libkiwix[^0-9]*\([0-9]*\).*/\1/p' | head -1)"
+  if [ -n "$major" ] && [ "$major" -ge 15 ]; then
+    printf '%s\n' "$KIWIX_LIBRARY_OPDS"
+  else
+    printf '%s\n' "$KIWIX_LIBRARY_XML"
+  fi
+}
 
 running() {
   # NOTE: if `ps aux | grep $SERVICE_NAME` shows nothing, this should fail too.
@@ -34,7 +48,7 @@ start() {
     --daemon \
     --port "$KIWIX_PORT" \
     --nolibrarybutton \
-    --library "$KIWIX_LIBRARY" \
+    --library "$(kiwix_library)" \
     --urlRootLocation="$KIWIX_URL_ROOT" \
     --threads "$KIWIX_THREADS"
 

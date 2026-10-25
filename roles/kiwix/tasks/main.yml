@@ -19,55 +19,67 @@
     quiet: yes
 
 
-- name: Refresh IIAB Python libraries (the catalog builder imports iiab.iiab_zim_catalog)
-  include_role:
-    name: pylibs
-  # Run here as well as in 4-server-options: ./runrole --reinstall kiwix does
-  # not run stage 4, so an existing install would otherwise keep the old
-  # module (or lack iiab_zim_catalog.py entirely).
-
-
-- name: Install python3-libzim (used by the catalog builder)
-  package:
-    name: python3-libzim
-    state: present
-  # Runs on every invocation (not just fresh installs), so upgrades get it.
-  # Available for all IIAB-supported OSes, including armhf.
-
-- name: Install/refresh kiwix-serve.service, iiab-make-kiwix-lib and the catalog builder
-  template:
-    src: "{{ item.src }}"
-    dest: "{{ item.dest }}"
-    mode: "{{ item.mode }}"
-  with_items:
-    - { src: 'kiwix-serve.service.j2', dest: '/etc/systemd/system/kiwix-serve.service', mode: '0644' }
-    - { src: 'iiab-make-kiwix-lib.j2', dest: '/usr/bin/iiab-make-kiwix-lib', mode: '0755' }
-    - { src: 'iiab-make-kiwix-lib3.py', dest: '/usr/bin/iiab-make-kiwix-lib.py', mode: '0755' }
-  # Runs on every invocation, so an upgrade also updates the service's
-  # --library path and the catalog builder.
-
-- name: Refresh the PDSM Kiwix wrapper (proot_services is skipped on upgrades)
-  template:
-    src: "{{ role_path }}/../proot_services/templates/kiwix.j2"
-    dest: /usr/local/pdsm/services-available/kiwix
-    mode: "0755"
-  when: is_proot | default(false)
-  # The wrapper is normally installed by the proot_services role, but that
-  # role's install.yml only runs on a fresh install.  Refresh it here as well so
-  # an upgrade picks up the current library path (kiwix_library_path), which is
-  # rendered into the wrapper.
-
-- name: daemon_reload, so systemd (re)reads newly installed kiwix-serve.service
-  systemd:
-    daemon_reload: yes
-  when: not (is_proot | default(false))
-
-
 - block:
 
     - name: Install Kiwix if 'kiwix_installed' not defined, e.g. in {{ iiab_state_file }}    # /etc/iiab/iiab_state.yml
       include_tasks: install.yml
       when: kiwix_installed is undefined
+
+    # kiwix-serve must be installed before we can ask it its libkiwix version,
+    # which decides the library file name (library.opds for 15+, library.xml
+    # for 14) rendered into the service files below.
+    - name: Extract libkiwix MAJOR version from "kiwix-serve --version"
+      shell: "{{ kiwix_path }}/bin/kiwix-serve --version | sed -n 's/.*libkiwix[^0-9]*\\([0-9]*\\).*/\\1/p' | head -1"
+      register: kiwix_libkiwix_major
+      changed_when: false
+
+    - name: Point kiwix-serve at the classic XML library (library.xml) for libkiwix < 15
+      set_fact:
+        kiwix_library_path: "{{ kiwix_library_xml }}"
+      when: (kiwix_libkiwix_major.stdout | default('14', true) | int) < 15
+
+    - name: Refresh IIAB Python libraries (the catalog builder imports iiab.iiab_zim_catalog)
+      include_role:
+        name: pylibs
+      # Run here as well as in 4-server-options: ./runrole --reinstall kiwix does
+      # not run stage 4, so an existing install would otherwise keep the old
+      # module (or lack iiab_zim_catalog.py entirely).
+
+    - name: Install python3-libzim (used by the catalog builder)
+      package:
+        name: python3-libzim
+        state: present
+      # Runs on every invocation (not just fresh installs), so upgrades get it.
+      # Available for all IIAB-supported OSes, including armhf.
+
+    - name: Install/refresh kiwix-serve.service, iiab-make-kiwix-lib and the catalog builder
+      template:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+        mode: "{{ item.mode }}"
+      with_items:
+        - { src: 'kiwix-serve.service.j2', dest: '/etc/systemd/system/kiwix-serve.service', mode: '0644' }
+        - { src: 'iiab-make-kiwix-lib.j2', dest: '/usr/bin/iiab-make-kiwix-lib', mode: '0755' }
+        - { src: 'iiab-make-kiwix-lib3.py', dest: '/usr/bin/iiab-make-kiwix-lib.py', mode: '0755' }
+      # Runs on every invocation, so an upgrade also updates the service's
+      # --library path and the catalog builder.
+
+    - name: Refresh the PDSM Kiwix wrapper (proot_services is skipped on upgrades)
+      template:
+        src: "{{ role_path }}/../proot_services/templates/kiwix.j2"
+        dest: /usr/local/pdsm/services-available/kiwix
+        mode: "0755"
+      when: is_proot | default(false)
+      # The wrapper is normally installed by the proot_services role, but that
+      # role's install.yml only runs on a fresh install.  Refresh it here as well
+      # so an upgrade keeps the template current.  (The wrapper detects the
+      # libkiwix version itself at start time, so this no longer carries the
+      # library path.)
+
+    - name: daemon_reload, so systemd (re)reads newly installed kiwix-serve.service
+      systemd:
+        daemon_reload: yes
+      when: not (is_proot | default(false))
 
     - include_tasks: enable-or-disable.yml
 
@@ -99,9 +111,9 @@
         - option: iiab_zim_path
           value: "{{ iiab_zim_path }}"
         - option: kiwix_library_path
-          value: "{{ kiwix_library_path }}"
+          value: "{{ kiwix_library_path }}"    # resolved: library.opds (15+) or library.xml (14)
         - option: kiwix_library_xml
-          value: "{{ kiwix_library_xml }}"    # legacy alias
+          value: "{{ kiwix_library_xml }}"     # library.xml (kiwix 14 classic XML)
         - option: zim_catalog_db
           value: "{{ zim_catalog_db }}"
 

@@ -22,8 +22,10 @@ Locations
 - The URL is http://box/kiwix or http://box.lan/kiwix (both proxied for AWStats, Matomo, ETC)
 - Use URL http://box:3000/kiwix if you want to avoid the proxy
 
-Your ``/library/zims/library.opds`` (containing essential metadata for the ZIM
-files you've installed) can be regenerated if necessary by running::
+Your library file (``/library/zims/library.opds`` for libkiwix 15+, or
+``/library/zims/library.xml`` for libkiwix 14) contains essential metadata for
+the ZIM files you've installed, and can be regenerated if necessary by
+running::
 
     /usr/bin/iiab-make-kiwix-lib
 
@@ -33,10 +35,10 @@ unchanged.
 The ZIM files in ``/library/zims/content`` are the source of truth. Metadata is
 cached in ``/library/zims/catalog.sqlite``; only new or changed ZIMs (size or
 mtime) are reopened, invalid ZIMs are skipped with a warning, and the library
-file is written atomically. ``iiab-make-kiwix-lib.py`` writes classic XML for
-libkiwix 14 and OPDS for libkiwix 15. This is a clean format break with no
-migration path between the two formats. The library file is named
-``library.opds`` in both cases; the builder removes the old ``library.xml``
-after the new file has been written.
+file is written atomically. libkiwix 14 reads classic XML; libkiwix 15 reads
+OPDS. This is a clean format break with no migration path between the two
+formats, so the library file name tracks the format: ``library.xml`` for
+libkiwix 14 and ``library.opds`` for libkiwix 15+. When upgrading from 14 to
+15, the builder removes the old ``library.xml`` after writing ``library.opds``.
 
 See also "How do I add ZIM files, like Wikipedia?" at http://FAQ.IIAB.IO
