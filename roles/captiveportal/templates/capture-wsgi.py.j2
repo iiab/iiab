@@ -18,26 +18,26 @@ from iiab.iiab_lib import get_iiab_env
 
 # portal_completed marks a client that has completed the automatic splash flow.
 # A completed client receives the success answer its OS expects -- 204 for
-# Android/Chromium, "success" for Firefox, "Microsoft Connect Test" for
-# Windows NCSI, and Apple's Success page for iOS/macOS -- and shows a clean
-# connected status. Incomplete clients receive the shared informational splash
-# or an OS-specific redirect.
+# Android/Chromium, "success" for Firefox, "Microsoft NCSI" for Windows NCSI,
+# "Microsoft Connect Test" for Windows Connect Test, and Apple's Success page
+# for iOS/macOS -- so it reports a clean connected status. Incomplete clients
+# receive the shared informational splash or an OS-specific redirect.
 
 # Create the jinja2 environment.
 CAPTIVE_PORTAL_BASE = "/opt/iiab/captiveportal"
 j2_env = Environment(loader=FileSystemLoader(CAPTIVE_PORTAL_BASE),trim_blocks=True)
 
 # How long a completed portal session (and its client state) survives without
-# any request from that client.  1 hour so a device that is in active use is
-# never re-prompted: Windows/Android usually probe at least every few minutes,
-# but a client that goes quiet must not be sent back through the splash page.
+# any request from that client. One hour: Windows/Android usually probe at least
+# every few minutes, so a brief gap does not send an active device back through
+# the splash page; only an hour of silence expires the completion.
 PORTAL_SESSION_TO = 60 * 60
-# Keep the shared informational page visible long enough for a captive assistant to
-# render it before its next probe completes the client.
+# Keep the shared informational page visible long enough for a captive
+# assistant to render it before its next probe completes the client.
 SPLASH_DISPLAY_TO = 5
 CLIENT_STATE_TTL = PORTAL_SESSION_TO
-# Neighbor lookups are short-lived because a client can change networks while
-# retaining the same address.
+# Neighbor lookups are short-lived because a client's MAC address can change
+# while it keeps the same IP address.
 MAC_CACHE_TTL = 30
 NEIGHBOR_LOOKUP_TIMEOUT = 2 # seconds; a wedged netlink must not stall requests
 
@@ -100,7 +100,7 @@ WINDOWS_PROBE_RESPONSES = {
 }
 
 # Alternate addresses for the splash page, in case a client cannot resolve the
-# FQDN.  captiveportal_alt_hostnames defaults to "box.local" (see
+# FQDN. captiveportal_alt_hostnames defaults to "box.local" (see
 # vars/default_vars.yml); any entry equal to the FQDN is dropped so the page
 # never shows the same address twice.
 manual_addresses = ["http://" + fully_qualified_domain_name]
@@ -290,7 +290,7 @@ def splash_waiting(ip):
     return True
 
 def client_ip(environ):
-    '''Single source of the client address.  nginx overrides X-Forwarded-For
+    '''The single source of the client address. nginx overrides X-Forwarded-For
     with the real peer address (uwsgi_param HTTP_X_FORWARDED_FOR $remote_addr);
     direct runs fall back to the peer address itself.'''
     forwarded = environ.get('HTTP_X_FORWARDED_FOR')
@@ -370,14 +370,14 @@ def macintosh(environ, start_response):
         return put_302(environ, start_response, CAPTIVE_SPLASH)
     if portal_session_active(ip):
         return probe_success(environ, start_response)
-    # Windows/NCSI browsers use the desktop splash flow. iOS/macOS sign-in
+    # Windows and NCSI clients use the desktop splash flow. iOS/macOS sign-in
     # assistants and Safari need the sign-in splash page below, so macOS
     # follows the same flow as iPhone OS.
     system, _ = parse_agent(environ.get('HTTP_USER_AGENT', ''))
     if system in ("Windows NT", "Microsoft NCSI"):
         return put_302(environ, start_response, CAPTIVE_SPLASH)
     # Nodogsplash keeps a pre-authenticated client on the splash page until
-    # that client authenticates.  Do not infer completion from a repeated
+    # that client authenticates. Do not infer completion from a repeated
     # connectivity probe; redirect the probe to the splash page first so
     # Apple clients invoke their captive-network assistant.
     return put_302(environ, start_response, CAPTIVE_SPLASH)
@@ -628,7 +628,8 @@ def application (environ, start_response):
    if host in ANDROID_PROBE_RESPONSES or path in ANDROID_PROBE_PATHS:
       if portal_session_active(ip):
           return put_204(environ,start_response)
-      # Non-Android /generate_204 gets a redirect for the Chromium "Open in browser" fallback.
+      # Non-Android /generate_204 gets a redirect for the Chromium "Open in
+      # browser" fallback.
       if path == "/generate_204" and not is_android_flow(environ):
           return put_302(environ, start_response, CAPTIVE_SPLASH)
       return android(environ, start_response)

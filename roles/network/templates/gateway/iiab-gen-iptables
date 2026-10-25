@@ -47,10 +47,9 @@ iiab_var_value() {
 }
 
 # iiab_var_value preserves the YAML spelling, but Ansible accepts true/yes/on/1
-# (any case) as boolean True. The parser matches those spellings, so a portal
-# enabled in Ansible is also enabled by the bash-generated dnsmasq and firewall
-# rules. The parsing matches the Ansible-generated Captive Portal dnsmasq
-# fragment.
+# (in any case) as boolean True. This parser accepts the same spellings, so a
+# portal enabled in Ansible is also enabled by the bash-generated dnsmasq and
+# firewall rules. The rules therefore agree with the Ansible-rendered fragment.
 is_true() {
     case "$1" in
         [Tt][Rr][Uu][Ee]|[Yy][Ee][Ss]|[Oo][Nn]|1) return 0 ;;
@@ -60,7 +59,7 @@ is_true() {
 
 # A Captive Portal variable that cannot be found must not silently look like
 # "False": that would disable the portal, or its DNS diversion, without any
-# hint about the misconfiguration.
+# indication of the misconfiguration.
 captiveportal_var_value() {
     value=$(iiab_var_value "$1")
     if [ -z "$value" ]; then
@@ -235,9 +234,9 @@ if [ "$wan" != "none" ]; then
         # Allow outgoing LAN connections only when IIAB provides Internet to
         # clients (iiab_gateway_enabled: True, the mode with MASQUERADE above).
         # Without MASQUERADE, packets with RFC1918 sources cannot receive
-        # replies and connectivity probes time out. Offline appliance mode
-        # rejects these packets so the client fails fast and the captive portal
-        # (probe DNS diversion + port-80 DNAT) answers probes.
+        # replies and connectivity probes time out. In offline appliance mode,
+        # these packets are rejected so the client fails fast and the captive
+        # portal (probe DNS diversion + port-80 DNAT) answers probes.
         if is_true "$iiab_gateway_enabled"; then
             $IPTABLES -A FORWARD -i $lan -o $wan -j ACCEPT
         else
@@ -262,18 +261,18 @@ fi
 # accordingly, so the client accepts the answer.
 #
 # In offline/captive-portal mode (iiab_gateway_enabled is not True), the
-# redirect is ALWAYS enabled so that clients using their own DNS (e.g. 8.8.8.8)
-# still resolve the portal probe hostnames via dnsmasq and get diverted to
-# the splash page.  The user cannot disable this in that mode.
+# redirect is always enabled so that clients using their own DNS (e.g. 8.8.8.8)
+# still resolve the portal probe hostnames via dnsmasq and are diverted to
+# the splash page. Users cannot disable it in that mode.
 #
 # In online/gateway mode (iiab_gateway_enabled is True), clients have full
-# Internet access through the IIAB.  Redirecting DNS is unnecessary for the
-# portal (which is not active) but can be enabled on demand by setting
+# Internet access through the IIAB. Redirecting DNS is unnecessary for the
+# portal (which is not active), but it can be enabled on demand by setting
 # block_DNS: True in /etc/iiab/local_vars.yml to force all client DNS through
 # the IIAB's dnsmasq (e.g. for DNS filtering).
 #
-# The redirect needs a LAN to redirect on: in appliance mode (lan=none) there
-# are no clients to divert, and iptables would reject the rules.
+# The redirect requires a LAN: in appliance mode (lan=none) there are no
+# clients to divert, and iptables would reject the rules.
 if [ "$lan" != "none" ] && { ! is_true "$iiab_gateway_enabled" || is_true "$block_DNS"; }; then
     $IPTABLES -t nat -A PREROUTING -i $lan -p tcp --dport 53 ! -d $lan_ip -j DNAT --to $lan_ip:53
     $IPTABLES -t nat -A PREROUTING -i $lan -p udp --dport 53 ! -d $lan_ip -j DNAT --to $lan_ip:53
@@ -286,7 +285,8 @@ fi
 # via their own DNS and would otherwise skip the portal. Exclude the LAN
 # subnet so local HTTP services remain reachable.
 # The Captive Portal role installs the dnsmasq fragment source; keep its active
-# copy in sync with the same condition so DNS and port-80 DNAT switch together.
+# copy in sync under the same condition so the DNS diversion and the port-80
+# DNAT change together.
 if is_true "$captiveportal_enabled" && [ "$lan" != "none" ] && ! is_true "$iiab_gateway_enabled"; then
     if is_true "$captiveportal_log_probes"; then
         $IPTABLES -t nat -A PREROUTING -i $lan -p tcp --dport 80 \
