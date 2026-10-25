@@ -39,6 +39,29 @@
              (zimantic_use_system_packages == 'auto' and
               ansible_facts.machine not in ['aarch64', 'x86_64']) }}
 
+    - name: Validate zimantic_embedding_model
+      assert:
+        that: zimantic_embedding_model in ['auto', 'multilingual-e5-small', 'e5-small-v2']
+        fail_msg: "zimantic_embedding_model must be 'auto', 'multilingual-e5-small', or 'e5-small-v2'"
+        quiet: yes
+
+    - name: Determine which embedding model to use
+      set_fact:
+        zimantic_embedding_model_selected: >-
+          {{ 'e5-small-v2' if (zimantic_embedding_model == 'auto' and
+                               (ansible_facts.memtotal_mb | default(2048) | int) <= 1024)
+             else (zimantic_embedding_model if zimantic_embedding_model != 'auto'
+                   else 'multilingual-e5-small') }}
+
+    - name: Select embedding model files
+      set_fact:
+        zimantic_selected_model_url: "{{ zimantic_english_model_url if zimantic_embedding_model_selected == 'e5-small-v2' else zimantic_multilingual_model_url }}"
+        zimantic_selected_model_checksum: "{{ zimantic_english_model_checksum if zimantic_embedding_model_selected == 'e5-small-v2' else zimantic_multilingual_model_checksum }}"
+        zimantic_selected_tokenizer_file: "{{ zimantic_english_tokenizer_file if zimantic_embedding_model_selected == 'e5-small-v2' else zimantic_multilingual_tokenizer_file }}"
+        zimantic_selected_tokenizer_url: "{{ zimantic_english_tokenizer_url if zimantic_embedding_model_selected == 'e5-small-v2' else zimantic_multilingual_tokenizer_url }}"
+        zimantic_selected_tokenizer_checksum: "{{ zimantic_english_tokenizer_checksum if zimantic_embedding_model_selected == 'e5-small-v2' else zimantic_multilingual_tokenizer_checksum }}"
+        zimantic_unused_tokenizer_file: "{{ zimantic_multilingual_tokenizer_file if zimantic_embedding_model_selected == 'e5-small-v2' else zimantic_english_tokenizer_file }}"
+
     - name: Check for a supported Python version
       command: "{{ zimantic_python }} --version"
       register: zimantic_python_check
@@ -158,20 +181,31 @@
       include_tasks: install.yml
       when: zimantic_needs_install
 
+    # Both tokenizers in one model directory would make Zimantic choose
+    # SentencePiece, which is wrong for the English model.
+    - name: Remove the tokenizer left by a different embedding model
+      file:
+        path: "{{ zimantic_model_dir }}/{{ zimantic_unused_tokenizer_file }}"
+        state: absent
+      register: zimantic_unused_tokenizer
+      when: zimantic_mode == 'semantic'
+
     - name: Download Zimantic embedding model
       get_curl:
-        url: "{{ zimantic_model_url }}"
+        url: "{{ zimantic_selected_model_url }}"
         dest: "{{ zimantic_model_dir }}/model.onnx"
-        checksum: "{{ zimantic_model_checksum }}"
+        checksum: "{{ zimantic_selected_model_checksum }}"
         timeout: "{{ download_timeout }}"
+      register: zimantic_model_download
       when: zimantic_mode == 'semantic'
 
     - name: Download Zimantic tokenizer
       get_curl:
-        url: "{{ zimantic_tokenizer_url }}"
-        dest: "{{ zimantic_model_dir }}/sentencepiece.bpe.model"
-        checksum: "{{ zimantic_tokenizer_checksum }}"
+        url: "{{ zimantic_selected_tokenizer_url }}"
+        dest: "{{ zimantic_model_dir }}/{{ zimantic_selected_tokenizer_file }}"
+        checksum: "{{ zimantic_selected_tokenizer_checksum }}"
         timeout: "{{ download_timeout }}"
+      register: zimantic_tokenizer_download
       when: zimantic_mode == 'semantic'
 
     - name: Check for the Zimantic embedding model
@@ -182,13 +216,13 @@
 
     - name: Check for the Zimantic tokenizer
       stat:
-        path: "{{ zimantic_model_dir }}/sentencepiece.bpe.model"
+        path: "{{ zimantic_model_dir }}/{{ zimantic_selected_tokenizer_file }}"
       register: zimantic_tokenizer_file
       when: zimantic_mode == 'semantic'
 
     - name: Fail if semantic mode has no embedding model
       fail:
-        msg: "Semantic mode needs model.onnx and sentencepiece.bpe.model in {{ zimantic_model_dir }}; the download failed or the files were removed"
+        msg: "Semantic mode needs model.onnx and {{ zimantic_selected_tokenizer_file }} in {{ zimantic_model_dir }}; the download failed or the files were removed"
       when:
         - zimantic_mode == 'semantic'
         - not (zimantic_model_file.stat.exists | default(false)) or
@@ -217,13 +251,18 @@
         daemon_reload: yes
       when: zimantic_service_update.changed
 
-    - name: Restart Zimantic after installation, configuration, or mode change
+    - name: Restart Zimantic after installation, configuration, mode, or model change
       systemd:
         name: zimantic
         state: restarted
       when:
         - zimantic_enabled
-        - zimantic_needs_install or zimantic_config_update.changed or zimantic_service_update.changed
+        - zimantic_needs_install or
+          zimantic_config_update.changed or
+          zimantic_service_update.changed or
+          (zimantic_unused_tokenizer.changed | default(false)) or
+          (zimantic_model_download.changed | default(false)) or
+          (zimantic_tokenizer_download.changed | default(false))
 
     - include_tasks: enable-or-disable.yml
 
@@ -244,6 +283,8 @@
           value: "{{ zimantic_enabled }}"
         - option: zimantic_mode
           value: "{{ zimantic_mode }}"
+        - option: zimantic_embedding_model
+          value: "{{ zimantic_embedding_model_selected }}"
         - option: zimantic_version
           value: "{{ zimantic_version }}"
         - option: zimantic_url

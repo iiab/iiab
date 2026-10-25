@@ -40,20 +40,34 @@ troubleshooting and direct access.
 Semantic mode
 ~~~~~~~~~~~~~
 
-``semantic`` adds meaning-based search. The role downloads the approximately
-123 MiB embedding model when it is missing. Set::
+``semantic`` adds meaning-based search. The role downloads the selected
+embedding model when it is missing. Set::
 
     zimantic_install: True
     zimantic_enabled: True
     zimantic_mode: semantic
 
-The semantic server benchmark is approximately 323 MiB RSS. 64-bit
-``aarch64`` and ``x86_64`` hosts use the PyPI wheels. 32-bit
-``armhf``/``armv7`` hosts have no wheels, so by default the role installs
-``python3-onnxruntime``, ``python3-faiss``, ``python3-libzim``,
-``python3-sentencepiece`` and the other native dependencies as distribution
-packages, then creates the virtual environment with ``--system-site-packages``.
-This requires Debian 13/trixie or newer.
+The semantic server benchmark with ``multilingual-e5-small`` is approximately
+323 MiB RSS; ``e5-small-v2`` uses less. 64-bit ``aarch64`` and ``x86_64`` hosts
+use the PyPI wheels. 32-bit ``armhf``/``armv7`` hosts have no wheels, so by
+default the role installs ``python3-onnxruntime``, ``python3-faiss``,
+``python3-libzim``, ``python3-sentencepiece`` and the other native dependencies
+as distribution packages, then creates the virtual environment with
+``--system-site-packages``. This requires Debian 13/trixie or newer.
+
+Embedding model
+~~~~~~~~~~~~~~~
+
+``zimantic_embedding_model`` selects the model:
+
+- ``auto`` (default) uses ``e5-small-v2`` on hosts with 1 GB RAM or less and
+  ``multilingual-e5-small`` otherwise.
+- ``multilingual-e5-small`` is about 123 MiB and searches 100+ languages.
+- ``e5-small-v2`` is about 34 MiB, English only, and saves roughly 125 MiB of
+  resident memory.
+
+Indexes are specific to the model that built them, so rebuild every index after
+changing ``zimantic_embedding_model`` (``zimantic build --force``).
 
 Native dependencies
 ~~~~~~~~~~~~~~~~~~~
