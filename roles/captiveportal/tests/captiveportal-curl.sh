@@ -156,7 +156,7 @@ request \
 assert_status 302
 assert_location "$CAPTIVE_SPLASH"
 
-sleep 6
+sleep 11
 
 request \
     macos-completed-after-splash "$(client_ip 0)" "$PORTAL_HOST" \
@@ -193,7 +193,7 @@ request \
 assert_status 302
 assert_location "$CAPTIVE_SPLASH"
 
-sleep 6
+sleep 11
 
 request \
     android-completed-probe "$(client_ip 1)" "$ANDROID_HOST" \
@@ -237,7 +237,7 @@ request \
 assert_status 302
 assert_location "$CAPTIVE_SPLASH"
 
-sleep 6
+sleep 11
 
 request \
     macos-completed-probe "$(client_ip 0)" "$PORTAL_HOST" \
@@ -272,7 +272,7 @@ assert_body_contains 'You may close this page.'
 assert_body_contains 'http-equiv="refresh"'
 assert_body_contains 'url=/captive_splash'
 
-sleep 6
+sleep 11
 
 request \
     windows-home-after-splash "$(client_ip 3)" "$WINDOWS_HOST" \
@@ -300,7 +300,7 @@ assert_body_contains 'Welcome to IIAB'
 assert_body_contains 'You may close this page.'
 assert_body_contains 'http-equiv="refresh"'
 
-sleep 6
+sleep 11
 
 request \
     fedora-home-after-splash "$(client_ip 4)" "$FEDORA_HOST" \

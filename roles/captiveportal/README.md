@@ -34,7 +34,7 @@ startup and application errors can be inspected with:
 
     sudo journalctl -u uwsgi-app@captiveportal.service
 
-The service stores client state in memory only. Entries expire after one hour
+The service stores client state in memory only. Entries expire after 15 minutes
 without a request, and all state is lost when the Captive Portal service
 restarts; no client-state database is used. A shared splash page is displayed
 for a short grace period before the client is marked complete.
@@ -127,7 +127,7 @@ redirect back to the splash page:
 
 This prevents repeated sign-in prompts and any "Limited connection" or
 "No internet access" warning while the connection is active. The completed
-state expires after one hour without a request, and the next request starts a
+state expires after 15 minutes without a request, and the next request starts a
 new portal session. A probe under an unknown hostname (e.g. an unrecognized
 OEM fork, or a client resolving probes with its own DNS) also receives
 `204 No Content` when the portal session is complete, as long as its path looks
