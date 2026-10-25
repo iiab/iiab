@@ -18,6 +18,22 @@
     state: absent
   when: not captiveportal_enabled
 
+- name: Remove the obsolete Captive Portal dnsmasq helper
+  file:
+    path: /usr/sbin/iiab-divert-to-nginx
+    state: absent
+
+- name: Remove the obsolete Captive Portal NGINX and dnsmasq generator
+  file:
+    path: /usr/sbin/iiab-make-cp-servers.py
+    state: absent
+
+# Render capture.conf before linking it into sites-enabled: Ansible's file
+# module refuses to create a symlink whose source does not exist yet.
+- name: Install and update Captive Portal generated files
+  include_tasks: update-files.yml
+  when: captiveportal_enabled
+
 - name: Enable the Captive Portal NGINX default server (if captiveportal_enabled)
   file:
     src: /etc/nginx/sites-available/capture.conf
@@ -31,52 +47,13 @@
     state: absent
   when: not captiveportal_enabled
 
-- name: Remove the obsolete Captive Portal dnsmasq helper
-  file:
-    path: /usr/sbin/iiab-divert-to-nginx
-    state: absent
-
-- name: Remove the obsolete Captive Portal NGINX and dnsmasq generator
-  file:
-    path: /usr/sbin/iiab-make-cp-servers.py
-    state: absent
-
-- name: Install and update Captive Portal generated files
-  include_tasks: update-files.yml
-  when: captiveportal_enabled
-
-- name: Enable the Captive Portal dnsmasq diversion when active
-  copy:
-    src: /etc/iiab/captiveportal-dnsmasq
-    dest: /etc/dnsmasq.d/capture
-    remote_src: true
-    mode: '0644'
-  when:
-    - captiveportal_enabled
-    - iiab_lan_iface != 'none'
-    - not iiab_gateway_enabled
-  register: captiveportal_dnsmasq
-
-- name: Remove the Captive Portal dnsmasq diversion when inactive
-  file:
-    path: /etc/dnsmasq.d/capture
-    state: absent
-  when:
-    - not captiveportal_enabled or iiab_lan_iface == 'none' or iiab_gateway_enabled
-  register: captiveportal_dnsmasq_removed
-
-- name: Check whether the dnsmasq systemd service is installed
-  stat:
-    path: "{{ systemd_location }}/dnsmasq.service"
-  register: dnsmasq_service
-
-- name: Reload dnsmasq when its Captive Portal diversion changes
-  systemd_service:
-    name: dnsmasq
-    state: reloaded
-  when:
-    - dnsmasq_service.stat.exists
-    - (captiveportal_dnsmasq is changed) or (captiveportal_dnsmasq_removed is changed)
+# /etc/dnsmasq.d/capture is activated or removed by iiab-gen-iptables, which
+# reads IIAB_LAN_DEVICE and IIAB_GATEWAY_ENABLED from /etc/iiab/iiab.env. The
+# role runs it below when it is already installed; during a fresh install the
+# network role runs it after the LAN interface is configured. Keeping the
+# decision in one place means the DNS diversion and the port-80 DNAT switch
+# together, and it avoids depending on 'iiab_lan_iface', which is defined by
+# the network role and is not in scope here.
 
 - name: Update NGINX files and restart NGINX
   include_role:
@@ -126,12 +103,12 @@
     - captiveportal_enabled
     - (captiveportal_wsgi is defined and captiveportal_wsgi is changed) or (captiveportal_ini is defined and captiveportal_ini is changed)
 
-# The network role normally regenerates the firewall by running
-# /usr/bin/iiab-gen-iptables. A standalone './runrole captiveportal' does not
-# run it, so this task regenerates the firewall as well.
-# The generator is deployed before execution so the probe DNS and port-80 DNAT
-# use matching rules. During installation, the network role runs last and the
-# generator may be absent, so the stat guards below skip cleanly.
+# The network role normally regenerates the firewall, and activates or removes
+# the Captive Portal dnsmasq diversion, by running /usr/bin/iiab-gen-iptables.
+# A standalone './runrole captiveportal' does not run it, so regenerate both
+# here as well. The generator is deployed before execution so the probe DNS and
+# port-80 DNAT use matching rules. During installation, the network role runs
+# last and the generator may be absent, so the stat guards below skip cleanly.
 - name: Record whether /usr/bin/iiab-gen-iptables exists (installed by the network role)
   stat:
     path: /usr/bin/iiab-gen-iptables
@@ -144,6 +121,6 @@
     mode: "0755"
   when: gen_iptables.stat.exists
 
-- name: Regenerate iptables firewall to match 'captiveportal_enabled' and 'iiab_gateway_enabled'
+- name: Regenerate iptables and the Captive Portal dnsmasq diversion to match 'captiveportal_enabled' and 'iiab_gateway_enabled'
   command: /usr/bin/iiab-gen-iptables
   when: gen_iptables.stat.exists
