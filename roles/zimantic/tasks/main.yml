@@ -26,11 +26,6 @@
         msg: "The Zimantic role currently requires regular systemd; PRoot/Android is not supported"
       when: is_proot
 
-    - name: Fail on unsupported architecture
-      fail:
-        msg: "Zimantic requires 64-bit Linux with native wheels; unsupported architecture is {{ ansible_facts.machine }}"
-      when: ansible_facts.machine not in zimantic_architectures
-
     - name: Check for a supported Python version
       command: "{{ zimantic_python }} --version"
       register: zimantic_python_check
@@ -43,6 +38,14 @@
       when:
         - zimantic_python_check.rc != 0 or
           ((zimantic_python_check.stdout ~ zimantic_python_check.stderr) is not search('Python 3\\.(1[1-4])\\.'))
+
+    - name: Install native dependencies from the distribution (32-bit hosts)
+      apt:
+        name: "{{ zimantic_system_packages }}"
+        state: present
+        update_cache: yes
+        cache_valid_time: 3600
+      when: zimantic_use_system_packages | bool
 
     - name: Check whether zimantic.service is installed
       stat:
