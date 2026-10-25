@@ -10,16 +10,18 @@ The SQLite database is a disposable cache, not a system of record:
 
   * it is rebuilt from the ZIM files whenever it is missing or has an
     incompatible schema version;
-  * a ZIM whose size has not changed since the last scan is not reopened;
+  * a ZIM whose size and mtime have not changed since the last scan is not
+    reopened;
   * an unreadable (invalid, truncated, permission-denied) ZIM is skipped,
     logged and left out of the catalog;
   * a missing content directory (unmounted drive, broken symlink) is an
     error, so the previous cache and library are kept;
   * rows for ZIM files that disappeared are removed.
 
-The exported library file is also derived.  Recent libkiwix (14.3+) reads
-OPDS and classic XML; libkiwix 15 reads only OPDS.  detect_library_format()
-picks the format supported by the installed kiwix-serve.
+The exported library file is also derived.  libkiwix 14 reads classic XML;
+libkiwix 15 reads OPDS.  This is a clean format break with no migration path.
+detect_library_format() picks the format supported by the installed
+kiwix-serve.
 '''
 
 import argparse
@@ -32,16 +34,42 @@ import re
 import sqlite3
 import subprocess
 import sys
+import threading
 import time
 import uuid
 from xml.sax import saxutils
 
 # Bump when the cache layout or the metadata derivation changes.  The cache is
 # disposable, so a mismatch simply triggers a full rescan.
-SCHEMA_VERSION = 3
+# Version 4 matches Zimantic's catalog.py column layout.  The two tools still
+# store ``path`` differently (relative here, absolute there) and handle
+# unreadable ZIMs differently, so do not point them at one shared file yet.
+SCHEMA_VERSION = 4
 CATALOG_FILENAME = 'catalog.sqlite'
 LIBRARY_FILENAME = 'library.opds'
 MAX_FAVICON_BYTES = 1 << 20    # ignore pathological illustrations (> 1 MiB)
+
+# Serializes schema creation between threads in one process.  Cross-process
+# callers are serialized by BEGIN IMMEDIATE in ZimCatalog._ensure_schema().
+_SCHEMA_LOCK = threading.Lock()
+
+# Columns of the zims table, in Zimantic's order.  Checked before trusting
+# ``user_version`` so a database written by another tool that reuses the
+# filename is rebuilt instead of failing every query.
+# ``icon_path`` is populated by Zimantic's HTML icon discovery; IIAB writes ''
+# and relies on the embedded illustration.  ``available``/``last_error`` are
+# currently always 1/'' here because IIAB removes unreadable rows from the cache
+# instead of retaining them; keep both tools' lifecycle rules in sync before
+# sharing a catalog file.
+_SCHEMA_COLUMNS = (
+    'path', 'stem', 'uuid', 'size', 'mtime', 'title', 'description',
+    'long_description', 'language', 'creator', 'publisher', 'date', 'tags',
+    'public_tags', 'name', 'flavour', 'category', 'article_count',
+    'media_count', 'entry_count', 'license', 'scraper', 'source',
+    'attribution', 'relation', 'counter', 'homepage', 'has_fulltext_index',
+    'favicon', 'favicon_mime', 'icon_path', 'has_illustration', 'available',
+    'last_error', 'scanned_at',
+)
 
 # ZIM metadata keys copied into the catalog.  Illustration_* keys are handled
 # separately, through get_illustration_item().
@@ -89,6 +117,12 @@ def normalize_counter(value):
     entries.sort(key=lambda item: (-item[1], item[0]))
     return ';'.join(
         ['%s=%d' % (mime, count) for mime, count in entries] + invalid)
+
+
+def normalize_creator(value):
+    '''Treat placeholder creator metadata as missing (same as Zimantic).'''
+    value = _text(value)
+    return '' if value == '-' else value
 
 
 def resolve_homepage(archive):
@@ -161,6 +195,13 @@ def normalize_tags(tags):
 def category_from_tags(tags):
     '''Return the _category:<value> tag, if any.'''
     return parse_tags(tags).get('_category', '')
+
+
+def public_tags(tags):
+    '''Tags suitable for display (private ``_`` tags removed).'''
+    return ';'.join(
+        tag for tag in _text(tags).split(';')
+        if tag and not tag.startswith('_'))
 
 
 def perma_ref(stem):
@@ -261,9 +302,11 @@ def read_zim_metadata(abs_path, rel_path):
         pass
 
     name = metadata.get('Name', '') or perma_ref(stem)
+    creator = normalize_creator(metadata.get('Creator', ''))
 
     return {
         'path': rel_path,
+        'stem': stem,
         'uuid': _archive_uuid(archive, abs_path),
         'size': stat.st_size,
         'mtime': stat.st_mtime,
@@ -271,10 +314,11 @@ def read_zim_metadata(abs_path, rel_path):
         'description': metadata.get('Description', ''),
         'long_description': metadata.get('LongDescription', ''),
         'language': metadata.get('Language', ''),
-        'creator': metadata.get('Creator', ''),
+        'creator': creator,
         'publisher': metadata.get('Publisher', ''),
         'date': _norm_date(metadata.get('Date', '')),
         'tags': tags,
+        'public_tags': public_tags(tags),
         'name': name,
         'flavour': metadata.get('Flavour', ''),
         'category': category_from_tags(tags),
@@ -291,6 +335,14 @@ def read_zim_metadata(abs_path, rel_path):
         'has_fulltext_index': has_fulltext_index,
         'favicon': favicon,
         'favicon_mime': favicon_mime,
+        # HTML-discovered icons are a Zimantic feature; IIAB relies on the
+        # embedded illustration above.
+        'icon_path': '',
+        'has_illustration': 1 if favicon else 0,
+        # IIAB currently drops unreadable ZIMs from the cache instead of
+        # keeping them as unavailable; the columns exist for schema parity.
+        'available': 1,
+        'last_error': '',
         'scanned_at': time.time(),
     }
 
@@ -299,11 +351,12 @@ def metadata_to_book_attrs(meta, exclude_favicon=True):
     '''Convert a metadata record to the classic book-attribute dict.
 
     Keys and units match what read_library_xml() returned for library.xml:
-    size is KiB, articleCount/mediaCount/size are strings, favicon is base64.
+    size is KiB; articleCount, mediaCount and size are strings; favicon is
+    base64.
     '''
     attrs = {
         # ``id`` remains the legacy dict/OPDS/JSON key.  It is the ZIM UUID,
-        # the same value zimantic calls ``uuid``.
+        # the same value Zimantic calls ``uuid``.
         'id': meta.get('uuid') or meta.get('path', ''),
         'uuid': meta.get('uuid') or '',
         'path': meta.get('path', ''),
@@ -338,9 +391,9 @@ def metadata_to_book_attrs(meta, exclude_favicon=True):
 def detect_library_format(kiwix_serve_path):
     '''Return 'opds' or 'xml' for the installed kiwix-serve.
 
-    libkiwix 14.3+ reads OPDS; older versions read classic XML only.  libkiwix
-    15 reads OPDS only.  Unknown versions fall back to XML, which is what
-    current releases understand.
+    libkiwix 15 reads OPDS; older versions read classic XML only.  If the
+    version cannot be determined, fall back to XML, which libkiwix 14
+    understands.
     '''
     try:
         output = subprocess.check_output(
@@ -355,7 +408,7 @@ def detect_library_format(kiwix_serve_path):
         log.warning('cannot parse kiwix-serve version from %r; using XML', output)
         return 'xml'
     version = (int(match.group(1)), int(match.group(2)))
-    return 'opds' if version >= (14, 3) else 'xml'
+    return 'opds' if version >= (15, 0) else 'xml'
 
 
 class ZimCatalog:
@@ -389,50 +442,74 @@ class ZimCatalog:
         return self.db
 
     def _ensure_schema(self):
-        version = self._connection().execute(
-            'PRAGMA user_version').fetchone()[0]
-        if version == SCHEMA_VERSION:
-            return
-        if version != 0:
-            log.warning('%s has schema version %s, rebuilding (wanted %s)',
-                        self.db_path, version, SCHEMA_VERSION)
-        self._connection().executescript('''
-            DROP TABLE IF EXISTS zims;
-            CREATE TABLE zims (
-                path TEXT PRIMARY KEY,
-                uuid TEXT NOT NULL DEFAULT '',
-                size INTEGER NOT NULL,
-                mtime REAL NOT NULL,
-                title TEXT NOT NULL DEFAULT '',
-                description TEXT NOT NULL DEFAULT '',
-                long_description TEXT NOT NULL DEFAULT '',
-                language TEXT NOT NULL DEFAULT '',
-                creator TEXT NOT NULL DEFAULT '',
-                publisher TEXT NOT NULL DEFAULT '',
-                date TEXT NOT NULL DEFAULT '',
-                tags TEXT NOT NULL DEFAULT '',
-                name TEXT NOT NULL DEFAULT '',
-                flavour TEXT NOT NULL DEFAULT '',
-                category TEXT NOT NULL DEFAULT '',
-                article_count INTEGER NOT NULL DEFAULT 0,
-                media_count INTEGER NOT NULL DEFAULT 0,
-                entry_count INTEGER NOT NULL DEFAULT 0,
-                license TEXT NOT NULL DEFAULT '',
-                scraper TEXT NOT NULL DEFAULT '',
-                source TEXT NOT NULL DEFAULT '',
-                attribution TEXT NOT NULL DEFAULT '',
-                relation TEXT NOT NULL DEFAULT '',
-                counter TEXT NOT NULL DEFAULT '',
-                homepage TEXT NOT NULL DEFAULT '',
-                has_fulltext_index INTEGER NOT NULL DEFAULT 0,
-                favicon BLOB,
-                favicon_mime TEXT NOT NULL DEFAULT '',
-                scanned_at REAL NOT NULL
-            );
-            CREATE INDEX zims_uuid ON zims(uuid);
-        ''')
-        self._connection().execute('PRAGMA user_version = %d' % SCHEMA_VERSION)
-        self._connection().commit()
+        # The version alone is not enough: another tool may have written this
+        # file with a different layout (Zimantic's catalog.py uses the same
+        # filename and a different schema), so verify the columns too.
+        with _SCHEMA_LOCK:
+            db = self._connection()
+            db.execute('BEGIN IMMEDIATE')
+            try:
+                version = db.execute('PRAGMA user_version').fetchone()[0]
+                columns = {
+                    row['name']
+                    for row in db.execute('PRAGMA table_info(zims)')
+                }
+                current = (version == SCHEMA_VERSION
+                           and columns == set(_SCHEMA_COLUMNS))
+                if not current and version != 0:
+                    reason = ('schema version %s' % version
+                              if version != SCHEMA_VERSION
+                              else 'a different table layout')
+                    log.warning('%s has %s, rebuilding (wanted version %s)',
+                                self.db_path, reason, SCHEMA_VERSION)
+                if not current:
+                    db.execute('DROP TABLE IF EXISTS zims')
+                    db.execute('''
+                        CREATE TABLE zims (
+                            path TEXT PRIMARY KEY,
+                            stem TEXT NOT NULL,
+                            uuid TEXT NOT NULL DEFAULT '',
+                            size INTEGER NOT NULL,
+                            mtime REAL NOT NULL,
+                            title TEXT NOT NULL DEFAULT '',
+                            description TEXT NOT NULL DEFAULT '',
+                            long_description TEXT NOT NULL DEFAULT '',
+                            language TEXT NOT NULL DEFAULT '',
+                            creator TEXT NOT NULL DEFAULT '',
+                            publisher TEXT NOT NULL DEFAULT '',
+                            date TEXT NOT NULL DEFAULT '',
+                            tags TEXT NOT NULL DEFAULT '',
+                            public_tags TEXT NOT NULL DEFAULT '',
+                            name TEXT NOT NULL DEFAULT '',
+                            flavour TEXT NOT NULL DEFAULT '',
+                            category TEXT NOT NULL DEFAULT '',
+                            article_count INTEGER NOT NULL DEFAULT 0,
+                            media_count INTEGER NOT NULL DEFAULT 0,
+                            entry_count INTEGER NOT NULL DEFAULT 0,
+                            license TEXT NOT NULL DEFAULT '',
+                            scraper TEXT NOT NULL DEFAULT '',
+                            source TEXT NOT NULL DEFAULT '',
+                            attribution TEXT NOT NULL DEFAULT '',
+                            relation TEXT NOT NULL DEFAULT '',
+                            counter TEXT NOT NULL DEFAULT '',
+                            homepage TEXT NOT NULL DEFAULT '',
+                            has_fulltext_index INTEGER NOT NULL DEFAULT 0,
+                            favicon BLOB,
+                            favicon_mime TEXT NOT NULL DEFAULT '',
+                            icon_path TEXT NOT NULL DEFAULT '',
+                            has_illustration INTEGER NOT NULL DEFAULT 0,
+                            available INTEGER NOT NULL DEFAULT 1,
+                            last_error TEXT NOT NULL DEFAULT '',
+                            scanned_at REAL NOT NULL
+                        )
+                    ''')
+                    db.execute('CREATE INDEX zims_stem ON zims(stem)')
+                    db.execute('CREATE INDEX zims_uuid ON zims(uuid)')
+                    db.execute('PRAGMA user_version = %d' % SCHEMA_VERSION)
+                db.commit()
+            except BaseException:
+                db.rollback()
+                raise
 
     def close(self):
         if self.db is not None:
@@ -440,9 +517,9 @@ class ZimCatalog:
             self.db = None
 
     def _existing(self):
-        return {row['path']: row['size']
+        return {row['path']: (row['size'], row['mtime'])
                 for row in self._connection().execute(
-                    'SELECT path, size FROM zims')}
+                    'SELECT path, size, mtime FROM zims')}
 
     def _zim_files(self):
         '''Return {relative path: (size, mtime)} for every .zim under content/.'''
@@ -485,7 +562,11 @@ class ZimCatalog:
 
         for rel_path in sorted(files):
             size, mtime = files[rel_path]
-            if not force and existing.get(rel_path) == size:
+            recorded = existing.get(rel_path)
+            if (not force
+                    and recorded is not None
+                    and recorded[0] == size
+                    and abs(recorded[1] - mtime) < 1e-6):
                 stats['skipped'] += 1
                 continue
             abs_path = os.path.join(self.zim_path, rel_path)
@@ -518,26 +599,32 @@ class ZimCatalog:
     def _upsert(self, meta):
         self._connection().execute('''
             INSERT INTO zims (
-                path, uuid, size, mtime, title, description, long_description,
-                language, creator, publisher, date, tags, name, flavour,
-                category, article_count, media_count, entry_count, license,
-                scraper, source, attribution, relation, counter, homepage,
-                has_fulltext_index, favicon, favicon_mime, scanned_at
+                path, stem, uuid, size, mtime, title, description,
+                long_description, language, creator, publisher, date, tags,
+                public_tags, name, flavour, category, article_count,
+                media_count, entry_count, license, scraper, source,
+                attribution, relation, counter, homepage, has_fulltext_index,
+                favicon, favicon_mime, icon_path, has_illustration, available,
+                last_error, scanned_at
             ) VALUES (
-                :path, :uuid, :size, :mtime, :title, :description,
+                :path, :stem, :uuid, :size, :mtime, :title, :description,
                 :long_description, :language, :creator, :publisher, :date,
-                :tags, :name, :flavour, :category, :article_count,
-                :media_count, :entry_count, :license, :scraper, :source,
-                :attribution, :relation, :counter, :homepage,
-                :has_fulltext_index, :favicon, :favicon_mime, :scanned_at
+                :tags, :public_tags, :name, :flavour, :category,
+                :article_count, :media_count, :entry_count, :license,
+                :scraper, :source, :attribution, :relation, :counter,
+                :homepage, :has_fulltext_index, :favicon, :favicon_mime,
+                :icon_path, :has_illustration, :available, :last_error,
+                :scanned_at
             )
             ON CONFLICT(path) DO UPDATE SET
-                uuid=excluded.uuid, size=excluded.size, mtime=excluded.mtime,
+                stem=excluded.stem, uuid=excluded.uuid,
+                size=excluded.size, mtime=excluded.mtime,
                 title=excluded.title, description=excluded.description,
                 long_description=excluded.long_description,
                 language=excluded.language, creator=excluded.creator,
                 publisher=excluded.publisher, date=excluded.date,
-                tags=excluded.tags, name=excluded.name,
+                tags=excluded.tags, public_tags=excluded.public_tags,
+                name=excluded.name,
                 flavour=excluded.flavour, category=excluded.category,
                 article_count=excluded.article_count,
                 media_count=excluded.media_count,
@@ -548,6 +635,10 @@ class ZimCatalog:
                 has_fulltext_index=excluded.has_fulltext_index,
                 favicon=excluded.favicon,
                 favicon_mime=excluded.favicon_mime,
+                icon_path=excluded.icon_path,
+                has_illustration=excluded.has_illustration,
+                available=excluded.available,
+                last_error=excluded.last_error,
                 scanned_at=excluded.scanned_at
         ''', {
             **meta,
@@ -558,31 +649,44 @@ class ZimCatalog:
         return self._connection().execute(
             'SELECT * FROM zims ORDER BY path').fetchall()
 
+    def unique_rows(self):
+        '''Return one deterministic row per ZIM UUID.
+
+        The UUID is the book identity; the path is only the file identity.  A
+        ZIM copied under another filename has the same UUID, so keep the copy
+        with the shortest path.  Used by every consumer that publishes books, so
+        the library file and the Admin Console menu agree.
+        '''
+        chosen = {}
+        for row in self.rows():
+            record = dict(row)
+            key = record.get('uuid') or record.get('path')
+            current = chosen.get(key)
+            if current is None:
+                chosen[key] = record
+                continue
+            new_path = record.get('path', '')
+            old_path = current.get('path', '')
+            if (len(new_path), new_path) < (len(old_path), old_path):
+                log.warning('duplicate ZIM UUID %s: using %s instead of %s',
+                            key, new_path, old_path)
+                chosen[key] = record
+            else:
+                log.warning('duplicate ZIM UUID %s: ignoring %s',
+                            key, new_path)
+        return sorted(chosen.values(), key=lambda record: record.get('path', ''))
+
     def book_dict(self, exclude_favicon=True):
         '''Return (zims keyed by UUID, map of relative path -> UUID).'''
-        # The UUID is the book identity; the path is only the file identity.
-        # A ZIM copied under another filename has the same UUID, so keep one
-        # deterministic copy instead of publishing the same book twice.
-        candidates = {}
-        for row in self.rows():
-            attrs = metadata_to_book_attrs(dict(row), exclude_favicon)
+        zims = {}
+        path_to_id = {}
+        for record in self.unique_rows():
+            attrs = metadata_to_book_attrs(record, exclude_favicon)
             zim_id = attrs.get('uuid') or attrs.get('id') or attrs.get('path')
             if not zim_id:
                 continue
-            key = (len(attrs.get('path', '')), attrs.get('path', ''))
-            current = candidates.get(zim_id)
-            if current is None:
-                candidates[zim_id] = (key, attrs)
-            elif key < current[0]:
-                log.warning('duplicate ZIM UUID %s: using %s instead of %s',
-                            zim_id, attrs.get('path'), current[1].get('path'))
-                candidates[zim_id] = (key, attrs)
-            else:
-                log.warning('duplicate ZIM UUID %s: ignoring %s',
-                            zim_id, attrs.get('path'))
-        zims = {zim_id: attrs for zim_id, (_, attrs) in candidates.items()}
-        path_to_id = {attrs['path']: zim_id
-                      for zim_id, attrs in zims.items()}
+            zims[zim_id] = attrs
+            path_to_id[attrs['path']] = zim_id
         return zims, path_to_id
 
     def write_opds(self, library_path, include_favicon=True):
@@ -606,8 +710,7 @@ class ZimCatalog:
         ]
 
         count = 0
-        for row in self.rows():
-            meta = dict(row)
+        for meta in self.unique_rows():
             attrs = metadata_to_book_attrs(meta, exclude_favicon=True)
             href = os.path.relpath(os.path.join(self.zim_path, attrs['path']),
                                    lib_dir).replace(os.sep, '/')
@@ -632,7 +735,10 @@ class ZimCatalog:
                          % saxutils.escape(attrs.get('creator', '')))
             parts.append('    <publisher><name>%s</name></publisher>\n'
                          % saxutils.escape(attrs.get('publisher', '')))
-            parts.append('    <dc:issued>%s</dc:issued>\n' % updated)
+            if date:
+                # dc:issued is the publication date; omit it for undated ZIMs
+                # (atom:updated above already carries the feed-generation time).
+                parts.append('    <dc:issued>%s</dc:issued>\n' % updated)
             if include_favicon and meta.get('favicon'):
                 mime = meta.get('favicon_mime') or 'image/png'
                 encoded = base64.b64encode(meta['favicon']).decode('ascii')
@@ -653,7 +759,7 @@ class ZimCatalog:
         return count
 
     def write_xml(self, library_path):
-        '''Write the classic library.xml format (for libkiwix < 14.3).'''
+        '''Write the classic library.xml format (for libkiwix < 15).'''
         if not self.zim_path:
             raise ValueError('write_xml() needs a zim_path')
         library_path = os.path.abspath(library_path)
@@ -661,8 +767,7 @@ class ZimCatalog:
         parts = ['<?xml version="1.0" encoding="UTF-8"?>\n',
                  '<library version="20110515">\n']
         count = 0
-        for row in self.rows():
-            meta = dict(row)
+        for meta in self.unique_rows():
             attrs = metadata_to_book_attrs(meta, exclude_favicon=False)
             href = os.path.relpath(os.path.join(self.zim_path, attrs['path']),
                                    lib_dir).replace(os.sep, '/')
@@ -722,18 +827,22 @@ def main(argv=None):
         description='Scan ZIM files into the IIAB catalog cache and export a '
                     'kiwix-serve library file.')
     parser.add_argument('--zim-path', default=zim_path_default,
-                        help='root containing content/*.zim (default: iiab_const.zim_path)')
+                        help='root containing content/*.zim '
+                             '(default: iiab_const.zim_path)')
     parser.add_argument('--catalog', default=catalog_default,
-                        help='SQLite cache path (default: <zim-path>/catalog.sqlite)')
+                        help='SQLite cache path '
+                             '(default: iiab_const.zim_catalog_db)')
     parser.add_argument('--library', default=library_default,
-                        help='library file to write (default: <zim-path>/library.opds)')
+                        help='library file to write '
+                             '(default: iiab_const.kiwix_library_path)')
     parser.add_argument('--format', choices=('auto', 'opds', 'xml'),
                         default='auto',
                         help='library format; auto uses the installed libkiwix version')
     parser.add_argument('--kiwix-serve', default=None,
                         help='kiwix-serve path for --format auto')
     parser.add_argument('--force', action='store_true',
-                        help='reopen every ZIM, even if its size is unchanged')
+                        help='reopen every ZIM, even if its size and mtime '
+                             'are unchanged')
     parser.add_argument('--json', action='store_true',
                         help='print the book dict as JSON; do not write a library')
     parser.add_argument('--verbose', '-v', action='store_true')

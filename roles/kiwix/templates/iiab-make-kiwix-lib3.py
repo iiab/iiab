@@ -5,9 +5,9 @@
    Rebuild the IIAB ZIM catalog and the kiwix-serve library file.
 
    The ZIM directory is the source of truth.  Metadata is cached in
-   catalog.sqlite; only new or resized ZIMs are reopened.  Invalid ZIMs are
+   catalog.sqlite; only new or modified ZIMs are reopened.  Invalid ZIMs are
    skipped with a warning.  The library file is written atomically in the
-   format supported by the installed kiwix-serve (OPDS for libkiwix 14.3+,
+   format supported by the installed kiwix-serve (OPDS for libkiwix 15+,
    classic XML for older releases).
 
    Author: Tim Moody <tim(at)timmoody(dot)com>
@@ -39,7 +39,8 @@ def main():
         level=logging.INFO if args.verbose else logging.WARNING,
         format='%(levelname)s: %(message)s')
 
-    # Fail loudly rather than silently producing an empty catalog.
+    # Fail loudly when the dependency that reads ZIM metadata is missing,
+    # rather than silently producing an empty catalog.
     try:
         import libzim  # noqa: F401
     except ImportError:
@@ -54,12 +55,20 @@ def main():
     if not catalog_path:
         if args.json:
             # A --json scan (used for USB devices) must not write to the device.
-            # Keep a per-device cache in /tmp so unchanged ZIMs are still skipped.
+            # Keep a per-device cache in the system temp directory so unchanged
+            # ZIMs are still skipped.
             digest = hashlib.sha1(zim_path.encode('utf-8')).hexdigest()[:12]
             catalog_path = os.path.join(
                 tempfile.gettempdir(), 'iiab-zim-catalog-%s.sqlite' % digest)
-        else:
+        elif args.device:
+            # A device scan builds a library file on the device, so it owns the
+            # cache next to that device's ZIMs (unlike --json above, which must
+            # not write to the device and so keeps a temp-dir cache).
             catalog_path = os.path.join(zim_path, zim_catalog.CATALOG_FILENAME)
+        else:
+            catalog_path = getattr(
+                iiab.CONST, 'zim_catalog_db',
+                os.path.join(zim_path, zim_catalog.CATALOG_FILENAME))
 
     if args.library:
         library_path = args.library
@@ -68,7 +77,8 @@ def main():
     else:
         library_path = getattr(
             iiab.CONST, 'kiwix_library_path',
-            os.path.join(zim_path, zim_catalog.LIBRARY_FILENAME))
+            getattr(iiab.CONST, 'kiwix_library_xml',
+                    os.path.join(zim_path, zim_catalog.LIBRARY_FILENAME)))
 
     catalog = zim_catalog.ZimCatalog(catalog_path, zim_path,
                                      verbose=args.verbose)
@@ -78,7 +88,8 @@ def main():
         except FileNotFoundError as error:
             # The ZIM directory (often an external drive) is not mounted.
             # Leave the cache and the previous library untouched.
-            print('ERROR: %s; keeping the previous library' % error)
+            print('ERROR: %s; keeping the previous library' % error,
+                  file=sys.stderr)
             return 1
 
         if args.json:
@@ -148,23 +159,28 @@ def main():
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description='Create the IIAB ZIM catalog and kiwix library file.')
+        description='Create the IIAB ZIM catalog and Kiwix library file.')
     parser.add_argument('--device',
-                        help='no trailing /. change the target device from '
-                             'internal storage to something else like /media/usb0')
+                        help='prefix for the ZIM path, e.g. /media/usb0 (no '
+                             'trailing /), to target an external device')
     parser.add_argument('--no_tmp',
                         help='deprecated no-op (the library is written atomically)',
                         action='store_true')
     parser.add_argument('-f', '--force',
-                        help='reopen every ZIM, even if its size is unchanged',
+                        help='reopen every ZIM, even if its size and mtime '
+                             'are unchanged',
                         action='store_true')
     parser.add_argument('--format', choices=('auto', 'opds', 'xml'),
                         default='auto',
                         help='library format; auto uses the installed libkiwix version')
     parser.add_argument('--catalog',
-                        help='catalog cache path (default: <zim-path>/catalog.sqlite)')
+                        help='catalog cache path (default: '
+                             '<zim-path>/catalog.sqlite, or a temp file '
+                             'with --json)')
     parser.add_argument('--library',
-                        help='library file to write (default: iiab_const.kiwix_library_path)')
+                        help='library file to write (default: '
+                             'iiab_const.kiwix_library_path, or '
+                             '<zim-path>/library.opds with --device)')
     parser.add_argument('--json',
                         help='print the installed ZIM dict as JSON and do not '
                              'write a library file (used for USB devices)',
