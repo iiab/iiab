@@ -4,10 +4,10 @@ import re, sys
 # Make sure (only) unused versions of selected pmtiles files have .old extension
 # * Only for vector, satellite, and terrain files, since those are the ones that most implementers care about.
 # * Rename .pmtiles.old files back to .pmtiles in case the implementer switches back to a previously selected version.
-#   * Do this _before_ we download so that if the download is botched the previously selected file is still usable.
+#   * Do this _before_ we download so that we don't do any extra downloading
 #   * Happens when sys.argv[1] == "selected"
 # * Rename .pmtiles files to .pmtiles.old if the implementer switches to a different version.
-#   * Do this _after_ we download so that we don't do any extra downloading
+#   * Do this _after_ we download so that if the download is botched the previously selected file is still usable.
 #   * Happens when sys.argv[1] == "unselected"
 # * Don't touch the "fallback" files in the /fallback subdirectory.
 
