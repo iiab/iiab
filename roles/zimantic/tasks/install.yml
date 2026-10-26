@@ -8,11 +8,46 @@
     cmd: "{{ zimantic_python }} -m venv {{ '--system-site-packages ' if (zimantic_system_packages_enabled | bool) else '' }}{{ zimantic_venv }}"
     creates: "{{ zimantic_venv }}/bin/python"
 
-# Without wheels, the native dependencies come from the distribution and pip
-# must not try to fetch or replace them.
+# pip's default build isolation creates a temporary environment and downloads
+# setuptools, which fails offline. Keep setuptools in the venv so the project
+# can be rebuilt from the local checkout.
+- name: Check for setuptools in the Zimantic virtual environment
+  command: "{{ zimantic_venv }}/bin/python -c 'import setuptools'"
+  register: zimantic_setuptools
+  changed_when: false
+  failed_when: false
+
+- name: Install setuptools for build-isolation-free installs
+  command:
+    cmd: "{{ zimantic_venv }}/bin/python -m pip install --disable-pip-version-check setuptools"
+  register: zimantic_setuptools_install
+  failed_when: false
+  when: zimantic_setuptools.rc != 0
+
+# The build needs setuptools, so a failed install means there is no usable
+# offline path. Surface the pip error instead of failing later inside pip's
+# build step.
+- name: Fail if setuptools is unavailable or cannot be installed
+  fail:
+    msg: >-
+      setuptools is required to build Zimantic but is missing from
+      {{ zimantic_venv }} and could not be installed. If this host is offline,
+      install setuptools while online and rerun.
+      {{ zimantic_setuptools_install.stderr | default('') }}
+  when:
+    - zimantic_setuptools.rc != 0
+    - zimantic_setuptools_install.rc != 0
+
+# When system packages provide the native dependencies, pip must not fetch or
+# replace them.
+#
+# install.yml runs only when the package must be installed or rebuilt, so force
+# a reinstall even when the version is unchanged. Dependencies are skipped for
+# an offline repair of an installed version, and resolved for a version change,
+# --upgrade, and --force-reinstall.
 - name: Install Zimantic and runtime dependencies
   command:
-    cmd: "{{ zimantic_venv }}/bin/python -m pip install --disable-pip-version-check --no-cache-dir --upgrade {{ '--no-deps ' if (zimantic_system_packages_enabled | bool) else '' }}{{ zimantic_source_dir }}"
+    cmd: "{{ zimantic_venv }}/bin/python -m pip install --disable-pip-version-check --no-cache-dir --no-build-isolation --upgrade --force-reinstall {{ '--no-deps ' if ((zimantic_system_packages_enabled | bool) or (not upgrade and not force_reinstall and (reinstall or ((zimantic_installed_version | default('')) == zimantic_version and zimantic_source_matches_version)))) else '' }}{{ zimantic_source_dir }}"
   register: zimantic_pip_install
   changed_when: "'Successfully installed' in zimantic_pip_install.stdout"
 

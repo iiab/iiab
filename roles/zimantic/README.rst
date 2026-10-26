@@ -6,13 +6,13 @@ Zimantic provides meaning-based, title-word, and native ZIM full-text search,
 plus direct article serving from local ZIM archives.
 
 This role is opt-in. It does not replace ``kiwix-serve`` by default because
-Zimantic currently needs Python 3.11-3.14, compatible native dependencies, and
-more disk space for its Python environment. ``libzim`` publishes wheels for
-specific Python versions, so choose ``zimantic_python`` only after confirming
-that the selected interpreter has a compatible wheel. On 32-bit ``armhf`` hosts,
-where no wheels are published, the role installs the native dependencies from
-Debian 13/trixie or newer instead. Existing IIAB Kiwix URLs and the Kiwix
-Android APK remain unchanged by default.
+Zimantic needs Python 3.11-3.14, compatible native dependencies, and more disk
+space for its Python environment. ``libzim`` publishes wheels only for specific
+Python versions, so select ``zimantic_python`` only after confirming that a
+compatible wheel exists. On 32-bit ``armhf`` hosts, where no wheels are
+published, the role installs the native dependencies from Debian 13/trixie or
+newer instead. Existing IIAB Kiwix URLs and the Kiwix Android APK remain
+unchanged by default.
 
 Configuration
 -------------
@@ -28,14 +28,14 @@ Fast mode
     zimantic_enabled: True
     zimantic_mode: fast
 
-Fast mode uses about 66 MiB RSS with one small ZIM. It uses ZIM-native
-full-text search and title-word search when a fast index has been built.
-Zimantic opens every archive below ``zimantic_zim_dir``; RSS therefore grows
-with the number and size of ZIMs. A test with 761 archives used about 646 MiB
-RSS, so a Pi Zero 2 W should use a small selected ZIM directory rather than the
-complete IIAB library. The server is available at ``http://box/zimantic``
-through NGINX. The service also listens on ``http://box:8090/`` for
-troubleshooting and direct access.
+Fast mode uses about 66 MiB RSS with one small ZIM. It provides ZIM-native
+full-text search and title-word search once a fast index has been built.
+Zimantic opens every archive under ``zimantic_zim_dir``, so RSS grows with the
+number and size of ZIMs. A test with 761 archives used about 646 MiB RSS; on a
+Pi Zero 2 W, point ``zimantic_zim_dir`` at a small set of ZIMs rather than the
+full IIAB library. The server is available at ``http://box/zimantic`` through
+NGINX. It also listens on ``http://box:8090/`` for troubleshooting and direct
+access.
 
 Semantic mode
 ~~~~~~~~~~~~~
@@ -47,13 +47,13 @@ embedding model when it is missing. Set::
     zimantic_enabled: True
     zimantic_mode: semantic
 
-The semantic server benchmark with ``multilingual-e5-small`` is approximately
-323 MiB RSS; ``e5-small-v2`` uses less. 64-bit ``aarch64`` and ``x86_64`` hosts
-use the PyPI wheels. 32-bit ``armhf``/``armv7`` hosts have no wheels, so by
-default the role installs ``python3-onnxruntime``, ``python3-faiss``,
-``python3-libzim``, ``python3-sentencepiece`` and the other native dependencies
-as distribution packages, then creates the virtual environment with
-``--system-site-packages``. This requires Debian 13/trixie or newer.
+The semantic server uses about 323 MiB RSS with ``multilingual-e5-small``;
+``e5-small-v2`` uses less. 64-bit ``aarch64`` and ``x86_64`` hosts use the PyPI
+wheels. 32-bit ``armhf``/``armv7`` hosts have no wheels, so by default the role
+installs ``python3-onnxruntime``, ``python3-faiss``, ``python3-libzim``,
+``python3-sentencepiece``, and the other native dependencies as distribution
+packages, then creates the virtual environment with ``--system-site-packages``.
+This requires Debian 13/trixie or newer.
 
 Embedding model
 ~~~~~~~~~~~~~~~
@@ -66,20 +66,19 @@ Embedding model
 - ``e5-small-v2`` is about 34 MiB, English only, and saves roughly 125 MiB of
   resident memory.
 
-Indexes are specific to the model that built them, so rebuild every index after
+Indexes are specific to the model that built them, so rebuild them after
 changing ``zimantic_embedding_model`` (``zimantic build --force``).
 
 Native dependencies
 ~~~~~~~~~~~~~~~~~~~
 
-``zimantic_use_system_packages`` controls where the native dependencies come
-from:
+``zimantic_use_system_packages`` controls where native dependencies come from:
 
 - ``auto`` (default) uses PyPI wheels on 64-bit hosts and distribution
   packages on ``armhf``/``armv7``.
 - ``always`` uses distribution packages on every architecture and therefore
   requires Debian 13/trixie or newer.
-- ``never`` always uses PyPI wheels; this fails on ``armhf``/``armv7`` because
+- ``never`` always uses PyPI wheels. This fails on ``armhf``/``armv7`` because
   no wheels are published.
 
 Indexes
@@ -90,59 +89,71 @@ during a maintenance window::
 
     cd /library/zimantic && sudo -u zimantic /opt/iiab/zimantic/.venv/bin/zimantic build --fast
 
-A full semantic index build is intentionally not run by this role because it
-can be expensive on small devices. Build semantic indexes on a faster
-compatible machine and copy the resulting files into
-``/library/zimantic/indexes`` before reloading the service. Set
-``zimantic_zim_dir`` to a directory containing only the archives you want
-Zimantic to search when memory is constrained; the default points at IIAB's
-complete ``/library/zims/content`` directory.
+A full semantic index build can be expensive on small devices, so the role does
+not attempt it. Build semantic indexes on a faster compatible machine, copy the
+files into ``/library/zimantic/indexes``, and restart the service. When memory
+is limited, set ``zimantic_zim_dir`` to a directory containing only the archives
+you want searched; the default is IIAB's complete ``/library/zims/content``.
 
 Upgrading
 ---------
 
 ``./runrole zimantic`` is the normal command. It checks out
 ``zimantic_version``, reinstalls the Python package when the checkout changes,
-re-templates the configuration and systemd unit, and restarts only when
-something changed. After pulling a newer IIAB revision, run::
+re-templates the configuration and systemd unit, and restarts the service only
+when something changed. After pulling a newer IIAB revision, run::
 
     cd /opt/iiab/iiab
     git pull
     sudo ./runrole zimantic
 
-The other verbs are::
+A normal run that only repairs an already-installed version (a missing
+executable or a reset checkout) leaves dependencies alone, so it can run
+offline. Changing ``zimantic_version`` re-resolves dependencies and normally
+needs network access.
 
-    sudo ./runrole --upgrade zimantic          # force the upgrade/install path
-    sudo ./runrole --reinstall zimantic        # reinstall the program
-    sudo ./runrole --force-reinstall zimantic  # reset settings, indexes, and model
+Start with the normal apply. If that is not enough, escalate from least to most
+work::
+
+    sudo ./runrole --reinstall zimantic        # rebuild the program only
+    sudo ./runrole --upgrade zimantic          # rebuild the program and dependencies
+    sudo ./runrole --force-reinstall zimantic  # also reset source, settings, indexes, and model
     sudo ./runrole --status zimantic           # show installed/desired state
 
-``--reinstall`` recreates ``zimantic_venv`` and re-runs the Python package
-install, keeping data, indexes, and settings.
+``--reinstall`` rebuilds only the Python package from the local checkout. It
+keeps the virtual environment, dependencies, data, indexes, and settings, and
+can run offline when the checkout already matches ``zimantic_version``.
+
+``--upgrade`` rebuilds the Python package and re-resolves its dependencies from
+the current checkout. Use it after changing ``zimantic_version`` or when
+dependencies need updating; it normally requires network access.
 
 ``--force-reinstall`` also deletes ``zimantic_source_dir`` and
-``zimantic_data_dir`` (indexes, model, ``config.toml``) so the role rebuilds
-everything from scratch. In ``semantic`` mode this downloads the model again,
-so it needs network access. Both commands require an existing ``zimantic``
-entry in ``/etc/iiab/iiab_state.yml`` and ask for ``yes`` unless ``-y`` is
-given.
+``zimantic_data_dir`` (indexes, model, and ``config.toml``), so the role
+rebuilds everything from scratch. In ``semantic`` mode it downloads the model
+again, so it also requires network access.
 
-The source directory under ``zimantic_source_dir`` is disposable: the role
-discards local tracked changes there when checking out the requested version.
-Runtime data, indexes, and models live under ``zimantic_data_dir``. Changing
+``--reinstall`` and ``--force-reinstall`` require an existing ``zimantic`` entry
+in ``/etc/iiab/iiab_state.yml``. ``--force-reinstall`` asks for ``yes`` unless
+``-y`` is given; ``--reinstall`` does not prompt.
+
+The source checkout under ``zimantic_source_dir`` is disposable: the role
+discards local tracked changes when checking out the requested version. Runtime
+data, indexes, and models live under ``zimantic_data_dir``. Changing
 ``zimantic_mode`` rewrites the configuration and systemd unit and restarts the
-service. Switching to ``semantic`` downloads the model if it is missing; a
-``fast`` index is upgraded in place when a semantic build is run.
+service. Switching to ``semantic`` downloads the model if it is missing, and a
+semantic build upgrades a ``fast`` index in place.
 
-The same erase can be done manually, then rerun the role::
+To reset manually instead, stop the service, remove both directories, and rerun
+the role::
 
     sudo systemctl stop zimantic
     sudo rm -rf /library/zimantic /opt/iiab/zimantic
 
-``zimantic_version`` is a git tag, while pip reports the package version from
-Zimantic's ``pyproject.toml``. These values should match without manually
-editing the checkout; if pip reports an older version, use a corrected
-Zimantic tag or release rather than changing ``pyproject.toml`` on the device.
+``zimantic_version`` is a git tag; pip reports the package version from
+Zimantic's ``pyproject.toml``. The values should match without editing the
+checkout. If pip reports an older version, use a corrected Zimantic tag or
+release rather than editing ``pyproject.toml`` on the device.
 
 Relationship to Kiwix
 ---------------------
