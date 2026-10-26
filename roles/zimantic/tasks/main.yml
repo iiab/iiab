@@ -19,6 +19,39 @@
     fail_msg: "zimantic_mode must be either 'fast' or 'semantic'"
     quiet: yes
 
+- name: Assert that "zimantic_file_types" is a non-empty list of patterns
+  assert:
+    that:
+      - zimantic_file_types | type_debug == 'list'
+      - zimantic_file_types | length > 0
+      - zimantic_file_types | reject('string') | list | length == 0
+    fail_msg: "zimantic_file_types must be a non-empty list of file types or glob patterns, for example [zim, text, ebook]"
+    quiet: yes
+
+- name: Assert that "zimantic_file_helpers" is supported
+  assert:
+    that: zimantic_file_helpers in ['auto', 'always', 'never']
+    fail_msg: "zimantic_file_helpers must be 'auto', 'always', or 'never'"
+    quiet: yes
+
+- name: Assert that ordinary-file extraction settings are valid
+  assert:
+    that:
+      - zimantic_file_timeout | float > 0
+      - zimantic_max_file_text_chars | int > 0
+      - zimantic_archive_depth | int >= 0
+      - zimantic_max_archive_members | int > 0
+      - zimantic_max_archive_bytes | int > 0
+      - zimantic_max_ocr_pages | int >= 0
+      - zimantic_ocr | type_debug == 'bool'
+      - zimantic_ocr_languages | type_debug == 'string'
+      - zimantic_ocr_languages | length > 0
+      - zimantic_asr | type_debug == 'bool'
+      - zimantic_asr_model | type_debug == 'string'
+      - zimantic_asr_model | length > 0
+    fail_msg: "Check the zimantic_file_* extraction limits and the OCR/ASR settings in local_vars.yml"
+    quiet: yes
+
 - block:
 
     - name: Fail on unsupported PRoot/Android environment
@@ -94,6 +127,51 @@
       when:
         - zimantic_system_packages_enabled | bool
         - zimantic_system_package_status.results | default([]) |
+          rejectattr('stdout', 'equalto', 'installed') | list | length > 0
+
+    - name: Determine whether Zimantic indexes ordinary files
+      set_fact:
+        zimantic_indexes_ordinary_files: >-
+          {{ zimantic_file_types | map('string') | map('lower') |
+             select('ne', 'zim') | select('ne', '.zim') |
+             select('ne', '*.zim') | list | length > 0 }}
+
+    - name: Determine whether to install optional file extraction packages
+      set_fact:
+        zimantic_install_file_helpers: >-
+          {{ zimantic_file_helpers == 'always' or
+             (zimantic_file_helpers == 'auto' and
+              (zimantic_indexes_ordinary_files | bool or
+               zimantic_ocr | bool)) }}
+
+    - name: Select optional file extraction packages
+      set_fact:
+        zimantic_selected_file_helper_packages: >-
+          {{ ((zimantic_file_helper_packages if zimantic_install_file_helpers | bool else []) +
+              (zimantic_ocr_packages
+               if (zimantic_install_file_helpers | bool and zimantic_ocr | bool)
+               else [])) | unique | list }}
+
+    # As with the native dependencies, check first so that an offline rerun does
+    # not cause APT to update its package lists when every helper is already
+    # installed.
+    - name: Check which optional file extraction packages are missing
+      command: "dpkg-query -W -f='${db:Status-Status}' {{ item }}"
+      register: zimantic_file_helper_status
+      changed_when: false
+      failed_when: false
+      loop: "{{ zimantic_selected_file_helper_packages }}"
+      when: zimantic_selected_file_helper_packages | length > 0
+
+    - name: Install optional file extraction packages
+      apt:
+        name: "{{ zimantic_selected_file_helper_packages }}"
+        state: present
+        update_cache: yes
+        cache_valid_time: 3600
+      when:
+        - zimantic_selected_file_helper_packages | length > 0
+        - zimantic_file_helper_status.results | default([]) |
           rejectattr('stdout', 'equalto', 'installed') | list | length > 0
 
     - name: Prepare an existing Zimantic install for reinstall
@@ -300,7 +378,7 @@
         - option: name
           value: Zimantic
         - option: description
-          value: '"Meaning-based and full-text search for local Kiwix ZIM files."'
+          value: '"Meaning-based and full-text search for local Kiwix ZIM files and documents."'
         - option: zimantic_install
           value: "{{ zimantic_install }}"
         - option: zimantic_enabled
@@ -323,6 +401,16 @@
           value: "{{ zimantic_zim_dir }}"
         - option: zimantic_index_dir
           value: "{{ zimantic_index_dir }}"
+        - option: zimantic_file_types
+          value: "{{ zimantic_file_types | join(',') }}"
+        - option: zimantic_file_helpers
+          value: "{{ zimantic_file_helpers }}"
+        - option: zimantic_ocr
+          value: "{{ zimantic_ocr }}"
+        - option: zimantic_asr
+          value: "{{ zimantic_asr }}"
+        - option: zimantic_archive_depth
+          value: "{{ zimantic_archive_depth }}"
 
   rescue:
 

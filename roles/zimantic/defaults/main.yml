@@ -9,6 +9,59 @@ zimantic_port: 8090
 zimantic_url_without_slash: /zimantic
 zimantic_url: "{{ zimantic_url_without_slash }}/"
 
+# File types that "zimantic build" indexes when it scans a folder. By default,
+# only ZIMs are indexed. Add extensions or named profiles to make ordinary
+# files searchable alongside the ZIMs:
+#
+#   zimantic_file_types: [zim, text, ebook]     # text, Markdown, PDF, EPUB, ...
+#   zimantic_file_types: [zim, docs, media]     # Office, subtitles, video, ...
+#   zimantic_file_types: [zim, all]             # every supported file type
+#   zimantic_file_types: [zim, all+unknown]     # every file; sniff its contents
+#
+# Named profiles are text, ebook, docs, office, media, video, audio, image,
+# comic, archive, all, and all+unknown. Extensions may be written as "epub",
+# ".epub" or "*.epub". Explicit paths passed to "zimantic build" are always
+# indexed.
+zimantic_file_types:
+  - zim
+
+# Limits for ordinary-file extraction. They apply only when zimantic_file_types
+# includes a non-ZIM type. A per-file deadline keeps one malformed file from
+# blocking a build, while the text-length and archive limits bound memory use.
+zimantic_file_timeout: 120
+zimantic_max_file_text_chars: 2000000
+zimantic_archive_depth: 0
+zimantic_max_archive_members: 10000
+zimantic_max_archive_bytes: 268435456
+zimantic_max_ocr_pages: 50
+
+# OCR and speech recognition are opt-in because they are slow and need extra
+# tools (Tesseract and Whisper). OCR languages use Tesseract's language codes.
+zimantic_ocr: False
+zimantic_ocr_languages: eng
+zimantic_asr: False
+zimantic_asr_model: tiny
+
+# Optional command-line extractors improve ordinary-file support. "auto"
+# installs the packages below when zimantic_file_types includes non-ZIM files;
+# "always" installs them even when only ZIMs are indexed; "never" leaves
+# installation of optional tools to the administrator.
+zimantic_file_helpers: auto
+zimantic_file_helper_packages:
+  - poppler-utils     # pdftotext
+  - unrtf             # unrtf
+  - catdoc            # catdoc, catppt, xls2csv (legacy Office)
+  - ghostscript       # ps2ascii (PostScript/EPS)
+  - libchm-bin        # extract_chm
+  - unar              # RAR and other archives
+  - ffmpeg            # ffmpeg, ffprobe (embedded or sidecar subtitles)
+# OCR needs Tesseract. The base tesseract-ocr package usually includes English;
+# add Debian language packs (for example tesseract-ocr-fra) to
+# zimantic_ocr_packages for other languages. They are installed only when
+# zimantic_ocr is enabled.
+zimantic_ocr_packages:
+  - tesseract-ocr
+
 # Zimantic currently supports Python 3.11-3.14. libzim and other native
 # dependencies publish wheels only for selected Python versions and
 # architectures; by default, armhf uses distribution packages instead.
@@ -26,10 +79,10 @@ zimantic_system_packages:
   - python3-faiss
   - python3-libzim
   - python3-pymupdf
+  - python3-chardet
   - python3-fastapi
   - python3-uvicorn
   # Needed to rebuild the local project without pip's network-fetching build
-  # isolation (e.g. an offline --reinstall).
   - python3-setuptools
 # "auto" uses distribution packages only where PyPI wheels are unavailable
 # (32-bit arm); "always" uses them on every architecture; "never" always
@@ -37,7 +90,7 @@ zimantic_system_packages:
 zimantic_use_system_packages: auto
 
 zimantic_repo: https://github.com/chapmanjacobd/zimantic.git
-zimantic_version: v0.1.5
+zimantic_version: v0.1.6
 zimantic_source_dir: "{{ iiab_base }}/zimantic"
 zimantic_venv: "{{ zimantic_source_dir }}/.venv"
 zimantic_user: zimantic
