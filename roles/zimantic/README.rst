@@ -216,6 +216,7 @@ work::
     sudo ./runrole --reinstall zimantic        # rebuild the program only
     sudo ./runrole --upgrade zimantic          # rebuild the program and dependencies
     sudo ./runrole --force-reinstall zimantic  # also reset source, settings, indexes, and model
+    sudo ./runrole --uninstall zimantic        # remove the service, data, and settings
     sudo ./runrole --status zimantic           # show installed/desired state
 
 ``--reinstall`` rebuilds only the Python package from the local checkout. It
@@ -231,9 +232,20 @@ dependencies need updating; it normally requires network access.
 rebuilds everything from scratch. In ``semantic`` mode it downloads the model
 again, so it also requires network access.
 
-``--reinstall`` and ``--force-reinstall`` require an existing ``zimantic`` entry
-in ``/etc/iiab/iiab_state.yml``. ``--force-reinstall`` asks for ``yes`` unless
-``-y`` is given; ``--reinstall`` does not prompt.
+``--uninstall`` stops and disables the service, removes its systemd unit and
+NGINX shortcut, deletes ``zimantic_source_dir`` and ``zimantic_data_dir``, and
+removes the ``zimantic`` user. Set ``zimantic_install: False`` (and
+``zimantic_enabled: False``) in ``local_vars.yml`` to keep it uninstalled.
+
+``--reinstall``, ``--force-reinstall``, and ``--uninstall`` require an existing
+``zimantic`` entry in ``/etc/iiab/iiab_state.yml``. ``--force-reinstall`` and
+``--uninstall`` ask for ``yes`` unless ``-y`` is given; ``--reinstall`` does not
+prompt.
+
+The role declares these extended operations in
+``roles/zimantic/meta/runrole.yml``. ``./runrole`` refuses ``--uninstall``,
+``--upgrade``, or ``--force-reinstall`` for roles that do not declare them, so
+the flags fail before an unsupported role can change anything.
 
 The source checkout under ``zimantic_source_dir`` is disposable: the role
 discards local tracked changes when checking out the requested version. Runtime
