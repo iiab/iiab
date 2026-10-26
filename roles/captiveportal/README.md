@@ -7,7 +7,7 @@ _Please Also See: http://FAQ.IIAB.IO > ["Captive Portal Administration: What tip
 * The IIAB captive portal uses a list of these OS supported web sites, and diverts these requests to the IIAB server, which in turn forwards to the IIAB home page.
 * While the portal is active -- `captiveportal_enabled: True`, a LAN interface is present, and `iiab_gateway_enabled` is not True (i.e. IIAB is not providing Internet to client devices) -- probe hostnames resolve to `198.51.100.1` by default (`captiveportal_probe_ip`), an unroutable TEST-NET-2 address reserved by RFC 5737. External LAN TCP port 80 traffic is redirected to the IIAB server, including traffic from devices such as Samsung clients that resolve probes using their own DNS; destinations within the configured LAN subnet are excluded so local HTTP services remain reachable. The role renders `capture-dnsmasq.j2` to `/etc/iiab/captiveportal-dnsmasq`, and `iiab-gen-iptables` copies it to `/etc/dnsmasq.d/capture` (and removes it again) under the same condition as the port-80 redirect, so the DNS diversion and the redirect always change together.
 * Other hostnames fall back to the IIAB LAN address while the portal is active, so URLs such as `http://a` and unrecognized OEM probes also reach the portal. Names in `/etc/hosts.dnsmasq` or DHCP leases keep their real addresses, `localhost` stays on `127.0.0.1`, and names in the configured IIAB domain (`.lan` by default) are resolved locally only. The fallback is removed with the rest of the generated dnsmasq fragment when the portal is inactive.
-* The normal IIAB NGINX server explicitly handles the configured LAN IP, any IPv4 address literal (including the host's WAN address and loopback), and local aliases (`box.lan` and `box.local`) before the portal's default server. This preserves the captive portal for unmatched probe traffic while allowing `http://<lan-ip>/`, `http://<wan-ip>/`, and mDNS clients to reach IIAB without resolving the canonical FQDN. `box.lan` is IIAB's canonical DNS name; `box.local` is also offered by mDNS/Avahi and is included in `/etc/hosts.dnsmasq` for clients that use unicast DNS.
+* The normal IIAB NGINX server explicitly handles the configured LAN IP, any IPv4 address literal (including the host's WAN address and loopback), and local aliases (`box.lan` and `box.local`) before the portal's default server. This preserves the captive portal for unmatched probe traffic while allowing `http://<lan-ip>/`, `http://<wan-ip>/`, and mDNS clients to reach IIAB without resolving the canonical FQDN. `box.lan` is IIAB's canonical DNS name; `box.local` is offered by mDNS/Avahi, and the portal's dnsmasq catch-all also resolves it while the portal is active.
 
 ## Components of the IIAB Captive Portal
 
@@ -73,7 +73,7 @@ manual IIAB addresses -- `http://box.lan` and `http://box.local` -- as large
 text that can be tapped to copy. While the portal is active, both resolve to
 the IIAB server (see `capture-dnsmasq.j2`). This helps clients that cannot
 resolve the FQDN through mDNS (`box.local` is also advertised by mDNS/Avahi
-when the client supports it). The shared splash refreshes after five seconds
+when the client supports it). The shared splash refreshes after ten seconds
 for desktop clients so the Captive Portal backend can return the final `302`
 to the IIAB homepage. Desktop Apple clients may close the window; mobile
 clients may close the page. After a short display grace period, every client
