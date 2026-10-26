@@ -172,6 +172,27 @@ file with the same name do not collide. File indexes record the absolute source
 path and size, so if you replace or move a source file, rebuild its index
 (``zimantic build --force <path>``).
 
+Memory and restart limits
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The systemd unit puts Zimantic in its own cgroup. ``zimantic_memory_high``
+(default ``70%``) makes the kernel reclaim and throttle under pressure, and
+``zimantic_memory_max`` (default ``80%``) is the hard limit: exceeding it
+OOM-kills Zimantic inside its cgroup instead of letting the whole device run
+out of memory. ``zimantic_oom_score_adjust`` (default ``200``) only makes
+Zimantic a preferred victim during a system-wide OOM; by itself it does not cap
+memory. On a 512 MB host, 80% leaves roughly 100 MB for the kernel, NGINX,
+Kiwix and SSH, so lower both percentages or point ``zimantic_zim_dir`` at a
+smaller set of archives if other services are starved.
+
+If Zimantic is OOM-killed, systemd retries after ``zimantic_restart_sec``
+(default 10 seconds). After ``zimantic_start_limit_burst`` starts in
+``zimantic_start_limit_interval`` (default three in ten minutes), it leaves the
+unit failed instead of restarting into another OOM. Check ``systemctl status
+zimantic`` and ``journalctl -u zimantic``; after fixing the cause,
+``systemctl reset-failed zimantic`` clears the rate limit so the service can be
+started again before the interval expires.
+
 Upgrading
 ---------
 
