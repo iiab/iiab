@@ -65,3 +65,46 @@ jobs:
         working-directory: /opt/iiab/iiab
       - run: iiab-summary
       - run: /opt/iiab/iiab/scripts/iiab-state diff /opt/iiab/iiab/.github/workflows/tests/expected_state_unittest.yml /etc/iiab/iiab_state.yml    # Final validation
+
+      # The base unittest install above is validated first. Roles changed by a
+      # pull request are then run on top of it, so their install/configure code
+      # is exercised even when the role is disabled in local_vars_unittest.yml.
+      - name: Find roles modified by this pull request
+        id: changed-roles
+        if: github.event_name == 'pull_request'
+        working-directory: /opt/iiab/iiab
+        run: |
+          set -euo pipefail
+          # Compare against the pull request's base (master...HEAD) using the
+          # base commit from the event, which fetch-depth: 0 guarantees is here.
+          base="${{ github.event.pull_request.base.sha }}"
+          mapfile -t changed < <(
+            git diff --name-only --no-renames "$base...HEAD" -- roles |
+              awk -F/ 'NF > 2 { print $2 }' |
+              sort -u |
+              while IFS= read -r role; do
+                # Stage roles (0-init, 1-prep, ...) already ran in iiab-install.
+                case "$role" in [0-9]*) continue ;; esac
+                # Ignore roles deleted by the pull request.
+                [ -d "roles/$role" ] || continue
+                echo "$role"
+              done
+          )
+          roles="${changed[*]}"
+          echo "roles=$roles" >> "$GITHUB_OUTPUT"
+          if [ -n "$roles" ]; then
+            echo "Roles modified by this pull request: $roles"
+          else
+            echo "No roles were modified by this pull request."
+          fi
+
+      - name: Run roles modified by this pull request
+        if: github.event_name == 'pull_request' && steps.changed-roles.outputs.roles != ''
+        working-directory: /opt/iiab/iiab
+        env:
+          CHANGED_ROLES: ${{ steps.changed-roles.outputs.roles }}
+        run: |
+          set -euo pipefail
+          read -r -a roles <<< "$CHANGED_ROLES"
+          # Install optional roles and reconfigure existing ones.
+          sudo ./runroles --add "${roles[@]}"
