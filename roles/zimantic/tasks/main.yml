@@ -75,13 +75,26 @@
         - zimantic_python_check.rc != 0 or
           ((zimantic_python_check.stdout ~ zimantic_python_check.stderr) is not search('Python 3\\.(1[1-4])\\.'))
 
+    # Checking first keeps offline reruns from touching the network: apt would
+    # otherwise run 'apt-get update' on every run, even when nothing is missing.
+    - name: Check which Zimantic system packages are missing
+      command: "dpkg-query -W -f='${db:Status-Status}' {{ item }}"
+      register: zimantic_system_package_status
+      changed_when: false
+      failed_when: false
+      loop: "{{ zimantic_system_packages }}"
+      when: zimantic_system_packages_enabled | bool
+
     - name: Install native dependencies from the distribution
       apt:
         name: "{{ zimantic_system_packages }}"
         state: present
         update_cache: yes
         cache_valid_time: 3600
-      when: zimantic_system_packages_enabled | bool
+      when:
+        - zimantic_system_packages_enabled | bool
+        - zimantic_system_package_status.results | default([]) |
+          rejectattr('stdout', 'equalto', 'installed') | list | length > 0
 
     - name: Check whether zimantic.service is installed
       stat:
@@ -152,13 +165,36 @@
           owner: root
           group: root
 
+    # 'git: update: yes' fetches from the remote even when the requested
+    # version is already checked out, which fails on an offline rerun.
+    - name: Check the current Zimantic source revision
+      command: "git -C {{ zimantic_source_dir }} rev-parse HEAD"
+      register: zimantic_source_head
+      changed_when: false
+      failed_when: false
+      when: (zimantic_source_dir ~ '/.git') is exists
+
+    - name: Check the current Zimantic source tag
+      command: "git -C {{ zimantic_source_dir }} describe --tags --exact-match"
+      register: zimantic_source_tag
+      changed_when: false
+      failed_when: false
+      when: (zimantic_source_dir ~ '/.git') is exists
+
+    - name: Determine whether the Zimantic source already matches {{ zimantic_version }}
+      set_fact:
+        zimantic_source_matches_version: >-
+          {{ (zimantic_source_tag.stdout | default('')) == zimantic_version or
+             ((zimantic_version | string) is search('^[0-9a-f]{7,40}$') and
+              (zimantic_source_head.stdout | default('')).startswith(zimantic_version | string)) }}
+
     - name: Check out Zimantic {{ zimantic_version }}
       git:
         repo: "{{ zimantic_repo }}"
         dest: "{{ zimantic_source_dir }}"
         version: "{{ zimantic_version }}"
         depth: 1
-        update: yes
+        update: "{{ not (zimantic_source_matches_version | bool) }}"
         force: yes
       register: zimantic_source_update
 
