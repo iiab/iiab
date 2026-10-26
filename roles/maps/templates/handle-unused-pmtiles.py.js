@@ -1,0 +1,80 @@
+from pathlib import Path
+import re, sys
+
+# Make sure (only) unused versions of selected pmtiles files have .old extension
+# * Only for vector, satellite, and terrain files, since those are the ones that most implementers care about.
+# * Rename .pmtiles.old files back to .pmtiles in case the implementer switches back to a previously selected version.
+#   * Do this _after_ we download so that if the download is botched the previously selected file is still usable.
+#   * Happens when sys.argv[1] == "selected"
+# * Rename .pmtiles files to .pmtiles.old if the implementer switches to a different version.
+#   * Do this _before_ we download so that we don't do any extra downloading
+#   * Happens when sys.argv[1] == "unselected"
+# * Don't touch the "fallback" files in the /fallback subdirectory.
+
+DATA_KEYS = [
+  "terrarium",
+  "openstreetmap-openmaptiles",
+  "naturalearth-openmaptiles",
+  "s2maps-sentinel2-2023",
+  'iiab-sentinel2',
+]
+
+# log = open("/tmp/old-rename.log", "a")
+def debug(*ss):
+    return
+    log.write(" ".join(str(s) for s in ss))
+    log.write("\n\n")
+    log.flush()
+
+def old(path):
+    return path.parent / (path.name + ".old")
+
+def rename(from_path, to_path):
+    debug("rename", from_path, to_path)
+    if from_path.exists() and to_path.exists():
+        debug("oops both exist", from_path, to_path)
+        raise Exception(f"Found both '{from_path}' and '{to_path}'. Please delete one of them.")
+    from_path.rename(to_path)
+
+maps_serve_path = Path("{{ maps_serve_path }}")
+
+selected_pmtiles = [
+  Path(maps_serve_path) / url.split("/")[-1]
+  for url
+  in [
+    "{{ maps_catalog.data['satellite'][maps_satellite_zoom | string] | default('') }}",
+    "{{ maps_catalog.data['vector'][maps_vector_zoom | string] | default('') }}",
+    "{{ maps_catalog.data['terrain'][maps_terrain_zoom | string] | default('') }}",
+  ]
+  if url
+]
+debug("selected_pmtiles", selected_pmtiles)
+
+if sys.argv[1] == "selected":
+    for selected_item in selected_pmtiles:
+        debug("selected_item", selected_item)
+        if old(selected_item).exists():
+            debug("rename selected_item")
+            rename(old(selected_item), selected_item)
+
+if sys.argv[1] == "unselected":
+    for pmtiles_file in maps_serve_path.glob("*.pmtiles"):
+        debug(pmtiles_file, "found")
+        if pmtiles_file in selected_pmtiles:
+            continue
+        debug(pmtiles_file, "not selected_pmtiles")
+        match (pmtiles_file.name.split('.')):
+            case [data_key, date, zoom_range, "pmtiles"]:
+                debug(data_key, date, zoom_range, "split")
+                if data_key not in DATA_KEYS:
+                    continue
+                debug(data_key, date, zoom_range, "in DATA_KEYS")
+                if not re.fullmatch(r'\d{4}-\d{2}-\d{2}', date, re.ASCII):
+                    continue
+                debug(data_key, date, zoom_range, "date valid")
+                if not re.fullmatch(r'z\d{2}-z\d{2}', zoom_range, re.ASCII):
+                    continue
+                debug(data_key, date, zoom_range, "zoom_range valid")
+                rename(pmtiles_file, old(pmtiles_file))
+            case not_matched:
+                debug("not_matched", not_matched)
