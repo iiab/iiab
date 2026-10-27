@@ -36,3 +36,62 @@
     path: "{{ zimantic_data_dir }}"
     state: absent
   when: force_reinstall
+
+# 'git: update: yes' fetches from the remote even when the requested
+# version is already checked out, which fails on an offline rerun.
+- name: Check the current Zimantic source revision
+  command: "git -C {{ zimantic_source_dir }} rev-parse HEAD"
+  register: zimantic_source_head
+  changed_when: false
+  failed_when: false
+  when: (zimantic_source_dir ~ '/.git') is exists
+
+- name: Check the current Zimantic source tag
+  command: "git -C {{ zimantic_source_dir }} describe --tags --exact-match"
+  register: zimantic_source_tag
+  changed_when: false
+  failed_when: false
+  when: (zimantic_source_dir ~ '/.git') is exists
+
+- name: Check the current Zimantic source remote
+  command: "git -C {{ zimantic_source_dir }} remote get-url origin"
+  register: zimantic_source_remote
+  changed_when: false
+  failed_when: false
+  when: (zimantic_source_dir ~ '/.git') is exists
+
+# 'git: update: no' returns before resetting anything, so use this check to
+# keep the checkout clean without fetching from the remote.
+- name: Check for local modifications in the Zimantic source
+  command: "git -C {{ zimantic_source_dir }} diff-index --quiet HEAD --"
+  register: zimantic_source_local_mods
+  changed_when: false
+  failed_when: false
+  when: (zimantic_source_dir ~ '/.git') is exists
+
+- name: Determine whether the Zimantic source already matches {{ zimantic_version }}
+  set_fact:
+    zimantic_source_matches_version: >-
+      {{ (((zimantic_source_tag.stdout | default('')) == zimantic_version) or
+          (((zimantic_version | string) is search('^[0-9a-f]{7,40}$')) and
+           (zimantic_source_head.stdout | default('')).startswith(zimantic_version | string))) and
+          ((zimantic_source_remote.stdout | default('')) == zimantic_repo) }}
+
+# The source directory is documented as disposable: discard local tracked
+# changes even when the version already matches.
+- name: Discard local changes in the matching Zimantic source
+  command: "git -C {{ zimantic_source_dir }} reset --hard HEAD"
+  register: zimantic_source_reset
+  when:
+    - zimantic_source_matches_version | bool
+    - zimantic_source_local_mods.rc != 0
+
+- name: Check out Zimantic {{ zimantic_version }}
+  git:
+    repo: "{{ zimantic_repo }}"
+    dest: "{{ zimantic_source_dir }}"
+    version: "{{ zimantic_version }}"
+    depth: 1
+    update: "{{ not (zimantic_source_matches_version | bool) }}"
+    force: yes
+  register: zimantic_source_update
