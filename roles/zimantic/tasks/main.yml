@@ -88,23 +88,6 @@
         fail_msg: "zimantic_embedding_model must be 'auto', 'multilingual-e5-small', or 'e5-small-v2'"
         quiet: yes
 
-    - name: Determine which embedding model to use
-      set_fact:
-        zimantic_embedding_model_selected: >-
-          {{ 'e5-small-v2' if (zimantic_embedding_model == 'auto' and
-                               (ansible_facts.memtotal_mb | default(2048) | int) <= 1024)
-             else (zimantic_embedding_model if zimantic_embedding_model != 'auto'
-                   else 'multilingual-e5-small') }}
-
-    - name: Select embedding model files
-      set_fact:
-        zimantic_selected_model_url: "{{ zimantic_english_model_url if zimantic_embedding_model_selected == 'e5-small-v2' else zimantic_multilingual_model_url }}"
-        zimantic_selected_model_checksum: "{{ zimantic_english_model_checksum if zimantic_embedding_model_selected == 'e5-small-v2' else zimantic_multilingual_model_checksum }}"
-        zimantic_selected_tokenizer_file: "{{ zimantic_english_tokenizer_file if zimantic_embedding_model_selected == 'e5-small-v2' else zimantic_multilingual_tokenizer_file }}"
-        zimantic_selected_tokenizer_url: "{{ zimantic_english_tokenizer_url if zimantic_embedding_model_selected == 'e5-small-v2' else zimantic_multilingual_tokenizer_url }}"
-        zimantic_selected_tokenizer_checksum: "{{ zimantic_english_tokenizer_checksum if zimantic_embedding_model_selected == 'e5-small-v2' else zimantic_multilingual_tokenizer_checksum }}"
-        zimantic_unused_tokenizer_file: "{{ zimantic_multilingual_tokenizer_file if zimantic_embedding_model_selected == 'e5-small-v2' else zimantic_english_tokenizer_file }}"
-
     - name: Check for a supported Python version
       command: "{{ zimantic_python }} --version"
       register: zimantic_python_check
@@ -118,8 +101,8 @@
         - zimantic_python_check.rc != 0 or
           ((zimantic_python_check.stdout ~ zimantic_python_check.stderr) is not search('Python 3\\.(1[1-4])\\.'))
 
-    # Reinstall clears the installed-state marker, so prepare the checkout
-    # before deciding whether the installation tasks must run.
+    # reinstall.yml stops the service and removes the source or data that
+    # --force-reinstall resets; install.yml and configure.yml rebuild them.
     - name: Prepare an existing Zimantic install for reinstall
       include_tasks: reinstall.yml
       when: reinstall or force_reinstall
@@ -130,13 +113,15 @@
           {{ (not (zimantic_installed | default(false) | bool)) or
              ((zimantic_installed_version | default('')) != zimantic_version) or
              reinstall or
-             upgrade or
-             zimantic_source_update.changed is defined or
-             zimantic_source_reset.changed is defined }}
+             force_reinstall or
+             upgrade }}
 
     - name: Install or upgrade Zimantic
       include_tasks: install.yml
       when: zimantic_needs_install
+
+    - name: Apply Zimantic packages, configuration, and model files
+      include_tasks: configure.yml
 
     - include_tasks: enable-or-disable.yml
 
