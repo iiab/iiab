@@ -19,29 +19,11 @@ Configuration
 
 Set these variables in ``/etc/iiab/local_vars.yml`` and run the role.
 
-Fast mode
-~~~~~~~~~
-
-``fast`` is the default and needs no embedding model. Set::
-
-    zimantic_install: True
-    zimantic_enabled: True
-    zimantic_mode: fast
-
-Fast mode uses about 66 MiB RSS with one small ZIM. It provides ZIM-native
-full-text search and title-word search once a fast index has been built.
-Zimantic opens every archive under ``zimantic_zim_dir``, so RSS grows with the
-number and size of ZIMs. A test with 761 archives used about 646 MiB RSS; on a
-Pi Zero 2 W, point ``zimantic_zim_dir`` at a small set of ZIMs rather than the
-full IIAB library. The server is available at ``http://box/zimantic`` through
-NGINX. It also listens on ``http://box:8090/`` for troubleshooting and direct
-access from the LAN (see the firewall note under "Relationship to Kiwix").
-
 Semantic mode
 ~~~~~~~~~~~~~
 
-``semantic`` adds meaning-based search. The role downloads the selected
-embedding model when it is missing. Set::
+``semantic`` is the default and adds meaning-based search. The role downloads
+the selected embedding model when it is missing. Set::
 
     zimantic_install: True
     zimantic_enabled: True
@@ -54,6 +36,24 @@ installs ``python3-onnxruntime``, ``python3-faiss``, ``python3-libzim``,
 ``python3-sentencepiece``, and the other native dependencies as distribution
 packages, then creates the virtual environment with ``--system-site-packages``.
 This requires Debian 13/trixie or newer.
+
+Fast mode
+~~~~~~~~~
+
+``fast`` needs no embedding model and provides ZIM-native full-text search and
+title-word search. Set::
+
+    zimantic_install: True
+    zimantic_enabled: True
+    zimantic_mode: fast
+
+Fast mode uses about 66 MiB RSS with one small ZIM. Zimantic opens every
+archive under ``zimantic_zim_dir``, so RSS grows with the number and size of
+ZIMs. A test with 761 archives used about 646 MiB RSS; on a Pi Zero 2 W, point
+``zimantic_zim_dir`` at a small set of ZIMs rather than the full IIAB library.
+The server is available at ``http://box/zimantic`` through NGINX. It also
+listens on ``http://box:8090/`` for troubleshooting and direct access from the
+LAN (see the firewall note under "Relationship to Kiwix").
 
 Embedding model
 ~~~~~~~~~~~~~~~
