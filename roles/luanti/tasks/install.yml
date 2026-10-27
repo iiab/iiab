@@ -33,18 +33,31 @@
     state: directory
     path: "{{ luanti_working_dir }}/games/"
 
-- name: Download default game https://content.luanti.org/packages/Luanti/minetest_game/ (2025-03-02 VERSION FOR NOW) -- if luanti_default_game == "minetest" AND (RasPiOS >= 13 or Debian >= 13 or Ubuntu >= 24.10)
+# Download the game from upstream GitHub (pinned tag) instead of ContentDB, so
+# installs no longer depend on content.luanti.org being online -- e.g. it was
+# down for days after the October 2026 security incident:
+# https://blog.luanti.org/2026/10/27/contentdb-security-incident/
+
+- name: Download default game https://github.com/luanti-org/minetest_game (TAG 5.8.0) -- if luanti_default_game == "minetest" AND (RasPiOS >= 13 or Debian >= 13 or Ubuntu >= 24.10)
   get_curl:
-    url: https://content.luanti.org/packages/Luanti/minetest_game/releases/29922/download/
-    dest: "{{ downloads_dir }}/game.zip"
+    url: https://github.com/luanti-org/minetest_game/archive/refs/tags/5.8.0.tar.gz
+    dest: "{{ downloads_dir }}/game.tar.gz"
     timeout: "{{ download_timeout }}"
   register: luanti_game_dl
+  when: luanti_default_game == "minetest" and ((is_raspbian and os_ver is version('raspbian-13', '>=')) or (is_debian and not is_raspbian and os_ver is version('debian-13', '>=')) or (is_ubuntu and os_ver is version('ubuntu-2410', '>=')))    # Gratuitous parens for clarity
+
+- name: Create dir {{ luanti_game_dir }}    # i.e. {{ luanti_working_dir }}/games/minetest_game
+  file:
+    state: directory
+    path: "{{ luanti_game_dir }}"
   when: luanti_default_game == "minetest" and ((is_raspbian and os_ver is version('raspbian-13', '>=')) or (is_debian and not is_raspbian and os_ver is version('debian-13', '>=')) or (is_ubuntu and os_ver is version('ubuntu-2410', '>=')))    # Gratuitous parens for clarity
 
 - name: Unarchive luanti default game
   unarchive:
     src: "{{ luanti_game_dl.dest }}"
-    dest: "{{ luanti_working_dir }}/games/"
+    dest: "{{ luanti_game_dir }}"
+    extra_opts:
+      - --strip-components=1    # Drop tarball's 'minetest_game-5.8.0/' top-level dir (gameid stays 'minetest_game')
   when: luanti_default_game == "minetest" and ((is_raspbian and os_ver is version('raspbian-13', '>=')) or (is_debian and not is_raspbian and os_ver is version('debian-13', '>=')) or (is_ubuntu and os_ver is version('ubuntu-2410', '>=')))    # Gratuitous parens for clarity
   #when: luanti_default_game == "minetest" and not luanti_server_renamed.failed
 
