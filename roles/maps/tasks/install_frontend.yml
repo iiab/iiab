@@ -25,76 +25,71 @@
     symlink_name: "{{ maps_dot_black_naturalearth6_symlink_name }}"
     dest_base_path: "{{ maps_serve_path }}"
 
-# This helps avoid silent errors transitioning between variable names. It can be deleted 2026/09/04.
-- name: Error on deprecated maps_vector_quality
-  assert:
-    that: maps_vector_quality is not defined
-    msg:
-      - "'maps_vector_quality' has been renamed to 'maps_vector_zoom' with new valid values. Please update your"
-      - "/etc/iiab/local_vars.yml and see https://github.com/iiab/iiab/blob/master/roles/maps/MAPS_CATALOG_DETAILS.md for valid values."
+# Put this in a file because there's a lot of repeat code
+- name: Install handle-unused-pmtiles.py
+  template:
+    src: "handle-unused-pmtiles.py.j2"
+    dest: "{{ maps_tools.base_dir }}/handle-unused-pmtiles.py"
+    mode: "0755"
 
+- name: "Rename any selected pmtiles from .old.pmtiles to .pmtiles"
+  shell: |
+    set -euo pipefail
+    {{ maps_tools.base_dir }}/handle-unused-pmtiles.py selected
+  args:
+    executable: /bin/bash
 
 - name: Get vector from catalog
   include_tasks: download_from_catalog.yml
+  when: maps_vector_zoom != maps_fallback_vector_zoom
   vars:
     catalog_item: vector
     catalog_item_config_var: maps_vector_zoom
-    symlink_name: "{{ maps_dot_black_osm_symlink_name }}"
     dest_base_path: "{{ maps_serve_path }}"
 
 - name: Download fallback vector tiles
-  include_tasks: download_large_file.yml
-  when: maps_vector_zoom != maps_fallback_vector_zoom
+  include_tasks: download_from_catalog.yml
   vars:
-    dest_base_path: "{{ maps_serve_path }}"
-    item: "{{ maps_catalog.data.vector[maps_fallback_vector_zoom | string] }}"
+    catalog_item: vector
+    catalog_item_config_var: maps_fallback_vector_zoom
+    dest_base_path: "{{ maps_fallback_path }}"
 
 - name: Get satellite from catalog
-  when: maps_satellite_zoom != "none"
   include_tasks: download_from_catalog.yml
+  when: (maps_satellite_zoom != "none") and (maps_satellite_zoom != maps_fallback_satellite_zoom)
   vars:
     catalog_item: satellite
     catalog_item_config_var: maps_satellite_zoom
-    symlink_name: "{{ maps_dot_black_satellite_symlink_name }}"
     dest_base_path: "{{ maps_serve_path }}"
 
 - name: Download fallback satellite tiles
-  when: (maps_satellite_zoom != "none") and (maps_satellite_zoom != maps_fallback_satellite_zoom)
-  include_tasks: download_large_file.yml
+  include_tasks: download_from_catalog.yml
+  when: maps_satellite_zoom != "none"
   vars:
-    dest_base_path: "{{ maps_serve_path }}"
-    item: "{{ maps_catalog.data.satellite[maps_fallback_satellite_zoom | string] }}"
-
-- name: Remove unused satellite symlink
-  when: maps_satellite_zoom == "none"
-  file:
-    path: "{{ maps_serve_path }}/{{ maps_dot_black_satellite_symlink_name }}"
-    state: absent
+    catalog_item: satellite
+    catalog_item_config_var: maps_fallback_satellite_zoom
+    dest_base_path: "{{ maps_fallback_path }}"
 
 # Unlike with satellite, if the user selects "none" for terrain, we download a dummy file
 - name: Get terrain from catalog
   include_tasks: download_from_catalog.yml
+  when: maps_terrain_zoom != maps_fallback_terrain_zoom
   vars:
     catalog_item: terrain
     catalog_item_config_var: maps_terrain_zoom
-    symlink_name: "{{ maps_dot_black_terrain_symlink_name }}"
     dest_base_path: "{{ maps_serve_path }}"
 
 - name: Download fallback terrain tiles
-  include_tasks: download_large_file.yml
-  when: maps_terrain_zoom != maps_fallback_terrain_zoom
+  include_tasks: download_from_catalog.yml
   vars:
-    dest_base_path: "{{ maps_serve_path }}"
-    item: "{{ maps_catalog.data.terrain[maps_fallback_terrain_zoom | string] }}"
+    catalog_item: terrain
+    catalog_item_config_var: maps_fallback_terrain_zoom
+    dest_base_path: "{{ maps_fallback_path }}"
 
-# maps-update.py is used here but it can also be run independently. As we use
-# it here, we take advantage of its handling of pmtiles zoom levels. It only
-# partially handles symlink repairs for now so we still need to set symlinks
-# by other means.
-- name: "Final map configuration"
+- name: "Rename any previously selected pmtiles from .pmtiles to .old.pmtiles"
   shell: |
     set -euo pipefail
-    {{ maps_tools.base_dir }}/maps-update.py
+    {{ maps_tools.base_dir }}/handle-unused-pmtiles.py unselected
   args:
     executable: /bin/bash
 
