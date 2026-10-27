@@ -11,16 +11,32 @@
     timeout: "{{ download_timeout }}"
   when: not luanti_mod.stat.exists
 
-- name: Create dir {{ luanti_game_dir }}/mods/{{ item.name }}
+- name: Remove incomplete staging dir for {{ item.name }}
   file:
-    state: directory
-    path: "{{ luanti_game_dir }}/mods/{{ item.name }}"
+    state: absent
+    path: "{{ luanti_game_dir }}/mods/.{{ item.name }}.staging"
   when: not luanti_mod.stat.exists
 
-- name: Extract mod into {{ luanti_game_dir }}/mods/{{ item.name }}
+- name: Create staging dir for {{ item.name }}
+  file:
+    state: directory
+    path: "{{ luanti_game_dir }}/mods/.{{ item.name }}.staging"
+  when: not luanti_mod.stat.exists
+
+- name: Extract mod into staging dir for {{ item.name }}
   unarchive:
     src: "{{ downloads_dir }}/{{ item.name }}.tar.gz"
-    dest: "{{ luanti_game_dir }}/mods/{{ item.name }}"
+    dest: "{{ luanti_game_dir }}/mods/.{{ item.name }}.staging"
     extra_opts:
       - --strip-components=1    # Drop tarball's '<repo>-<commit>/' top-level dir
+  when: not luanti_mod.stat.exists
+
+- name: Install extracted mod {{ item.name }}
+  command:
+    argv:
+      - mv
+      - "{{ luanti_game_dir }}/mods/.{{ item.name }}.staging"
+      - "{{ luanti_game_dir }}/mods/{{ item.name }}"
+  args:
+    creates: "{{ luanti_game_dir }}/mods/{{ item.name }}"
   when: not luanti_mod.stat.exists
