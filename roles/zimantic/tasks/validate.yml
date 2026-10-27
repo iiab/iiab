@@ -31,10 +31,36 @@
     fail_msg: "zimantic_use_system_packages must be 'auto', 'always', or 'never'"
     quiet: yes
 
+- name: Fail if distribution packages are requested on an unsupported Debian release
+  fail:
+    msg: >-
+      zimantic_use_system_packages needs Debian 13/trixie or newer because the
+      native dependencies are not packaged in this release. Use PyPI wheels on
+      a 64-bit host (zimantic_use_system_packages: never), or upgrade to
+      Debian 13+.
+  when:
+    - zimantic_system_packages_enabled | bool
+    - (ansible_facts.distribution | default('')) == 'Debian'
+    - (ansible_facts.distribution_major_version | default('0') | int) < 13
+
 - name: Validate zimantic_embedding_model
   assert:
-    that: zimantic_embedding_model in ['auto', 'multilingual-e5-small', 'e5-small-v2']
-    fail_msg: "zimantic_embedding_model must be 'auto', 'multilingual-e5-small', or 'e5-small-v2'"
+    that: zimantic_embedding_model in ['multilingual-e5-small', 'e5-small-v2']
+    fail_msg: "zimantic_embedding_model must be 'multilingual-e5-small' or 'e5-small-v2'"
+    quiet: yes
+
+- name: Validate the selected embedding model block
+  assert:
+    that:
+      - zimantic_model_url is defined
+      - zimantic_model_checksum is defined
+      - zimantic_tokenizer_file is defined
+      - zimantic_tokenizer_url is defined
+      - zimantic_tokenizer_checksum is defined
+    fail_msg: >-
+      Uncomment one complete embedding model block in
+      roles/zimantic/defaults/main.yml, or copy it into
+      /etc/iiab/local_vars.yml
     quiet: yes
 
 - name: Check for a supported Python version

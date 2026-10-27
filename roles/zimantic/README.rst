@@ -35,7 +35,7 @@ number and size of ZIMs. A test with 761 archives used about 646 MiB RSS; on a
 Pi Zero 2 W, point ``zimantic_zim_dir`` at a small set of ZIMs rather than the
 full IIAB library. The server is available at ``http://box/zimantic`` through
 NGINX. It also listens on ``http://box:8090/`` for troubleshooting and direct
-access.
+access from the LAN (see the firewall note under "Relationship to Kiwix").
 
 Semantic mode
 ~~~~~~~~~~~~~
@@ -58,16 +58,18 @@ This requires Debian 13/trixie or newer.
 Embedding model
 ~~~~~~~~~~~~~~~
 
-``zimantic_embedding_model`` selects the model:
+Choose the model by uncommenting one block in
+``roles/zimantic/defaults/main.yml`` and commenting out the other, or copy the
+chosen block into ``/etc/iiab/local_vars.yml``:
 
-- ``auto`` (default) uses ``e5-small-v2`` on hosts with 1 GB RAM or less and
-  ``multilingual-e5-small`` otherwise.
-- ``multilingual-e5-small`` is about 123 MiB and searches 100+ languages.
+- ``multilingual-e5-small`` (default) is about 123 MiB and searches 100+
+  languages.
 - ``e5-small-v2`` is about 34 MiB, English only, and saves roughly 125 MiB of
-  resident memory.
+  resident memory. It is the better choice on hosts with 1 GB RAM or less.
 
-Indexes are specific to the model that built them, so rebuild them after
-changing ``zimantic_embedding_model`` (``zimantic build --force``).
+Each block sets ``zimantic_embedding_model``, the model URL and checksum, and
+the tokenizer file, URL, and checksum. Indexes are specific to the model that
+built them, so rebuild them after switching (``zimantic build --force``).
 
 Native dependencies
 ~~~~~~~~~~~~~~~~~~~
@@ -124,7 +126,8 @@ The role follows the shared role lifecycle described in the top-level
 
 - ``update.yml`` fetches ``zimantic_version`` and installs missing system
   packages. It runs on first install, version changes, ``--upgrade``,
-  ``--force-reinstall``, or when the checkout is missing.
+  ``--force-reinstall``, or when the checkout is missing or does not match
+  ``zimantic_version``.
 - ``install.yml`` creates the virtual environment and rebuilds the Python
   package from the local checkout. It uses ``--no-deps`` for a normal repair or
   ``--reinstall``, so those paths work offline when the checkout and virtual
@@ -154,10 +157,11 @@ when something changed. After pulling a newer IIAB revision, run::
     git pull
     sudo ./runrole zimantic
 
-A normal run that only repairs an already-installed version (a missing
-executable or a reset checkout) leaves dependencies alone, so it can run
-offline. Changing ``zimantic_version`` re-resolves dependencies and normally
-needs network access.
+A normal run that only repairs an already-installed version (for example a
+missing executable) leaves dependencies alone, so it can run offline. A
+checkout that does not match ``zimantic_version`` is fetched again, and
+changing ``zimantic_version`` re-resolves dependencies; both normally need
+network access.
 
 Start with the normal apply. If that is not enough, escalate from least to most
 work::
@@ -166,7 +170,7 @@ work::
     sudo ./runrole --upgrade zimantic          # rebuild the program and dependencies
     sudo ./runrole --force-reinstall zimantic  # also reset source, settings, indexes, and model
     sudo ./runrole --uninstall zimantic        # remove the service, data, and settings
-    sudo ./runrole --status zimantic           # show installed/desired state
+    ./runrole --status zimantic                # show installed/desired state
 
 ``--reinstall`` rebuilds only the Python package from the local checkout. It
 keeps the virtual environment, dependencies, data, indexes, and settings, and
@@ -189,7 +193,9 @@ removes the ``zimantic`` user. Set ``zimantic_install: False`` (and
 ``--reinstall``, ``--force-reinstall``, and ``--uninstall`` require an existing
 ``zimantic`` entry in ``/etc/iiab/iiab_state.yml``. ``--force-reinstall`` and
 ``--uninstall`` ask for ``yes`` unless ``-y`` is given; ``--reinstall`` does not
-prompt.
+prompt. ``--reinstall``, ``--upgrade``, and ``--force-reinstall`` also require
+``zimantic_install: True``; pass ``--add`` if you intentionally disabled it.
+``--status`` is read-only and cannot be combined with the other options.
 
 The role declares these extended operations in
 ``roles/zimantic/meta/runrole.yml``. ``./runrole`` refuses ``--uninstall``,
@@ -230,9 +236,13 @@ set::
     zimantic_enabled: True
 
 Zimantic continues to use its default port 8090 and URL
-``http://box/zimantic``. NGINX proxies the URL to the loopback service, so the
-direct port can be firewalled while the application remains available through
-the main IIAB HTTP port. When ``kiwix_enabled: False`` and
+``http://box/zimantic``. NGINX proxies the URL to the local service, so
+blocking the direct port does not affect ``http://box/zimantic``. Like other
+IIAB apps, the installer opens port 8090 on the WAN side only when
+``ports_externally_visible`` is 3 or higher; lower that setting (or block 8090
+yourself) to keep the direct port reachable only from the LAN. Port 8090 may
+collide with AzuraCast's container port range or the deprecated httpd role;
+override ``zimantic_port`` if needed. When ``kiwix_enabled: False`` and
 ``zimantic_enabled: True``, ``http://box/kiwix`` and ``/kiwix/`` also redirect
 to Zimantic. Disabling Kiwix stops and disables ``kiwix-serve``, removes its
 Nginx shortcut, and removes its scheduled restart; it does not uninstall an

@@ -84,7 +84,10 @@ jobs:
               sort -u |
               while IFS= read -r role; do
                 # Stage roles (0-init, 1-prep, ...) already ran in iiab-install.
-                case "$role" in [0-9]*) continue ;; esac
+                # Infrastructure roles (network) reconfigure the host (install
+                # packages, flush firewall rules) and are not safe to reapply
+                # on the shared runner, so they are skipped here too.
+                case "$role" in [0-9]*|network) continue ;; esac
                 # Ignore roles deleted by the pull request.
                 [ -d "roles/$role" ] || continue
                 echo "$role"
@@ -106,13 +109,31 @@ jobs:
         run: |
           set -euo pipefail
           read -r -a roles <<< "$CHANGED_ROLES"
-          # Install optional roles and reconfigure existing ones. Run each role
-          # separately: ./runroles inherits skip_role_on_error: True from
-          # default_vars.yml, which would turn rescued role failures into a
-          # successful test. ./runrole forces skip_role_on_error: False, while
-          # the loop still attempts every changed role before failing.
+
+          # Enable the changed roles persistently in local_vars.yml instead of
+          # using './runrole --add', which sets '*_install: True' for one run
+          # only. As soon as a role is installed it records '*_installed: True'
+          # in iiab_state.yml, and 0-init -- which runs before every role --
+          # rejects '*_install: False' once that marker exists. The next
+          # './runrole --add' would therefore fail validation. Appending the
+          # opt-in also keeps local_vars.yml consistent with the state file.
+          for role in "${roles[@]}"; do
+            var=$(source scripts/runrole-common.sh; role_var "$role")
+            if grep -q "^${var}_install:" /etc/iiab/local_vars.yml; then
+              sudo sed -i "s/^${var}_install:.*/${var}_install: True/" \
+                /etc/iiab/local_vars.yml
+            else
+              printf '%s_install: True\n' "$var" |
+                sudo tee -a /etc/iiab/local_vars.yml >/dev/null
+            fi
+          done
+
+          # Run each role separately: ./runroles inherits skip_role_on_error:
+          # True from default_vars.yml, which would turn rescued role failures
+          # into a successful test. ./runrole forces skip_role_on_error: False,
+          # while the loop still attempts every changed role before failing.
           status=0
           for role in "${roles[@]}"; do
-            sudo ./runrole --add "$role" || status=1
+            sudo ./runrole "$role" || status=1
           done
           exit "$status"

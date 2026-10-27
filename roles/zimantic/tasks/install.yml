@@ -4,8 +4,8 @@
 # never removes runtime data; update.yml owns network refreshes.
 #
 # A plain --reinstall and a repair of the installed version rebuild with
-# --no-deps from the local checkout. Resolving dependencies only happens after
-# update.yml, or when the checkout had to be created from scratch.
+# --no-deps from the local checkout. Dependencies are resolved from PyPI only
+# when wheels are in use and either update.yml ran or the venv is new.
 
 - name: Check for the Zimantic source checkout
   stat:
@@ -23,11 +23,7 @@
   command:
     cmd: "{{ zimantic_python }} -m venv {{ '--system-site-packages ' if (zimantic_system_packages_enabled | bool) else '' }}{{ zimantic_venv }}"
     creates: "{{ zimantic_venv }}/bin/python"
-
-- name: Check for the Zimantic virtual environment
-  stat:
-    path: "{{ zimantic_venv }}/bin/python"
-  register: zimantic_venv_python
+  register: zimantic_venv_created
 
 - name: Check for the Zimantic executable
   stat:
@@ -41,6 +37,15 @@
       {{ (not zimantic_executable.stat.exists) or
          (zimantic_needs_update | bool) or
          reinstall }}
+    # Resolve dependencies from PyPI only when wheels are in use. When
+    # distribution packages provide the native dependencies, pip must not
+    # fetch or replace them. --no-deps is also what makes a plain --reinstall
+    # and an offline repair work. A newly created venv has no packages of its
+    # own, but --system-site-packages makes the distribution packages visible.
+    zimantic_install_deps: >-
+      {{ (not zimantic_system_packages_enabled | bool) and
+         ((zimantic_resolve_dependencies | default(false) | bool) or
+          (zimantic_venv_created.changed | default(false) | bool)) }}
   block:
 
     # pip's default build isolation creates a temporary environment and
@@ -78,13 +83,9 @@
       register: zimantic_df1
       changed_when: false
 
-    # When system packages provide the native dependencies, pip must not fetch
-    # or replace them. --no-deps is also what makes a plain --reinstall and an
-    # offline repair work. A newly created virtual environment has no
-    # dependencies yet, so it must resolve them even on a reinstall.
     - name: Install Zimantic and runtime dependencies
       command:
-        cmd: "{{ zimantic_venv }}/bin/python -m pip install --disable-pip-version-check --no-cache-dir --no-build-isolation --upgrade --force-reinstall {{ '' if (zimantic_resolve_dependencies | bool or not zimantic_venv_python.stat.exists) else '--no-deps ' }}{{ zimantic_source_dir }}"
+        cmd: "{{ zimantic_venv }}/bin/python -m pip install --disable-pip-version-check --no-cache-dir --no-build-isolation --upgrade --force-reinstall {{ '' if zimantic_install_deps | bool else '--no-deps ' }}{{ zimantic_source_dir }}"
       register: zimantic_pip_install
       changed_when: "'Successfully installed' in zimantic_pip_install.stdout"
       notify: Restart Zimantic
@@ -107,7 +108,7 @@
     - name: "Set 'zimantic_installed: True' in {{ iiab_state_file }}"
       lineinfile:
         path: "{{ iiab_state_file }}"
-        regexp: '^zimantic_installed'
+        regexp: '^zimantic_installed:'
         line: 'zimantic_installed: True'
       when: iiab_state_file is file
 

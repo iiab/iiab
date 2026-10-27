@@ -8,18 +8,17 @@ zimantic_system_packages_enabled: >-
      (zimantic_use_system_packages == 'auto' and
       (ansible_facts.machine | default('')) not in ['aarch64', 'x86_64']) }}
 
-zimantic_embedding_model_selected: >-
-  {{ 'e5-small-v2' if (zimantic_embedding_model == 'auto' and
-                       (ansible_facts.memtotal_mb | default(2048) | int) <= 1024)
-     else (zimantic_embedding_model if zimantic_embedding_model != 'auto'
-           else 'multilingual-e5-small') }}
+# Zimantic chooses SentencePiece when both tokenizer files are present, which
+# is wrong for the English model. Remove whichever tokenizer the selected model
+# does not use.
+zimantic_unused_tokenizer_files: >-
+  {{ ['sentencepiece.bpe.model', 'vocab.txt']
+     | reject('equalto', zimantic_tokenizer_file) | list }}
 
-zimantic_selected_model_url: "{{ zimantic_english_model_url if zimantic_embedding_model_selected == 'e5-small-v2' else zimantic_multilingual_model_url }}"
-zimantic_selected_model_checksum: "{{ zimantic_english_model_checksum if zimantic_embedding_model_selected == 'e5-small-v2' else zimantic_multilingual_model_checksum }}"
-zimantic_selected_tokenizer_file: "{{ zimantic_english_tokenizer_file if zimantic_embedding_model_selected == 'e5-small-v2' else zimantic_multilingual_tokenizer_file }}"
-zimantic_selected_tokenizer_url: "{{ zimantic_english_tokenizer_url if zimantic_embedding_model_selected == 'e5-small-v2' else zimantic_multilingual_tokenizer_url }}"
-zimantic_selected_tokenizer_checksum: "{{ zimantic_english_tokenizer_checksum if zimantic_embedding_model_selected == 'e5-small-v2' else zimantic_multilingual_tokenizer_checksum }}"
-zimantic_unused_tokenizer_file: "{{ zimantic_multilingual_tokenizer_file if zimantic_embedding_model_selected == 'e5-small-v2' else zimantic_english_tokenizer_file }}"
+# A full 40-character (or abbreviated) commit hash may not be the tip of a
+# branch, so a depth-1 clone cannot always check it out.
+zimantic_version_is_commit: >-
+  {{ (zimantic_version | string) is search('^[0-9a-f]{7,40}$') }}
 
 # A normal apply only updates the program when the requested version is not
 # installed, an upgrade was requested, or --force-reinstall resets everything.

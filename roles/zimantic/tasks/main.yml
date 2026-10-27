@@ -31,19 +31,19 @@
       include_tasks: reinstall.yml
       when: reinstall or force_reinstall
 
-    - name: Check whether the Zimantic source checkout exists
-      stat:
-        path: "{{ zimantic_source_dir }}/.git"
-      register: zimantic_source_git
+    - name: Inspect the Zimantic source checkout
+      include_tasks: check-source.yml
 
     # update.yml fetches the requested version. It also runs when the checkout
-    # is missing, because install.yml cannot rebuild from a source tree that is
-    # not on disk.
+    # is missing or does not match zimantic_version (for example after a
+    # manual reset), because install.yml cannot rebuild the requested code
+    # from a source tree that is not on disk.
     - name: Update Zimantic packages and source
       include_tasks: update.yml
       when: >-
         zimantic_needs_update | bool or
-        not zimantic_source_git.stat.exists
+        not zimantic_source_git.stat.exists or
+        not (zimantic_source_matches_version | bool)
 
     # Dependency resolution needs network access. A plain --reinstall and an
     # offline repair of the installed version must use --no-deps instead.
@@ -52,7 +52,8 @@
       vars:
         zimantic_resolve_dependencies: >-
           {{ (zimantic_needs_update | bool) or
-             (not zimantic_source_git.stat.exists) }}
+             (not zimantic_source_git.stat.exists) or
+             (not (zimantic_source_matches_version | bool)) }}
 
     - name: Apply Zimantic configuration, assets, and service settings
       include_tasks: configure.yml

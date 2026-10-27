@@ -35,25 +35,26 @@
 # SentencePiece, which is wrong for the English model.
 - name: Remove the tokenizer left by a different embedding model
   file:
-    path: "{{ zimantic_model_dir }}/{{ zimantic_unused_tokenizer_file }}"
+    path: "{{ zimantic_model_dir }}/{{ item }}"
     state: absent
+  loop: "{{ zimantic_unused_tokenizer_files }}"
   notify: Restart Zimantic
   when: zimantic_mode == 'semantic'
 
 - name: Download Zimantic embedding model
   get_curl:
-    url: "{{ zimantic_selected_model_url }}"
+    url: "{{ zimantic_model_url }}"
     dest: "{{ zimantic_model_dir }}/model.onnx"
-    checksum: "{{ zimantic_selected_model_checksum }}"
+    checksum: "{{ zimantic_model_checksum }}"
     timeout: "{{ download_timeout }}"
   notify: Restart Zimantic
   when: zimantic_mode == 'semantic'
 
 - name: Download Zimantic tokenizer
   get_curl:
-    url: "{{ zimantic_selected_tokenizer_url }}"
-    dest: "{{ zimantic_model_dir }}/{{ zimantic_selected_tokenizer_file }}"
-    checksum: "{{ zimantic_selected_tokenizer_checksum }}"
+    url: "{{ zimantic_tokenizer_url }}"
+    dest: "{{ zimantic_model_dir }}/{{ zimantic_tokenizer_file }}"
+    checksum: "{{ zimantic_tokenizer_checksum }}"
     timeout: "{{ download_timeout }}"
   notify: Restart Zimantic
   when: zimantic_mode == 'semantic'
@@ -66,17 +67,20 @@
 
 - name: Check for the Zimantic tokenizer
   stat:
-    path: "{{ zimantic_model_dir }}/{{ zimantic_selected_tokenizer_file }}"
-  register: zimantic_tokenizer_file
+    path: "{{ zimantic_model_dir }}/{{ zimantic_tokenizer_file }}"
+  register: zimantic_tokenizer_stat
   when: zimantic_mode == 'semantic'
 
 - name: Fail if semantic mode has no embedding model
   fail:
-    msg: "Semantic mode needs model.onnx and {{ zimantic_selected_tokenizer_file }} in {{ zimantic_model_dir }}; the download failed or the files were removed"
+    msg: "Semantic mode needs model.onnx and {{ zimantic_tokenizer_file }} in {{ zimantic_model_dir }}; the download failed or the files were removed"
   when:
     - zimantic_mode == 'semantic'
+    # get_curl only reports what it would download in check mode, so the files
+    # are still absent here. Do not turn a dry run into a failure.
+    - not ansible_check_mode
     - not zimantic_model_file.stat.exists or
-      not zimantic_tokenizer_file.stat.exists
+      not zimantic_tokenizer_stat.stat.exists
 
 - name: Install Zimantic configuration
   template:
