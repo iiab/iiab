@@ -1,8 +1,16 @@
-# "How do i fail a task in Ansible if the variable contains a boolean value?
-# I want to perform input validation for Ansible playbooks"
+---
+# Entry point. This file only validates and dispatches to the lifecycle task
+# files; see "Role task lifecycle" in the top-level README.md.
+#
+#   install.yml    offline-safe build/repair from the local checkout
+#   update.yml     the only phase that fetches a new program version
+#   configure.yml  always runs; configuration, assets, and service settings
+#   reinstall.yml  local preparation for --reinstall / --force-reinstall
+#   uninstall.yml  cleanup for --uninstall
+#   state.yml      records the reported settings in iiab.ini
 
 # ./runrole --uninstall zimantic removes the role instead of applying it, so
-# skip the install-time validation and end the role once cleanup is done.
+# skip install-time validation and end the role once cleanup is done.
 - name: Uninstall Zimantic
   include_tasks: uninstall.yml
   when: uninstall
@@ -11,165 +19,56 @@
   meta: end_role
   when: uninstall
 
-- name: Assert that "zimantic_install is sameas true" (boolean not string etc)
-  assert:
-    that: zimantic_install is sameas true
-    fail_msg: "PLEASE SET 'zimantic_install: True' e.g. IN: /etc/iiab/local_vars.yml"
-    quiet: yes
-
-- name: Assert that "zimantic_enabled | type_debug == 'bool'" (boolean not string etc)
-  assert:
-    that: zimantic_enabled | type_debug == 'bool'
-    fail_msg: "PLEASE GIVE VARIABLE 'zimantic_enabled' A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
-    quiet: yes
-
-- name: Assert that "zimantic_mode" is supported
-  assert:
-    that: zimantic_mode in ['fast', 'semantic']
-    fail_msg: "zimantic_mode must be either 'fast' or 'semantic'"
-    quiet: yes
-
-- name: Assert that "zimantic_file_types" is a non-empty list of patterns
-  assert:
-    that:
-      - zimantic_file_types | type_debug == 'list'
-      - zimantic_file_types | length > 0
-      - zimantic_file_types | reject('string') | list | length == 0
-    fail_msg: "zimantic_file_types must be a non-empty list of file types or glob patterns, for example [zim, text, ebook]"
-    quiet: yes
-
-- name: Assert that "zimantic_file_helpers" is supported
-  assert:
-    that: zimantic_file_helpers in ['auto', 'always', 'never']
-    fail_msg: "zimantic_file_helpers must be 'auto', 'always', or 'never'"
-    quiet: yes
-
-- name: Assert that ordinary-file extraction settings are valid
-  assert:
-    that:
-      - zimantic_file_timeout | float > 0
-      - zimantic_max_file_text_chars | int > 0
-      - zimantic_archive_depth | int >= 0
-      - zimantic_max_archive_members | int > 0
-      - zimantic_max_archive_bytes | int > 0
-      - zimantic_max_ocr_pages | int >= 0
-      - zimantic_ocr | type_debug == 'bool'
-      - zimantic_ocr_languages is string
-      - zimantic_ocr_languages | length > 0
-      - zimantic_asr | type_debug == 'bool'
-      - zimantic_asr_model is string
-      - zimantic_asr_model | length > 0
-    fail_msg: "Check the zimantic_file_* extraction limits and the OCR/ASR settings in local_vars.yml"
-    quiet: yes
+- name: Validate Zimantic settings
+  import_tasks: validate.yml
 
 - block:
 
-    - name: Fail on unsupported PRoot/Android environment
-      fail:
-        msg: "The Zimantic role currently requires regular systemd; PRoot/Android is not supported"
-      when: is_proot
-
-    - name: Validate zimantic_use_system_packages
-      assert:
-        that: zimantic_use_system_packages in ['auto', 'always', 'never']
-        fail_msg: "zimantic_use_system_packages must be 'auto', 'always', or 'never'"
-        quiet: yes
-
-    - name: Determine whether to use distribution packages
-      set_fact:
-        zimantic_system_packages_enabled: >-
-          {{ zimantic_use_system_packages == 'always' or
-             (zimantic_use_system_packages == 'auto' and
-              ansible_facts.machine not in ['aarch64', 'x86_64']) }}
-
-    - name: Validate zimantic_embedding_model
-      assert:
-        that: zimantic_embedding_model in ['auto', 'multilingual-e5-small', 'e5-small-v2']
-        fail_msg: "zimantic_embedding_model must be 'auto', 'multilingual-e5-small', or 'e5-small-v2'"
-        quiet: yes
-
-    - name: Check for a supported Python version
-      command: "{{ zimantic_python }} --version"
-      register: zimantic_python_check
-      changed_when: false
-      failed_when: false
-
-    - name: Fail if a supported Python version is unavailable
-      fail:
-        msg: "Zimantic currently requires Python 3.11-3.14; install a compatible {{ zimantic_python }} before enabling the zimantic role"
-      when:
-        - zimantic_python_check.rc != 0 or
-          ((zimantic_python_check.stdout ~ zimantic_python_check.stderr) is not search('Python 3\\.(1[1-4])\\.'))
-
     # reinstall.yml stops the service and removes the source or data that
-    # --force-reinstall resets; install.yml and configure.yml rebuild them.
+    # --force-reinstall resets; update.yml, install.yml, and configure.yml
+    # rebuild them.
     - name: Prepare an existing Zimantic install for reinstall
       include_tasks: reinstall.yml
       when: reinstall or force_reinstall
 
-    - name: Determine whether Zimantic needs installation or upgrade
-      set_fact:
-        zimantic_needs_install: >-
-          {{ (not (zimantic_installed | default(false) | bool)) or
-             ((zimantic_installed_version | default('')) != zimantic_version) or
-             reinstall or
-             force_reinstall or
-             upgrade }}
+    - name: Check whether the Zimantic source checkout exists
+      stat:
+        path: "{{ zimantic_source_dir }}/.git"
+      register: zimantic_source_git
 
-    - name: Install or upgrade Zimantic
+    # update.yml fetches the requested version. It also runs when the checkout
+    # is missing, because install.yml cannot rebuild from a source tree that is
+    # not on disk.
+    - name: Update Zimantic packages and source
+      include_tasks: update.yml
+      when: >-
+        zimantic_needs_update | bool or
+        not zimantic_source_git.stat.exists
+
+    # Dependency resolution needs network access. A plain --reinstall and an
+    # offline repair of the installed version must use --no-deps instead.
+    - name: Install or repair Zimantic from the local checkout
       include_tasks: install.yml
-      when: zimantic_needs_install
+      vars:
+        zimantic_resolve_dependencies: >-
+          {{ (zimantic_needs_update | bool) or
+             (not zimantic_source_git.stat.exists) }}
 
-    - name: Apply Zimantic packages, configuration, and model files
+    - name: Apply Zimantic configuration, assets, and service settings
       include_tasks: configure.yml
 
     - include_tasks: enable-or-disable.yml
 
-    - name: Add 'zimantic' variable values to {{ iiab_ini_file }}
-      ini_file:
-        path: "{{ iiab_ini_file }}"
-        section: zimantic
-        option: "{{ item.option }}"
-        value: "{{ item.value | string }}"
-      with_items:
-        - option: name
-          value: Zimantic
-        - option: description
-          value: '"Meaning-based and full-text search for local Kiwix ZIM files and documents."'
-        - option: zimantic_install
-          value: "{{ zimantic_install }}"
-        - option: zimantic_enabled
-          value: "{{ zimantic_enabled }}"
-        - option: zimantic_mode
-          value: "{{ zimantic_mode }}"
-        - option: zimantic_embedding_model
-          value: "{{ zimantic_embedding_model_selected }}"
-        - option: zimantic_version
-          value: "{{ zimantic_version }}"
-        - option: zimantic_url
-          value: "{{ zimantic_url }}"
-        - option: zimantic_port
-          value: "{{ zimantic_port }}"
-        - option: zimantic_source_dir
-          value: "{{ zimantic_source_dir }}"
-        - option: zimantic_data_dir
-          value: "{{ zimantic_data_dir }}"
-        - option: zimantic_zim_dir
-          value: "{{ zimantic_zim_dir }}"
-        - option: zimantic_index_dir
-          value: "{{ zimantic_index_dir }}"
-        - option: zimantic_file_types
-          value: "{{ zimantic_file_types | join(',') }}"
-        - option: zimantic_file_helpers
-          value: "{{ zimantic_file_helpers }}"
-        - option: zimantic_ocr
-          value: "{{ zimantic_ocr }}"
-        - option: zimantic_asr
-          value: "{{ zimantic_asr }}"
-        - option: zimantic_archive_depth
-          value: "{{ zimantic_archive_depth }}"
+    - name: Record Zimantic state
+      include_tasks: state.yml
 
   rescue:
+
+    - name: Report the rescued Zimantic failure
+      debug:
+        msg: >-
+          {{ ansible_failed_task.name | default('Zimantic role failed') }}:
+          {{ ansible_failed_result.msg | default(ansible_failed_result.stderr | default('unknown error')) }}
 
     - name: Restart Zimantic after a failed reinstall
       systemd:

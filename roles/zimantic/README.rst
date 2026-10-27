@@ -3,9 +3,7 @@ Zimantic
 =============
 
 Zimantic provides meaning-based, title-word, and native ZIM full-text search,
-plus direct article serving from local ZIM archives. It can also index ordinary
-files as additional searchable sources: text, PDF, EPUB, Office/OpenDocument,
-subtitles, media, images, and archives.
+plus direct article serving from local ZIM archives.
 
 This role is opt-in. It does not replace ``kiwix-serve`` by default because
 Zimantic needs Python 3.11-3.14, compatible native dependencies, and more disk
@@ -83,75 +81,6 @@ Native dependencies
 - ``never`` always uses PyPI wheels. This fails on ``armhf``/``armv7`` because
   no wheels are published.
 
-Ordinary files
-~~~~~~~~~~~~~~
-
-By default, the role indexes only ZIM files. Add entries to
-``zimantic_file_types`` to make ordinary files searchable too::
-
-    zimantic_install: True
-    zimantic_enabled: True
-    zimantic_file_types: [zim, text, docs, ebook]
-
-Named profiles expand to groups of file formats: ``text``, ``ebook``,
-``docs``, ``office``, ``media``, ``video``, ``audio``, ``image``, ``comic``,
-``archive``, ``all`` (every supported type), and ``all+unknown`` (every file,
-with content detection deciding). Extensions may be written as ``epub``,
-``.epub``, or ``*.epub``. Explicit paths passed to ``zimantic build`` are
-always indexed, even when their extension is not listed.
-
-Build the indexes during a maintenance window. ``zimantic build`` with no path
-scans ``zimantic_zim_dir`` (``/library/zims/content``). To index content stored
-elsewhere, pass another folder or individual files::
-
-    cd /library/zimantic
-    sudo -u zimantic /opt/iiab/zimantic/.venv/bin/zimantic build --fast
-    sudo -u zimantic /opt/iiab/zimantic/.venv/bin/zimantic build --fast /media/usb
-
-Source files must remain readable at the same path after indexing. Search
-results open the original file via ``http://box/zimantic/file/<name>``
-(for example ``/zimantic/file/manual.pdf#page=12`` or
-``/zimantic/file/lesson.mp4#t=91.4``). Moving or renaming a source requires
-rebuilding its index. For hardening, the ``zimantic`` systemd unit blocks
-access to ``/home``, ``/root``, and ``/run/user``, so keep ordinary files under
-``/library``, ``/media``, or another path the service can read.
-
-Optional command-line extractors add support for formats that Zimantic cannot
-read natively. ``zimantic_file_helpers: auto`` (the default) installs the
-packages in ``zimantic_file_helper_packages`` when ``zimantic_file_types``
-includes any non-ZIM type. Set it to ``always`` or ``never`` as needed. The
-default package list provides ``pdftotext``, ``unrtf``,
-``catdoc``/``catppt``/``xls2csv``, ``ps2ascii``, ``extract_chm``, ``unar``,
-and ``ffmpeg``/``ffprobe``. If a helper is missing, that format is skipped
-instead of failing the build.
-
-Additional tools and features can be enabled separately:
-
-- Calibre's ``ebook-convert`` handles MOBI/AZW3/FB2/DjVu and is a fallback for
-  some Office files. Install the IIAB ``calibre`` role or the ``calibre``
-  package.
-- Archives use ``7z`` or ``unar``. The default helper set installs ``unar``;
-  ``p7zip-full`` (Debian 12/Ubuntu 22.04) or ``7zip`` (Debian 13/Ubuntu 24.04
-  and newer) is optional.
-- Set ``zimantic_ocr: True`` to OCR scanned PDFs, images, and comic pages.
-  ``zimantic_ocr_packages`` installs ``tesseract-ocr``; add language packs
-  such as ``tesseract-ocr-fra`` to that list for non-English OCR. Set
-  ``zimantic_ocr_languages`` to the Tesseract language list (for example
-  ``eng+fra``).
-- Set ``zimantic_asr: True`` to transcribe media without subtitles. This needs
-  the ``whisper`` command in ``zimantic_venv`` (for example
-  ``sudo -u zimantic /opt/iiab/zimantic/.venv/bin/pip install openai-whisper``);
-  the role does not install it because it is large and CPU-only transcription
-  is slow on small devices.
-
-Extraction is bounded by ``zimantic_file_timeout``,
-``zimantic_max_file_text_chars``, ``zimantic_archive_depth``,
-``zimantic_max_archive_members``, and ``zimantic_max_archive_bytes``; OCR also
-stops after ``zimantic_max_ocr_pages`` pages. Archive member names are always
-indexed; set ``zimantic_archive_depth`` above zero to extract and index nested
-files. Malformed files and failing helpers are logged and skipped without
-aborting the rest of the build.
-
 Indexes
 ~~~~~~~
 
@@ -165,12 +94,6 @@ not attempt it. Build semantic indexes on a faster compatible machine, copy the
 files into ``/library/zimantic/indexes``, and restart the service. When memory
 is limited, set ``zimantic_zim_dir`` to a directory containing only the archives
 you want searched; the default is IIAB's complete ``/library/zims/content``.
-
-ZIM indexes are named after the archive stem; ordinary-file indexes keep the
-source extension (``manual.pdf.sqlite``) so indexes for a ZIM and an ordinary
-file with the same name do not collide. File indexes record the absolute source
-path and size, so if you replace or move a source file, rebuild its index
-(``zimantic build --force <path>``).
 
 Memory and restart limits
 ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -192,6 +115,32 @@ unit failed instead of restarting into another OOM. Check ``systemctl status
 zimantic`` and ``journalctl -u zimantic``; after fixing the cause,
 ``systemctl reset-failed zimantic`` clears the rate limit so the service can be
 started again before the interval expires.
+
+Task layout
+-----------
+
+The role follows the shared role lifecycle described in the top-level
+``README.md``:
+
+- ``update.yml`` fetches ``zimantic_version`` and installs missing system
+  packages. It runs on first install, version changes, ``--upgrade``,
+  ``--force-reinstall``, or when the checkout is missing.
+- ``install.yml`` creates the virtual environment and rebuilds the Python
+  package from the local checkout. It uses ``--no-deps`` for a normal repair or
+  ``--reinstall``, so those paths work offline when the checkout and virtual
+  environment already exist.
+- ``configure.yml`` runs on every apply and reconciles the user, directories,
+  model files, ``config.toml``, and the systemd unit.
+- ``reinstall.yml`` only stops the service and performs the
+  ``--force-reinstall`` deletions; it never downloads anything.
+- ``install.yml`` writes the installed/version marker as soon as the build
+  succeeds, so a later configure failure does not force another dependency
+  resolution on an offline host. ``state.yml`` reports the settings in
+  ``iiab.ini``.
+
+Derived values (the selected embedding model and the decision to update) live in
+``vars/main.yml``. Service restarts are handlers, so the task files only signal
+what changed instead of carrying restart conditions.
 
 Upgrading
 ---------

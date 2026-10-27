@@ -1,0 +1,52 @@
+---
+# Input validation. Runs after the uninstall shortcut in main.yml, because an
+# uninstall must work even when zimantic_install is False.
+
+- name: Assert that "zimantic_install is sameas true" (boolean not string etc)
+  assert:
+    that: zimantic_install is sameas true
+    fail_msg: "PLEASE SET 'zimantic_install: True' e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+
+- name: Assert that "zimantic_enabled | type_debug == 'bool'" (boolean not string etc)
+  assert:
+    that: zimantic_enabled | type_debug == 'bool'
+    fail_msg: "PLEASE GIVE VARIABLE 'zimantic_enabled' A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+
+- name: Assert that "zimantic_mode" is supported
+  assert:
+    that: zimantic_mode in ['fast', 'semantic']
+    fail_msg: "zimantic_mode must be either 'fast' or 'semantic'"
+    quiet: yes
+
+- name: Fail on unsupported PRoot/Android environment
+  fail:
+    msg: "The Zimantic role currently requires regular systemd; PRoot/Android is not supported"
+  when: is_proot
+
+- name: Validate zimantic_use_system_packages
+  assert:
+    that: zimantic_use_system_packages in ['auto', 'always', 'never']
+    fail_msg: "zimantic_use_system_packages must be 'auto', 'always', or 'never'"
+    quiet: yes
+
+- name: Validate zimantic_embedding_model
+  assert:
+    that: zimantic_embedding_model in ['auto', 'multilingual-e5-small', 'e5-small-v2']
+    fail_msg: "zimantic_embedding_model must be 'auto', 'multilingual-e5-small', or 'e5-small-v2'"
+    quiet: yes
+
+- name: Check for a supported Python version
+  command: "{{ zimantic_python }} --version"
+  register: zimantic_python_check
+  changed_when: false
+  failed_when: false
+  check_mode: no
+
+- name: Fail if a supported Python version is unavailable
+  fail:
+    msg: "Zimantic currently requires Python 3.11-3.14; install a compatible {{ zimantic_python }} before enabling the zimantic role"
+  when:
+    - zimantic_python_check.rc != 0 or
+      ((zimantic_python_check.stdout ~ zimantic_python_check.stderr) is not search('Python 3\\.(1[1-4])\\.'))

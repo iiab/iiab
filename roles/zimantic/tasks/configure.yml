@@ -1,23 +1,9 @@
 ---
-# Runs on every role application. Only install.yml is gated by the installed
-# state, so configuration, packages, and model files must be reconciled here.
-
-- name: Determine which embedding model to use
-  set_fact:
-    zimantic_embedding_model_selected: >-
-      {{ 'e5-small-v2' if (zimantic_embedding_model == 'auto' and
-                           (ansible_facts.memtotal_mb | default(2048) | int) <= 1024)
-         else (zimantic_embedding_model if zimantic_embedding_model != 'auto'
-               else 'multilingual-e5-small') }}
-
-- name: Select embedding model files
-  set_fact:
-    zimantic_selected_model_url: "{{ zimantic_english_model_url if zimantic_embedding_model_selected == 'e5-small-v2' else zimantic_multilingual_model_url }}"
-    zimantic_selected_model_checksum: "{{ zimantic_english_model_checksum if zimantic_embedding_model_selected == 'e5-small-v2' else zimantic_multilingual_model_checksum }}"
-    zimantic_selected_tokenizer_file: "{{ zimantic_english_tokenizer_file if zimantic_embedding_model_selected == 'e5-small-v2' else zimantic_multilingual_tokenizer_file }}"
-    zimantic_selected_tokenizer_url: "{{ zimantic_english_tokenizer_url if zimantic_embedding_model_selected == 'e5-small-v2' else zimantic_multilingual_tokenizer_url }}"
-    zimantic_selected_tokenizer_checksum: "{{ zimantic_english_tokenizer_checksum if zimantic_embedding_model_selected == 'e5-small-v2' else zimantic_multilingual_tokenizer_checksum }}"
-    zimantic_unused_tokenizer_file: "{{ zimantic_multilingual_tokenizer_file if zimantic_embedding_model_selected == 'e5-small-v2' else zimantic_english_tokenizer_file }}"
+# Always runs. Configuration, model files, and the service definition are
+# reconciled on every apply, so local_vars.yml changes take effect without a
+# reinstall. Fetching a missing model is allowed here because it is an
+# immutable asset, not a program version; nothing is deleted or re-downloaded
+# when the file and checksum already match.
 
 - name: Create Linux user {{ zimantic_user }}
   user:
@@ -45,58 +31,13 @@
       owner: root
       group: root
 
-- name: Determine whether Zimantic indexes ordinary files
-  set_fact:
-    zimantic_indexes_ordinary_files: >-
-      {{ zimantic_file_types | map('string') | map('lower') |
-         select('ne', 'zim') | select('ne', '.zim') |
-         select('ne', '*.zim') | list | length > 0 }}
-
-- name: Determine whether to install optional file extraction packages
-  set_fact:
-    zimantic_install_file_helpers: >-
-      {{ zimantic_file_helpers == 'always' or
-         (zimantic_file_helpers == 'auto' and
-          (zimantic_indexes_ordinary_files | bool or
-           zimantic_ocr | bool)) }}
-
-- name: Select optional file extraction packages
-  set_fact:
-    zimantic_selected_file_helper_packages: >-
-      {{ ((zimantic_file_helper_packages if zimantic_install_file_helpers | bool else []) +
-          (zimantic_ocr_packages
-           if (zimantic_install_file_helpers | bool and zimantic_ocr | bool)
-           else [])) | unique | list }}
-
-# As with the native dependencies, check first so that an offline rerun does
-# not cause APT to update its package lists when every helper is already
-# installed.
-- name: Check which optional file extraction packages are missing
-  command: "dpkg-query -W -f='${db:Status-Status}' {{ item }}"
-  register: zimantic_file_helper_status
-  changed_when: false
-  failed_when: false
-  loop: "{{ zimantic_selected_file_helper_packages }}"
-  when: zimantic_selected_file_helper_packages | length > 0
-
-- name: Install optional file extraction packages
-  apt:
-    name: "{{ zimantic_selected_file_helper_packages }}"
-    state: present
-    update_cache: yes
-    cache_valid_time: 3600
-  when:
-    - zimantic_selected_file_helper_packages | length > 0
-    - zimantic_file_helper_status.results | default([]) |
-      rejectattr('stdout', 'equalto', 'installed') | list | length > 0
-
 # Both tokenizers in one model directory would make Zimantic choose
 # SentencePiece, which is wrong for the English model.
 - name: Remove the tokenizer left by a different embedding model
   file:
     path: "{{ zimantic_model_dir }}/{{ zimantic_unused_tokenizer_file }}"
     state: absent
-  register: zimantic_unused_tokenizer
+  notify: Restart Zimantic
   when: zimantic_mode == 'semantic'
 
 - name: Download Zimantic embedding model
@@ -105,7 +46,7 @@
     dest: "{{ zimantic_model_dir }}/model.onnx"
     checksum: "{{ zimantic_selected_model_checksum }}"
     timeout: "{{ download_timeout }}"
-  register: zimantic_model_download
+  notify: Restart Zimantic
   when: zimantic_mode == 'semantic'
 
 - name: Download Zimantic tokenizer
@@ -114,7 +55,7 @@
     dest: "{{ zimantic_model_dir }}/{{ zimantic_selected_tokenizer_file }}"
     checksum: "{{ zimantic_selected_tokenizer_checksum }}"
     timeout: "{{ download_timeout }}"
-  register: zimantic_tokenizer_download
+  notify: Restart Zimantic
   when: zimantic_mode == 'semantic'
 
 - name: Check for the Zimantic embedding model
@@ -144,7 +85,7 @@
     owner: "{{ zimantic_user }}"
     group: "{{ zimantic_user }}"
     mode: "0644"
-  register: zimantic_config_update
+  notify: Restart Zimantic
 
 - name: Install zimantic.service
   template:
@@ -153,22 +94,6 @@
     owner: root
     group: root
     mode: "0644"
-  register: zimantic_service_update
-
-- name: daemon_reload, so systemd reads the new zimantic.service
-  systemd:
-    daemon_reload: yes
-  when: zimantic_service_update.changed
-
-- name: Restart Zimantic after installation, configuration, mode, or model change
-  systemd:
-    name: zimantic
-    state: restarted
-  when:
-    - zimantic_enabled
-    - zimantic_needs_install or
-      zimantic_config_update.changed or
-      zimantic_service_update.changed or
-      zimantic_unused_tokenizer.changed or
-      zimantic_model_download.changed or
-      zimantic_tokenizer_download.changed
+  notify:
+    - Reload systemd
+    - Restart Zimantic

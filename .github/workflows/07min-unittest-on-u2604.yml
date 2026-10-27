@@ -106,5 +106,13 @@ jobs:
         run: |
           set -euo pipefail
           read -r -a roles <<< "$CHANGED_ROLES"
-          # Install optional roles and reconfigure existing ones.
-          sudo ./runroles --add "${roles[@]}"
+          # Install optional roles and reconfigure existing ones. Run each role
+          # separately: ./runroles inherits skip_role_on_error: True from
+          # default_vars.yml, which would turn rescued role failures into a
+          # successful test. ./runrole forces skip_role_on_error: False, while
+          # the loop still attempts every changed role before failing.
+          status=0
+          for role in "${roles[@]}"; do
+            sudo ./runrole --add "$role" || status=1
+          done
+          exit "$status"

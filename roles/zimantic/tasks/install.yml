@@ -1,157 +1,119 @@
 ---
-# Runs only when Zimantic must be installed, upgraded, or rebuilt. Anything
-# that must follow local_vars.yml changes belongs in configure.yml instead.
+# Offline-safe build phase. Runs on every apply, but does nothing when the
+# installed executable is already usable. It never fetches a new version and
+# never removes runtime data; update.yml owns network refreshes.
+#
+# A plain --reinstall and a repair of the installed version rebuild with
+# --no-deps from the local checkout. Resolving dependencies only happens after
+# update.yml, or when the checkout had to be created from scratch.
 
-- name: Record (initial) disk space used
-  shell: df -B1 --output=used / | tail -1
-  register: zimantic_df1
-  changed_when: false
+- name: Check for the Zimantic source checkout
+  stat:
+    path: "{{ zimantic_source_dir }}/.git"
+  register: zimantic_install_source
 
-# Checking first keeps offline reruns from touching the network: apt would
-# otherwise run 'apt-get update' on every run, even when nothing is missing.
-- name: Check which Zimantic system packages are missing
-  command: "dpkg-query -W -f='${db:Status-Status}' {{ item }}"
-  register: zimantic_system_package_status
-  changed_when: false
-  failed_when: false
-  loop: "{{ zimantic_system_packages }}"
-  when: zimantic_system_packages_enabled | bool
-
-- name: Install native dependencies from the distribution
-  apt:
-    name: "{{ zimantic_system_packages }}"
-    state: present
-    update_cache: yes
-    cache_valid_time: 3600
-  when:
-    - zimantic_system_packages_enabled | bool
-    - zimantic_system_package_status.results | default([]) |
-      rejectattr('stdout', 'equalto', 'installed') | list | length > 0
-
-# 'git: update: yes' fetches from the remote even when the requested
-# version is already checked out, which fails on an offline rerun.
-- name: Check the current Zimantic source revision
-  command: "git -C {{ zimantic_source_dir }} rev-parse HEAD"
-  register: zimantic_source_head
-  changed_when: false
-  failed_when: false
-  when: (zimantic_source_dir ~ '/.git') is exists
-
-- name: Check the current Zimantic source tag
-  command: "git -C {{ zimantic_source_dir }} describe --tags --exact-match"
-  register: zimantic_source_tag
-  changed_when: false
-  failed_when: false
-  when: (zimantic_source_dir ~ '/.git') is exists
-
-- name: Check the current Zimantic source remote
-  command: "git -C {{ zimantic_source_dir }} remote get-url origin"
-  register: zimantic_source_remote
-  changed_when: false
-  failed_when: false
-  when: (zimantic_source_dir ~ '/.git') is exists
-
-- name: Determine whether the Zimantic source already matches {{ zimantic_version }}
-  set_fact:
-    zimantic_source_matches_version: >-
-      {{ (((zimantic_source_tag.stdout | default('')) == zimantic_version) or
-          (((zimantic_version | string) is search('^[0-9a-f]{7,40}$')) and
-           (zimantic_source_head.stdout | default('')).startswith(zimantic_version | string))) and
-          ((zimantic_source_remote.stdout | default('')) == zimantic_repo) }}
-
-# The source directory is documented as disposable: discard local tracked
-# changes before deciding whether a fetch is necessary. 'git: update: no'
-# returns before resetting anything, so this cannot be left to the module.
-- name: Discard local changes in the matching Zimantic source
-  command: "git -C {{ zimantic_source_dir }} reset --hard HEAD"
-  changed_when: false
-  when: zimantic_source_matches_version | bool
-
-- name: Check out Zimantic {{ zimantic_version }}
-  git:
-    repo: "{{ zimantic_repo }}"
-    dest: "{{ zimantic_source_dir }}"
-    version: "{{ zimantic_version }}"
-    depth: 1
-    update: "{{ not (zimantic_source_matches_version | bool) }}"
-    force: yes
+- name: Fail if the Zimantic source checkout is missing
+  fail:
+    msg: >-
+      {{ zimantic_source_dir }} is missing. Run './runrole --upgrade zimantic'
+      while online, or restore the checkout before retrying.
+  when: not zimantic_install_source.stat.exists
 
 - name: Create Zimantic Python virtual environment
   command:
     cmd: "{{ zimantic_python }} -m venv {{ '--system-site-packages ' if (zimantic_system_packages_enabled | bool) else '' }}{{ zimantic_venv }}"
     creates: "{{ zimantic_venv }}/bin/python"
 
-# pip's default build isolation creates a temporary environment and downloads
-# setuptools, which fails offline. Keep setuptools in the venv so the project
-# can be rebuilt from the local checkout.
-- name: Check for setuptools in the Zimantic virtual environment
-  command: "{{ zimantic_venv }}/bin/python -c 'import setuptools'"
-  register: zimantic_setuptools
-  changed_when: false
-  failed_when: false
+- name: Check for the Zimantic virtual environment
+  stat:
+    path: "{{ zimantic_venv }}/bin/python"
+  register: zimantic_venv_python
 
-- name: Install setuptools for build-isolation-free installs
-  command:
-    cmd: "{{ zimantic_venv }}/bin/python -m pip install --disable-pip-version-check setuptools"
-  register: zimantic_setuptools_install
-  failed_when: false
-  when: zimantic_setuptools.rc != 0
+- name: Check for the Zimantic executable
+  stat:
+    path: "{{ zimantic_venv }}/bin/zimantic"
+  register: zimantic_executable
 
-# The build needs setuptools, so a failed install means there is no usable
-# offline path. Surface the pip error instead of failing later inside pip's
-# build step.
-- name: Fail if setuptools is unavailable or cannot be installed
-  fail:
-    msg: >-
-      setuptools is required to build Zimantic but is missing from
-      {{ zimantic_venv }} and could not be installed. If this host is offline,
-      install setuptools while online and rerun.
-      {{ zimantic_setuptools_install.stderr | default('') }}
-  when:
-    - zimantic_setuptools.rc != 0
-    - zimantic_setuptools_install.rc != 0
+- name: Rebuild Zimantic from the local checkout
+  when: zimantic_rebuild | bool
+  vars:
+    zimantic_rebuild: >-
+      {{ (not zimantic_executable.stat.exists) or
+         (zimantic_needs_update | bool) or
+         reinstall }}
+  block:
 
-# When system packages provide the native dependencies, pip must not fetch or
-# replace them.
-#
-# install.yml runs only when the package must be installed or rebuilt, so force
-# a reinstall even when the version is unchanged. The checkout above is always
-# at zimantic_version, so matching versions can rebuild offline with --no-deps;
-# a version change, --upgrade, and --force-reinstall resolve dependencies.
-- name: Install Zimantic and runtime dependencies
-  command:
-    cmd: "{{ zimantic_venv }}/bin/python -m pip install --disable-pip-version-check --no-cache-dir --no-build-isolation --upgrade --force-reinstall {{ '--no-deps ' if ((zimantic_system_packages_enabled | bool) or (not upgrade and not force_reinstall and (reinstall or ((zimantic_installed_version | default('')) == zimantic_version)))) else '' }}{{ zimantic_source_dir }}"
-  register: zimantic_pip_install
-  changed_when: "'Successfully installed' in zimantic_pip_install.stdout"
+    # pip's default build isolation creates a temporary environment and
+    # downloads setuptools, which fails offline. Keep setuptools in the venv so
+    # the project can be rebuilt from the local checkout.
+    - name: Check for setuptools in the Zimantic virtual environment
+      command: "{{ zimantic_venv }}/bin/python -c 'import setuptools'"
+      register: zimantic_setuptools
+      changed_when: false
+      failed_when: false
 
-- name: Record (final) disk space used
-  shell: df -B1 --output=used / | tail -1
-  register: zimantic_df2
-  changed_when: false
+    - name: Install setuptools for build-isolation-free installs
+      command:
+        cmd: "{{ zimantic_venv }}/bin/python -m pip install --disable-pip-version-check setuptools"
+      register: zimantic_setuptools_install
+      failed_when: false
+      when: zimantic_setuptools.rc != 0
 
-- name: Add 'zimantic_disk_usage' to {{ iiab_ini_file }}
-  ini_file:
-    path: "{{ iiab_ini_file }}"
-    section: zimantic
-    option: zimantic_disk_usage
-    value: "{{ zimantic_df2.stdout | int - zimantic_df1.stdout | int }}"
+    # The build needs setuptools, so a failed install means there is no usable
+    # offline path. Surface the pip error instead of failing later inside pip's
+    # build step.
+    - name: Fail if setuptools is unavailable or cannot be installed
+      fail:
+        msg: >-
+          setuptools is required to build Zimantic but is missing from
+          {{ zimantic_venv }} and could not be installed. If this host is
+          offline, install setuptools while online and rerun.
+          {{ zimantic_setuptools_install.stderr | default('') }}
+      when:
+        - zimantic_setuptools.rc != 0
+        - zimantic_setuptools_install.rc != 0
 
-- name: "Set 'zimantic_installed: True'"
-  set_fact:
-    zimantic_installed: True
+    - name: Record (initial) disk space used
+      shell: df -B1 --output=used / | tail -1
+      register: zimantic_df1
+      changed_when: false
 
-- name: "Set 'zimantic_installed_version' to {{ zimantic_version }}"
-  set_fact:
-    zimantic_installed_version: "{{ zimantic_version }}"
+    # When system packages provide the native dependencies, pip must not fetch
+    # or replace them. --no-deps is also what makes a plain --reinstall and an
+    # offline repair work. A newly created virtual environment has no
+    # dependencies yet, so it must resolve them even on a reinstall.
+    - name: Install Zimantic and runtime dependencies
+      command:
+        cmd: "{{ zimantic_venv }}/bin/python -m pip install --disable-pip-version-check --no-cache-dir --no-build-isolation --upgrade --force-reinstall {{ '' if (zimantic_resolve_dependencies | bool or not zimantic_venv_python.stat.exists) else '--no-deps ' }}{{ zimantic_source_dir }}"
+      register: zimantic_pip_install
+      changed_when: "'Successfully installed' in zimantic_pip_install.stdout"
+      notify: Restart Zimantic
 
-- name: "Add 'zimantic_installed: True' to {{ iiab_state_file }}"
-  lineinfile:
-    path: "{{ iiab_state_file }}"
-    regexp: '^zimantic_installed'
-    line: 'zimantic_installed: True'
+    - name: Record (final) disk space used
+      shell: df -B1 --output=used / | tail -1
+      register: zimantic_df2
+      changed_when: false
 
-- name: "Add 'zimantic_installed_version: {{ zimantic_version }}' to {{ iiab_state_file }}"
-  lineinfile:
-    path: "{{ iiab_state_file }}"
-    regexp: '^zimantic_installed_version:'
-    line: "zimantic_installed_version: {{ zimantic_version }}"
+    - name: Add 'zimantic_disk_usage' to {{ iiab_ini_file }}
+      ini_file:
+        path: "{{ iiab_ini_file }}"
+        section: zimantic
+        option: zimantic_disk_usage
+        value: "{{ zimantic_df2.stdout | int - zimantic_df1.stdout | int }}"
+
+    # Record the installed marker as soon as the build succeeds, so a later
+    # configure failure does not force another dependency resolution on an
+    # offline host.
+    - name: "Set 'zimantic_installed: True' in {{ iiab_state_file }}"
+      lineinfile:
+        path: "{{ iiab_state_file }}"
+        regexp: '^zimantic_installed'
+        line: 'zimantic_installed: True'
+      when: iiab_state_file is file
+
+    - name: "Set 'zimantic_installed_version: {{ zimantic_version }}' in {{ iiab_state_file }}"
+      lineinfile:
+        path: "{{ iiab_state_file }}"
+        regexp: '^zimantic_installed_version:'
+        line: "zimantic_installed_version: {{ zimantic_version }}"
+      when: iiab_state_file is file
