@@ -117,15 +117,21 @@ jobs:
           # rejects '*_install: False' once that marker exists. The next
           # './runrole --add' would therefore fail validation. Appending the
           # opt-in also keeps local_vars.yml consistent with the state file.
+          #
+          # Set '*_enabled: True' too: it usually defaults to False in
+          # default_vars.yml, so without it the role would install but then
+          # disable or stop the service it just configured.
           for role in "${roles[@]}"; do
             var=$(source scripts/runrole-common.sh; role_var "$role")
-            if grep -q "^${var}_install:" /etc/iiab/local_vars.yml; then
-              sudo sed -i "s/^${var}_install:.*/${var}_install: True/" \
-                /etc/iiab/local_vars.yml
-            else
-              printf '%s_install: True\n' "$var" |
-                sudo tee -a /etc/iiab/local_vars.yml >/dev/null
-            fi
+            for suffix in install enabled; do
+              if grep -q "^${var}_${suffix}:" /etc/iiab/local_vars.yml; then
+                sudo sed -i "s/^${var}_${suffix}:.*/${var}_${suffix}: True/" \
+                  /etc/iiab/local_vars.yml
+              else
+                printf '%s_%s: True\n' "$var" "$suffix" |
+                  sudo tee -a /etc/iiab/local_vars.yml >/dev/null
+              fi
+            done
           done
 
           # Run each role separately: ./runroles inherits skip_role_on_error:
