@@ -6,11 +6,6 @@
   when: kiwix_arch == "unsupported"
 
 
-- name: Record (initial) disk space used
-  shell: df -B1 --output=used / | tail -1
-  register: df1
-
-
 # 1. PUT IN PLACE: /opt/iiab/downloads/kiwix-tools_linux-*.tar.gz, move /opt/iiab/kiwix/bin aside if nec, create essential dirs, and test.zim if nec (library.xml is created later, by enable-or-disable.yml)
 
 # 2022-10-04: get_url might be removed in future (unarchive below can handle
@@ -99,46 +94,9 @@
 #  when: is_debuntu
 
 
-# 4. INSTALL iiab-make-kiwix-lib*, kiwix-serve.service, kiwix.conf for Apache
-
-- name: 'Install from templates: kiwix-serve.service, iiab-make-kiwix-lib, iiab-make-kiwix-lib.py'
-  template:
-    src: "{{ item.src }}"
-    dest: "{{ item.dest }}"
-    mode: "{{ item.mode }}"
-  with_items:
-    - { src: 'kiwix-serve.service.j2', dest: '/etc/systemd/system/kiwix-serve.service', mode: '0644' }
-    - { src: 'iiab-make-kiwix-lib.j2', dest: '/usr/bin/iiab-make-kiwix-lib', mode: '0755' }
-    - { src: 'iiab-make-kiwix-lib3.py', dest: '/usr/bin/iiab-make-kiwix-lib.py', mode: '0755' }
-
-- name: daemon_reload, so systemd (re)reads newly installed kiwix-serve.service
-  systemd:
-    daemon_reload: yes
+# 4. INSTALL Kiwix's Android app (if requested).  The systemd unit and helper
+# scripts are reconciled by configure.yml on every apply.
 
 - name: Install Kiwix Android app
   include_tasks: kiwix-apk.yml
   when: kiwix_incl_apk
-
-
-# 5. RECORD Kiwix AS INSTALLED
-
-- name: Record (final) disk space used
-  shell: df -B1 --output=used / | tail -1
-  register: df2
-
-- name: Add 'kiwix_disk_usage = {{ df2.stdout | int - df1.stdout | int }}' to {{ iiab_ini_file }}
-  ini_file:
-    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
-    section: kiwix
-    option: kiwix_disk_usage
-    value: "{{ df2.stdout | int - df1.stdout | int }}"
-
-- name: "Set 'kiwix_installed: True'"
-  set_fact:
-    kiwix_installed: True
-
-- name: "Add 'kiwix_installed: True' to {{ iiab_state_file }}"
-  lineinfile:
-    path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
-    regexp: '^kiwix_installed'
-    line: 'kiwix_installed: True'

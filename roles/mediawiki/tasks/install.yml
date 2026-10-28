@@ -10,12 +10,7 @@
 - name: FAIL (STOP THE INSTALL) IF 'mysql_installed is undefined'
   fail:
     msg: "MediaWiki install cannot proceed, as MySQL / MariaDB is not installed."
-  when: mysql_installed is undefined
-
-
-- name: Record (initial) disk space used
-  shell: df -B1 --output=used / | tail -1
-  register: df1
+  when: not lookup('installed', 'mysql_installed')
 
 
 # https://www.mediawiki.org/wiki/Manual:Installation_requirements#PHP
@@ -191,49 +186,4 @@
     chdir: "{{ mediawiki_abs_path }}"    # /library/mediawiki-1.XY.Z
     creates: "{{ mediawiki_abs_path }}/LocalSettings.php"
 
-- name: Configure $wgArticlePath variable in {{ mediawiki_abs_path }}/LocalSettings.php
-  lineinfile:
-    path: "{{ mediawiki_abs_path }}/LocalSettings.php"    # /library/mediawiki-1.XY.Z
-    line: '$wgArticlePath = "/wiki/$1";'
-
-- name: Configure $wgUsePathInfo variable in {{ mediawiki_abs_path }}/LocalSettings.php
-  lineinfile:
-    path: "{{ mediawiki_abs_path }}/LocalSettings.php"    # /library/mediawiki-1.XY.Z
-    line: '$wgUsePathInfo = true;'
-
-- name: Configure $wgServer variable in {{ mediawiki_abs_path }}/LocalSettings.php
-  lineinfile:
-    path: "{{ mediawiki_abs_path }}/LocalSettings.php"    # /library/mediawiki-1.XY.Z
-    regexp: '^\$wgServer ='
-    line: '$wgServer = "//" . $_SERVER["HTTP_HOST"];'
-
-- name: Configure wfLoadExtension variable in {{ mediawiki_abs_path }}/LocalSettings.php for Visual Editor
-  lineinfile:
-    path: "{{ mediawiki_abs_path }}/LocalSettings.php"    # /library/mediawiki-1.XY.Z
-    line: "wfLoadExtension( 'VisualEditor' );"
-    state: present
-  when: mediawiki_visual_editor
-
-
-# RECORD MediaWiki AS INSTALLED
-
-- name: Record (final) disk space used
-  shell: df -B1 --output=used / | tail -1
-  register: df2
-
-- name: Add 'mediawiki_disk_usage = {{ df2.stdout | int - df1.stdout | int }}' to {{ iiab_ini_file }}
-  ini_file:
-    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
-    section: mediawiki
-    option: mediawiki_disk_usage
-    value: "{{ df2.stdout | int - df1.stdout | int }}"
-
-- name: "Set 'mediawiki_installed: True'"
-  set_fact:
-    mediawiki_installed: True
-
-- name: "Add 'mediawiki_installed: True' to {{ iiab_state_file }}"
-  lineinfile:
-    path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
-    regexp: '^mediawiki_installed'
-    line: 'mediawiki_installed: True'
+# LocalSettings.php tweaks are reconciled by configure.yml on every apply.

@@ -2,12 +2,16 @@
   template:
     src: maps-nginx.conf.j2
     dest: "{{ nginx_conf_dir }}/maps-nginx.conf"    # /etc/nginx/conf.d
+  notify:
+    - Reload nginx
   when: maps_enabled
 
 - name: Disable http://box/osm via NGINX, by removing {{ nginx_conf_dir }}/maps-nginx.conf
   file:
     path: "{{ nginx_conf_dir }}/maps-nginx.conf"
     state: absent
+  notify:
+    - Reload nginx
   when: not maps_enabled
 
 
@@ -23,20 +27,18 @@
   template:
     src: nominatim-nginx.conf.j2
     dest: "{{ nginx_conf_dir }}/nominatim-nginx.conf"
+  notify:
+    - Reload nginx
   when: maps_enabled and maps_search_engine == "nominatim"
 
 - name: Disable http://box/nominatim via NGINX, by removing {{ nginx_conf_dir }}/nominatim-nginx.conf
   file:
     path: "{{ nginx_conf_dir }}/nominatim-nginx.conf"
     state: absent
+  notify:
+    - Reload nginx
   when: not maps_enabled or not maps_search_engine == "nominatim"
 
-
-- name: Reload 'nginx' systemd service
-  systemd:
-    daemon_reload: yes
-    name: nginx
-    state: reloaded
 
 - name: Disable nominatim service - not proot
   systemd:
@@ -46,7 +48,7 @@
   with_items:
     - nominatim.socket
     - nominatim.service
-  when: not is_proot and nominatim_installed is defined and (not maps_enabled or not maps_search_engine == "nominatim")
+  when: not is_proot and lookup('installed', 'nominatim_installed') and (not maps_enabled or not maps_search_engine == "nominatim")
 
 - name: Enable nominatim service - not proot
   systemd:

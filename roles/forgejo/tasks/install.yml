@@ -20,7 +20,7 @@
 
     - name: Set forgejo_version from the latest release tag
       set_fact:
-        forgejo_version: "{{ forgejo_latest.json.tag_name | regex_replace('^v', '') }}"
+        forgejo_version: "{{ (forgejo_latest.content | from_json).tag_name | regex_replace('^v', '') }}"
 
 # Validate the final version (resolved from the API, or pinned in local_vars) unconditionally.
 # A conditional assert *inside* the block above would be skipped once set_fact flips
@@ -31,11 +31,6 @@
       - forgejo_version is match('^[0-9]+\.[0-9]+\.[0-9]+$')
     fail_msg: "forgejo_version='{{ forgejo_version }}' is not a valid X.Y.Z Forgejo release (resolved from {{ forgejo_releases_api }}, or pinned in local_vars.yml)."
     quiet: true
-
-- name: Record (initial) disk space used
-  shell: df -B1 --output=used / | tail -1
-  register: df1
-
 
 # 1. Prepare to install Forgejo: stop any running instance, create user and dirs
 
@@ -81,9 +76,10 @@
     - backups
 
 
-# 1b. In-place upgrade safety. install.yml only runs when 'forgejo_installed' is
-# undefined, i.e. on a fresh install OR on 'runrole --reinstall forgejo' (which
-# clears that flag). This is how a reinstall doubles as the UPDATE path. When an
+# 1b. In-place upgrade safety. The lifecycle runner runs install.yml on a fresh
+# install and on 'runrole --reinstall forgejo'; the installed marker stays in
+# place, but the runner's reinstall flag runs the phase. This is how a reinstall
+# doubles as the UPDATE path. When an
 # install already exists (app.ini present), back up the DB + repos with 'forgejo
 # dump' BEFORE swapping the binary, so a bad schema migration on the next restart
 # can be recovered. /library/forgejo/data (repos, DB) is never wiped, so user work
@@ -249,7 +245,7 @@
     - name: FAIL (STOP THE INSTALL) IF 'mysql_installed is undefined'
       fail:
         msg: "Forgejo needs MariaDB but the 'mysql' role did not install it."
-      when: mysql_installed is undefined
+      when: not lookup('installed', 'mysql_installed')
 
     - name: "Create MySQL database for Forgejo: {{ forgejo_db_name }}"
       ansible.mariadb.mariadb_db:
@@ -280,27 +276,3 @@
     src: forgejo.service.j2
     dest: /etc/systemd/system/forgejo.service
   when: not is_proot
-
-
-# 5. RECORD Forgejo AS INSTALLED
-
-- name: Record (final) disk space used
-  shell: df -B1 --output=used / | tail -1
-  register: df2
-
-- name: Add 'forgejo_disk_usage = {{ df2.stdout | int - df1.stdout | int }}' to {{ iiab_ini_file }}
-  ini_file:
-    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
-    section: forgejo
-    option: forgejo_disk_usage
-    value: "{{ df2.stdout | int - df1.stdout | int }}"
-
-- name: "Set 'forgejo_installed: True'"
-  set_fact:
-    forgejo_installed: True
-
-- name: "Add 'forgejo_installed: True' to {{ iiab_state_file }}"
-  lineinfile:
-    path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
-    regexp: '^forgejo_installed'
-    line: 'forgejo_installed: True'

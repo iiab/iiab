@@ -2,18 +2,21 @@
   template:
     src: nextcloud-nginx.conf.j2
     dest: "{{ nginx_conf_dir }}/nextcloud-nginx.conf"    # /etc/nginx/conf.d
+  notify:
+    - Reload nginx
   when: nextcloud_enabled
 
 - name: Disable http://box{{ nextcloud_url }} via NGINX, by removing {{ nginx_conf_dir }}/nextcloud-nginx.conf    # http://box/nextcloud
   file:
     path: "{{ nginx_conf_dir }}/nextcloud-nginx.conf"    # /etc/nginx/conf.d
     state: absent
+  notify:
+    - Reload nginx
   when: not nextcloud_enabled
 
-- name: Restart 'nginx' & 'php{{ php_version }}-fpm' systemd services
+# php-fpm is restarted here (not notified) because setup.yml edits its pool
+# configuration independently of the NGINX shortcut.
+- name: Restart 'php{{ php_version }}-fpm' systemd service
   systemd:
-    name: "{{ item }}"
+    name: php{{ php_version }}-fpm
     state: restarted
-  with_items:
-    - nginx
-    - php{{ php_version }}-fpm
