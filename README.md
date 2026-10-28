@@ -142,8 +142,8 @@ The runner identifies the calling role, looks up its state-marker prefix with
 order. It also handles the `--uninstall` guard, the `--reinstall` guard, the
 install-state snapshot, disk measurement, and the `skip_role_on_error` rescue.
 Add role-specific work before or after the include, or move it into the phase
-file it belongs to. `awstats` is the reference implementation; `matomo` and
-`transmission` follow in later pull requests.
+file it belongs to. `awstats`, `matomo`, and `transmission` are the reference implementations;
+most roles with `tasks/install.yml` now use the runner.
 
 The central rule is: **`install.yml` is gated by the runner**. It runs on the
 first install, during `--reinstall`, and during the apply half of

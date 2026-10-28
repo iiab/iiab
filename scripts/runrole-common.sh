@@ -302,19 +302,6 @@ install_local_facts() {
     cp "$IIAB_REPO/scripts/local_facts.fact" /etc/ansible/facts.d/local_facts.fact
 }
 
-# The entry playbooks still load the state file with vars_files, so it must
-# exist even on a host that has never completed a full install.  A missing file
-# is a valid empty state for iiab_state and the installed lookup; roles that
-# write markers replace this empty file.  Drop this once vars_files no longer
-# loads iiab_state.yml.
-ensure_state_file() {
-    $CHECK_LOCAL_VARS && return 0
-    if [ ! -f "$IIAB_STATE_FILE" ]; then
-        mkdir -p "$(dirname "$IIAB_STATE_FILE")"
-        : > "$IIAB_STATE_FILE"
-    fi
-}
-
 # Stage a private copy of the state file for --check, so check mode cannot
 # change the host's markers.
 stage_check_state() {
