@@ -1,0 +1,28 @@
+---
+# Configure phase. This role keeps its tasks inline in main.yml (it does not
+# use 0-init/tasks/lifecycle.yml), so main.yml includes this file directly.
+# This is the one part of the role that uses the network: probing for Internet
+# access decides whether the offline wiki documentation can be refreshed.
+
+# 2022-06-30: internet_available var removed
+- name: 'Test for Internet access, using: https://wiki.iiab.io'
+  get_url:
+    #url: "{{ iiab_download_url }}/heart-beat.txt"
+    url: https://wiki.iiab.io
+    #dest: /tmp/heart-beat.txt
+    dest: /tmp/internet_access_test.html
+    #timeout: "{{ download_timeout }}"
+    # @jvonau recommends: 100sec is too much (keep 10sec default)
+  ignore_errors: True
+  #async: 10
+  #poll: 2
+  register: internet_access_test
+
+- name: Remove downloaded Internet test file /tmp/internet_access_test.html
+  file:
+    path: /tmp/internet_access_test.html
+    state: absent
+
+- name: Run /usr/bin/iiab-refresh-wiki-docs (scraper script) to create http://box/info offline documentation.  (This script was installed in Stage 3 = roles/3-base-server/tasks/main.yml, which ran roles/www_base/tasks/main.yml)
+  command: /usr/bin/iiab-refresh-wiki-docs
+  when: not internet_access_test.failed and not nodocs

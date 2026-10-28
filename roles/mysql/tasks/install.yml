@@ -1,8 +1,3 @@
-- name: Record (initial) disk space used
-  shell: df -B1 --output=used / | tail -1
-  register: df1
-
-
 - name: 'Install MySQL packages: mariadb-server, mariadb-client, php{{ php_version }}-mysql'
   package:
     name:
@@ -62,12 +57,7 @@
   command: pdsm restart mariadb
   when: is_proot
 
-- name: "Install /root/.my.cnf file from template -- used to contain root password credential, prior to 2020-08-24: https://github.com/iiab/iiab/pull/2488"
-  template:
-    src: my.cnf.j2
-    dest: /root/.my.cnf
-    owner: root
-    mode: '0600'
+# /root/.my.cnf is reconciled by configure.yml on every apply.
 
 #- name: Remove the MySQL 'test' database
 #  mysql_db:
@@ -94,27 +84,3 @@
 #  with_items:
 #    - 127.0.0.1
 #    - ::1
-
-
-# RECORD MySQL AS INSTALLED
-
-- name: Record (final) disk space used
-  shell: df -B1 --output=used / | tail -1
-  register: df2
-
-- name: Add 'mysql_disk_usage = {{ df2.stdout | int - df1.stdout | int }}' to {{ iiab_ini_file }}
-  ini_file:
-    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
-    section: mysql
-    option: mysql_disk_usage
-    value: "{{ df2.stdout | int - df1.stdout | int }}"
-
-- name: "Set 'mysql_installed: True'"
-  set_fact:
-    mysql_installed: True
-
-- name: "Add 'mysql_installed: True' to {{ iiab_state_file }}"
-  lineinfile:
-    path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
-    regexp: '^mysql_installed'
-    line: 'mysql_installed: True'

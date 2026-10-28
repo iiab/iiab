@@ -1,8 +1,3 @@
-- name: Record (initial) disk space used
-  shell: df -B1 --output=used / | tail -1
-  register: df1
-
-
 - name: 'Install packages: postgresql, postgresql-client'
   package:
     name:
@@ -44,11 +39,6 @@
     masked: yes
   when: postgresql_stock_start_conf.stat.exists
 
-- name: Install /etc/systemd/system/postgresql-iiab.service from template (0644 by default)
-  template:
-    src: postgresql-iiab.service.j2
-    dest: /etc/systemd/system/postgresql-iiab.service
-
 - name: Create PostgreSQL data dir /library/pgsql-iiab, owned by postgres:postgres (0700)
   file:
     state: directory
@@ -82,14 +72,8 @@
 #   become_user: postgres
 #   when: not is_debuntu
 
-- name: Install /library/pgsql-iiab/postgresql.conf from template (postgres:postgres, 0640)
-  template:
-    backup: yes
-    src: postgresql.conf.j2
-    dest: /library/pgsql-iiab/postgresql.conf
-    owner: postgres
-    group: postgres
-    mode: "0640"
+# The service unit and postgresql.conf are reconciled by configure.yml on
+# every apply.
 
 - name: Disable & Stop stock 'postgresql' (parent) systemd service
   systemd:
@@ -116,27 +100,3 @@
 #    state: stopped    # Already done by parent above
 #    enabled: no       # Doesn't do anything
 #  when: is_debian and not is_raspbian
-
-
-# RECORD PostgreSQL AS INSTALLED
-
-- name: Record (final) disk space used
-  shell: df -B1 --output=used / | tail -1
-  register: df2
-
-- name: Add 'postgresql_disk_usage = {{ df2.stdout | int - df1.stdout | int }}' to {{ iiab_ini_file }}
-  ini_file:
-    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
-    section: postgresql
-    option: postgresql_disk_usage
-    value: "{{ df2.stdout | int - df1.stdout | int }}"
-
-- name: "Set 'postgresql_installed: True'"
-  set_fact:
-    postgresql_installed: True
-
-- name: "Add 'postgresql_installed: True' to {{ iiab_state_file }}"
-  lineinfile:
-    path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
-    regexp: '^postgresql_installed'
-    line: 'postgresql_installed: True'

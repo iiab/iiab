@@ -1,6 +1,11 @@
-- name: Record (initial) disk space used
-  shell: df -B1 --output=used / | tail -1
-  register: df1
+- name: Record initial disk space used for network
+  include_role:
+    name: 0-init
+    tasks_from: disk_usage_start
+  vars:
+    # Not role_name: 1-prep includes this file directly, and network's
+    # iiab.ini section must stay "network" in that path too.
+    disk_usage_role: "network"
 
 
 # 2022-03-16: 'apt show <pkg> | grep Size' revealed download sizes, on 64-bit RasPiOS with desktop.
@@ -138,7 +143,7 @@
 # LESS MAINTAINED
 - name: Install Squid
   include_tasks: roles/network/tasks/squid.yml    # Invoked by 1-prep (so full path needed)
-  when: squid_install and squid_installed is undefined
+  when: squid_install and (not lookup('installed', 'squid_installed') or reinstall)
 
   #preprep for backends
 - name: Netplan in use on Ubuntu 18.04+
@@ -181,25 +186,20 @@
   include_tasks: roles/network/tasks/netwarn.yml    # Invoked by 1-prep (so full path needed)
 
 
-# RECORD Network AS INSTALLED
+# REMEMBER THAT NETWORK PACKAGES ARE INSTALLED
 
-- name: Record (final) disk space used
-  shell: df -B1 --output=used / | tail -1
-  register: df2
+- name: Record final disk space used for network
+  include_role:
+    name: 0-init
+    tasks_from: disk_usage_finish
+  vars:
+    # Not role_name: 1-prep includes this file directly, and network's
+    # iiab.ini section must stay "network" in that path too.
+    disk_usage_role: "network"
 
-- name: Add 'network_disk_usage = {{ df2.stdout | int - df1.stdout | int }}' to {{ iiab_ini_file }}
-  ini_file:
-    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
-    section: network
-    option: network_disk_usage
-    value: "{{ df2.stdout | int - df1.stdout | int }}"
-
-- name: "Set 'network_installed: True'"
+- name: Remember that the network packages were installed
   set_fact:
-    network_installed: True
+    network_packages_installed: True
 
-- name: "Add 'network_installed: True' to {{ iiab_state_file }}"
-  lineinfile:
-    path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
-    regexp: '^network_installed'
-    line: 'network_installed: True'
+# network_installed is recorded at the end of tasks/main.yml, after the
+# configuration has completed.

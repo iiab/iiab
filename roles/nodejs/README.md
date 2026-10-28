@@ -20,7 +20,7 @@ If Nodesource.com does not yet support your Linux OS and IIAB's asked to install
 
 ```
 sudo apt install nodejs npm
-sudo echo 'nodejs_installed: True' >> /etc/iiab/iiab_state.yml
+sudo ./scripts/iiab-state set nodejs_installed
 ```
 
 (The above installs your OS's own versions of Node.js and npm.)
@@ -45,4 +45,4 @@ Earlier, some preferred installing the tar file version mentioned at [#2082](htt
 
 Either way, you'll (likely) then also need to run: `sudo apt install npm`
 
-Whatever versions of Node.js and npm you install, make sure `/etc/iiab/iiab_state.yml` contains the line `nodejs_installed: True` (add it if necessary!)  Finally, proceed to install Internet Archive, JupyterHub, Node-RED ([Raspberry Pi notes](https://nodered.org/docs/hardware/raspberrypi#swapping-sd-cards)), PBX (Asterisk/FreePBX) and/or Sugarizer: [#1799](https://github.com/iiab/iiab/issues/1799)
+Whatever versions of Node.js and npm you install, make sure `nodejs_installed` is recorded (run `sudo ./scripts/iiab-state set nodejs_installed` if necessary!)  Finally, proceed to install Internet Archive, JupyterHub, Node-RED ([Raspberry Pi notes](https://nodered.org/docs/hardware/raspberrypi#swapping-sd-cards)), PBX (Asterisk/FreePBX) and/or Sugarizer: [#1799](https://github.com/iiab/iiab/issues/1799)

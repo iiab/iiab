@@ -1,6 +1,9 @@
 - name: Install network packages (including many WiFi tools, and also iptables-persistent for firewall)
   include_tasks: install.yml
-  when: network_install and network_installed is undefined
+  when:
+    - network_install
+    - network_packages_installed is not defined
+    - not lookup('installed', 'network_installed') or reinstall
 
 - name: detected_network
   include_tasks: detected_network.yml
@@ -35,7 +38,7 @@
 
 
 - name: Configuring Network if enabled
-  when: network_installed is defined and network_enabled
+  when: network_install and network_enabled
   block:
 
   # 2022-07-22: Is './runrole --reinstall network' the new way to make this run?
@@ -143,3 +146,15 @@
     path: "{{ iiab_etc_path }}/install-flags/iiab-network-complete"
     state: touch
   when: iiab_stage|int == 9
+
+- name: "Add 'network_installed: True' to {{ iiab_state_file }}"
+  iiab_state:
+    key: network_installed
+  when: network_install
+
+- name: "Add 'squid_installed: True' to {{ iiab_state_file }}"
+  iiab_state:
+    key: squid_installed
+  when:
+    - network_install
+    - squid_install
