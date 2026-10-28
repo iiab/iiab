@@ -14,18 +14,13 @@
 - name: FAIL (STOP THE INSTALL) IF 'nodejs_installed is undefined'
   fail:
     msg: "Node-RED install cannot proceed, as Node.js is not installed."
-  when: nodejs_installed is undefined
+  when: not lookup('installed', 'nodejs_installed')
 
 # 2020-10-29: not really nec as Node-RED supports recent Node.js versions
 #- name: FAIL (STOP THE INSTALL) IF 'nodejs_version != "12.x"'
 #  fail:
 #    msg: "Node-RED install cannot proceed, as it currently requires Node.js 12.x, whereas nodejs_version is set to {{ nodejs_version }}.  Please check the value of nodejs_version in /opt/iiab/iiab/vars/default_vars.yml, /etc/iiab/local_vars.yml, /opt/iiab/iiab/roles/nodejs, etc."
 #  when: nodejs_version != "12.x"
-
-
-- name: Record (initial) disk space used
-  shell: df -B1 --output=used / | tail -1
-  register: df1
 
 
 # BRUTAL but ensures consistency across OS's / distros like Raspbian Desktop &
@@ -100,8 +95,8 @@
 #    creates: /usr/lib/node_modules/node-red-dashboard
 #  when: nodered_install and internet_available
 
-- include_tasks: settings.yml
-  #when: not is_raspbian
+# Node-RED's user, directories and settings are reconciled by configure.yml.
+# Desktop integration (os-integration.yml) remains part of install.
 
 - include_tasks: os-integration.yml
 #- include_tasks: rpi_desk.yml
@@ -139,27 +134,3 @@
 #  apache2_module:
 #    state: present
 #    name: proxy_wstunnel
-
-
-# RECORD Node-RED AS INSTALLED
-
-- name: Record (final) disk space used
-  shell: df -B1 --output=used / | tail -1
-  register: df2
-
-- name: Add 'nodered_disk_usage = {{ df2.stdout | int - df1.stdout | int }}' to {{ iiab_ini_file }}
-  ini_file:
-    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
-    section: nodered
-    option: nodered_disk_usage
-    value: "{{ df2.stdout | int - df1.stdout | int }}"
-
-- name: "Set 'nodered_installed: True'"
-  set_fact:
-    nodered_installed: True
-
-- name: "Add 'nodered_installed: True' to {{ iiab_state_file }}"
-  lineinfile:
-    path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
-    regexp: '^nodered_installed'
-    line: 'nodered_installed: True'

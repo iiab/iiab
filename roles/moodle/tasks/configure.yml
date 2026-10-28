@@ -1,0 +1,95 @@
+---
+# Reconcile Moodle's database, data directory, installer and config.php on
+# every apply.  The program checkout and packages are handled by install.yml
+# (first install, --reinstall and --clean-install only).
+
+- name: Create dir {{ moodle_data }} ({{ apache_user }}:{{ apache_user }}) (by default 755 = drwxr-xr-x initially, but moodle_installer sets drwxrwsrwx below)
+  file:
+    state: directory
+    path: "{{ moodle_data }}"    # /library/moodle
+    owner: "{{ apache_user }}"
+    group: "{{ apache_user }}"
+
+# /etc/systemd/system/postgresql-iiab.service
+- name: Start 'postgresql-iiab' systemd service, to configure Moodle's DB
+  systemd:
+    name: postgresql-iiab
+    state: started
+
+- name: Create PostgreSQL db user {{ moodle_db_user }}/{{ moodle_db_pass }}
+  postgresql_user:
+    name: "{{ moodle_db_user }}"    # Admin
+    password: "{{ moodle_db_pass }}"    # changeme
+    encrypted: yes    # Required by PostgreSQL 10+ e.g. Ubuntu 18.04's PostgreSQL 10.3+, see https://github.com/iiab/iiab/issues/759
+    role_attr_flags: NOSUPERUSER,NOCREATEROLE,NOCREATEDB
+    state: present
+  become: yes
+  become_user: postgres
+
+- name: 'Create database: {{ moodle_db_name }}'
+  postgresql_db:
+    name: "{{ moodle_db_name }}"
+    encoding: utf8
+    owner: "{{ moodle_db_user }}"
+    template: template1
+    state: present
+  become: yes
+  become_user: postgres
+
+- name: (Re)Start 'postgresql-iiab' systemd service
+  systemd:
+    name: postgresql-iiab
+    state: restarted
+    #enabled: yes    # Service ends up enabled regardless
+
+
+- name: Install {{ moodle_base }}/moodle_installer from template (0755)
+  template:
+    src: moodle_installer.j2
+    dest: "{{ moodle_base }}/moodle_installer"
+    mode: "0755"
+
+- name: Execute {{ moodle_base }}/moodle_installer IF {{ moodle_base }}/config.php doesn't yet exist -- REQUIRES 'max_input_vars = 5000' (or higher) in /etc/php/{{ php_version }}/cli/php.ini IF PHP 8+ (as set up by www_options/tasks/main.yml) -- WHEREAS LATER ON Moodle uses /etc/php/{{ php_version }}/fpm/php.ini during regular operation
+  shell: "{{ moodle_base }}/moodle_installer"
+  args:
+    creates: "{{ moodle_base }}/config.php"
+
+# 2021-07-05: For /opt/iiab/moodle, let's stick with default permissions from
+# above (755 dirs & 644 files), and ownership (www-data:www-data), as we do in
+# moodle/tasks/mathjax.yml
+
+# 2021-07-05: Seems like a good idea but Moodle's permissions recommendations
+# at https://docs.moodle.org/20/en/Creating_Moodle_site_data_directory don't
+# actually mandate this:
+#
+# - name: chmod -R o-rwx {{ moodle_data }} e.g. drwxrwsrwx to drwxrws---
+#   file:
+#     path: "{{ moodle_data }}"    # /library/moodle
+#     mode: o-rwx
+#     recurse: yes
+
+# 2021-11-19: Resolves Moodle error https://github.com/iiab/iiab/issues/3024
+- name: Set cron job to run /opt/iiab/moodle/admin/cli/cron.php every minute (* * * * *) in /var/spool/cron/crontabs/www-data -- per https://docs.moodle.org/310/en/Cron
+  cron:
+    name: https://docs.moodle.org/en/Cron
+    user: www-data
+    job: "/usr/bin/php /opt/iiab/moodle/admin/cli/cron.php >/dev/null"
+
+# https://docs.moodle.org/311/en/Nginx#XSendfile_aka_X-Accel-Redirect
+# https://github.com/moodle/moodle/blob/master/config-dist.php#L274-L287
+- name: Write extra parameters to {{ moodle_base }}/config.php -- "Setting Moodle and Nginx to use XSendfile functionality is a big win as it frees PHP from delivering files allowing Nginx to do what it does best, i.e. deliver files"
+  lineinfile:
+    path: "{{ moodle_base }}/config.php"
+    line: '$CFG->{{ item.name }} = {{ item.value }};'
+    insertbefore: '^\$CFG->directorypermissions'
+  with_items:
+    #- { name: 'backuptempdir', value: "'{{ moodlebox_moodle_data_dir }}/backup'" }
+    - { name: 'xsendfile', value: "'X-Accel-Redirect'" }
+    - { name: 'xsendfilealiases', value: "array('/dataroot/' => $CFG->dataroot)" }
+    #- { name: 'customfiletypes', value: "array(\n  (object)array(\n    'extension' => 'crt',\n    'icon' => 'sourcecode',\n    'type' => 'application/x-x509-ca-cert',\n    'customdescription' => 'X.509 CA certificate'\n  )\n)"}
+    #- { name: 'showcampaigncontent', value: 'false' }
+
+- include_tasks: mathjax.yml
+
+- name: Run 'php {{ moodle_base }}/admin/cli/cfg.php --name=pathtopdftoppm --set=/usr/bin/pdftoppm' for converting PDF files to PNG (faster than Ghostscript, particularly for large files) -- works with apt package 'poppler-utils' installed above (#2854)
+  command: php "{{ moodle_base }}/admin/cli/cfg.php" --name=pathtopdftoppm --set=/usr/bin/pdftoppm

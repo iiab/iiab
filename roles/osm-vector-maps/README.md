@@ -45,7 +45,7 @@ Where `<CONTINENT-or-REGION>.mbtiles` is one of the [major region files](https:/
 
    ~cd /library/www/<br>
    rm -rf osm-vector-maps/<br>
-   nano /etc/iiab/iiab_state.yml    # Delete line 'osm_vector_maps_installed: True'<br>
+   sudo ./scripts/iiab-state remove osm_vector_maps_installed<br>
    git remote add ghunt git@github.com:/georgejhunt/iiab<br>
    git fetch --all<br>
    git checkout -b maps7.3 ghunt/maps7.3<br>
