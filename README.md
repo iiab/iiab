@@ -150,7 +150,7 @@ file it belongs to. `awstats` is the reference implementation; `matomo` and
 `transmission` follow in later pull requests.
 
 The central rule is: **`install.yml` is gated by the runner**. It runs on the
-first install, during `--reinstall`, and during the apply half of
+first install, during `--reinstall`, and during the install part of
 `--clean-install`. It does **not** run on an ordinary apply of an already
 installed role. Put anything that must be reconciled on every apply in
 `configure.yml` (or in `state.yml` when recording values is the natural home).
@@ -158,10 +158,10 @@ installed role. Put anything that must be reconciled on every apply in
 | File | Required? | Runs when | May use the network? |
 |---|---|---|---|
 | `main.yml` | yes | every invocation; normally only includes the runner | no |
-| `install.yml` | optional | first install, `--reinstall`, and the apply half of `--clean-install` | yes (install/update only) |
+| `install.yml` | optional | first install, `--reinstall`, `--clean-install` | yes (install/update only) |
 | `configure.yml` | optional | every apply | only to fetch a missing immutable asset |
 | `state.yml` | optional | after a successful apply | no |
-| `uninstall.yml` | optional | `--uninstall` and the uninstall half of `--clean-install` | no |
+| `uninstall.yml` | optional | `--uninstall` and `--clean-install` | no |
 
 `enable-or-disable.yml` is a legacy convention, not part of the formal
 contract. The runner still executes it on every apply when present, but new or
