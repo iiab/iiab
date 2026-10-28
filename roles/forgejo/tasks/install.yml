@@ -7,6 +7,31 @@
       guard, orphaning an existing database.
     quiet: true
 
+# Resolve 'latest' to the newest published Forgejo release so the role tracks upstream
+# instead of a hard pin. Set forgejo_version to a specific value in local_vars.yml to opt out.
+- name: Resolve the latest Forgejo release (when forgejo_version == 'latest')
+  when: forgejo_version == 'latest'
+  block:
+    - name: Query Codeberg for the latest Forgejo release
+      uri:
+        url: "{{ forgejo_releases_api }}"
+        return_content: true
+      register: forgejo_latest
+
+    - name: Set forgejo_version from the latest release tag
+      set_fact:
+        forgejo_version: "{{ forgejo_latest.json.tag_name | regex_replace('^v', '') }}"
+
+# Validate the final version (resolved from the API, or pinned in local_vars) unconditionally.
+# A conditional assert *inside* the block above would be skipped once set_fact flips
+# forgejo_version off 'latest', letting a malformed version reach the download tasks.
+- name: Assert forgejo_version is a valid X.Y.Z release
+  assert:
+    that:
+      - forgejo_version is match('^[0-9]+\.[0-9]+\.[0-9]+$')
+    fail_msg: "forgejo_version='{{ forgejo_version }}' is not a valid X.Y.Z Forgejo release (resolved from {{ forgejo_releases_api }}, or pinned in local_vars.yml)."
+    quiet: true
+
 - name: Record (initial) disk space used
   shell: df -B1 --output=used / | tail -1
   register: df1
