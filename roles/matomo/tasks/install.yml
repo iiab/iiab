@@ -1,16 +1,9 @@
-# The sections of code interacting with the Matomo website are modified from code found at https://git.coop/webarch/matomo/. This code is distributed under
-# Version 3 of the GNU General Public License. We modified this code and applied it here in April 2022. The derived sections correspond to the tasks running
-# from "HTTP Get Welcome" through "Finish Matomo Setup", lines 63 through 199.
-
-
-- name: "WARNING: './runrole --reinstall matomo' CAN FAIL AS OF 2022-06-15, e.g. if /library/www/matomo already exists"
-  meta: noop
-
-# EXAMPLE OF ABOVE ERROR:
-
-# TASK [matomo : HTTP Get Welcome] ***************************************************************************************************************************************
-# fatal: [127.0.0.1]: FAILED! => {"cache_control": "private, no-cache, no-store", "changed": false, "connection": "close", "content_type": "text/html; charset=utf-8", "date": "Wed, 15 Jun 2022 05:07:41 GMT", "elapsed": 0, "expires": "Thu, 19 Nov 1981 08:52:00 GMT", "msg": "Status code was 500 and not [200]: HTTP Error 500: Internal Server Error", "pragma": "no-cache", "redirected": false, "server": "nginx/1.18.0 (Ubuntu)", "set_cookie": "MATOMO_SESSID=psak3aem27vrdrt8t2f016600f; path=/; HttpOnly; SameSite=Lax", "status": 500, "transfer_encoding": "chunked", "url": "http://box.lan/matomo/index.php?action=welcome", "x_matomo_request_id": "fbfd2"}
-
+---
+# Install/update phase. The runner runs this on first install, --reinstall
+# and --clean-install. install.yml is the only phase
+# that installs packages or downloads Matomo. The download is skipped when the
+# archive is already present, and extraction is skipped once Matomo is in
+# place, so a plain apply does not re-download anything.
 
 - name: "Set 'mysql_install: True' and 'mysql_enabled: True'"
   set_fact:
@@ -24,13 +17,7 @@
 - name: FAIL (STOP THE INSTALL) IF 'mysql_installed is undefined'
   fail:
     msg: "Matomo install cannot proceed, as MySQL / MariaDB is not installed."
-  when: mysql_installed is undefined
-
-
-- name: Record (initial) disk space used
-  shell: df -B1 --output=used / | tail -1
-  register: df1
-
+  when: not lookup('installed', 'mysql_installed')
 
 # https://matomo.org/faq/on-premise/matomo-requirements/
 - name: Install Matomo's recommended PHP extensions
@@ -47,6 +34,25 @@
   include_tasks: roles/www_options/tasks/php-settings.yml
   when: php_settings_done is undefined
 
+- name: Download Matomo (2 min)
+  get_curl:
+    url: "{{ matomo_dl_url }}"    # e.g. https://builds.matomo.org/matomo.tar.gz
+    dest: "{{ downloads_dir }}/matomo.tar.gz"
+    timeout: "{{ download_timeout }}"
+  register: matomo_dl
+
+- name: Extract Matomo (1 min)
+  unarchive:
+    src: "{{ matomo_dl.dest }}"
+    dest: "{{ matomo_path }}"     # e.g. /library/www
+    creates: "{{ matomo_path }}/matomo/index.php"
+
+- name: Set Matomo Directory Permissions
+  file:
+    path: "{{ matomo_path }}/matomo"
+    recurse: yes
+    owner: "{{ apache_user }}"    # e.g. www-data
+    group: "{{ apache_user }}"
 - name: Start 'php-fpm' via pdsm (proot)
   command: pdsm start php-fpm
   register: pdsm_start
@@ -54,7 +60,7 @@
   when: is_proot
 
 - name: Start MariaDB
-  #action: service name=mysql state=started
+  # action: service name=mysql state=started
   systemd:
     name: "{{ mysql_service }}"
     state: started
@@ -69,7 +75,7 @@
 - name: Create MariaDB Database for Matomo
   ansible.mariadb.mariadb_db:
     name: "{{ matomo_db_name }}"
-    #login_unix_socket: /var/run/mysqld/mysqld.sock
+    # login_unix_socket: /var/run/mysqld/mysqld.sock
   when: not is_proot
 
 - name: Add Admin User to MariaDB Database
@@ -78,7 +84,7 @@
     password: "{{ matomo_db_pass }}"
     update_password: on_create    # OR SHOULD './runrole --reinstall matomo' FORCE A COMPLETELY CLEAN INSTALL?
     priv: "{{ matomo_db_name }}.*:ALL"
-    #login_unix_socket: /var/run/mysqld/mysqld.sock
+    # login_unix_socket: /var/run/mysqld/mysqld.sock
   when: not is_proot
 
 - name: Prepare MariaDB database and user on (proot)
@@ -107,265 +113,6 @@
         - localhost
         - "{{ tcp_host }}"
 
-- name: Download Matomo (2 min)
-  get_curl:
-    url: "{{ matomo_dl_url }}"    # e.g. https://builds.matomo.org/matomo.tar.gz
-    dest: "{{ downloads_dir }}/matomo.tar.gz"
-    timeout: "{{ download_timeout }}"
-  register: matomo_dl
-
-- name: Extract Matomo (1 min)
-  unarchive:
-    src: "{{ matomo_dl.dest }}"
-    dest: "{{ matomo_path }}"     # e.g. /library/www
-
-- name: Set Matomo Directory Permissions
-  file:
-    path: "{{ matomo_path }}/matomo"
-    recurse: yes
-    owner: "{{ apache_user }}"    # e.g. www-data
-    group: "{{ apache_user }}"
-
-- name: HTTP Get Welcome
-  uri:
-    url: "{{ matomo_full_url }}index.php?action=welcome"    # e.g. http://box.lan/matomo
-    method: GET
-    status_code: 200
-    timeout: 120
-  register: matomo_welcome
-  until: matomo_welcome.status == 200
-  retries: 3
-  delay: 5
-
-- name: Show Matomo Welcome page HTTP status
-  debug:
-    msg: "Matomo welcome page returned HTTP {{ matomo_welcome.status }} for {{ matomo_welcome.url }} (after {{ matomo_welcome.attempts }} attempt{{ 's' if matomo_welcome.attempts != 1 else '' }})"
-
-- name: Set a variable for the MATOMO_SESSID cookie
-  set_fact:
-    matomo_session_cookie: "MATOMO_SESSID={{ cookie.value }}"
-  when: cookie.key == "MATOMO_SESSID"
-  loop: "{{ matomo_welcome.cookies | dict2items }}"
-  loop_control:
-    loop_var: cookie
-
-- name: Get Matomo System Check
-  uri:
-    url: "{{ matomo_full_url }}index.php?action=systemCheck"
-    method: GET
-    headers:
-      Cookie: "{{ matomo_session_cookie }}"
-    return_content: true
-    timeout: 120
-    status_code: 200
-  register: matomo_system_check
-  until: matomo_system_check.status == 200
-  retries: 3
-  delay: 5
-
-- name: Matomo Database Setup
-  uri:
-    url: "{{ matomo_full_url }}index.php?action=databaseSetup"
-    method: POST
-    headers:
-      Cookie: "{{ matomo_session_cookie }}"
-    body:
-      # TCP fields only in proot:
-      host: "{{ tcp_host if is_proot else omit }}"
-      port: "{{ tcp_port if is_proot else omit }}"
-      unix_socket: "{{ '' if is_proot else omit }}"
-      charset: "{{ 'utf8mb4' if is_proot else omit }}"
-      type: "{{ 'InnoDB' if is_proot else omit }}"
-      # Common fields:
-      username: "{{ matomo_db_user }}"
-      password: "{{ matomo_db_pass }}"
-      dbname: "{{ matomo_db_name }}"
-      tables_prefix: "matomo_"
-      adapter: "PDO\\MYSQL"
-    body_format: form-urlencoded
-    status_code: [200, 302]
-    follow_redirects: all
-    timeout: 120
-  register: matomo_database_setup
-  until: matomo_database_setup.status in [200, 302]
-  retries: 3
-  delay: 5
-
-- name: Matomo Table Creation
-  uri:
-    url: "{{ matomo_full_url }}index.php?action=tablesCreation&module=Installation"
-    method: GET
-    headers:
-      Cookie: "{{ matomo_session_cookie }}"
-    status_code: [200, 302]
-    follow_redirects: all
-    return_content: true
-  register: matomo_table_creation
-  failed_when: false
-  retries: 3
-  delay: 5
-  until: matomo_table_creation.status in [200, 302]
-
-- name: Set a variable for the MATOMO_SESSID cookie
-  set_fact:
-    matomo_session_cookie: "MATOMO_SESSID={{ cookie.value }}"
-  when:
-    - matomo_table_creation.cookies is defined
-    - matomo_table_creation.cookies | length > 0
-    - cookie.key == "MATOMO_SESSID"
-  loop: "{{ matomo_table_creation.cookies | dict2items }}"
-  loop_control:
-    loop_var: cookie
-
-- name: Matomo User Setup
-  uri:
-    url: "{{ matomo_full_url }}index.php?action=setupSuperUser&module=Installation"
-    method: POST
-    headers:
-      Cookie: "{{ matomo_session_cookie }}"
-    body:
-      login: "{{ matomo_db_user }}"
-      password: "{{ matomo_db_pass }}"
-      password_bis: "{{ matomo_db_pass }}"
-      email: "nobody@dev.null"
-      subscribe_newsletter_piwikorg: 0
-      subscribe_newsletter_professionalservices: 0
-    body_format: form-urlencoded
-    status_code: 302
-    timeout: 120
-  register: matomo_setup_superuser
-  until: matomo_setup_superuser.status == 302
-  retries: 3
-  delay: 5
-
-- name: Configure Matomo to track IIAB
-  uri:
-    url: "{{ matomo_full_url }}index.php?action=firstWebsiteSetup&module=Installation"
-    method: POST
-    headers:
-      Cookie: "{{ matomo_session_cookie }}"
-    body:
-      siteName: "IIAB"
-      url: "{{ matomo_host_url }}"
-      ecommerce: 0
-    body_format: form-urlencoded
-    status_code: [200, 302]
-    timeout: 120
-  register: _result
-  until: _result.status in [200, 302]
-  retries: 3
-  delay: 5
-
-- name: Fallback Configure Matomo to track IIAB
-  uri:
-    url: "{{ matomo_full_url }}index.php?action=firstWebsiteSetup&module=Installation"
-    method: POST
-    headers:
-      Cookie: "{{ matomo_session_cookie }}"
-    body:
-      siteName: "IIAB"
-      url: "{{ matomo_host_url }}"
-      timezone: "Europe/London"
-      ecommerce: 0
-    body_format: form-urlencoded
-    status_code: 302
-    timeout: 120
-  register: _fallback_result
-  until: _fallback_result.status == 302
-  retries: 3
-  delay: 5
-  when: _result.status == 200
-
-- name: Matomo Tracking Code
-  uri:
-    url: "{{ matomo_full_url }}index.php?action=trackingCode&module=Installation&site_idSite=1&site_name={{ matomo_host_url }}"
-    method: GET
-    headers:
-      Cookie: "{{ matomo_session_cookie }}"
-    return_content: true
-    status_code: 200
-    timeout: 120
-  register: matomo_tracking_code
-  until: matomo_tracking_code.status == 200
-  retries: 3
-  delay: 5
-
-- name: Finish Matomo Setup
-  uri:
-    url: "{{ matomo_full_url }}index.php?action=finished&module=Installation"
-    method: POST
-    headers:
-      Cookie: "{{ matomo_session_cookie }}"
-    body:
-      do_not_track: 1
-      anonymise_ip: 1
-      submit: "Continue to Matomo"
-    body_format: form-urlencoded
-    status_code: 302
-    timeout: 120
-  register: matomo_finished
-  until: matomo_finished.status == 302
-  retries: 3
-  delay: 5
-
-- name: Start Collecting Matomo Data
-  cron:
-    name: "MatomoDataIngestionOnReboot"
-    special_time: reboot
-    job: "{{ matomo_cronjob }}"
-    user: root
-    cron_file: "matomo_reboot"
-
-- name: Run Daily Job Collecting Matomo Data
-  cron:
-    name: "DailyMatomoDataIngestion"
-    minute: "0"
-    hour: "0"
-    job: "{{ matomo_cronjob }}"
-    user: root
-    cron_file: "matomo_daily"
-
-- name: Set Permissions for token.php
-  copy:
-    content: ""
-    dest: "{{ matomo_path }}/matomo/tmp/cache/token.php"
-    group: "{{ apache_user }}"
-    owner: "{{ apache_user }}"
-
-- name: Set Permissions for tracker Directory
-  file:
-    path: "{{ matomo_path }}/matomo/tmp/cache/tracker"
-    state: directory
-    owner: "{{ apache_user }}"
-    group: "{{ apache_user }}"
-
-- name: Don't Check for Trusted Host
-  ini_file:
-    path: "{{ matomo_path }}/matomo/config/config.ini.php"
-    section: General
-    option: enable_trusted_host_check
-    value: 0
-
-
-# RECORD Matomo AS INSTALLED
-
-- name: Record (final) disk space used
-  shell: df -B1 --output=used / | tail -1
-  register: df2
-
-- name: Add 'matomo_disk_usage = {{ df2.stdout | int - df1.stdout | int }}' to {{ iiab_ini_file }}
-  ini_file:
-    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
-    section: matomo
-    option: matomo_disk_usage
-    value: "{{ df2.stdout | int - df1.stdout | int }}"
-
-- name: "Set 'matomo_installed: True'"
-  set_fact:
-    matomo_installed: True
-
-- name: "Add 'matomo_installed: True' to {{ iiab_state_file }}"
-  lineinfile:
-    path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
-    regexp: '^matomo_installed'
-    line: 'matomo_installed: True'
+# The installed marker is written at the end of configure.yml, once the
+# one-time Matomo web installer has completed. A failure there must retry the
+# whole setup on the next run rather than leave Matomo half-configured.

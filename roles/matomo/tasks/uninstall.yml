@@ -1,0 +1,57 @@
+---
+# Included only when 'uninstall' is set.
+#
+# Remove the Matomo application, its configuration, the NGINX shortcut, and the
+# ingestion cron jobs. Shared packages such as MariaDB and the PHP extensions are
+# left in place.
+#
+# The Matomo database and its user are user data: they are declared in
+# matomo_user_data_databases and are never deleted. Everything in this phase is
+# local.
+
+- name: Remove the Matomo NGINX shortcut
+  file:
+    path: "{{ nginx_conf_dir }}/matomo-nginx.conf"
+    state: absent
+  notify:
+    - Reload nginx
+
+- name: Remove the Matomo application
+  file:
+    path: "{{ matomo_path }}/matomo"
+    state: absent
+
+- name: Remove the downloaded Matomo archive
+  file:
+    path: "{{ downloads_dir }}/matomo.tar.gz"
+    state: absent
+
+- name: Remove the Matomo ingestion cron jobs
+  cron:
+    name: "{{ item.name }}"
+    cron_file: "{{ item.cron_file }}"
+    state: absent
+  with_items:
+    - name: MatomoDataIngestionOnReboot
+      cron_file: matomo_reboot
+    - name: DailyMatomoDataIngestion
+      cron_file: matomo_daily
+
+- name: Record that Matomo is uninstalled in {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"
+    section: matomo
+    option: matomo_install
+    value: "False"
+
+- name: Record that Matomo is disabled in {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"
+    section: matomo
+    option: matomo_enabled
+    value: "False"
+
+- name: Remove Matomo markers from {{ iiab_state_file }}
+  iiab_state:
+    key: matomo_installed
+    state: absent

@@ -1,0 +1,58 @@
+---
+# Included only when 'uninstall' is set.
+#
+# Remove the service, settings, and packages. Downloaded content under
+# {{ transmission_download_dir }} is declared in transmission_user_data: it is
+# user data and is never deleted.
+
+- name: Check whether transmission-daemon.service is installed
+  stat:
+    path: /etc/systemd/system/transmission-daemon.service
+  register: transmission_uninstall_unit
+
+- name: Stop and disable Transmission before uninstalling
+  systemd:
+    name: transmission-daemon
+    state: stopped
+    enabled: no
+    daemon_reload: yes
+  when: transmission_uninstall_unit.stat.exists
+
+- name: Remove Transmission settings
+  file:
+    path: "{{ item }}"
+    state: absent
+  with_items:
+    - "{{ etc_path }}/transmission-daemon"
+    - /var/lib/transmission-daemon/.config/transmission-daemon/settings.json
+
+- name: Remove a leftover Transmission source checkout
+  file:
+    path: /opt/iiab/transmission
+    state: absent
+
+- name: Remove the Transmission packages
+  package:
+    name:
+      - transmission-daemon
+      - transmission-cli
+    state: absent
+
+- name: Record that Transmission is uninstalled in {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"
+    section: transmission
+    option: transmission_install
+    value: "False"
+
+- name: Record that Transmission is disabled in {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"
+    section: transmission
+    option: transmission_enabled
+    value: "False"
+
+- name: Remove Transmission markers from {{ iiab_state_file }}
+  iiab_state:
+    key: transmission_installed
+    state: absent
