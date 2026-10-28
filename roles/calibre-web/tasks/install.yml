@@ -6,11 +6,6 @@
 # https://github.com/iiab/iiab/tree/master/roles/calibre-web#upgrading
 
 
-- name: Record (initial) disk space used
-  shell: df -B1 --output=used / | tail -1
-  register: df1
-
-
 - name: Stop 'calibre-web' systemd service for safety (RED ERROR CAN BE IGNORED!)
   systemd:
     name: calibre-web
@@ -165,11 +160,6 @@
 # https://pip.pypa.io/en/stable/user_guide/#requirements-files
 # https://pip.pypa.io/en/latest/reference/requirements-file-format/
 
-- name: Install /etc/systemd/system/calibre-web.service from template
-  template:
-    src: calibre-web.service.j2
-    dest: /etc/systemd/system/calibre-web.service
-
 - name: Ensure log dir exists for Calibre-Web (proot)
   file:
     path: "{{ calibreweb_log }}"
@@ -206,27 +196,3 @@
     group: "{{ apache_user }}"         # www-data on debuntu
     backup: yes
   when: not appdb.stat.exists
-
-
-# RECORD Calibre-Web AS INSTALLED
-
-- name: Record (final) disk space used
-  shell: df -B1 --output=used / | tail -1
-  register: df2
-
-- name: Add 'calibreweb_disk_usage = {{ df2.stdout | int - df1.stdout | int }}' to {{ iiab_ini_file }}
-  ini_file:
-    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
-    section: calibre-web
-    option: calibreweb_disk_usage
-    value: "{{ df2.stdout | int - df1.stdout | int }}"
-
-- name: "Set 'calibreweb_installed: True'"
-  set_fact:
-    calibreweb_installed: True
-
-- name: "Add 'calibreweb_installed: True' to {{ iiab_state_file }}"
-  lineinfile:
-    path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
-    regexp: '^calibreweb_installed'
-    line: 'calibreweb_installed: True'

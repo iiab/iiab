@@ -1,3 +1,8 @@
+---
+# Install/update phase. The shared runner runs this on first install,
+# --reinstall and --clean-install. --reinstall (or a fresh host) wipes and
+# reclones the checkout. This is the only phase that may use the network.
+
 # 1. INSTALL 2 PREREQS
 
 - name: "Set 'nodejs_install: True' and 'nodejs_enabled: True'"
@@ -21,66 +26,62 @@
     state: present
 
 
-- name: Record (initial) disk space used
-  shell: df -B1 --output=used / | tail -1
-  register: df1
+# 2. UPDATE AN EXISTING INSTALL IN PLACE
 
+# 2020-02-11: @mitra42 & @holta agree (#2247) that the 2-stanza "UPDATE
+# internetarchive" portion should run whenever one isn't installing (or
+# reinstalling) internetarchive, for now.  The update branch refreshes an existing
+# checkout when install.yml runs without --reinstall.
+- name: "UPGRADE: Stop 'internetarchive' systemd service, if internetarchive_installed is defined"
+  systemd:
+    name: internetarchive
+    daemon_reload: yes
+    state: stopped
+  when:
+    - lookup('installed', 'internetarchive_installed')
+    - not reinstall
 
-# 2. CREATE DIR, WIPE/CLONE dweb-mirror & RUN NPM
-
-- name: mkdir {{ internetarchive_dir }}
-  file:
-    state: directory
-    path: "{{ internetarchive_dir }}"    # /opt/iiab/internetarchive
-
-- name: Wipe dir {{ internetarchive_dir }}/dweb-mirror so './runrole --reinstall internetarchive' gets you the latest code
-  file:
-    state: absent
-    path: "{{ internetarchive_dir }}/dweb-mirror"
-
-- name: Clone dweb-mirror from GitHub
-  git:
-    repo: https://github.com/internetarchive/dweb-mirror
-    dest: "{{ internetarchive_dir }}/dweb-mirror"
-
-- name: Run 'npm install' to download/populate {{ internetarchive_dir }}/dweb-mirror/node_modules (CAN TAKE ~5 MINUTES)
-  shell: npm install
+- name: "UPGRADE: Run 'npm install && npm update' in {{ internetarchive_dir }}/dweb-mirror, if internetarchive_installed is defined"
+  shell: npm install && npm update
   args:
     chdir: "{{ internetarchive_dir }}/dweb-mirror"
-
-- name: mkdir {{ content_base }}/archiveorg
-  file:
-    state: directory
-    path: "{{ content_base }}/archiveorg"    # /library
+  when:
+    - lookup('installed', 'internetarchive_installed')
+    - not reinstall
 
 
-# 3. CONFIG FILES
+# 3. INSTALL OR REBUILD FROM SCRATCH
 
-- name: "Install from template: /etc/systemd/system/internetarchive.service"
-  template:
-    src: internetarchive.service.j2
-    dest: /etc/systemd/system/internetarchive.service
+- name: Install Internet Archive from scratch
+  when: not lookup('installed', 'internetarchive_installed') or reinstall
+  block:
 
+    - name: mkdir {{ internetarchive_dir }}
+      file:
+        state: directory
+        path: "{{ internetarchive_dir }}"    # /opt/iiab/internetarchive
 
-# 4. RECORD Internet Archive AS INSTALLED
+    - name: Wipe dir {{ internetarchive_dir }}/dweb-mirror so './runrole --reinstall internetarchive' gets you the latest code
+      file:
+        state: absent
+        path: "{{ internetarchive_dir }}/dweb-mirror"
 
-- name: Record (final) disk space used
-  shell: df -B1 --output=used / | tail -1
-  register: df2
+    - name: Clone dweb-mirror from GitHub
+      git:
+        repo: https://github.com/internetarchive/dweb-mirror
+        dest: "{{ internetarchive_dir }}/dweb-mirror"
 
-- name: Add 'internetarchive_disk_usage = {{ df2.stdout | int - df1.stdout | int }}' to {{ iiab_ini_file }}
-  ini_file:
-    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
-    section: internetarchive
-    option: internetarchive_disk_usage
-    value: "{{ df2.stdout | int - df1.stdout | int }}"
+    - name: Run 'npm install' to download/populate {{ internetarchive_dir }}/dweb-mirror/node_modules (CAN TAKE ~5 MINUTES)
+      shell: npm install
+      args:
+        chdir: "{{ internetarchive_dir }}/dweb-mirror"
 
-- name: "Set 'internetarchive_installed: True'"
-  set_fact:
-    internetarchive_installed: True
+    - name: mkdir {{ content_base }}/archiveorg
+      file:
+        state: directory
+        path: "{{ content_base }}/archiveorg"    # /library
 
-- name: "Add 'internetarchive_installed: True' to {{ iiab_state_file }}"
-  lineinfile:
-    path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
-    regexp: '^internetarchive_installed'
-    line: 'internetarchive_installed: True'
+    - name: "Install from template: /etc/systemd/system/internetarchive.service"
+      template:
+        src: internetarchive.service.j2
+        dest: /etc/systemd/system/internetarchive.service

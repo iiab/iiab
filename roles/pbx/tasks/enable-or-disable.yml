@@ -3,13 +3,13 @@
 
 - name: EITHER - Create symlink /etc/{{ apache_service }}/sites-enabled/freepbx.conf to enable Apache's http://box:{{ pbx_http_port }}/freepbx - if apache_installed is defined and pbx_use_apache and pbx_enabled    # http://box:83/freepbx
   command: a2ensite freepbx.conf
-  when: apache_installed is defined and pbx_use_apache and pbx_enabled
+  when: lookup('installed', 'apache_installed') and pbx_use_apache and pbx_enabled
 
 - name: OR ELSE - Delete symlink /etc/{{ apache_service }}/sites-enabled/freepbx.conf to disable Apache's http://box:{{ pbx_http_port }}/freepbx - if not (apache_installed is defined and pbx_use_apache and pbx_enabled)
   file:    # As 'a2dissite freepbx.conf' might not be installed
     path: /etc/{{ apache_service }}/sites-enabled/freepbx.conf    # apache2
     state: absent
-  when: not (apache_installed is defined and pbx_use_apache and pbx_enabled)
+  when: not (lookup('installed', 'apache_installed') and pbx_use_apache and pbx_enabled)
 
 
 - name: "ENACT ABOVE SETTING FOR APACHE - 'pbx_use_apache: False' might arise later, so best ALWAYS run..."
@@ -21,7 +21,7 @@
     name: "{{ apache_service }}"    # apache2
     state: restarted
     enabled: yes
-  when: apache_installed is defined and pbx_use_apache and pbx_enabled
+  when: lookup('installed', 'apache_installed') and pbx_use_apache and pbx_enabled
 
 - name: OR ELSE - Stop & Disable '{{ apache_service }}' systemd service - if not (apache_installed is defined and pbx_use_apache and pbx_enabled)
   systemd:
@@ -29,7 +29,7 @@
     name: "{{ apache_service }}"
     state: stopped
     enabled: no
-  when: not (apache_installed is defined and pbx_use_apache and pbx_enabled)
+  when: not (lookup('installed', 'apache_installed') and pbx_use_apache and pbx_enabled)
   ignore_errors: yes    # If Apache not installed, HIGHLIGHT IN RED FOR IMPLEMENTER/OPERATOR
 
 - name: Open-or-Close Asterix ports (including Apache port {{ pbx_http_port }}) in iptables firewall, depending on pbx_enabled [{{ pbx_enabled }}] in local_vars.yml - in support of './runrole pbx'
@@ -62,6 +62,8 @@
       template:
         src: freepbx-nginx.conf.j2
         dest: "{{ nginx_conf_dir }}/freepbx-nginx.conf"    # /etc/nginx/conf.d
+      notify:
+        - Reload nginx
 
   when: pbx_use_nginx and pbx_enabled
 
@@ -82,6 +84,8 @@
       file:
         path: "{{ nginx_conf_dir }}/freepbx-nginx.conf"
         state: absent
+      notify:
+        - Reload nginx
 
   when: not (pbx_use_nginx and pbx_enabled)
 
@@ -94,14 +98,6 @@
     name: php{{ php_version }}-fpm
     state: restarted
     enabled: yes
-
-- name: Restart 'nginx' systemd service
-  systemd:
-    name: nginx
-    state: restarted
-
-
-
 
 - name: WRAP UP - Asterisk VIA FreePBX systemd service...
   meta: noop

@@ -1,0 +1,273 @@
+#!/usr/bin/env python3
+"""Read and write the IIAB state file from shell code.
+
+This is the shell-facing companion to ``modules/iiab_state.py``.  It keeps the
+flat YAML format that IIAB already uses, but replaces ``grep``/``sed`` edits
+with locked, atomic read-modify-write operations.  The default path comes from
+``IIAB_STATE_FILE`` or ``/etc/iiab/iiab_state.yml``.
+
+Examples::
+
+    ./scripts/iiab-state list
+    ./scripts/iiab-state get awstats_installed
+    ./scripts/iiab-state set awstats_installed
+    ./scripts/iiab-state forget awstats
+    ./scripts/iiab-state is-installed awstats
+    ./scripts/iiab-state has-prefix awstats
+    ./scripts/iiab-state normalize --json
+    ./scripts/iiab-state diff expected_state.yml /etc/iiab/iiab_state.yml
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import sys
+from pathlib import Path
+
+from iiab_state_lib import LoadError, load_state_module
+
+# IIAB installs Ansible (and PyYAML) in a dedicated venv.  Re-exec there when
+# the system python3 lacks PyYAML, so shell callers work before/without a
+# system-wide install.  The sentinel stops two interpreters that both lack
+# PyYAML from re-exec'ing each other forever.
+REEXEC_SENTINEL = "IIAB_STATE_REEXEC"
+try:
+    import yaml  # noqa: F401
+except ImportError:
+    if os.environ.get(REEXEC_SENTINEL):
+        raise
+    for candidate in ("/usr/local/ansible/bin/python3", "/usr/bin/python3"):
+        if (
+            os.path.exists(candidate)
+            and os.path.realpath(candidate) != os.path.realpath(sys.executable)
+        ):
+            os.environ[REEXEC_SENTINEL] = "1"
+            os.execv(candidate, [candidate, str(Path(__file__).resolve()), *sys.argv[1:]])
+    raise
+
+try:
+    state_module = load_state_module()
+except LoadError as error:
+    sys.exit(f"iiab-state: {error}")
+
+DEFAULT_PATH = state_module.DEFAULT_PATH
+MARKER_SUFFIXES = state_module.MARKER_SUFFIXES
+
+
+def as_bool(value):
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in ("true", "yes", "on", "1")
+    return bool(value)
+
+
+def show(value):
+    if isinstance(value, bool):
+        return "True" if value else "False"
+    if value is None:
+        return "null"
+    return str(value)
+
+
+def parse_value(text):
+    lowered = text.strip().lower()
+    if lowered in ("true", "yes", "on"):
+        return True
+    if lowered in ("false", "no", "off"):
+        return False
+    if lowered in ("null", "none", "~"):
+        return None
+    return text
+
+
+def normalized(path):
+    data, _ = state_module.load_state(path)
+    return {
+        key: as_bool(value)
+        for key, value in data.items()
+        if key.endswith(MARKER_SUFFIXES)
+    }
+
+
+def print_diff(expected, actual):
+    missing = sorted(set(expected) - set(actual))
+    extra = sorted(set(actual) - set(expected))
+    changed = sorted(
+        key for key in set(expected) & set(actual) if expected[key] != actual[key]
+    )
+    for key in missing:
+        print(f"missing: {key}")
+    for key in extra:
+        print(f"extra:   {key}")
+    for key in changed:
+        print(f"changed: {key} (expected {show(expected[key])}, got {show(actual[key])})")
+    return bool(missing or extra or changed)
+
+
+def build_parser():
+    parser = argparse.ArgumentParser(
+        description="Read and write IIAB install-state markers.",
+    )
+    parser.add_argument(
+        "--file",
+        default=DEFAULT_PATH,
+        help=f"state file (default: {DEFAULT_PATH})",
+    )
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    get = subparsers.add_parser("get", help="print one value")
+    get.add_argument("key")
+    get.add_argument("--default")
+
+    set_parser = subparsers.add_parser("set", help="set one key")
+    set_parser.add_argument("key")
+    set_parser.add_argument("value", nargs="?", default="True")
+    set_parser.add_argument("--dry-run", action="store_true")
+
+    remove = subparsers.add_parser("remove", help="remove exact keys")
+    remove.add_argument("keys", nargs="+")
+    remove.add_argument("--dry-run", action="store_true")
+
+    forget = subparsers.add_parser(
+        "forget", help="remove every marker for a role prefix"
+    )
+    forget.add_argument("prefix")
+    forget.add_argument("--dry-run", action="store_true")
+
+    list_parser = subparsers.add_parser("list", help="print all markers")
+    list_parser.add_argument("--prefix")
+    list_parser.add_argument("--all", action="store_true", help="include non-marker keys")
+
+    installed = subparsers.add_parser(
+        "is-installed", help="exit 0 when a role's installed marker is true"
+    )
+    installed.add_argument("role")
+
+    has_prefix = subparsers.add_parser(
+        "has-prefix",
+        help="exit 0 when any true marker has this role/prefix; 2 on read error",
+    )
+    has_prefix.add_argument("prefix")
+
+    normalize = subparsers.add_parser(
+        "normalize", help="print a stable installed/downloaded view"
+    )
+    normalize.add_argument("--json", action="store_true")
+
+    diff = subparsers.add_parser(
+        "diff", help="compare two state files after normalization"
+    )
+    diff.add_argument("expected")
+    diff.add_argument("actual")
+
+    return parser
+
+
+def main(argv=None):
+    parser = build_parser()
+    args = parser.parse_args(argv)
+
+    try:
+        if args.command == "get":
+            data, _ = state_module.load_state(args.file)
+            if args.key not in data:
+                if args.default is not None:
+                    print(args.default)
+                    return 0
+                print(f"iiab-state: {args.key} is not set", file=sys.stderr)
+                return 1
+            print(show(data[args.key]))
+            return 0
+
+        if args.command == "set":
+            result = state_module.change_state(
+                path=args.file,
+                key=args.key,
+                value=parse_value(args.value),
+                write=not args.dry_run,
+            )
+            if args.dry_run and result["changed"]:
+                print(f"would set {args.key} in {args.file}")
+            return 0
+
+        if args.command == "remove":
+            result = state_module.change_state(
+                path=args.file,
+                state="absent",
+                keys=args.keys,
+                write=not args.dry_run,
+            )
+            prefix = "would remove" if args.dry_run else "removed"
+            for key in result["removed"]:
+                print(f"{prefix} {key}")
+            return 0
+
+        if args.command == "forget":
+            data, _ = state_module.load_state(args.file)
+            keys = state_module.marker_keys(data, args.prefix)
+            if not keys:
+                return 0
+            result = state_module.change_state(
+                path=args.file,
+                state="absent",
+                keys=keys,
+                write=not args.dry_run,
+            )
+            prefix = "would remove" if args.dry_run else "removed"
+            for key in result["removed"]:
+                print(f"{prefix} {key}")
+            return 0
+
+        if args.command == "list":
+            data, _ = state_module.load_state(args.file)
+            for key in sorted(data):
+                if args.prefix and not (
+                    key == args.prefix or key.startswith(args.prefix + "_")
+                ):
+                    continue
+                if not args.all and not key.endswith(MARKER_SUFFIXES):
+                    continue
+                print(f"{key}: {show(data[key])}")
+            return 0
+
+        if args.command == "is-installed":
+            key = args.role
+            if not key.endswith(MARKER_SUFFIXES):
+                key += "_installed"
+            data, _ = state_module.load_state(args.file)
+            return 0 if as_bool(data.get(key, False)) else 1
+
+        if args.command == "has-prefix":
+            data, _ = state_module.load_state(args.file)
+            keys = state_module.marker_keys(data, args.prefix)
+            return 0 if any(as_bool(data[key]) for key in keys) else 1
+
+        if args.command == "normalize":
+            data = normalized(args.file)
+            if args.json:
+                print(json.dumps(data, indent=2, sort_keys=True))
+            else:
+                for key in sorted(data):
+                    print(f"{key}: {show(data[key])}")
+            return 0
+
+        if args.command == "diff":
+            if not os.path.exists(args.expected):
+                print(f"iiab-state: {args.expected} not found", file=sys.stderr)
+                return 2
+            changed = print_diff(normalized(args.expected), normalized(args.actual))
+            return 1 if changed else 0
+
+    except (OSError, state_module.StateError) as error:
+        print(f"iiab-state: {error}", file=sys.stderr)
+        return 2
+
+    parser.error(f"unknown command: {args.command}")
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())

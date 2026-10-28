@@ -1,0 +1,187 @@
+---
+# Shared role lifecycle runner.  A role's tasks/main.yml includes this file:
+#
+#   - name: Run the <Role> lifecycle
+#     include_role:
+#       name: 0-init
+#       tasks_from: lifecycle
+#
+# Contract (also documented in "Role task lifecycle" in the top-level README):
+#
+#   install.yml          first install, --clean-install and --reinstall only
+#   configure.yml        every apply (optional)
+#   enable-or-disable.yml every apply (optional)
+#   state.yml            every successful apply (optional)
+#   reinstall.yml        --reinstall only (optional)
+#   uninstall.yml        --uninstall only (optional; also use for
+#                        --clean-install, which is uninstall + apply)
+#   validate.yml         every apply except --uninstall (optional; prefer the
+#                        0-init checklist for install/enabled checks)
+#
+# The runner identifies the calling role from Ansible's parent-role variables,
+# runs the standard phases in order, skips phase files the role does not have,
+# and measures disk usage around install/configure when the role is not
+# installed yet or is being reinstalled.
+
+- name: Identify the role using the shared lifecycle runner
+  set_fact:
+    lifecycle_role: "{{ ansible_parent_role_names | first }}"
+    lifecycle_prefix: "{{ lookup('role_var', ansible_parent_role_names | first) }}"
+    lifecycle_phases: >-
+      {{ lookup('fileglob', (ansible_parent_role_paths | first) ~ '/tasks/*.yml', wantlist=True)
+         | map('basename')
+         | map('regex_replace', '\.ya?ml$', '')
+         | list }}
+
+- name: Uninstall {{ lifecycle_role }}
+  include_role:
+    name: "{{ lifecycle_role }}"
+    tasks_from: uninstall
+  when:
+    - uninstall
+    - "'uninstall' in lifecycle_phases"
+
+- name: Apply {{ lifecycle_role }}
+  when: not uninstall
+  block:
+
+    - name: Validate {{ lifecycle_role }} settings
+      include_role:
+        name: "{{ lifecycle_role }}"
+        tasks_from: validate
+      when: "'validate' in lifecycle_phases"
+
+    - name: Restore the {{ ansible_parent_role_names | first }} lifecycle context
+      set_fact:
+        lifecycle_role: "{{ ansible_parent_role_names | first }}"
+        lifecycle_prefix: "{{ lookup('role_var', ansible_parent_role_names | first) }}"
+        lifecycle_phases: >-
+          {{ lookup('fileglob', (ansible_parent_role_paths | first) ~ '/tasks/*.yml', wantlist=True)
+             | map('basename')
+             | map('regex_replace', '\.ya?ml$', '')
+             | list }}
+
+    # Snapshot before install.yml writes the marker.  A dict keyed by role
+    # keeps nested includes (e.g. matomo -> mysql) from clobbering our state.
+    - name: Capture {{ lifecycle_role }} install state
+      set_fact:
+        lifecycle_state: >-
+          {{ (lifecycle_state | default({}))
+             | combine({lifecycle_role: {
+                  'installed': lookup('installed', lifecycle_prefix),
+                  'record_disk_usage': (not lookup('installed', lifecycle_prefix) or reinstall),
+                  'needs_setup': not lookup('installed', lifecycle_prefix)
+                }}) }}
+
+    - name: Prepare an existing {{ lifecycle_role }} install for reinstall
+      include_role:
+        name: "{{ lifecycle_role }}"
+        tasks_from: reinstall
+      when:
+        - reinstall
+        - "'reinstall' in lifecycle_phases"
+
+    - name: Restore the {{ ansible_parent_role_names | first }} lifecycle context
+      set_fact:
+        lifecycle_role: "{{ ansible_parent_role_names | first }}"
+        lifecycle_prefix: "{{ lookup('role_var', ansible_parent_role_names | first) }}"
+        lifecycle_phases: >-
+          {{ lookup('fileglob', (ansible_parent_role_paths | first) ~ '/tasks/*.yml', wantlist=True)
+             | map('basename')
+             | map('regex_replace', '\.ya?ml$', '')
+             | list }}
+
+    - name: Record initial disk space used for {{ lifecycle_role }}
+      include_role:
+        name: 0-init
+        tasks_from: disk_usage_start
+      vars:
+        disk_usage_role: "{{ lifecycle_role }}"
+      when: lifecycle_state[lifecycle_role].record_disk_usage | bool
+
+    # install.yml is deliberately not run on a plain apply: it may download,
+    # clone, or rebuild.  Put settings that must be reconciled every time in
+    # configure.yml (or enable-or-disable.yml) instead.
+    - name: Install or repair {{ lifecycle_role }}
+      include_role:
+        name: "{{ lifecycle_role }}"
+        tasks_from: install
+      when:
+        - "'install' in lifecycle_phases"
+        - not lifecycle_state[lifecycle_role].installed or reinstall
+
+    - name: Restore the {{ ansible_parent_role_names | first }} lifecycle context
+      set_fact:
+        lifecycle_role: "{{ ansible_parent_role_names | first }}"
+        lifecycle_prefix: "{{ lookup('role_var', ansible_parent_role_names | first) }}"
+        # Nested includes (e.g. matomo -> mysql) overwrite a plain fact, so
+        # read the parent's snapshot explicitly.
+        lifecycle_needs_setup: "{{ lifecycle_state[ansible_parent_role_names | first].needs_setup }}"
+        lifecycle_phases: >-
+          {{ lookup('fileglob', (ansible_parent_role_paths | first) ~ '/tasks/*.yml', wantlist=True)
+             | map('basename')
+             | map('regex_replace', '\.ya?ml$', '')
+             | list }}
+
+    - name: Apply {{ lifecycle_role }} configuration
+      include_role:
+        name: "{{ lifecycle_role }}"
+        tasks_from: configure
+      when: "'configure' in lifecycle_phases"
+
+    - name: Restore the {{ ansible_parent_role_names | first }} lifecycle context
+      set_fact:
+        lifecycle_role: "{{ ansible_parent_role_names | first }}"
+        lifecycle_prefix: "{{ lookup('role_var', ansible_parent_role_names | first) }}"
+        lifecycle_phases: >-
+          {{ lookup('fileglob', (ansible_parent_role_paths | first) ~ '/tasks/*.yml', wantlist=True)
+             | map('basename')
+             | map('regex_replace', '\.ya?ml$', '')
+             | list }}
+
+    - name: Enable or disable {{ lifecycle_role }}
+      include_role:
+        name: "{{ lifecycle_role }}"
+        tasks_from: enable-or-disable
+      when: "'enable-or-disable' in lifecycle_phases"
+
+    - name: Restore the {{ ansible_parent_role_names | first }} lifecycle context
+      set_fact:
+        lifecycle_role: "{{ ansible_parent_role_names | first }}"
+        lifecycle_prefix: "{{ lookup('role_var', ansible_parent_role_names | first) }}"
+        lifecycle_phases: >-
+          {{ lookup('fileglob', (ansible_parent_role_paths | first) ~ '/tasks/*.yml', wantlist=True)
+             | map('basename')
+             | map('regex_replace', '\.ya?ml$', '')
+             | list }}
+
+    - name: Record {{ lifecycle_role }} state
+      include_role:
+        name: "{{ lifecycle_role }}"
+        tasks_from: state
+      when: "'state' in lifecycle_phases"
+
+    - name: Restore the {{ ansible_parent_role_names | first }} lifecycle context
+      set_fact:
+        lifecycle_role: "{{ ansible_parent_role_names | first }}"
+        lifecycle_prefix: "{{ lookup('role_var', ansible_parent_role_names | first) }}"
+        lifecycle_phases: >-
+          {{ lookup('fileglob', (ansible_parent_role_paths | first) ~ '/tasks/*.yml', wantlist=True)
+             | map('basename')
+             | map('regex_replace', '\.ya?ml$', '')
+             | list }}
+
+    - name: Record final disk space used for {{ lifecycle_role }}
+      include_role:
+        name: 0-init
+        tasks_from: disk_usage_finish
+      vars:
+        disk_usage_role: "{{ lifecycle_role }}"
+      when: lifecycle_state[lifecycle_role].record_disk_usage | bool
+
+  rescue:
+
+    - name: 'SEE ERROR ABOVE (skip_role_on_error: {{ skip_role_on_error }})'
+      fail:
+        msg: ""
+      when: not skip_role_on_error

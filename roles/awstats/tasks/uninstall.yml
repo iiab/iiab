@@ -1,0 +1,48 @@
+---
+# Included only when 'uninstall' is set.
+#
+# Remove the AWStats package, its configuration, and the NGINX shortcut. The
+# summary data in {{ awstats_data_dir }} is declared as user data and is never
+# deleted. This phase is local and does not need the network.
+
+- name: Remove the AWStats NGINX shortcut
+  file:
+    path: "{{ nginx_conf_dir }}/awstats-nginx.conf"
+    state: absent
+  notify:
+    - Reload nginx
+
+- name: Remove AWStats configuration and CGI directory
+  file:
+    path: "{{ item }}"
+    state: absent
+  with_items:
+    - /etc/awstats/awstats.conf
+    - /etc/awstats/awstats.conf.dist
+    - /etc/awstats/awstats.schoolserver.conf
+    - /etc/nginx/cgi-bin.php
+    - /usr/lib/cgi-bin/awstats
+
+- name: Remove the awstats package
+  package:
+    name: awstats
+    state: absent
+
+- name: Record that AWStats is uninstalled in {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"
+    section: awstats
+    option: awstats_install
+    value: "False"
+
+- name: Record that AWStats is disabled in {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"
+    section: awstats
+    option: awstats_enabled
+    value: "False"
+
+- name: Remove AWStats markers from {{ iiab_state_file }}
+  iiab_state:
+    key: awstats_installed
+    state: absent
