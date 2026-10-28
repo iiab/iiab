@@ -153,17 +153,19 @@ The central rule is: **`install.yml` is gated by the runner**. It runs on the
 first install, during `--reinstall`, and during the apply half of
 `--clean-install`. It does **not** run on an ordinary apply of an already
 installed role. Put anything that must be reconciled on every apply in
-`configure.yml` (or in `enable-or-disable.yml` / `state.yml` when that is the
-natural home).
+`configure.yml` (or in `state.yml` when recording values is the natural home).
 
 | File | Required? | Runs when | May use the network? |
 |---|---|---|---|
 | `main.yml` | yes | every invocation; normally only includes the runner | no |
 | `install.yml` | optional | first install, `--reinstall`, and the apply half of `--clean-install` | yes (install/update only) |
 | `configure.yml` | optional | every apply | only to fetch a missing immutable asset |
-| `enable-or-disable.yml` | optional | every apply | no |
 | `state.yml` | optional | after a successful apply | no |
 | `uninstall.yml` | optional | `--uninstall` and the uninstall half of `--clean-install` | no |
+
+`enable-or-disable.yml` is a legacy convention, not part of the formal
+contract. The runner still executes it on every apply when present, but new or
+converted roles should put that work in `configure.yml`.
 
 The rules are intentionally simple:
 
@@ -179,9 +181,10 @@ The rules are intentionally simple:
   must be re-applied on an ordinary apply.
 - `uninstall.yml` removes the program and its settings, never declared user
   data, and removes the role's state markers as its final task.
-- Write the installed marker only after `configure.yml` (and any
-  enable/disable step) has succeeded. Roles that use the runner do this in
-  `state.yml`. Never write it in `install.yml` or a helper included by it.
+- Write the installed marker only after `configure.yml` (and the legacy
+  enable/disable step, when present) has succeeded. Roles that use the runner
+  do this in `state.yml`. Never write it in `install.yml` or a helper included
+  by it.
 - Do not add `disk_usage_start.yml` / `disk_usage_finish.yml` includes to a
   role that uses the shared runner. The runner measures disk usage around the
   whole `install.yml` -> `configure.yml` sequence when the role is not

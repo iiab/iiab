@@ -67,8 +67,10 @@ ROLE_EXTRA_SERVICES = {
     "samba": {"smbd", "nmbd"},
 }
 
-# Task files defined by the "Role task lifecycle" section of README.md. Only
-# these need phase-aware checks; helper files are reached through them.
+# Task files executed by the lifecycle runner. Only these need phase-aware
+# checks; helper files are reached through them. enable-or-disable is a legacy
+# convention outside the formal contract, but the runner still executes it, so
+# it is checked too.
 LIFECYCLE_FILES = {
     "main",
     "uninstall",
