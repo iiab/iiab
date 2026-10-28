@@ -71,7 +71,6 @@ ROLE_EXTRA_SERVICES = {
 # these need phase-aware checks; helper files are reached through them.
 LIFECYCLE_FILES = {
     "main",
-    "validate",
     "uninstall",
     "install",
     "configure",
@@ -84,7 +83,6 @@ LIFECYCLE_FILES = {
 # only dispatches to the phase that owns the work.
 OFFLINE_PHASES = {
     "main",
-    "validate",
     "uninstall",
     "state",
     "enable-or-disable",
@@ -121,7 +119,6 @@ NETWORK_COMMAND = re.compile(
 
 LIFECYCLE_HINTS = {
     "main": "tasks/main.yml should only validate and dispatch; move the work to install.yml or configure.yml",
-    "validate": "validate.yml must not use the network; move the fetch to install.yml",
     "uninstall": "uninstall.yml must work offline; move the fetch to install.yml",
     "install": "install.yml should not run configure.yml; main.yml owns the phase order",
     "configure": "configure.yml should not install the program; move that work to install.yml",

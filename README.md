@@ -159,7 +159,6 @@ natural home).
 | File | Required? | Runs when | May use the network? |
 |---|---|---|---|
 | `main.yml` | yes | every invocation; normally only includes the runner | no |
-| `validate.yml` | optional | every apply except `--uninstall` | no |
 | `install.yml` | optional | first install, `--reinstall`, and the apply half of `--clean-install` | yes (install/update only) |
 | `configure.yml` | optional | every apply | only to fetch a missing immutable asset |
 | `enable-or-disable.yml` | optional | every apply | no |
