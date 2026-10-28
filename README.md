@@ -50,10 +50,11 @@ repeatable: the role is installed if missing and otherwise reconfigured.
 
 The options escalate, from least to most work:
 
-- `--reinstall` reruns the role's install/update path. A role whose rebuild
-  needs manual cleanup can opt out with `reinstall: false` in
-  `roles/<role>/meta/runrole.yml`. Converted roles keep their installed markers
-  during the rebuild; legacy roles have them removed first, as before.
+- `--reinstall` reruns the role's install/update path, installing the role
+  first when it is missing. A role whose rebuild needs manual cleanup can opt
+  out with `reinstall: false` in `roles/<role>/meta/runrole.yml`. Converted
+  roles keep their installed markers during the rebuild; legacy roles have them
+  removed first, as before.
 - `--clean-install` is literally `--uninstall` followed by a normal apply, so
   it requires the role to support `--uninstall`.
 - `--uninstall` removes the program and its settings where supported.
@@ -78,9 +79,12 @@ without `--reinstall` to finish the install.
 `./runroles` accepts the same options and multiple roles, e.g.
 `./runroles --status captiveportal kiwix`.
 
-`runrole` and `runroles` validate only the role(s) they were asked to run. Full
-installs validate the complete 0-init checklist. `--check-local-vars` validates
-configuration only, is read-only, and does not run role-specific runtime checks.
+`runrole` and `runroles` validate only the role(s) or checklist variable
+prefix(es) they were asked about. Full installs validate the complete 0-init
+checklist. `--check-local-vars` validates configuration only, is read-only, and
+does not run role-specific runtime checks. The name may be a role or any
+variable prefix from the checklist, including prefixes such as `squid` that a
+larger role manages.
 
 If `./runrole --uninstall <role>` keeps failing, fix the reported error and
 retry. If you already removed the program another way, clear its markers with
@@ -202,8 +206,11 @@ The rules are intentionally simple:
 
       when: not lookup('installed', 'mysql') or reinstall
 
-  The state file is no longer loaded through `vars_files`; the lookup reads it
-  directly and also sees a marker set with `set_fact` earlier in the run.
+  The `installed` lookup reads the state file directly, so a role can use it
+  even when `vars_files` did not load the state file. It still prefers a value
+  set with `set_fact` earlier in the run. Entry playbooks still load
+  `/etc/iiab/iiab_state.yml` through `vars_files` today; that goes away as
+  roles are converted one at a time.
 
 ### Converting an existing role
 
@@ -281,12 +288,15 @@ Use the role's state-file prefix, so `calibre-web` uses `calibreweb_user_data`.
 `--clean-install`, `--reinstall`, and `--uninstall` must leave every declared
 path and database in place. There is no option that deletes them.
 
-`scripts/test-role-lifecycle.py` also scans the lifecycle task files and prints
-`WARN` lines with the file, line, and task name when a phase that must work
-offline does network work, when an offline phase includes a phase that may use
-the network, or when a state marker is tested directly. Warnings do not fail
-unless `--strict` is used. A deliberate exception can carry a
-`# lifecycle: allow-network <reason>` comment immediately above the task.
+`scripts/test-role-lifecycle.py` runs the mocked lifecycle scenarios for one
+role (or `--all` for every role) and also scans the lifecycle task files. It
+prints `WARN` lines with the file, line, and task name when a phase that must
+work offline does network work, when an offline phase includes a phase that may
+use the network, when a state marker is tested directly, or when a marker is
+written before the role has finished. Warnings do not fail unless `--strict` is
+used, so `--all` can be used to track conversion progress; a reference to the
+removed `clean_install` variable always fails. A deliberate exception can carry
+a `# lifecycle: allow-network <reason>` comment immediately above the task.
 
 ## Community
 

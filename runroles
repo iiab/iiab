@@ -51,7 +51,7 @@ Options:
       --check-local-vars
                         Validate /etc/iiab/local_vars.yml and exit, without
                         running or changing anything. Checks the full checklist,
-                        or only the listed role(s)
+                        or only the listed role(s) or variable prefix(es)
       --status          Show installed/desired state without changing anything
       --list            List roles with their installed state and capabilities
   -h, --help            Show this help
@@ -71,9 +71,10 @@ reset: whether settings and program data survive depends on the role. To remove
 user data, do it manually.
 
 --clean-install is literally --uninstall followed by a normal apply, so a role
-supports it exactly when it supports --uninstall. --reinstall, --clean-install,
-and apply act on roles the configuration says should be installed, so they also
-require '<prefix>_install: True' (pass -a to override it for one run).
+supports it exactly when it supports --uninstall. --reinstall installs a role
+that is missing and rebuilds it otherwise. Apply, --reinstall, and
+--clean-install act on roles the configuration says should be installed, so they
+also require '<prefix>_install: True' (pass -a to override it for one run).
 --check-local-vars is read-only: it validates the configuration and exits.
 
 * --reinstall reruns each role's install/update path. Some roles keep settings
@@ -169,12 +170,14 @@ for role in "${ROLES[@]}"; do
         exit 1
     fi
     if ! role_exists "$role"; then
-        # --status also accepts prefixes managed by a larger role or stage
-        # (squid, hostapd, dnsmasq, admin_console).
+        # --status and --check-local-vars also accept prefixes managed by a
+        # larger role or stage (squid, hostapd, dnsmasq).
         if ! $STATUS; then
-            echo "ERROR: unknown role: $role"
-            echo "Run './runroles --list' to see the available roles."
-            exit 1
+            if ! $CHECK_LOCAL_VARS || ! is_checklist_prefix "$role"; then
+                echo "ERROR: unknown role: $role"
+                echo "Run './runroles --list' to see the available roles."
+                exit 1
+            fi
         fi
     fi
 done
@@ -249,7 +252,7 @@ if $CHECK_LOCAL_VARS; then
     PLAYBOOK=check-local-vars.yml
     CHECK_LOCAL_VARS_ROLES=""
     for role in "${ROLES[@]}"; do
-        prefix=$(role_install_var "$role")
+        prefix=$(checklist_install_var "$role")
         if [ -n "$prefix" ]; then
             CHECK_LOCAL_VARS_ROLES="${CHECK_LOCAL_VARS_ROLES}\"${prefix}\","
         fi
@@ -291,8 +294,6 @@ if $UNINSTALL || $CLEAN_INSTALL; then
         if state_has_prefix "$var"; then
             found=true
             UNINSTALL_ROLES+=("$role")
-        elif $CLEAN_INSTALL; then
-            echo "$role is not installed; nothing to uninstall."
         else
             echo "$role is not installed; nothing to uninstall."
         fi

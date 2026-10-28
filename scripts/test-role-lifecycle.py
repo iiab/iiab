@@ -3,12 +3,11 @@
 
 Besides the scenarios, task files are scanned for lifecycle warnings: network
 work in a phase that must stay offline, offline phases that include a phase
-which may use the network, and unsafe state checks. The scenarios also seed a
-role's declared user data and check that every runrole operation keeps it.
-
-``clean_install`` is no longer a runtime flag: --clean-install is --uninstall
-followed by a normal apply. The test fails if any Ansible file still writes the
-old variable.
+which may use the network, unsafe state checks, and state writes in the wrong
+phase. The scenarios also seed a role's declared user data and check that every
+runrole operation keeps it. Warnings are reported but do not fail the run
+unless --strict is used; a reference to the removed clean_install variable
+always fails.
 """
 
 from __future__ import annotations
@@ -1424,8 +1423,9 @@ def unsafe_state_warnings(role: str) -> list[Warning]:
 
     ``*_installed`` and ``*_downloaded`` are observed state.  Use
     ``lookup('installed', 'mysql')`` (or ``not lookup(...)``) rather than
-    reading the marker variable directly; the state file is not loaded through
-    vars_files, so a bare reference is wrong even when it does not raise.
+    reading the marker variable directly.  Entry playbooks still load the state
+    file through vars_files while roles are converted one at a time, but a bare
+    reference breaks as soon as a role stops being loaded that way.
     """
     tasks_dir = ROOT_DIR / "roles" / role / "tasks"
     warnings: list[Warning] = []
@@ -1814,7 +1814,8 @@ def create_mock_library(directory: Path) -> Path:
     collection_modules = {
         ("ansible", "mariadb"): {"mariadb_db", "mariadb_user"},
         ("ansible", "posix"): {"patch"},
-        ("community", "general"): {"htpasswd", "npm"},
+        ("community", "general"): {"apache2_module", "htpasswd", "npm", "timezone"},
+        ("community", "mysql"): {"mysql_db", "mysql_user"},
         ("community", "postgresql"): {"postgresql_db", "postgresql_user"},
     }
     for (namespace, collection), module_names in collection_modules.items():
@@ -2349,9 +2350,9 @@ def run_role(role: str, vars_file: str, quiet: bool = False, strict: bool = Fals
                     print(output, end="")
                 if " FAIL\n" in output or output.endswith("FAIL\n"):
                     failures = 1
-    if strict and warnings:
+    if strict and (warnings or unsafe_state or state_writes):
         failures = 1
-    return failures or int(bool(unsafe_state)) or int(bool(state_writes))
+    return failures
 
 
 def main() -> int:

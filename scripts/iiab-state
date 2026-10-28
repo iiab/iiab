@@ -33,11 +33,23 @@ from iiab_state_lib import LoadError, load_state_module
 # system-wide install.  The sentinel stops two interpreters that both lack
 # PyYAML from re-exec'ing each other forever.
 REEXEC_SENTINEL = "IIAB_STATE_REEXEC"
+
+
+def missing_yaml():
+    print(
+        "iiab-state: PyYAML is required to read the IIAB state file.\n"
+        "Install it (e.g. 'sudo apt install python3-yaml') or run "
+        "'./scripts/ansible' first.",
+        file=sys.stderr,
+    )
+    return 2
+
+
 try:
     import yaml  # noqa: F401
 except ImportError:
     if os.environ.get(REEXEC_SENTINEL):
-        raise
+        sys.exit(missing_yaml())
     for candidate in ("/usr/local/ansible/bin/python3", "/usr/bin/python3"):
         if (
             os.path.exists(candidate)
@@ -45,7 +57,7 @@ except ImportError:
         ):
             os.environ[REEXEC_SENTINEL] = "1"
             os.execv(candidate, [candidate, str(Path(__file__).resolve()), *sys.argv[1:]])
-    raise
+    sys.exit(missing_yaml())
 
 try:
     state_module = load_state_module()

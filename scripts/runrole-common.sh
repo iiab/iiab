@@ -31,17 +31,24 @@ state_cmd() {
     "$IIAB_STATE_CMD" --file "$IIAB_STATE_FILE" "$@"
 }
 
-# True if any true marker belongs to prefix.  A state-file read error is fatal
-# instead of silently looking like "not installed".
+# True if any true marker belongs to prefix.  Only 0 (yes) and 1 (no) are
+# normal answers: anything else, including an unexpected interpreter error,
+# must not look like "not installed".
 state_has_prefix() {
     local status
     state_cmd has-prefix "$1"
     status=$?
-    if [ "$status" -eq 2 ]; then
+    if [ "$status" -ne 0 ] && [ "$status" -ne 1 ]; then
         echo -e "\e[1mERROR: could not read $IIAB_STATE_FILE (see above).\e[0m" >&2
         exit 2
     fi
     return "$status"
+}
+
+# True when <name> is a variable prefix from 0-init's validation checklist,
+# even when it is not a standalone role (squid, hostapd, dnsmasq).
+is_checklist_prefix() {
+    role_lifecycle checklist-prefixes | grep -qxF -- "$1"
 }
 
 state_show_prefix() {
@@ -61,6 +68,13 @@ role_var() {
 # Install/enabled prefix. Empty for always-on helper roles.
 role_install_var() {
     role_lifecycle install-var "$1"
+}
+
+# Like role_install_var, but also accepts a bare checklist prefix (squid,
+# hostapd, dnsmasq) for --check-local-vars.  A helper role with no switch still
+# returns an empty prefix; only an unknown role falls back to its own name.
+checklist_install_var() {
+    role_lifecycle install-var "$1" 2>/dev/null || printf '%s' "$1"
 }
 
 role_exists() {
@@ -153,19 +167,10 @@ var_source() {
     fi
 }
 
-# True if <role>_install resolves to a true value across default + local vars.
-# Guarded so a missing vars file is quiet rather than three grep errors.
-# A helper role with no install/enabled switch is always considered enabled.
-role_install_enabled() {
-    local prefix
+# True if <prefix>_install resolves to a true value across default + local vars.
+install_var_enabled() {
     local value
-    # Prefixes such as squid/hostapd/dnsmasq are managed by another role, so
-    # role_lifecycle does not know them.  Fall back to the prefix itself.
-    prefix=$(role_install_var "$1" 2>/dev/null) || prefix=$1
-    if [ -z "$prefix" ]; then
-        return 0
-    fi
-    value=$(var_value "${prefix}_install")
+    value=$(var_value "${1}_install")
     case $value in
         True|true|TRUE|Yes|yes|YES|On|on|ON|1)
             return 0
@@ -176,16 +181,29 @@ role_install_enabled() {
     esac
 }
 
-# Print the effective value of <role>_install, or "-" when it is never set.
-role_desired() {
+# True if <role>_install resolves to a true value across default + local vars.
+# Guarded so a missing vars file is quiet rather than three grep errors.
+# A helper role with no install/enabled switch is always considered enabled.
+role_install_enabled() {
     local prefix
-    local value
+    # Prefixes such as squid/hostapd/dnsmasq are managed by another role, so
+    # role_lifecycle does not know them.  Fall back to the prefix itself.
     prefix=$(role_install_var "$1" 2>/dev/null) || prefix=$1
     if [ -z "$prefix" ]; then
+        return 0
+    fi
+    install_var_enabled "$prefix"
+}
+
+# Print the effective value of <prefix>_install, or "always" for a helper role
+# with no install/enabled switch.
+desired_for() {
+    local value
+    if [ -z "$1" ]; then
         printf 'always'
         return
     fi
-    value=$(var_value "${prefix}_install")
+    value=$(var_value "${1}_install")
     printf '%s' "${value:--}"
 }
 
@@ -272,33 +290,55 @@ status_role() {
     return 0
 }
 
+# True when the output of `iiab-state list` has a true marker for <prefix>.
+# Matches the CLI's has-prefix semantics without starting a process per role.
+prefix_in_listing() {
+    local prefix=$1
+    local listing=$2
+    awk -v prefix="$prefix" '
+        {
+            key = $0
+            sub(/:.*/, "", key)
+            value = $0
+            sub(/^[^:]*:[ \t]*/, "", value)
+            if ((key == prefix || index(key, prefix "_") == 1) &&
+                tolower(value) ~ /^(true|yes|on|1)$/) {
+                found = 1
+                exit
+            }
+        }
+        END { exit(found ? 0 : 1) }
+    ' <<< "$listing"
+}
+
 # Print every runnable role with its installed state, desired value, conflict
-# flag, and capabilities.  Reads the state file once.
+# flag, and capabilities.  Reads the state file once and the role metadata once.
 list_roles() {
+    local role
     local var
+    local install_var
+    local capabilities
     local installed
     local conflict
-    local capabilities
-    if ! state_cmd list > /dev/null; then
+    local state_listing
+    if ! state_listing=$(state_cmd list); then
         echo -e "\e[1mERROR: could not read $IIAB_STATE_FILE (see above).\e[0m" >&2
         return 2
     fi
     printf '%-24s %-10s %-8s %-9s %s\n' "ROLE" "INSTALLED" "DESIRED" "CONFLICT" "CAPABILITIES"
-    while IFS= read -r role; do
+    while IFS='|' read -r role var install_var capabilities; do
         installed="no"
         conflict="no"
-        var=$(role_var "$role")
-        if state_has_prefix "$var"; then
+        if prefix_in_listing "$var" "$state_listing"; then
             installed="yes"
         fi
-        if [ "$installed" = yes ] && [ -n "$(role_install_var "$role")" ] && ! role_install_enabled "$role"; then
+        if [ "$installed" = yes ] && [ -n "$install_var" ] && ! install_var_enabled "$install_var"; then
             conflict="yes"
         fi
-        capabilities=$(role_capabilities "$role")
         capabilities=${capabilities//_/-}
         printf '%-24s %-10s %-8s %-9s %s\n' \
-            "$role" "$installed" "$(role_desired "$role")" "$conflict" "${capabilities:-none}"
-    done < <(role_lifecycle list)
+            "$role" "$installed" "$(desired_for "$install_var")" "$conflict" "${capabilities:-none}"
+    done < <(role_lifecycle table)
 }
 
 # Copy local facts once, so roles can read ansible_local.local_facts.

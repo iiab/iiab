@@ -16,6 +16,7 @@ STATUS=false
 LIST=false
 VERBOSE=false
 CLEAN_INSTALL_RECOVERY=false
+LOGFILE=false
 INVENTORY=ansible_hosts
 PLAYBOOK=run-one-role.yml
 
@@ -43,7 +44,7 @@ Options:
       --check-local-vars
                         Validate /etc/iiab/local_vars.yml and exit, without
                         running or changing anything. Checks the full checklist,
-                        or only the listed role(s)
+                        or only the listed role(s) or variable prefix(es)
       --status          Show installed/desired state without changing anything
       --list            List roles with their installed state and capabilities
   -h, --help            Show this help
@@ -63,19 +64,20 @@ lifecycle test enforces it for every option. --reinstall is a rebuild, not a
 reset: whether settings and program data survive depends on the role. To remove
 user data, do it manually.
 
---reinstall, --clean-install and --uninstall act on a role that is already
-installed, and the install phases also require '<prefix>_install: True' (pass -a
-to override it for one run). --clean-install is literally --uninstall followed
-by a normal apply, so a role supports it exactly when it supports --uninstall.
---status and --list are read-only and cannot be combined with other options.
---check-local-vars is read-only too: it validates the configuration and exits.
+--reinstall installs a role that is missing and rebuilds it otherwise.
+--uninstall requires the role to be installed.  The install phases require
+'<prefix>_install: True' (pass -a to override it for one run). --clean-install
+is literally --uninstall followed by a normal apply, so a role supports it
+exactly when it supports --uninstall. --status and --list are read-only and
+cannot be combined with other options. --check-local-vars is read-only too: it
+validates the configuration and exits.
 
-* --reinstall reruns the role's install/update path. Some roles keep settings
-  and program data, others rewrite or remove them; use --clean-install when you
-  want a known reset. User data is never deleted: roles declare it in
-  '<role>_user_data' and the lifecycle test enforces it. Legacy roles have
-  their state markers removed first, as before; converted roles keep them
-  until the rebuild succeeds.
+* --reinstall reruns the role's install/update path (installing it first when it
+  is missing). Some roles keep settings and program data, others rewrite or
+  remove them; use --clean-install when you want a known reset. User data is
+  never deleted: roles declare it in '<role>_user_data' and the lifecycle test
+  enforces it. Legacy roles have their state markers removed first, as before;
+  converted roles keep them until the rebuild succeeds.
 
 If --uninstall keeps failing, fix the reported error and retry. The role's
 markers are removed only after cleanup succeeds. If you already removed the
@@ -146,6 +148,7 @@ while [[ $# -gt 0 ]]; do
                 ROLE_NAME="$1"
             elif [ ! -v ANSIBLE_LOG_PATH ]; then
                 export ANSIBLE_LOG_PATH="$1"
+                LOGFILE=true
             else
                 echo "Too many arguments (ROLE_NAME and ANSIBLE_LOG_PATH already specified!)"
                 exit 1
@@ -176,19 +179,22 @@ if [ -v ROLE_NAME ]; then
     fi
 
     if ! role_exists "$ROLE_NAME"; then
-        # --status also accepts prefixes managed by a larger role or stage
-        # (squid, hostapd, dnsmasq, admin_console), so validation errors can
-        # point users at './runrole --status <prefix>'.
+        # --status and --check-local-vars also accept prefixes managed by a
+        # larger role or stage (squid, hostapd, dnsmasq), so validation errors
+        # can point users at './runrole --status <prefix>'.
         if ! $STATUS; then
-            echo "ERROR: unknown role: $ROLE_NAME"
-            echo "Run './runrole --list' to see the available roles."
-            exit 1
+            if ! $CHECK_LOCAL_VARS || ! is_checklist_prefix "$ROLE_NAME"; then
+                echo "ERROR: unknown role: $ROLE_NAME"
+                echo "Run './runrole --list' to see the available roles."
+                exit 1
+            fi
         fi
     fi
 fi
 
-if $CHECK_LOCAL_VARS && ($UNINSTALL || $REINSTALL || $CLEAN_INSTALL || $ADD || $CHECK || $STATUS || $ASSUME_YES || $VERBOSE); then
+if $CHECK_LOCAL_VARS && ($LOGFILE || $UNINSTALL || $REINSTALL || $CLEAN_INSTALL || $ADD || $CHECK || $STATUS || $ASSUME_YES || $VERBOSE); then
     echo "--check-local-vars is read-only and cannot be combined with other options."
+    echo "It accepts a role or variable prefix, but no log file."
     exit 1
 fi
 
@@ -215,8 +221,9 @@ if $CHECK && ($REINSTALL || $CLEAN_INSTALL); then
     exit 1
 fi
 
-if $STATUS && ($UNINSTALL || $REINSTALL || $CLEAN_INSTALL || $ADD || $CHECK || $ASSUME_YES || $VERBOSE); then
+if $STATUS && ($LOGFILE || $UNINSTALL || $REINSTALL || $CLEAN_INSTALL || $ADD || $CHECK || $ASSUME_YES || $VERBOSE); then
     echo "--status is read-only and cannot be combined with other options."
+    echo "It accepts a role, but no log file."
     exit 1
 fi
 
@@ -227,8 +234,15 @@ fi
 ROLE_VAR=""
 ROLE_INSTALL_VAR=""
 if [ -v ROLE_NAME ] && ! $STATUS; then
-    ROLE_VAR=$(role_var "$ROLE_NAME")
-    ROLE_INSTALL_VAR=$(role_install_var "$ROLE_NAME")
+    if role_exists "$ROLE_NAME"; then
+        ROLE_VAR=$(role_var "$ROLE_NAME")
+        ROLE_INSTALL_VAR=$(role_install_var "$ROLE_NAME")
+    else
+        # --check-local-vars lets a prefix managed by a larger role or stage
+        # (squid, hostapd, dnsmasq) be validated on its own.
+        ROLE_VAR=$ROLE_NAME
+        ROLE_INSTALL_VAR=$ROLE_NAME
+    fi
 fi
 
 if $STATUS; then
@@ -347,9 +361,7 @@ elif $REINSTALL; then
             }
         fi
     else
-        echo -e "\e[1mERROR: $IIAB_STATE_FILE has no marker that begins with '${ROLE_VAR}_'\e[0m\n"
-        echo "Nothing to reinstall. Run without --reinstall to install it normally."
-        exit 1
+        echo -e "\e[1m${ROLE_NAME} is not installed; installing it now.\e[0m\n"
     fi
 else
     if state_has_prefix "$ROLE_VAR" && ! $ASSUME_YES && ! $CHECK; then

@@ -8,7 +8,9 @@ This module is the single source of truth for:
 * the role name -> install/enabled prefix mapping (``iiab-admin`` ->
   ``admin_console``);
 * which extended operations a role implements;
-* which roles are runnable (``roles/<name>/tasks/main.yml`` exists).
+* which roles are runnable (``roles/<name>/tasks/main.yml`` exists);
+* which variable prefixes the 0-init checklist validates, including prefixes
+  such as ``squid`` that are managed by a larger role.
 
 ``runrole`` and ``runroles`` call the CLI (see ``main``) so the shell and the
 Python lifecycle test can never disagree about whether a flag is supported.
@@ -35,10 +37,12 @@ from pathlib import Path
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 ROLES_DIR = ROOT_DIR / "roles"
+CHECKLIST_FILE = ROOT_DIR / "roles" / "0-init" / "tasks" / "validate_vars.yml"
 
 SKIP_ROLE_DIRS = {"0-DEPRECATED-ROLES"}
 
 ROLE_NAME = re.compile(r"[A-Za-z0-9_-]+")
+CHECKLIST_ITEM = re.compile(r"-\s+([A-Za-z0-9_]+)\s*(?:#.*)?")
 
 # Roles whose state-marker prefix differs from the directory name.
 ROLE_VAR_OVERRIDES = {
@@ -120,6 +124,57 @@ def available_roles() -> list[str]:
         if any((role_dir / "tasks" / name).is_file() for name in ("main.yml", "main.yaml")):
             roles.append(role_dir.name)
     return roles
+
+
+def checklist_prefixes() -> list[str]:
+    """Return the variable prefixes in 0-init's validation checklist.
+
+    Some prefixes (squid, hostapd, dnsmasq) belong to a larger role or install
+    stage, so they are not standalone roles.  ``runrole --check-local-vars
+    <prefix>`` still accepts them; reading the checklist here keeps the shell
+    tools aligned with ``roles/0-init/tasks/validate_vars.yml``.
+    """
+    try:
+        text = CHECKLIST_FILE.read_text(encoding="utf-8")
+    except OSError:
+        return []
+
+    prefixes = []
+    in_block = False
+    for line in text.splitlines():
+        if not in_block:
+            if re.fullmatch(r"\s*vars_checklist_all:\s*", line):
+                in_block = True
+            continue
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        match = CHECKLIST_ITEM.fullmatch(stripped)
+        if match is None:
+            break
+        prefixes.append(match.group(1))
+    return prefixes
+
+
+def table_rows() -> list[str]:
+    """Return one ``role|marker-prefix|install-prefix|capabilities`` row each.
+
+    ``./runrole --list`` prints every role at once instead of starting four
+    Python interpreters per role.
+    """
+    rows = []
+    for role in available_roles():
+        rows.append(
+            "|".join(
+                (
+                    role,
+                    role_var(role),
+                    install_prefix(role),
+                    " ".join(capabilities(role)),
+                )
+            )
+        )
+    return rows
 
 
 def _manifest_value(role: str, feature: str) -> bool | None:
@@ -260,6 +315,16 @@ def build_parser() -> argparse.ArgumentParser:
 
     subparsers.add_parser("list", help="print every runnable role, one per line")
 
+    subparsers.add_parser(
+        "checklist-prefixes",
+        help="print every variable prefix in 0-init's validation checklist",
+    )
+
+    subparsers.add_parser(
+        "table",
+        help="print role|marker-prefix|install-prefix|capabilities for every role",
+    )
+
     return parser
 
 
@@ -270,6 +335,14 @@ def main(argv=None) -> int:
     if args.command == "list":
         for role in available_roles():
             print(role)
+        return 0
+    if args.command == "checklist-prefixes":
+        for prefix in checklist_prefixes():
+            print(prefix)
+        return 0
+    if args.command == "table":
+        for row in table_rows():
+            print(row)
         return 0
 
     if args.command == "exists":
