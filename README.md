@@ -42,7 +42,7 @@ repeatable: each role is installed if missing and otherwise reconfigured.
     sudo ./runrole --reinstall captiveportal        # rebuild the program
     sudo ./runrole --clean-install awstats          # uninstall, then install again
     sudo ./runrole --uninstall awstats              # uninstall, never deleting user data
-    sudo ./runrole --uninstall awstats --skip-missing  # ignore roles that are not installed
+    sudo ./runrole --uninstall awstats --skip-never-installed  # ignore roles with no markers
     ./runrole --status captiveportal                # show installed/desired state
     ./runrole --list                                # list roles, state, conflicts, capabilities
     sudo ./runrole --check-local-vars               # validate local_vars.yml, then exit
@@ -57,8 +57,12 @@ repeatable: each role is installed if missing and otherwise reconfigured.
   `--uninstall` support. It resets user settings and never deletes user data.
 - `--uninstall` removes the program, its program data, and its user settings
   where supported. It never deletes user data. With several roles it refuses to
-  start if any listed role is not installed; add `--skip-missing` to remove the
-  installed roles and report the rest.
+  start if any listed role has no installed markers; add
+  `--skip-never-installed` to remove the installed roles and report the rest.
+- `--continue-on-error` runs each role separately and keeps going when one
+  fails, then reports the failed roles and exits nonzero. The default stops at
+  the first failure. It can be combined with `--uninstall` and
+  `--clean-install`; a role whose uninstall fails is not reinstalled.
 - `--status` and `--list` are read-only. `--check-local-vars` validates only
   the listed role(s)/prefix(es), or the full checklist when none are given.
 - `--log FILE` writes the Ansible log to FILE instead of `./iiab-debug.log`.

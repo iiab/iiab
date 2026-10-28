@@ -11,7 +11,8 @@ STATUS=false
 LIST=false
 VERBOSE=false
 CLEAN_INSTALL_RECOVERY=false
-SKIP_MISSING=false
+SKIP_NEVER_INSTALLED=false
+CONTINUE_ON_ERROR=false
 LOG_FILE=""
 ROLES=()
 INVENTORY=ansible_hosts
@@ -51,8 +52,13 @@ Options:
       --clean-install   Uninstall each role, then install it again (needs
                         --uninstall support)
       --uninstall       Uninstall the programs and their settings, never deleting user data
-      --skip-missing    With --uninstall, skip roles that are not installed
+      --skip-never-installed
+                        With --uninstall, skip roles with no installed markers
                         instead of failing before anything is removed
+      --continue-on-error
+                        Keep going with later roles when one fails, then exit
+                        nonzero (runs each role separately; the default stops
+                        at the first failure)
       --check-local-vars
                         Validate local_vars.yml and exit, without changing anything
       --status          Show installed/desired state without changing anything
@@ -64,7 +70,8 @@ Examples:
   ./runrole transmission kiwix
   ./runrole --reinstall transmission calibre-web
   ./runrole --clean-install awstats
-  ./runrole --uninstall awstats --skip-missing
+  ./runrole --uninstall awstats --skip-never-installed
+  ./runrole --continue-on-error transmission kiwix
   ./runrole --check-local-vars awstats matomo
   ./runrole --log /tmp/iiab.log captiveportal
 
@@ -88,8 +95,11 @@ while [[ $# -gt 0 ]]; do
         --uninstall)
             UNINSTALL=true
             ;;
-        --skip-missing)
-            SKIP_MISSING=true
+        --skip-never-installed)
+            SKIP_NEVER_INSTALLED=true
+            ;;
+        --continue-on-error)
+            CONTINUE_ON_ERROR=true
             ;;
         -y|--yes)
             ASSUME_YES=true
@@ -142,7 +152,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if $LIST; then
-    if [[ ${#ROLES[@]} -gt 0 ]] || $UNINSTALL || $REINSTALL || $CLEAN_INSTALL || $CHECK_LOCAL_VARS || $STATUS || $ADD || $ASSUME_YES || $VERBOSE || $SKIP_MISSING || [ -n "$LOG_FILE" ]; then
+    if [[ ${#ROLES[@]} -gt 0 ]] || $UNINSTALL || $REINSTALL || $CLEAN_INSTALL || $CHECK_LOCAL_VARS || $STATUS || $ADD || $ASSUME_YES || $VERBOSE || $SKIP_NEVER_INSTALLED || $CONTINUE_ON_ERROR || [ -n "$LOG_FILE" ]; then
         echo "--list is read-only and does not accept roles or other options."
         exit 1
     fi
@@ -195,9 +205,10 @@ for role in "${ROLES[@]}"; do
         "This role opts out because rebuilding it requires manual cleanup (see roles/${role}/meta/runrole.yml)."; then
         unsupported=true
     fi
-    # --skip-missing removes only roles that are installed. A missing role
-    # must not fail the capability check that protects the roles it skips.
-    if $UNINSTALL && $SKIP_MISSING && ! state_has_prefix "$(role_var "$role")"; then
+    # --skip-never-installed removes only roles that are installed. A role
+    # without a marker must not fail the capability check that protects the
+    # roles it skips.
+    if $UNINSTALL && $SKIP_NEVER_INSTALLED && ! state_has_prefix "$(role_var "$role")"; then
         :
     elif $UNINSTALL && ! role_require_capability "$role" "--uninstall" uninstall; then
         unsupported=true
@@ -287,19 +298,19 @@ if $UNINSTALL || $CLEAN_INSTALL; then
 
     if $UNINSTALL; then
         if [[ ${#MISSING_ROLES[@]} -gt 0 ]]; then
-            if $SKIP_MISSING; then
+            if $SKIP_NEVER_INSTALLED; then
                 for role in "${MISSING_ROLES[@]}"; do
-                    echo "$role is not installed; skipping."
+                    echo "$role has no installed markers; skipping."
                 done
             else
-                echo -e "\e[1mERROR: not installed in $IIAB_STATE_FILE:\e[0m" >&2
+                echo -e "\e[1mERROR: no installed markers in $IIAB_STATE_FILE:\e[0m" >&2
                 printf '  %s\n' "${MISSING_ROLES[@]}" >&2
-                echo "Nothing was uninstalled. Pass --skip-missing to uninstall the installed roles only." >&2
+                echo "Nothing was uninstalled. Pass --skip-never-installed to uninstall the installed roles only." >&2
                 exit 1
             fi
         fi
         if [[ ${#UNINSTALL_ROLES[@]} -eq 0 ]]; then
-            echo -e "\e[1mERROR: none of the listed roles are installed in $IIAB_STATE_FILE\e[0m"
+            echo -e "\e[1mERROR: none of the listed roles have installed markers in $IIAB_STATE_FILE\e[0m"
             echo "Nothing to uninstall."
             exit 1
         fi
@@ -426,6 +437,16 @@ extra_vars() {
     printf '%s,"validate_roles":[%s]}' "$json" "${validate_roles%,}"
 }
 
+# Run one role in its own playbook. --continue-on-error uses this so a failure
+# in one role does not stop the roles after it.
+run_one_phase() {
+    local phase=$1
+    local role=$2
+    PLAYBOOK_ROLES=("$role")
+    write_playbook "$role"
+    run_playbook "$(extra_vars "$phase")"
+}
+
 if $VERBOSE; then
     echo -e "\e[1mDetected Python interpreter:\e[0m"
     ansible -m setup -a 'gather_subset=!hardware,!network' -i "$INVENTORY" localhost --connection=local | grep python
@@ -434,7 +455,69 @@ fi
 
 install_local_facts
 
-if $CLEAN_INSTALL && ! $CLEAN_INSTALL_RECOVERY; then
+if $CONTINUE_ON_ERROR; then
+    STATUS_CODE=0
+    CONTINUE_FAILED=()
+    UNINSTALL_FAILED=()
+    APPLY_ROLES_CONTINUE=("${APPLY_ROLES[@]}")
+
+    if $UNINSTALL || ($CLEAN_INSTALL && ! $CLEAN_INSTALL_RECOVERY); then
+        for role in "${UNINSTALL_ROLES[@]}"; do
+            run_one_phase uninstall "$role"
+            role_status=$?
+            if [ "$role_status" -ne 0 ]; then
+                STATUS_CODE=1
+                UNINSTALL_FAILED+=("$role")
+                CONTINUE_FAILED+=("$role")
+            elif ! verify_uninstall_markers "$role"; then
+                STATUS_CODE=1
+                UNINSTALL_FAILED+=("$role")
+                CONTINUE_FAILED+=("$role")
+            fi
+        done
+
+        if $CLEAN_INSTALL; then
+            # Do not reinstall a role whose uninstall phase failed.
+            remaining=()
+            for role in "${APPLY_ROLES_CONTINUE[@]}"; do
+                skip=false
+                for failed_role in "${UNINSTALL_FAILED[@]}"; do
+                    if [ "$failed_role" = "$role" ]; then
+                        skip=true
+                        break
+                    fi
+                done
+                if ! $skip; then
+                    remaining+=("$role")
+                fi
+            done
+            APPLY_ROLES_CONTINUE=("${remaining[@]}")
+        fi
+    fi
+
+    if ! $UNINSTALL; then
+        for role in "${APPLY_ROLES_CONTINUE[@]}"; do
+            run_one_phase apply "$role"
+            role_status=$?
+            if [ "$role_status" -ne 0 ]; then
+                STATUS_CODE=1
+                CONTINUE_FAILED+=("$role")
+            fi
+        done
+    fi
+
+    if [ "$STATUS_CODE" -ne 0 ]; then
+        echo -e "\e[1mERROR: these roles failed:\e[0m" >&2
+        printf '  %s\n' "${CONTINUE_FAILED[@]}" >&2
+        echo "The other listed roles were still processed." >&2
+    fi
+
+    if $UNINSTALL; then
+        PLAYBOOK_ROLES=("${UNINSTALL_ROLES[@]}")
+    else
+        PLAYBOOK_ROLES=("${APPLY_ROLES[@]}")
+    fi
+elif $CLEAN_INSTALL && ! $CLEAN_INSTALL_RECOVERY; then
     PLAYBOOK_ROLES=("${UNINSTALL_ROLES[@]}")
     write_playbook "${PLAYBOOK_ROLES[@]}"
     run_playbook "$(extra_vars uninstall)"

@@ -317,7 +317,7 @@ validate_options() {
     if [ -n "${LOG_FILE:-}" ]; then
         log=true
     fi
-    if $CHECK_LOCAL_VARS && ($log || $UNINSTALL || $REINSTALL || $CLEAN_INSTALL || $ADD || $STATUS || $ASSUME_YES || $VERBOSE); then
+    if $CHECK_LOCAL_VARS && ($log || $UNINSTALL || $REINSTALL || $CLEAN_INSTALL || $ADD || $STATUS || $ASSUME_YES || $VERBOSE || $CONTINUE_ON_ERROR); then
         echo "--check-local-vars is read-only and cannot be combined with other options."
         exit 1
     fi
@@ -329,11 +329,11 @@ validate_options() {
         echo "--clean-install cannot be combined with --add or --reinstall."
         exit 1
     fi
-    if $SKIP_MISSING && ! $UNINSTALL; then
-        echo "--skip-missing only applies to --uninstall."
+    if $SKIP_NEVER_INSTALLED && ! $UNINSTALL; then
+        echo "--skip-never-installed only applies to --uninstall."
         exit 1
     fi
-    if $STATUS && ($log || $UNINSTALL || $REINSTALL || $CLEAN_INSTALL || $ADD || $ASSUME_YES || $VERBOSE || $SKIP_MISSING); then
+    if $STATUS && ($log || $UNINSTALL || $REINSTALL || $CLEAN_INSTALL || $ADD || $ASSUME_YES || $VERBOSE || $SKIP_NEVER_INSTALLED || $CONTINUE_ON_ERROR); then
         echo "--status is read-only and cannot be combined with other options."
         exit 1
     fi
