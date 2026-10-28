@@ -216,7 +216,7 @@
                 patchResource: async handlerResult => {
                     const style = handlerResult && handlerResult.data
                     if (style && style.sources && !style.iiabPatched) {
-                        await until(fqrLoaded, 100)
+                        const fqrs = await downloadedFQRegions
 
                         // Grab the sources and layers as they are so we can replicate them in FQRs
                         const worldMapLayers = [...style.layers]
@@ -232,8 +232,8 @@
                         // There's one exception though, which is that we want all satellite, world or FQR,
                         // to be the bottom layers. This is because the world vector may in some cases be
                         // on top of an FQR satellite in hybrid mode.
-                        Object.keys(downloadedFQRegions.regions).forEach(fqrName => {
-                            const region = downloadedFQRegions.regions[fqrName]
+                        Object.keys(fqrs.regions).forEach(fqrName => {
+                            const region = fqrs.regions[fqrName]
 
                             const hillshadeFqrId = makeFqrSourceId(fqrName, DATA_KEYS.HILLSHADE);
 
@@ -461,12 +461,12 @@
             async function drawFQRegionOutlines() {
 
                 await until(mapStyleLoaded)
-                await until(fqrLoaded)
+                const fqrs = await downloadedFQRegions
 
-                for (regionName_ in downloadedFQRegions.regions) {
+                for (regionName_ in fqrs.regions) {
                     const regionName = regionName_ // fix variable capturing in callbacks below
                     const regionId = "region-" + regionName
-                    const [min_lon, min_lat, max_lon, max_lat] = downloadedFQRegions.regions[regionName].ui_bounds
+                    const [min_lon, min_lat, max_lon, max_lat] = fqrs.regions[regionName].ui_bounds
 
                     if (mb.map.getSource(regionId)) {
                         // Looks like we already ran this. Quit without setting a timeout.
@@ -592,9 +592,11 @@
             // the screen when zoomed in
             async function setFQRegionOutlinesVisibility() {
                 await until(() => mb.map && mb.map.fqRegionsShown)
+                const fqrs = await downloadedFQRegions
+
                 // Hide the lines if you zoom in enough
                 const lineVisibility = mb.map.getZoom() > 10 ? "none" : "visible"
-                for(regionName in downloadedFQRegions.regions) {
+                for(regionName in fqrs.regions) {
                     // TODO - fade instead? or in addition?
                     const regionId = "region-" + regionName
                     mb.map.setLayoutProperty(regionId + "~line", "visibility", lineVisibility)
@@ -620,7 +622,9 @@
             }
 
             // Are we (roughly) so much looking at a region (any region) that it obscures the world map?
-            function isWorldMapObscuredByFQR(regionsOnScreen) {
+            async function isWorldMapObscuredByFQR(regionsOnScreen) {
+                const fqrs = await downloadedFQRegions
+
                 const mapBounds = mb.map.getBounds()
                 const mapCorners = [
                   mapBounds.getSouthWest(),
@@ -631,7 +635,7 @@
 
                 // Does SOME region contain EVERY corner of the map bounds?
                 return regionsOnScreen
-                .map(regionName => new maplibregl.LngLatBounds(downloadedFQRegions.regions[regionName].ui_bounds))
+                .map(regionName => new maplibregl.LngLatBounds(fqrs.regions[regionName].ui_bounds))
                 .some(regionBounds =>
                     // region.ui_bounds, like region.bbox, has its western coordinate "wrapped" (i.e. -180 to 180).
                     // However unlike bbox, if it crosses the antimeridian, the eastern coordinate does not wrap:
@@ -660,6 +664,8 @@
                 // terrain turned on.
 
                 await until(mapStyleLoaded)
+                const fqrs = await downloadedFQRegions
+
                 worldMapTerrain = (await worldMap.pmtilesFiles).terrain
 
                 if (!mb.terrain) {
@@ -680,7 +686,7 @@
                         // awkward situation to be looking at multiple regions,
                         // so take the first one (which is the closest to the
                         // map center, see sorting above)
-                        return downloadedFQRegions.regions[regionsOnScreen[0]].pmtilesFiles.terrain.sourceId
+                        return fqrs.regions[regionsOnScreen[0]].pmtilesFiles.terrain.sourceId
                     }
                     if (worldMapTerrain && worldMapTerrain.maxzoom > 0) {
                         // If no FQRs are on screen and we have a world map terrain, return to it
@@ -692,10 +698,10 @@
                         // Even if we're not looking at it now, decent chance we'll look at it again soon.
                         return curTerrainSource
                     }
-                    if (fqRegionsExist()) {
+                    if (await fqRegionsExist()) {
                         // If no FQRs are on screen, and we have no world map terrain, and no terrain is
                         // currently loaded, (probably initializing) just pick an arbitrary FQR to start with.
-                        return Object.values(downloadedFQRegions.regions)[0].pmtilesFiles.terrain.sourceId
+                        return Object.values(fqrs.regions)[0].pmtilesFiles.terrain.sourceId
                     }
                     // If we have no FQRs at all, and we have no world map terrain, report a bug because
                     // terrain should never be turned on in this case. And then, pick
@@ -747,8 +753,9 @@
                 // `hideUnseenFQRs` would compound it? And maybe a better `regionsOnScreen` would fix it.
 
                 await until(mapStyleLoaded)
+                const fqrs = await downloadedFQRegions
 
-                const regionsSet = new Set(Object.keys(downloadedFQRegions.regions))
+                const regionsSet = new Set(Object.keys(fqrs.regions))
                 const regionsOnScreenSet = new Set(regionsOnScreen)
                 const regionsOffScreenSet = regionsSet.difference(regionsOnScreenSet)
 
@@ -772,7 +779,7 @@
                 const shouldHideWorldMap = (
                   worldMapVector &&
                   (mb.map.getZoom() >= worldMapVector.maxzoom + 1) &&
-                  isWorldMapObscuredByFQR(regionsOnScreen)
+                  (await isWorldMapObscuredByFQR(regionsOnScreen))
                 )
                 const worldLayerVisibility = shouldHideWorldMap ? "none" : "visible"
                 if (mb.terrain) {
@@ -863,8 +870,8 @@
                 // of acting on the newest user change early and repeatedly which would get us the right answer in the end. But in case that's
                 // wrong and we decide we want to go based on the end of the chain of events, we should look at mb.map.getStyle().sources
 
-                await until(fqrLoaded)
-                worldDataKeys = await worldMap.dataKeys
+                const fqrs = await downloadedFQRegions
+                const worldDataKeys = await worldMap.dataKeys
 
                 // Probably enough for maps.black to set all of the licenses after a style switch or first page load
                 await until(mapStyleLoaded)
@@ -877,7 +884,7 @@
                 }
 
                 // Does *any* FQR use the given dataKey?
-                const fqrHasSource = dataKey => Object.values(downloadedFQRegions.regions).some(r => r.dataKeys.includes(dataKey))
+                const fqrHasSource = dataKey => Object.values(fqrs.regions).some(r => r.dataKeys.includes(dataKey))
 
                 // maps.black.js adds the s2maps and osm licenses based on whether the mapstyle requires it, irrespective of whether the pmtiles
                 // file is altogether missing.
@@ -1079,7 +1086,6 @@
             }
 
             let fqRegionsControl
-            let downloadedFQRegions = null;
             let worldMap = {}
             worldMap.pmtilesFiles = (async () => {
                 const [mainDirList, mainError] = await homeDirListPromise
@@ -1198,15 +1204,11 @@
                 Object.values(await worldMap.pmtilesFiles).map(({dataKey}) => dataKey)
             )()
 
-            // TODO downloadedFQRegions should just be a Promise like worldMap.pmtilesFiles
-            const fqrLoaded = () => !!downloadedFQRegions
-
-            async function setFQRegions() {
+            const downloadedFQRegions = (async () => {
                 const [dirList, error] = await homeDirListPromise
                 if (error) {
-                    downloadedFQRegions = {regions: {}}
                     console.error("Failed to load Full Quality Regions:", error)
-                    return
+                    return {regions: {}}
                 }
                 regionNames = dirList
                     .filter(entry => entry.type === "directory" && entry.name.endsWith('.fqr'))
@@ -1264,7 +1266,7 @@
                 // At this point we're done making requests. We should have all of the data we need to set up our FQRs here.
                 //
                 // regions = {regionName: {meta, listing}, ...}
-                downloadedFQRegions = {
+                const fqrs = {
                   regions: Object.fromEntries(
                       regionInfo
                       .map(res=>res.value)  // [regionName, {meta, listing}] (see above)
@@ -1334,16 +1336,16 @@
                       })
                       .filter(Boolean)      // remove errors in finishing setting up the region
                 )}
-                for (regionName in downloadedFQRegions.regions) {
-                    const pmtilesFiles = downloadedFQRegions.regions[regionName].pmtilesFiles
+                for (regionName in fqrs.regions) {
+                    const pmtilesFiles = fqrs.regions[regionName].pmtilesFiles
                     warnIncompleteRegion(pmtilesFiles, regionName)
                 }
-            }
-            setFQRegions()
+                return fqrs
+            })()
 
-            // Assumes calling function has already done `await until(fqrLoaded)`
-            function fqRegionsExist() {
-                return !!(Object.keys(downloadedFQRegions.regions).length)
+            async function fqRegionsExist() {
+                const fqrs = await downloadedFQRegions
+                return !!(Object.keys(fqrs.regions).length)
             }
 
             // Here's the deal:
@@ -1382,8 +1384,7 @@
                 }
 
                 // Full Quality Regions always have terrain
-                await until(fqrLoaded)
-                return fqRegionsExist()
+                return (await fqRegionsExist())
             }
 
             async function getAvailableStyles() {
@@ -1878,8 +1879,9 @@
                             .addTo(mb.map);
                     })
                 }
-                onClickDeleteRegion(regionName) {
-                    const [min_lon, min_lat, max_lon, max_lat] = downloadedFQRegions.regions[regionName].ui_bounds
+                async onClickDeleteRegion(regionName) {
+                    const fqrs = await downloadedFQRegions
+                    const [min_lon, min_lat, max_lon, max_lat] = fqrs.regions[regionName].ui_bounds
 
                     // Zoom out to view the region so that the delete popup is well placed
                     const fqrWidth = max_lon - min_lon
@@ -2003,7 +2005,7 @@
 
                         // In the future we may want to rebuild this every time we add a new alert but this will be fine so
                         // long as we add the data warninsg within these two parts of the code:
-                        await until(fqrLoaded, 100)
+                        await downloadedFQRegions
                         await worldMap.pmtilesFilesCorrected
 
                         if (Object.keys(dataFileAlerts).length) {
