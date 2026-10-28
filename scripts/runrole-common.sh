@@ -1,7 +1,7 @@
 #!/bin/bash
 #
-# Shared by ./runrole and ./runroles.  DEFAULT_VARS_FILE follows the checkout;
-# LOCAL_VARS_FILE and the state files stay under /etc/iiab.
+# Shared by ./runrole and the deprecated ./runroles shim.  DEFAULT_VARS_FILE
+# follows the checkout; LOCAL_VARS_FILE and the state files stay under /etc/iiab.
 
 IIAB_REPO="${IIAB_REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 IIAB_STATE_CMD="${IIAB_STATE_CMD:-$IIAB_REPO/scripts/iiab-state}"
@@ -310,13 +310,12 @@ list_roles() {
     done < <(role_lifecycle table)
 }
 
-# Refuse contradictory or destructive option combinations.  The first argument
-# is "single" for ./runrole, where a log file is also accepted.
+# Refuse contradictory or destructive option combinations.
 # shellcheck disable=SC2153  # Flags are set by the caller.
 validate_options() {
     local log=false
-    if [ "${1:-multi}" = single ]; then
-        log=$LOGFILE
+    if [ -n "${LOG_FILE:-}" ]; then
+        log=true
     fi
     if $CHECK_LOCAL_VARS && ($log || $UNINSTALL || $REINSTALL || $CLEAN_INSTALL || $ADD || $STATUS || $ASSUME_YES || $VERBOSE); then
         echo "--check-local-vars is read-only and cannot be combined with other options."
@@ -330,7 +329,11 @@ validate_options() {
         echo "--clean-install cannot be combined with --add or --reinstall."
         exit 1
     fi
-    if $STATUS && ($log || $UNINSTALL || $REINSTALL || $CLEAN_INSTALL || $ADD || $ASSUME_YES || $VERBOSE); then
+    if $SKIP_MISSING && ! $UNINSTALL; then
+        echo "--skip-missing only applies to --uninstall."
+        exit 1
+    fi
+    if $STATUS && ($log || $UNINSTALL || $REINSTALL || $CLEAN_INSTALL || $ADD || $ASSUME_YES || $VERBOSE || $SKIP_MISSING); then
         echo "--status is read-only and cannot be combined with other options."
         exit 1
     fi

@@ -49,6 +49,6 @@ Where `<CONTINENT-or-REGION>.mbtiles` is one of the [major region files](https:/
    git remote add ghunt git@github.com:/georgejhunt/iiab<br>
    git fetch --all<br>
    git checkout -b maps7.3 ghunt/maps7.3<br>
-   ./runroles osm-vector-maps~
+   ./runrole osm-vector-maps~
 
 #### Please also see the IIAB Maps doc: https://github.com/iiab/iiab/wiki/IIAB-Maps

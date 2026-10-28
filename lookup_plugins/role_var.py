@@ -15,8 +15,8 @@ from pathlib import Path
 
 from ansible.plugins.lookup import LookupBase
 
-# scripts/role_lifecycle.py is shared with ./runrole, ./runroles, and the
-# lifecycle test.  It only uses the standard library, so it also works before
+# scripts/role_lifecycle.py is shared with ./runrole and the lifecycle test.
+# It only uses the standard library, so it also works before
 # Ansible is installed when those tools import it directly.
 _SCRIPTS_DIR = Path(__file__).resolve().parent.parent / "scripts"
 if str(_SCRIPTS_DIR) not in sys.path:

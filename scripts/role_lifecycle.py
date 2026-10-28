@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Role metadata shared by ./runrole, ./runroles, and the lifecycle test.
+"""Role metadata shared by ./runrole and the lifecycle test.
 
 Single source of truth for the role -> state-marker prefix mapping
 (``calibre-web`` -> ``calibreweb``), the install/enabled prefix mapping

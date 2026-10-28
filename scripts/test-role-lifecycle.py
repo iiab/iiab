@@ -34,8 +34,8 @@ from jinja2 import meta as jinja_meta
 ROOT_DIR = Path(__file__).resolve().parents[1]
 
 # scripts/role_lifecycle.py is the single source of truth for role names,
-# variable prefixes, and capabilities; ./runrole and ./runroles call the same
-# code through its CLI.
+# variable prefixes, and capabilities; ./runrole and the lifecycle test call
+# the same code through its CLI.
 _SPEC = importlib.util.spec_from_file_location(
     "iiab_role_lifecycle", ROOT_DIR / "scripts" / "role_lifecycle.py"
 )

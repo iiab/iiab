@@ -33,17 +33,20 @@ Finally, you can [customize your Internet-in-a-Box home page](https://wiki.iiab.
 
 ## Running roles individually
 
-`./runrole` applies one role using `/etc/iiab/local_vars.yml`. Runs are
-repeatable: the role is installed if missing and otherwise reconfigured.
+`./runrole` applies one or more roles using `/etc/iiab/local_vars.yml`. Runs are
+repeatable: each role is installed if missing and otherwise reconfigured.
 
-    sudo ./runrole captiveportal                    # apply
+    sudo ./runrole captiveportal                    # apply one role
+    sudo ./runrole transmission kiwix               # apply several roles
     sudo ./runrole --add captiveportal              # apply despite captiveportal_install: False
     sudo ./runrole --reinstall captiveportal        # rebuild the program
     sudo ./runrole --clean-install awstats          # uninstall, then install again
     sudo ./runrole --uninstall awstats              # uninstall, never deleting user data
+    sudo ./runrole --uninstall awstats --skip-missing  # ignore roles that are not installed
     ./runrole --status captiveportal                # show installed/desired state
     ./runrole --list                                # list roles, state, conflicts, capabilities
     sudo ./runrole --check-local-vars               # validate local_vars.yml, then exit
+    sudo ./runrole --log /tmp/iiab.log captiveportal
 
 - `--reinstall` reruns `install.yml` (installing first when missing). Converted
   roles keep their state markers and user settings until the rebuild succeeds;
@@ -53,10 +56,14 @@ repeatable: the role is installed if missing and otherwise reconfigured.
 - `--clean-install` is `--uninstall` followed by a fresh install, so it needs
   `--uninstall` support. It resets user settings and never deletes user data.
 - `--uninstall` removes the program, its program data, and its user settings
-  where supported. It never deletes user data.
+  where supported. It never deletes user data. With several roles it refuses to
+  start if any listed role is not installed; add `--skip-missing` to remove the
+  installed roles and report the rest.
 - `--status` and `--list` are read-only. `--check-local-vars` validates only
   the listed role(s)/prefix(es), or the full checklist when none are given.
-- `./runroles` accepts the same options for multiple roles.
+- `--log FILE` writes the Ansible log to FILE instead of `./iiab-debug.log`.
+- `./runroles` is a deprecated alias for `./runrole`; it accepts the same
+  arguments.
 
 Roles support `--uninstall` when `tasks/main.yml` implements it (an
 `uninstall.yml` include, or inline `when: uninstall`). `meta/runrole.yml` can
@@ -191,7 +198,7 @@ before the test can prove it.
 (`awstats_installed: True`), so `vars_files`, `grep`, and image fixtures keep
 working. A missing file is a valid empty state for the module, the lookup, and
 `./scripts/iiab-state`; during the migration the entry playbooks still load it
-with `vars_files`, so `./runrole` and `./runroles` create it when absent. The
+with `vars_files`, so `./runrole` creates it when absent. The
 path comes from `iiab_state_file`, which defaults to `IIAB_STATE_FILE` or
 `/etc/iiab/iiab_state.yml`.
 
