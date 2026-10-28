@@ -6,7 +6,9 @@ work in a phase that must stay offline, offline phases that include a phase
 which may use the network, an unguarded uninstall include, unsafe state
 checks, and state writes in the wrong phase. Warnings are reported but do not
 fail the run unless --strict is used; a reference to the removed
-clean_install variable always fails.
+clean_install variable and an ownership path declared in more than one class
+always fail. Declared user settings are seeded and must survive a normal
+apply; declared user data must survive every operation.
 """
 
 from __future__ import annotations
@@ -24,7 +26,9 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import NamedTuple
 
+import jinja2
 import yaml
+from jinja2 import meta as jinja_meta
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 
@@ -261,6 +265,12 @@ def decode(value):
         return value
 
 
+def is_false(value):
+    if isinstance(value, bool):
+        return not value
+    return str(value).strip().lower() in {"0", "false", "no", "off", ""}
+
+
 def module_args():
     if len(sys.argv) <= 1 or not os.path.isfile(sys.argv[1]):
         return {}
@@ -312,9 +322,11 @@ def exists(state, path):
     )
 
 
-def create(state, path, kind="file"):
+def create(state, path, kind="file", content=None):
     changed = not exists(state, path)
     state["paths"][path] = kind
+    if kind == "file" and content is not None:
+        state.setdefault("contents", {})[path] = content
     return changed
 
 
@@ -402,6 +414,7 @@ def remove(state, path):
     ]
     for item in paths:
         del state["paths"][item]
+        state.setdefault("contents", {}).pop(item, None)
     return bool(paths)
 
 
@@ -512,11 +525,32 @@ def main():
             path = posixpath.join(path, posixpath.basename(args.get("src", "")))
         if name == "get_curl" and args.get("url"):
             path = destination(state, path, str(args["url"]))
+        # Match template/copy semantics for user settings: force: false keeps
+        # an existing destination exactly as it is.
+        if (
+            name in {"template", "copy"}
+            and exists(state, path)
+            and is_false(args.get("force", True))
+        ):
+            finish(state, changed=False, skipped=True, path=path, dest=path)
         if args.get("state") == "absent":
             changed = remove(state, path)
         else:
             kind = "directory" if args.get("state") == "directory" else "file"
-            changed = create(state, path, kind)
+            content = None
+            if kind == "file":
+                if name == "template":
+                    content = "managed template: " + str(args.get("src", ""))
+                elif name == "copy":
+                    content = str(
+                        args.get("content")
+                        or ("managed copy: " + str(args.get("src", "")))
+                    )
+                elif name == "get_curl":
+                    content = "managed download: " + str(args.get("url", ""))
+                elif name in {"lineinfile", "blockinfile", "replace", "ini_file"}:
+                    content = f"managed {name} write: {path}"
+            changed = create(state, path, kind, content)
         finish(state, changed=changed, path=path, dest=path)
 
     if name in {"group", "user"}:
@@ -802,6 +836,180 @@ def enabled_var(role: str) -> str:
     return f"{role_lifecycle.install_prefix(role) or role_var(role)}_enabled"
 
 
+OWNERSHIP_KINDS = ("user_settings", "program_data", "user_data")
+USER_SETTING_SENTINEL = (
+    "IIAB lifecycle test: a normal apply must not overwrite this user setting\n"
+)
+USER_DATA_SENTINEL = "IIAB lifecycle test: user data must survive every operation\n"
+
+
+def defaults_file(role: str) -> Path | None:
+    defaults = ROOT_DIR / "roles" / role / "defaults"
+    for name in ("main.yml", "main.yaml"):
+        path = defaults / name
+        if path.is_file():
+            return path
+    return None
+
+
+def load_vars_file(path: Path) -> dict:
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, yaml.YAMLError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def resolved_ownership(role: str, vars_file: str = "") -> dict[str, list[str]]:
+    """Resolve a role's user_settings/program_data/user_data declarations.
+
+    Role defaults are not loaded as host facts in the lifecycle playbook, so
+    resolve the declared paths here with the same vars the test passes to the
+    playbook.  This is the test-side half of the Data ownership contract.
+    """
+    defaults = defaults_file(role)
+    if defaults is None:
+        return {kind: [] for kind in OWNERSHIP_KINDS}
+
+    raw: dict = load_vars_file(defaults)
+    base = Path(vars_file) if vars_file else ROOT_DIR / "vars" / "default_vars.yml"
+    raw.update(load_vars_file(base))
+    for name in ("main.yml", "main.yaml"):
+        raw.update(load_vars_file(ROOT_DIR / "roles" / role / "vars" / name))
+
+    environment = jinja2.Environment()
+    resolved: dict[str, object] = {}
+
+    def resolve(name: str, stack: set[str]):
+        if name in resolved:
+            return resolved[name]
+        if name not in raw or name in stack:
+            return None
+        result = render(raw[name], stack | {name})
+        resolved[name] = result
+        return result
+
+    def render(value, stack: set[str]):
+        if isinstance(value, str):
+            try:
+                names = jinja_meta.find_undeclared_variables(environment.parse(value))
+            except jinja2.TemplateSyntaxError:
+                return value
+            if not names:
+                return value
+            context = {name: resolve(name, stack) for name in names}
+            try:
+                return environment.from_string(value).render(context)
+            except jinja2.TemplateError:
+                return value
+        if isinstance(value, list):
+            return [render(item, stack) for item in value]
+        if isinstance(value, dict):
+            return {key: render(item, stack) for key, item in value.items()}
+        return value
+
+    prefix = role_var(role)
+    result: dict[str, list[str]] = {}
+    for kind in OWNERSHIP_KINDS:
+        value = render(raw.get(f"{prefix}_{kind}", []), set())
+        if not isinstance(value, list):
+            value = []
+        result[kind] = [
+            str(item)
+            for item in value
+            if item and "{{" not in str(item) and "{%" not in str(item)
+        ]
+    return result
+
+
+def state_has_path(state: dict, path: str) -> bool:
+    paths = state.get("paths", {})
+    if path in paths:
+        return True
+    prefix = path.rstrip("/") + "/"
+    return any(item.startswith(prefix) for item in paths)
+
+
+def ownership_content(state: dict, path: str):
+    contents = state.get("contents", {})
+    if path.rstrip("/") != path:
+        return contents.get(path.rstrip("/") + "/.iiab-user-setting")
+    return contents.get(path)
+
+
+def seed_ownership(state: dict, ownership: dict[str, list[str]]) -> None:
+    """Seed declared paths so an operation's effect on them is observable."""
+    paths = state.setdefault("paths", {})
+    contents = state.setdefault("contents", {})
+
+    def seed(path: str, sentinel: str | None):
+        kind = "directory" if path.endswith("/") else "file"
+        paths[path] = kind
+        if sentinel is None:
+            return
+        if kind == "directory":
+            marker = path.rstrip("/") + "/.iiab-user-setting"
+            paths[marker] = "file"
+            contents[marker] = sentinel
+        else:
+            contents[path] = sentinel
+
+    for path in ownership["user_settings"]:
+        seed(path, USER_SETTING_SENTINEL)
+    for path in ownership["user_data"]:
+        seed(path, USER_DATA_SENTINEL)
+
+
+def ownership_problem(
+    state: dict,
+    ownership: dict[str, list[str]],
+    operation: str,
+    check_user_settings: bool,
+) -> str | None:
+    missing = [
+        path for path in ownership["user_data"] if not state_has_path(state, path)
+    ]
+    if missing:
+        return f"{operation} removed declared user data: " + ", ".join(missing)
+
+    if check_user_settings:
+        changed = [
+            path
+            for path in ownership["user_settings"]
+            if ownership_content(state, path) != USER_SETTING_SENTINEL
+        ]
+        if changed:
+            return (
+                f"{operation} overwrote declared user settings: "
+                + ", ".join(changed)
+            )
+    return None
+
+
+def ownership_warnings(role: str, vars_file: str = "") -> list[Warning]:
+    """Warn when a path is declared in more than one ownership class."""
+    ownership = resolved_ownership(role, vars_file)
+    classes: dict[str, list[str]] = {}
+    for kind in OWNERSHIP_KINDS:
+        for path in ownership[kind]:
+            classes.setdefault(path.rstrip("/"), []).append(kind)
+
+    defaults = defaults_file(role)
+    location = (
+        str(defaults.relative_to(ROOT_DIR)) if defaults else f"roles/{role}/defaults"
+    )
+    return [
+        Warning(
+            location,
+            None,
+            f"{path} is declared as both {' and '.join(kinds)}; a path belongs "
+            "to exactly one ownership class",
+        )
+        for path, kinds in classes.items()
+        if len(kinds) > 1
+    ]
+
+
 def initial_state(role: str, installed: bool = False) -> dict:
     return {
         "paths": {
@@ -809,6 +1017,7 @@ def initial_state(role: str, installed: bool = False) -> dict:
             "/lib/systemd/system": "directory",
             "/usr/lib/systemd/system": "directory",
         },
+        "contents": {},
         "services": {"nginx": {"enabled": True, "state": "started"}},
         "packages": {},
     }
@@ -1519,12 +1728,14 @@ def run_scenario(
     steps: list[tuple[str, dict, bool | None]],
     seed_marker: bool = False,
     initial_installed: bool = False,
+    check_user_settings: bool = True,
 ) -> str:
     """Run lifecycle steps in one virtual host.
 
     Each step is (name, values, expect_marker).  expect_marker True requires
     the installed marker afterwards, False requires it to be gone, and None
-    skips the check.
+    skips the check.  Declared ownership is seeded before the first step so a
+    normal apply cannot silently overwrite user settings or delete user data.
     """
     scenario.mkdir()
     prepare_controller_files(scenario)
@@ -1534,9 +1745,10 @@ def run_scenario(
     else:
         state_yaml.touch()
     state_file = scenario / "state.json"
-    state_file.write_text(
-        json.dumps(initial_state(role, initial_installed)), encoding="utf-8"
-    )
+    ownership = resolved_ownership(role, vars_file)
+    state = initial_state(role, initial_installed)
+    seed_ownership(state, ownership)
+    state_file.write_text(json.dumps(state), encoding="utf-8")
     output = [f"  {title:<19}"]
 
     for name, values, expect_marker in steps:
@@ -1578,6 +1790,15 @@ def run_scenario(
             output.append(state_yaml.read_text(encoding="utf-8"))
             return "".join(output)
 
+    final_state = json.loads(state_file.read_text(encoding="utf-8"))
+    problem = ownership_problem(
+        final_state, ownership, title, check_user_settings=check_user_settings
+    )
+    if problem:
+        output.append(f"FAIL\n{problem}\n")
+        output.append(state_file.read_text(encoding="utf-8"))
+        return "".join(output)
+
     output.append("PASS\n")
     return "".join(output)
 
@@ -1606,6 +1827,8 @@ def operation_result(
         # same way and prove the role does not remove them while rebuilding.
         seed_marker=name == "reinstall",
         initial_installed=values["installed"],
+        # --reinstall may reset user settings; only user data must survive.
+        check_user_settings=name != "reinstall",
     )
 
 
@@ -1700,6 +1923,8 @@ def run_role(role: str, vars_file: str, quiet: bool = False, strict: bool = Fals
     print_warnings(unsafe_state, "unsafe state checks")
     state_writes = state_write_warnings(role)
     print_warnings(state_writes, "state writes in the wrong phase")
+    ownership = ownership_warnings(role, vars_file)
+    print_warnings(ownership, "ownership declarations")
     if not quiet:
         for name in skipped:
             print(f"  {name:<19} SKIP (unsupported)")
@@ -1730,6 +1955,10 @@ def run_role(role: str, vars_file: str, quiet: bool = False, strict: bool = Fals
                 print(output, end="")
             if "FAIL\n" in output:
                 failures = 1
+    # A path in more than one ownership class makes preservation ambiguous, so
+    # it is an error even without --strict.
+    if ownership:
+        failures = 1
     if strict and (warnings or unsafe_state or state_writes):
         failures = 1
     return failures

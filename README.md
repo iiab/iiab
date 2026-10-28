@@ -51,8 +51,8 @@ repeatable: the role is installed if missing and otherwise reconfigured.
   `roles/<role>/meta/runrole.yml`.
 - `--clean-install` is `--uninstall` followed by a normal apply, so it needs
   `--uninstall` support.
-- `--uninstall` removes the program and its settings where supported. No
-  runrole operation ever deletes user data.
+- `--uninstall` removes the program and its program data where supported. It
+  must never delete user settings or user data.
 - `--status` and `--list` are read-only. `--check-local-vars` validates only
   the listed role(s)/prefix(es), or the full checklist when none are given.
 - `./runroles` accepts the same options for multiple roles.
@@ -101,8 +101,8 @@ Anything that must be reconciled every time belongs in `configure.yml`.
 `enable-or-disable.yml` is a legacy convention the runner still executes; new
 work belongs in `configure.yml`.
 
-- `uninstall.yml` removes the program and its settings, never declared user
-  data, and removes the role's state markers as its final task.
+- `uninstall.yml` removes the program and its program data, never user settings
+  or user data, and removes the role's state markers as its final task.
 - Write the installed marker only after configure succeeds (normally in
   `state.yml`). Test markers with `lookup('installed', 'mysql')`, not the
   `*_installed` variable directly.
@@ -122,6 +122,68 @@ Converting a role stops
 The test runs against mocked filesystems, services, and processes. Use
 `--strict` to turn lifecycle warnings into failures, and `--all` to test every
 active role (`--jobs N` sets its parallelism).
+
+## Data ownership
+
+A converted role distinguishes five kinds of state. "Settings" is not one
+category, and the lifecycle must not treat it as one.
+
+| Class | Examples | Normal apply | `--reinstall` | `--uninstall` |
+|---|---|---|---|---|
+| **Program** | packages, binaries, source trees, service units | not touched | rebuilt | removed |
+| **Program data** | generated config, caches, indexes, logs, generated service files | reconciled by `configure.yml` | may be discarded and rebuilt | removed |
+| **Managed settings** | values driven by `local_vars.yml` | reconciled from `local_vars.yml` | reconciled | removed |
+| **User settings** | app-owned preferences and admin choices, or hand-edited config that IIAB does not manage | preserved | no guarantee | preserved |
+| **User data** | uploads, content, database records, generated reports | untouched | untouched | never removed |
+
+`local_vars.yml` is the user-owned *input* for managed settings, and an apply is
+supposed to enforce it. User settings are the opposite: state the user owns
+after IIAB seeds it. `configure.yml` must not reconcile user settings on an
+ordinary apply. If a role cannot separate the two in one file, split the file
+(a drop-in directory, include, or separate database table) rather than
+overwriting the whole file.
+
+The simple rule for a user-setting file is to create it only when missing and
+overwrite it only on a rebuild:
+
+    - name: Install the app configuration
+      template:
+        src: app.conf.j2
+        dest: "{{ app_config_file }}"
+        force: "{{ iiab_reset_user_settings | bool }}"   # false on apply
+
+The lifecycle runner sets `iiab_reset_user_settings` from `reinstall` on every
+apply: it is false during a normal apply and true during `--reinstall`. This
+preserves an existing user setting during a normal apply and lets `--reinstall`
+reset it. Apply the same guard to `copy`, `lineinfile`, `ini_file`, and
+`blockinfile`: do not write a user-setting file without it.
+
+A role that must update a shipped default without discarding local edits needs
+a three-way check (the last IIAB-written checksum, the current file, and the
+new default) or a key-level merge. Unconditionally overwriting a user-setting
+file on every apply is not acceptable.
+
+Declare what a role owns in `defaults/main.yml`, using the role's state-marker
+prefix (`calibre-web` uses `calibreweb_...`):
+
+    exampleapp_user_settings:
+      - /etc/exampleapp/settings.conf
+    exampleapp_program_data:
+      - /var/cache/exampleapp
+    exampleapp_user_data:
+      - /var/lib/exampleapp/uploads
+
+A path belongs to exactly one class. The lifecycle test resolves these
+declarations, seeds the paths, and fails if a normal apply, uninstall, or
+clean-install overwrites a user setting, deletes user data, or if a path
+appears in more than one class. `--reinstall` is deliberately not checked for
+user settings.
+
+`awstats` is the reference implementation: `awstats_user_settings` keeps
+`/etc/awstats/awstats.schoolserver.conf` across normal applies and uninstalls,
+while `awstats_program_data` and `awstats_user_data` declare the rest of its
+state. Only `awstats` is converted so far; new conversions must declare their
+ownership before the lifecycle test can prove it.
 
 ## Observed state
 
