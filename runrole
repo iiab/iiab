@@ -27,65 +27,32 @@ Usage: ./runrole [options] <role> [logfile]
        ./runrole --status <role>
        ./runrole --check-local-vars [role]
 
-Apply a role using /etc/iiab/local_vars.yml. Runs are repeatable: the role is
-installed if missing and otherwise reconfigured.
+Apply a role using /etc/iiab/local_vars.yml; repeatable (install if missing,
+otherwise reconfigure). See README.md for the lifecycle contract.
 
 Options:
   -y, --yes             Do not ask for confirmation
   -a, --add             Run the role even if '*_install: False'
-  -v, --verbose         Show the detected Python interpreter and pass -v to Ansible
+  -v, --verbose         Show the Python interpreter and pass -v to Ansible
       --apply           Apply settings (the default)
-      --reinstall       Rebuild the program (roles may opt out in meta/runrole.yml)*
-      --clean-install   Uninstall the role, then install it again. Requires the
-                        role to support --uninstall; never deletes user data
-      --uninstall       Uninstall the program, never deleting user data (roles
-                        that implement 'uninstall')
+      --reinstall       Rebuild the program (roles may opt out)
+      --clean-install   Uninstall, then install again (needs --uninstall support)
+      --uninstall       Uninstall the program, never deleting user data
       --check           Best-effort Ansible check mode (--check --diff)
       --check-local-vars
-                        Validate /etc/iiab/local_vars.yml and exit, without
-                        running or changing anything. Checks the full checklist,
-                        or only the listed role(s) or variable prefix(es)
+                        Validate local_vars.yml and exit, without changing anything
       --status          Show installed/desired state without changing anything
-      --list            List roles with their installed state and capabilities
+      --list            List roles with their state and capabilities
   -h, --help            Show this help
 
 Examples:
-  ./runrole captiveportal
   ./runrole --reinstall captiveportal
-  ./runrole --clean-install awstats
-  ./runrole --uninstall awstats
-  ./runrole --status captiveportal
-  ./runrole --list
-  ./runrole --check-local-vars
+  sudo ./runrole --clean-install awstats
   ./runrole --check-local-vars captiveportal
 
-No runrole option deletes user data. Roles declare their user data, and the
-lifecycle test enforces it for every option. --reinstall is a rebuild, not a
-reset: whether settings and program data survive depends on the role. To remove
-user data, do it manually.
-
---reinstall installs a role that is missing and rebuilds it otherwise.
---uninstall requires the role to be installed.  The install phases require
-'<prefix>_install: True' (pass -a to override it for one run). --clean-install
-is literally --uninstall followed by a normal apply, so a role supports it
-exactly when it supports --uninstall. --status and --list are read-only and
-cannot be combined with other options. --check-local-vars is read-only too: it
-validates the configuration and exits.
-
-* --reinstall reruns the role's install/update path (installing it first when it
-  is missing). Some roles keep settings and program data, others rewrite or
-  remove them; use --clean-install when you want a known reset. User data is
-  never deleted: roles declare it in '<role>_user_data' and the lifecycle test
-  enforces it. Legacy roles have their state markers removed first, as before;
-  converted roles keep them until the rebuild succeeds.
-
-If --uninstall keeps failing, fix the reported error and retry. The role's
-markers are removed only after cleanup succeeds. If you already removed the
-program another way, clear its markers with the role's state-file prefix
-(calibre-web uses calibreweb):
-  sudo ./scripts/iiab-state forget <prefix>
-This makes IIAB treat the role as uninstalled, so do it only after the program
-and its settings are gone.
+No option deletes user data. --status and --list are read-only and cannot be
+combined with other options. Set '<prefix>_install: True' (or pass -a) before
+running the install phases.
 EOF
 }
 
@@ -192,40 +159,7 @@ if [ -v ROLE_NAME ]; then
     fi
 fi
 
-if $CHECK_LOCAL_VARS && ($LOGFILE || $UNINSTALL || $REINSTALL || $CLEAN_INSTALL || $ADD || $CHECK || $STATUS || $ASSUME_YES || $VERBOSE); then
-    echo "--check-local-vars is read-only and cannot be combined with other options."
-    echo "It accepts a role or variable prefix, but no log file."
-    exit 1
-fi
-
-if $UNINSTALL && ($REINSTALL || $CLEAN_INSTALL || $ADD); then
-    echo "--uninstall cannot be combined with --add, --reinstall, or --clean-install."
-    exit 1
-fi
-
-if $CLEAN_INSTALL && ($REINSTALL || $ADD); then
-    echo "--clean-install cannot be combined with --add or --reinstall."
-    echo "It already uninstalls the role and installs it again."
-    exit 1
-fi
-
-if $CHECK && $UNINSTALL; then
-    echo "--check cannot be combined with --uninstall."
-    echo "Use --status to inspect the role without changing anything."
-    exit 1
-fi
-
-if $CHECK && ($REINSTALL || $CLEAN_INSTALL); then
-    echo "--check cannot be combined with --reinstall or --clean-install."
-    echo "Use --status to inspect the role without changing anything."
-    exit 1
-fi
-
-if $STATUS && ($LOGFILE || $UNINSTALL || $REINSTALL || $CLEAN_INSTALL || $ADD || $CHECK || $ASSUME_YES || $VERBOSE); then
-    echo "--status is read-only and cannot be combined with other options."
-    echo "It accepts a role, but no log file."
-    exit 1
-fi
+validate_options single
 
 if [ ! -v ANSIBLE_LOG_PATH ]; then
     export ANSIBLE_LOG_PATH="$CWD/iiab-debug.log"    # Default log file location

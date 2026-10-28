@@ -1,31 +1,18 @@
 #!/usr/bin/env python3
 """Role metadata shared by ./runrole, ./runroles, and the lifecycle test.
 
-This module is the single source of truth for:
+Single source of truth for the role -> state-marker prefix mapping
+(``calibre-web`` -> ``calibreweb``), the install/enabled prefix mapping
+(``iiab-admin`` -> ``admin_console``), role capabilities, and the prefixes in
+0-init's validation checklist.  Uses only the standard library so it runs
+before Ansible is installed.
 
-* the role name -> state-marker prefix mapping (``calibre-web`` ->
-  ``calibreweb``);
-* the role name -> install/enabled prefix mapping (``iiab-admin`` ->
-  ``admin_console``);
-* which extended operations a role implements;
-* which roles are runnable (``roles/<name>/tasks/main.yml`` exists);
-* which variable prefixes the 0-init checklist validates, including prefixes
-  such as ``squid`` that are managed by a larger role.
-
-``runrole`` and ``runroles`` call the CLI (see ``main``) so the shell and the
-Python lifecycle test can never disagree about whether a flag is supported.
-Only the standard library is used, so this runs before Ansible is installed.
-
-An extended operation is derived, not declared:
-
-* ``--clean-install`` is ``--uninstall`` followed by a normal apply, so a role
-  supports it exactly when it supports ``--uninstall``;
-* ``--reinstall`` is available to every role unless ``meta/runrole.yml`` sets
-  ``reinstall: false`` (e.g. azuracast requires manual Docker cleanup);
-* ``--uninstall`` is supported when the role's entry point hands off to
-  ``tasks/uninstall.yml`` or guards work with ``when: uninstall`` inline.
-  An unused ``uninstall.yml`` alone does not opt a role in. ``meta/runrole.yml``
-  can opt in a role whose implementation cannot be detected from its tasks.
+``--clean-install`` is ``--uninstall`` followed by an apply, so it is supported
+exactly when ``--uninstall`` is.  ``--uninstall`` is supported when the role
+entry point hands off to ``tasks/uninstall.yml`` (or guards work with
+``when: uninstall`` inline); ``meta/runrole.yml`` can override that.
+``--reinstall`` is available unless ``meta/runrole.yml`` sets
+``reinstall: false``.
 """
 
 from __future__ import annotations

@@ -26,40 +26,28 @@
 - name: 'DISALLOW "XYZ_install: False" WHEN "XYZ_installed" IS TRUE IN /etc/iiab/iiab_state.yml ...for up-to-{{ vars_checklist | length }} var pairs'
   fail:
     msg: |
-      DISALLOWED: {{ installed_conflicts | length }} app(s) are already installed,
-      but /etc/iiab/local_vars.yml sets their '*_install' to False:
+      DISALLOWED: {{ installed_conflicts | length }} installed app(s) have
+      '<app>_install: False' in /etc/iiab/local_vars.yml:
 
       {% for item in installed_conflicts %}
-        - {{ var_role_names.get(item, item) }}  ({{ item }}_install: False in local_vars.yml, {{ 'iiab_admin_installed' if item == 'admin_console' else item ~ '_installed' }}: True in iiab_state.yml)
+        - {{ var_role_names.get(item, item) }}  ({{ item }}_install: False, {{ 'iiab_admin_installed' if item == 'admin_console' else item ~ '_installed' }}: True)
       {% endfor %}
 
-      IIAB cannot turn an installed app off by changing local_vars.yml alone.
       Choose one:
-
-      1. KEEP IT INSTALLED
-         Set '<app>_install: True' in /etc/iiab/local_vars.yml and re-run.
-
-      2. UNINSTALL IT FIRST (only for standalone roles that support this)
+      1. Keep it: set '<app>_install: True' in local_vars.yml and re-run.
+      2. Uninstall it (roles that support this):
            ./runrole --list
            sudo ./runrole --uninstall <role>
-         Then set '<app>_install: False' in /etc/iiab/local_vars.yml.
-         Prefixes managed by a larger role have no standalone uninstall:
-         squid belongs to 'network', and admin_console belongs to 'iiab-admin'.
-         Remove those manually first, then use option 3.
-
-      3. CLEAR A STALE MARKER (only if the app is already gone)
-         If an earlier install failed after recording its marker, and you have
-         since removed the program and its settings, clear the marker with:
+         Prefixes managed by a larger role (squid -> network, admin_console ->
+         iiab-admin) have no standalone uninstall.
+      3. If the program and its settings are already gone, clear the stale
+         marker with the state-file prefix (admin_console -> iiab_admin,
+         calibre-web -> calibreweb):
            sudo ./scripts/iiab-state forget <state-prefix>
-         Use the state-file prefix, not always the app name: admin_console uses
-         iiab_admin, and calibre-web uses calibreweb.
-         This makes IIAB treat the role as uninstalled.  Do not use it while
-         the program or its settings are still present.
 
       Inspect without changing anything:
         ./runrole --status <role>
         ./runrole --list
-        ./runrole --check-local-vars
 
       More help: http://FAQ.IIAB.IO
       https://github.com/iiab/iiab/wiki/IIAB-Installation#do-everything-from-scratch

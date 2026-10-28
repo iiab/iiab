@@ -21,7 +21,6 @@ import shutil
 import subprocess
 import sys
 import tempfile
-import textwrap
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import NamedTuple
@@ -31,8 +30,6 @@ import yaml
 from jinja2 import meta as jinja_meta
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
-ACTIVE_STATES = {"started", "restarted", "reloaded"}
-BASELINE_SERVICES = {"nginx", "dnsmasq"}
 
 # scripts/role_lifecycle.py is the single source of truth for role names,
 # variable prefixes, and capabilities; ./runrole and ./runroles call the same
@@ -191,13 +188,24 @@ TASK_KEYWORDS = {
 }
 MOCK_MODULE_SOURCE = r'''#!/usr/bin/python3
 import ast
-import copy
 import json
 import os
 import posixpath
 import re
 import shlex
 import sys
+
+FILE_MODULES = {
+    "file",
+    "template",
+    "copy",
+    "get_curl",
+    "lineinfile",
+    "blockinfile",
+    "replace",
+    "ini_file",
+}
+PACKAGE_MODULES = {"apt", "apk", "dnf", "package", "pacman", "yum", "zypper"}
 
 
 def module_name():
@@ -213,32 +221,30 @@ def decode(value):
 
 
 def module_args():
-    if len(sys.argv) > 1 and os.path.isfile(sys.argv[1]):
-        with open(sys.argv[1], encoding="utf-8") as args_file:
-            text = args_file.read()
-        if text.startswith("{"):
-            return json.loads(text).get("ANSIBLE_MODULE_ARGS", {})
-        # Ansible writes some argument files as shell-like key=value text
-        # (e.g. command with cmd/creates), where values may be quoted and
-        # contain spaces. Shlex keeps those values intact; the previous regex
-        # stopped at the first space and truncated commands such as pip install.
-        try:
-            tokens = shlex.split(text)
-        except ValueError:
-            tokens = text.split()
-        args = {}
-        for token in tokens:
-            key, separator, value = token.partition("=")
-            if separator and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", key):
-                args[key] = decode(value)
-        return args
-    return {}
+    if len(sys.argv) <= 1 or not os.path.isfile(sys.argv[1]):
+        return {}
+    with open(sys.argv[1], encoding="utf-8") as args_file:
+        text = args_file.read()
+    if text.startswith("{"):
+        return json.loads(text).get("ANSIBLE_MODULE_ARGS", {})
+    # Ansible sometimes writes shell-like key=value text, where values may be
+    # quoted and contain spaces.  Shlex keeps those values intact.
+    try:
+        tokens = shlex.split(text)
+    except ValueError:
+        tokens = text.split()
+    args = {}
+    for token in tokens:
+        key, separator, value = token.partition("=")
+        if separator and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", key):
+            args[key] = decode(value)
+    return args
 
 
 def load_state():
-    state_file = os.environ["IIAB_MOCK_STATE"]
-    if os.path.isfile(state_file):
-        with open(state_file, encoding="utf-8") as stream:
+    path = os.environ["IIAB_MOCK_STATE"]
+    if os.path.isfile(path):
+        with open(path, encoding="utf-8") as stream:
             return json.load(stream)
     return {"paths": {}, "services": {}}
 
@@ -265,58 +271,31 @@ def exists(state, path):
     )
 
 
-def unit_path(service):
-    suffixes = (
-        ".service",
-        ".socket",
-        ".timer",
-        ".path",
-        ".target",
-        ".mount",
-        ".automount",
-        ".swap",
-        ".device",
-        ".slice",
-        ".scope",
-    )
-    suffix = "" if service.endswith(suffixes) else ".service"
-    return f"/etc/systemd/system/{service}{suffix}"
-
-
 def create(state, path, kind="file"):
     changed = not exists(state, path)
     state["paths"][path] = kind
     return changed
 
 
-# Packages that ship systemd units the roles look for. Installing one of these
-# packages materializes its units, just like the package manager would.
-PACKAGE_UNITS = {
-    "uwsgi": (
-        "/lib/systemd/system/uwsgi-app@.service",
-        "/lib/systemd/system/uwsgi-app@.socket",
-    ),
-}
-
-
 def install_packages(state, args):
     names = args.get("name") or args.get("pkg") or args.get("package") or []
     if isinstance(names, str):
         names = [names]
-    requested = str(args.get("state") or "present").lower()
+    removing = str(args.get("state") or "present").lower() in {
+        "absent",
+        "removed",
+        "purged",
+    }
     changed = False
     packages = state.setdefault("packages", {})
     for package in names:
         package = str(package).split("=", 1)[0]
-        if requested in {"absent", "removed", "purged"}:
-            if packages.pop(package, None) is not None:
-                changed = True
+        if removing:
+            changed = packages.pop(package, None) is not None or changed
             continue
         if packages.get(package) != "present":
             packages[package] = "present"
             changed = True
-        for path in PACKAGE_UNITS.get(package, ()):
-            changed = create(state, path) or changed
     return changed
 
 
@@ -339,9 +318,7 @@ def seed_user_data(state, args):
 def remove(state, path):
     prefix = path.rstrip("/") + "/"
     paths = [
-        item
-        for item in state["paths"]
-        if item == path or item.startswith(prefix)
+        item for item in state["paths"] if item == path or item.startswith(prefix)
     ]
     for item in paths:
         del state["paths"][item]
@@ -356,14 +333,20 @@ def record_service(state, name, enabled=None, service_state=None):
         service["enabled"] = enabled
     if service_state:
         service["state"] = service_state
-    state.setdefault("events", []).append(
-        {
-            "phase": os.environ.get("IIAB_MOCK_PHASE"),
-            "name": name,
-            "enabled": enabled,
-            "state": service_state,
-        }
-    )
+
+
+def destination(state, path, url):
+    """Return the file a download lands on, creating the directory if needed."""
+    name = posixpath.basename(url.split("?")[0])
+    is_dir = path.endswith("/") or state["paths"].get(path) == "directory"
+    if not is_dir and name and not posixpath.splitext(path.rstrip("/"))[1]:
+        is_dir = True
+    if not is_dir:
+        return path
+    directory = path.rstrip("/")
+    if directory:
+        create(state, directory, "directory")
+    return posixpath.join(path, name)
 
 
 def command_result(state, args):
@@ -373,7 +356,6 @@ def command_result(state, args):
         finish(state, changed=False, skipped=True, rc=0, stdout="", stderr="")
     if creates:
         create(state, creates)
-
     try:
         words = shlex.split(command)
     except ValueError:
@@ -382,10 +364,8 @@ def command_result(state, args):
     # Simulate the download destinations of the common command-line fetchers.
     if words and words[0] in {"wget", "curl"}:
         for flag in ("-O", "--output-document", "-o", "--output"):
-            if flag in words:
-                index = words.index(flag)
-                if index + 1 < len(words):
-                    create(state, words[index + 1])
+            if flag in words and words.index(flag) + 1 < len(words):
+                create(state, words[words.index(flag) + 1])
 
     if "systemctl" in command or re.search(r"(^|\s)service\s", command):
         actions = {
@@ -396,37 +376,25 @@ def command_result(state, args):
         }
         for index, word in enumerate(words):
             if word in actions and index + 1 < len(words):
-                record_service(
-                    state,
-                    words[index + 1],
-                    service_state=actions[word],
-                )
+                record_service(state, words[index + 1], service_state=actions[word])
             elif word == "enable" and index + 1 < len(words):
                 record_service(state, words[index + 1], enabled=True)
             elif word == "disable" and index + 1 < len(words):
                 record_service(state, words[index + 1], enabled=False)
         finish(state, changed=False, rc=0, stdout="", stderr="")
 
-    if "dpkg-query" in command:
-        stdout = "installed"
-    elif "rev-parse" in command:
-        stdout = "mock-commit"
-    elif "describe --tags" in command:
-        stdout = "v0.1.5"
-    elif "remote get-url" in command:
-        stdout = "https://example.invalid/iiab-test-repo.git"
-    elif "--version" in command:
-        stdout = "Python 3.14.0"
-    elif "df " in command:
-        stdout = "1000"
-    elif "ls /sys/class/net |" in command:
-        stdout = "1"
-    elif "is-active" in command:
-        stdout = "active"
-    elif "pip install" in command:
-        stdout = "Successfully installed iiab-test-package"
-    else:
-        stdout = ""
+    outputs = (
+        ("dpkg-query", "installed"),
+        ("rev-parse", "mock-commit"),
+        ("describe --tags", "v0.1.5"),
+        ("remote get-url", "https://example.invalid/iiab-test-repo.git"),
+        ("--version", "Python 3.14.0"),
+        ("df ", "1000"),
+        ("ls /sys/class/net |", "1"),
+        ("is-active", "active"),
+        ("pip install", "Successfully installed iiab-test-package"),
+    )
+    stdout = next((value for token, value in outputs if token in command), "")
     finish(state, changed=False, rc=0, stdout=stdout, stderr="")
 
 
@@ -437,55 +405,31 @@ def main():
 
     if name == "stat":
         path = args.get("path", "")
-        installed = os.environ.get("IIAB_MOCK_INSTALLED") == "true"
         finish(
             state,
             changed=False,
             stat={
-                "exists": exists(state, path) or installed,
+                "exists": exists(state, path)
+                or os.environ.get("IIAB_MOCK_INSTALLED") == "true",
                 "isdir": state["paths"].get(path) == "directory",
                 "size": 0,
                 "islnk": False,
             },
         )
 
-    if name in {
-        "file",
-        "template",
-        "copy",
-        "get_curl",
-        "lineinfile",
-        "blockinfile",
-        "replace",
-        "ini_file",
-    }:
+    if name in FILE_MODULES:
         path = args.get("path") or args.get("dest") or args.get("name")
         if not path:
             fail(state, f"{name} mock needs a path or destination")
         if name in {"template", "copy"} and path.endswith("/"):
             path = posixpath.join(path, posixpath.basename(args.get("src", "")))
         if name == "get_curl" and args.get("url"):
-            url_name = posixpath.basename(str(args["url"]).split("?")[0])
-            dest_is_dir = path.endswith("/") or state["paths"].get(path) == "directory"
-            if (
-                not dest_is_dir
-                and url_name
-                and not posixpath.splitext(path.rstrip("/"))[1]
-            ):
-                dest_is_dir = True
-            if dest_is_dir:
-                dest_dir = path.rstrip("/")
-                if dest_dir:
-                    create(state, dest_dir, "directory")
-                path = posixpath.join(path, url_name)
+            path = destination(state, path, str(args["url"]))
         if args.get("state") == "absent":
             changed = remove(state, path)
         else:
             kind = "directory" if args.get("state") == "directory" else "file"
             changed = create(state, path, kind)
-            if name == "template" and path.startswith("/etc/systemd/system/"):
-                for service in state.get("expected_services", []):
-                    changed = create(state, unit_path(service)) or changed
         finish(state, changed=changed, path=path, dest=path)
 
     if name in {"group", "user"}:
@@ -495,59 +439,27 @@ def main():
         finish(state, changed=False, used=1000, mounts=[])
 
     if name == "git":
-        destination = args.get("dest")
-        create(state, destination, "directory")
-        create(state, posixpath.join(destination, ".git"), "directory")
+        destination_dir = args.get("dest")
+        create(state, destination_dir, "directory")
+        create(state, posixpath.join(destination_dir, ".git"), "directory")
         finish(state, changed=True, after="mock-commit")
 
     if name == "get_url":
         dest = args.get("dest") or args.get("path")
-        url = str(args.get("url", ""))
-        url_name = posixpath.basename(url.split("?")[0])
-        dest_is_dir = bool(dest) and (
-            dest.endswith("/") or state["paths"].get(dest) == "directory"
-        )
-        if (
-            dest
-            and not dest_is_dir
-            and url_name
-            and not posixpath.splitext(dest.rstrip("/"))[1]
-        ):
-            dest_is_dir = True
-        if dest and dest_is_dir:
-            dest_dir = dest.rstrip("/")
-            if dest_dir:
-                create(state, dest_dir, "directory")
-            if url_name:
-                dest = posixpath.join(dest, url_name)
         if dest:
+            dest = destination(state, dest, str(args.get("url", "")))
             create(state, dest)
         finish(state, changed=False, dest=dest)
 
-    if name in {
-        "apt",
-        "apk",
-        "dnf",
-        "package",
-        "pacman",
-        "yum",
-        "zypper",
-    }:
+    if name in PACKAGE_MODULES:
         finish(state, changed=install_packages(state, args))
 
-    if name in {
-        "unarchive",
-        "mount",
-        "sysctl",
-        "mariadb_user",
-        "postgresql_user",
-    }:
+    if name in {"unarchive", "mount", "sysctl", "mariadb_user", "postgresql_user"}:
         finish(state, changed=False)
 
     if name in {"mariadb_db", "postgresql_db"}:
-        database = args.get("name")
-        if database:
-            state.setdefault("databases", {})[str(database)] = str(
+        if args.get("name"):
+            state.setdefault("databases", {})[str(args["name"])] = str(
                 args.get("state", "present")
             ).lower()
         finish(state, changed=False)
@@ -575,26 +487,12 @@ def main():
         if not args.get("name"):
             finish(state, changed=False)
         service = args["name"]
-        installed = os.environ.get("IIAB_MOCK_INSTALLED") == "true"
-        unit = unit_path(service)
-        available = service in state.get("available_services", [])
-        if not installed and service not in state["services"] and not exists(state, unit):
-            if not available:
-                fail(state, f"service {service} is not installed")
         record_service(
             state,
             service,
             enabled=args.get("enabled"),
             service_state=args.get("state"),
         )
-        finish(state, changed=False)
-
-    if name == "mock_checkpoint":
-        snapshot = args.get("snapshot")
-        state.setdefault("snapshots", {})[snapshot] = {
-            "paths": copy.deepcopy(state["paths"]),
-            "services": copy.deepcopy(state["services"]),
-        }
         finish(state, changed=False)
 
     if name in {"raw", "script"}:
@@ -694,65 +592,6 @@ class ActionModule(ActionBase):
             result["stderr_lines"] = str(result["stderr"]).splitlines()
         if code:
             result["failed"] = True
-        return result
-'''
-
-MOCK_ACTION_SOURCE = r'''from __future__ import annotations
-
-import json
-import os
-import posixpath
-
-from ansible.plugins.action import ActionBase
-
-
-def state_path(task_vars):
-    return (task_vars or {}).get("iiab_mock_state") or os.environ["IIAB_MOCK_STATE"]
-
-
-def unit_path(service):
-    suffixes = (
-        ".service",
-        ".socket",
-        ".timer",
-        ".path",
-        ".target",
-        ".mount",
-        ".automount",
-        ".swap",
-        ".device",
-        ".slice",
-        ".scope",
-    )
-    suffix = "" if service.endswith(suffixes) else ".service"
-    return f"/etc/systemd/system/{service}{suffix}"
-
-
-class ActionModule(ActionBase):
-    def run(self, tmp=None, task_vars=None):
-        result = super().run(tmp, task_vars)
-        args = self._task.args
-        path = args.get("dest") or args.get("path")
-        if not path:
-            result.update(failed=True, msg="mock action needs a destination")
-            return result
-
-        state_file = state_path(task_vars)
-        with open(state_file, encoding="utf-8") as stream:
-            state = json.load(stream)
-        if path.endswith("/"):
-            path = posixpath.join(path, posixpath.basename(args.get("src", "")))
-        changed = path not in state["paths"]
-        state["paths"][path] = "file"
-        if path.startswith("/etc/systemd/system/"):
-            for service in state.get("expected_services", []):
-                unit = unit_path(service)
-                if unit not in state["paths"]:
-                    state["paths"][unit] = "file"
-                    changed = True
-        with open(state_file, "w", encoding="utf-8") as stream:
-            json.dump(state, stream)
-        result.update(changed=changed, path=path)
         return result
 '''
 
@@ -867,28 +706,6 @@ class ActionModule(ActionBase):
 '''
 
 
-def user_data_defaults_file(role: str) -> Path | None:
-    defaults = ROOT_DIR / "roles" / role / "defaults"
-    for name in ("main.yml", "main.yaml"):
-        path = defaults / name
-        if path.is_file():
-            return path
-    return None
-
-
-def declares_user_data(role: str) -> bool:
-    path = user_data_defaults_file(role)
-    if path is None:
-        return False
-    return bool(
-        re.search(
-            rf"^{re.escape(role_var(role))}_user_data\b",
-            path.read_text(encoding="utf-8"),
-            re.MULTILINE,
-        )
-    )
-
-
 def load_vars_file(path: Path) -> dict:
     try:
         data = yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -898,46 +715,50 @@ def load_vars_file(path: Path) -> dict:
 
 
 def resolved_user_data(role: str, vars_file: str) -> dict:
-    """Resolve a role's declared user data without including its defaults.
+    """Resolve a role's declared user data without loading its defaults as facts.
 
-    The lifecycle playbook must not load role defaults as host facts: that
-    would shadow the role's own templated defaults with raw Jinja strings. So
-    resolve just the declared paths and databases here, using the same vars the
-    test passes to the playbook.
+    Loading defaults as host facts would shadow the role's own templated
+    defaults with raw Jinja strings, so resolve just the declared paths and
+    databases with the same vars the test passes to the playbook.
     """
-    defaults = user_data_defaults_file(role)
-    if defaults is None or not declares_user_data(role):
+    defaults = next(
+        (
+            ROOT_DIR / "roles" / role / "defaults" / name
+            for name in ("main.yml", "main.yaml")
+            if (ROOT_DIR / "roles" / role / "defaults" / name).is_file()
+        ),
+        None,
+    )
+    if defaults is None:
         return {"paths": [], "databases": []}
 
     prefix = role_var(role)
-    raw: dict = load_vars_file(defaults)
-    base = Path(vars_file) if vars_file else ROOT_DIR / "vars" / "default_vars.yml"
-    raw.update(load_vars_file(base))
+    raw = load_vars_file(defaults)
+    raw.update(
+        load_vars_file(
+            Path(vars_file) if vars_file else ROOT_DIR / "vars" / "default_vars.yml"
+        )
+    )
     raw.update(load_vars_file(ROOT_DIR / "roles" / role / "vars" / "main.yml"))
+    if f"{prefix}_user_data" not in raw:
+        return {"paths": [], "databases": []}
 
     environment = jinja2.Environment()
     resolved: dict[str, object] = {}
 
-    def resolve(name: str, stack: set[str]):
-        if name in resolved:
-            return resolved[name]
-        if name not in raw or name in stack:
-            return None
-        result = render(raw[name], stack | {name})
-        resolved[name] = result
-        return result
-
-    def render(value, stack: set[str]):
+    def render(value, stack: frozenset[str] = frozenset()):
         if isinstance(value, str):
             try:
-                names = jinja_meta.find_undeclared_variables(
-                    environment.parse(value)
-                )
+                names = jinja_meta.find_undeclared_variables(environment.parse(value))
             except jinja2.TemplateSyntaxError:
                 return value
             if not names:
                 return value
-            context = {name: resolve(name, stack) for name in names}
+            context = {}
+            for name in names:
+                if name not in resolved and name in raw and name not in stack:
+                    resolved[name] = render(raw[name], stack | {name})
+                context[name] = resolved.get(name)
             try:
                 return environment.from_string(value).render(context)
             except jinja2.TemplateError:
@@ -948,156 +769,26 @@ def resolved_user_data(role: str, vars_file: str) -> dict:
             return {key: render(item, stack) for key, item in value.items()}
         return value
 
-    paths = render(raw.get(f"{prefix}_user_data", []), set())
-    databases = render(raw.get(f"{prefix}_user_data_databases", []), set())
-    if not isinstance(paths, list):
-        paths = []
-    if not isinstance(databases, list):
-        databases = []
+    def as_list(name):
+        value = render(raw.get(name, []))
+        return [str(item) for item in value if item] if isinstance(value, list) else []
+
     return {
-        "paths": [str(path) for path in paths if path],
-        "databases": [str(database) for database in databases if database],
+        "paths": as_list(f"{prefix}_user_data"),
+        "databases": as_list(f"{prefix}_user_data_databases"),
     }
 
 
 def enabled_var(role: str) -> str:
-    """Return the role's <prefix>_enabled variable.
-
-    Use the same install prefix as runrole; don't guess from task prose (that
-    used to pick dependency names such as mongodb_enabled for sugarizer).
-    """
-    prefix = role_lifecycle.install_prefix(role) or role_var(role)
-    return f"{prefix}_enabled"
-
-
-def role_service_names(role: str) -> set[str]:
-    services = set()
-    tasks_dir = ROOT_DIR / "roles" / role / "tasks"
-    for path in sorted(tasks_dir.rglob("*")):
-        if not path.is_file():
-            continue
-        lines = path.read_text(encoding="utf-8").splitlines()
-        for index, line in enumerate(lines):
-            module = re.match(r"^\s+(?:systemd_service|systemd|service):\s*$", line)
-            if not module:
-                continue
-            module_indent = len(line) - len(line.lstrip())
-            for following in lines[index + 1 : index + 8]:
-                if following.strip() and len(following) - len(following.lstrip()) <= module_indent:
-                    break
-                match = re.match(
-                    r'^\s+name:\s*["\']?([A-Za-z0-9@_.-]+)["\']?\s*$',
-                    following,
-                )
-                if match:
-                    services.add(match.group(1))
-                    break
-    return services
-
-
-UNIT_SUFFIXES = (
-    ".service",
-    ".socket",
-    ".timer",
-    ".path",
-    ".target",
-    ".mount",
-    ".automount",
-    ".swap",
-    ".device",
-    ".slice",
-    ".scope",
-)
-
-
-def unit_path(service: str) -> str:
-    suffix = "" if service.endswith(UNIT_SUFFIXES) else ".service"
-    return f"/etc/systemd/system/{service}{suffix}"
+    return f"{role_lifecycle.install_prefix(role) or role_var(role)}_enabled"
 
 
 def initial_state(role: str, installed: bool = False) -> dict:
-    role_services = sorted(
-        role_service_names(role) | ROLE_EXTRA_SERVICES.get(role, set())
-    )
-    available_services = [
-        "nginx",
-        "dnsmasq",
-        "apache2",
-        "avahi-daemon",
-        "hostapd",
-        "hostapd.service",
-        "iiab-clone-wifi.service",
-        "mariadb",
-        "php8.2-fpm",
-        "postgresql",
-        "postgresql-iiab",
-        "ssh",
-        "systemd-resolved",
-        "networking",
-        "wpa_supplicant",
-    ]
-    # A fresh install gets its units from the package that the mocked package
-    # task installs, so treat every service the role refers to as available.
-    available_services.extend(
-        service for service in role_services if service not in available_services
-    )
-    state = {
+    return {
         "paths": {},
         "services": {"nginx": {"enabled": True, "state": "started"}},
-        "expected_services": role_services,
-        "available_services": available_services,
         "packages": {},
     }
-    # Packages such as uwsgi materialize their unit templates when a role
-    # installs them; instance units are added by the role's own systemd tasks.
-    if installed:
-        for service in role_services:
-            if service in state["services"]:
-                continue
-            state["paths"][unit_path(service)] = "file"
-            state["services"][service] = {"enabled": True, "state": "started"}
-    return state
-
-
-def role_manages_service_toggle(role: str) -> bool:
-    tasks_dir = ROOT_DIR / "roles" / role / "tasks"
-    return any(
-        path.is_file() and "enable-or-disable" in path.stem
-        for path in tasks_dir.rglob("*")
-    )
-
-
-def role_toggle_service_names(role: str) -> set[str]:
-    services = set()
-    tasks_dir = ROOT_DIR / "roles" / role / "tasks"
-    for path in tasks_dir.rglob("*"):
-        if not path.is_file() or "enable-or-disable" not in path.stem:
-            continue
-        services.update(role_service_names_from_files((path,)))
-    services.update(ROLE_EXTRA_SERVICES.get(role, set()))
-    return services
-
-
-def role_service_names_from_files(paths) -> set[str]:
-    services = set()
-    for path in paths:
-        lines = path.read_text(encoding="utf-8").splitlines()
-        for index, line in enumerate(lines):
-            module = re.match(r"^\s+(?:systemd_service|systemd|service):\s*$", line)
-            if not module:
-                continue
-            module_indent = len(line) - len(line.lstrip())
-            for following in lines[index + 1 : index + 8]:
-                if following.strip() and len(following) - len(following.lstrip()) <= module_indent:
-                    break
-                match = re.match(
-                    r'^\s+name:\s*["\']?([A-Za-z0-9@_.-]+)["\']?\s*$',
-                    following,
-                )
-                if match:
-                    services.add(match.group(1))
-                    break
-    return services
 
 
 class _LifecycleLoader(yaml.SafeLoader):
@@ -1266,7 +957,7 @@ def task_modules(task: dict) -> list[tuple[str, object]]:
 
 
 class Warning(NamedTuple):
-    """A lifecycle finding that can be printed or surfaced as a CI annotation."""
+    """A lifecycle finding."""
 
     path: str
     line: int | None
@@ -1283,34 +974,14 @@ class Warning(NamedTuple):
             message = message[:157] + "..."
         return f"  WARN {location}{label}: {message}\n"
 
-    def annotation(self) -> str:
-        properties = f"file={self.path}"
-        if self.line is not None:
-            properties += f",line={self.line}"
-        label = f"{self.label}: " if self.label else ""
-        message = self.message.replace("\n", " ")
-        return f"::warning {properties}::{label}{message}"
 
-
-def warnings_enabled() -> bool:
-    """True when GitHub should render each finding as a PR annotation."""
-    return os.environ.get("GITHUB_ACTIONS") == "true"
-
-
-def print_warnings(
-    warnings: list[Warning],
-    header: str | None = None,
-    stream=sys.stdout,
-) -> None:
+def print_warnings(warnings: list[Warning], header: str | None = None) -> None:
     if not warnings:
         return
     if header:
-        print(f"  {header}: {len(warnings)}", file=stream)
+        print(f"  {header}: {len(warnings)}")
     for item in warnings:
-        if warnings_enabled():
-            print(item.annotation(), file=stream)
-        else:
-            print(item.text(), end="", file=stream)
+        print(item.text(), end="")
 
 
 def format_lifecycle_warning(
@@ -1575,82 +1246,6 @@ def prepare_controller_files(scenario: Path) -> None:
     (scenario / "roles").symlink_to(ROOT_DIR / "roles", target_is_directory=True)
 
 
-def playbook_header(
-    role: str,
-    vars_file: str,
-    install_name: str,
-    enabled_name: str,
-    enabled: bool,
-    installed: bool,
-    scenario: Path,
-    phase: str | None = None,
-    lifecycle: dict | None = None,
-) -> str:
-    lifecycle = lifecycle or {}
-    vars_path = vars_file or str(ROOT_DIR / "vars" / "default_vars.yml")
-    lines = [
-        "- hosts: localhost",
-        "  connection: local",
-        "  gather_facts: false",
-        "  vars_files:",
-        f'    - "{vars_path}"',
-        "  module_defaults:",
-        "    iiab_state:",
-        '      path: "{{ iiab_state_file }}"',
-        "  vars:",
-        f'    ansible_python_interpreter: "{sys.executable}"',
-        "    ansible_facts:",
-        "      machine: x86_64",
-        "      distribution: Debian",
-        '      distribution_major_version: "13"',
-        '      distribution_version: "13.0"',
-        "      pkg_mgr: apt",
-        "      default_ipv4:",
-        "        alias: eth0",
-        "        gateway: 192.0.2.1",
-        "      ansible_local:",
-        "        local_facts:",
-        '          systemd_networkd: "disabled"',
-        '          network_manager: "disabled"',
-        '          dhcpcd: "disabled"',
-        "    is_proot: false",
-        "    iiab_stage: 8",
-        "    no_net_restart: false",
-        '    iiab_wireless_lan_iface: "wlan0"',
-        '    iiab_lan_iface: "eth0"',
-        '    iiab_wan_iface: "eth0"',
-        '    rpi_model: "none"',
-        '    os_ver: "debian-13"',
-        "    is_debian: true",
-        "    is_raspbian: false",
-        "    is_ubuntu: false",
-        "    is_linuxmint: false",
-        '    dpkg_arch: {"stdout": "amd64"}',
-        '    php_version: "8.2"',
-        '    python_version: "3.14"',
-        "    skip_role_on_error: false",
-        f'    uninstall: {str(lifecycle.get("uninstall", False)).lower()}',
-        f'    reinstall: {str(lifecycle.get("reinstall", False)).lower()}',
-        f"    {install_name}: true",
-        f"    {enabled_name}: {str(enabled).lower()}",
-        f'    iiab_mock_state: "{scenario}/state.json"',
-        f'    iiab_mock_installed: "{str(installed).lower()}"',
-    ]
-    if phase:
-        lines.append(f'    iiab_mock_phase: "{phase}"')
-    lines.extend(
-        [
-            "  environment:",
-            f'    IIAB_MOCK_STATE: "{scenario}/state.json"',
-            f'    IIAB_MOCK_INSTALLED: "{str(installed).lower()}"',
-        ]
-    )
-    if phase:
-        lines.append(f'    IIAB_MOCK_PHASE: "{phase}"')
-    lines.append("  tasks:")
-    return "\n".join(lines) + "\n"
-
-
 def make_playbook(
     role: str,
     vars_file: str,
@@ -1661,93 +1256,88 @@ def make_playbook(
     enabled: bool,
     installed: bool,
     lifecycle: dict | None = None,
-    phase: str | None = None,
-    checkpoint: str | None = None,
-    seed_installed: bool = False,
 ) -> str:
-    content = playbook_header(
-        role,
-        vars_file,
-        install_name,
-        enabled_name,
-        enabled,
-        installed,
-        scenario,
-        phase,
-        lifecycle,
-    )
-    if phase:
-        lifecycle = lifecycle or {}
-        content += textwrap.indent(
-            textwrap.dedent(
-                f"""\
-                    - set_fact:
-                        {install_name}: true
-                        {enabled_name}: {str(enabled).lower()}
-                        uninstall: {str(lifecycle.get("uninstall", False)).lower()}
-                        reinstall: {str(lifecycle.get("reinstall", False)).lower()}
-                """
-            ),
-            "    ",
-        )
-    if seed_installed:
-        content += textwrap.indent(
-            textwrap.dedent(
-                f"""\
-                    - set_fact:
-                        {role_var(role)}_installed: true
-                """
-            ),
-            "    ",
-        )
+    lifecycle = lifecycle or {}
+    play = {
+        "hosts": "localhost",
+        "connection": "local",
+        "gather_facts": False,
+        "vars_files": [vars_file or str(ROOT_DIR / "vars" / "default_vars.yml")],
+        "module_defaults": {"iiab_state": {"path": "{{ iiab_state_file }}"}},
+        "vars": {
+            "ansible_python_interpreter": sys.executable,
+            "ansible_facts": {
+                "machine": "x86_64",
+                "distribution": "Debian",
+                "distribution_major_version": "13",
+                "distribution_version": "13.0",
+                "pkg_mgr": "apt",
+                "default_ipv4": {"alias": "eth0", "gateway": "192.0.2.1"},
+                "ansible_local": {
+                    "local_facts": {
+                        "systemd_networkd": "disabled",
+                        "network_manager": "disabled",
+                        "dhcpcd": "disabled",
+                    }
+                },
+            },
+            "is_proot": False,
+            "iiab_stage": 8,
+            "no_net_restart": False,
+            "iiab_wireless_lan_iface": "wlan0",
+            "iiab_lan_iface": "eth0",
+            "iiab_wan_iface": "eth0",
+            "rpi_model": "none",
+            "os_ver": "debian-13",
+            "is_debian": True,
+            "is_raspbian": False,
+            "is_ubuntu": False,
+            "is_linuxmint": False,
+            "dpkg_arch": {"stdout": "amd64"},
+            "php_version": "8.2",
+            "python_version": "3.14",
+            "skip_role_on_error": False,
+            "iiab_mock_state": str(scenario / "state.json"),
+            "iiab_mock_installed": str(installed).lower(),
+        },
+        "environment": {
+            "IIAB_MOCK_STATE": str(scenario / "state.json"),
+            "IIAB_MOCK_INSTALLED": str(installed).lower(),
+        },
+        "tasks": [
+            {
+                "set_fact": {
+                    install_name: True,
+                    enabled_name: enabled,
+                    "uninstall": bool(lifecycle.get("uninstall", False)),
+                    "reinstall": bool(lifecycle.get("reinstall", False)),
+                }
+            },
+        ],
+    }
     user_data = resolved_user_data(role, vars_file)
     if user_data["paths"] or user_data["databases"]:
-        content += textwrap.indent(
-            textwrap.dedent(
-                f"""\
-                    - name: Seed declared user data for the lifecycle test
-                      mock_user_data:
-                        paths: {json.dumps(user_data["paths"])}
-                        databases: {json.dumps(user_data["databases"])}
-                """
-            ),
-            "    ",
+        play["tasks"].append(
+            {
+                "name": "Seed declared user data for the lifecycle test",
+                "mock_user_data": {
+                    "paths": user_data["paths"],
+                    "databases": user_data["databases"],
+                },
+            }
         )
-    content += textwrap.indent(
-        textwrap.dedent(
-            """\
-                # Roles notify the shared NGINX handlers in 0-init.  Load them
-                # without running 0-init's tasks, so each role can still be
-                # tested on its own.
-                - name: Load the shared handlers from 0-init
-                  include_role:
-                    name: 0-init
-                    tasks_from: noop
-            """
-        ),
-        "    ",
+    # Roles notify the shared NGINX handlers in 0-init.  Load them without
+    # running 0-init's tasks, so each role can still be tested on its own.
+    play["tasks"].extend(
+        [
+            {
+                "name": "Load the shared handlers from 0-init",
+                "include_role": {"name": "0-init", "tasks_from": "noop"},
+            },
+            {"include_role": {"name": role}},
+        ]
     )
-    content += textwrap.indent(
-        textwrap.dedent(
-            f"""\
-                - include_role:
-                    name: {role}
-            """
-        ),
-        "    ",
-    )
-    if checkpoint:
-        content += textwrap.indent(
-            textwrap.dedent(
-                f"""\
-                    - name: Record {checkpoint} virtual state
-                      mock_checkpoint:
-                        snapshot: {checkpoint}
-                """
-            ),
-            "    ",
-        )
-    return content
+    return yaml.safe_dump([play], sort_keys=False)
 
 
 def create_mock_library(directory: Path) -> Path:
@@ -1759,9 +1349,6 @@ def create_mock_library(directory: Path) -> Path:
     module.chmod(0o755)
     actions = directory / "actions"
     actions.mkdir()
-    for name in ("copy", "template", "unarchive"):
-        action = actions / f"{name}.py"
-        action.write_text(MOCK_ACTION_SOURCE, encoding="utf-8")
     (actions / "pause.py").write_text(MOCK_PAUSE_ACTION_SOURCE, encoding="utf-8")
     (actions / "normal.py").write_text(MOCK_NORMAL_ACTION_SOURCE, encoding="utf-8")
     (actions / "include_vars.py").write_text(
@@ -1804,13 +1391,11 @@ def create_mock_library(directory: Path) -> Path:
         "raw",
         "script",
         "setup",
-        "mock_checkpoint",
         "mock_user_data",
     }
     for name in names:
         (library / name).symlink_to(module)
-        if name not in {"copy", "template", "unarchive"}:
-            (actions / f"{name}.py").symlink_to(module_action)
+        (actions / f"{name}.py").symlink_to(module_action)
     collection_modules = {
         ("ansible", "mariadb"): {"mariadb_db", "mariadb_user"},
         ("ansible", "posix"): {"patch"},
@@ -1841,7 +1426,6 @@ def run_ansible(
     library: Path,
     state_file: Path,
     installed: bool | None = None,
-    phase: str | None = None,
     extra_vars: dict | None = None,
 ) -> subprocess.CompletedProcess[str]:
     # Some roles run command tasks with become_user (postgres, www-data). The
@@ -1867,26 +1451,23 @@ def run_ansible(
     )
     if installed is not None:
         environment["IIAB_MOCK_INSTALLED"] = str(installed).lower()
-    if phase:
-        environment["IIAB_MOCK_PHASE"] = phase
+    # default_vars.yml sets skip_role_on_error: True, and vars_files beat
+    # play-level vars. Force it as an extra var so a real role failure fails
+    # the lifecycle test instead of silently passing.
+    scenario_vars = {
+        "skip_role_on_error": False,
+        "iiab_state_file": str(state_file.parent / "iiab_state.yml"),
+    }
+    scenario_vars.update(extra_vars or {})
     command = [
         shutil.which("ansible-playbook") or "ansible-playbook",
         "--forks=1",
         "-i",
         "localhost,",
         str(playbook),
+        "--extra-vars",
+        json.dumps(scenario_vars),
     ]
-    # default_vars.yml sets skip_role_on_error: True, and vars_files beat the
-    # play-level value in make_playbook(). Force it as an extra var so a real
-    # role failure makes the lifecycle test fail instead of silently passing.
-    scenario_vars = {
-        "skip_role_on_error": False,
-        "iiab_state_file": str(state_file.parent / "iiab_state.yml"),
-    }
-    if extra_vars:
-        scenario_vars.update(extra_vars)
-    command.extend(["--extra-vars", json.dumps(scenario_vars)])
-
     return subprocess.run(
         command,
         cwd=ROOT_DIR,
@@ -1899,19 +1480,17 @@ def run_ansible(
 
 def state_has_path(state: dict, path: str) -> bool:
     paths = state.get("paths", {})
-    if path in paths:
-        return True
-    prefix = path.rstrip("/") + "/"
-    return any(item.startswith(prefix) for item in paths)
+    return path in paths or any(
+        item.startswith(path.rstrip("/") + "/") for item in paths
+    )
 
 
 def user_data_problem(state: dict, operation: str) -> str | None:
-    """Report declared user data that an operation removed or left behind."""
+    """Report declared user data that an operation removed."""
     declared = state.get("user_data") or {}
     paths = [str(path) for path in declared.get("paths", [])]
     databases = [str(name) for name in declared.get("databases", [])]
     databases_state = state.get("databases", {})
-
     missing = [path for path in paths if not state_has_path(state, path)]
     missing.extend(
         name for name in databases if databases_state.get(name) != "present"
@@ -1919,6 +1498,106 @@ def user_data_problem(state: dict, operation: str) -> str | None:
     if missing:
         return f"{operation} removed declared user data: " + ", ".join(missing)
     return None
+
+
+def marker_present(state_yaml: Path, role: str) -> bool:
+    prefix = re.escape(role_var(role))
+    return (
+        re.search(
+            rf"^{prefix}_(?:installed|downloaded): True$",
+            state_yaml.read_text(encoding="utf-8"),
+            re.MULTILINE,
+        )
+        is not None
+    )
+
+
+def scenario_failure(output: list[str], result) -> str:
+    output.append("FAIL\n")
+    output.append("".join(result.stdout.splitlines(True)[-40:]))
+    output.append("".join(result.stderr.splitlines(True)[-40:]))
+    return "".join(output)
+
+
+def run_scenario(
+    title: str,
+    role: str,
+    vars_file: str,
+    library: Path,
+    scenario: Path,
+    enabled_name: str,
+    install_name: str,
+    steps: list[tuple[str, dict, bool | None]],
+    seed_marker: bool = False,
+    initial_installed: bool = False,
+) -> str:
+    """Run lifecycle steps in one virtual host and check user data survives.
+
+    Each step is (name, values, expect_marker).  expect_marker True requires
+    the installed marker afterwards, False requires it to be gone, and None
+    skips the check.
+    """
+    scenario.mkdir()
+    prepare_controller_files(scenario)
+    state_yaml = scenario / "iiab_state.yml"
+    if seed_marker:
+        state_yaml.write_text(f"{role_var(role)}_installed: True\n", encoding="utf-8")
+    else:
+        state_yaml.touch()
+    state_file = scenario / "state.json"
+    state_file.write_text(
+        json.dumps(initial_state(role, initial_installed)), encoding="utf-8"
+    )
+    output = [f"  {title:<19}"]
+
+    for name, values, expect_marker in steps:
+        playbook = scenario / f"{name}.yml"
+        playbook.write_text(
+            make_playbook(
+                role,
+                vars_file,
+                install_name,
+                enabled_name,
+                scenario,
+                enabled=values["enabled"],
+                installed=values["installed"],
+                lifecycle=values,
+            ),
+            encoding="utf-8",
+        )
+        result = run_ansible(
+            playbook,
+            library,
+            state_file,
+            installed=values["installed"],
+            extra_vars={
+                install_name: True,
+                enabled_name: values["enabled"],
+                "uninstall": values.get("uninstall", False),
+                "reinstall": values.get("reinstall", False),
+            },
+        )
+        if result.returncode:
+            return scenario_failure(output, result)
+        if expect_marker is not None and marker_present(state_yaml, role) != expect_marker:
+            problem = (
+                "did not remove the role's markers"
+                if not expect_marker
+                else "did not keep the role's installed marker"
+            )
+            output.append(f"FAIL\n{name} {problem}\n")
+            output.append(state_yaml.read_text(encoding="utf-8"))
+            return "".join(output)
+
+    state = json.loads(state_file.read_text(encoding="utf-8"))
+    problem = user_data_problem(state, title)
+    if problem:
+        output.append(f"FAIL\n{problem}\n")
+        output.append(state_file.read_text(encoding="utf-8"))
+        return "".join(output)
+
+    output.append("PASS\n")
+    return "".join(output)
 
 
 def operation_result(
@@ -1931,85 +1610,21 @@ def operation_result(
     install_name: str,
     values: dict,
 ) -> str:
-    scenario = temp_dir / name
-    scenario.mkdir()
-    prepare_controller_files(scenario)
-    state_yaml = scenario / "iiab_state.yml"
-    if name == "reinstall":
-        # ./runrole leaves the role's markers in place during --reinstall, so
-        # start the scenario the same way and prove the role does not remove
-        # them while rebuilding.
-        state_yaml.write_text(f"{role_var(role)}_installed: True\n", encoding="utf-8")
-    else:
-        state_yaml.touch()
-    state_file = scenario / "state.json"
-    state_file.write_text(
-        json.dumps(initial_state(role, values["installed"])), encoding="utf-8"
-    )
-    playbook = scenario / "playbook.yml"
-    playbook.write_text(
-        make_playbook(
-            role,
-            vars_file,
-            install_name,
-            enabled_name,
-            scenario,
-            enabled=values["enabled"],
-            installed=values["installed"],
-            lifecycle=values,
-        ),
-        encoding="utf-8",
-    )
-    extra_vars = {
-        install_name: True,
-        enabled_name: values["enabled"],
-        **{key: values[key] for key in ("uninstall", "reinstall")},
-    }
-    result = run_ansible(
-        playbook,
+    expect_marker = {"uninstall": False, "reinstall": True}.get(name)
+    return run_scenario(
+        name,
+        role,
+        vars_file,
         library,
-        state_file,
-        installed=values["installed"],
-        phase=name,
-        extra_vars=extra_vars,
+        temp_dir / name,
+        enabled_name,
+        install_name,
+        [(name, values, expect_marker)],
+        # ./runrole leaves markers in place during --reinstall, so start the
+        # same way and prove the role does not remove them while rebuilding.
+        seed_marker=name == "reinstall",
+        initial_installed=values["installed"],
     )
-    output = [f"  {name:<19}"]
-    if result.returncode:
-        output.append("FAIL\n")
-        output.append("".join(result.stdout.splitlines(True)[-40:]))
-        output.append("".join(result.stderr.splitlines(True)[-40:]))
-        return "".join(output)
-    state = json.loads(state_file.read_text(encoding="utf-8"))
-    problem = user_data_problem(state, name)
-    if problem:
-        output.append(f"FAIL\n{problem}\n")
-        output.append(state_file.read_text(encoding="utf-8"))
-        return "".join(output)
-
-    if name == "uninstall":
-        prefix = role_var(role)
-        if re.search(
-            rf"^{re.escape(prefix)}_(?:installed|downloaded): True$",
-            state_yaml.read_text(encoding="utf-8"),
-            re.MULTILINE,
-        ):
-            output.append("FAIL\nuninstall did not remove the role's markers\n")
-            output.append(state_yaml.read_text(encoding="utf-8"))
-            return "".join(output)
-
-    if name == "reinstall":
-        prefix = role_var(role)
-        if not re.search(
-            rf"^{re.escape(prefix)}_(?:installed|downloaded): True$",
-            state_yaml.read_text(encoding="utf-8"),
-            re.MULTILINE,
-        ):
-            output.append("FAIL\nreinstall did not keep the role's installed marker\n")
-            output.append(state_yaml.read_text(encoding="utf-8"))
-            return "".join(output)
-
-    output.append("PASS\n")
-    return "".join(output)
 
 
 def clean_install_result(
@@ -2020,213 +1635,29 @@ def clean_install_result(
     enabled_name: str,
     install_name: str,
 ) -> str:
-    """Run --uninstall and then a normal apply, sharing one virtual host.
-
-    --clean-install is not a flag the role sees: ./runrole runs the uninstall
-    phase and then the ordinary apply. Mirror that here so the scenario proves
-    the second run really reinstalls from the post-uninstall state.
-    """
-    scenario = temp_dir / "clean-install"
-    scenario.mkdir()
-    prepare_controller_files(scenario)
-    state_yaml = scenario / "iiab_state.yml"
-    state_yaml.touch()
-    state_file = scenario / "state.json"
-    state_file.write_text(json.dumps(initial_state(role, True)), encoding="utf-8")
-
-    output = [f"  {'clean-install':<19}"]
-    phases = (
-        ("clean-install-uninstall", True, True),
-        ("clean-install-install", False, False),
-    )
-    for phase, installed, uninstall in phases:
-        playbook = scenario / f"{phase}.yml"
-        playbook.write_text(
-            make_playbook(
-                role,
-                vars_file,
-                install_name,
-                enabled_name,
-                scenario,
-                enabled=True,
-                installed=installed,
-                lifecycle={"uninstall": uninstall, "reinstall": False},
+    """Mirror --clean-install: uninstall then a normal apply on one host."""
+    return run_scenario(
+        "clean-install",
+        role,
+        vars_file,
+        library,
+        temp_dir / "clean-install",
+        enabled_name,
+        install_name,
+        [
+            (
+                "clean-install-uninstall",
+                {"installed": True, "enabled": True, "uninstall": True, "reinstall": False},
+                False,
             ),
-            encoding="utf-8",
-        )
-        result = run_ansible(
-            playbook,
-            library,
-            state_file,
-            installed=installed,
-            phase=phase,
-            extra_vars={
-                install_name: True,
-                enabled_name: True,
-                "uninstall": uninstall,
-                "reinstall": False,
-            },
-        )
-        if result.returncode:
-            output.append("FAIL\n")
-            output.append("".join(result.stdout.splitlines(True)[-40:]))
-            output.append("".join(result.stderr.splitlines(True)[-40:]))
-            return "".join(output)
-        if uninstall:
-            prefix = role_var(role)
-            if re.search(
-                rf"^{re.escape(prefix)}_(?:installed|downloaded): True$",
-                state_yaml.read_text(encoding="utf-8"),
-                re.MULTILINE,
-            ):
-                output.append("FAIL\nclean-install uninstall left the role's markers behind\n")
-                output.append(state_yaml.read_text(encoding="utf-8"))
-                return "".join(output)
-
-    state = json.loads(state_file.read_text(encoding="utf-8"))
-    problem = user_data_problem(state, "clean-install")
-    if problem:
-        output.append(f"FAIL\n{problem}\n")
-        output.append(state_file.read_text(encoding="utf-8"))
-        return "".join(output)
-
-    prefix = role_var(role)
-    if not re.search(
-        rf"^{re.escape(prefix)}_(?:installed|downloaded): True$",
-        state_yaml.read_text(encoding="utf-8"),
-        re.MULTILINE,
-    ):
-        output.append("FAIL\nclean-install did not record an installed marker\n")
-        output.append(state_yaml.read_text(encoding="utf-8"))
-        return "".join(output)
-
-    output.append("PASS\n")
-    return "".join(output)
-
-
-def toggle_result(
-    role: str,
-    vars_file: str,
-    library: Path,
-    temp_dir: Path,
-    enabled_name: str,
-    install_name: str,
-    uninstall_supported: bool,
-    toggle_supported: bool,
-    toggle_services: set[str],
-) -> str:
-    scenario = temp_dir / "toggle"
-    if not toggle_supported:
-        return f"  {'toggle':<19}SKIP (role has no service toggle tasks)\n"
-    scenario.mkdir()
-    prepare_controller_files(scenario)
-    (scenario / "iiab_state.yml").touch()
-    state_file = scenario / "state.json"
-    state_file.write_text(json.dumps(initial_state(role)), encoding="utf-8")
-    playbook = scenario / "playbook.yml"
-    plays = []
-    phases = [
-        ("enabled", True, False),
-        ("disabled", False, True),
-        ("enabled-again", True, True),
-    ]
-    if uninstall_supported:
-        phases.append(("uninstall", True, True))
-    for phase, enabled, installed in phases:
-        plays.append(
-            make_playbook(
-                role,
-                vars_file,
-                install_name,
-                enabled_name,
-                scenario,
-                enabled=enabled,
-                installed=installed,
-                lifecycle={"uninstall": phase == "uninstall"},
-                phase=phase,
-                checkpoint=phase,
-                seed_installed=installed,
-            )
-        )
-    playbook.write_text("---\n" + "".join(plays), encoding="utf-8")
-    result = run_ansible(playbook, library, state_file)
-    output = [f"  {'toggle':<19}"]
-    if result.returncode:
-        output.append("FAIL\n")
-        output.append("".join(result.stdout.splitlines(True)[-40:]))
-        output.append("".join(result.stderr.splitlines(True)[-40:]))
-        return "".join(output)
-
-    state = json.loads(state_file.read_text(encoding="utf-8"))
-    snapshots = state.get("snapshots", {})
-    required = {"enabled", "disabled", "enabled-again"}
-    if uninstall_supported:
-        required.add("uninstall")
-    if not required <= snapshots.keys():
-        output.append("FAIL\nvirtual state did not record all toggle phases\n")
-        output.append(f"recorded snapshots: {sorted(snapshots)}\n")
-        return "".join(output)
-
-    events = state.get("events", [])
-    active = {
-        event["name"]
-        for event in events
-        if event["phase"] == "enabled" and event["state"] in ACTIVE_STATES
-    }
-    stopped = {
-        event["name"]
-        for event in events
-        if event["phase"] == "disabled" and event["state"] == "stopped"
-    }
-    active_again = {
-        event["name"]
-        for event in events
-        if event["phase"] == "enabled-again" and event["state"] in ACTIVE_STATES
-    }
-    managed = active & toggle_services - BASELINE_SERVICES
-    if not managed:
-        # A role can toggle a config file instead of owning a daemon (e.g.,
-        # AWStats' NGINX shortcut). Both phases are already installed, so any
-        # path difference between them comes from the enabled state.
-        disabled_paths = set(snapshots["disabled"].get("paths", {}))
-        enabled_paths = set(snapshots["enabled-again"].get("paths", {}))
-        added = enabled_paths - disabled_paths
-        removed = disabled_paths - enabled_paths
-        if added or removed:
-            output.append(
-                f"PASS (config-only toggle: {len(added)} added, "
-                f"{len(removed)} removed)\n"
-            )
-            return "".join(output)
-        output.append("SKIP (role created no systemd service or config change)\n")
-        return "".join(output)
-    if missing := managed - stopped:
-        output.append(f"FAIL\nservices not stopped when disabled: {sorted(missing)}\n")
-        return "".join(output)
-    if missing := managed - active_again:
-        output.append(f"FAIL\nservices not started when re-enabled: {sorted(missing)}\n")
-        return "".join(output)
-
-    for name in managed:
-        enabled_service = snapshots["enabled"]["services"][name]
-        disabled_service = snapshots["disabled"]["services"][name]
-        enabled_again_service = snapshots["enabled-again"]["services"][name]
-        if enabled_service["state"] not in ACTIVE_STATES:
-            output.append(f"FAIL\n{name} was not active after enabling\n")
-            return "".join(output)
-        if disabled_service["state"] != "stopped":
-            output.append(f"FAIL\n{name} was not stopped after disabling\n")
-            return "".join(output)
-        if enabled_again_service["state"] not in ACTIVE_STATES:
-            output.append(f"FAIL\n{name} was not active after re-enabling\n")
-            return "".join(output)
-        if uninstall_supported:
-            uninstall_service = snapshots["uninstall"]["services"].get(name)
-            if not uninstall_service or uninstall_service["state"] != "stopped":
-                output.append(f"FAIL\n{name} was not stopped during uninstall\n")
-                return "".join(output)
-    output.append("PASS\n")
-    return "".join(output)
+            (
+                "clean-install-install",
+                {"installed": False, "enabled": True, "uninstall": False, "reinstall": False},
+                True,
+            ),
+        ],
+        initial_installed=True,
+    )
 
 
 def default_jobs() -> int:
@@ -2262,7 +1693,6 @@ def run_role(role: str, vars_file: str, quiet: bool = False, strict: bool = Fals
     operations: list[tuple[str, dict]] = [
         ("apply", {"installed": False, "enabled": True}),
         ("disabled-apply", {"installed": False, "enabled": False}),
-        ("toggle", {}),
     ]
     skipped: list[str] = []
     if role_supports(role, "reinstall"):
@@ -2270,10 +1700,6 @@ def run_role(role: str, vars_file: str, quiet: bool = False, strict: bool = Fals
     else:
         skipped.append("reinstall")
     uninstall_supported = role_supports(role, "uninstall")
-    toggle_supported = role_manages_service_toggle(role)
-    toggle_services = role_toggle_service_names(role)
-    # An already-installed role that is disabled is covered by the 'disabled'
-    # phase of the toggle scenario below, so it is not run separately.
     if uninstall_supported:
         operations.extend(
             [
@@ -2299,57 +1725,29 @@ def run_role(role: str, vars_file: str, quiet: bool = False, strict: bool = Fals
     with tempfile.TemporaryDirectory(prefix="iiab-role-lifecycle.") as directory:
         temp_dir = Path(directory)
         library = create_mock_library(temp_dir)
-        futures = {}
-        # Keep one ansible-playbook per role at a time. --all parallelizes
-        # across roles; nesting another pool here used to launch dozens of
-        # ansible processes on a single-vCPU CI runner.
-        with ThreadPoolExecutor(max_workers=1) as executor:
-            for name, values in operations:
-                if name == "toggle":
-                    future = executor.submit(
-                        toggle_result,
-                        role,
-                        vars_file,
-                        library,
-                        temp_dir,
-                        enabled_name,
-                        install_name,
-                        uninstall_supported,
-                        toggle_supported,
-                        toggle_services,
-                    )
-                elif name == "clean-install":
-                    future = executor.submit(
-                        clean_install_result,
-                        role,
-                        vars_file,
-                        library,
-                        temp_dir,
-                        enabled_name,
-                        install_name,
-                    )
-                else:
-                    for lifecycle_flag in ("uninstall", "reinstall"):
-                        values.setdefault(lifecycle_flag, False)
-                    future = executor.submit(
-                        operation_result,
-                        name,
-                        role,
-                        vars_file,
-                        library,
-                        temp_dir,
-                        enabled_name,
-                        install_name,
-                        values,
-                    )
-                futures[name] = future
-            failures = 0
-            for name, _ in operations:
-                output = futures[name].result()
-                if not quiet or "FAIL" in output:
-                    print(output, end="")
-                if " FAIL\n" in output or output.endswith("FAIL\n"):
-                    failures = 1
+        failures = 0
+        for name, values in operations:
+            if name == "clean-install":
+                output = clean_install_result(
+                    role, vars_file, library, temp_dir, enabled_name, install_name
+                )
+            else:
+                values.setdefault("uninstall", False)
+                values.setdefault("reinstall", False)
+                output = operation_result(
+                    name,
+                    role,
+                    vars_file,
+                    library,
+                    temp_dir,
+                    enabled_name,
+                    install_name,
+                    values,
+                )
+            if not quiet or "FAIL" in output:
+                print(output, end="")
+            if "FAIL\n" in output:
+                failures = 1
     if strict and (warnings or unsafe_state or state_writes):
         failures = 1
     return failures

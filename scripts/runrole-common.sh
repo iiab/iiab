@@ -1,11 +1,7 @@
 #!/bin/bash
 #
-# Shared by ./runrole and ./runroles.
-#
-# Paths default to the usual IIAB locations. DEFAULT_VARS_FILE follows the
-# checkout, so ./runrole also works from a git worktree; LOCAL_VARS_FILE and
-# the state files stay under /etc/iiab because that is what the installed
-# host uses.
+# Shared by ./runrole and ./runroles.  DEFAULT_VARS_FILE follows the checkout;
+# LOCAL_VARS_FILE and the state files stay under /etc/iiab.
 
 IIAB_REPO="${IIAB_REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 IIAB_STATE_CMD="${IIAB_STATE_CMD:-$IIAB_REPO/scripts/iiab-state}"
@@ -31,9 +27,7 @@ state_cmd() {
     "$IIAB_STATE_CMD" --file "$IIAB_STATE_FILE" "$@"
 }
 
-# True if any true marker belongs to prefix.  Only 0 (yes) and 1 (no) are
-# normal answers: anything else, including an unexpected interpreter error,
-# must not look like "not installed".
+# Only 0 (yes) and 1 (no) are normal answers; anything else is a read error.
 state_has_prefix() {
     local status
     state_cmd has-prefix "$1"
@@ -70,9 +64,7 @@ role_install_var() {
     role_lifecycle install-var "$1"
 }
 
-# Like role_install_var, but also accepts a bare checklist prefix (squid,
-# hostapd, dnsmasq) for --check-local-vars.  A helper role with no switch still
-# returns an empty prefix; only an unknown role falls back to its own name.
+# Like role_install_var, but also accepts a bare checklist prefix.
 checklist_install_var() {
     role_lifecycle install-var "$1" 2>/dev/null || printf '%s' "$1"
 }
@@ -82,14 +74,11 @@ role_exists() {
 }
 
 # True if the role's main.yml dispatches to the shared lifecycle runner.
-# Legacy roles gate install.yml on an installed marker instead; --reinstall
-# removes their markers before the run, as it did before the runner existed.
 role_uses_runner() {
     role_lifecycle uses-runner "$1"
 }
 
-# True if <role> implements <feature>. --clean-install is derived from
-# --uninstall because it is literally uninstall followed by a normal apply.
+# True if <role> implements <feature>.
 role_supports() {
     role_lifecycle supports "$1" "$2"
 }
@@ -98,8 +87,7 @@ role_capabilities() {
     role_lifecycle capabilities "$1"
 }
 
-# Print an error unless <role> implements <feature>. The optional fourth
-# argument explains why the flag needs that capability.
+# Print an error unless <role> implements <feature>.
 role_require_capability() {
     local role=$1
     local flag=$2
@@ -116,8 +104,7 @@ role_require_capability() {
     return 1
 }
 
-# Ask for explicit confirmation before an operation that removes data. Callers
-# set ASSUME_YES from -y/--yes.
+# Ask for explicit confirmation before an operation that removes data.
 confirm_destructive() {
     local ans
     if [ "$ASSUME_YES" = true ]; then
@@ -135,8 +122,7 @@ confirm_destructive() {
     [ "$ans" = "yes" ]
 }
 
-# Print one <key>: <value> line from a vars file.  Values may be quoted and
-# may carry a trailing comment.  Returns 1 when the key is absent.
+# Print one <key>: <value> from a vars file; 1 when the key is absent.
 yaml_value() {
     local file=$1
     local key=$2
@@ -148,7 +134,6 @@ yaml_value() {
         sed -E "s/^[[:space:]]*${key}:[[:space:]]*//; s/[[:space:]]+#.*$//; s/[[:space:]]+$//; s/^[\"']//; s/[\"']$//"
 }
 
-# Effective value of <key>: local_vars.yml wins over default_vars.yml.
 var_value() {
     local value
     value=$(yaml_value "$LOCAL_VARS_FILE" "$1") || value=""
@@ -158,7 +143,6 @@ var_value() {
     printf '%s' "$value"
 }
 
-# Where the effective value came from: "desired", "default", or "".
 var_source() {
     if [ -f "$LOCAL_VARS_FILE" ] && yaml_value "$LOCAL_VARS_FILE" "$1" > /dev/null; then
         echo desired
@@ -167,7 +151,6 @@ var_source() {
     fi
 }
 
-# True if <prefix>_install resolves to a true value across default + local vars.
 install_var_enabled() {
     local value
     value=$(var_value "${1}_install")
@@ -181,13 +164,9 @@ install_var_enabled() {
     esac
 }
 
-# True if <role>_install resolves to a true value across default + local vars.
-# Guarded so a missing vars file is quiet rather than three grep errors.
 # A helper role with no install/enabled switch is always considered enabled.
 role_install_enabled() {
     local prefix
-    # Prefixes such as squid/hostapd/dnsmasq are managed by another role, so
-    # role_lifecycle does not know them.  Fall back to the prefix itself.
     prefix=$(role_install_var "$1" 2>/dev/null) || prefix=$1
     if [ -z "$prefix" ]; then
         return 0
@@ -195,8 +174,6 @@ role_install_enabled() {
     install_var_enabled "$prefix"
 }
 
-# Print the effective value of <prefix>_install, or "always" for a helper role
-# with no install/enabled switch.
 desired_for() {
     local value
     if [ -z "$1" ]; then
@@ -207,9 +184,7 @@ desired_for() {
     printf '%s' "${value:--}"
 }
 
-# Show one role's recorded markers, desired configuration, and capabilities.
-# Returns 1 for an unknown role so callers can fail instead of printing a
-# meaningless empty report.
+# Show one role's markers, desired configuration, and capabilities.
 status_role() {
     local role="$1"
     local var
@@ -223,9 +198,7 @@ status_role() {
     install_var=$(role_install_var "$role" 2>/dev/null) || install_var=$var
     if ! role_exists "$role"; then
         standalone=false
-        # A few checklist prefixes (squid, hostapd, dnsmasq, admin_console) are
-        # managed by a larger role or install stage.  Still show their state,
-        # so the validation error can point at './runrole --status <prefix>'.
+        # Prefixes managed by a larger role or stage still get a report.
         if ! state_has_prefix "$var" && [ -z "$(var_source "${var}_install")" ]; then
             echo "ERROR: unknown role: $role" >&2
             echo "Run './runrole --list' to see the available roles." >&2
@@ -290,8 +263,7 @@ status_role() {
     return 0
 }
 
-# True when the output of `iiab-state list` has a true marker for <prefix>.
-# Matches the CLI's has-prefix semantics without starting a process per role.
+# Match has-prefix semantics without a process per role.
 prefix_in_listing() {
     local prefix=$1
     local listing=$2
@@ -311,8 +283,7 @@ prefix_in_listing() {
     ' <<< "$listing"
 }
 
-# Print every runnable role with its installed state, desired value, conflict
-# flag, and capabilities.  Reads the state file once and the role metadata once.
+# Print every runnable role with its state, desired value, and capabilities.
 list_roles() {
     local role
     local var
@@ -341,6 +312,38 @@ list_roles() {
     done < <(role_lifecycle table)
 }
 
+# Refuse contradictory or destructive option combinations.  The first argument
+# is "single" for ./runrole, where a log file is also accepted.
+# shellcheck disable=SC2153  # Flags are set by the caller.
+validate_options() {
+    local log=""
+    [ "${1:-multi}" = single ] && log=$LOGFILE
+    if $CHECK_LOCAL_VARS && ($log || $UNINSTALL || $REINSTALL || $CLEAN_INSTALL || $ADD || $CHECK || $STATUS || $ASSUME_YES || $VERBOSE); then
+        echo "--check-local-vars is read-only and cannot be combined with other options."
+        exit 1
+    fi
+    if $UNINSTALL && ($REINSTALL || $CLEAN_INSTALL || $ADD); then
+        echo "--uninstall cannot be combined with --add, --reinstall, or --clean-install."
+        exit 1
+    fi
+    if $CLEAN_INSTALL && ($REINSTALL || $ADD); then
+        echo "--clean-install cannot be combined with --add or --reinstall."
+        exit 1
+    fi
+    if $CHECK && $UNINSTALL; then
+        echo "--check cannot be combined with --uninstall. Use --status instead."
+        exit 1
+    fi
+    if $CHECK && ($REINSTALL || $CLEAN_INSTALL); then
+        echo "--check cannot be combined with --reinstall or --clean-install. Use --status instead."
+        exit 1
+    fi
+    if $STATUS && ($log || $UNINSTALL || $REINSTALL || $CLEAN_INSTALL || $ADD || $CHECK || $ASSUME_YES || $VERBOSE); then
+        echo "--status is read-only and cannot be combined with other options."
+        exit 1
+    fi
+}
+
 # Copy local facts once, so roles can read ansible_local.local_facts.
 install_local_facts() {
     $CHECK && return 0
@@ -349,11 +352,7 @@ install_local_facts() {
     cp "$IIAB_REPO/scripts/local_facts.fact" /etc/ansible/facts.d/local_facts.fact
 }
 
-# The entry playbooks still load the state file with vars_files, so it must
-# exist even on a host that has never completed a full install.  A missing file
-# is a valid empty state for iiab_state and the installed lookup; roles that
-# write markers replace this empty file.  Drop this once vars_files no longer
-# loads iiab_state.yml.
+# Entry playbooks still load the state file with vars_files, so it must exist.
 ensure_state_file() {
     $CHECK_LOCAL_VARS && return 0
     if [ ! -f "$IIAB_STATE_FILE" ]; then
@@ -362,8 +361,7 @@ ensure_state_file() {
     fi
 }
 
-# Stage a private copy of the state file for --check, so check mode cannot
-# change the host's markers.
+# Give --check its own state file, so check mode cannot change the host.
 stage_check_state() {
     $CHECK || return 0
     CHECK_STATE_FILE=$(mktemp "${TMPDIR:-/tmp}/iiab-state.XXXXXX")
@@ -378,7 +376,6 @@ stage_check_state() {
     fi
 }
 
-# Run one ansible-playbook invocation. $1 is the JSON object for --extra-vars.
 run_playbook() {
     local extra_vars=$1
     local -a args=(
@@ -399,9 +396,7 @@ run_playbook() {
     ansible-playbook "${args[@]}"
 }
 
-# Confirm that an uninstall phase really removed the role's markers. A role
-# that forgets its final 'iiab_state: state=absent' task must not be reported
-# as uninstalled.
+# A role that forgets its final 'state=absent' task must not look uninstalled.
 verify_uninstall_markers() {
     local role=$1
     local var

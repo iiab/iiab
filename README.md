@@ -35,8 +35,6 @@ Finally, you can [customize your Internet-in-a-Box home page](https://wiki.iiab.
 
 `./runrole` applies one role using `/etc/iiab/local_vars.yml`. Runs are
 repeatable: the role is installed if missing and otherwise reconfigured.
-`install.yml` owns installing and updating the program, so there is no separate
-`--upgrade` flag.
 
     sudo ./runrole captiveportal                    # apply
     sudo ./runrole --add captiveportal              # apply despite captiveportal_install: False
@@ -48,255 +46,117 @@ repeatable: the role is installed if missing and otherwise reconfigured.
     sudo ./runrole --check captiveportal            # best-effort dry run
     sudo ./runrole --check-local-vars               # validate local_vars.yml, then exit
 
-The options escalate, from least to most work:
+- `--reinstall` reruns `install.yml` (installing first when missing). Converted
+  roles keep their state markers until the rebuild succeeds; legacy roles have
+  them removed first, as before. A role can opt out with `reinstall: false` in
+  `roles/<role>/meta/runrole.yml`.
+- `--clean-install` is `--uninstall` followed by a normal apply, so it needs
+  `--uninstall` support.
+- `--uninstall` removes the program and its settings where supported. No
+  runrole option deletes user data: roles declare it in `<role>_user_data`
+  (and `<role>_user_data_databases`), and the lifecycle test enforces it.
+- `--status` and `--list` are read-only. `--check-local-vars` validates only
+  the listed role(s)/prefix(es), or the full checklist when none are given.
+- `./runroles` accepts the same options for multiple roles.
 
-- `--reinstall` reruns the role's install/update path, installing the role
-  first when it is missing. A role whose rebuild needs manual cleanup can opt
-  out with `reinstall: false` in `roles/<role>/meta/runrole.yml`. Converted
-  roles keep their installed markers during the rebuild; legacy roles have them
-  removed first, as before.
-- `--clean-install` is literally `--uninstall` followed by a normal apply, so
-  it requires the role to support `--uninstall`.
-- `--uninstall` removes the program and its settings where supported.
+Roles support `--uninstall` when `tasks/main.yml` implements it (an
+`uninstall.yml` include, or inline `when: uninstall`). `meta/runrole.yml` can
+override detection with `uninstall: true` / `reinstall: false`.
 
-No runrole option deletes user data. Roles declare it in `<role>_user_data`
-(and `<role>_user_data_databases`); the lifecycle test checks every operation
-against those declarations. Remove user data manually if you really need to.
+### Conflicts with the installed state
 
-`--reinstall` is a rebuild, not a reset. Whether existing program data and
-settings survive depends on the role. Use `--clean-install` when you want a
-known clean slate. `--uninstall` keeps the role's state marker until
-`uninstall.yml` removes it as its final task, so a failed uninstall can be
-retried.
-
-Roles are converted to the lifecycle runner one at a time. Converted roles keep
-their installed markers while `--reinstall` runs. For a role that still uses the
-old entrypoint, `--reinstall` removes its `<prefix>_*` markers before Ansible
-starts, exactly as it did previously, so its `install.yml` reruns too. If such a
-legacy reinstall fails, the role is left looking uninstalled; run the role
-without `--reinstall` to finish the install.
-
-`./runroles` accepts the same options and multiple roles, e.g.
-`./runroles --status captiveportal kiwix`.
-
-`runrole` and `runroles` validate only the role(s) or checklist variable
-prefix(es) they were asked about. Full installs validate the complete 0-init
-checklist. `--check-local-vars` validates configuration only, is read-only, and
-does not run role-specific runtime checks. The name may be a role or any
-variable prefix from the checklist, including prefixes such as `squid` that a
-larger role manages.
-
-If `./runrole --uninstall <role>` keeps failing, fix the reported error and
-retry. If you already removed the program another way, clear its markers with
-the role's state-file prefix (not always its directory name):
-
-    sudo ./scripts/iiab-state forget --dry-run awstats
-    sudo ./scripts/iiab-state forget awstats
-
-Only do that after the program and its settings are gone.
-
-### If local_vars.yml conflicts with the installed state
-
-The most common error after a failed install is setting `<app>_install: False`
-for an app that IIAB already recorded as installed. Inspect the state without
-changing anything:
+An app already recorded as installed cannot be turned off by editing
+`local_vars.yml` alone. Inspect without changing anything:
 
     ./runrole --status squid
     ./runrole --list
 
-Then keep the app, uninstall it where supported
-(`sudo ./runrole --uninstall <role>`), or clear a stale marker with
-`sudo ./scripts/iiab-state forget <state-prefix>`. The last step is only safe
-after the program and its settings are gone. `--add` forces `<app>_install:
-True` for one run without editing `local_vars.yml`.
-
-### Role capabilities
-
-A role supports `--uninstall` when its `tasks/main.yml` implements it
-(`tasks/uninstall.yml`, a hand-off to it, or an inline `when: uninstall`).
-`--clean-install` is supported by exactly the same roles. `--reinstall` is
-available to roles that have not opted out. `--status` reports the capabilities
-detected for a role, and `--list` shows them for every role.
-
-For unusual roles whose implementation cannot be detected from their tasks, an
-optional `roles/<role>/meta/runrole.yml` can opt in or out:
-
-    ---
-    uninstall: true
-    reinstall: false
-
-Role names, state-marker prefixes (`calibre-web` -> `calibreweb`), install/
-enabled prefixes (`iiab-admin` -> `admin_console`), and capability detection
-live in `scripts/role_lifecycle.py`, which both the shell tools and
-`scripts/test-role-lifecycle.py` call. Ansible task files reach the marker map
-through `lookup_plugins/role_var.py`. Helper roles that never have their own
-`*_install` switch (`firmware`, `pylibs`, `www_base`, `www_options`) are
-declared in `NO_INSTALL_PREFIX`.
+Keep it, uninstall it where supported (`sudo ./runrole --uninstall <role>`), or
+clear a stale marker with `sudo ./scripts/iiab-state forget <prefix>`. Clear a
+marker only after the program and its settings are gone. `--add` forces
+`<app>_install: True` for one run without editing `local_vars.yml`.
 
 ## Role task lifecycle
 
-Roles that adopt the safe-apply pattern keep a small, fixed set of task files so
-a maintainer can decide where a change belongs without guessing.
-`tasks/main.yml` does not repeat the phase order: it includes the shared runner
-in `roles/0-init/tasks/lifecycle.yml`:
+Converted roles keep a small, fixed set of task files; `tasks/main.yml` only
+dispatches to the shared runner in `roles/0-init/tasks/lifecycle.yml`:
 
     - name: Run the <Role> lifecycle
       include_role:
         name: 0-init
         tasks_from: lifecycle
 
-The runner identifies the calling role, looks up its state-marker prefix with
-`lookup('role_var', ...)`, discovers which phase files exist, and runs them in
-order. It also handles the `--uninstall` guard, the `--reinstall` guard, the
-install-state snapshot, disk measurement, and the `skip_role_on_error` rescue.
-Add role-specific work before or after the include, or move it into the phase
-file it belongs to. `awstats` is the reference implementation; `matomo` and
-`transmission` follow in later pull requests.
+| File | Runs when | May use the network? |
+|---|---|---|
+| `main.yml` | every invocation | no |
+| `install.yml` | first install, `--reinstall`, `--clean-install` | yes |
+| `configure.yml` | every apply | only to fetch a missing immutable asset |
+| `state.yml` | after a successful apply | no |
+| `uninstall.yml` | `--uninstall` and `--clean-install` | no |
 
-The central rule is: **`install.yml` is gated by the runner**. It runs on the
-first install, during `--reinstall`, and during the install part of
-`--clean-install`. It does **not** run on an ordinary apply of an already
-installed role. Put anything that must be reconciled on every apply in
-`configure.yml` (or in `state.yml` when recording values is the natural home).
+`install.yml` is the only phase that installs or updates the program, and the
+runner gates it: it does not run on an ordinary apply of an installed role.
+Anything that must be reconciled every time belongs in `configure.yml`.
+`enable-or-disable.yml` is a legacy convention the runner still executes; new
+work belongs in `configure.yml`.
 
-| File | Required? | Runs when | May use the network? |
-|---|---|---|---|
-| `main.yml` | yes | every invocation; normally only includes the runner | no |
-| `install.yml` | optional | first install, `--reinstall`, `--clean-install` | yes (install/update only) |
-| `configure.yml` | optional | every apply | only to fetch a missing immutable asset |
-| `state.yml` | optional | after a successful apply | no |
-| `uninstall.yml` | optional | `--uninstall` and `--clean-install` | no |
-
-`enable-or-disable.yml` is a legacy convention, not part of the formal
-contract. The runner still executes it on every apply when present, but new or
-converted roles should put that work in `configure.yml`.
-
-The rules are intentionally simple:
-
-- `install.yml` is the only phase that installs or updates the program and its
-  packages. Because the runner gates it, first-install-only work (cloning,
-  moving an existing tree aside, unconditional downloads) is safe. It also
-  runs during `--reinstall`, so rebuild preparation belongs here: either make
-  it idempotent (for example, remove generated files unconditionally before
-  recreating them) or guard it with `when: reinstall`. It never removes
-  declared user data.
-- `configure.yml` reconciles desired state on every run. Move settings,
-  templates, database provisioning and service configuration here when they
-  must be re-applied on an ordinary apply.
 - `uninstall.yml` removes the program and its settings, never declared user
   data, and removes the role's state markers as its final task.
-- Write the installed marker only after `configure.yml` (and the legacy
-  enable/disable step, when present) has succeeded. Roles that use the runner
-  do this in `state.yml`. Never write it in `install.yml` or a helper included
-  by it.
-- Do not add `disk_usage_start.yml` / `disk_usage_finish.yml` includes to a
-  role that uses the shared runner. The runner measures disk usage around the
-  whole `install.yml` -> `configure.yml` sequence when the role is not
-  installed yet or is being reinstalled, and writes the delta to `iiab.ini`.
-- Put computed values in `vars/main.yml`, user-facing knobs in
-  `defaults/main.yml`, and service restarts in `handlers/main.yml`.
-- A role that only adds or removes an NGINX config file should notify the
-  shared `Reload nginx` / `Restart nginx` handlers in
-  `roles/0-init/handlers/main.yml` instead of restarting NGINX itself. Add
-  `meta: flush_handlers` only if a later task needs the new configuration live
-  immediately.
-- `*_installed` and `*_downloaded` markers are observed state, not
-  configuration. Never test one directly. Use the `installed` lookup
-  (`lookup_plugins/installed.py`) for every check, including the install gate:
+- Write the installed marker only after configure succeeds (normally in
+  `state.yml`). Test markers with `lookup('installed', 'mysql')`, not the
+  `*_installed` variable directly.
+- Do not add `disk_usage_start.yml` / `disk_usage_finish.yml` to a role that
+  uses the runner; it measures disk usage around the whole lifecycle.
+- Prefer the shared `Reload nginx` / `Restart nginx` handlers in
+  `roles/0-init/handlers/main.yml` over restarting NGINX in a role.
 
-      when: not lookup('installed', 'mysql') or reinstall
-
-  The `installed` lookup reads the state file directly, so a role can use it
-  even when `vars_files` did not load the state file. It still prefers a value
-  set with `set_fact` earlier in the run. Entry playbooks still load
-  `/etc/iiab/iiab_state.yml` through `vars_files` today; that goes away as
-  roles are converted one at a time.
-
-### Converting an existing role
-
-1. Replace the body of `main.yml` with the lifecycle include above.
-2. Move first-install-only work to `install.yml`; move work that must be
-   reconciled on every apply to `configure.yml`.
-3. Add `state.yml` to record `iiab.ini` values and write the installed marker
-   through `iiab_state`.
-4. Add `uninstall.yml` only if removal is safe and repeatable.
-5. Declare user data in `defaults/main.yml`.
-6. Run `python3 scripts/test-role-lifecycle.py <role>`.
-
-**Behavior changes to call out in review:** converting a role stops
-`install.yml` from running on an ordinary apply of an already-installed host.
-Anything that used to be re-applied from `install.yml` must move to
-`configure.yml` or it will only run again on `--reinstall`/`--clean-install`.
-Conversely, `--reinstall` now actually reruns `install.yml` for converted
-roles, so a rebuild that used to be silently skipped will now happen.
+`awstats` is the reference implementation. To convert a role: replace
+`main.yml` with the include, move first-install-only work to `install.yml` and
+repeatable work to `configure.yml`, add `state.yml`, add `uninstall.yml` only if
+removal is safe, declare user data, then run
+`python3 scripts/test-role-lifecycle.py <role>`. Converting a role stops
+`install.yml` from running on an ordinary apply, so move re-applied work to
+`configure.yml`.
 
 ## Observed state
 
 `/etc/iiab/iiab_state.yml` remains a flat YAML mapping
-(`awstats_installed: True`), so `vars_files`, existing `grep` checks, and image
-fixtures keep working. A missing file is a valid empty state. The path comes
-from `iiab_state_file`, which defaults to `IIAB_STATE_FILE` or
+(`awstats_installed: True`), so `vars_files`, `grep`, and image fixtures keep
+working. A missing file is a valid empty state. The path comes from
+`iiab_state_file`, which defaults to `IIAB_STATE_FILE` or
 `/etc/iiab/iiab_state.yml`.
 
-Write a marker through the module instead of `lineinfile`:
+Write markers through the module, not `lineinfile`:
 
     - name: Record AWStats installed
       iiab_state:
         key: awstats_installed
 
-    - name: Forget AWStats markers
-      iiab_state:
-        key: awstats_installed
-        state: absent
-
-Entry playbooks pass the path once with `module_defaults`:
-
-    module_defaults:
-      iiab_state:
-        path: "{{ iiab_state_file }}"
-
-Shell code uses `./scripts/iiab-state` instead of editing the file with
-`grep`/`sed`:
+Entry playbooks pass the path once with `module_defaults`. Shell code uses
+`./scripts/iiab-state`:
 
     ./scripts/iiab-state get awstats_installed
     ./scripts/iiab-state is-installed awstats
     ./scripts/iiab-state forget awstats
     ./scripts/iiab-state diff expected.yml /etc/iiab/iiab_state.yml
 
-`normalize` and `diff` ignore comments, key order, and `True`/`true` spelling.
-The module, lookup plugin, and command share one parser and one locked, atomic
-write path, so concurrent writers cannot lose each other's markers.
+`normalize`/`diff` ignore comments, key order, and `True`/`true` spelling. The
+module, lookup plugin, and command share one parser and one locked, atomic
+write path.
 
 ## User data
 
-A role that owns user data declares what it must not delete while reinstalling,
-clean-installing, or uninstalling. Put the list in `defaults/main.yml`:
+Roles that own user data declare what must not be deleted:
 
-    # transmission/defaults/main.yml
     transmission_user_data:
       - "{{ transmission_download_dir }}"
 
-A role whose user data lives in a database declares the database names
-separately:
-
-    # matomo/defaults/main.yml
     matomo_user_data: []
     matomo_user_data_databases:
       - "{{ matomo_db_name }}"
 
-Use the role's state-file prefix, so `calibre-web` uses `calibreweb_user_data`.
-`--clean-install`, `--reinstall`, and `--uninstall` must leave every declared
-path and database in place. There is no option that deletes them.
-
-`scripts/test-role-lifecycle.py` runs the mocked lifecycle scenarios for one
-role (or `--all` for every role) and also scans the lifecycle task files. It
-prints `WARN` lines with the file, line, and task name when a phase that must
-work offline does network work, when an offline phase includes a phase that may
-use the network, when a state marker is tested directly, or when a marker is
-written before the role has finished. Warnings do not fail unless `--strict` is
-used, so `--all` can be used to track conversion progress; a reference to the
-removed `clean_install` variable always fails. A deliberate exception can carry
-a `# lifecycle: allow-network <reason>` comment immediately above the task.
+Use the role's state-file prefix (`calibre-web` -> `calibreweb`). No option
+deletes declared paths or databases; remove them manually if required.
 
 ## Community
 

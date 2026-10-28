@@ -1,45 +1,22 @@
 #!/usr/bin/python
 """Read and write IIAB install-state markers atomically.
 
-The state file stays a flat YAML mapping of the form::
+The state file stays a flat YAML mapping (``awstats_installed: True``), so
+``vars_files``, shell greps, and image fixtures keep working.  Writes go
+through this module instead of ``lineinfile``: the whole file is read, changed,
+and replaced atomically under a lock.  Unrelated keys, their order, and the
+leading comment block are preserved; booleans stay ``True``/``False``.
 
-    awstats_installed: True
-    firmware_downloaded: True
-
-That format is deliberately unchanged: playbooks load it through
-``vars_files``, shell tools grep it, and the image tests compare it.  What
-changes is that writes go through this module instead of ``lineinfile``:
-
-* the whole file is read, changed, and replaced atomically;
-* concurrent writers serialize on a lock file;
-* unrelated keys, their order, and the leading comment block are preserved;
-  comments inside the mapping itself are not preserved;
-* booleans are emitted as ``True``/``False`` so existing ``grep '...: True'``
-  checks keep working;
-* check mode reports whether the file would change without writing it.
-
-Use the module for a single marker::
+Use the module for single markers::
 
     - name: Record AWStats installed
       iiab_state:
         key: awstats_installed
+        state: absent          # remove it instead
 
-Remove an exact marker::
-
-    - name: Forget AWStats markers
-      iiab_state:
-        key: awstats_installed
-        state: absent
-
-The module works on exact marker names.  Removing every marker for a role is
-a shell convenience (``./scripts/iiab-state forget awstats``), because only the
-caller knows which role prefix maps to which marker.
-
-The companion ``./scripts/iiab-state`` command exposes the same operations to
-shell code, and ``lookup_plugins/installed.py`` reuses the parsing helpers
-below, so all three read the file the same way.  The default path comes from
-``IIAB_STATE_FILE`` or ``/etc/iiab/iiab_state.yml``; playbooks normally pass
-``path`` once through ``module_defaults``.
+The companion ``./scripts/iiab-state`` exposes the same operations to shell
+code, and ``lookup_plugins/installed.py`` reuses the parsing helpers below, so
+all three read the file the same way.
 """
 
 from __future__ import annotations
