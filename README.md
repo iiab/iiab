@@ -50,7 +50,7 @@ repeatable: the role is installed if missing and otherwise reconfigured.
   legacy roles have their markers removed first and offer no user-settings
   guarantee. A role can opt out with `reinstall: false` in
   `roles/<role>/meta/runrole.yml`.
-- `--clean-install` is `--uninstall` followed by a normal apply, so it needs
+- `--clean-install` is `--uninstall` followed by a fresh install, so it needs
   `--uninstall` support. It resets user settings and never deletes user data.
 - `--uninstall` removes the program, its program data, and its user settings
   where supported. It never deletes user data.
@@ -97,7 +97,7 @@ dispatches to the shared runner in `roles/0-init/tasks/lifecycle.yml`:
 may start can still use the network; `main.yml` itself must not.
 
 `install.yml` is the only phase that installs or updates the program, and the
-runner gates it: it does not run on an ordinary apply of an installed role.
+runner gates it: it does not run when applying an already-installed role.
 Anything that must be reconciled every time belongs in `configure.yml`.
 `enable-or-disable.yml` is a legacy convention the runner still executes; new
 work belongs in `configure.yml`.
@@ -118,8 +118,8 @@ work belongs in `configure.yml`.
 repeatable work to `configure.yml`, add `state.yml`, add `uninstall.yml` only if
 removal is safe, then run `python3 scripts/test-role-lifecycle.py <role>`.
 Converting a role stops
-`install.yml` from running on an ordinary apply, so move re-applied work to
-`configure.yml`.
+`install.yml` from running when applying an already-installed role, so move
+re-applied work to `configure.yml`.
 
 The test runs against mocked filesystems, services, and processes. Use
 `--strict` to turn lifecycle warnings into failures, and `--all` to test every
@@ -141,12 +141,10 @@ category, and the lifecycle must not treat it as one.
 The `--reinstall` user-settings guarantee applies to converted roles using the
 shared runner. Legacy roles keep their current behavior and offer no guarantee.
 
-`local_vars.yml` is the user-owned *input* for managed settings, and an apply is
-supposed to enforce it. User settings are the opposite: state the user owns
-after IIAB seeds it. `configure.yml` must not reconcile user settings on an
-ordinary apply. If a role cannot separate the two in one file, split the file
-(a drop-in directory, include, or separate database table) rather than
-overwriting the whole file.
+`local_vars.yml` is the user-owned *input* for managed settings; an apply
+enforces it. User settings are the opposite: state the user owns after IIAB
+seeds it. If a role cannot separate the two in one file, split the file rather
+than overwriting the whole file.
 
 The simple rule for a user-setting file is to create it only when missing and
 never overwrite it:
@@ -162,10 +160,9 @@ This preserves an existing user setting on apply and `--reinstall`.
 Apply the same guard to `copy`, `lineinfile`, `ini_file`, and `blockinfile`:
 do not write a user-setting file without it.
 
-A role that must update a shipped default without discarding local edits needs
-a three-way check (the last IIAB-written checksum, the current file, and the
-new default) or a key-level merge. Unconditionally overwriting a user-setting
-file on every apply is not acceptable.
+If a shipped default must change without discarding local edits, use a
+three-way checksum check or a key-level merge; do not overwrite
+unconditionally.
 
 Declare what a role owns in `defaults/main.yml`, using the role's state-marker
 prefix (`calibre-web` uses `calibreweb_...`):
@@ -177,19 +174,16 @@ prefix (`calibre-web` uses `calibreweb_...`):
     exampleapp_user_data:
       - /var/lib/exampleapp/uploads
 
-A path belongs to exactly one class. The lifecycle test resolves these
-declarations, seeds the paths, and fails if an apply or `--reinstall` overwrites
-a user setting, `--uninstall` does not remove it, `--clean-install` does not
-reset it, user data is deleted, or a path appears in more than one class. The
-`--reinstall` check applies to converted roles; unconverted roles are not held
-to it.
+A path belongs to exactly one class. The lifecycle test seeds these paths and
+fails if apply or `--reinstall` overwrites a user setting, `--uninstall` does
+not remove it, `--clean-install` does not reset it, user data is deleted, or a
+path appears in more than one class. The reinstall check covers converted
+roles only.
 
-`awstats` is the reference implementation: `awstats_user_settings` keeps
-`/etc/awstats/awstats.schoolserver.conf` across applies and `--reinstall`,
-removes it on `--uninstall`, and reseeds the default on `--clean-install`.
-`awstats_program_data` and `awstats_user_data` declare the rest of its state.
-Only `awstats` is converted so far; new conversions must declare their
-ownership before the lifecycle test can prove it.
+`awstats` is the reference implementation: the user setting survives apply and
+`--reinstall`, is removed by `--uninstall`, and is reset by `--clean-install`.
+Only `awstats` is converted so far; new conversions must declare ownership
+before the test can prove it.
 
 ## Observed state
 

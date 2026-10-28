@@ -839,7 +839,8 @@ def enabled_var(role: str) -> str:
 
 OWNERSHIP_KINDS = ("user_settings", "program_data", "user_data")
 USER_SETTING_SENTINEL = (
-    "IIAB lifecycle test: a normal apply must not overwrite this user setting\n"
+    "IIAB lifecycle test: an install-and-configure apply must not overwrite "
+    "this user setting\n"
 )
 USER_DATA_SENTINEL = "IIAB lifecycle test: user data must survive every operation\n"
 
@@ -1463,10 +1464,10 @@ def state_write_warnings(role: str) -> list[Warning]:
 def clean_install_references() -> list[Warning]:
     """Find the removed clean_install variable in any Ansible file.
 
-    --clean-install is implemented by ./runrole as --uninstall followed by a
-    normal apply. No role may branch on the removed variable, so this is a
-    hard failure rather than a warning. The CLI flag itself (with a hyphen) is
-    fine in prose; only the Ansible variable matters.
+    --clean-install is implemented by ./runrole as --uninstall followed by an
+    install-and-configure apply. No role may branch on the removed variable,
+    so this is a hard failure rather than a warning. The CLI flag itself (with
+    a hyphen) is fine in prose; only the Ansible variable matters.
     """
     findings: list[Warning] = []
     paths = set(ROOT_DIR.glob("*.yml")) | set(ROOT_DIR.glob("*.yaml"))
@@ -1865,7 +1866,7 @@ def clean_install_result(
     enabled_name: str,
     install_name: str,
 ) -> str:
-    """Mirror --clean-install: uninstall then a normal apply on one host."""
+    """Mirror --clean-install: uninstall, then install and configure on one host."""
     return run_scenario(
         "clean-install",
         role,
