@@ -67,9 +67,13 @@ known clean slate. `--uninstall` keeps the role's state marker until
 `uninstall.yml` removes it as its final task, so a failed uninstall can be
 retried.
 
-Roles are converted to the lifecycle runner one at a time. Until a role is
-converted, it keeps its previous apply and reinstall behavior; `--reinstall`
-only guarantees that `install.yml` reruns for converted roles.
+Roles are converted to the lifecycle runner one at a time. `--reinstall`
+guarantees that `install.yml` reruns for converted roles. An unconverted role
+still gates `install.yml` on its installed marker, and `--reinstall` keeps that
+marker, so the role behaves like a normal apply until it is converted. To get
+the old delete-marker rebuild deliberately, clear the marker with
+`./scripts/iiab-state forget <prefix>` and run the role without `--reinstall`
+(`--reinstall` refuses once the marker is gone).
 
 `./runroles` accepts the same options and multiple roles, e.g.
 `./runroles --status captiveportal kiwix`.
@@ -160,20 +164,20 @@ natural home).
 | `configure.yml` | optional | every apply | only to fetch a missing immutable asset |
 | `enable-or-disable.yml` | optional | every apply | no |
 | `state.yml` | optional | after a successful apply | no |
-| `reinstall.yml` | optional | `--reinstall` only | no |
 | `uninstall.yml` | optional | `--uninstall` and the uninstall half of `--clean-install` | no |
 
 The rules are intentionally simple:
 
 - `install.yml` is the only phase that installs or updates the program and its
   packages. Because the runner gates it, first-install-only work (cloning,
-  moving an existing tree aside, unconditional downloads) is safe.
+  moving an existing tree aside, unconditional downloads) is safe. It also
+  runs during `--reinstall`, so rebuild preparation belongs here: either make
+  it idempotent (for example, remove generated files unconditionally before
+  recreating them) or guard it with `when: reinstall`. It never removes
+  declared user data.
 - `configure.yml` reconciles desired state on every run. Move settings,
   templates, database provisioning and service configuration here when they
   must be re-applied on an ordinary apply.
-- `reinstall.yml` only stops the service and removes directories that are safe
-  to rebuild. It never removes declared user data. `--clean-install` does not
-  run it.
 - `uninstall.yml` removes the program and its settings, never declared user
   data, and removes the role's state markers as its final task.
 - Write the installed marker only after `configure.yml` (and any
@@ -206,8 +210,7 @@ The rules are intentionally simple:
    reconciled on every apply to `configure.yml`.
 3. Add `state.yml` to record `iiab.ini` values and write the installed marker
    through `iiab_state`.
-4. Add `uninstall.yml` only if removal is safe and repeatable. Add
-   `reinstall.yml` only if a rebuild needs local cleanup.
+4. Add `uninstall.yml` only if removal is safe and repeatable.
 5. Declare user data in `defaults/main.yml`.
 6. Run `python3 scripts/test-role-lifecycle.py <role>`.
 

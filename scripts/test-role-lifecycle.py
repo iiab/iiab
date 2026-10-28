@@ -73,7 +73,6 @@ LIFECYCLE_FILES = {
     "main",
     "validate",
     "uninstall",
-    "reinstall",
     "install",
     "configure",
     "state",
@@ -87,7 +86,6 @@ OFFLINE_PHASES = {
     "main",
     "validate",
     "uninstall",
-    "reinstall",
     "state",
     "enable-or-disable",
 }
@@ -125,7 +123,6 @@ LIFECYCLE_HINTS = {
     "main": "tasks/main.yml should only validate and dispatch; move the work to install.yml or configure.yml",
     "validate": "validate.yml must not use the network; move the fetch to install.yml",
     "uninstall": "uninstall.yml must work offline; move the fetch to install.yml",
-    "reinstall": "reinstall.yml must work offline; move the fetch to install.yml",
     "install": "install.yml should not run configure.yml; main.yml owns the phase order",
     "configure": "configure.yml should not install the program; move that work to install.yml",
     "state": "state.yml only records settings",
@@ -135,7 +132,6 @@ LIFECYCLE_HINTS = {
 # Phases that main.yml must only include conditionally.
 GATED_PHASES = {
     "uninstall": "uninstall.yml must only run when uninstall is set; add a when: guard",
-    "reinstall": "reinstall.yml must only run for --reinstall; add a when: guard",
 }
 
 TASK_KEYWORDS = {
