@@ -13,7 +13,7 @@ $i++;
 $cfg['Servers'][$i]['verbose'] = 'School Server Mysql Database';
 $cfg['Servers'][$i]['host'] = 'localhost';
 $cfg['Servers'][$i]['port'] = '';
-$cfg['Servers'][$i]['socket'] = '/var/run/mariadbd/mysqld.sock';
+$cfg['Servers'][$i]['socket'] = '/run/mariadbd/mysqld.sock';
 $cfg['Servers'][$i]['connect_type'] = 'tcp';
 $cfg['Servers'][$i]['auth_type'] = 'cookie';
 $cfg['Servers'][$i]['user'] = 'root';
