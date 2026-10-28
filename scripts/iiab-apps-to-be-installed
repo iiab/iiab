@@ -38,10 +38,19 @@ chmod 777 /tmp/iiab-apps-list /tmp/iiab-apps-to-be-installed 2>/dev/null
 
 # The list above is already variable-prefix based (calibreweb,
 # osm_vector_maps), so no role-name translation is needed here.
-while read app; do
+#
+# Read the markers once: starting a Python process per app is noticeably slow
+# on a Raspberry Pi, and iiab-summary calls this script.
+if ! state_markers=$(/opt/iiab/iiab/scripts/iiab-state list); then
+    echo "ERROR: could not read the IIAB state file." >&2
+    exit 1
+fi
+
+while IFS= read -r app; do
     # echo ${app}_install: $(iiab_var_value ${app}_install)
 
-    if [[ $(iiab_var_value ${app}_install) =~ ^[Tt]rue$ ]] && ! /opt/iiab/iiab/scripts/iiab-state is-installed "$app"; then
-        echo $app | tee -a /tmp/iiab-apps-to-be-installed
+    if [[ $(iiab_var_value "${app}_install") =~ ^[Tt]rue$ ]] &&
+        ! grep -qx "${app}_installed: True" <<< "$state_markers"; then
+        echo "$app" | tee -a /tmp/iiab-apps-to-be-installed
     fi
 done < /tmp/iiab-apps-list

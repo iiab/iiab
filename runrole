@@ -10,7 +10,6 @@ REINSTALL=false
 CLEAN_INSTALL=false
 ASSUME_YES=false
 ADD=false
-CHECK=false
 CHECK_LOCAL_VARS=false
 STATUS=false
 LIST=false
@@ -38,7 +37,6 @@ Options:
       --reinstall       Rebuild the program (roles may opt out)
       --clean-install   Uninstall, then install again (needs --uninstall support)
       --uninstall       Uninstall the program, never deleting user data
-      --check           Best-effort Ansible check mode (--check --diff)
       --check-local-vars
                         Validate local_vars.yml and exit, without changing anything
       --status          Show installed/desired state without changing anything
@@ -88,9 +86,6 @@ while [[ $# -gt 0 ]]; do
         -v|--verbose)
             VERBOSE=true
             ;;
-        --check)
-            CHECK=true
-            ;;
         --check-local-vars)
             CHECK_LOCAL_VARS=true
             ;;
@@ -126,7 +121,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if $LIST; then
-    if [ -v ROLE_NAME ] || $UNINSTALL || $REINSTALL || $CLEAN_INSTALL || $CHECK || $CHECK_LOCAL_VARS || $STATUS || $ADD || $ASSUME_YES || $VERBOSE; then
+    if [ -v ROLE_NAME ] || $UNINSTALL || $REINSTALL || $CLEAN_INSTALL || $CHECK_LOCAL_VARS || $STATUS || $ADD || $ASSUME_YES || $VERBOSE; then
         echo "--list is read-only and does not accept a role or other options."
         exit 1
     fi
@@ -196,7 +191,7 @@ if $CLEAN_INSTALL; then
         "--clean-install uninstalls the role and then installs it again, so it needs the same implementation as --uninstall." || exit 1
 fi
 
-if ! $CHECK && ! $CHECK_LOCAL_VARS; then
+if ! $CHECK_LOCAL_VARS; then
     mkdir -p "$(dirname "$LOCAL_VARS_FILE")"    # -p avoids errors, effectively like '|| true'
 fi
 if [ ! -f "$LOCAL_VARS_FILE" ]; then
@@ -211,8 +206,6 @@ if [ ! -f "$LOCAL_VARS_FILE" ]; then
     exit 1
 fi
 
-ensure_state_file
-stage_check_state
 trap cleanup_temp_files EXIT
 
 if ! command -v ansible > /dev/null; then
@@ -220,7 +213,7 @@ if ! command -v ansible > /dev/null; then
     exit 1
 fi
 
-install_local_facts
+ensure_state_file
 
 if $CHECK_LOCAL_VARS; then
     PLAYBOOK=check-local-vars.yml
@@ -298,7 +291,7 @@ elif $REINSTALL; then
         echo -e "\e[1m${ROLE_NAME} is not installed; installing it now.\e[0m\n"
     fi
 else
-    if state_has_prefix "$ROLE_VAR" && ! $ASSUME_YES && ! $CHECK; then
+    if state_has_prefix "$ROLE_VAR" && ! $ASSUME_YES; then
         echo -e "\e[1m${ROLE_NAME} is already installed.\e[0m"
         echo "Applying settings from $LOCAL_VARS_FILE (safe to repeat)."
         echo
@@ -319,9 +312,6 @@ extra_vars() {
         if $ADD && [ -n "$ROLE_INSTALL_VAR" ]; then
             json="$json,\"${ROLE_INSTALL_VAR}_install\":true"
         fi
-        if $CHECK; then
-            json="$json,\"iiab_state_file\":\"${CHECK_STATE_FILE}\""
-        fi
     fi
     json="$json,\"validate_roles\":[\"${ROLE_INSTALL_VAR:-$ROLE_VAR}\"]"
     json="$json,\"role_to_run\":\"${ROLE_NAME}\"}"
@@ -334,9 +324,7 @@ if $VERBOSE; then
     echo
 fi
 
-if $CHECK; then
-    echo -e "\e[1;33mWARNING: --check is best-effort; not all roles are check-mode safe.\e[0m\n"
-fi
+install_local_facts
 
 if $CLEAN_INSTALL && ! $CLEAN_INSTALL_RECOVERY; then
     run_playbook "$(extra_vars uninstall)"
@@ -383,7 +371,7 @@ fi
 # --add forces '<prefix>_install: True' for this run only.  If it installed
 # something, local_vars.yml still says False, which the next full run will
 # reject.  Say so now, with the two ways out.
-if $ADD && ! $UNINSTALL && ! $CLEAN_INSTALL && ! $CHECK; then
+if $ADD && ! $UNINSTALL && ! $CLEAN_INSTALL; then
     if [ -n "$ROLE_INSTALL_VAR" ] && state_has_prefix "$ROLE_VAR" && ! role_install_enabled "$ROLE_NAME"; then
         echo -e "\e[1;33mNOTE: --add did not change $LOCAL_VARS_FILE.\e[0m"
         echo "'${ROLE_INSTALL_VAR}_install' is still False there, but ${ROLE_NAME} is installed."

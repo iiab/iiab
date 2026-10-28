@@ -24,6 +24,19 @@
         state: directory
         mode: "0755"
 
+    - name: Create a state file through the CLI
+      command: "{{ cli }} --file {{ test_dir }}/ensured.yml ensure"
+
+    - name: Read the ensured state file
+      slurp:
+        src: "{{ test_dir }}/ensured.yml"
+      register: ensured
+
+    - name: Verify the ensure command wrote the default header
+      assert:
+        that:
+          - "'iiab-state-format: 1' in (ensured.content | b64decode)"
+
     - name: A missing file is an empty state for reads
       command: "{{ cli }} --file {{ state_path }} get alpha_installed"
       register: missing_read
@@ -152,6 +165,7 @@
         content: |
           beta_installed: True
           beta_downloaded: True
+          beta_version: "7.8"
           other_installed: True
         mode: "0644"
 
@@ -172,6 +186,7 @@
           - "'removed beta_downloaded' in forgot.stdout"
           - "'beta_installed' not in (after_forget.content | b64decode)"
           - "'beta_downloaded' not in (after_forget.content | b64decode)"
+          - "(after_forget.content | b64decode | from_yaml)['beta_version'] == '7.8'"
           - "'other_installed: True' in (after_forget.content | b64decode)"
 
     - name: Write an expected-state fixture that matches

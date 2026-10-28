@@ -5,7 +5,6 @@ REINSTALL=false
 CLEAN_INSTALL=false
 ASSUME_YES=false
 ADD=false
-CHECK=false
 CHECK_LOCAL_VARS=false
 STATUS=false
 LIST=false
@@ -46,7 +45,6 @@ Options:
       --clean-install   Uninstall each role, then install it again (needs
                         --uninstall support)
       --uninstall       Uninstall the programs, never deleting user data
-      --check           Best-effort Ansible check mode (--check --diff)
       --check-local-vars
                         Validate local_vars.yml and exit, without changing anything
       --status          Show installed/desired state without changing anything
@@ -86,9 +84,6 @@ while [[ $# -gt 0 ]]; do
         -v|--verbose)
             VERBOSE=true
             ;;
-        --check)
-            CHECK=true
-            ;;
         --check-local-vars)
             CHECK_LOCAL_VARS=true
             ;;
@@ -116,7 +111,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if $LIST; then
-    if [[ ${#ROLES[@]} -gt 0 ]] || $UNINSTALL || $REINSTALL || $CLEAN_INSTALL || $CHECK || $CHECK_LOCAL_VARS || $STATUS || $ADD || $ASSUME_YES || $VERBOSE; then
+    if [[ ${#ROLES[@]} -gt 0 ]] || $UNINSTALL || $REINSTALL || $CLEAN_INSTALL || $CHECK_LOCAL_VARS || $STATUS || $ADD || $ASSUME_YES || $VERBOSE; then
         echo "--list is read-only and does not accept roles or other options."
         exit 1
     fi
@@ -175,6 +170,9 @@ if $unsupported; then
     exit 1
 fi
 
+if ! $CHECK_LOCAL_VARS; then
+    mkdir -p "$(dirname "$LOCAL_VARS_FILE")"    # -p avoids errors, effectively like '|| true'
+fi
 if [ ! -f "$LOCAL_VARS_FILE" ]; then
     echo -e "\n\e[1mEXITING: /opt/iiab/iiab/runroles REQUIRES $LOCAL_VARS_FILE\e[0m\n" >&2
     exit 1
@@ -185,8 +183,6 @@ if ! command -v ansible > /dev/null; then
     exit 1
 fi
 
-install_local_facts
-
 if $CHECK_LOCAL_VARS; then
     PLAYBOOK=check-local-vars.yml
     CHECK_LOCAL_VARS_ROLES=""
@@ -194,6 +190,8 @@ if $CHECK_LOCAL_VARS; then
         prefix=$(checklist_install_var "$role")
         if [ -n "$prefix" ]; then
             CHECK_LOCAL_VARS_ROLES="${CHECK_LOCAL_VARS_ROLES}\"${prefix}\","
+        elif role_exists "$role"; then
+            echo "NOTE: ${role} is an always-on helper role; it has no install/enabled vars to validate."
         fi
     done
     if [[ ${#ROLES[@]} -gt 0 ]]; then
@@ -206,12 +204,10 @@ if $CHECK_LOCAL_VARS; then
 fi
 
 ensure_state_file
-stage_check_state
 trap cleanup_temp_files EXIT
 
-# The generated playbook keeps the repository's relative vars_files working,
-# but a unique name keeps concurrent runs from overwriting each other. The
-# EXIT trap removes it, and .gitignore covers an interrupted run.
+# The generated playbook keeps the repository's relative vars_files working.
+# The EXIT trap removes it, and .gitignore covers an interrupted run.
 PLAYBOOK=""
 TEMP_PLAYBOOK=""
 write_playbook() {
@@ -293,7 +289,7 @@ elif $REINSTALL; then
     done
     echo
 else
-    if ! $ASSUME_YES && ! $CHECK; then
+    if ! $ASSUME_YES; then
         installed=false
         for role in "${ROLES[@]}"; do
             var=$(role_var "$role")
@@ -352,9 +348,6 @@ extra_vars() {
                 fi
             done
         fi
-        if $CHECK; then
-            json="$json,\"iiab_state_file\":\"${CHECK_STATE_FILE}\""
-        fi
     fi
     local validate_roles=""
     local role_var_name
@@ -373,9 +366,7 @@ if $VERBOSE; then
     echo
 fi
 
-if $CHECK; then
-    echo -e "\e[1;33mWARNING: --check is best-effort; not all roles are check-mode safe.\e[0m\n"
-fi
+install_local_facts
 
 if $CLEAN_INSTALL && ! $CLEAN_INSTALL_RECOVERY; then
     PLAYBOOK_ROLES=("${UNINSTALL_ROLES[@]}")
@@ -446,7 +437,7 @@ fi
 # --add forces '<prefix>_install: True' for this run only.  If it installed
 # something, local_vars.yml still says False, which the next full run will
 # reject.  Say so now, with the two ways out.
-if $ADD && ! $UNINSTALL && ! $CLEAN_INSTALL && ! $CHECK; then
+if $ADD && ! $UNINSTALL && ! $CLEAN_INSTALL; then
     for role in "${PLAYBOOK_ROLES[@]}"; do
         var=$(role_var "$role")
         install_var=$(role_install_var "$role")

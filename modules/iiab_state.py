@@ -1,11 +1,11 @@
 #!/usr/bin/python
-"""Read and write IIAB install-state markers atomically.
+"""Read and write IIAB install-state markers.
 
 The state file stays a flat YAML mapping (``awstats_installed: True``), so
 ``vars_files``, shell greps, and image fixtures keep working.  Writes go
 through this module instead of ``lineinfile``: the whole file is read, changed,
-and replaced atomically under a lock.  Unrelated keys, their order, and the
-leading comment block are preserved; booleans stay ``True``/``False``.
+and written back.  Unrelated keys, their order, and the leading comment block
+are preserved; booleans stay ``True``/``False``.
 
 Use the module for single markers::
 
@@ -134,7 +134,7 @@ def dump_state(data, header="", include_header=True):
 
 @contextmanager
 def state_lock(path=DEFAULT_PATH):
-    """Serialize read-modify-write cycles for one state file."""
+    """Hold an exclusive lock while one caller changes the state file."""
     directory = os.path.dirname(os.path.abspath(path)) or "."
     os.makedirs(directory, exist_ok=True)
     lock_path = os.path.join(directory, "." + os.path.basename(path) + ".lock")
@@ -147,7 +147,7 @@ def state_lock(path=DEFAULT_PATH):
 
 
 def write_state(path, data, header=""):
-    """Atomically replace *path* with *data*."""
+    """Write *data* to *path*."""
     directory = os.path.dirname(os.path.abspath(path)) or "."
     os.makedirs(directory, exist_ok=True)
     descriptor, temporary = tempfile.mkstemp(
@@ -191,8 +191,12 @@ def write_state(path, data, header=""):
 
 
 def marker_keys(state, prefix):
-    """Keys belonging to *prefix*: ``prefix`` itself or ``prefix_*``."""
-    return [key for key in state if key == prefix or key.startswith(prefix + "_")]
+    """Return the marker keys for *prefix*: ``prefix_installed``, etc."""
+    return [
+        key
+        for key in state
+        if key.startswith(prefix + "_") and key.endswith(MARKER_SUFFIXES)
+    ]
 
 
 def coerce_value(value):

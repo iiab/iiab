@@ -187,13 +187,22 @@ def _manifest_says(role: str, feature: str) -> bool:
     return _manifest_value(role, feature) is True
 
 
+def _uncommented(text: str) -> str:
+    """Drop YAML comments before looking for includes or ``when:`` guards.
+
+    A commented-out include or guard must not make a role advertise an
+    operation it does not implement.
+    """
+    return "\n".join(line.split("#", 1)[0] for line in text.splitlines())
+
+
 def _entrypoint_implements(role: str, feature: str) -> bool:
     """True when main.yml hands off to *feature*.yml or gates on it inline."""
     path = entrypoint(role)
     if path is None:
         return False
     try:
-        text = path.read_text(encoding="utf-8")
+        text = _uncommented(path.read_text(encoding="utf-8"))
     except OSError:
         return False
     if any(match.group("feature") == feature for match in INCLUDE.finditer(text)):
@@ -220,7 +229,7 @@ def uses_lifecycle_runner(role: str) -> bool:
     if path is None:
         return False
     try:
-        text = path.read_text(encoding="utf-8")
+        text = _uncommented(path.read_text(encoding="utf-8"))
     except OSError:
         return False
     return LIFECYCLE_RUNNER.search(text) is not None

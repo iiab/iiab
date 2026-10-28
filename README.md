@@ -43,7 +43,6 @@ repeatable: the role is installed if missing and otherwise reconfigured.
     sudo ./runrole --uninstall awstats              # uninstall, never deleting user data
     ./runrole --status captiveportal                # show installed/desired state
     ./runrole --list                                # list roles, state, conflicts, capabilities
-    sudo ./runrole --check captiveportal            # best-effort dry run
     sudo ./runrole --check-local-vars               # validate local_vars.yml, then exit
 
 - `--reinstall` reruns `install.yml` (installing first when missing). Converted
@@ -88,11 +87,14 @@ dispatches to the shared runner in `roles/0-init/tasks/lifecycle.yml`:
 
 | File | Runs when | May use the network? |
 |---|---|---|
-| `main.yml` | every invocation | no |
+| `main.yml` | every invocation | no (it only dispatches) |
 | `install.yml` | first install, `--reinstall`, `--clean-install` | yes |
 | `configure.yml` | every apply | only to fetch a missing immutable asset |
 | `state.yml` | after a successful apply | no |
 | `uninstall.yml` | `--uninstall` and `--clean-install` | no |
+
+`main.yml` starts the phases below through the runner, so the `install.yml` it
+may start can still use the network; `main.yml` itself must not.
 
 `install.yml` is the only phase that installs or updates the program, and the
 runner gates it: it does not run on an ordinary apply of an installed role.
@@ -118,12 +120,18 @@ removal is safe, declare user data, then run
 `install.yml` from running on an ordinary apply, so move re-applied work to
 `configure.yml`.
 
+The test runs against mocked filesystems, services, and processes. Use
+`--strict` to turn lifecycle warnings into failures, and `--all` to test every
+active role (`--jobs N` sets its parallelism).
+
 ## Observed state
 
 `/etc/iiab/iiab_state.yml` remains a flat YAML mapping
 (`awstats_installed: True`), so `vars_files`, `grep`, and image fixtures keep
-working. A missing file is a valid empty state. The path comes from
-`iiab_state_file`, which defaults to `IIAB_STATE_FILE` or
+working. A missing file is a valid empty state for the module, the lookup, and
+`./scripts/iiab-state`; during the migration the entry playbooks still load it
+with `vars_files`, so `./runrole` and `./runroles` create it when absent. The
+path comes from `iiab_state_file`, which defaults to `IIAB_STATE_FILE` or
 `/etc/iiab/iiab_state.yml`.
 
 Write markers through the module, not `lineinfile`:
@@ -141,8 +149,7 @@ Entry playbooks pass the path once with `module_defaults`. Shell code uses
     ./scripts/iiab-state diff expected.yml /etc/iiab/iiab_state.yml
 
 `normalize`/`diff` ignore comments, key order, and `True`/`true` spelling. The
-module, lookup plugin, and command share one parser and one locked, atomic
-write path.
+module, lookup plugin, and command share one parser and one write path.
 
 ## User data
 

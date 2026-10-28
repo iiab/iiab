@@ -14,11 +14,9 @@ IIAB_STATE_FILE="${IIAB_STATE_FILE:-/etc/iiab/iiab_state.yml}"
 IIAB_INI_FILE="${IIAB_INI_FILE:-/etc/iiab/iiab.ini}"
 export IIAB_STATE_FILE
 
-CHECK_STATE_FILE=""
 TEMP_PLAYBOOK=""
 
 cleanup_temp_files() {
-    [ -n "$CHECK_STATE_FILE" ] && rm -f "$CHECK_STATE_FILE"
     [ -n "$TEMP_PLAYBOOK" ] && rm -f "$TEMP_PLAYBOOK"
     return 0
 }
@@ -318,7 +316,7 @@ list_roles() {
 validate_options() {
     local log=""
     [ "${1:-multi}" = single ] && log=$LOGFILE
-    if $CHECK_LOCAL_VARS && ($log || $UNINSTALL || $REINSTALL || $CLEAN_INSTALL || $ADD || $CHECK || $STATUS || $ASSUME_YES || $VERBOSE); then
+    if $CHECK_LOCAL_VARS && ($log || $UNINSTALL || $REINSTALL || $CLEAN_INSTALL || $ADD || $STATUS || $ASSUME_YES || $VERBOSE); then
         echo "--check-local-vars is read-only and cannot be combined with other options."
         exit 1
     fi
@@ -330,15 +328,7 @@ validate_options() {
         echo "--clean-install cannot be combined with --add or --reinstall."
         exit 1
     fi
-    if $CHECK && $UNINSTALL; then
-        echo "--check cannot be combined with --uninstall. Use --status instead."
-        exit 1
-    fi
-    if $CHECK && ($REINSTALL || $CLEAN_INSTALL); then
-        echo "--check cannot be combined with --reinstall or --clean-install. Use --status instead."
-        exit 1
-    fi
-    if $STATUS && ($log || $UNINSTALL || $REINSTALL || $CLEAN_INSTALL || $ADD || $CHECK || $ASSUME_YES || $VERBOSE); then
+    if $STATUS && ($log || $UNINSTALL || $REINSTALL || $CLEAN_INSTALL || $ADD || $ASSUME_YES || $VERBOSE); then
         echo "--status is read-only and cannot be combined with other options."
         exit 1
     fi
@@ -346,34 +336,20 @@ validate_options() {
 
 # Copy local facts once, so roles can read ansible_local.local_facts.
 install_local_facts() {
-    $CHECK && return 0
     $CHECK_LOCAL_VARS && return 0
     mkdir -p /etc/ansible/facts.d
     cp "$IIAB_REPO/scripts/local_facts.fact" /etc/ansible/facts.d/local_facts.fact
 }
 
 # Entry playbooks still load the state file with vars_files, so it must exist.
+# ./scripts/iiab-state owns the file format, including its header.
 ensure_state_file() {
     $CHECK_LOCAL_VARS && return 0
-    if [ ! -f "$IIAB_STATE_FILE" ]; then
-        mkdir -p "$(dirname "$IIAB_STATE_FILE")"
-        : > "$IIAB_STATE_FILE"
-    fi
-}
-
-# Give --check its own state file, so check mode cannot change the host.
-stage_check_state() {
-    $CHECK || return 0
-    CHECK_STATE_FILE=$(mktemp "${TMPDIR:-/tmp}/iiab-state.XXXXXX")
-    if [ -f "$IIAB_STATE_FILE" ]; then
-        cp "$IIAB_STATE_FILE" "$CHECK_STATE_FILE"
-    else
-        printf '%s\n' \
-            '# DO *NOT* MANUALLY EDIT THIS, THANKS!' \
-            '# IIAB installs apps/services; extended operations are only for' \
-            '# roles that provide the matching lifecycle tasks.' \
-            '' > "$CHECK_STATE_FILE"
-    fi
+    [ -f "$IIAB_STATE_FILE" ] && return 0
+    state_cmd ensure || {
+        echo -e "\e[1mERROR: could not create $IIAB_STATE_FILE (see above).\e[0m" >&2
+        exit 2
+    }
 }
 
 run_playbook() {
@@ -384,9 +360,6 @@ run_playbook() {
         --connection=local
         --extra-vars "$extra_vars"
     )
-    if $CHECK; then
-        args+=(--check --diff)
-    fi
     if $VERBOSE; then
         args+=(-v)
     fi
