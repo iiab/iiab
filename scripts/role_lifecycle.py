@@ -172,7 +172,7 @@ def _entrypoint_implements(role: str, feature: str) -> bool:
     return False
 
 
-def _uses_lifecycle_runner(role: str) -> bool:
+def uses_lifecycle_runner(role: str) -> bool:
     """True when main.yml hands off to 0-init's shared lifecycle runner."""
     path = entrypoint(role)
     if path is None:
@@ -189,7 +189,7 @@ def supports_uninstall(role: str) -> bool:
         return False
     if _manifest_says(role, "uninstall"):
         return True
-    if _uses_lifecycle_runner(role):
+    if uses_lifecycle_runner(role):
         # The runner calls tasks/uninstall.yml when uninstall is set.  An
         # unused uninstall.yml alone still does not opt a role in.
         return (tasks_dir(role) / "uninstall.yml").is_file()
@@ -241,6 +241,12 @@ def build_parser() -> argparse.ArgumentParser:
     exists_parser = subparsers.add_parser("exists", help="exit 0 when the role exists")
     exists_parser.add_argument("role")
 
+    uses_runner = subparsers.add_parser(
+        "uses-runner",
+        help="exit 0 when main.yml uses 0-init's shared lifecycle runner",
+    )
+    uses_runner.add_argument("role")
+
     supports_parser = subparsers.add_parser(
         "supports", help="exit 0 when the role implements a feature"
     )
@@ -268,6 +274,8 @@ def main(argv=None) -> int:
 
     if args.command == "exists":
         return 0 if exists(args.role) else 1
+    if args.command == "uses-runner":
+        return 0 if uses_lifecycle_runner(args.role) else 1
     if args.command == "supports":
         return 0 if supports(args.role, args.feature) else 1
 

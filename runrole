@@ -73,7 +73,9 @@ by a normal apply, so a role supports it exactly when it supports --uninstall.
 * --reinstall reruns the role's install/update path. Some roles keep settings
   and program data, others rewrite or remove them; use --clean-install when you
   want a known reset. User data is never deleted: roles declare it in
-  '<role>_user_data' and the lifecycle test enforces it.
+  '<role>_user_data' and the lifecycle test enforces it. Legacy roles have
+  their state markers removed first, as before; converted roles keep them
+  until the rebuild succeeds.
 
 If --uninstall keeps failing, fix the reported error and retry. The role's
 markers are removed only after cleanup succeeds. If you already removed the
@@ -333,8 +335,17 @@ if $UNINSTALL || $CLEAN_INSTALL; then
 elif $REINSTALL; then
     if state_has_prefix "$ROLE_VAR"; then
         echo -e "\e[1mReinstalling ${ROLE_NAME}.\e[0m\n"
-        echo -e "\nThe installed marker(s) stay in place until the reinstall succeeds:\n"
-        state_show_prefix "$ROLE_VAR"; echo
+        if role_uses_runner "$ROLE_NAME"; then
+            echo -e "\nThe installed marker(s) stay in place until the reinstall succeeds:\n"
+            state_show_prefix "$ROLE_VAR"; echo
+        else
+            echo -e "\nThis role does not use the shared lifecycle runner, so these marker(s) are removed before the rebuild (the previous --reinstall behavior):\n"
+            state_show_prefix "$ROLE_VAR"; echo
+            state_cmd forget "$ROLE_VAR" >/dev/null || {
+                echo -e "\e[1mERROR: could not remove ${ROLE_VAR}_* markers from $IIAB_STATE_FILE.\e[0m" >&2
+                exit 2
+            }
+        fi
     else
         echo -e "\e[1mERROR: $IIAB_STATE_FILE has no marker that begins with '${ROLE_VAR}_'\e[0m\n"
         echo "Nothing to reinstall. Run without --reinstall to install it normally."

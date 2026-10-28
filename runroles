@@ -79,7 +79,9 @@ require '<prefix>_install: True' (pass -a to override it for one run).
 * --reinstall reruns each role's install/update path. Some roles keep settings
   and program data, others rewrite or remove them; use --clean-install when you
   want a known reset. User data is never deleted: roles declare it in
-  '<role>_user_data' and the lifecycle test enforces it.
+  '<role>_user_data' and the lifecycle test enforces it. Legacy roles have
+  their state markers removed first, as before; converted roles keep them
+  until the rebuild succeeds.
 
 If --uninstall keeps failing, fix the reported error and retry. A role's
 markers are removed only after its cleanup succeeds. If you already removed a
@@ -334,8 +336,17 @@ elif $REINSTALL; then
     for role in "${ROLES[@]}"; do
         var=$(role_var "$role")
         if state_has_prefix "$var"; then
-            echo "Reinstalling $role. Its markers stay until the role finishes:"
-            state_show_prefix "$var" | sed 's/^/  /'
+            if role_uses_runner "$role"; then
+                echo "Reinstalling $role. Its markers stay until the role finishes:"
+                state_show_prefix "$var" | sed 's/^/  /'
+            else
+                echo "Reinstalling $role. Legacy role: removing its markers before the rebuild:"
+                state_show_prefix "$var" | sed 's/^/  /'
+                state_cmd forget "$var" >/dev/null || {
+                    echo -e "\e[1mERROR: could not remove ${var}_* markers from $IIAB_STATE_FILE.\e[0m" >&2
+                    exit 2
+                }
+            fi
         else
             echo "$role is not installed; it will be installed normally."
         fi

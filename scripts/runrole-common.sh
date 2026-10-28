@@ -67,6 +67,13 @@ role_exists() {
     role_lifecycle exists "$1"
 }
 
+# True if the role's main.yml dispatches to the shared lifecycle runner.
+# Legacy roles gate install.yml on an installed marker instead; --reinstall
+# removes their markers before the run, as it did before the runner existed.
+role_uses_runner() {
+    role_lifecycle uses-runner "$1"
+}
+
 # True if <role> implements <feature>. --clean-install is derived from
 # --uninstall because it is literally uninstall followed by a normal apply.
 role_supports() {

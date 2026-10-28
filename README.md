@@ -52,7 +52,8 @@ The options escalate, from least to most work:
 
 - `--reinstall` reruns the role's install/update path. A role whose rebuild
   needs manual cleanup can opt out with `reinstall: false` in
-  `roles/<role>/meta/runrole.yml`.
+  `roles/<role>/meta/runrole.yml`. Converted roles keep their installed markers
+  during the rebuild; legacy roles have them removed first, as before.
 - `--clean-install` is literally `--uninstall` followed by a normal apply, so
   it requires the role to support `--uninstall`.
 - `--uninstall` removes the program and its settings where supported.
@@ -67,13 +68,12 @@ known clean slate. `--uninstall` keeps the role's state marker until
 `uninstall.yml` removes it as its final task, so a failed uninstall can be
 retried.
 
-Roles are converted to the lifecycle runner one at a time. `--reinstall`
-guarantees that `install.yml` reruns for converted roles. An unconverted role
-still gates `install.yml` on its installed marker, and `--reinstall` keeps that
-marker, so the role behaves like a normal apply until it is converted. To get
-the old delete-marker rebuild deliberately, clear the marker with
-`./scripts/iiab-state forget <prefix>` and run the role without `--reinstall`
-(`--reinstall` refuses once the marker is gone).
+Roles are converted to the lifecycle runner one at a time. Converted roles keep
+their installed markers while `--reinstall` runs. For a role that still uses the
+old entrypoint, `--reinstall` removes its `<prefix>_*` markers before Ansible
+starts, exactly as it did previously, so its `install.yml` reruns too. If such a
+legacy reinstall fails, the role is left looking uninstalled; run the role
+without `--reinstall` to finish the install.
 
 `./runroles` accepts the same options and multiple roles, e.g.
 `./runroles --status captiveportal kiwix`.
