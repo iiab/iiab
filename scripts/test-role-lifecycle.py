@@ -272,16 +272,57 @@ def exists(state, path):
 
 
 def unit_path(service):
-    return (
-        f"/etc/systemd/system/{service}"
-        if service.endswith(".service")
-        else f"/etc/systemd/system/{service}.service"
+    suffixes = (
+        ".service",
+        ".socket",
+        ".timer",
+        ".path",
+        ".target",
+        ".mount",
+        ".automount",
+        ".swap",
+        ".device",
+        ".slice",
+        ".scope",
     )
+    suffix = "" if service.endswith(suffixes) else ".service"
+    return f"/etc/systemd/system/{service}{suffix}"
 
 
 def create(state, path, kind="file"):
     changed = not exists(state, path)
     state["paths"][path] = kind
+    return changed
+
+
+# Packages that ship systemd units the roles look for. Installing one of these
+# packages materializes its units, just like the package manager would.
+PACKAGE_UNITS = {
+    "uwsgi": (
+        "/lib/systemd/system/uwsgi-app@.service",
+        "/lib/systemd/system/uwsgi-app@.socket",
+    ),
+}
+
+
+def install_packages(state, args):
+    names = args.get("name") or args.get("pkg") or args.get("package") or []
+    if isinstance(names, str):
+        names = [names]
+    requested = str(args.get("state") or "present").lower()
+    changed = False
+    packages = state.setdefault("packages", {})
+    for package in names:
+        package = str(package).split("=", 1)[0]
+        if requested in {"absent", "removed", "purged"}:
+            if packages.pop(package, None) is not None:
+                changed = True
+            continue
+        if packages.get(package) != "present":
+            packages[package] = "present"
+            changed = True
+        for path in PACKAGE_UNITS.get(package, ()):
+            changed = create(state, path) or changed
     return changed
 
 
@@ -491,9 +532,16 @@ def main():
 
     if name in {
         "apt",
+        "apk",
         "dnf",
-        "yum",
         "package",
+        "pacman",
+        "yum",
+        "zypper",
+    }:
+        finish(state, changed=install_packages(state, args))
+
+    if name in {
         "unarchive",
         "mount",
         "sysctl",
@@ -669,11 +717,21 @@ def state_path(task_vars):
 
 
 def unit_path(service):
-    return (
-        f"/etc/systemd/system/{service}"
-        if service.endswith(".service")
-        else f"/etc/systemd/system/{service}.service"
+    suffixes = (
+        ".service",
+        ".socket",
+        ".timer",
+        ".path",
+        ".target",
+        ".mount",
+        ".automount",
+        ".swap",
+        ".device",
+        ".slice",
+        ".scope",
     )
+    suffix = "" if service.endswith(suffixes) else ".service"
+    return f"/etc/systemd/system/{service}{suffix}"
 
 
 class ActionModule(ActionBase):
@@ -938,9 +996,29 @@ def role_service_names(role: str) -> set[str]:
                     following,
                 )
                 if match:
-                    services.add(match.group(1).removesuffix(".service"))
+                    services.add(match.group(1))
                     break
     return services
+
+
+UNIT_SUFFIXES = (
+    ".service",
+    ".socket",
+    ".timer",
+    ".path",
+    ".target",
+    ".mount",
+    ".automount",
+    ".swap",
+    ".device",
+    ".slice",
+    ".scope",
+)
+
+
+def unit_path(service: str) -> str:
+    suffix = "" if service.endswith(UNIT_SUFFIXES) else ".service"
+    return f"/etc/systemd/system/{service}{suffix}"
 
 
 def initial_state(role: str, installed: bool = False) -> dict:
@@ -963,8 +1041,6 @@ def initial_state(role: str, installed: bool = False) -> dict:
         "systemd-resolved",
         "networking",
         "wpa_supplicant",
-        "uwsgi-app@captiveportal.socket",
-        "uwsgi-app@captiveportal.service",
     ]
     # A fresh install gets its units from the package that the mocked package
     # task installs, so treat every service the role refers to as available.
@@ -976,25 +1052,15 @@ def initial_state(role: str, installed: bool = False) -> dict:
         "services": {"nginx": {"enabled": True, "state": "started"}},
         "expected_services": role_services,
         "available_services": available_services,
+        "packages": {},
     }
-    state["paths"].update(
-        {
-            "/lib/systemd/system/uwsgi-app@.service": "file",
-            "/lib/systemd/system/uwsgi-app@.socket": "file",
-        }
-    )
-    if role == "firmware":
-        state["available_services"].append("iiab-check-firmware.service")
+    # Packages such as uwsgi materialize their unit templates when a role
+    # installs them; instance units are added by the role's own systemd tasks.
     if installed:
         for service in role_services:
             if service in state["services"]:
                 continue
-            unit = (
-                f"/etc/systemd/system/{service}"
-                if service.endswith(".service")
-                else f"/etc/systemd/system/{service}.service"
-            )
-            state["paths"][unit] = "file"
+            state["paths"][unit_path(service)] = "file"
             state["services"][service] = {"enabled": True, "state": "started"}
     return state
 
@@ -1035,7 +1101,7 @@ def role_service_names_from_files(paths) -> set[str]:
                     following,
                 )
                 if match:
-                    services.add(match.group(1).removesuffix(".service"))
+                    services.add(match.group(1))
                     break
     return services
 
