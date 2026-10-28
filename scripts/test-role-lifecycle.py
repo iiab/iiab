@@ -7,8 +7,9 @@ which may use the network, an unguarded uninstall include, unsafe state
 checks, and state writes in the wrong phase. Warnings are reported but do not
 fail the run unless --strict is used; a reference to the removed
 clean_install variable and an ownership path declared in more than one class
-always fail. Declared user settings are seeded and must survive a normal
-apply; declared user data must survive every operation.
+always fail. Declared user settings are seeded and must survive apply and
+--reinstall, be removed by --uninstall, and be reset by --clean-install;
+declared user data must survive every operation.
 """
 
 from __future__ import annotations
@@ -964,7 +965,7 @@ def ownership_problem(
     state: dict,
     ownership: dict[str, list[str]],
     operation: str,
-    check_user_settings: bool,
+    user_settings: str,
 ) -> str | None:
     missing = [
         path for path in ownership["user_data"] if not state_has_path(state, path)
@@ -972,7 +973,7 @@ def ownership_problem(
     if missing:
         return f"{operation} removed declared user data: " + ", ".join(missing)
 
-    if check_user_settings:
+    if user_settings == "preserve":
         changed = [
             path
             for path in ownership["user_settings"]
@@ -983,6 +984,28 @@ def ownership_problem(
                 f"{operation} overwrote declared user settings: "
                 + ", ".join(changed)
             )
+    elif user_settings == "remove":
+        present = [
+            path for path in ownership["user_settings"] if state_has_path(state, path)
+        ]
+        if present:
+            return (
+                f"{operation} did not remove declared user settings: "
+                + ", ".join(present)
+            )
+    elif user_settings == "reset":
+        unchanged = [
+            path
+            for path in ownership["user_settings"]
+            if ownership_content(state, path) == USER_SETTING_SENTINEL
+        ]
+        if unchanged:
+            return (
+                f"{operation} did not reset declared user settings: "
+                + ", ".join(unchanged)
+            )
+    else:
+        raise ValueError(f"unknown user-settings policy: {user_settings}")
     return None
 
 
@@ -1728,14 +1751,15 @@ def run_scenario(
     steps: list[tuple[str, dict, bool | None]],
     seed_marker: bool = False,
     initial_installed: bool = False,
-    check_user_settings: bool = True,
+    user_settings: str = "preserve",
 ) -> str:
     """Run lifecycle steps in one virtual host.
 
     Each step is (name, values, expect_marker).  expect_marker True requires
     the installed marker afterwards, False requires it to be gone, and None
-    skips the check.  Declared ownership is seeded before the first step so a
-    normal apply cannot silently overwrite user settings or delete user data.
+    skips the check.  Declared ownership is seeded before the first step so an
+    apply cannot silently overwrite user settings or delete user data.
+    user_settings is "preserve", "remove", or "reset".
     """
     scenario.mkdir()
     prepare_controller_files(scenario)
@@ -1792,7 +1816,7 @@ def run_scenario(
 
     final_state = json.loads(state_file.read_text(encoding="utf-8"))
     problem = ownership_problem(
-        final_state, ownership, title, check_user_settings=check_user_settings
+        final_state, ownership, title, user_settings=user_settings
     )
     if problem:
         output.append(f"FAIL\n{problem}\n")
@@ -1827,8 +1851,9 @@ def operation_result(
         # same way and prove the role does not remove them while rebuilding.
         seed_marker=name == "reinstall",
         initial_installed=values["installed"],
-        # --reinstall may reset user settings; only user data must survive.
-        check_user_settings=name != "reinstall",
+        # --uninstall removes user settings; apply and --reinstall preserve
+        # them.  User data must survive every operation.
+        user_settings={"uninstall": "remove"}.get(name, "preserve"),
     )
 
 
@@ -1862,6 +1887,7 @@ def clean_install_result(
             ),
         ],
         initial_installed=True,
+        user_settings="reset",
     )
 
 

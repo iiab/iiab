@@ -242,7 +242,7 @@ status_role() {
             echo "  Remove it: sudo ./runrole --uninstall ${role}"
         else
             echo "  ${role} does not support --uninstall."
-            echo "  If the program and its program data are already gone, clear the"
+            echo "  If the program and its settings are already gone, clear the"
             echo "  stale marker with: sudo ./scripts/iiab-state forget ${var}"
         fi
     fi
