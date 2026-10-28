@@ -1,0 +1,21 @@
+---
+# Record filesystem usage before a role does work.  The label defaults to the
+# role that included this file; callers pass disk_usage_role only to override it.
+# disk_usage_paths is optional and defaults to / and content_base.
+# The matching disk_usage_finish.yml writes the delta to iiab.ini, so a role
+# measures its whole update/install/configure lifecycle instead of one phase.
+- name: Record initial disk space used
+  vars:
+    _iiab_disk_usage_role: "{{ disk_usage_role | default(ansible_parent_role_names | first) }}"
+  block:
+    - name: Record initial disk space used for {{ _iiab_disk_usage_role }}
+      disk_usage:
+        paths: "{{ disk_usage_paths | default(['/', content_base | default('/')]) }}"
+      register: _iiab_disk_usage_now
+      changed_when: false
+
+    - name: Remember initial disk space used for {{ _iiab_disk_usage_role }}
+      set_fact:
+        _iiab_disk_usage_start: >-
+          {{ (_iiab_disk_usage_start | default({}))
+             | combine({_iiab_disk_usage_role: _iiab_disk_usage_now.used | int}) }}
