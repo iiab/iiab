@@ -698,7 +698,7 @@
                         // Even if we're not looking at it now, decent chance we'll look at it again soon.
                         return curTerrainSource
                     }
-                    if (await fqRegionsExist()) {
+                    if (fqrs.count) {
                         // If no FQRs are on screen, and we have no world map terrain, and no terrain is
                         // currently loaded, (probably initializing) just pick an arbitrary FQR to start with.
                         return Object.values(fqrs.regions)[0].pmtilesFiles.terrain.sourceId
@@ -1266,8 +1266,7 @@
                 // At this point we're done making requests. We should have all of the data we need to set up our FQRs here.
                 //
                 // regions = {regionName: {meta, listing}, ...}
-                const fqrs = {
-                  regions: Object.fromEntries(
+                const regions = Object.fromEntries(
                       regionInfo
                       .map(res=>res.value)  // [regionName, {meta, listing}] (see above)
                       .filter(Boolean)      // remove errors in getting meta or listing
@@ -1335,18 +1334,14 @@
                           return [regionName, fqrData]
                       })
                       .filter(Boolean)      // remove errors in finishing setting up the region
-                )}
-                for (regionName in fqrs.regions) {
-                    const pmtilesFiles = fqrs.regions[regionName].pmtilesFiles
+                )
+                for (regionName in regions) {
+                    const pmtilesFiles = regions[regionName].pmtilesFiles
                     warnIncompleteRegion(pmtilesFiles, regionName)
                 }
-                return fqrs
+                // `count` is for succinctness later
+                return {regions, count: Object.keys(regions).length}
             })()
-
-            async function fqRegionsExist() {
-                const fqrs = await downloadedFQRegions
-                return !!(Object.keys(fqrs.regions).length)
-            }
 
             // Here's the deal:
             //
@@ -1376,15 +1371,17 @@
                 // A user can choose "0-none" for terrain which gives them effectively no world terrain.
                 // However they can still have FQR terrain. So we return true if there is either a real
                 // world map terrain file or any FQRs. (TODO - check for missing terrain files in FQRs)
-                const pmtilesFiles = await worldMap.pmtilesFiles
+                const worldPmtilesFiles = await worldMap.pmtilesFiles
 
-                // Check this first to return faster
-                if (pmtilesFiles.terrain.maxzoom > 0) {
+                // Check this first to return faster if world map loads first
+                if (worldPmtilesFiles.terrain.maxzoom > 0) {
                     return true
                 }
 
+                const fqrs = await downloadedFQRegions
+
                 // Full Quality Regions always have terrain
-                return (await fqRegionsExist())
+                return !!fqrs.count
             }
 
             async function getAvailableStyles() {
