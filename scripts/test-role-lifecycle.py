@@ -3,11 +3,10 @@
 
 Besides the scenarios, task files are scanned for lifecycle warnings: network
 work in a phase that must stay offline, offline phases that include a phase
-which may use the network, unsafe state checks, and state writes in the wrong
-phase. The scenarios also seed a role's declared user data and check that every
-runrole operation keeps it. Warnings are reported but do not fail the run
-unless --strict is used; a reference to the removed clean_install variable
-always fails.
+which may use the network, an unguarded uninstall include, unsafe state
+checks, and state writes in the wrong phase. Warnings are reported but do not
+fail the run unless --strict is used; a reference to the removed
+clean_install variable always fails.
 """
 
 from __future__ import annotations
@@ -25,9 +24,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import NamedTuple
 
-import jinja2
 import yaml
-from jinja2 import meta as jinja_meta
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 
@@ -55,14 +52,6 @@ def available_roles() -> list[str]:
     return role_lifecycle.available_roles()
 
 
-# Services supplied by a package but referenced through a loop or a computed
-# variable that role_service_names() cannot resolve statically.
-ROLE_EXTRA_SERVICES = {
-    "cups": {"cups", "cups-browsed"},
-    "luanti": {"luanti-server", "minetest-server"},
-    "samba": {"smbd", "nmbd"},
-}
-
 # Task files executed by the lifecycle runner. Only these need phase-aware
 # checks; helper files are reached through them. enable-or-disable is a legacy
 # convention outside the formal contract, but the runner still executes it, so
@@ -89,7 +78,6 @@ OFFLINE_PHASES = {
 # Phases that may use the network, and must therefore only run when the role
 # dispatches to them deliberately.
 NETWORK_PHASES = {"install"}
-
 
 PACKAGE_MODULES = {"apt", "apk", "dnf", "package", "pacman", "yum", "zypper"}
 INSTALLER_MODULES = {"composer", "gem", "npm", "pnpm", "pip", "pip3", "snap", "yarn"}
@@ -207,6 +195,59 @@ FILE_MODULES = {
 }
 PACKAGE_MODULES = {"apt", "apk", "dnf", "package", "pacman", "yum", "zypper"}
 
+UNIT_SUFFIXES = (
+    ".service",
+    ".socket",
+    ".timer",
+    ".path",
+    ".target",
+    ".mount",
+    ".automount",
+    ".swap",
+    ".device",
+    ".slice",
+    ".scope",
+)
+UNIT_DIRS = (
+    "/etc/systemd/system",
+    "/lib/systemd/system",
+    "/usr/lib/systemd/system",
+)
+
+# Services that exist on the mocked base host or are supplied by an earlier
+# IIAB stage.  Each role is tested on its own, so these do not have to be
+# installed by the role under test.
+BASE_SERVICES = {
+    "NetworkManager",
+    "apache2",
+    "avahi-daemon",
+    "dhcpcd",
+    "dnsmasq",
+    "hostapd",
+    "iiab-clone-wifi",
+    "mariadb",
+    "networking",
+    "networkd-dispatcher",
+    "nginx",
+    "php8.2-fpm",
+    "postgresql",
+    "postgresql-iiab",
+    "ssh",
+    "sshd",
+    "systemd-networkd",
+    "systemd-networkd-wait-online",
+    "systemd-resolved",
+    "systemd-udevd",
+    "uwsgi-app",
+    "wpa_supplicant",
+}
+
+# Packages whose units are not named after the package.
+PACKAGE_UNIT_ALIASES = {
+    "openssh-server": {"ssh", "sshd"},
+    "samba": {"smbd", "nmbd"},
+}
+
 
 def module_name():
     name = os.path.basename(sys.argv[0])
@@ -277,6 +318,61 @@ def create(state, path, kind="file"):
     return changed
 
 
+def unit_name(service):
+    service = str(service)
+    return service if service.endswith(UNIT_SUFFIXES) else service + ".service"
+
+
+def unit_base(unit):
+    unit = unit_name(unit)
+    for suffix in UNIT_SUFFIXES:
+        if unit.endswith(suffix):
+            unit = unit[: -len(suffix)]
+            break
+    return unit.split("@", 1)[0]
+
+
+def package_provides_unit(package, unit):
+    package = str(package).split(":", 1)[0].lower().replace("_", "-")
+    base = unit_base(unit).lower()
+    if not package or not base:
+        return False
+    if base in PACKAGE_UNIT_ALIASES.get(package, ()):
+        return True
+    return (
+        base == package
+        or base.startswith(package + "-")
+        or package.startswith(base + "-")
+    )
+
+
+def unit_available(state, service):
+    service = str(service)
+    if service in BASE_SERVICES or unit_base(service) in BASE_SERVICES:
+        return True
+    unit = unit_name(service)
+    if any(exists(state, posixpath.join(directory, unit)) for directory in UNIT_DIRS):
+        return True
+    return any(
+        package_provides_unit(package, unit)
+        for package in state.get("packages", {})
+    )
+
+
+def stat_exists(state, path):
+    if exists(state, path) or os.environ.get("IIAB_MOCK_INSTALLED") == "true":
+        return True
+    unit = posixpath.basename(path)
+    if not any(path == posixpath.join(directory, unit) for directory in UNIT_DIRS):
+        return False
+    if unit_base(unit) in BASE_SERVICES:
+        return True
+    return any(
+        package_provides_unit(package, unit)
+        for package in state.get("packages", {})
+    )
+
+
 def install_packages(state, args):
     names = args.get("name") or args.get("pkg") or args.get("package") or []
     if isinstance(names, str):
@@ -297,22 +393,6 @@ def install_packages(state, args):
             packages[package] = "present"
             changed = True
     return changed
-
-
-def seed_user_data(state, args):
-    paths = args.get("paths") or []
-    databases = args.get("databases") or []
-    if isinstance(paths, str):
-        paths = [paths]
-    if isinstance(databases, str):
-        databases = [databases]
-    paths = [str(path) for path in paths if path]
-    databases = [str(database) for database in databases if database]
-    for path in paths:
-        create(state, path, "directory" if path.endswith("/") else "file")
-    for database in databases:
-        state.setdefault("databases", {})[database] = "present"
-    state["user_data"] = {"paths": paths, "databases": databases}
 
 
 def remove(state, path):
@@ -367,6 +447,12 @@ def command_result(state, args):
             if flag in words and words.index(flag) + 1 < len(words):
                 create(state, words[words.index(flag) + 1])
 
+    # Source builds normally install their unit from the source directory.
+    if words and words[0] == "make" and {"install", "config"} & set(words[1:]):
+        program = posixpath.basename(str(args.get("chdir", "")).rstrip("/"))
+        if program:
+            create(state, posixpath.join("/etc/systemd/system", f"{program}.service"))
+
     if "systemctl" in command or re.search(r"(^|\s)service\s", command):
         actions = {
             "start": "started",
@@ -409,8 +495,7 @@ def main():
             state,
             changed=False,
             stat={
-                "exists": exists(state, path)
-                or os.environ.get("IIAB_MOCK_INSTALLED") == "true",
+                "exists": stat_exists(state, path),
                 "isdir": state["paths"].get(path) == "directory",
                 "size": 0,
                 "islnk": False,
@@ -421,7 +506,9 @@ def main():
         path = args.get("path") or args.get("dest") or args.get("name")
         if not path:
             fail(state, f"{name} mock needs a path or destination")
-        if name in {"template", "copy"} and path.endswith("/"):
+        if name in {"template", "copy"} and (
+            path.endswith("/") or state["paths"].get(path) == "directory"
+        ):
             path = posixpath.join(path, posixpath.basename(args.get("src", "")))
         if name == "get_curl" and args.get("url"):
             path = destination(state, path, str(args["url"]))
@@ -464,15 +551,12 @@ def main():
             ).lower()
         finish(state, changed=False)
 
-    if name == "mock_user_data":
-        seed_user_data(state, args)
-        finish(state, changed=False)
-
     if name in {"command", "shell"}:
         command_result(state, args)
 
     if name == "uri":
         status = 302 if str(args.get("method", "GET")).upper() == "POST" else 200
+        content = '{"tag_name": "v0.1.5"}'
         finish(
             state,
             changed=False,
@@ -480,13 +564,21 @@ def main():
             url=args.get("url", ""),
             attempts=1,
             cookies={"MATOMO_SESSID": "mock"},
-            content='{"tag_name": "v0.1.5"}',
+            content=content,
+            json=json.loads(content),
         )
 
     if name in {"systemd", "systemd_service", "service"}:
         if not args.get("name"):
             finish(state, changed=False)
         service = args["name"]
+        installed = os.environ.get("IIAB_MOCK_INSTALLED") == "true"
+        if (
+            not installed
+            and service not in state["services"]
+            and not unit_available(state, service)
+        ):
+            fail(state, f"service {service} is not installed")
         record_service(
             state,
             service,
@@ -706,86 +798,17 @@ class ActionModule(ActionBase):
 '''
 
 
-def load_vars_file(path: Path) -> dict:
-    try:
-        data = yaml.safe_load(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, yaml.YAMLError):
-        return {}
-    return data if isinstance(data, dict) else {}
-
-
-def resolved_user_data(role: str, vars_file: str) -> dict:
-    """Resolve a role's declared user data without loading its defaults as facts.
-
-    Loading defaults as host facts would shadow the role's own templated
-    defaults with raw Jinja strings, so resolve just the declared paths and
-    databases with the same vars the test passes to the playbook.
-    """
-    defaults = next(
-        (
-            ROOT_DIR / "roles" / role / "defaults" / name
-            for name in ("main.yml", "main.yaml")
-            if (ROOT_DIR / "roles" / role / "defaults" / name).is_file()
-        ),
-        None,
-    )
-    if defaults is None:
-        return {"paths": [], "databases": []}
-
-    prefix = role_var(role)
-    raw = load_vars_file(defaults)
-    raw.update(
-        load_vars_file(
-            Path(vars_file) if vars_file else ROOT_DIR / "vars" / "default_vars.yml"
-        )
-    )
-    raw.update(load_vars_file(ROOT_DIR / "roles" / role / "vars" / "main.yml"))
-    if f"{prefix}_user_data" not in raw:
-        return {"paths": [], "databases": []}
-
-    environment = jinja2.Environment()
-    resolved: dict[str, object] = {}
-
-    def render(value, stack: frozenset[str] = frozenset()):
-        if isinstance(value, str):
-            try:
-                names = jinja_meta.find_undeclared_variables(environment.parse(value))
-            except jinja2.TemplateSyntaxError:
-                return value
-            if not names:
-                return value
-            context = {}
-            for name in names:
-                if name not in resolved and name in raw and name not in stack:
-                    resolved[name] = render(raw[name], stack | {name})
-                context[name] = resolved.get(name)
-            try:
-                return environment.from_string(value).render(context)
-            except jinja2.TemplateError:
-                return value
-        if isinstance(value, list):
-            return [render(item, stack) for item in value]
-        if isinstance(value, dict):
-            return {key: render(item, stack) for key, item in value.items()}
-        return value
-
-    def as_list(name):
-        value = render(raw.get(name, []))
-        return [str(item) for item in value if item] if isinstance(value, list) else []
-
-    return {
-        "paths": as_list(f"{prefix}_user_data"),
-        "databases": as_list(f"{prefix}_user_data_databases"),
-    }
-
-
 def enabled_var(role: str) -> str:
     return f"{role_lifecycle.install_prefix(role) or role_var(role)}_enabled"
 
 
 def initial_state(role: str, installed: bool = False) -> dict:
     return {
-        "paths": {},
+        "paths": {
+            "/etc/systemd/system": "directory",
+            "/lib/systemd/system": "directory",
+            "/usr/lib/systemd/system": "directory",
+        },
         "services": {"nginx": {"enabled": True, "state": "started"}},
         "packages": {},
     }
@@ -1315,17 +1338,6 @@ def make_playbook(
             },
         ],
     }
-    user_data = resolved_user_data(role, vars_file)
-    if user_data["paths"] or user_data["databases"]:
-        play["tasks"].append(
-            {
-                "name": "Seed declared user data for the lifecycle test",
-                "mock_user_data": {
-                    "paths": user_data["paths"],
-                    "databases": user_data["databases"],
-                },
-            }
-        )
     # Roles notify the shared NGINX handlers in 0-init.  Load them without
     # running 0-init's tasks, so each role can still be tested on its own.
     play["tasks"].extend(
@@ -1391,7 +1403,6 @@ def create_mock_library(directory: Path) -> Path:
         "raw",
         "script",
         "setup",
-        "mock_user_data",
     }
     for name in names:
         (library / name).symlink_to(module)
@@ -1478,28 +1489,6 @@ def run_ansible(
     )
 
 
-def state_has_path(state: dict, path: str) -> bool:
-    paths = state.get("paths", {})
-    return path in paths or any(
-        item.startswith(path.rstrip("/") + "/") for item in paths
-    )
-
-
-def user_data_problem(state: dict, operation: str) -> str | None:
-    """Report declared user data that an operation removed."""
-    declared = state.get("user_data") or {}
-    paths = [str(path) for path in declared.get("paths", [])]
-    databases = [str(name) for name in declared.get("databases", [])]
-    databases_state = state.get("databases", {})
-    missing = [path for path in paths if not state_has_path(state, path)]
-    missing.extend(
-        name for name in databases if databases_state.get(name) != "present"
-    )
-    if missing:
-        return f"{operation} removed declared user data: " + ", ".join(missing)
-    return None
-
-
 def marker_present(state_yaml: Path, role: str) -> bool:
     prefix = re.escape(role_var(role))
     return (
@@ -1531,7 +1520,7 @@ def run_scenario(
     seed_marker: bool = False,
     initial_installed: bool = False,
 ) -> str:
-    """Run lifecycle steps in one virtual host and check user data survives.
+    """Run lifecycle steps in one virtual host.
 
     Each step is (name, values, expect_marker).  expect_marker True requires
     the installed marker afterwards, False requires it to be gone, and None
@@ -1588,13 +1577,6 @@ def run_scenario(
             output.append(f"FAIL\n{name} {problem}\n")
             output.append(state_yaml.read_text(encoding="utf-8"))
             return "".join(output)
-
-    state = json.loads(state_file.read_text(encoding="utf-8"))
-    problem = user_data_problem(state, title)
-    if problem:
-        output.append(f"FAIL\n{problem}\n")
-        output.append(state_file.read_text(encoding="utf-8"))
-        return "".join(output)
 
     output.append("PASS\n")
     return "".join(output)

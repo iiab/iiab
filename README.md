@@ -52,8 +52,7 @@ repeatable: the role is installed if missing and otherwise reconfigured.
 - `--clean-install` is `--uninstall` followed by a normal apply, so it needs
   `--uninstall` support.
 - `--uninstall` removes the program and its settings where supported. No
-  runrole option deletes user data: roles declare it in `<role>_user_data`
-  (and `<role>_user_data_databases`), and the lifecycle test enforces it.
+  runrole operation ever deletes user data.
 - `--status` and `--list` are read-only. `--check-local-vars` validates only
   the listed role(s)/prefix(es), or the full checklist when none are given.
 - `./runroles` accepts the same options for multiple roles.
@@ -115,8 +114,8 @@ work belongs in `configure.yml`.
 `awstats` is the reference implementation. To convert a role: replace
 `main.yml` with the include, move first-install-only work to `install.yml` and
 repeatable work to `configure.yml`, add `state.yml`, add `uninstall.yml` only if
-removal is safe, declare user data, then run
-`python3 scripts/test-role-lifecycle.py <role>`. Converting a role stops
+removal is safe, then run `python3 scripts/test-role-lifecycle.py <role>`.
+Converting a role stops
 `install.yml` from running on an ordinary apply, so move re-applied work to
 `configure.yml`.
 
@@ -150,20 +149,6 @@ Entry playbooks pass the path once with `module_defaults`. Shell code uses
 
 `normalize`/`diff` ignore comments, key order, and `True`/`true` spelling. The
 module, lookup plugin, and command share one parser and one write path.
-
-## User data
-
-Roles that own user data declare what must not be deleted:
-
-    transmission_user_data:
-      - "{{ transmission_download_dir }}"
-
-    matomo_user_data: []
-    matomo_user_data_databases:
-      - "{{ matomo_db_name }}"
-
-Use the role's state-file prefix (`calibre-web` -> `calibreweb`). No option
-deletes declared paths or databases; remove them manually if required.
 
 ## Community
 

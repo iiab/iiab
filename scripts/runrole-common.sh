@@ -314,8 +314,10 @@ list_roles() {
 # is "single" for ./runrole, where a log file is also accepted.
 # shellcheck disable=SC2153  # Flags are set by the caller.
 validate_options() {
-    local log=""
-    [ "${1:-multi}" = single ] && log=$LOGFILE
+    local log=false
+    if [ "${1:-multi}" = single ]; then
+        log=$LOGFILE
+    fi
     if $CHECK_LOCAL_VARS && ($log || $UNINSTALL || $REINSTALL || $CLEAN_INSTALL || $ADD || $STATUS || $ASSUME_YES || $VERBOSE); then
         echo "--check-local-vars is read-only and cannot be combined with other options."
         exit 1
