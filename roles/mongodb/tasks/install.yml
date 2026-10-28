@@ -199,32 +199,16 @@
 
 - block: # noqa: key-order[task]
 
-    - name: Install source/repo "http://ports.ubuntu.com/ubuntu-ports focal-security main" at /etc/apt/sources.list.d/ports_ubuntu_com_ubuntu_ports.sources if Ubuntu
-      copy:
-        content: |
-          Types: deb
-          URIs: http://ports.ubuntu.com/ubuntu-ports
-          Suites: focal-security
-          Components: main
-        dest: /etc/apt/sources.list.d/ports_ubuntu_com_ubuntu_ports.sources
-        mode: "0644"
+    - name: Install OLD source/repo "deb http://ports.ubuntu.com/ubuntu-ports focal-security main" at /etc/apt/sources.list.d/ports_ubuntu_com_ubuntu_ports.list if Ubuntu
+      apt_repository:
+        repo: deb http://ports.ubuntu.com/ubuntu-ports focal-security main
       when: is_ubuntu
 
-    - name: Install Debian security snapshot for libssl1.1 at /etc/apt/sources.list.d/iiab-bullseye-security-snapshot.sources if Debian
-      copy:
-        content: |
-          Types: deb
-          URIs: https://snapshot.debian.org/archive/debian-security/{{ mongodb_debian_security_snapshot }}/
-          Suites: bullseye-security
-          Components: main
-          Check-Valid-Until: no
-        dest: /etc/apt/sources.list.d/iiab-bullseye-security-snapshot.sources
-        mode: "0644"
+    - name: Install Debian security snapshot for libssl1.1 if Debian
+      apt_repository:
+        repo: "deb [check-valid-until=no] https://snapshot.debian.org/archive/debian-security/{{ mongodb_debian_security_snapshot }}/ bullseye-security main"
+        filename: iiab-bullseye-security-snapshot
       when: is_debian
-
-    - name: Update APT cache for libssl1.1
-      apt:
-        update_cache: yes
 
     - name: Force install libssl1.1
       package:
@@ -232,27 +216,16 @@
         state: present
 
     - name: Remove Debian security snapshot for libssl1.1 if Debian
-      file:
-        path: "{{ item }}"
+      apt_repository:
+        repo: "deb [check-valid-until=no] https://snapshot.debian.org/archive/debian-security/{{ mongodb_debian_security_snapshot }}/ bullseye-security main"
+        filename: iiab-bullseye-security-snapshot
         state: absent
-      loop:
-        # The '.sources' file is the current one; the '.list' file is the
-        # legacy one written by the former apt_repository task. Both must go,
-        # else the snapshot repo stays enabled after the migration.
-        - /etc/apt/sources.list.d/iiab-bullseye-security-snapshot.sources
-        - /etc/apt/sources.list.d/iiab-bullseye-security-snapshot.list
       when: is_debian
 
-    - name: Remove source/repo "http://ports.ubuntu.com/ubuntu-ports focal-security main" at /etc/apt/sources.list.d/ports_ubuntu_com_ubuntu_ports.sources if Ubuntu
-      file:
-        path: "{{ item }}"
+    - name: Remove OLD source/repo "deb http://ports.ubuntu.com/ubuntu-ports focal-security main" at /etc/apt/sources.list.d/ports_ubuntu_com_ubuntu_ports.list if Ubuntu
+      apt_repository:
+        repo: deb http://ports.ubuntu.com/ubuntu-ports focal-security main
         state: absent
-      loop:
-        # The '.sources' file is the current one; the '.list' file is the
-        # legacy one written by the former apt_repository task. Both must go,
-        # else the ports repo stays enabled after the migration.
-        - /etc/apt/sources.list.d/ports_ubuntu_com_ubuntu_ports.sources
-        - /etc/apt/sources.list.d/ports_ubuntu_com_ubuntu_ports.list
       when: is_ubuntu
 
   when: mongodb_version is version('6.0', '<')
