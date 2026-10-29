@@ -741,6 +741,11 @@ import yaml
 
 from ansible.plugins.action import ActionBase
 
+try:
+    from ansible.plugins.action import VariableLayer
+except ImportError:  # ansible-core < 2.21
+    VariableLayer = None
+
 
 def load_data(path: Path):
     text = path.read_text(encoding="utf-8")
@@ -795,9 +800,20 @@ class ActionModule(ActionBase):
                         data = load_data(candidate)
                         break
         if name:
-            result["ansible_facts"] = {name: data}
+            facts = {name: data}
         elif isinstance(data, dict):
-            result["ansible_facts"] = data
+            facts = data
+        else:
+            facts = {}
+
+        result["ansible_facts"] = facts
+        if VariableLayer is not None:
+            # ansible-core 2.21 no longer injects action-provided facts as
+            # top-level variables. include_vars registers names at the
+            # INCLUDE_VARS layer instead, so mirror that to keep them visible
+            # without requiring ansible_facts.<name>.
+            self.register_host_variables(facts, VariableLayer.INCLUDE_VARS)
+            self.register_host_variables({}, VariableLayer.CACHEABLE_FACT)
         result["changed"] = False
         result["ansible_included_var_files"] = []
         return result

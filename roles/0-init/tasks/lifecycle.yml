@@ -32,6 +32,14 @@
   when: not uninstall
   block:
 
+    # Every entry point gets this check, not only ./runrole.
+    - name: Assert that '{{ lifecycle_install_prefix }}_install' is True
+      assert:
+        that: lookup('vars', lifecycle_install_prefix ~ '_install') is sameas true
+        fail_msg: "PLEASE SET '{{ lifecycle_install_prefix }}_install: True' e.g. IN: /etc/iiab/local_vars.yml"
+        quiet: yes
+      when: lifecycle_install_prefix != ''
+
     # Snapshot before install.yml writes the marker.  A dict keyed by role
     # keeps nested includes (e.g. matomo -> mysql) from clobbering our state.
     - name: Capture {{ lifecycle_role }} install state
@@ -100,6 +108,10 @@
       vars:
         disk_usage_role: "{{ lifecycle_role }}"
       when: lifecycle_state[lifecycle_role].record_disk_usage | bool
+
+    # Make the change live before the role reports success.
+    - name: Run pending handlers for {{ lifecycle_role }}
+      meta: flush_handlers
 
   rescue:
 

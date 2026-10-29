@@ -7,12 +7,12 @@ installed.  Use this lookup for boolean checks:
     when: lookup('installed', 'mysql')
 
 The lookup accepts either the role name or the full marker name, and returns
-false when the marker is undefined.  It reads the marker from the play's
-variables when the state file was loaded through ``vars_files``; otherwise it
-falls back to ``iiab_state_file`` directly, so a playbook or test can use the
-lookup without loading the file.  The file itself is parsed by
-``modules/iiab_state.py``, the same code the ``iiab_state`` module and
-``scripts/iiab-state`` use.
+false when the marker is undefined.  It reads ``iiab_state_file`` when the
+file exists, because play variables loaded through ``vars_files`` go stale
+after a marker is removed.  Without the file it falls back to play
+variables, so a test can use the lookup without one.  The file itself is
+parsed by ``modules/iiab_state.py``, the same code the ``iiab_state`` module
+and ``scripts/iiab-state`` use.
 """
 
 from __future__ import annotations
@@ -33,7 +33,6 @@ if str(_SCRIPTS_DIR) not in sys.path:
 
 from iiab_state_lib import LoadError, load_state_module  # noqa: E402
 
-_UNDEFINED = object()
 _CACHE = {}
 
 try:
@@ -76,9 +75,12 @@ class LookupModule(LookupBase):
             if not marker.endswith(("_installed", "_downloaded")):
                 marker += "_installed"
 
-            value = variables.get(marker, _UNDEFINED)
-            if value is _UNDEFINED:
+            # The state file is the authority.  Play variables loaded through
+            # vars_files go stale once a marker is removed in the same run.
+            if os.path.exists(path):
                 value = _load_state(path).get(marker, False)
+            else:
+                value = variables.get(marker, False)
 
             try:
                 results.append(boolean(value, strict=False))
