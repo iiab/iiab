@@ -1,0 +1,37 @@
+---
+- name: Exercise the disk_usage module through Ansible
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    ansible_python_interpreter: "{{ ansible_playbook_python }}"
+    missing_path: /var/lib/iiab-disk-usage-test/not-created/yet
+
+  tasks:
+    - name: Measure the root filesystem
+      disk_usage:
+        path: /
+      register: root
+
+    - name: Measure root plus a path that does not exist
+      disk_usage:
+        paths:
+          - /
+          - "{{ missing_path }}"
+      register: combined
+
+    - name: Measure in check mode
+      disk_usage:
+        path: /
+      check_mode: true
+      register: checked
+
+    - name: Verify the module results
+      assert:
+        that:
+          - root.used | int > 0
+          - combined.used | int >= root.used | int
+          - checked.used | int > 0
+          - combined.mounts | length == 2
+          - combined.mounts[1].resolved is exists

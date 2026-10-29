@@ -1,0 +1,21 @@
+---
+# Pair with disk_usage_start.yml.  The label defaults to the role that included
+# this file, unless the caller passes disk_usage_role.  It names the iiab.ini
+# section, and the option is '<role>_disk_usage' with dashes converted to
+# underscores.
+- name: Record final disk space used
+  vars:
+    _iiab_disk_usage_role: "{{ disk_usage_role | default(ansible_parent_role_names | first) }}"
+  block:
+    - name: Record final disk space used for {{ _iiab_disk_usage_role }}
+      disk_usage:
+        paths: "{{ disk_usage_paths | default(['/', content_base | default('/')]) }}"
+      register: _iiab_disk_usage_now
+      changed_when: false
+
+    - name: Add '{{ _iiab_disk_usage_role | replace('-', '_') }}_disk_usage' to {{ iiab_ini_file }}
+      ini_file:
+        path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+        section: "{{ _iiab_disk_usage_role }}"
+        option: "{{ _iiab_disk_usage_role | replace('-', '_') }}_disk_usage"
+        value: "{{ _iiab_disk_usage_now.used | int - (_iiab_disk_usage_start[_iiab_disk_usage_role] | int) }}"

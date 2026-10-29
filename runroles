@@ -1,27 +1,514 @@
 #!/bin/bash
 
+UNINSTALL=false
+REINSTALL=false
+CLEAN_INSTALL=false
+ASSUME_YES=false
+ADD=false
+CHECK=false
+CHECK_LOCAL_VARS=false
+STATUS=false
+LIST=false
+VERBOSE=false
+CLEAN_INSTALL_RECOVERY=false
+ROLES=()
 INVENTORY=ansible_hosts
-PLAYBOOK=run-roles-tmp.yml
+PLAYBOOK=
+PLAYBOOK_ROLES=()
+UNINSTALL_ROLES=()
+APPLY_ROLES=()
 
-CWD=`pwd`
 if [ ! -f iiab-stages.yml ]; then
     echo "Exiting: IIAB Playbook not found."
     echo "Please run this in /opt/iiab/iiab (top level of the git repo)."
     exit 1
 fi
 
-if [[ $# -eq 0 ]] ; then
-    echo "Usage: ./runroles <list of roles separated by spaces>"
-    exit 0
-fi
+# shellcheck source=scripts/runrole-common.sh
+. scripts/runrole-common.sh
 
-# make working playbook
-cp runroles-base.yml $PLAYBOOK
+usage() {
+    cat <<'EOF'
+Usage: ./runroles [options] <role> [role ...]
+       ./runroles --list
+       ./runroles --status <role> [role ...]
+       ./runroles --check-local-vars [role ...]
 
-# add desired roles from arguments
-for role in "$@"
-do
-    echo "    - { role: $role }" >> $PLAYBOOK
+Apply one or more roles using /etc/iiab/local_vars.yml. Runs are repeatable:
+roles are installed if missing and otherwise reconfigured.
+
+Options:
+  -y, --yes             Do not ask for confirmation
+  -a, --add             Run the roles even if '*_install: False'
+  -v, --verbose         Show the detected Python interpreter and pass -v to Ansible
+      --apply           Apply settings (the default)
+      --reinstall       Rebuild the programs (roles may opt out in meta/runrole.yml)*
+      --clean-install   Uninstall each role, then install it again. Requires
+                        --uninstall support; never deletes user data
+      --uninstall       Uninstall the programs, never deleting user data (roles
+                        that implement 'uninstall')
+      --check           Best-effort Ansible check mode (--check --diff)
+      --check-local-vars
+                        Validate /etc/iiab/local_vars.yml and exit, without
+                        running or changing anything. Checks the full checklist,
+                        or only the listed role(s)
+      --status          Show installed/desired state without changing anything
+      --list            List roles with their installed state and capabilities
+  -h, --help            Show this help
+
+Examples:
+  ./runroles transmission kiwix
+  ./runroles --reinstall transmission calibre-web
+  ./runroles --clean-install awstats matomo
+  ./runroles --uninstall awstats
+  ./runroles --list
+  ./runroles --check-local-vars
+  ./runroles --check-local-vars awstats matomo
+
+No runroles option deletes user data. Roles declare their user data, and the
+lifecycle test enforces it for every option. --reinstall is a rebuild, not a
+reset: whether settings and program data survive depends on the role. To remove
+user data, do it manually.
+
+--clean-install is literally --uninstall followed by a normal apply, so a role
+supports it exactly when it supports --uninstall. --reinstall, --clean-install,
+and apply act on roles the configuration says should be installed, so they also
+require '<prefix>_install: True' (pass -a to override it for one run).
+--check-local-vars is read-only: it validates the configuration and exits.
+
+* --reinstall reruns each role's install/update path. Some roles keep settings
+  and program data, others rewrite or remove them; use --clean-install when you
+  want a known reset. User data is never deleted: roles declare it in
+  '<role>_user_data' and the lifecycle test enforces it.
+
+If --uninstall keeps failing, fix the reported error and retry. A role's
+markers are removed only after its cleanup succeeds. If you already removed a
+program another way, clear its markers with the role's state-file prefix
+(calibre-web uses calibreweb):
+  sudo ./scripts/iiab-state forget <prefix>
+This makes IIAB treat the role as uninstalled, so do it only after the program
+and its settings are gone.
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --apply)
+            ;;    # Explicit apply is the default behavior
+        --reinstall)
+            REINSTALL=true
+            ;;
+        --clean-install)
+            CLEAN_INSTALL=true
+            ;;
+        --uninstall)
+            UNINSTALL=true
+            ;;
+        -y|--yes)
+            ASSUME_YES=true
+            ;;
+        -a|--add)
+            ADD=true
+            ;;
+        -v|--verbose)
+            VERBOSE=true
+            ;;
+        --check)
+            CHECK=true
+            ;;
+        --check-local-vars)
+            CHECK_LOCAL_VARS=true
+            ;;
+        --status)
+            STATUS=true
+            ;;
+        --list)
+            LIST=true
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        -*)
+            echo "Unknown option: $1"
+            echo
+            usage
+            exit 1
+            ;;
+        *)
+            ROLES+=("$1")
+            ;;
+    esac
+    shift
 done
 
-ansible-playbook -i $INVENTORY $PLAYBOOK --connection=local
+if $LIST; then
+    if [[ ${#ROLES[@]} -gt 0 ]] || $UNINSTALL || $REINSTALL || $CLEAN_INSTALL || $CHECK || $CHECK_LOCAL_VARS || $STATUS || $ADD || $ASSUME_YES || $VERBOSE; then
+        echo "--list is read-only and does not accept roles or other options."
+        exit 1
+    fi
+    list_roles
+    exit $?
+fi
+
+if [[ ${#ROLES[@]} -eq 0 ]] && ! $CHECK_LOCAL_VARS; then
+    usage
+    exit 1
+fi
+
+if $CHECK_LOCAL_VARS && ($UNINSTALL || $REINSTALL || $CLEAN_INSTALL || $ADD || $CHECK || $STATUS || $ASSUME_YES || $VERBOSE); then
+    echo "--check-local-vars is read-only and cannot be combined with other options."
+    exit 1
+fi
+
+for role in "${ROLES[@]}"; do
+    if ! [[ $role =~ ^[A-Za-z0-9_-]+$ ]]; then
+        echo "ERROR: invalid role name: $role"
+        exit 1
+    fi
+    if ! role_exists "$role"; then
+        # --status also accepts prefixes managed by a larger role or stage
+        # (squid, hostapd, dnsmasq, admin_console).
+        if ! $STATUS; then
+            echo "ERROR: unknown role: $role"
+            echo "Run './runroles --list' to see the available roles."
+            exit 1
+        fi
+    fi
+done
+
+if $UNINSTALL && ($REINSTALL || $CLEAN_INSTALL || $ADD); then
+    echo "--uninstall cannot be combined with --add, --reinstall, or --clean-install."
+    exit 1
+fi
+
+if $CLEAN_INSTALL && ($REINSTALL || $ADD); then
+    echo "--clean-install cannot be combined with --add or --reinstall."
+    echo "It already uninstalls the roles and installs them again."
+    exit 1
+fi
+
+if $CHECK && $UNINSTALL; then
+    echo "--check cannot be combined with --uninstall."
+    echo "Use --status to inspect the roles without changing anything."
+    exit 1
+fi
+
+if $CHECK && ($REINSTALL || $CLEAN_INSTALL); then
+    echo "--check cannot be combined with --reinstall or --clean-install."
+    echo "Use --status to inspect the roles without changing anything."
+    exit 1
+fi
+
+if $STATUS && ($UNINSTALL || $REINSTALL || $CLEAN_INSTALL || $ADD || $CHECK || $ASSUME_YES || $VERBOSE); then
+    echo "--status is read-only and cannot be combined with other options."
+    exit 1
+fi
+
+if $STATUS; then
+    status_failures=0
+    for role in "${ROLES[@]}"; do
+        status_role "$role" || status_failures=1
+    done
+    exit "$status_failures"
+fi
+
+unsupported=false
+for role in "${ROLES[@]}"; do
+    if $REINSTALL && ! role_require_capability "$role" "--reinstall" reinstall \
+        "This role opts out because rebuilding it requires manual cleanup (see roles/${role}/meta/runrole.yml)."; then
+        unsupported=true
+    fi
+    if $UNINSTALL && ! role_require_capability "$role" "--uninstall" uninstall; then
+        unsupported=true
+    fi
+    if $CLEAN_INSTALL && ! role_require_capability "$role" "--clean-install" uninstall \
+        "--clean-install uninstalls the role and then installs it again, so it needs the same implementation as --uninstall."; then
+        unsupported=true
+    fi
+done
+if $unsupported; then
+    exit 1
+fi
+
+if [ ! -f "$LOCAL_VARS_FILE" ]; then
+    echo -e "\n\e[1mEXITING: /opt/iiab/iiab/runroles REQUIRES $LOCAL_VARS_FILE\e[0m\n" >&2
+    exit 1
+fi
+
+if ! command -v ansible > /dev/null; then
+    echo -e "\n\e[1mPlease install Ansible, by running:\n\nsudo /opt/iiab/iiab/scripts/ansible\e[0m\n"
+    exit 1
+fi
+
+install_local_facts
+
+if $CHECK_LOCAL_VARS; then
+    PLAYBOOK=check-local-vars.yml
+    CHECK_LOCAL_VARS_ROLES=""
+    for role in "${ROLES[@]}"; do
+        prefix=$(role_install_var "$role")
+        if [ -n "$prefix" ]; then
+            CHECK_LOCAL_VARS_ROLES="${CHECK_LOCAL_VARS_ROLES}\"${prefix}\","
+        fi
+    done
+    if [[ ${#ROLES[@]} -gt 0 ]]; then
+        CHECK_LOCAL_VARS_EXTRA="{\"validate_roles\":[${CHECK_LOCAL_VARS_ROLES%,}]}"
+    else
+        CHECK_LOCAL_VARS_EXTRA='{}'
+    fi
+    run_playbook "$CHECK_LOCAL_VARS_EXTRA"
+    exit $?
+fi
+
+stage_check_state
+trap cleanup_temp_files EXIT
+
+# The generated playbook keeps the repository's relative vars_files working,
+# but a unique name keeps concurrent runs from overwriting each other. The
+# EXIT trap removes it, and .gitignore covers an interrupted run.
+PLAYBOOK=""
+TEMP_PLAYBOOK=""
+write_playbook() {
+    [ -n "$PLAYBOOK" ] && rm -f "$PLAYBOOK"
+    PLAYBOOK=$(mktemp "$IIAB_REPO/run-roles-tmp.XXXXXX.yml")
+    TEMP_PLAYBOOK=$PLAYBOOK
+    cp "$IIAB_REPO/runroles-base.yml" "$PLAYBOOK"
+    for role in "$@"; do
+        printf '    - { role: %s }\n' "$role" >> "$PLAYBOOK"
+    done
+}
+
+APPLY_ROLES=("${ROLES[@]}")
+if $UNINSTALL || $CLEAN_INSTALL; then
+    UNINSTALL_ROLES=()
+    found=false
+    for role in "${ROLES[@]}"; do
+        var=$(role_var "$role")
+        if state_has_prefix "$var"; then
+            found=true
+            UNINSTALL_ROLES+=("$role")
+        elif $CLEAN_INSTALL; then
+            echo "$role is not installed; nothing to uninstall."
+        else
+            echo "$role is not installed; nothing to uninstall."
+        fi
+    done
+    echo
+
+    if ! $found; then
+        if $CLEAN_INSTALL; then
+            # A previous clean-install may already have uninstalled every
+            # listed role before its apply phase failed.  Finish by applying.
+            CLEAN_INSTALL_RECOVERY=true
+            echo -e "\e[1mNone of the listed roles are installed. Installing them now.\e[0m\n"
+        else
+            echo -e "\e[1mERROR: none of the listed roles are installed in $IIAB_STATE_FILE\e[0m"
+            echo "Nothing to uninstall."
+            exit 1
+        fi
+    else
+        if $CLEAN_INSTALL; then
+            echo -e "\e[1;31mWARNING: --clean-install uninstalls the listed roles and their settings, then installs them again. User data is never deleted.\e[0m"
+        else
+            echo -e "\e[1;31mWARNING: --uninstall removes the listed roles and their settings, but never deletes their user data.\e[0m"
+        fi
+        confirm_destructive || { echo "Cancelled."; exit 1; }
+
+        for role in "${UNINSTALL_ROLES[@]}"; do
+            var=$(role_var "$role")
+            if $CLEAN_INSTALL; then
+                echo "Uninstalling $role before installing it again. These markers stay until it finishes:"
+            else
+                echo "Uninstalling $role. These markers stay until it finishes:"
+            fi
+            state_show_prefix "$var" | sed 's/^/  /'
+        done
+        echo
+    fi
+    if $UNINSTALL; then
+        APPLY_ROLES=("${UNINSTALL_ROLES[@]}")
+    fi
+elif $REINSTALL; then
+    for role in "${ROLES[@]}"; do
+        var=$(role_var "$role")
+        if state_has_prefix "$var"; then
+            echo "Reinstalling $role. Its markers stay until the role finishes:"
+            state_show_prefix "$var" | sed 's/^/  /'
+        else
+            echo "$role is not installed; it will be installed normally."
+        fi
+    done
+    echo
+else
+    if ! $ASSUME_YES && ! $CHECK; then
+        installed=false
+        for role in "${ROLES[@]}"; do
+            var=$(role_var "$role")
+            if state_has_prefix "$var"; then
+                installed=true
+                break
+            fi
+        done
+        if $installed; then
+            echo "Applying settings to already-installed role(s) from $LOCAL_VARS_FILE."
+            echo "This is safe to repeat."
+            echo
+        fi
+    fi
+fi
+
+# Apply/reinstall phases act on roles the configuration says should be
+# installed. Refuse before anything runs, instead of letting the role's tasks
+# install something that local_vars.yml disables.
+if ! $UNINSTALL; then
+    missing_install=false
+    for role in "${APPLY_ROLES[@]}"; do
+        if ! role_install_enabled "$role"; then
+            var=$(role_install_var "$role")
+            if $ADD; then
+                echo "WARNING: --add sets '${var}_install: True' for $role, for this run only."
+            else
+                echo -e "\e[1mERROR: '${var}_install: True' MUST BE SET for $role!\e[0m" >&2
+                echo "Set it in: $LOCAL_VARS_FILE, or pass --add to run it once." >&2
+                if state_has_prefix "$(role_var "$role")" && role_supports "$role" uninstall; then
+                    echo "Or remove the existing installation with: sudo ./runrole --uninstall $role" >&2
+                fi
+                missing_install=true
+            fi
+        fi
+    done
+    if $missing_install; then
+        exit 1
+    fi
+fi
+
+extra_vars() {
+    local phase=$1
+    local json='{"skip_role_on_error":false'
+    if [ "$phase" = uninstall ]; then
+        json="$json,\"uninstall\":true"
+    else
+        if $REINSTALL; then
+            json="$json,\"reinstall\":true"
+        fi
+        if $ADD; then
+            for role in "${PLAYBOOK_ROLES[@]}"; do
+                var=$(role_install_var "$role")
+                if [ -n "$var" ]; then
+                    json="$json,\"${var}_install\":true"
+                fi
+            done
+        fi
+        if $CHECK; then
+            json="$json,\"iiab_state_file\":\"${CHECK_STATE_FILE}\""
+        fi
+    fi
+    local validate_roles=""
+    local role_var_name
+    for role in "${PLAYBOOK_ROLES[@]}"; do
+        role_var_name=$(role_install_var "$role")
+        if [ -n "$role_var_name" ]; then
+            validate_roles="${validate_roles}\"${role_var_name}\","
+        fi
+    done
+    printf '%s,"validate_roles":[%s]}' "$json" "${validate_roles%,}"
+}
+
+if $VERBOSE; then
+    echo -e "\e[1mDetected Python interpreter:\e[0m"
+    ansible -m setup -a 'gather_subset=!hardware,!network' -i "$INVENTORY" localhost --connection=local | grep python
+    echo
+fi
+
+if $CHECK; then
+    echo -e "\e[1;33mWARNING: --check is best-effort; not all roles are check-mode safe.\e[0m\n"
+fi
+
+if $CLEAN_INSTALL && ! $CLEAN_INSTALL_RECOVERY; then
+    PLAYBOOK_ROLES=("${UNINSTALL_ROLES[@]}")
+    write_playbook "${PLAYBOOK_ROLES[@]}"
+    run_playbook "$(extra_vars uninstall)"
+    STATUS_CODE=$?
+    if [ "$STATUS_CODE" -ne 0 ]; then
+        exit "$STATUS_CODE"
+    fi
+    for role in "${PLAYBOOK_ROLES[@]}"; do
+        verify_uninstall_markers "$role" || exit 1
+    done
+    echo -e "\n\e[1mRemoved the listed roles. Installing them again.\e[0m\n"
+    PLAYBOOK_ROLES=("${APPLY_ROLES[@]}")
+    write_playbook "${PLAYBOOK_ROLES[@]}"
+    run_playbook "$(extra_vars apply)"
+    STATUS_CODE=$?
+elif $CLEAN_INSTALL_RECOVERY; then
+    PLAYBOOK_ROLES=("${APPLY_ROLES[@]}")
+    write_playbook "${PLAYBOOK_ROLES[@]}"
+    run_playbook "$(extra_vars apply)"
+    STATUS_CODE=$?
+elif $UNINSTALL; then
+    PLAYBOOK_ROLES=("${UNINSTALL_ROLES[@]}")
+    write_playbook "${PLAYBOOK_ROLES[@]}"
+    run_playbook "$(extra_vars uninstall)"
+    STATUS_CODE=$?
+else
+    PLAYBOOK_ROLES=("${APPLY_ROLES[@]}")
+    write_playbook "${PLAYBOOK_ROLES[@]}"
+    run_playbook "$(extra_vars apply)"
+    STATUS_CODE=$?
+fi
+
+if [ "$STATUS_CODE" -ne 0 ]; then
+    exit "$STATUS_CODE"
+fi
+
+if $UNINSTALL; then
+    for role in "${PLAYBOOK_ROLES[@]}"; do
+        verify_uninstall_markers "$role" || exit 1
+        var=$(role_var "$role")
+        echo "Removed ${var}_* markers from $IIAB_STATE_FILE."
+    done
+    echo "Set the listed roles' '*_install: False' in $LOCAL_VARS_FILE to keep them uninstalled."
+    echo
+elif $CLEAN_INSTALL; then
+    missing=false
+    for role in "${PLAYBOOK_ROLES[@]}"; do
+        var=$(role_var "$role")
+        if ! state_has_prefix "$var"; then
+            echo -e "\e[1mERROR: ${role} finished without writing its installed marker.\e[0m" >&2
+            missing=true
+        fi
+    done
+    if $missing; then
+        echo "The install phase did not report success; check the log above." >&2
+        exit 1
+    fi
+    if $CLEAN_INSTALL_RECOVERY; then
+        echo "Finished installing the listed roles."
+    else
+        echo "Clean-installed the listed roles."
+    fi
+    echo
+fi
+
+# --add forces '<prefix>_install: True' for this run only.  If it installed
+# something, local_vars.yml still says False, which the next full run will
+# reject.  Say so now, with the two ways out.
+if $ADD && ! $UNINSTALL && ! $CLEAN_INSTALL && ! $CHECK; then
+    for role in "${PLAYBOOK_ROLES[@]}"; do
+        var=$(role_var "$role")
+        install_var=$(role_install_var "$role")
+        if [ -n "$install_var" ] && state_has_prefix "$var" && ! role_install_enabled "$role"; then
+            echo -e "\e[1;33mNOTE: --add did not change $LOCAL_VARS_FILE.\e[0m"
+            echo "'${install_var}_install' is still False there, but ${role} is installed."
+            echo "Set '${install_var}_install: True' to keep it, or remove it with:"
+            if role_supports "$role" uninstall; then
+                echo "  sudo ./runrole --uninstall ${role}"
+            else
+                echo "  sudo ./scripts/iiab-state forget ${var}"
+                echo "  (only after the program and its settings are gone)"
+            fi
+            echo
+        fi
+    done
+fi

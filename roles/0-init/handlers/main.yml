@@ -1,0 +1,47 @@
+---
+# Shared NGINX handlers, available to every role because 0-init is included by
+# all entry points (run-one-role.yml, iiab-stages.yml, iiab-from-*.yml).
+#
+# Roles that add/remove a file in {{ nginx_conf_dir }} or a symlink in
+# sites-enabled should notify "Reload nginx": NGINX re-reads its configuration
+# and drains the old workers without dropping connections.  Notifications are
+# coalesced, so a full install reloads NGINX once instead of once per role.
+#
+# Use "Restart nginx" only when the daemon itself (not just its configuration)
+# has to be replaced.  nginx/tasks/enable-or-disable.yml keeps its own
+# enable/start/restart logic because it is the role that installs the daemon.
+#
+# The systemd and pdsm (proot) variants listen to the same topic, so a role
+# notifies one name and only the applicable task runs.
+
+- name: Reload nginx via systemd
+  systemd:
+    name: nginx
+    state: reloaded
+  when:
+    - nginx_enabled | default(true)
+    - not is_proot
+  listen: Reload nginx
+
+- name: Reload nginx via pdsm
+  command: pdsm restart nginx
+  when:
+    - nginx_enabled | default(true)
+    - is_proot
+  listen: Reload nginx
+
+- name: Restart nginx via systemd
+  systemd:
+    name: nginx
+    state: restarted
+  when:
+    - nginx_enabled | default(true)
+    - not is_proot
+  listen: Restart nginx
+
+- name: Restart nginx via pdsm
+  command: pdsm restart nginx
+  when:
+    - nginx_enabled | default(true)
+    - is_proot
+  listen: Restart nginx

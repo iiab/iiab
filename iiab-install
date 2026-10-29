@@ -4,7 +4,6 @@
 
 PLAYBOOK=iiab-stages.yml
 INVENTORY=ansible_hosts
-IIAB_STATE_FILE=/etc/iiab/iiab_state.yml
 ARGS="--extra-vars {"    # Needs boolean not string so use JSON list.  bash forces {...} to '{...}' for Ansible
 
 CWD=`pwd`
@@ -175,17 +174,8 @@ if [ "$STAGE" -lt 2 ] && $($DEBUG); then
     echo -e "\n'--debug' *ignored* as STAGE (counter) < 2."
 fi
 
-# /etc/iiab/iiab_state.yml is mandatory and must be created here.  Background:
-# Allow iiab-install to read IIAB_STATE_FILE to not repeat installs of previous
-# roles that already completed within the stage.
-if [ ! -f  $IIAB_STATE_FILE ]; then    # touch $IIAB_STATE_FILE
-    echo -e "\nCreating... $IIAB_STATE_FILE"
-    cat > $IIAB_STATE_FILE << EOF
-# DO *NOT* MANUALLY EDIT THIS, THANKS!
-# IIAB does NOT currently support uninstalling apps/services.
-
-EOF
-fi
+# /etc/iiab/iiab_state.yml is created on demand by roles that install
+# something.  A missing file is a valid empty state.
 
 echo -e "\nTRY TO RERUN './iiab-install' IF IT FAILS DUE TO CONNECTIVITY ISSUES ETC!\n"
 
@@ -197,6 +187,22 @@ ansible -m setup -a 'gather_subset=!hardware,!network' -i $INVENTORY localhost -
 ansible -m setup -a 'gather_subset=!hardware,!network' -i $INVENTORY localhost --connection=local >> /dev/null    # So vars are recorded in /opt/iiab/iiab/iiab-install.log
 ARGS="$ARGS}"
 echo -e "\nNOW RUN: ansible-playbook -i $INVENTORY $PLAYBOOK $ARGS --connection=local\n"
-ansible-playbook -i $INVENTORY $PLAYBOOK $ARGS --connection=local
+if ! ansible-playbook -i $INVENTORY $PLAYBOOK $ARGS --connection=local; then
+    echo -e "\n\e[1;31mIIAB INSTALL DID NOT FINISH.\e[0m\n" >&2
+    echo -e "Full Ansible log: $ANSIBLE_LOG_PATH\n" >&2
+    echo -e "Next steps:" >&2
+    echo -e "  1. Read the first 'fatal:' message above, or in the log." >&2
+    echo -e "  2. Fix it, then re-run './iiab-install'.  Completed stages are skipped." >&2
+    echo -e "  3. If an app failed to install, do NOT set '<app>_install: False' for" >&2
+    echo -e "     an app that already recorded itself as installed.  Keep it True, or" >&2
+    echo -e "     remove it first (where supported):" >&2
+    echo -e "       sudo ./runrole --list" >&2
+    echo -e "       sudo ./runrole --uninstall <role>" >&2
+    echo -e "  4. Version details: run './scripts/iiab-summary' (or see /etc/iiab/iiab.ini)." >&2
+    echo -e "  5. For help, run 'sudo iiab-diagnostics' and include its output." >&2
+    echo -e "  6. Supported platforms: https://github.com/iiab/iiab/wiki/IIAB-Platforms" >&2
+    echo -e "     FAQ: http://FAQ.IIAB.IO\n" >&2
+    exit 1
+fi
 
 echo -e "./iiab-install $* COMPLETED IN $CWD\n\n"
