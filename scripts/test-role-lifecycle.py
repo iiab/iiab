@@ -443,6 +443,12 @@ def destination(state, path, url):
     return posixpath.join(path, name)
 
 
+def record_download(state, path, url):
+    """Remember the source URL so include_vars can load the real fixture."""
+    if path and url:
+        state.setdefault("downloads", {})[path] = str(url)
+
+
 def command_result(state, args):
     command = args.get("_raw_params") or args.get("cmd") or ""
     creates = args.get("creates")
@@ -526,6 +532,7 @@ def main():
             path = posixpath.join(path, posixpath.basename(args.get("src", "")))
         if name == "get_curl" and args.get("url"):
             path = destination(state, path, str(args["url"]))
+            record_download(state, path, str(args["url"]))
         # Match template/copy semantics for user settings: force: false keeps
         # an existing destination exactly as it is.
         if (
@@ -571,6 +578,7 @@ def main():
         if dest:
             dest = destination(state, dest, str(args.get("url", "")))
             create(state, dest)
+            record_download(state, dest, str(args.get("url", "")))
         finish(state, changed=False, dest=dest)
 
     if name in PACKAGE_MODULES:
@@ -727,6 +735,7 @@ MOCK_INCLUDE_VARS_ACTION_SOURCE = r'''from __future__ import annotations
 import json
 import os
 from pathlib import Path
+from urllib.parse import unquote, urlparse
 
 import yaml
 
@@ -738,6 +747,21 @@ def load_data(path: Path):
     if path.suffix == ".json":
         return json.loads(text)
     return yaml.safe_load(text)
+
+
+def downloaded_name(filename: str) -> str | None:
+    """Return the URL's file name for a mocked download, if one is known."""
+    state_file = os.environ.get("IIAB_MOCK_STATE")
+    if not state_file or not Path(state_file).is_file():
+        return None
+    try:
+        state = json.loads(Path(state_file).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    url = state.get("downloads", {}).get(filename)
+    if not url:
+        return None
+    return unquote(Path(urlparse(url).path).name) or None
 
 
 class ActionModule(ActionBase):
@@ -752,19 +776,20 @@ class ActionModule(ActionBase):
             if path.is_file():
                 data = load_data(path)
             else:
-                # Mock downloads live in IIAB_MOCK_STATE, not on disk. Fall
-                # back to a real data file shipped alongside the role.
+                # Mock downloads live in IIAB_MOCK_STATE, not on disk. Resolve
+                # the download's URL to the fixture shipped with the role, so
+                # tasks that parse a downloaded catalog see its real content.
                 role = getattr(self._task, "_role", None)
                 role_path = Path(getattr(role, "_role_path", "."))
                 candidates = []
+                name_on_disk = downloaded_name(filename)
+                if name_on_disk:
+                    candidates.extend(
+                        [role_path / name_on_disk, role_path / "files" / name_on_disk]
+                    )
                 if role_path.is_dir():
                     candidates.extend(sorted(role_path.glob("*.json")))
                     candidates.extend(sorted((role_path / "files").glob("*.json")))
-                lifecycle_root = os.environ.get("IIAB_LIFECYCLE_ROOT")
-                if name == "maps_catalog" and lifecycle_root:
-                    candidates.append(
-                        Path(lifecycle_root) / "roles" / "maps" / "maps-catalog.json"
-                    )
                 for candidate in candidates:
                     if candidate.is_file():
                         data = load_data(candidate)
@@ -1042,6 +1067,7 @@ def initial_state(role: str, installed: bool = False) -> dict:
             "/usr/lib/systemd/system": "directory",
         },
         "contents": {},
+        "downloads": {},
         "services": {"nginx": {"enabled": True, "state": "started"}},
         "packages": {},
     }
@@ -1690,7 +1716,6 @@ def run_ansible(
             "ANSIBLE_LOOKUP_PLUGINS": str(ROOT_DIR / "lookup_plugins"),
             "ANSIBLE_NOCOLOR": "1",
             "IIAB_MOCK_STATE": str(state_file),
-            "IIAB_LIFECYCLE_ROOT": str(ROOT_DIR),
         }
     )
     if installed is not None:

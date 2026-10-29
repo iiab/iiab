@@ -132,9 +132,11 @@ Converting a role stops
 `install.yml` from running when applying an already-installed role, so move
 re-applied work to `configure.yml`.
 
-The test runs against mocked filesystems, services, and processes. Use
-`--strict` to turn lifecycle warnings into failures, and `--all` to test every
-active role (`--jobs N` sets its parallelism).
+The test runs against mocked filesystems, services, and processes. A mocked
+download is resolved back to the fixture file shipped with the role, so
+`include_vars` on a downloaded catalog sees its real content. Use `--strict` to
+turn lifecycle warnings into failures, and `--all` to test every active role
+(`--jobs N` sets its parallelism).
 
 ## Data ownership
 
