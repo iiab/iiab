@@ -36,8 +36,10 @@ startup and application errors can be inspected with:
 
 The service stores client state in memory only. Entries expire after 15 minutes
 without a request, and all state is lost when the Captive Portal service
-restarts; no client-state database is used. A shared splash page is displayed
-for a short grace period before the client is marked complete.
+restarts; no client-state database is used. The splash display timer (eight
+seconds) starts only when the shared splash page is served. A separate
+unconditional timer completes the client twelve seconds after its first request,
+so clients that never open the splash page are still allowed through.
 
 When running `capture-wsgi.py` directly for debugging, it listens on TCP
 port `9090` by default. Override the port with `--port`, or set
@@ -56,13 +58,10 @@ messages use the `WWW-ATTEMPT:` prefix and can be viewed with:
 
     sudo dmesg | grep 'WWW-ATTEMPT:'
 
-When the portal is active, DHCP advertises the RFC 8910 Captive Portal API at
-`http://captive.<iiab_domain>/.well-known/captive-portal` (by default,
-`http://captive.lan/.well-known/captive-portal`). The API reports the per-client
-`captive` state and the shared informational splash URL, so current iOS and
-macOS versions can discover the portal even when they do not issue the legacy
-Apple HTTP probe. Legacy probe interception remains enabled for clients that
-do not support the API.
+RFC 8910 Captive Portal API discovery is not advertised: DHCP option 114
+requires an HTTPS URL with a certificate the client trusts, and IIAB does not
+provide one for this portal. Portal discovery therefore relies on the legacy
+HTTP probes.
 
 macOS/iOS and Android clients see a single shared informational splash page,
 matching Nodogsplash's pre-authentication flow. Desktop probes, including
@@ -70,14 +69,16 @@ Windows/NCSI, Firefox, and Linux desktop checks, first redirect to that same
 splash and then redirect to the configured IIAB homepage after the grace
 period. The page explains that the network provides offline access. It lists
 manual IIAB addresses -- `http://box.lan` and `http://box.local` -- as large
-text that can be tapped to copy. While the portal is active, both resolve to
+text that can be selected or tapped to copy. While the portal is active, both resolve to
 the IIAB server (see `capture-dnsmasq.j2`). This helps clients that cannot
 resolve the FQDN through mDNS (`box.local` is also advertised by mDNS/Avahi
-when the client supports it). The shared splash refreshes after ten seconds
+when the client supports it). The shared splash refreshes after eight seconds
 for desktop clients so the Captive Portal backend can return the final `302`
 to the IIAB homepage. Desktop Apple clients may close the window; mobile
-clients may close the page. After a short display grace period, every client
-completes automatically. Apple clients receive Apple's `Success` response on
+clients may close the page. After the splash page has been shown for eight
+seconds, every client completes automatically, even if the page was closed
+first; clients that never open the splash page are completed twelve seconds
+after their first request. Apple clients receive Apple's `Success` response on
 their next connectivity probe, while Android clients receive the no-content
 response expected by their connectivity check. As in Nodogsplash, repeating a
 pre-authentication request keeps that client in the splash flow, while

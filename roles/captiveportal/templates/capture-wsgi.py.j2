@@ -4,7 +4,6 @@
 
 from wsgiref.simple_server import make_server
 import argparse
-import json
 import subprocess
 import time
 import logging
@@ -32,9 +31,12 @@ j2_env = Environment(loader=FileSystemLoader(CAPTIVE_PORTAL_BASE),trim_blocks=Tr
 # at least every few minutes, so a brief gap does not send an active device back
 # through the splash page; fifteen minutes of silence expires the completion.
 PORTAL_SESSION_TO = 15 * 60
-# Keep the shared informational page visible long enough for a captive
-# assistant to render it before its next probe completes the client.
-SPLASH_DISPLAY_TO = 10
+# Clients are allowed through after the shared splash page has been displayed
+# for this long. The display timer starts only when the page is served.
+SPLASH_DISPLAY_TO = 8
+# Clients that never open the splash page are allowed through this long after
+# their first request, so they cannot be stranded on redirects.
+PORTAL_ALLOW_TO = 12
 CLIENT_STATE_TTL = PORTAL_SESSION_TO
 # Neighbor lookups are short-lived because a client's MAC address can change
 # while it keeps the same IP address.
@@ -169,6 +171,7 @@ def new_client_state():
         "mac": "",
         "portal_completed": False,
         "splash_until": 0,
+        "allow_until": 0,
         "os": "",
         "os_version": "",
         "last_seen": time.monotonic(),
@@ -213,6 +216,7 @@ def update_client_state(ip, mac, system, system_version):
             os_version=system_version,
             portal_completed=False,
             splash_until=0,
+            allow_until=0,
         )
     else:
         state.update(os=system, os_version=system_version)
@@ -250,12 +254,17 @@ def get_mac(ip):
     return mac
 
 def set_portal_completed(ip):
-    get_client_state(ip)["portal_completed"] = True
+    get_client_state(ip).update(
+        portal_completed=True,
+        splash_until=0,
+        allow_until=0,
+    )
 
 def clear_portal_completed(ip):
     get_client_state(ip).update(
         portal_completed=False,
         splash_until=0,
+        allow_until=0,
     )
 
 def is_portal_completed(ip):
@@ -276,18 +285,28 @@ def portal_session_active(ip):
     clear_portal_completed(ip)
     return False
 
-def splash_waiting(ip):
-    '''Keep an informational splash visible briefly, then complete the client.'''
+def splash_timer_running(ip):
+    '''True while the splash display period is still open. This never starts
+    the timer: only serving the splash page does.'''
+    deadline = get_client_state(ip)["splash_until"]
+    return bool(deadline) and time.monotonic() < deadline
+
+def finish_portal_if_expired(ip):
+    '''Complete a client when either the splash display timer or the
+    unconditional allow timer has elapsed. Returns True if this call completed
+    it, so handlers can answer the current probe with a success response.'''
     state = get_client_state(ip)
-    deadline = state["splash_until"]
-    if deadline:
-        if time.monotonic() < deadline:
-            return True
-        state["splash_until"] = 0
+    now = time.monotonic()
+    splash_expired = state["splash_until"] and now >= state["splash_until"]
+    allow_expired = state["allow_until"] and now >= state["allow_until"]
+    if splash_expired or allow_expired:
         set_portal_completed(ip)
-        return False
-    state["splash_until"] = time.monotonic() + SPLASH_DISPLAY_TO
-    return True
+        return True
+    return False
+
+def start_splash_timer(ip):
+    '''Start the display period only when the splash page is actually served.'''
+    get_client_state(ip)["splash_until"] = time.monotonic() + SPLASH_DISPLAY_TO
 
 def client_ip(environ):
     '''The single source of the client address. nginx overrides X-Forwarded-For
@@ -302,6 +321,7 @@ def client_ip(environ):
 def generic_probe(environ, start_response):
     logger.debug('in generic_probe')
     ip = client_ip(environ)
+    finish_portal_if_expired(ip)
     if portal_session_active(ip):
         return probe_success(environ, start_response)
     if is_android_flow(environ):
@@ -315,10 +335,12 @@ def informational_splash(environ, start_response):
     redirect_home_after_timeout = system not in ("Android", "OS X", "iPhone OS")
     if portal_session_active(ip):
         return probe_success(environ, start_response)
-    if not splash_waiting(ip) and redirect_home_after_timeout:
-        return put_302(environ, start_response)
-    if portal_session_active(ip):
+    if finish_portal_if_expired(ip):
+        if redirect_home_after_timeout:
+            return put_302(environ, start_response)
         return probe_success(environ, start_response)
+    if not splash_timer_running(ip):
+        start_splash_timer(ip)
     close_hint = "You may close this window." if system == "OS X" else "You may close this page."
     en_txt = {
         'message': "This network provides offline access.",
@@ -355,21 +377,19 @@ def informational_splash(environ, start_response):
 
 def android(environ, start_response):
     ip = client_ip(environ)
-    if splash_waiting(ip):
-        return put_302(environ, start_response, CAPTIVE_SPLASH)
-    return put_204(environ, start_response)
+    finish_portal_if_expired(ip)
+    if portal_session_active(ip):
+        return put_204(environ, start_response)
+    return put_302(environ, start_response, CAPTIVE_SPLASH)
 
 def macintosh(environ, start_response):
     logger.debug('in macintosh')
     ip = client_ip(environ)
+    finish_portal_if_expired(ip)
     if portal_session_active(ip):
         return probe_success(environ, start_response)
     if is_android_flow(environ):
         return informational_splash(environ, start_response)
-    if splash_waiting(ip):
-        return put_302(environ, start_response, CAPTIVE_SPLASH)
-    if portal_session_active(ip):
-        return probe_success(environ, start_response)
     # Windows and NCSI clients use the desktop splash flow. iOS/macOS sign-in
     # assistants and Safari need the sign-in splash page below, so macOS
     # follows the same flow as iPhone OS.
@@ -453,23 +473,6 @@ def plain_200(environ, start_response, body):
     ])
     return [payload]
 
-def captive_portal_api(environ, start_response):
-    ip = client_ip(environ)
-    if not portal_session_active(ip) and get_client_state(ip)["splash_until"]:
-        splash_waiting(ip)
-    captive = not portal_session_active(ip)
-    response = {
-        "captive": captive,
-        "user-portal-url": "http://captive.{{ iiab_domain }}/captive_splash",
-    }
-    payload = json.dumps(response, separators=(",", ":")).encode()
-    start_response('200 OK', [
-        ('Content-type', 'application/captive+json'),
-        ('Content-Length', str(len(payload))),
-        ('Cache-Control', 'no-store'),
-    ])
-    return [payload]
-
 # Path shapes of connectivity probes that reach us under an unrecognized
 # hostname (OEM forks, clients using their own DNS, and similar cases).
 # Regular browsing redirects to the IIAB homepage.
@@ -505,11 +508,14 @@ def probe_success(environ, start_response):
         return plain_200(environ, start_response, response_body)
     if host in APPLE_PROBE_RESPONSES:
         return success(environ, start_response, APPLE_PROBE_RESPONSES[host])
-    # Substring matches cover CDN and regional hostnames not listed above.
+    # Substring matches cover CDN, regional, and port-qualified hostnames not
+    # listed above. Keep the two Windows protocols distinct: NCSI expects
+    # "Microsoft NCSI", while Connect Test expects "Microsoft Connect Test".
     if 'firefox' in host:
         return plain_200(environ, start_response, 'success')
-    if 'msftconnecttest' in host or 'msftncsi' in host or \
-       path.endswith(('connecttest.txt', 'ncsi.txt')):
+    if path.endswith('ncsi.txt') or 'msftncsi' in host:
+        return plain_200(environ, start_response, 'Microsoft NCSI')
+    if path.endswith('connecttest.txt') or 'msftconnecttest' in host:
         return plain_200(environ, start_response, 'Microsoft Connect Test')
     if 'apple' in host:
         return success(environ, start_response)
@@ -589,11 +595,18 @@ def application (environ, start_response):
 
    # Client activity is recorded in transient in-memory state.
    state = get_client_state(ip)
-   state["last_seen"] = time.monotonic()
+   now = time.monotonic()
+   state["last_seen"] = now
 
    system,system_version = parse_agent(agent)
    if system != '':
       update_client_state(ip, mac, system, system_version)
+
+   # Start the unconditional allow timer on the first request so a client that
+   # never opens the splash page still gets through. Do this after
+   # update_client_state(), which resets the timers on a device change.
+   if not state["portal_completed"] and not state["allow_until"]:
+      state["allow_until"] = now + PORTAL_ALLOW_TO
 
    #######   Return pages based upon PATH   ###############
    # do more specific stuff first
@@ -605,9 +618,6 @@ def application (environ, start_response):
       if system in ("OS X", "iPhone OS"):
          return put_302(environ, start_response, "/hotspot-detect.html")
       return put_204(environ, start_response)
-
-   if path == "/.well-known/captive-portal":
-      return captive_portal_api(environ, start_response)
 
    if path in INFORMATIONAL_SPLASH_PATHS:
       return informational_splash(environ, start_response)
@@ -626,6 +636,7 @@ def application (environ, start_response):
       return generic_probe(environ, start_response)
 
    if host in ANDROID_PROBE_RESPONSES or path in ANDROID_PROBE_PATHS:
+      finish_portal_if_expired(ip)
       if portal_session_active(ip):
           return put_204(environ,start_response)
       # Non-Android /generate_204 gets a redirect for the Chromium "Open in
