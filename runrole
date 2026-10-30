@@ -262,9 +262,9 @@ if $CHECK_LOCAL_VARS; then
         CHECK_LOCAL_VARS_ROLES="${CHECK_LOCAL_VARS_ROLES}\"${prefix}\","
     done
     if [[ ${#ROLES[@]} -gt 0 ]]; then
-        CHECK_LOCAL_VARS_EXTRA="{\"validate_roles\":[${CHECK_LOCAL_VARS_ROLES%,}]}"
+        CHECK_LOCAL_VARS_EXTRA="{\"iiab_role_uninstall\":false,\"iiab_role_reinstall\":false,\"iiab_role_upgrade\":false,\"validate_roles\":[${CHECK_LOCAL_VARS_ROLES%,}]}"
     else
-        CHECK_LOCAL_VARS_EXTRA='{}'
+        CHECK_LOCAL_VARS_EXTRA='{"iiab_role_uninstall":false,"iiab_role_reinstall":false,"iiab_role_upgrade":false}'
     fi
     run_playbook "$CHECK_LOCAL_VARS_EXTRA"
     exit $?
@@ -427,24 +427,30 @@ extra_vars() {
     local validate_roles=""
     local install_var
     local role
+    local role_uninstall=false
+    local role_reinstall=false
+    local role_upgrade=false
 
     if [ "$phase" = uninstall ]; then
-        json="$json,\"uninstall\":true"
+        role_uninstall=true
     else
         if $REINSTALL; then
-            json="$json,\"iiab_role_reinstall\":true"
+            role_reinstall=true
         fi
         if $UPGRADE; then
-            json="$json,\"upgrade\":true"
+            role_upgrade=true
         fi
-        if $ADD; then
-            for role in "${PLAYBOOK_ROLES[@]}"; do
-                install_var=$(role_install_var "$role")
-                if [ -n "$install_var" ]; then
-                    json="$json,\"${install_var}_install\":true"
-                fi
-            done
-        fi
+    fi
+    # Always pass all three flags, so a value in local_vars.yml cannot turn an
+    # apply into an uninstall (or the reverse).
+    json="$json,\"iiab_role_uninstall\":${role_uninstall},\"iiab_role_reinstall\":${role_reinstall},\"iiab_role_upgrade\":${role_upgrade}"
+    if [ "$phase" != uninstall ] && $ADD; then
+        for role in "${PLAYBOOK_ROLES[@]}"; do
+            install_var=$(role_install_var "$role")
+            if [ -n "$install_var" ]; then
+                json="$json,\"${install_var}_install\":true"
+            fi
+        done
     fi
     for role in "${PLAYBOOK_ROLES[@]}"; do
         install_var=$(role_install_var "$role")

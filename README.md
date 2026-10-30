@@ -80,6 +80,8 @@ repeatable: each role is installed if missing and otherwise reconfigured.
 - `LOCAL_VARS_FILE`, `DEFAULT_VARS_FILE`, and `IIAB_STATE_FILE` override the
   local-vars, defaults, and state-file paths for both the shell checks and the
   entry playbooks.
+- Role lifecycle operations are controlled by internal `iiab_role_*` flags.
+  Do not set them in `local_vars.yml`; use the CLI options instead.
 - `./runroles` is a deprecated alias for `./runrole`; it accepts the same
   arguments.
 

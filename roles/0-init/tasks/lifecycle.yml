@@ -23,21 +23,21 @@
     name: "{{ lifecycle_role }}"
     tasks_from: uninstall
   when:
-    - uninstall
+    - iiab_role_uninstall | bool
     - "'uninstall' in lifecycle_phases"
 
 # Make the uninstall live before the play ends, as the Apply block does below.
 - name: Run pending handlers for {{ lifecycle_role }}
   meta: flush_handlers
   when:
-    - uninstall
+    - iiab_role_uninstall | bool
     - "'uninstall' in lifecycle_phases"
 
 # The uninstall phase is deliberately outside this block: an explicit
 # --uninstall must fail loudly instead of being swallowed when
 # skip_role_on_error is True in a larger play.
 - name: Apply {{ lifecycle_role }}
-  when: not uninstall
+  when: not (iiab_role_uninstall | bool)
   block:
 
     # Every entry point gets this check, not only ./runrole.
@@ -56,7 +56,7 @@
           {{ (lifecycle_state | default({}))
              | combine({lifecycle_role: {
                   'installed': lookup('installed', lifecycle_prefix),
-                  'record_disk_usage': (not lookup('installed', lifecycle_prefix) or iiab_role_reinstall or upgrade)
+                  'record_disk_usage': (not lookup('installed', lifecycle_prefix) or (iiab_role_reinstall | bool) or (iiab_role_upgrade | bool))
                 }}) }}
 
     # uninstall.yml defines --reinstall: remove the role, then install it
@@ -67,7 +67,7 @@
         name: "{{ lifecycle_role }}"
         tasks_from: uninstall
       when:
-        - iiab_role_reinstall
+        - iiab_role_reinstall | bool
         - lifecycle_state[lifecycle_role].installed | bool
         - "'uninstall' in lifecycle_phases"
 
@@ -89,14 +89,14 @@
         that: "'upgrade' in lifecycle_phases"
         fail_msg: "{{ lifecycle_role }} does not ship tasks/upgrade.yml, so it has no --upgrade path."
         quiet: yes
-      when: upgrade
+      when: iiab_role_upgrade | bool
 
     - name: Upgrade {{ lifecycle_role }}
       include_role:
         name: "{{ lifecycle_role }}"
         tasks_from: upgrade
       when:
-        - upgrade
+        - iiab_role_upgrade | bool
         - "'upgrade' in lifecycle_phases"
 
     - name: Restore the {{ ansible_parent_role_names | first }} lifecycle context
@@ -111,8 +111,8 @@
         tasks_from: install
       when:
         - "'install' in lifecycle_phases"
-        - not upgrade
-        - not lifecycle_state[lifecycle_role].installed or iiab_role_reinstall
+        - not (iiab_role_upgrade | bool)
+        - not lifecycle_state[lifecycle_role].installed or (iiab_role_reinstall | bool)
 
     - name: Restore the {{ ansible_parent_role_names | first }} lifecycle context
       include_tasks: lifecycle_context.yml

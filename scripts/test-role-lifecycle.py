@@ -1656,9 +1656,9 @@ def make_playbook(
                 "set_fact": {
                     install_name: True,
                     enabled_name: enabled,
-                    "uninstall": bool(lifecycle.get("uninstall", False)),
+                    "iiab_role_uninstall": bool(lifecycle.get("uninstall", False)),
                     "iiab_role_reinstall": bool(lifecycle.get("reinstall", False)),
-                    "upgrade": bool(lifecycle.get("upgrade", False)),
+                    "iiab_role_upgrade": bool(lifecycle.get("upgrade", False)),
                 }
             },
         ],
@@ -1890,9 +1890,9 @@ def run_scenario(
             extra_vars={
                 install_name: True,
                 enabled_name: values["enabled"],
-                "uninstall": values.get("uninstall", False),
+                "iiab_role_uninstall": values.get("uninstall", False),
                 "iiab_role_reinstall": values.get("reinstall", False),
-                "upgrade": values.get("upgrade", False),
+                "iiab_role_upgrade": values.get("upgrade", False),
             },
         )
         if result.returncode:
