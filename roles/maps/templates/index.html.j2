@@ -1683,6 +1683,65 @@
                     this.drawButton.style['background-color'] = this.INACTIVE_COLOR
                 }
 
+                // Given the bbox, give a file size estimate. We will start with something
+                // very crude, and we can refine it over time if it is requested.
+                getEstimates(wrappedBounds) {
+                    const EARTH_CIRCUMFERENCE = 40_000
+
+                    const latDiffToKm = latDiff => Math.abs((latDiff / 360) * EARTH_CIRCUMFERENCE)
+                    const lngDiffToKm = (lngDiff, north, south) => {
+                        const kmsAtEquator = (lngDiff / 360) * EARTH_CIRCUMFERENCE
+
+                        // in reality this is more of a calculus problem but hopefully a simple
+                        // halfway point between north and south boundaries works for an estimate.
+                        const latFactor = Math.cos(Math.PI * (((south + north) / 2) / 180))
+
+                        return Math.abs(kmsAtEquator * latFactor)
+                    }
+
+                    const latDiff = wrappedBounds.getSouth() - wrappedBounds.getNorth()
+                    const lngDiff = wrappedBounds.getEast() < wrappedBounds.getWest() ?
+                        wrappedBounds.getEast() - wrappedBounds.getWest() + 360 :
+                        wrappedBounds.getEast() - wrappedBounds.getWest()
+
+                    const kmHeight = latDiffToKm(latDiff)
+                    const kmWidth = lngDiffToKm(
+                        lngDiff, wrappedBounds.getNorth(), wrappedBounds.getSouth(),
+                    )
+                    // areaEstimate is named thus because it uses a rough equation to calculate.
+                    // Good enough for file size estimates.
+                    const areaEstimate = kmWidth * kmHeight
+
+                    // The following is my vibes-oriented estimate. I put in fractional exponents because
+                    // I thought there would be curve to the numbers, particularly with urban centers being
+                    // smaller percentage as areas grow. From there I tweaked numbers until it seemed to
+                    // fit. That's as deep as this analysis goes. Even with all of this, it gives some bad
+                    // estimates.
+
+                    // A convenient figure to play with. The minimum is 10km x 10km because that seems
+                    // to be roughly the smallest bit of map that you can download.
+                    const areaPer100sqkm = Math.max(areaEstimate, 10 * 10) / (10 * 10)
+
+                    const water = (areaPer100sqkm ** 1) * 0.023 + 2
+                    const ruralLo = (areaPer100sqkm ** .9) * 0.2 + 3.4
+                    const ruralHi = ruralLo * 3
+
+                    const urbanLo = (areaPer100sqkm ** .55) * 8.4
+                    const urbanHi = urbanLo * 1.5
+
+                    // Rural becomes less relevant at big distances. Seems like urban areas within the
+                    // land do have an effect, but we'll dampen it.
+                    const landLo = ruralLo
+                    const landHi = (ruralHi + urbanHi) / 2
+
+                    // Probably even if it's just one dimension, it will inevitably contain some rural areas
+                    if (kmWidth < 500 && kmHeight < 500) {
+                        return {water, ruralLo, ruralHi, urbanLo, urbanHi}
+                    } else {
+                        return {water, landLo, landHi}
+                    }
+                }
+
                 setupDownloaderUI() {
                     const thisControl = this
                     let downloadPopup = null
@@ -1771,6 +1830,25 @@
                             }
                         })()
 
+                        const downloadNameInput = document.createElement('input');
+                        downloadNameInput.style = "display: block; margin-bottom: 1em;"
+
+                        function updateName () {
+                            const cleanedName = downloadNameInput.value.slice(0, 35).toLowerCase().replace(/[^a-z0-9]+/g, "_")
+                            downloadNameInput.value = cleanedName
+                            downloadCommand.set(cleanedName)
+                            nameNextButton.set()
+                        }
+                        // be as annoying and cover as many bases as I can
+                        downloadNameInput.onkeydown = downloadNameInput.onpaste = downloadNameInput.onchange = updateName
+
+                        downloadNameInput.onkeyup = e => {
+                            updateName() // because onkeydown happens before the new value is actually set
+                            if (e.key === "Enter") {
+                                trySubmitRegionName()
+                            }
+                        }
+
                         function popupButton(textContent, onclick) {
                             const button = document.createElement('button')
                             button.textContent = textContent
@@ -1780,20 +1858,47 @@
                             return button
                         }
 
-                        const backButton = popupButton("Back", () => {
-                            // show popupStart, hide popupFinish
-                            popupStart.style = ""
-                            popupFinish.style = "display: none;"
+                        const nameBackButton = popupButton("Back", () => {
+                            // show popupRegionFileSize, hide popupRegionName
+                            popupRegionName.style = "display: none;"
+                            popupRegionFileSize.style = ""
+                        })
+
+                        const commandBackButton = popupButton("Back", () => {
+                            // show popupRegionName, hide popupRegionCommand
+                            popupRegionCommand.style = "display: none;"
+                            popupRegionName.style = ""
                         })
 
                         const doneButton = popupButton("Done", () => {
                             this.setOffMode();
                             removePopup();
                         })
-                        const cancelButton = popupButton("Cancel", () => {
+                        const nameCancelButton = popupButton("Cancel", () => {
                             this.setOffMode();
                             removePopup();
                         })
+                        const fileSizeCancelButton = popupButton("Cancel", () => {
+                            this.setOffMode();
+                            removePopup();
+                        })
+
+                        const fileSizeNextButton = popupButton("Next", () => {
+                            // show popupRegionName, hide popupRegionFileSize
+                            popupRegionFileSize.style = "display: none;"
+                            popupRegionName.style = ""
+                        })
+
+                        const nameNextButton = popupButton("", trySubmitRegionName)
+
+                        nameNextButton.set = function() {
+                            if (downloadNameInput.value.length > 0) {
+                                this.innerHTML = "Next"
+                            } else {
+                                this.innerHTML = "<span style='color: #888'>Next</span>"
+                            }
+                        }
+                        nameNextButton.set()
 
                         const downloadCommand = document.createElement('div');
                         downloadCommand.set = function(downloadName) {
@@ -1805,56 +1910,96 @@
                             >${downloadCommandString}</pre>`
                         }
 
-                        const downloadNameInput = document.createElement('input');
-                        downloadNameInput.style = "display: block; margin-bottom: 1em;"
+                        const estimates = this.getEstimates(wrappedBounds)
 
-                        function updateName () {
-                            const cleanedName = downloadNameInput.value.slice(0, 35).toLowerCase().replace(/[^a-z0-9]+/g, "_")
-                            downloadNameInput.value = cleanedName
-                            downloadCommand.set(cleanedName)
-                            nextButton.set()
-                        }
-                        // be as annoying and cover as many bases as I can
-                        downloadNameInput.onkeydown = downloadNameInput.onpaste = downloadNameInput.onchange = updateName
+                        // Display a number of MB in a nice way (as GB if > 1000). Since it's
+                        // such a rough estimate, only give one significant figure.
+                        const dispMB = num => {
+                            const extraDigits = Math.floor(Math.log10(num))
+                            const rounded = Math.round(num / (10 ** extraDigits)) * 10 ** extraDigits
 
-                        downloadNameInput.onkeyup = e => {
-                            updateName() // because onkeydown happens before the new value is actually set
-                            if (e.key === "Enter") {
-                                tryGoToNext()
+                            if (rounded < 1000) {
+                                return `${rounded}MB`
                             }
+                            return `${rounded / 1000}GB`
                         }
 
-                        const popupStart = document.createElement('div');
-                        popupStart.innerHTML = `
-                            <h1>Download region</h1>
-                            <p>Choose a name for this <b>Full Quality Region</b> <i>(lower case letters, numbers, and _ only)</i>
+                        // In case the range ends up being the same string representation of a
+                        // file size twice, just show the one number. Otherwise display as a range
+                        const dispMBRange = (num1, num2) => {
+                            const disp1 = dispMB(num1)
+                            const disp2 = dispMB(num2)
+                            if (disp1 === disp2) {
+                                return disp1
+                            }
+                            return `${disp1} - ${disp2}`
+                        }
+
+                        let estimateList = `
+                              <li>Water: <b>${dispMB(estimates.water)}</b></li>
+                        `
+                        if (estimates.ruralLo) {
+                            estimateList += `
+                                  <li>Rural areas: <b>${dispMBRange(estimates.ruralLo, estimates.ruralHi)}</b></li>
+                            `
+                        }
+                        if (estimates.urbanLo) {
+                            estimateList += `
+                                  <li>Urban areas: <b>${dispMBRange(estimates.urbanLo, estimates.urbanHi)}</b></li>
+                            `
+                        }
+                        if (estimates.landLo) {
+                            estimateList += `
+                                  <li>Land: <b>${dispMBRange(estimates.landLo, estimates.landHi)}</b></li>
+                            `
+                        }
+
+                        const popupRegionFileSize = document.createElement('div');
+                        popupRegionFileSize.innerHTML = `
+                            <h1>Download Region</h1>
+                            <h2>Estimated File Size</h2>
+                            <p>
+                              A <i>rough estimate</i> of the download size of this region depends on what it contains:
+                            </p>
+
+                            <ul>
+                              ${estimateList}
+                            </ul>
+
+                            <p>
+                              You will see an accurate file size before download begins.
                             </p>
                         `
-                        function tryGoToNext() {
+                        popupRegionFileSize.appendChild(fileSizeNextButton)
+                        popupRegionFileSize.appendChild(fileSizeCancelButton)
+
+                        const popupRegionName = document.createElement('div');
+                        popupRegionName.style = "display: none;"
+                        popupRegionName.innerHTML = `
+                            <h1>Download Region</h1>
+                            <h2>Pick A Name</h2>
+                            <p>
+                              Choose a name for this region <i>(lower case letters, numbers, and _ only)</i>
+                            </p>
+                        `
+                        function trySubmitRegionName() {
                             if (downloadNameInput.value.length > 0) {
-                                popupFinish.style = "" // show popupFinish
-                                popupStart.style = "display: none;"
+                                popupRegionCommand.style = "" // show popupRegionCommand
+                                popupRegionName.style = "display: none;"
                                 updateName() // for good measure. we want to avoid them inputting a destructive command!
                             }
                         }
-                        const nextButton = popupButton("", tryGoToNext)
-                        nextButton.set = function() {
-                            if (downloadNameInput.value.length > 0) {
-                                this.innerHTML = "Next"
-                            } else {
-                                this.innerHTML = "<span style='color: #888'>Next</span>"
-                            }
-                        }
-                        nextButton.set()
 
-                        popupStart.appendChild(downloadNameInput)
-                        popupStart.appendChild(nextButton)
-                        popupStart.appendChild(cancelButton)
+                        popupRegionName.appendChild(downloadNameInput)
+                        popupRegionName.appendChild(nameNextButton)
+                        popupRegionName.appendChild(nameBackButton)
+                        popupRegionName.appendChild(nameCancelButton)
 
-                        const popupFinish = document.createElement('div');
-                        popupFinish.style = "display: none;"
-                        popupFinish.innerHTML = `
-                            <h1>Download region</h1>
+                        const popupRegionCommand = document.createElement('div');
+                        popupRegionCommand.style = "display: none;"
+                        popupRegionCommand.innerHTML = `
+                            <h1>Download Region</h1>
+                            <h2>Final Step</h2>
                             <ul>
                               <li>Click below to select text</li>
                               <li>Copy text</li>
@@ -1862,13 +2007,14 @@
                               <li>When it is done downloading, reload this page</li>
                             </ul>
                         `
-                        popupFinish.appendChild(downloadCommand)
-                        popupFinish.appendChild(backButton)
-                        popupFinish.appendChild(doneButton)
+                        popupRegionCommand.appendChild(downloadCommand)
+                        popupRegionCommand.appendChild(doneButton)
+                        popupRegionCommand.appendChild(commandBackButton)
 
                         const popupContainer = document.createElement('div');
-                        popupContainer.appendChild(popupStart)
-                        popupContainer.appendChild(popupFinish)
+                        popupContainer.appendChild(popupRegionFileSize)
+                        popupContainer.appendChild(popupRegionName)
+                        popupContainer.appendChild(popupRegionCommand)
 
                         downloadPopup = new maplibregl.Popup({closeOnClick: false, closeButton: false})
                             .setLngLat(drawnBounds.getCenter())
