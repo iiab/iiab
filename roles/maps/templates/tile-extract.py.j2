@@ -304,14 +304,19 @@ def delete_extract(extract_name):
 def create_extract(new_fqr, extract_name, extract_paths):
     # Extract them all successfully before moving them.
     # Assumes it doesn't exist yet
-    # Opt-in: IIAB_PMTILES_PROGRESS=json adds --progress=json and
-    # --download-threads=16 for a caller that reads progress (e.g. dash-node).
+    # Opt-in integrator mode: IIAB_PMTILES_PROGRESS=json adds --progress=json (for
+    # a caller like dash-node) and --download-threads=IIAB_PMTILES_DOWNLOAD_THREADS
+    # (default 8: the throughput knee in testing; use 4 on a weak device). Unset:
+    # human progress bar, upstream's 4 threads.
     progress_json = os.environ.get("IIAB_PMTILES_PROGRESS") == "json"
+    download_threads = os.environ.get("IIAB_PMTILES_DOWNLOAD_THREADS", "8")
+    if not download_threads.isdigit() or int(download_threads) < 1:
+        download_threads = "8"
     for paths in extract_paths.values():
         cmd = [PMTILES, "extract", paths["source"], paths["tmp"], "--bbox=" + new_fqr.to_bbox_str()]
         if progress_json:
             cmd.append("--progress=json")
-            cmd.append("--download-threads=16")
+            cmd.append("--download-threads=" + download_threads)
         result = subprocess.run(
             cmd,
             check=False, # default, but pylint recommends it be explicit
