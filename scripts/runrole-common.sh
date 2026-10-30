@@ -103,7 +103,17 @@ role_require_capability() {
     if [ -n "$reason" ]; then
         echo "$reason" >&2
     fi
-    echo "Reference tasks/${feature}.yml from the role entrypoint, add a 'when: ${feature}' condition there, or declare '${feature}: true' in roles/${role}/meta/runrole.yml." >&2
+    case $feature in
+        reinstall)
+            echo "This role opts out; remove 'reinstall: false' from roles/${role}/meta/runrole.yml only if a rebuild is safe." >&2
+            ;;
+        uninstall)
+            echo "Ship tasks/uninstall.yml, add a 'when: uninstall' condition to the entrypoint, or declare 'uninstall: true' in roles/${role}/meta/runrole.yml (legacy roles)." >&2
+            ;;
+        upgrade)
+            echo "Ship tasks/upgrade.yml, add a 'when: upgrade' condition to the entrypoint, or declare 'upgrade: true' in roles/${role}/meta/runrole.yml (legacy roles)." >&2
+            ;;
+    esac
     return 1
 }
 

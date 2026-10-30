@@ -90,7 +90,10 @@ inline `when: uninstall`, or `uninstall: true` in `meta/runrole.yml`), and
 `--upgrade` when they ship `upgrade.yml` (or, for a legacy role, implement
 `when: upgrade`). For a role using the shared runner, the phase file itself is
 required. `meta/runrole.yml` can opt a role out of `--reinstall` with
-`reinstall: false`; every other role accepts it.
+`reinstall: false`; every other role accepts it. For a legacy role,
+`uninstall: true` / `upgrade: true` in `meta/runrole.yml` can override detection
+when the entrypoint branches on the flag; a converted role must ship the phase
+file instead.
 
 ### Conflicts with the installed state
 
