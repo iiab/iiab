@@ -11,30 +11,40 @@
     path: /etc/awstats/awstats.conf
   register: awstats
 
-- name: If so, move it aside to /etc/awstats/awstats.conf.dist
+- name: If so, move it aside to /etc/awstats/awstats.conf.dist (only once, as it's IIAB's own file after that)
   command: mv /etc/awstats/awstats.conf /etc/awstats/awstats.conf.dist
+  args:
+    creates: /etc/awstats/awstats.conf.dist
   when: awstats.stat.islnk is defined and not awstats.stat.islnk
 
-# This is a user setting: create it on first install, but never replace a local
-# edit. --uninstall and --reinstall remove it, and the next configure creates
-# the shipped default again.
-- name: Install /etc/awstats/awstats.schoolserver.conf from template
-  template:
-    src: awstats.schoolserver.conf.j2
-    dest: /etc/awstats/awstats.schoolserver.conf
-    force: false
-
-- name: Symlink /etc/awstats/awstats.conf -> /etc/awstats/awstats.schoolserver.conf for access by IP address
+- name: Remove the /etc/awstats/awstats.conf symlink left by older installs
   file:
-    src: /etc/awstats/awstats.schoolserver.conf
     path: /etc/awstats/awstats.conf
-    state: link
+    state: absent
+  when: awstats.stat.islnk is defined and awstats.stat.islnk
 
 - name: Symlink /usr/lib/cgi-bin/awstats/awstats.pl -> /usr/lib/cgi-bin/awstats.pl so old Apache links to awstats will work after change to NGINX
   file:
     src: /usr/lib/cgi-bin/awstats.pl
     path: /usr/lib/cgi-bin/awstats/awstats.pl
     state: link
+
+# Debian's cron (/usr/share/awstats/tools/update.sh) processes every
+# /etc/awstats/awstats.*.conf AND awstats.conf, so a second config file
+# (formerly awstats.schoolserver.conf) made it analyse every log twice.
+- name: Remove /etc/awstats/awstats.schoolserver.conf left by older installs
+  file:
+    path: /etc/awstats/awstats.schoolserver.conf
+    state: absent
+
+# This is a user setting: create it on first install, but never replace a local
+# edit. --uninstall and --reinstall remove it, and the next configure creates
+# the shipped default again.
+- name: Install /etc/awstats/awstats.conf from template (also used for access by IP address)
+  template:
+    src: awstats.schoolserver.conf.j2
+    dest: /etc/awstats/awstats.conf
+    force: false
 
 - name: Install /etc/nginx/cgi-bin.php from template
   template:
@@ -43,5 +53,5 @@
   notify:
     - Reload nginx
 
-- name: "Summarize logs up to now: /usr/bin/perl /usr/lib/cgi-bin/awstats.pl -config=schoolserver -update"
-  command: /usr/bin/perl /usr/lib/cgi-bin/awstats.pl -config=schoolserver -update
+- name: "Summarize logs up to now: /usr/bin/perl /usr/lib/cgi-bin/awstats.pl -config=awstats -update"
+  command: /usr/bin/perl /usr/lib/cgi-bin/awstats.pl -config=awstats -update
