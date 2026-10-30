@@ -22,8 +22,8 @@ UNINSTALL_ROLES=()
 APPLY_ROLES=()
 
 if [ ! -f runrole-base.yml ]; then
-    echo "Exiting: IIAB Playbook not found."
-    echo "Please run this in /opt/iiab/iiab (top level of git repo)."
+    echo "ERROR: runrole-base.yml not found."
+    echo "Run this command from the top level of the IIAB repository (/opt/iiab/iiab)."
     exit 1
 fi
 
@@ -39,31 +39,33 @@ Usage: ./runrole [options] <role> [role ...]
        ./runrole --status <role> [role ...]
        ./runrole --check-local-vars [role ...]
 
-Apply one or more roles using /etc/iiab/local_vars.yml; repeatable (install if
-missing, otherwise reconfigure). See README.md for the lifecycle contract.
+Apply one or more roles with /etc/iiab/local_vars.yml. An apply is repeatable:
+it installs a missing role, then configures an installed role. See README.md
+for the lifecycle rules.
 
 Options:
   -y, --yes             Do not ask for confirmation
-  -a, --add             Run the roles even if '*_install: False'
+  -a, --add             Apply the roles even if '*_install: False'
   -v, --verbose         Show the Python interpreter and pass -v to Ansible
       --log FILE        Write the Ansible log to FILE (default: ./iiab-debug.log)
-      --apply           Apply settings (the default)
-      --reinstall       Uninstall each role, then install it again. Roles
-                        without uninstall.yml warn and keep their previous
-                        install behavior. User settings declared by
-                        uninstall.yml are reset
-      --upgrade         Upgrade where the role ships upgrade.yml
-      --uninstall       Uninstall the programs and their settings, never deleting user data
+      --apply           Apply the roles (the default)
+      --reinstall       Remove each role, then install it again. Roles with
+                        uninstall.yml reset the user settings that the file
+                        declares. Roles without it run install.yml again and
+                        warn that the result is ambiguous
+      --upgrade         Upgrade a role that ships upgrade.yml
+      --uninstall       Remove the program, its program data, and its settings.
+                        Never delete user data
       --skip-never-installed
-                        With --uninstall, skip roles with no installed markers
-                        instead of failing before anything is removed
+                        With --uninstall, skip roles that have no installed
+                        marker instead of failing before anything is removed
       --continue-on-error
-                        Keep going with later roles when one fails, then exit
-                        nonzero (runs each role separately; the default stops
-                        at the first failure)
+                        Run each role separately and continue after a failure.
+                        At the end, report the failed roles and exit nonzero.
+                        By default, the run stops at the first failure
       --check-local-vars
-                        Validate local_vars.yml and exit, without changing anything
-      --status          Show installed/desired state without changing anything
+                        Validate local_vars.yml and exit. Do not change anything
+      --status          Show installed and desired state. Do not change anything
       --list            List roles with their state and capabilities
   -h, --help            Show this help
 
@@ -78,8 +80,8 @@ Examples:
   ./runrole --log /tmp/iiab.log captiveportal
 
 No option deletes user data. --status, --list, and --check-local-vars are
-read-only. Set '<prefix>_install: True' (or pass -a) before running the install
-phases.
+read-only. Set '<prefix>_install: True' (or pass -a) before you apply or
+reinstall the roles.
 EOF
 }
 
@@ -205,7 +207,7 @@ fi
 unsupported=false
 for role in "${ROLES[@]}"; do
     if $REINSTALL && ! role_require_capability "$role" "--reinstall" reinstall \
-        "This role opts out because reinstalling it requires manual cleanup (see roles/${role}/meta/runrole.yml)."; then
+        "Reinstalling this role requires manual cleanup."; then
         unsupported=true
     fi
     # --skip-never-installed removes only roles that are installed. A role
@@ -217,7 +219,7 @@ for role in "${ROLES[@]}"; do
         unsupported=true
     fi
     if $UPGRADE && ! role_require_capability "$role" "--upgrade" upgrade \
-        "This role does not ship tasks/upgrade.yml, so it has no application-native upgrade path."; then
+        "This role has no upgrade method for its application."; then
         unsupported=true
     fi
 done
@@ -294,10 +296,10 @@ write_playbook() {
 APPLY_ROLES=("${ROLES[@]}")
 MISSING_ROLES=()
 
-# Apply/reinstall phases act on roles the configuration says should be
-# installed. Refuse before anything runs -- including before a legacy role's
-# markers are forgotten -- instead of letting the role's tasks install
-# something that local_vars.yml disables.
+# Apply and reinstall operate only on roles that local_vars.yml says must be
+# installed. Refuse before anything runs, including before runrole removes a
+# legacy role's markers. This prevents a role from installing a program that
+# local_vars.yml disables.
 if ! $UNINSTALL; then
     missing_install=false
     for role in "${APPLY_ROLES[@]}"; do
@@ -424,7 +426,7 @@ else
             fi
         done
         if $installed; then
-            echo "Applying settings to already-installed role(s) from $LOCAL_VARS_FILE."
+            echo "Applying settings to installed roles from $LOCAL_VARS_FILE."
             echo "This is safe to repeat."
             echo
         fi
@@ -564,9 +566,9 @@ if $UNINSTALL; then
     echo
 fi
 
-# --add forces '<prefix>_install: True' for this run only.  If it installed
-# something, local_vars.yml still says False, which the next full run will
-# reject.  Say so now, with the two ways out.
+# --add forces '<prefix>_install: True' for this run only. If it installed
+# something, local_vars.yml still says False, and the next apply will refuse.
+# Report the two ways out now.
 if $ADD && ! $UNINSTALL; then
     for role in "${PLAYBOOK_ROLES[@]}"; do
         var=$(role_var "$role")

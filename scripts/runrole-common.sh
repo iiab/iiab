@@ -25,7 +25,7 @@ state_cmd() {
     "$IIAB_STATE_CMD" --file "$IIAB_STATE_FILE" "$@"
 }
 
-# Only 0 (yes) and 1 (no) are normal answers; anything else is a read error.
+# Exit status 0 means yes and 1 means no. Any other status is a read error.
 state_has_prefix() {
     local status
     state_cmd has-prefix "$1"
@@ -103,17 +103,7 @@ role_require_capability() {
     if [ -n "$reason" ]; then
         echo "$reason" >&2
     fi
-    case $feature in
-        reinstall)
-            echo "Remove 'reinstall: false' from roles/${role}/meta/runrole.yml only if a reinstall is safe." >&2
-            ;;
-        uninstall)
-            echo "Ship tasks/uninstall.yml, add a 'when: uninstall' condition to the entrypoint, or declare 'uninstall: true' in roles/${role}/meta/runrole.yml (legacy roles)." >&2
-            ;;
-        upgrade)
-            echo "Ship tasks/upgrade.yml, add a 'when: upgrade' condition to the entrypoint, or declare 'upgrade: true' in roles/${role}/meta/runrole.yml (legacy roles)." >&2
-            ;;
-    esac
+    echo "Run './runrole --list' to see the supported operations." >&2
     return 1
 }
 
@@ -197,7 +187,7 @@ desired_for() {
     printf '%s' "${value:--}"
 }
 
-# Show one role's markers, desired configuration, and capabilities.
+# Show one role's markers, desired state, and capabilities.
 status_role() {
     local role="$1"
     local var
@@ -270,7 +260,7 @@ status_role() {
         fi
     else
         echo "No standalone role owns this prefix, so it has no runrole capabilities."
-        echo "Run './runrole --list' to see the role that manages it (e.g. squid -> network)."
+        echo "Run './runrole --list' to see the role that manages it (for example, squid -> network)."
     fi
     echo
     return 0

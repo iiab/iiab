@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-"""Run role lifecycle scenarios against a virtual Ansible environment.
+"""Run role lifecycle scenarios in a virtual Ansible environment.
 
-Besides the scenarios, task files are scanned for lifecycle warnings: network
-work in a phase that must stay offline, offline phases that include a phase
-which may use the network, an unguarded uninstall include, unsafe state
-checks, and state writes in the wrong phase. Warnings are reported but do not
-fail the run unless --strict is used; a reference to the removed
-clean_install variable and an ownership path declared in more than one class
-always fail. Declared user settings are seeded and must survive apply and
---upgrade, be reset by --reinstall when the role ships uninstall.yml, and be
-removed by --uninstall; declared user data must survive every operation.
+The test also scans task files for lifecycle warnings: network work in an
+offline phase, an offline phase that includes a phase that may use the network,
+an unguarded uninstall include, unsafe state checks, and a state write in the
+wrong phase. It reports warnings but fails on them only when --strict is used.
+Two conditions always fail: a reference to the removed clean_install variable,
+and an ownership path that appears in more than one class. Declared user
+settings are created before the run. They must survive an apply to an installed
+role and --upgrade, be reset by --reinstall when the role ships uninstall.yml,
+and be removed by --uninstall. Declared user data must survive every operation.
 """
 
 from __future__ import annotations
@@ -79,7 +79,7 @@ SHARED_ROLES = {
 
 # Task files executed by the lifecycle runner. Only these need phase-aware
 # checks; helper files are reached through them. enable-or-disable is a legacy
-# convention outside the formal contract, but the runner still executes it, so
+# convention outside the formal lifecycle, but the runner still executes it, so
 # it is checked too.
 LIFECYCLE_FILES = {
     "main",
@@ -92,9 +92,9 @@ LIFECYCLE_FILES = {
 }
 
 # install.yml, upgrade.yml, and configure.yml may use the network. Everything
-# else must work offline: --uninstall and --reinstall have to be retryable on a
-# disconnected host, and main.yml only dispatches to the phase that owns the
-# work.
+# else must work offline: --uninstall and --reinstall must be retryable on a
+# host without a network, and main.yml only dispatches to the phase that owns
+# the work.
 OFFLINE_PHASES = {
     "main",
     "uninstall",
@@ -485,7 +485,7 @@ def command_result(state, args):
     except ValueError:
         words = command.split()
 
-    # Simulate the download destinations of the common command-line fetchers.
+    # Simulate the download destinations of the common command-line tools.
     if words and words[0] in {"wget", "curl"}:
         for flag in ("-O", "--output-document", "-o", "--output"):
             if flag in words and words.index(flag) + 1 < len(words):
@@ -1386,8 +1386,8 @@ def lifecycle_warnings(role: str) -> list[Warning]:
                 included = included_phase(module, args)
                 if not included or included == phase:
                     continue
-                # main.yml is supposed to dispatch to these phases; every
-                # other offline phase including them can pull in the network.
+                # main.yml must dispatch to these phases; any other offline
+                # phase that includes them can pull in the network.
                 if phase == "main":
                     if included in GATED_PHASES and not guarded:
                         warnings.append(
@@ -1932,16 +1932,16 @@ def operation_result(
 ) -> str:
     expect_marker = False if name == "uninstall" else True
     if name == "reinstall":
-        # A role with uninstall.yml is uninstalled first, which resets declared
-        # program data and user settings.  A role without it keeps its previous
-        # install.yml behavior, which preserves user settings.
+        # A role with uninstall.yml is removed first, which resets declared
+        # program data and user settings. A role without it runs install.yml
+        # again, which preserves user settings.
         resets = has_task_phase(role, "uninstall")
         user_settings = "reset" if resets else "preserve"
     elif name == "uninstall":
         user_settings = "remove"
     else:
-        # Apply and --upgrade preserve user settings.  User data must survive
-        # every operation.
+        # An apply and --upgrade preserve user settings. User data must
+        # survive every operation.
         user_settings = "preserve"
     return run_scenario(
         name,

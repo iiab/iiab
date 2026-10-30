@@ -41,14 +41,17 @@ Or, if you absolutely must attempt an upgrade (ENTIRELY AT YOUR OWN RISK) run th
  sudo iiab-install-map-region <CONTINENT-or-REGION>.mbtiles
  ```
 
-Where `<CONTINENT-or-REGION>.mbtiles` is one of the [major region files](https://github.com/iiab/iiab/wiki/IIAB-Maps#where-are-iiab-maps-stored) (e.g. with "2020" in its filename) that you choose from IIAB's [map catalog](https://github.com/iiab/iiab/wiki/IIAB-Maps#how-do-i-upgrade-an-iiab-map-pack).
+Where `<CONTINENT-or-REGION>.mbtiles` is one of the [major region files](https://github.com/iiab/iiab/wiki/IIAB-Maps#where-are-iiab-maps-stored) (for example, a file with "2020" in its name) that you choose from IIAB's [map catalog](https://github.com/iiab/iiab/wiki/IIAB-Maps#how-do-i-upgrade-an-iiab-map-pack).
 
-   ~cd /library/www/<br>
+To use the older maps7.3 branch instead:
+
+   cd /library/www<br>
    rm -rf osm-vector-maps/<br>
-   nano /etc/iiab/iiab_state.yml    # Delete line 'osm_vector_maps_installed: True'<br>
+   cd /opt/iiab/iiab<br>
+   sudo ./scripts/iiab-state forget osm_vector_maps<br>
    git remote add ghunt git@github.com:/georgejhunt/iiab<br>
    git fetch --all<br>
    git checkout -b maps7.3 ghunt/maps7.3<br>
-   ./runrole osm-vector-maps~
+   ./runrole osm-vector-maps
 
 #### Please also see the IIAB Maps doc: https://github.com/iiab/iiab/wiki/IIAB-Maps

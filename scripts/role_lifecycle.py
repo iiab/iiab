@@ -49,9 +49,9 @@ INSTALL_PREFIX_OVERRIDES = {
     "iiab-admin": "admin_console",
 }
 
-# Helper roles that are always installed/configured by a stage playbook.  They
-# have no <role>_install / <role>_enabled vars, so runrole must not invent them
-# or report a conflict when they have a state marker.
+# Helper roles that a stage playbook always installs and configures. They have
+# no <role>_install / <role>_enabled vars, so runrole must not invent them or
+# report a conflict when they have a state marker.
 NO_INSTALL_PREFIX = {"firmware", "pylibs", "www_base", "www_options"}
 
 INCLUDE = re.compile(
@@ -158,7 +158,7 @@ def checklist_prefixes() -> list[str]:
 
 
 def table_rows() -> list[str]:
-    """Return one ``role|marker-prefix|install-prefix|capabilities`` row each.
+    """Return one ``role|marker-prefix|install-prefix|capabilities`` row per role.
 
     ``./runrole --list`` prints every role at once instead of starting four
     Python interpreters per role.
@@ -275,9 +275,8 @@ def supports(role: str, feature: str) -> bool:
     """True when *role* implements *feature*.
 
     ``reinstall`` is available to every role unless ``meta/runrole.yml`` sets
-    ``reinstall: false``.  A role with ``tasks/uninstall.yml`` is uninstalled
-    and then installed again; one without it falls back to its previous
-    install.yml behavior.
+    ``reinstall: false``. A role with ``tasks/uninstall.yml`` is removed and
+    then installed again. A role without that file runs ``install.yml`` again.
     """
     if feature == "reinstall":
         return exists(role) and _manifest_value(role, "reinstall") is not False
@@ -289,7 +288,7 @@ def supports(role: str, feature: str) -> bool:
 
 
 def capabilities(role: str) -> list[str]:
-    """Return the extended operations *role* accepts, in escalation order."""
+    """Return the optional lifecycle operations that *role* accepts."""
     result = []
     if supports(role, "reinstall"):
         result.append("reinstall")
@@ -339,7 +338,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     capabilities_parser = subparsers.add_parser(
-        "capabilities", help="print the role's extended operations"
+        "capabilities", help="print the role's optional lifecycle operations"
     )
     capabilities_parser.add_argument("role")
 

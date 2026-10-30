@@ -6,13 +6,13 @@ installed.  Use this lookup for boolean checks:
 
     when: lookup('installed', 'mysql')
 
-The lookup accepts either the role name or the full marker name, and returns
-false when the marker is undefined.  It reads ``iiab_state_file`` when the
-file exists, because play variables loaded through ``vars_files`` go stale
-after a marker is removed.  Without the file it falls back to play
-variables, so a test can use the lookup without one.  The file itself is
-parsed by ``modules/iiab_state.py``, the same code the ``iiab_state`` module
-and ``scripts/iiab-state`` use.
+The lookup accepts a marker prefix (``mysql``) or a full marker name
+(``firmware_downloaded``), and returns false when the marker is absent. It
+reads ``iiab_state_file`` when the file exists, because play variables loaded
+through ``vars_files`` go stale after a marker is removed. Without the file, it
+falls back to play variables, so a test can use the lookup without a state
+file. ``modules/iiab_state.py`` parses the file, with the same code that the
+``iiab_state`` module and ``scripts/iiab-state`` use.
 """
 
 from __future__ import annotations

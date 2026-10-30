@@ -1,5 +1,5 @@
 #!/usr/bin/python
-"""Read and write IIAB install-state markers.
+"""Read and write IIAB state markers.
 
 The state file stays a flat YAML mapping (``awstats_installed: True``), so
 ``vars_files``, shell greps, and image fixtures keep working.  Writes go
@@ -40,8 +40,8 @@ DEFAULT_HEADER = """\
 # DO *NOT* MANUALLY EDIT THIS, THANKS!
 # Managed by modules/iiab_state.py and ./scripts/iiab-state.
 # iiab-state-format: 1
-# IIAB installs apps/services; './runrole --uninstall' is only for roles that
-# provide the matching extended operation.
+# IIAB installs apps and services. './runrole --uninstall' works only for roles
+# that implement the uninstall operation.
 """
 
 MARKER_SUFFIXES = ("_installed", "_downloaded")

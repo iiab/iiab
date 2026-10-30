@@ -1,9 +1,12 @@
-"""Look up an IIAB role's variable/marker prefix.
+"""Look up an IIAB role's marker prefix or install prefix.
 
-The directory name and the variable prefix differ for a few roles, e.g.
-``calibre-web`` uses ``calibreweb_install`` and ``calibreweb_installed``.
-``scripts/role_lifecycle.py`` owns that mapping; this plugin is only a thin
-Ansible wrapper so role task files do not hard-code prefixes:
+The directory name and the variable prefix differ for a few roles. For example,
+``calibre-web`` uses ``calibreweb`` in ``calibreweb_install`` and
+``calibreweb_installed``. ``iiab-admin`` uses ``iiab_admin`` for its marker,
+but ``admin_console`` for ``admin_console_install`` and
+``admin_console_enabled``. ``scripts/role_lifecycle.py`` owns that mapping;
+this plugin is a thin Ansible wrapper so role task files do not hard-code
+prefixes:
 
     lifecycle_prefix: "{{ lookup('role_var', role_name) }}"
 
@@ -31,6 +34,7 @@ from role_lifecycle import install_prefix, role_var  # noqa: E402
 
 class LookupModule(LookupBase):
     def run(self, terms, variables=None, kind="marker", **kwargs):
+        # kind='marker' (the default) returns the state-marker prefix.
         # kind='install' returns the <prefix>_install / <prefix>_enabled
         # prefix (iiab-admin -> admin_console), or '' for helper roles.
         lookup = install_prefix if kind == "install" else role_var

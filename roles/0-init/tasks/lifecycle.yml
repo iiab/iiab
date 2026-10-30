@@ -6,12 +6,12 @@
 #       name: 0-init
 #       tasks_from: lifecycle
 #
-# Phases: install.yml (first install, --reinstall), upgrade.yml (--upgrade only,
-# instead of install.yml), configure.yml (every apply), state.yml (after a
-# successful apply), uninstall.yml (--uninstall, and the uninstall half of
-# --reinstall).  enable-or-disable.yml is a legacy convention that still runs on
-# every apply.  User settings are seeded with force: false, preserved by apply,
-# and reset by uninstall.yml.  See "Data ownership" in README.md.
+# Phases: install.yml (first install and --reinstall), upgrade.yml (--upgrade
+# only, instead of install.yml), configure.yml (every apply), state.yml (after a
+# successful apply), uninstall.yml (--uninstall, and the remove half of
+# --reinstall). enable-or-disable.yml is a legacy convention that still runs on
+# every apply. User settings are created with force: false, stay unchanged on an
+# apply, and are reset by uninstall.yml. See "Data ownership" in README.md.
 # lifecycle_context.yml re-reads the context after each phase, because a nested
 # include_role can clobber a fact.
 
@@ -44,12 +44,13 @@
     - name: Assert that '{{ lifecycle_install_prefix }}_install' is True
       assert:
         that: lookup('vars', lifecycle_install_prefix ~ '_install', default=false) is sameas true
-        fail_msg: "PLEASE SET '{{ lifecycle_install_prefix }}_install: True' e.g. IN: /etc/iiab/local_vars.yml"
+        fail_msg: "Set '{{ lifecycle_install_prefix }}_install: True' in /etc/iiab/local_vars.yml before you apply {{ lifecycle_role }}."
         quiet: yes
       when: lifecycle_install_prefix != ''
 
     # Snapshot before install.yml writes the marker.  A dict keyed by role
-    # keeps nested includes (e.g. matomo -> mysql) from clobbering our state.
+    # keeps nested includes (for example, matomo -> mysql) from clobbering our
+    # state.
     - name: Capture {{ lifecycle_role }} install state
       set_fact:
         lifecycle_state: >-
@@ -59,9 +60,8 @@
                   'record_disk_usage': (not lookup('installed', lifecycle_prefix) or (iiab_role_reinstall | bool) or (iiab_role_upgrade | bool))
                 }}) }}
 
-    # uninstall.yml defines --reinstall: remove the role, then install it
-    # again.  Roles without it fall back to install.yml, and --reinstall is
-    # ambiguous for them, so ./runrole warns.
+    # uninstall.yml supplies the remove half of --reinstall. Roles without it
+    # rerun install.yml, and ./runrole warns that the result is ambiguous.
     - name: Uninstall {{ lifecycle_role }} before reinstalling
       include_role:
         name: "{{ lifecycle_role }}"
@@ -102,8 +102,8 @@
     - name: Restore the {{ ansible_parent_role_names | first }} lifecycle context
       include_tasks: lifecycle_context.yml
 
-    # install.yml is deliberately not run on a plain apply: it may download,
-    # clone, or reinstall.  Put settings that must be reconciled every time in
+    # Do not run install.yml on an apply to an installed role: it may download,
+    # clone, or reinstall. Put work that must run on every apply in
     # configure.yml instead.
     - name: Install or repair {{ lifecycle_role }}
       include_role:

@@ -33,182 +33,193 @@ Finally, you can [customize your Internet-in-a-Box home page](https://wiki.iiab.
 
 ## Running roles individually
 
-`./runrole` applies one or more roles using `/etc/iiab/local_vars.yml`. Runs are
-repeatable: each role is installed if missing and otherwise reconfigured.
+`./runrole` applies one or more roles. It reads `/etc/iiab/local_vars.yml`.
+An apply is repeatable: it installs a missing role, then configures an
+installed role.
+
+### Commands
 
     sudo ./runrole captiveportal                    # apply one role
     sudo ./runrole transmission kiwix               # apply several roles
     sudo ./runrole --add captiveportal              # apply despite captiveportal_install: False
-    sudo ./runrole --reinstall awstats              # uninstall, then install again
+    sudo ./runrole --reinstall awstats              # remove, then install again
     sudo ./runrole --upgrade <role>                 # upgrade, once the role ships upgrade.yml
     sudo ./runrole --uninstall awstats              # uninstall, never deleting user data
     sudo ./runrole --uninstall awstats --skip-never-installed  # ignore roles with no markers
-    ./runrole --status captiveportal                # show installed/desired state
+    ./runrole --status captiveportal                # show installed and desired state
     ./runrole --list                                # list roles, state, conflicts, capabilities
     sudo ./runrole --check-local-vars               # validate local_vars.yml, then exit
     sudo ./runrole --log /tmp/iiab.log captiveportal
 
-- `--reinstall` reinstalls the role. When the role ships `uninstall.yml`, it runs
-  that file and installs again; this resets the role's declared user settings,
-  but never deletes user data. Without `uninstall.yml`, IIAB reruns
-  `install.yml` and warns that the behavior is ambiguous. A role whose reinstall
-  is unsafe can opt out with `reinstall: false` in
+- `--reinstall` installs the role again. If the role ships `uninstall.yml`,
+  `./runrole` first runs that file. It removes the program, its program data,
+  its managed settings, and its declared user settings. The reinstall then
+  installs the role and records its markers again. A reinstall never deletes
+  user data. If the role has no `uninstall.yml`, the reinstall runs
+  `install.yml` again and `./runrole` warns that the result is ambiguous. A
+  role can refuse
+  `--reinstall` with `reinstall: false` in
   `roles/<role>/meta/runrole.yml`; `kolibri`, `wordpress`, and `azuracast` do.
-  Legacy roles have their state markers removed before the reinstall starts, so
-  a failed reinstall leaves them looking uninstalled. `./iiab-install
-  --reinstall` is different: it only resets the stage counter and reruns the
-  stages; use `./runrole --reinstall <role>` to reinstall a role. `--reinstall`
-  asks for confirmation before resetting user settings; pass `-y` in
-  automation.
-- `--upgrade` upgrades an installed role through the application's own
-  mechanism. It is accepted only when the role ships `upgrade.yml` (or, for a
-  legacy role, implements `when: upgrade`). No role ships `upgrade.yml` in 1.0;
-  see "Upgrades" below.
-- `--uninstall` removes the program, its program data, and its user settings
-  where supported. It never deletes user data. Only leaf roles ship
-  `uninstall.yml`; shared roles do not. With several roles it refuses to start
-  if any listed role has no installed markers; add
-  `--skip-never-installed` to remove the installed roles and report the rest.
-- `--continue-on-error` runs each role separately and keeps going when one
-  fails, then reports the failed roles and exits nonzero. The default stops at
-  the first failure. It can be combined with `--uninstall`. Preflight failures
-  (unsupported operations, missing markers, or `<app>_install: False`) abort
-  the whole run before any role is processed.
-- `--status` and `--list` are read-only. `--check-local-vars` validates only
-  the listed role(s)/prefix(es), or the full checklist when none are given. A
-  listed prefix that has no 0-init checklist entry is an error, not a silent
-  pass.
+- For a legacy role, `./runrole` removes the state markers before the reinstall
+  starts. A failed reinstall then leaves the role marked as uninstalled.
+  `./iiab-install --reinstall` is different: it resets only the stage counter
+  and reruns the stages. To reinstall one role, use
+  `./runrole --reinstall <role>`.
+- `--upgrade` upgrades an installed role through the program's own upgrade
+  method. The role must ship `upgrade.yml` (or, for a legacy role, implement
+  `when: upgrade`). No role ships `upgrade.yml` in 1.0. See "Upgrades" below.
+- `--uninstall` removes the program, its program data, managed settings, and
+  user settings. It never deletes user data. Only leaf roles support it; shared
+  infrastructure roles do not. With several roles, `./runrole` refuses to start
+  if any listed role has no installed marker. Add `--skip-never-installed` to
+  uninstall the installed roles and report the others.
+- `--continue-on-error` runs each role in a separate playbook and continues
+  after a role fails. At the end, it reports the failed roles and exits
+  nonzero. Without this option, the run stops at the first failure. It can be
+  combined with `--uninstall`. A preflight failure stops the whole run before
+  any role starts. Preflight failures include an unsupported operation and,
+  for `--uninstall` or `--upgrade`, a missing marker. For an apply or a
+  reinstall, `<app>_install: False` is also a preflight failure.
+- `--status` and `--list` are read-only. `--check-local-vars` is also read-only;
+  it validates only the listed roles or prefixes, or the full checklist when
+  none are given. A listed prefix with no 0-init checklist entry is an error.
 - `--log FILE` writes the Ansible log to FILE instead of `./iiab-debug.log`.
 - `LOCAL_VARS_FILE`, `DEFAULT_VARS_FILE`, and `IIAB_STATE_FILE` override the
-  local-vars, defaults, and state-file paths for both the shell checks and the
-  entry playbooks.
-- Role lifecycle operations are controlled by internal `iiab_role_*` flags.
-  Do not set them in `local_vars.yml`; use the CLI options instead.
+  local-vars, defaults, and state-file paths for the shell checks and the entry
+  playbooks.
+- Role lifecycle operations use internal `iiab_role_*` flags. Do not set them
+  in `local_vars.yml`; use the CLI options.
 - `./runroles` is a deprecated alias for `./runrole`; it accepts the same
   arguments.
 
-Roles support `--uninstall` when they implement it (`tasks/uninstall.yml`, an
-inline `when: uninstall`, or `uninstall: true` in `meta/runrole.yml`), and
-`--upgrade` when they ship `upgrade.yml` (or, for a legacy role, implement
-`when: upgrade`). For a role using the shared runner, the phase file itself is
-required. `meta/runrole.yml` can opt a role out of `--reinstall` with
-`reinstall: false`; every other role accepts it. For a legacy role,
-`uninstall: true` / `upgrade: true` in `meta/runrole.yml` can override detection
-when the entrypoint branches on the flag; a converted role must ship the phase
-file instead.
+`--uninstall` and `--reinstall` ask for confirmation before they remove
+programs or reset settings. Pass `-y` in automation.
 
-### Conflicts with the installed state
+Capability detection uses one rule per operation. A legacy role supports
+`--uninstall` or `--upgrade` when its entry point includes the phase file, has
+an inline `when: uninstall` or `when: upgrade` path, or when
+`meta/runrole.yml` declares `uninstall: true` or `upgrade: true`. A role that
+uses the shared runner must ship `tasks/uninstall.yml` or `tasks/upgrade.yml`;
+a manifest flag cannot add a phase. Every existing role supports `--reinstall`
+unless `meta/runrole.yml` sets `reinstall: false`.
 
-An app already recorded as installed cannot be turned off by editing
-`local_vars.yml` alone. Inspect without changing anything:
+### Conflicts with the observed state
+
+If a role is recorded as installed, an edit to `local_vars.yml` alone cannot
+turn it off. Inspect the current state without a change:
 
     ./runrole --status squid
     ./runrole --list
 
-Keep it, uninstall it where supported (`sudo ./runrole --uninstall <role>`), or
-clear a stale marker with `sudo ./scripts/iiab-state forget <prefix>`. Clear a
-marker only after the program and its settings are gone. `--add` forces
-`<app>_install: True` for one run without editing `local_vars.yml`.
+Then do one of these actions:
+
+- Keep the role: set `<prefix>_install: True` in `local_vars.yml`.
+- Remove it, when the role supports `--uninstall`: run
+  `sudo ./runrole --uninstall <role>`.
+- Clear a stale marker: run `sudo ./scripts/iiab-state forget <prefix>`. Do
+  this only after the program, its program data, and its settings are gone.
+
+`--add` forces `<app>_install: True` for one run without an edit to
+`local_vars.yml`.
 
 ## Role task lifecycle
 
-Converted roles keep a small, fixed set of task files; `tasks/main.yml` only
-dispatches to the shared runner in `roles/0-init/tasks/lifecycle.yml`:
+A converted role is a role that uses the shared lifecycle runner. It uses a
+fixed set of task files. `tasks/main.yml` only dispatches to the runner in
+`roles/0-init/tasks/lifecycle.yml`:
 
     - name: Run the <Role> lifecycle
       include_role:
         name: 0-init
         tasks_from: lifecycle
 
-| File | Runs when | May use the network? |
+| File | Runs when | Network access |
 |---|---|---|
 | `main.yml` | every invocation | no (it only dispatches) |
-| `install.yml` | first install, `--reinstall` | yes |
+| `install.yml` | first install and `--reinstall` | yes |
 | `upgrade.yml` | `--upgrade` only, instead of `install.yml` | yes |
-| `configure.yml` | every apply | only to fetch a missing immutable asset |
+| `configure.yml` | every apply | only to download a missing immutable asset |
 | `state.yml` | after a successful apply | no |
-| `uninstall.yml` | `--uninstall`, and the uninstall half of `--reinstall` | no |
+| `uninstall.yml` | `--uninstall` and the remove half of `--reinstall` | no |
 
-`main.yml` starts the phases below through the runner, so the `install.yml` or
-`upgrade.yml` it may start can still use the network; `main.yml` itself must
-not.
+The runner starts these phases through `main.yml`. The phases can use the
+network when the table permits it. `main.yml` itself must not.
 
-`install.yml` is the only phase that installs or updates the program on a first
-install or `--reinstall`, and the runner gates it: it does not run when applying
-an already-installed role. On `--upgrade`, `upgrade.yml` replaces it. Anything
-that must be reconciled every time belongs in `configure.yml`.
-`enable-or-disable.yml` is a legacy convention the runner still executes
-(`awstats` uses it for the NGINX shortcut); new toggles belong in
-`configure.yml`.
+`install.yml` is the only phase that installs the program. The runner starts it
+on a first install and on `--reinstall`. It does not start it when an installed
+role is applied. On `--upgrade`, `upgrade.yml` replaces it. Put work that must
+run on every apply in `configure.yml`. `enable-or-disable.yml` is a
+legacy convention that the runner still runs; `awstats` uses it for the NGINX
+shortcut. Put new toggles in `configure.yml`.
 
 - `upgrade.yml` is optional. It runs instead of `install.yml` on `--upgrade` and
-  must use the application's own upgrade mechanism. It never writes schema
+  must use the program's own upgrade method. It must not write schema
   migrations or `local_vars.yml`. No role ships one in 1.0.
-- `uninstall.yml` removes the program, its program data, and its declared user
-  settings, never user data, and removes the role's state markers as its final
-  task. It is also the whole of `--reinstall`: any local cleanup that a reinstall
-  needs belongs at the bottom of this file, before the markers are removed. A
-  role without `uninstall.yml` reruns `install.yml` on `--reinstall`, and
-  `./runrole` warns that the behavior is ambiguous. Only leaf roles ship
-  `uninstall.yml`; shared infrastructure roles such as `mysql`, `postgresql`,
-  `mongodb`, `nginx`, `proot_services`, `sshd`, `www_base`, and `www_options`
-  do not.
-- Write the installed marker only after configure succeeds (normally in
-  `state.yml`). Test markers with `lookup('installed', 'mysql')`, not the
-  `*_installed` variable directly.
-- Do not add `disk_usage_start.yml` / `disk_usage_finish.yml` to a role that
-  uses the runner; it measures disk usage around the whole lifecycle.
-- Prefer the shared `Reload nginx` / `Restart nginx` handlers in
-  `roles/0-init/handlers/main.yml` over restarting NGINX in a role.
+- `uninstall.yml` removes the program, its program data, managed settings, and
+  declared user settings. It never deletes user data. Its final task removes
+  the role's state markers. This file also supplies the remove half of
+  `--reinstall`: put cleanup that a reinstall needs at the bottom of the file,
+  before the markers are removed. If the role has no `uninstall.yml`,
+  `--reinstall` runs `install.yml` again and `./runrole` warns that the result
+  is ambiguous. Only leaf roles ship `uninstall.yml`. Shared infrastructure
+  roles, such as `mysql`, `postgresql`, `mongodb`, `nginx`, `proot_services`,
+  `sshd`, `www_base`, and `www_options`, do not.
+- Write the installed marker only after configure succeeds. Normally,
+  `state.yml` does this. Test a marker with `lookup('installed', 'mysql')`, not
+  the `*_installed` variable.
+- Do not add `disk_usage_start.yml` or `disk_usage_finish.yml` to a role that
+  uses the runner. The runner measures disk use for the whole lifecycle.
+- Notify `Reload nginx` when a role changes NGINX configuration. Use
+  `Restart nginx` only when the role replaces the daemon itself. Both handlers
+  are in `roles/0-init/handlers/main.yml`.
 
-`awstats` is the reference implementation, including the uninstall/reinstall
-path. To convert a role: replace `main.yml` with the include, move
-first-install-only work to
-`install.yml` and repeatable work to `configure.yml`, add `state.yml`, add
-`uninstall.yml` only if removal is safe (this also defines `--reinstall`, so put
-reinstall cleanup at the bottom of it), add `upgrade.yml` only if the
-application has its own upgrade mechanism, then run
-`python3 scripts/test-role-lifecycle.py <role>`.
+`awstats` is the reference implementation, including reinstall and uninstall.
+To convert a role:
+
+1. Replace `main.yml` with the include.
+2. Move first-install work to `install.yml` and repeatable work to
+   `configure.yml`.
+3. Add `state.yml`.
+4. Add `uninstall.yml` only if removal is safe. This file also supplies the
+   remove half of `--reinstall`; put reinstall cleanup at its bottom.
+5. Add `upgrade.yml` only if the program has its own upgrade method.
+6. Run `python3 scripts/test-role-lifecycle.py <role>`.
+
 If a reinstall is unsafe, set `reinstall: false` in
-`roles/<role>/meta/runrole.yml` instead. Converting a role stops
-`install.yml` from running when applying an already-installed role, so move
-re-applied work to `configure.yml`.
+`roles/<role>/meta/runrole.yml` instead. A converted role does not run
+`install.yml` when the role is already installed, so move repeatable work to
+`configure.yml`.
 
-The test runs against mocked filesystems, services, and processes. A mocked
-download is resolved back to the fixture file shipped with the role, so
-`include_vars` on a downloaded catalog sees its real content. Use `--strict` to
-turn lifecycle warnings into failures, and `--all` to test every active role
-(`--jobs N` sets its parallelism). Roles not yet converted to the shared runner
-are reported as failures, so `--all` is expected to be red until the migration
-is complete.
+The test uses mocked filesystems, services, and processes. It resolves a mocked
+download to the fixture file shipped with the role, so `include_vars` on a
+downloaded catalog sees the real content. `--strict` turns lifecycle warnings
+into failures. `--all` tests every active role; `--jobs N` sets the
+parallelism. Roles that do not use the shared runner fail the test, so `--all`
+fails until the migration is complete.
 
 ## Data ownership
 
-A converted role distinguishes five kinds of state. "Settings" is not one
-category, and the lifecycle must not treat it as one.
+A converted role separates five classes of data and settings. Do not treat
+"settings" as one class. The lifecycle uses these classes:
 
-| Class | Examples | Apply (already installed) | `--reinstall` | `--uninstall` |
+| Class | Contents | Apply to an installed role | `--reinstall` | `--uninstall` |
 |---|---|---|---|---|
-| **Program** | packages, binaries, source trees, service units | not touched | removed and installed again when `uninstall.yml` exists; otherwise ambiguous | removed |
-| **Program data** | generated config, caches, indexes, logs, generated service files | reconciled by `configure.yml` | removed by `uninstall.yml`, then recreated | removed |
-| **Managed settings** | values driven by `local_vars.yml` | reconciled from `local_vars.yml` | reconciled | removed |
-| **User settings** | app-owned preferences and admin choices, or hand-edited config that IIAB does not manage | preserved | removed by `uninstall.yml`, then reseeded | removed |
-| **User data** | uploads, content, database records, generated reports | untouched | never removed | never removed |
+| **Program** | packages, binaries, source trees, service units | not changed | removed, then installed again | removed |
+| **Program data** | generated config, caches, indexes, logs, generated service files | updated by `configure.yml` | removed by `uninstall.yml`, then recreated | removed |
+| **Managed settings** | values set from `local_vars.yml` | set from `local_vars.yml` | set again | removed |
+| **User settings** | app preferences and administrator choices, or hand-edited config that IIAB does not manage | not changed | removed by `uninstall.yml`, then created again from the shipped default | removed |
+| **User data** | uploads, content, database records, generated reports | not changed | never deleted | never deleted |
 
-`--reinstall` is accepted by every role unless `meta/runrole.yml` sets
-`reinstall: false`. When the role ships `uninstall.yml`, reinstall runs that and
-installs again. Without `uninstall.yml`, the role keeps its previous
-`install.yml` behavior, but the result is not a full uninstall and `./runrole`
-warns that it is ambiguous. `--uninstall` applies to roles that implement it,
-normally by shipping `uninstall.yml`.
+This table describes a role that ships `uninstall.yml`. Without that file,
+`--reinstall` runs `install.yml` again and does not reset user settings.
 
-`local_vars.yml` is the user-owned *input* for managed settings; an apply
-enforces it. User settings are the opposite: state the user owns after IIAB
-seeds it. If a role cannot separate the two in one file, split the file rather
-than overwriting the whole file.
+`local_vars.yml` is user input for managed settings. An apply enforces those
+values. User settings are different: IIAB creates them once, then the user owns
+them. If a role cannot keep the two apart in one file, split the file. Do not
+overwrite the whole file.
 
-The simple rule for a user-setting file is to create it only when missing and
-never overwrite it:
+For a user-setting file, create it only when it is missing and never overwrite
+it:
 
     - name: Install the app configuration
       template:
@@ -216,20 +227,20 @@ never overwrite it:
         dest: "{{ app_config_file }}"
         force: false
 
-This preserves an existing user setting on apply, and on `--reinstall` when the
-role has no `uninstall.yml`. `--uninstall` removes it; `uninstall.yml` removes
-it before the next configure reseeds the shipped default. `copy` and `template`
-support `force: false`; use it for user-setting files. `lineinfile`,
-`blockinfile`, and `ini_file` have no `force` option, so check whether the file,
-line, or key already exists and skip the write (or merge at the key level)
-instead of overwriting it.
+This rule preserves an existing user setting on an apply, and on `--reinstall`
+when the role has no `uninstall.yml`. `--uninstall` removes the file. When
+`uninstall.yml` removes it, the next apply creates the shipped default again.
+`copy` and `template` support `force: false`; use it for user-setting files.
+`lineinfile`, `blockinfile`, and `ini_file` have no `force` option. For those
+modules, check whether the file, line, or key exists and skip the write, or
+merge at the key level. Do not overwrite an existing value.
 
 If a shipped default must change without discarding local edits, use a
-three-way checksum check or a key-level merge; do not overwrite
+three-way checksum check or a key-level merge. Do not overwrite
 unconditionally.
 
-Declare what a role owns in `defaults/main.yml`, using the role's state-marker
-prefix (`calibre-web` uses `calibreweb_...`):
+Declare the paths that a role owns in `defaults/main.yml`. Use the role's
+marker prefix (`calibre-web` uses `calibreweb_...`):
 
     exampleapp_user_settings:
       - /etc/exampleapp/settings.conf
@@ -238,53 +249,56 @@ prefix (`calibre-web` uses `calibreweb_...`):
     exampleapp_user_data:
       - /var/lib/exampleapp/uploads
 
-A path belongs to exactly one class. The lifecycle test seeds these paths and
-fails if apply overwrites a user setting, `--uninstall` does not remove it, a
-role with `uninstall.yml` does not reset it on `--reinstall`, user data is
-deleted, or a path appears in more than one class.
+A path belongs to exactly one class. The lifecycle test creates the declared
+user settings and user data, then fails if any of these conditions is true:
 
-`awstats` is the reference implementation: the user setting survives apply, is
-reset by `--reinstall`, and is removed by `--uninstall`. Only `awstats` is
-converted so far; new conversions must declare ownership before the test can
+- An apply changes a user setting.
+- `--uninstall` does not remove a user setting.
+- A role with `uninstall.yml` does not reset a user setting on `--reinstall`.
+- An operation deletes user data.
+- A path appears in more than one class.
+
+`awstats` is the reference implementation: an apply preserves its user setting,
+`--reinstall` resets it, and `--uninstall` removes it. Only `awstats` is
+converted so far. A new conversion must declare ownership before the test can
 prove it.
 
 ## Upgrades
 
-`--upgrade` is intentionally narrow, and no role ships `upgrade.yml` in 1.0.
-An upgrade must follow the application's own mechanism: back up what the
-application needs, swap the program or package, and let the application migrate
-its own data on startup. IIAB roles do not write schema migrations.
+`--upgrade` has a narrow scope. No role ships `upgrade.yml` in 1.0. An upgrade
+must use the program's own method: back up the files that the program needs,
+replace the program or package, and let the program migrate its own data on
+startup. IIAB roles do not write schema migrations.
 
 The scope is:
 
-- A role offers `--upgrade` only when it ships `upgrade.yml` (or, for a legacy
-  role, implements an inline `when: upgrade` path). An unusual implementation
-  can declare `upgrade: true` in `meta/runrole.yml` when detection cannot see
-  it. Shared infrastructure roles do not offer it.
-- Cross-OS-major upgrades are out of scope. Reinstall IIAB on the new OS
-  instead; an OS upgrade can change database and package major versions.
-- Long-lived pinned resources stay pinned in Ansible (`local_vars.yml` or the
-  role defaults). The user updates the pin before upgrading; `upgrade.yml` must
-  not rewrite `local_vars.yml`.
-- If an application has no upgrade mechanism, its role does not ship
-  `upgrade.yml`.
+- A role offers `--upgrade` only when it ships `upgrade.yml`, or when a legacy
+  role has an inline `when: upgrade` path. If detection cannot see an unusual
+  implementation, the role can declare `upgrade: true` in
+  `meta/runrole.yml`. Shared infrastructure roles do not offer `--upgrade`.
+- Cross-OS-major upgrades are out of scope. Reinstall IIAB on the new OS. An OS
+  upgrade can change database and package major versions.
+- Keep long-lived pinned resources pinned in Ansible (`local_vars.yml` or the
+  role defaults). The user updates the pin before the upgrade. `upgrade.yml`
+  must not rewrite `local_vars.yml`.
+- If a program has no upgrade method, its role does not ship `upgrade.yml`.
 
-`--reinstall` is not `--upgrade`: where `uninstall.yml` exists, it uninstalls
-the role and installs it again; without it, the path is ambiguous. `--upgrade`
-keeps the installation and user settings in place while the application moves
-itself to the pinned version.
+`--reinstall` is not `--upgrade`. A reinstall removes the role when
+`uninstall.yml` exists, then installs it again. It resets user settings only in
+that case. An upgrade keeps the installation and the user settings in place
+while the program moves to the pinned version.
 
 ## Observed state
 
-`/etc/iiab/iiab_state.yml` remains a flat YAML mapping
-(`awstats_installed: True`), so `vars_files`, `grep`, and image fixtures keep
-working. A missing file is a valid empty state for the module, the lookup, and
-`./scripts/iiab-state`; during the migration the entry playbooks still load it
-with `vars_files`, so `./runrole` creates it when absent. The
-path comes from `iiab_state_file`, which defaults to `IIAB_STATE_FILE` or
+`/etc/iiab/iiab_state.yml` is a flat YAML mapping (`awstats_installed: True`).
+This format keeps `vars_files`, `grep`, and image fixtures working. A missing
+file is a valid empty state for the module, the lookup, and
+`./scripts/iiab-state`. During the migration, the entry playbooks load the file
+with `vars_files`, so `./runrole` creates it when it is missing. The path comes
+from `iiab_state_file`; the default is `IIAB_STATE_FILE` or
 `/etc/iiab/iiab_state.yml`.
 
-Write markers through the module, not `lineinfile`:
+Write a marker through the module, not `lineinfile`:
 
     - name: Record AWStats installed
       iiab_state:
@@ -298,9 +312,10 @@ Entry playbooks pass the path once with `module_defaults`. Shell code uses
     ./scripts/iiab-state forget awstats
     ./scripts/iiab-state diff expected.yml /etc/iiab/iiab_state.yml
 
-`normalize`/`diff` compare only `_installed`/`_downloaded` markers; they ignore
-comments, key order, `True`/`true` spelling, and unrelated keys. The module,
-lookup plugin, and command share one parser and one write path.
+`normalize` and `diff` compare only `_installed` and `_downloaded` markers.
+They ignore comments, key order, `True`/`true` spelling, and unrelated keys.
+The module, lookup plugin, and command use one parser. All writes use one code
+path.
 
 ## Community
 
