@@ -2,12 +2,28 @@
 - hosts: all
   become: yes
 
+  vars:
+    default_vars_file: "{{ lookup('env', 'DEFAULT_VARS_FILE') or 'vars/default_vars.yml' }}"
+    local_vars_file: "{{ lookup('env', 'LOCAL_VARS_FILE') or '/etc/iiab/local_vars.yml' }}"
+    state_file: "{{ lookup('env', 'IIAB_STATE_FILE') or '/etc/iiab/iiab_state.yml' }}"
+
   vars_files:
-    - vars/default_vars.yml
+    - "{{ default_vars_file }}"
     # ansible-core 2.19 disallows (thankfully no longer needed!)
     #- vars/{{ ansible_local.local_facts.os_ver }}.yml
-    - /etc/iiab/local_vars.yml
-    - /etc/iiab/iiab_state.yml
+    - "{{ local_vars_file }}"
+    - "{{ state_file }}"
+
+  module_defaults:
+    iiab_state:
+      path: "{{ iiab_state_file }}"
+
+  pre_tasks:
+    - name: Refuse role-level lifecycle operations from this playbook
+      set_fact:
+        iiab_role_uninstall: false
+        iiab_role_reinstall: false
+        iiab_role_upgrade: false
 
   roles:
     - { role: 0-init }

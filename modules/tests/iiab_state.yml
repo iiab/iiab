@@ -1,0 +1,298 @@
+---
+- name: Exercise the iiab_state module and iiab-state CLI
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    ansible_python_interpreter: "{{ ansible_playbook_python }}"
+    test_dir: /tmp/iiab-state-integration
+    state_path: "{{ test_dir }}/iiab_state.yml"
+    bad_path: "{{ test_dir }}/bad.yml"
+    cli: "{{ playbook_dir }}/../../scripts/iiab-state"
+    iiab_state_file: "{{ state_path }}"
+
+  tasks:
+    - name: Start with a clean test directory
+      file:
+        path: "{{ test_dir }}"
+        state: absent
+
+    - name: Create the test directory
+      file:
+        path: "{{ test_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Create a state file through the CLI
+      command: "{{ cli }} --file {{ test_dir }}/ensured.yml ensure"
+
+    - name: Read the ensured state file
+      slurp:
+        src: "{{ test_dir }}/ensured.yml"
+      register: ensured
+
+    - name: Verify the ensure command wrote the default header
+      assert:
+        that:
+          - "'iiab-state-format: 1' in (ensured.content | b64decode)"
+
+    - name: A missing file is an empty state for reads
+      command: "{{ cli }} --file {{ state_path }} get alpha_installed"
+      register: missing_read
+      changed_when: false
+      failed_when: missing_read.rc != 1
+
+    - name: Set the first marker
+      iiab_state:
+        path: "{{ state_path }}"
+        key: alpha_installed
+      register: first_set
+
+    - name: Set the same marker again
+      iiab_state:
+        path: "{{ state_path }}"
+        key: alpha_installed
+      register: repeated_set
+
+    - name: Set a downloaded marker
+      iiab_state:
+        path: "{{ state_path }}"
+        key: firmware_downloaded
+      register: downloaded_set
+
+    - name: Set an unrelated role marker
+      iiab_state:
+        path: "{{ state_path }}"
+        key: beta_installed
+      register: beta_set
+
+    - name: Set a string value through the same API
+      iiab_state:
+        path: "{{ state_path }}"
+        key: beta_version
+        value: "7.8"
+      register: version_set
+
+    - name: Check removal in check mode
+      iiab_state:
+        path: "{{ state_path }}"
+        key: alpha_installed
+        state: absent
+      check_mode: true
+      register: checked_remove
+
+    - name: Read the file before the real removal
+      slurp:
+        src: "{{ state_path }}"
+      register: before_remove
+
+    - name: Remove the alpha marker
+      iiab_state:
+        path: "{{ state_path }}"
+        key: alpha_installed
+        state: absent
+      register: alpha_remove
+
+    - name: Read the file after the real removal
+      slurp:
+        src: "{{ state_path }}"
+      register: after_remove
+
+    - name: Verify the module results
+      assert:
+        that:
+          - first_set is changed
+          - repeated_set is not changed
+          - downloaded_set is changed
+          - beta_set is changed
+          - version_set is changed
+          - checked_remove is changed
+          - "'alpha_installed: True' in (before_remove.content | b64decode)"
+          - alpha_remove is changed
+          - alpha_remove.removed | sort == ['alpha_installed']
+          - "'alpha_installed' not in (after_remove.content | b64decode)"
+          - "'beta_installed: True' in (after_remove.content | b64decode)"
+          - "(after_remove.content | b64decode | from_yaml)['beta_version'] == '7.8'"
+          - "'iiab-state-format: 1' in (after_remove.content | b64decode)"
+          - "'alpha_installed: true' not in (after_remove.content | b64decode)"
+
+    - name: The lookup plugin reads the file without vars_files
+      assert:
+        that:
+          - lookup('installed', 'beta')
+          - not lookup('installed', 'alpha')
+          - lookup('installed', 'firmware_downloaded')
+
+    - name: List markers through the CLI
+      command: "{{ cli }} --file {{ state_path }} list"
+      register: listed
+      changed_when: false
+
+    - name: Check the CLI installed predicate
+      command: "{{ cli }} --file {{ state_path }} is-installed beta"
+      register: beta_installed
+      changed_when: false
+      failed_when: beta_installed.rc != 0
+
+    - name: Check the CLI installed predicate for a missing role
+      command: "{{ cli }} --file {{ state_path }} is-installed alpha"
+      register: alpha_installed
+      changed_when: false
+      failed_when: alpha_installed.rc != 1
+
+    - name: Check the CLI prefix predicate
+      command: "{{ cli }} --file {{ state_path }} has-prefix beta"
+      register: beta_prefix
+      changed_when: false
+      failed_when: beta_prefix.rc != 0
+
+    - name: Check the CLI prefix predicate for a missing prefix
+      command: "{{ cli }} --file {{ state_path }} has-prefix alpha"
+      register: alpha_prefix
+      changed_when: false
+      failed_when: alpha_prefix.rc != 1
+
+    - name: Verify the CLI output
+      assert:
+        that:
+          - "'beta_installed: True' in listed.stdout"
+          - "'alpha_installed' not in listed.stdout"
+
+    - name: Write a file with several role markers
+      copy:
+        dest: "{{ test_dir }}/forget.yml"
+        content: |
+          beta_installed: True
+          beta_downloaded: True
+          beta_version: "7.8"
+          other_installed: True
+        mode: "0644"
+
+    - name: Forget a role prefix through the CLI
+      command: "{{ cli }} --file {{ test_dir }}/forget.yml forget beta"
+      register: forgot
+      changed_when: forgot.rc == 0
+
+    - name: Read the file after forgetting a prefix
+      slurp:
+        src: "{{ test_dir }}/forget.yml"
+      register: after_forget
+
+    - name: Verify prefix removal left unrelated markers alone
+      assert:
+        that:
+          - "'removed beta_installed' in forgot.stdout"
+          - "'removed beta_downloaded' in forgot.stdout"
+          - "'beta_installed' not in (after_forget.content | b64decode)"
+          - "'beta_downloaded' not in (after_forget.content | b64decode)"
+          - "(after_forget.content | b64decode | from_yaml)['beta_version'] == '7.8'"
+          - "'other_installed: True' in (after_forget.content | b64decode)"
+
+    - name: Write an expected-state fixture that matches
+      copy:
+        dest: "{{ test_dir }}/expected.yml"
+        content: |
+          beta_installed: true
+          firmware_downloaded: yes
+        mode: "0644"
+
+    - name: Compare matching state files
+      command: "{{ cli }} --file {{ state_path }} diff {{ test_dir }}/expected.yml {{ state_path }}"
+      register: matching_diff
+      changed_when: false
+      failed_when: matching_diff.rc != 0
+
+    - name: Write an expected-state fixture with a difference
+      copy:
+        dest: "{{ test_dir }}/expected-bad.yml"
+        content: |
+          beta_installed: true
+          alpha_installed: true
+        mode: "0644"
+
+    - name: Compare differing state files
+      command: "{{ cli }} --file {{ state_path }} diff {{ test_dir }}/expected-bad.yml {{ state_path }}"
+      register: differing_diff
+      changed_when: false
+      failed_when: differing_diff.rc != 1
+
+    - name: Verify the normalized diff explains the difference
+      assert:
+        that:
+          - "'missing: alpha_installed' in differing_diff.stdout"
+          - "'extra:   firmware_downloaded' in differing_diff.stdout"
+
+    - name: The module defaults to IIAB_STATE_FILE
+      iiab_state:
+        key: env_installed
+      environment:
+        IIAB_STATE_FILE: "{{ state_path }}"
+      register: env_set
+
+    - name: The CLI defaults to IIAB_STATE_FILE
+      command: "{{ cli }} get env_installed"
+      environment:
+        IIAB_STATE_FILE: "{{ state_path }}"
+      register: env_read
+      changed_when: false
+
+    - name: Verify both use IIAB_STATE_FILE when no path is passed
+      assert:
+        that:
+          - env_set.path == state_path
+          - env_read.stdout == 'True'
+
+    - name: Run concurrent writers against the same file
+      shell: |
+        set -e
+        for worker in $(seq 1 20); do
+          "{{ cli }}" --file "{{ state_path }}" set "worker_${worker}_installed" >/dev/null &
+        done
+        wait
+      changed_when: false
+
+    - name: Read the file after concurrent writes
+      slurp:
+        src: "{{ state_path }}"
+      register: concurrent
+
+    - name: Verify that no concurrent update was lost
+      assert:
+        that:
+          - concurrent.content | b64decode | regex_findall('worker_[0-9]+_installed') | length == 20
+
+    - name: Remove a missing key is a no-op
+      iiab_state:
+        path: "{{ state_path }}"
+        key: never_installed
+        state: absent
+      register: missing_remove
+
+    - name: Verify the no-op
+      assert:
+        that:
+          - missing_remove is not changed
+
+    - name: Write a malformed state file
+      copy:
+        dest: "{{ bad_path }}"
+        content: |
+          - not a mapping
+        mode: "0644"
+
+    - name: Refuse to read a malformed state file
+      command: "{{ cli }} --file {{ bad_path }} list"
+      register: bad_read
+      changed_when: false
+      failed_when: bad_read.rc != 2
+
+    - name: Verify the malformed-file error is actionable
+      assert:
+        that:
+          - "'must contain a YAML mapping' in bad_read.stderr"
+
+    - name: Remove integration-test artifacts
+      file:
+        path: "{{ test_dir }}"
+        state: absent

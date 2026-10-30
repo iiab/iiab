@@ -4,7 +4,7 @@
 
 PLAYBOOK=iiab-stages.yml
 INVENTORY=ansible_hosts
-IIAB_STATE_FILE=/etc/iiab/iiab_state.yml
+export IIAB_STATE_FILE=/etc/iiab/iiab_state.yml
 ARGS="--extra-vars {"    # Needs boolean not string so use JSON list.  bash forces {...} to '{...}' for Ansible
 
 CWD=`pwd`
@@ -23,7 +23,7 @@ usage() {
     echo -e "Use './iiab-install --reinstall' to force running all Stages 0-9, followed by the Network Role."
     echo -e "Use './iiab-install --debug' to run Stage 0, followed by Stages 3-9, followed by the Network Role."
     echo -e "Use './iiab-configure' to run Stage 0, followed by Stages 4-9."
-    echo -e "Use './runrole' to run Stage 0, followed by a single Stage or Role."
+    echo -e "Use './runrole' to run Stage 0 (0-init), followed by one or more roles."
     echo -e "Use './iiab-network' to run Stage 0, followed by the Network Role.\e[0m\n"
 }
 
@@ -49,7 +49,7 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-ARGS="$ARGS\"skip_role_on_error\":$SKIP_ROLE_ON_ERROR"    # Needs boolean not
+ARGS="$ARGS\"skip_role_on_error\":$SKIP_ROLE_ON_ERROR,\"iiab_role_uninstall\":false,\"iiab_role_reinstall\":false,\"iiab_role_upgrade\":false"    # Needs boolean not
 # string so use JSON list.  Ansible permits these boolean values: (refresher)
 # https://github.com/iiab/iiab/blob/master/roles/0-init/tasks/validate_vars.yml#L19-L43
 
@@ -157,8 +157,8 @@ if [ -f /etc/iiab/iiab.env ]; then
 
     if $($REINSTALL); then
         STAGE=0
-        #ARGS="$ARGS"" --extra-vars reinstall=True"
-        ARGS="$ARGS,\"reinstall\":True"    # Needs boolean not string so use JSON list
+        # --reinstall only resets the stage counter and reruns the stages.
+        # To reinstall one role, use './runrole --reinstall <role>'.
         sed -i 's/^STAGE=.*/STAGE=0/' /etc/iiab/iiab.env
         echo "Wrote STAGE=0 (counter) to /etc/iiab/iiab.env"
     elif [ "$STAGE" -ge 2 ] && $($DEBUG); then
@@ -175,16 +175,13 @@ if [ "$STAGE" -lt 2 ] && $($DEBUG); then
     echo -e "\n'--debug' *ignored* as STAGE (counter) < 2."
 fi
 
-# /etc/iiab/iiab_state.yml is mandatory and must be created here.  Background:
-# Allow iiab-install to read IIAB_STATE_FILE to not repeat installs of previous
-# roles that already completed within the stage.
-if [ ! -f  $IIAB_STATE_FILE ]; then    # touch $IIAB_STATE_FILE
+# /etc/iiab/iiab_state.yml is still loaded through vars_files by the entry
+# playbooks, so it must exist.  Remove this block once every role reads state
+# markers through the 'installed' lookup (a missing file is already a valid
+# empty state for the module and the lookup).
+if [ ! -f "$IIAB_STATE_FILE" ]; then
     echo -e "\nCreating... $IIAB_STATE_FILE"
-    cat > $IIAB_STATE_FILE << EOF
-# DO *NOT* MANUALLY EDIT THIS, THANKS!
-# IIAB does NOT currently support uninstalling apps/services.
-
-EOF
+    ./scripts/iiab-state --file "$IIAB_STATE_FILE" ensure
 fi
 
 echo -e "\nTRY TO RERUN './iiab-install' IF IT FAILS DUE TO CONNECTIVITY ISSUES ETC!\n"
@@ -197,6 +194,16 @@ ansible -m setup -a 'gather_subset=!hardware,!network' -i $INVENTORY localhost -
 ansible -m setup -a 'gather_subset=!hardware,!network' -i $INVENTORY localhost --connection=local >> /dev/null    # So vars are recorded in /opt/iiab/iiab/iiab-install.log
 ARGS="$ARGS}"
 echo -e "\nNOW RUN: ansible-playbook -i $INVENTORY $PLAYBOOK $ARGS --connection=local\n"
-ansible-playbook -i $INVENTORY $PLAYBOOK $ARGS --connection=local
+if ! ansible-playbook -i $INVENTORY $PLAYBOOK $ARGS --connection=local; then
+    echo -e "\n\e[1;31mIIAB INSTALL DID NOT FINISH.\e[0m\n" >&2
+    echo -e "Read the first 'fatal:' above or in $ANSIBLE_LOG_PATH\n" >&2
+    echo -e "Fix it and re-run './iiab-install' (completed stages are skipped)." >&2
+    echo -e "If a role fails after it records the app as installed, keep" >&2
+    echo -e "'<app>_install: True'. If the role supports --uninstall, remove the" >&2
+    echo -e "app with 'sudo ./runrole --uninstall <role>' (see 'sudo ./runrole --list')." >&2
+    echo -e "Need help? Run 'sudo iiab-diagnostics' and include its output." >&2
+    echo -e "Platforms: https://github.com/iiab/iiab/wiki/IIAB-Platforms\n" >&2
+    exit 1
+fi
 
 echo -e "./iiab-install $* COMPLETED IN $CWD\n\n"

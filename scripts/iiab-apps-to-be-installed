@@ -19,8 +19,15 @@ iiab_var_value() {
 # 2022-06-18: 46 apps (list incorrect) -- adds these 6: iiab_admin, minetest, network (HAS NO _installed VAR), pylibs, www_base, www_options
 #grep -l _installed: /opt/iiab/iiab/roles/*/tasks/* | cut -d/ -f6 | sort | uniq > /tmp/iiab-apps-list
 
-# 2022-06-18: 50 apps (list long but ok!) -- adds these 10: dansguardian, dhcpd, iiab_admin, minetest, named, pylibs, squid, wondershaper, www_base, www_options
-grep -hro '[A-Za-z_][A-Za-z_]*_installed: True' --exclude-dir=0-DEPRECATED-ROLES /opt/iiab/iiab/roles | sed 's/_installed: True$//' | sort | uniq > /tmp/iiab-apps-list
+# Derive the app list from markers written through the iiab_state module.
+# The old lineinfile pattern is still accepted while roles are converted one
+# at a time; it can be dropped once every role writes state through the module.
+{
+    grep -rhE '^[[:space:]]+key: [A-Za-z_][A-Za-z0-9_]*_installed[[:space:]]*$' --exclude-dir=0-DEPRECATED-ROLES /opt/iiab/iiab/roles |
+        sed -E 's/.*key: ([A-Za-z_][A-Za-z0-9_]*)_installed.*/\1/'
+    grep -hroE '[A-Za-z_][A-Za-z0-9_]*_installed: True' --exclude-dir=0-DEPRECATED-ROLES /opt/iiab/iiab/roles |
+        sed -E 's/_installed: True$//'
+} | sort -u > /tmp/iiab-apps-list
 
 # Non-root CANNOT rm files from /tmp, but CAN write to them (unlike root!!)
 # This ALSO creates the file (useful when "Apps2B" == 0, for iiab-summary etc)
@@ -29,16 +36,21 @@ truncate -s 0 /tmp/iiab-apps-to-be-installed
 # So other (non-root) users CAN later write to these, even if they CAN'T chmod!
 chmod 777 /tmp/iiab-apps-list /tmp/iiab-apps-to-be-installed 2>/dev/null
 
-while read app; do
-    if [[ $app == "calibre-web" ]]; then
-        app=calibreweb
-    elif [[ $app == "osm-vector-maps" ]]; then
-        app=osm_vector_maps
-    fi
+# The list above already uses variable prefixes (calibreweb,
+# osm_vector_maps), so no role-name translation is needed here.
+#
+# Read the markers once: starting a Python process per app is noticeably slow
+# on a Raspberry Pi, and iiab-summary calls this script.
+if ! state_markers=$(/opt/iiab/iiab/scripts/iiab-state list); then
+    echo "ERROR: could not read the IIAB state file." >&2
+    exit 1
+fi
 
+while IFS= read -r app; do
     # echo ${app}_install: $(iiab_var_value ${app}_install)
 
-    if [[ $(iiab_var_value ${app}_install) =~ ^[Tt]rue$ ]] && ! grep -q "${app}_installed: True" /etc/iiab/iiab_state.yml; then
-        echo $app | tee -a /tmp/iiab-apps-to-be-installed
+    if [[ $(iiab_var_value "${app}_install") =~ ^[Tt]rue$ ]] &&
+        ! grep -qx "${app}_installed: True" <<< "$state_markers"; then
+        echo "$app" | tee -a /tmp/iiab-apps-to-be-installed
     fi
 done < /tmp/iiab-apps-list
