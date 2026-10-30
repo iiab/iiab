@@ -48,7 +48,7 @@ repeatable: each role is installed if missing and otherwise reconfigured.
     sudo ./runrole --check-local-vars               # validate local_vars.yml, then exit
     sudo ./runrole --log /tmp/iiab.log captiveportal
 
-- `--reinstall` rebuilds the role. When the role ships `uninstall.yml`, it runs
+- `--reinstall` reinstalls the role. When the role ships `uninstall.yml`, it runs
   that file and installs again; this resets the role's declared user settings,
   but never deletes user data. Without `uninstall.yml`, IIAB reruns
   `install.yml` and warns that the behavior is ambiguous. A role whose reinstall
@@ -57,7 +57,7 @@ repeatable: each role is installed if missing and otherwise reconfigured.
   Legacy roles have their state markers removed before the reinstall starts, so
   a failed reinstall leaves them looking uninstalled. `./iiab-install
   --reinstall` is different: it only resets the stage counter and reruns the
-  stages; use `./runrole --reinstall <role>` to rebuild a role. `--reinstall`
+  stages; use `./runrole --reinstall <role>` to reinstall a role. `--reinstall`
   asks for confirmation before resetting user settings; pass `-y` in
   automation.
 - `--upgrade` upgrades an installed role through the application's own
@@ -146,7 +146,7 @@ that must be reconciled every time belongs in `configure.yml`.
   migrations or `local_vars.yml`. No role ships one in 1.0.
 - `uninstall.yml` removes the program, its program data, and its declared user
   settings, never user data, and removes the role's state markers as its final
-  task. It is also the whole of `--reinstall`: any local cleanup that a rebuild
+  task. It is also the whole of `--reinstall`: any local cleanup that a reinstall
   needs belongs at the bottom of this file, before the markers are removed. A
   role without `uninstall.yml` reruns `install.yml` on `--reinstall`, and
   `./runrole` warns that the behavior is ambiguous. Only leaf roles ship
