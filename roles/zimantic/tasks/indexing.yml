@@ -1,0 +1,147 @@
+---
+# Fast indexing makes newly downloaded ZIMs searchable immediately. In
+# semantic mode, the nightly full build upgrades those indexes with vectors.
+
+- name: Check installed Zimantic indexing units
+  stat:
+    path: "{{ item }}"
+  loop:
+    - /etc/systemd/system/zimantic-indexing-fast.path
+    - /etc/systemd/system/zimantic-indexing-fast.service
+    - /etc/systemd/system/zimantic-indexing.timer
+    - /etc/systemd/system/zimantic-indexing.service
+  register: zimantic_indexing_unit_files
+
+- name: Stop and disable the fast indexing path when Zimantic is disabled
+  systemd:
+    name: zimantic-indexing-fast.path
+    state: stopped
+    enabled: no
+  when:
+    - not zimantic_enabled
+    - (zimantic_indexing_unit_files.results
+       | selectattr('item', 'equalto', '/etc/systemd/system/zimantic-indexing-fast.path')
+       | map(attribute='stat.exists') | first | bool)
+
+- name: Stop the fast indexing service when Zimantic is disabled
+  systemd:
+    name: zimantic-indexing-fast.service
+    state: stopped
+  when:
+    - not zimantic_enabled
+    - (zimantic_indexing_unit_files.results
+       | selectattr('item', 'equalto', '/etc/systemd/system/zimantic-indexing-fast.service')
+       | map(attribute='stat.exists') | first | bool)
+
+- name: Stop and disable the semantic indexing timer when not in semantic mode
+  systemd:
+    name: zimantic-indexing.timer
+    state: stopped
+    enabled: no
+  when:
+    - not zimantic_enabled or zimantic_mode != 'semantic'
+    - (zimantic_indexing_unit_files.results
+       | selectattr('item', 'equalto', '/etc/systemd/system/zimantic-indexing.timer')
+       | map(attribute='stat.exists') | first | bool)
+
+- name: Stop the semantic indexing service when not in semantic mode
+  systemd:
+    name: zimantic-indexing.service
+    state: stopped
+  when:
+    - not zimantic_enabled or zimantic_mode != 'semantic'
+    - (zimantic_indexing_unit_files.results
+       | selectattr('item', 'equalto', '/etc/systemd/system/zimantic-indexing.service')
+       | map(attribute='stat.exists') | first | bool)
+
+- name: Install fast indexing service
+  template:
+    src: zimantic-indexing-fast.service.j2
+    dest: /etc/systemd/system/zimantic-indexing-fast.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+  when: zimantic_enabled
+
+- name: Remove fast indexing service when Zimantic is disabled
+  file:
+    path: /etc/systemd/system/zimantic-indexing-fast.service
+    state: absent
+  notify: Reload systemd
+  when: not zimantic_enabled
+
+- name: Install fast indexing path
+  template:
+    src: zimantic-indexing-fast.path.j2
+    dest: /etc/systemd/system/zimantic-indexing-fast.path
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+  when: zimantic_enabled
+
+- name: Remove fast indexing path when Zimantic is disabled
+  file:
+    path: /etc/systemd/system/zimantic-indexing-fast.path
+    state: absent
+  notify: Reload systemd
+  when: not zimantic_enabled
+
+- name: Install semantic indexing service
+  template:
+    src: zimantic-indexing.service.j2
+    dest: /etc/systemd/system/zimantic-indexing.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+  when:
+    - zimantic_enabled
+    - zimantic_mode == 'semantic'
+
+- name: Remove semantic indexing service outside semantic mode
+  file:
+    path: /etc/systemd/system/zimantic-indexing.service
+    state: absent
+  notify: Reload systemd
+  when:
+    - not zimantic_enabled or zimantic_mode != 'semantic'
+
+- name: Install semantic indexing timer
+  template:
+    src: zimantic-indexing.timer.j2
+    dest: /etc/systemd/system/zimantic-indexing.timer
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+  when:
+    - zimantic_enabled
+    - zimantic_mode == 'semantic'
+
+- name: Remove semantic indexing timer outside semantic mode
+  file:
+    path: /etc/systemd/system/zimantic-indexing.timer
+    state: absent
+  notify: Reload systemd
+  when:
+    - not zimantic_enabled or zimantic_mode != 'semantic'
+
+- name: Enable and start fast indexing path
+  systemd:
+    name: zimantic-indexing-fast.path
+    enabled: yes
+    state: started
+    daemon_reload: yes
+  when: zimantic_enabled
+
+- name: Enable and start semantic indexing timer
+  systemd:
+    name: zimantic-indexing.timer
+    enabled: yes
+    state: started
+    daemon_reload: yes
+  when:
+    - zimantic_enabled
+    - zimantic_mode == 'semantic'

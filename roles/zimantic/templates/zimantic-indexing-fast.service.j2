@@ -1,0 +1,18 @@
+# Managed by IIAB's zimantic role.
+
+[Unit]
+Description=Index new ZIMs quickly and rescan Zimantic
+After=local-fs.target
+RequiresMountsFor={{ zimantic_zim_dir }} {{ zimantic_data_dir }}
+
+[Service]
+Type=oneshot
+User={{ zimantic_user }}
+Group={{ zimantic_user }}
+WorkingDirectory={{ zimantic_data_dir }}
+ExecStart=/bin/sh -c 'if ! exec 9>"{{ zimantic_data_dir }}/.build.lock"; then echo "zimantic: unable to open build lock" >&2; exit 1; fi; if ! /usr/bin/flock -n 9; then echo "zimantic: another build is running, fast build skipped" >&2; exit 0; fi; build_status=0; "{{ zimantic_venv }}/bin/zimantic" build --fast --wait-stable || build_status=$?; reload_status=0; "{{ zimantic_venv }}/bin/zimantic" reload || reload_status=$?; if [ "$build_status" -ne 0 ]; then exit "$build_status"; fi; exit "$reload_status"'
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=full
+ProtectHome=yes
+ReadWritePaths={{ zimantic_data_dir }}

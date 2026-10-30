@@ -25,10 +25,38 @@
     state: absent
   when: zimantic_uninstall_unit.stat.exists
 
-- name: Reload systemd after removing zimantic.service
+- name: Check for installed Zimantic indexing units
+  stat:
+    path: "{{ item }}"
+  loop:
+    - /etc/systemd/system/zimantic-indexing-fast.path
+    - /etc/systemd/system/zimantic-indexing-fast.service
+    - /etc/systemd/system/zimantic-indexing.timer
+    - /etc/systemd/system/zimantic-indexing.service
+  register: zimantic_uninstall_indexing_units
+
+- name: Stop and disable Zimantic indexing units
+  systemd:
+    name: "{{ item.item | basename }}"
+    state: stopped
+    enabled: no
+  loop: "{{ zimantic_uninstall_indexing_units.results }}"
+  when: item.stat.exists
+
+- name: Remove Zimantic indexing units
+  file:
+    path: "{{ item.item }}"
+    state: absent
+  loop: "{{ zimantic_uninstall_indexing_units.results }}"
+  register: zimantic_removed_indexing_units
+
+- name: Reload systemd after removing Zimantic units
   systemd:
     daemon_reload: yes
-  when: zimantic_uninstall_unit.stat.exists
+  when:
+    - zimantic_uninstall_unit.stat.exists or
+      (zimantic_removed_indexing_units.results
+       | selectattr('changed', 'equalto', true) | list | length > 0)
 
 - name: Remove the Zimantic NGINX shortcut
   file:

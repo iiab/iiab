@@ -86,16 +86,28 @@ Native dependencies
 Indexes
 ~~~~~~~
 
-The role does not build indexes. Build a fast (title and full-text) index
-during a maintenance window::
+The role does not build indexes during installation. To run a fast (title and
+full-text) index manually during a maintenance window::
 
     cd /library/zimantic && sudo -u zimantic /opt/iiab/zimantic/.venv/bin/zimantic build --fast
 
-A full semantic index build can be expensive on small devices, so the role does
-not attempt it. Build semantic indexes on a faster compatible machine, copy the
-files into ``/library/zimantic/indexes``, and restart the service. When memory
-is limited, set ``zimantic_zim_dir`` to a directory containing only the archives
-you want searched; the default is IIAB's complete ``/library/zims/content``.
+A full semantic index build can be expensive on small devices. In semantic mode,
+the role installs a nightly full indexing timer for the local time window
+01:00-06:00, plus a path trigger that creates fast indexes as new ZIMs arrive.
+In fast mode, only the fast path trigger is installed; no semantic build or
+embedding model is run overnight. The indexing units reload the running server
+after each build and serialize fast and full builds so they cannot write the
+same index concurrently.
+
+To run a semantic build manually::
+
+    cd /library/zimantic && sudo -u zimantic /opt/iiab/zimantic/.venv/bin/zimantic build --wait-stable
+
+Build semantic indexes on a faster compatible machine when memory or overnight
+load is a concern, then copy the files into ``/library/zimantic/indexes`` and
+restart the service. When memory is limited, set ``zimantic_zim_dir`` to a
+directory containing only the archives you want searched; the default is IIAB's
+complete ``/library/zims/content``.
 
 Memory and restart limits
 ~~~~~~~~~~~~~~~~~~~~~~~~~
