@@ -103,6 +103,22 @@ def get_mirror(path):
 
     raise Exception(f"Failed to download {path} from any of the available mirrors.")
 
+def resolve_source(source, tmp):
+    # A resume can only continue the partial from the SAME mirror recorded in its
+    # <output>.resume journal; get_mirror() shuffles, so on a retry reuse that mirror.
+    journal = Path(str(tmp) + ".resume")
+    if journal.exists():
+        try:
+            j = json.loads(journal.read_text())
+            bucket, key = j.get("bucket"), j.get("key")
+            if bucket and key:
+                pinned = bucket + "/" + key
+                if requests.head(pinned).status_code == 200:
+                    return pinned
+        except (json.JSONDecodeError, OSError, requests.RequestException):
+            pass
+    return get_mirror(source)
+
 def get_extract_dir(extract_name):
     """
     Make sure this matches makeFqrSourceId in index.html
@@ -148,14 +164,15 @@ def get_new_extract_paths(extract_name):
     def get_paths(source):
         match (source.split('/')[-1].split('.')):
             case [region_extract_type, date, _zoom_range, "pmtiles"]:
+                tmp = (TMP_DIR /
+                        f"{region_extract_type}.{date}.full-region.{extract_name}.pmtiles")
                 return {
                     "source":
-                        get_mirror(source),
+                        resolve_source(source, tmp),
                     "extract":
                         get_extract_dir(extract_name) / f"{region_extract_type}.{date}.pmtiles",
                     "tmp":
-                        (TMP_DIR /
-                            f"{region_extract_type}.{date}.full-region.{extract_name}.pmtiles"),
+                        tmp,
                 }
             case _:
                 raise Exception("Oops got unexpected pmtiles file name:", source)
