@@ -5,6 +5,10 @@
 # immutable asset, not a program version; nothing is deleted or re-downloaded
 # when the file and checksum already match.
 
+# An apply to an installed role skips install.yml, so validate here too.
+- name: Validate Zimantic settings
+  include_tasks: validate.yml
+
 - name: Create Linux user {{ zimantic_user }}
   user:
     name: "{{ zimantic_user }}"
@@ -101,3 +105,44 @@
   notify:
     - Reload systemd
     - Restart Zimantic
+
+# Enable or disable the service and its NGINX shortcut after the unit and
+# configuration have been reconciled above.
+- name: Enable and start zimantic.service
+  systemd:
+    name: zimantic
+    enabled: yes
+    state: started
+    daemon_reload: yes
+  when: zimantic_enabled
+
+# The installed marker is in iiab_state.yml, so only a service this role
+# installed is touched. On a first apply that installs with _enabled False the
+# marker is written by state.yml after configure; the new unit is not enabled
+# or started by default, so there is nothing to stop.
+- name: Disable and stop zimantic.service
+  systemd:
+    name: zimantic
+    enabled: no
+    state: stopped
+  when:
+    - not zimantic_enabled
+    - lookup('installed', 'zimantic')
+
+- name: Disable http://box{{ zimantic_url }} shortcut via NGINX
+  file:
+    path: "{{ nginx_conf_dir }}/zimantic-nginx.conf"
+    state: absent
+  notify:
+    - Restart nginx
+    - Restart nginx via pdsm
+  when: not zimantic_enabled
+
+- name: Enable http://box{{ zimantic_url }} shortcut via NGINX
+  template:
+    src: zimantic-nginx.conf.j2
+    dest: "{{ nginx_conf_dir }}/zimantic-nginx.conf"
+  notify:
+    - Restart nginx
+    - Restart nginx via pdsm
+  when: zimantic_enabled

@@ -124,83 +124,80 @@ Task layout
 The role follows the shared role lifecycle described in the top-level
 ``README.md``:
 
+- ``install.yml`` validates the settings and includes ``build.yml``. The runner
+  runs it on a first install and after ``--reinstall`` has removed the program.
+- ``upgrade.yml`` validates the settings and includes ``build.yml``. The runner
+  runs it instead of ``install.yml`` for ``--upgrade``.
+- ``build.yml`` inspects the source checkout, includes ``update.yml`` when the
+  checkout is missing or does not match ``zimantic_version``, creates the
+  virtual environment, and rebuilds the Python package from the local checkout.
+  This is the only place that fetches a program version.
 - ``update.yml`` fetches ``zimantic_version`` and installs missing system
-  packages. It runs on first install, version changes, ``--upgrade``,
-  ``--force-reinstall``, or when the checkout is missing or does not match
-  ``zimantic_version``.
-- ``install.yml`` creates the virtual environment and rebuilds the Python
-  package from the local checkout. It uses ``--no-deps`` for a normal repair or
-  ``--reinstall``, so those paths work offline when the checkout and virtual
-  environment already exist.
+  packages. ``build.yml`` includes it only when the checkout is missing or
+  stale, so an offline rebuild can still use an existing checkout.
 - ``configure.yml`` runs on every apply and reconciles the user, directories,
   model files, ``config.toml``, and the systemd unit.
-- ``reinstall.yml`` only stops the service and performs the
-  ``--force-reinstall`` deletions; it never downloads anything.
-- ``install.yml`` writes the installed/version marker as soon as the build
-  succeeds, so a later configure failure does not force another dependency
-  resolution on an offline host. ``state.yml`` reports the settings in
-  ``iiab.ini``.
+- ``uninstall.yml`` removes the service, NGINX shortcut, source checkout,
+  runtime data, and the role's user. It also supplies the remove half of
+  ``--reinstall``.
+- ``state.yml`` reports the settings in ``iiab.ini`` and writes the installed
+  and version markers after a successful apply.
 
-Derived values (the selected embedding model and the decision to update) live in
-``vars/main.yml``. Service restarts are handlers, so the task files only signal
-what changed instead of carrying restart conditions.
+Derived values (the selected embedding model and whether ``zimantic_version``
+is a commit hash) live in ``vars/main.yml``. Service restarts are handlers, so
+the task files only signal what changed instead of carrying restart conditions.
 
 Upgrading
 ---------
 
-``./runrole zimantic`` is the normal command. It checks out
-``zimantic_version``, reinstalls the Python package when the checkout changes,
-re-templates the configuration and systemd unit, and restarts the service only
-when something changed. After pulling a newer IIAB revision, run::
+``./runrole zimantic`` is the normal command. It re-templates the
+configuration and systemd unit, reconciles the model files, and restarts the
+service only when something changed. It does not change an installed program
+version; use ``--upgrade`` for that. After pulling a newer IIAB revision, run::
 
     cd /opt/iiab/iiab
     git pull
     sudo ./runrole zimantic
 
-A normal run that only repairs an already-installed version (for example a
-missing executable) leaves dependencies alone, so it can run offline. A
-checkout that does not match ``zimantic_version`` is fetched again, and
-changing ``zimantic_version`` re-resolves dependencies; both normally need
-network access.
+To move to a different ``zimantic_version``, or to refresh dependencies, run
+``--upgrade``. It fetches the requested checkout and rebuilds the Python
+package and its dependencies, keeping runtime data, indexes, models, and
+settings.
 
 Start with the normal apply. If that is not enough, escalate from least to most
 work::
 
-    sudo ./runrole --reinstall zimantic        # rebuild the program only
-    sudo ./runrole --upgrade zimantic          # rebuild the program and dependencies
-    sudo ./runrole --force-reinstall zimantic  # also reset source, settings, indexes, and model
-    sudo ./runrole --uninstall zimantic        # remove the service, data, and settings
-    ./runrole --status zimantic                # show installed/desired state
+    sudo ./runrole --upgrade zimantic    # fetch the requested version and dependencies
+    sudo ./runrole --reinstall zimantic  # reset the program, data, indexes, model, and settings
+    sudo ./runrole --uninstall zimantic  # remove the service, data, and settings
+    ./runrole --status zimantic          # show installed/desired state
 
-``--reinstall`` rebuilds only the Python package from the local checkout. It
-keeps the virtual environment, dependencies, data, indexes, and settings, and
-can run offline when the checkout already matches ``zimantic_version``.
+``--upgrade`` fetches ``zimantic_version`` and rebuilds the Python package and
+its dependencies. It keeps ``zimantic_source_dir`` data, indexes, models, and
+settings, so it normally requires network access.
 
-``--upgrade`` rebuilds the Python package and re-resolves its dependencies from
-the current checkout. Use it after changing ``zimantic_version`` or when
-dependencies need updating; it normally requires network access.
-
-``--force-reinstall`` also deletes ``zimantic_source_dir`` and
-``zimantic_data_dir`` (indexes, model, and ``config.toml``), so the role
-rebuilds everything from scratch. In ``semantic`` mode it downloads the model
-again, so it also requires network access.
+``--reinstall`` runs ``uninstall.yml`` and then installs again. It removes the
+source checkout, runtime data (indexes, model, and ``config.toml``), and the
+role's settings, then rebuilds everything from scratch. In ``semantic`` mode it
+downloads the model again, so it requires network access. The ZIM files under
+``zimantic_zim_dir`` are user data and are never removed.
 
 ``--uninstall`` stops and disables the service, removes its systemd unit and
 NGINX shortcut, deletes ``zimantic_source_dir`` and ``zimantic_data_dir``, and
 removes the ``zimantic`` user. Set ``zimantic_install: False`` (and
 ``zimantic_enabled: False``) in ``local_vars.yml`` to keep it uninstalled.
 
-``--reinstall``, ``--force-reinstall``, and ``--uninstall`` require an existing
-``zimantic`` entry in ``/etc/iiab/iiab_state.yml``. ``--force-reinstall`` and
-``--uninstall`` ask for ``yes`` unless ``-y`` is given; ``--reinstall`` does not
-prompt. ``--reinstall``, ``--upgrade``, and ``--force-reinstall`` also require
-``zimantic_install: True``; pass ``--add`` if you intentionally disabled it.
-``--status`` is read-only and cannot be combined with the other options.
+``--reinstall`` and ``--uninstall`` require an existing ``zimantic`` entry in
+``/etc/iiab/iiab_state.yml`` and ask for ``yes`` unless ``-y`` is given.
+``--upgrade`` also requires the marker but does not prompt. These operations
+require ``zimantic_install: True``; pass ``--add`` if you intentionally
+disabled it. ``--status`` is read-only and cannot be combined with the other
+options.
 
-The role declares these extended operations in
-``roles/zimantic/meta/runrole.yml``. ``./runrole`` refuses ``--uninstall``,
-``--upgrade``, or ``--force-reinstall`` for roles that do not declare them, so
-the flags fail before an unsupported role can change anything.
+The role declares these extended operations by shipping ``uninstall.yml`` and
+``upgrade.yml``; it needs no ``meta/runrole.yml`` entry. ``./runrole`` refuses
+``--uninstall`` or ``--upgrade`` for roles that do not ship the matching phase,
+so the flags fail before an unsupported role can change anything.
 
 The source checkout under ``zimantic_source_dir`` is disposable: the role
 discards local tracked changes when checking out the requested version. Runtime
