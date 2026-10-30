@@ -12,7 +12,7 @@ DEFAULT_VARS_FILE="${DEFAULT_VARS_FILE:-$IIAB_REPO/vars/default_vars.yml}"
 LOCAL_VARS_FILE="${LOCAL_VARS_FILE:-/etc/iiab/local_vars.yml}"
 IIAB_STATE_FILE="${IIAB_STATE_FILE:-/etc/iiab/iiab_state.yml}"
 IIAB_INI_FILE="${IIAB_INI_FILE:-/etc/iiab/iiab.ini}"
-export IIAB_STATE_FILE
+export DEFAULT_VARS_FILE LOCAL_VARS_FILE IIAB_STATE_FILE
 
 TEMP_PLAYBOOK=""
 

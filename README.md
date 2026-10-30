@@ -77,6 +77,9 @@ repeatable: each role is installed if missing and otherwise reconfigured.
   listed prefix that has no 0-init checklist entry is an error, not a silent
   pass.
 - `--log FILE` writes the Ansible log to FILE instead of `./iiab-debug.log`.
+- `LOCAL_VARS_FILE`, `DEFAULT_VARS_FILE`, and `IIAB_STATE_FILE` override the
+  local-vars, defaults, and state-file paths for both the shell checks and the
+  entry playbooks.
 - `./runroles` is a deprecated alias for `./runrole`; it accepts the same
   arguments.
 
