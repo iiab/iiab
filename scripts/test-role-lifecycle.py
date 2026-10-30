@@ -8,8 +8,8 @@ checks, and state writes in the wrong phase. Warnings are reported but do not
 fail the run unless --strict is used; a reference to the removed
 clean_install variable and an ownership path declared in more than one class
 always fail. Declared user settings are seeded and must survive apply and
---reinstall, be removed by --uninstall, and be reset by --clean-install;
-declared user data must survive every operation.
+--upgrade, be reset by --reinstall when the role ships uninstall.yml, and be
+removed by --uninstall; declared user data must survive every operation.
 """
 
 from __future__ import annotations
@@ -57,6 +57,26 @@ def available_roles() -> list[str]:
     return role_lifecycle.available_roles()
 
 
+def has_task_phase(role: str, phase: str) -> bool:
+    directory = ROOT_DIR / "roles" / role / "tasks"
+    return any(
+        (directory / f"{phase}{suffix}").is_file() for suffix in (".yml", ".yaml")
+    )
+
+
+# Infrastructure roles that must not ship uninstall.yml. Removal belongs to
+# the leaf application roles that use them.
+SHARED_ROLES = {
+    "mysql",
+    "postgresql",
+    "mongodb",
+    "nginx",
+    "proot_services",
+    "sshd",
+    "www_base",
+    "www_options",
+}
+
 # Task files executed by the lifecycle runner. Only these need phase-aware
 # checks; helper files are reached through them. enable-or-disable is a legacy
 # convention outside the formal contract, but the runner still executes it, so
@@ -65,14 +85,16 @@ LIFECYCLE_FILES = {
     "main",
     "uninstall",
     "install",
+    "upgrade",
     "configure",
     "state",
     "enable-or-disable",
 }
 
-# install.yml and configure.yml may use the network. Everything else must work
-# offline: --uninstall has to be retryable on a disconnected host, and main.yml
-# only dispatches to the phase that owns the work.
+# install.yml, upgrade.yml, and configure.yml may use the network. Everything
+# else must work offline: --uninstall and --reinstall have to be retryable on a
+# disconnected host, and main.yml only dispatches to the phase that owns the
+# work.
 OFFLINE_PHASES = {
     "main",
     "uninstall",
@@ -82,7 +104,7 @@ OFFLINE_PHASES = {
 
 # Phases that may use the network, and must therefore only run when the role
 # dispatches to them deliberately.
-NETWORK_PHASES = {"install"}
+NETWORK_PHASES = {"install", "upgrade"}
 
 PACKAGE_MODULES = {"apt", "apk", "dnf", "package", "pacman", "yum", "zypper"}
 INSTALLER_MODULES = {"composer", "gem", "npm", "pnpm", "pip", "pip3", "snap", "yarn"}
@@ -112,6 +134,7 @@ LIFECYCLE_HINTS = {
     "main": "tasks/main.yml should only validate and dispatch; move the work to install.yml or configure.yml",
     "uninstall": "uninstall.yml must work offline; move the fetch to install.yml",
     "install": "install.yml should not run configure.yml; main.yml owns the phase order",
+    "upgrade": "upgrade.yml must use the application's own upgrade mechanism, not IIAB schema migrations",
     "configure": "configure.yml should not install the program; move that work to install.yml",
     "state": "state.yml only records settings",
     "enable-or-disable": "enable-or-disable.yml only toggles services",
@@ -120,6 +143,7 @@ LIFECYCLE_HINTS = {
 # Phases that main.yml must only include conditionally.
 GATED_PHASES = {
     "uninstall": "uninstall.yml must only run when uninstall is set; add a when: guard",
+    "upgrade": "upgrade.yml must only run when upgrade is set; add a when: guard",
 }
 
 TASK_KEYWORDS = {
@@ -1075,6 +1099,20 @@ def ownership_warnings(role: str, vars_file: str = "") -> list[Warning]:
     ]
 
 
+def shared_role_warnings(role: str) -> list[Warning]:
+    """Warn when a shared infrastructure role advertises --uninstall."""
+    if role not in SHARED_ROLES or not role_supports(role, "uninstall"):
+        return []
+    return [
+        Warning(
+            f"roles/{role}",
+            None,
+            "shared infrastructure roles must not implement --uninstall; "
+            "removal belongs to the leaf application roles that use them",
+        )
+    ]
+
+
 def initial_state(role: str, installed: bool = False) -> dict:
     return {
         "paths": {
@@ -1506,10 +1544,10 @@ def state_write_warnings(role: str) -> list[Warning]:
 def clean_install_references() -> list[Warning]:
     """Find the removed clean_install variable in any Ansible file.
 
-    --clean-install is implemented by ./runrole as --uninstall followed by an
-    install-and-configure apply. No role may branch on the removed variable,
-    so this is a hard failure rather than a warning. The CLI flag itself (with
-    a hyphen) is fine in prose; only the Ansible variable matters.
+    --clean-install was merged into --reinstall. No role may branch on the
+    removed variable, so this is a hard failure rather than a warning. The old
+    CLI flag itself (with a hyphen) is fine in prose; only the Ansible variable
+    matters.
     """
     findings: list[Warning] = []
     paths = set(ROOT_DIR.glob("*.yml")) | set(ROOT_DIR.glob("*.yaml"))
@@ -1530,8 +1568,8 @@ def clean_install_references() -> list[Warning]:
                         str(path.relative_to(ROOT_DIR)),
                         number,
                         "'clean_install' is no longer a runtime flag; "
-                        "--clean-install is --uninstall followed by a normal "
-                        "apply. Remove this variable.",
+                        "--clean-install was merged into --reinstall. "
+                        "Remove this variable.",
                     )
                 )
     return findings
@@ -1609,6 +1647,7 @@ def make_playbook(
                     enabled_name: enabled,
                     "uninstall": bool(lifecycle.get("uninstall", False)),
                     "reinstall": bool(lifecycle.get("reinstall", False)),
+                    "upgrade": bool(lifecycle.get("upgrade", False)),
                 }
             },
         ],
@@ -1842,6 +1881,7 @@ def run_scenario(
                 enabled_name: values["enabled"],
                 "uninstall": values.get("uninstall", False),
                 "reinstall": values.get("reinstall", False),
+                "upgrade": values.get("upgrade", False),
             },
         )
         if result.returncode:
@@ -1879,7 +1919,19 @@ def operation_result(
     install_name: str,
     values: dict,
 ) -> str:
-    expect_marker = {"uninstall": False, "reinstall": True}.get(name)
+    expect_marker = False if name == "uninstall" else True
+    if name == "reinstall":
+        # A role with uninstall.yml is uninstalled first, which resets declared
+        # program data and user settings.  A role without it keeps its previous
+        # install.yml behavior, which preserves user settings.
+        resets = has_task_phase(role, "uninstall")
+        user_settings = "reset" if resets else "preserve"
+    elif name == "uninstall":
+        user_settings = "remove"
+    else:
+        # Apply and --upgrade preserve user settings.  User data must survive
+        # every operation.
+        user_settings = "preserve"
     return run_scenario(
         name,
         role,
@@ -1889,47 +1941,11 @@ def operation_result(
         enabled_name,
         install_name,
         [(name, values, expect_marker)],
-        # ./runrole leaves markers in place during --reinstall, so start the
-        # same way and prove the role does not remove them while rebuilding.
-        seed_marker=name == "reinstall",
+        # ./runrole leaves markers in place during --reinstall and --upgrade,
+        # so start the same way and prove the role does not remove them.
+        seed_marker=name in {"reinstall", "upgrade"},
         initial_installed=values["installed"],
-        # --uninstall removes user settings; apply and --reinstall preserve
-        # them.  User data must survive every operation.
-        user_settings={"uninstall": "remove"}.get(name, "preserve"),
-    )
-
-
-def clean_install_result(
-    role: str,
-    vars_file: str,
-    library: Path,
-    temp_dir: Path,
-    enabled_name: str,
-    install_name: str,
-) -> str:
-    """Mirror --clean-install: uninstall, then install and configure on one host."""
-    return run_scenario(
-        "clean-install",
-        role,
-        vars_file,
-        library,
-        temp_dir / "clean-install",
-        enabled_name,
-        install_name,
-        [
-            (
-                "clean-install-uninstall",
-                {"installed": True, "enabled": True, "uninstall": True, "reinstall": False},
-                False,
-            ),
-            (
-                "clean-install-install",
-                {"installed": False, "enabled": True, "uninstall": False, "reinstall": False},
-                True,
-            ),
-        ],
-        initial_installed=True,
-        user_settings="reset",
+        user_settings=user_settings,
     )
 
 
@@ -1969,19 +1985,24 @@ def run_role(role: str, vars_file: str, quiet: bool = False, strict: bool = Fals
     ]
     skipped: list[str] = []
     if role_supports(role, "reinstall"):
-        operations.append(("reinstall", {"installed": True, "enabled": True, "reinstall": True}))
-    else:
-        skipped.append("reinstall")
-    uninstall_supported = role_supports(role, "uninstall")
-    if uninstall_supported:
-        operations.extend(
-            [
-                ("clean-install", {"installed": True, "enabled": True}),
-                ("uninstall", {"installed": True, "enabled": False, "uninstall": True}),
-            ]
+        operations.append(
+            ("reinstall", {"installed": True, "enabled": True, "reinstall": True})
         )
     else:
-        skipped.extend(["clean-install", "uninstall"])
+        skipped.append("reinstall")
+    if role_supports(role, "upgrade"):
+        operations.append(
+            ("upgrade", {"installed": True, "enabled": True, "upgrade": True})
+        )
+    else:
+        skipped.append("upgrade")
+    uninstall_supported = role_supports(role, "uninstall")
+    if uninstall_supported:
+        operations.append(
+            ("uninstall", {"installed": True, "enabled": False, "uninstall": True})
+        )
+    else:
+        skipped.append("uninstall")
 
     if not quiet:
         print(f"Testing {role} lifecycle with mocked filesystem, services, and processes...")
@@ -1993,6 +2014,8 @@ def run_role(role: str, vars_file: str, quiet: bool = False, strict: bool = Fals
     print_warnings(state_writes, "state writes in the wrong phase")
     ownership = ownership_warnings(role, vars_file)
     print_warnings(ownership, "ownership declarations")
+    shared_uninstall = shared_role_warnings(role)
+    print_warnings(shared_uninstall, "shared roles must not be removable")
     if not quiet:
         for name in skipped:
             print(f"  {name:<19} SKIP (unsupported)")
@@ -2002,23 +2025,19 @@ def run_role(role: str, vars_file: str, quiet: bool = False, strict: bool = Fals
         library = create_mock_library(temp_dir)
         failures = 0
         for name, values in operations:
-            if name == "clean-install":
-                output = clean_install_result(
-                    role, vars_file, library, temp_dir, enabled_name, install_name
-                )
-            else:
-                values.setdefault("uninstall", False)
-                values.setdefault("reinstall", False)
-                output = operation_result(
-                    name,
-                    role,
-                    vars_file,
-                    library,
-                    temp_dir,
-                    enabled_name,
-                    install_name,
-                    values,
-                )
+            values.setdefault("uninstall", False)
+            values.setdefault("reinstall", False)
+            values.setdefault("upgrade", False)
+            output = operation_result(
+                name,
+                role,
+                vars_file,
+                library,
+                temp_dir,
+                enabled_name,
+                install_name,
+                values,
+            )
             if not quiet or "FAIL" in output:
                 print(output, end="")
             if "FAIL\n" in output:
@@ -2027,7 +2046,7 @@ def run_role(role: str, vars_file: str, quiet: bool = False, strict: bool = Fals
     # it is an error even without --strict.
     if ownership:
         failures = 1
-    if strict and (warnings or unsafe_state or state_writes):
+    if strict and (warnings or unsafe_state or state_writes or shared_uninstall):
         failures = 1
     return failures
 
@@ -2064,8 +2083,8 @@ def main() -> int:
     if args.jobs is not None and not args.all_roles:
         parser.error("--jobs requires --all")
 
-    # --clean-install is uninstall followed by install; no Ansible file may
-    # still branch on the removed variable. This is a hard failure.
+    # --clean-install was merged into --reinstall; no Ansible file may still
+    # branch on the removed variable. This is a hard failure.
     offenders = clean_install_references()
     if offenders:
         print_warnings(offenders, "clean_install is no longer a runtime flag")

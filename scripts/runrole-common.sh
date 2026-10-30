@@ -76,6 +76,11 @@ role_uses_runner() {
     role_lifecycle uses-runner "$1"
 }
 
+# True if the role ships tasks/<phase>.yml (or .yaml).
+role_has_phase() {
+    role_lifecycle has-phase "$1" "$2"
+}
+
 # True if <role> implements <feature>.
 role_supports() {
     role_lifecycle supports "$1" "$2"
@@ -317,23 +322,23 @@ validate_options() {
     if [ -n "${LOG_FILE:-}" ]; then
         log=true
     fi
-    if $CHECK_LOCAL_VARS && ($log || $UNINSTALL || $REINSTALL || $CLEAN_INSTALL || $ADD || $STATUS || $ASSUME_YES || $VERBOSE || $CONTINUE_ON_ERROR); then
+    if $CHECK_LOCAL_VARS && ($log || $UNINSTALL || $REINSTALL || $UPGRADE || $ADD || $STATUS || $ASSUME_YES || $VERBOSE || $CONTINUE_ON_ERROR); then
         echo "--check-local-vars is read-only and cannot be combined with other options."
         exit 1
     fi
-    if $UNINSTALL && ($REINSTALL || $CLEAN_INSTALL || $ADD); then
-        echo "--uninstall cannot be combined with --add, --reinstall, or --clean-install."
+    if $UNINSTALL && ($REINSTALL || $UPGRADE || $ADD); then
+        echo "--uninstall cannot be combined with --add, --reinstall, or --upgrade."
         exit 1
     fi
-    if $CLEAN_INSTALL && ($REINSTALL || $ADD); then
-        echo "--clean-install cannot be combined with --add or --reinstall."
+    if $REINSTALL && $UPGRADE; then
+        echo "--reinstall and --upgrade cannot be combined."
         exit 1
     fi
     if $SKIP_NEVER_INSTALLED && ! $UNINSTALL; then
         echo "--skip-never-installed only applies to --uninstall."
         exit 1
     fi
-    if $STATUS && ($log || $UNINSTALL || $REINSTALL || $CLEAN_INSTALL || $ADD || $ASSUME_YES || $VERBOSE || $SKIP_NEVER_INSTALLED || $CONTINUE_ON_ERROR); then
+    if $STATUS && ($log || $UNINSTALL || $REINSTALL || $UPGRADE || $ADD || $ASSUME_YES || $VERBOSE || $SKIP_NEVER_INSTALLED || $CONTINUE_ON_ERROR); then
         echo "--status is read-only and cannot be combined with other options."
         exit 1
     fi

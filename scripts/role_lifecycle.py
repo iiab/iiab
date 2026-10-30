@@ -7,12 +7,14 @@ Single source of truth for the role -> state-marker prefix mapping
 0-init's validation checklist.  Uses only the standard library so it runs
 before Ansible is installed.
 
-``--clean-install`` is ``--uninstall`` followed by an apply, so it is supported
-exactly when ``--uninstall`` is.  ``--uninstall`` is supported when the role
-entry point hands off to ``tasks/uninstall.yml`` (or guards work with
-``when: uninstall`` inline); ``meta/runrole.yml`` can override that.
-``--reinstall`` is available unless ``meta/runrole.yml`` sets
-``reinstall: false``.
+``--uninstall`` is supported when the role entry point hands off to
+``tasks/uninstall.yml`` (or guards work with ``when: uninstall`` inline);
+``meta/runrole.yml`` can override that.  ``--upgrade`` works the same way with
+``tasks/upgrade.yml`` / ``when: upgrade``.  ``--reinstall`` is available to
+every role unless ``meta/runrole.yml`` sets ``reinstall: false``.  When the role
+ships ``tasks/uninstall.yml``, reinstall runs that and then installs again.
+Without it, reinstall falls back to ``install.yml``, but ``./runrole`` warns
+that the behavior is ambiguous.
 """
 
 from __future__ import annotations
@@ -81,6 +83,16 @@ def install_prefix(role: str) -> str:
 
 def tasks_dir(role: str) -> Path:
     return ROLES_DIR / role / "tasks"
+
+
+def has_phase(role: str, phase: str) -> bool:
+    """True when *role* ships tasks/<phase>.yml (or .yaml)."""
+    if not exists(role):
+        return False
+    directory = tasks_dir(role)
+    return any(
+        (directory / f"{phase}{suffix}").is_file() for suffix in (".yml", ".yaml")
+    )
 
 
 def entrypoint(role: str) -> Path | None:
@@ -235,32 +247,40 @@ def uses_lifecycle_runner(role: str) -> bool:
     return LIFECYCLE_RUNNER.search(text) is not None
 
 
-def supports_uninstall(role: str) -> bool:
+def _supports_phase(role: str, phase: str) -> bool:
     if not exists(role):
         return False
-    if _manifest_says(role, "uninstall"):
+    if _manifest_says(role, phase):
         return True
     if uses_lifecycle_runner(role):
-        # The runner calls tasks/uninstall.yml when uninstall is set.  An
-        # unused uninstall.yml alone still does not opt a role in.
-        return (tasks_dir(role) / "uninstall.yml").is_file()
-    return _entrypoint_implements(role, "uninstall")
+        # The runner calls tasks/<phase>.yml when the flag is set.  An unused
+        # phase file alone still does not opt a role in.
+        return has_phase(role, phase)
+    return _entrypoint_implements(role, phase)
+
+
+def supports_uninstall(role: str) -> bool:
+    return _supports_phase(role, "uninstall")
+
+
+def supports_upgrade(role: str) -> bool:
+    return _supports_phase(role, "upgrade")
 
 
 def supports(role: str, feature: str) -> bool:
     """True when *role* implements *feature*.
 
-    ``clean_install`` is the derived pair uninstall-then-install, so it is
-    supported exactly when ``uninstall`` is.
-
-    ``reinstall`` is available to ordinary roles, but a role may explicitly
-    opt out in ``meta/runrole.yml`` (``reinstall: false``) when rebuilding it
-    requires manual cleanup that runrole must not pretend to automate.
+    ``reinstall`` is available to every role unless ``meta/runrole.yml`` sets
+    ``reinstall: false``.  A role with ``tasks/uninstall.yml`` is uninstalled
+    and then installed again; one without it falls back to its previous
+    install.yml behavior.
     """
     if feature == "reinstall":
         return exists(role) and _manifest_value(role, "reinstall") is not False
-    if feature in ("uninstall", "clean_install"):
+    if feature == "uninstall":
         return supports_uninstall(role)
+    if feature == "upgrade":
+        return supports_upgrade(role)
     raise ValueError(f"unknown feature: {feature}")
 
 
@@ -269,8 +289,10 @@ def capabilities(role: str) -> list[str]:
     result = []
     if supports(role, "reinstall"):
         result.append("reinstall")
+    if supports(role, "upgrade"):
+        result.append("upgrade")
     if supports_uninstall(role):
-        result.extend(["uninstall", "clean_install"])
+        result.append("uninstall")
     return result
 
 
@@ -298,11 +320,19 @@ def build_parser() -> argparse.ArgumentParser:
     )
     uses_runner.add_argument("role")
 
+    has_phase_parser = subparsers.add_parser(
+        "has-phase", help="exit 0 when the role ships tasks/<phase>.yml"
+    )
+    has_phase_parser.add_argument("role")
+    has_phase_parser.add_argument("phase")
+
     supports_parser = subparsers.add_parser(
         "supports", help="exit 0 when the role implements a feature"
     )
     supports_parser.add_argument("role")
-    supports_parser.add_argument("feature", choices=["reinstall", "uninstall", "clean_install"])
+    supports_parser.add_argument(
+        "feature", choices=["reinstall", "upgrade", "uninstall"]
+    )
 
     capabilities_parser = subparsers.add_parser(
         "capabilities", help="print the role's extended operations"
@@ -345,6 +375,8 @@ def main(argv=None) -> int:
         return 0 if exists(args.role) else 1
     if args.command == "uses-runner":
         return 0 if uses_lifecycle_runner(args.role) else 1
+    if args.command == "has-phase":
+        return 0 if has_phase(args.role, args.phase) else 1
     if args.command == "supports":
         return 0 if supports(args.role, args.feature) else 1
 

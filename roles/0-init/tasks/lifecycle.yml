@@ -6,13 +6,14 @@
 #       name: 0-init
 #       tasks_from: lifecycle
 #
-# Phases: install.yml (first install, --reinstall, --clean-install),
-# configure.yml (every apply), state.yml (after a successful apply),
-# uninstall.yml (--uninstall).  enable-or-disable.yml is a legacy convention
-# that still runs on every apply.  User settings are seeded with force: false,
-# preserved by apply/--reinstall, and removed by uninstall.yml.  See "Data
-# ownership" in README.md.  lifecycle_context.yml re-reads the context after
-# each phase, because a nested include_role can clobber a fact.
+# Phases: install.yml (first install, --reinstall), upgrade.yml (--upgrade only,
+# instead of install.yml), configure.yml (every apply), state.yml (after a
+# successful apply), uninstall.yml (--uninstall, and the uninstall half of
+# --reinstall).  enable-or-disable.yml is a legacy convention that still runs on
+# every apply.  User settings are seeded with force: false, preserved by apply,
+# and reset by uninstall.yml.  See "Data ownership" in README.md.
+# lifecycle_context.yml re-reads the context after each phase, because a nested
+# include_role can clobber a fact.
 
 - name: Identify the role using the shared lifecycle runner
   include_tasks: lifecycle_context.yml
@@ -55,8 +56,22 @@
           {{ (lifecycle_state | default({}))
              | combine({lifecycle_role: {
                   'installed': lookup('installed', lifecycle_prefix),
-                  'record_disk_usage': (not lookup('installed', lifecycle_prefix) or reinstall)
+                  'record_disk_usage': (not lookup('installed', lifecycle_prefix) or reinstall or upgrade)
                 }}) }}
+
+    # uninstall.yml defines --reinstall: remove the role, then install it
+    # again.  Roles without it fall back to install.yml, and --reinstall is
+    # ambiguous for them, so ./runrole warns.
+    - name: Uninstall {{ lifecycle_role }} before reinstalling
+      include_role:
+        name: "{{ lifecycle_role }}"
+        tasks_from: uninstall
+      when:
+        - reinstall
+        - "'uninstall' in lifecycle_phases"
+
+    - name: Restore the {{ ansible_parent_role_names | first }} lifecycle context
+      include_tasks: lifecycle_context.yml
 
     - name: Record initial disk space used for {{ lifecycle_role }}
       include_role:
@@ -65,6 +80,26 @@
       vars:
         disk_usage_role: "{{ lifecycle_role }}"
       when: lifecycle_state[lifecycle_role].record_disk_usage | bool
+
+    # upgrade.yml replaces install.yml: the application's own mechanism owns
+    # the new version, and IIAB does not write schema migrations.
+    - name: Assert that '{{ lifecycle_role }}' supports --upgrade
+      assert:
+        that: "'upgrade' in lifecycle_phases"
+        fail_msg: "{{ lifecycle_role }} does not ship tasks/upgrade.yml, so it has no --upgrade path."
+        quiet: yes
+      when: upgrade
+
+    - name: Upgrade {{ lifecycle_role }}
+      include_role:
+        name: "{{ lifecycle_role }}"
+        tasks_from: upgrade
+      when:
+        - upgrade
+        - "'upgrade' in lifecycle_phases"
+
+    - name: Restore the {{ ansible_parent_role_names | first }} lifecycle context
+      include_tasks: lifecycle_context.yml
 
     # install.yml is deliberately not run on a plain apply: it may download,
     # clone, or rebuild.  Put settings that must be reconciled every time in
@@ -75,6 +110,7 @@
         tasks_from: install
       when:
         - "'install' in lifecycle_phases"
+        - not upgrade
         - not lifecycle_state[lifecycle_role].installed or reinstall
 
     - name: Restore the {{ ansible_parent_role_names | first }} lifecycle context
