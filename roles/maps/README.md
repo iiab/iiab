@@ -261,6 +261,15 @@ For large file downloads:
 * If there is an interruption and you need to run it again, it should resume where it left off.
 * If you want to see download progress, read the Ansible output for instructions.
 
+## pmtiles custom build
+
+This change installs a custom [go-pmtiles](https://github.com/protomaps/go-pmtiles) build, `1.31.2-m16` (upstream `v1.31.2` plus a small patch set), so the maps role can test two things ahead of the same work landing upstream:
+
+- **Faster downloads (always on).** It splits a large tile range into parallel sub-requests and work-steals across connections, so one big range no longer bottlenecks on a single connection. This is faster than stock even at the default 4 download threads; the thread default is unchanged from upstream. It can also resume or pause a region download instead of restarting it.
+- **Integrator mode (opt-in).** Set `IIAB_PMTILES_PROGRESS=json` before the role runs. The role then passes `--progress=json` (one JSON line per second on stdout: `phase`, `bytes_done`, `bytes_total`, `speed_bps`, `eta_s`, and `exit_code` on the last line; logs stay on stderr) and raises the download threads to 16 to use a fast link. Unset, nothing changes (human progress bar, 4 threads). This is only for a caller that drives the download and reads the progress.
+
+Binaries: `https://iiab.switnet.org/binaries/pmtiles-1.31.2-m16/`. To use the stock binary, point `maps_tools.pmtiles.releases` in `defaults/main.yml` back at the protomaps URLs and checksums. This is proposed upstream as an experiment (PR link once opened); if upstream adopts the build, only the opt-in wiring in `tile-extract.py` stays here.
+
 ## How to change or upgrade your IIAB Maps
 
 Your IIAB Maps **software**, **data**, and **settings** can be updated separately or together.
