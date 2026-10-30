@@ -1220,7 +1220,7 @@ def network_action(module: str, args, task: dict) -> tuple[str, str] | None:
         url = task_arg(args, "url", "a remote host")
         if task_arg(args, "dest"):
             return "asset", f"downloads {url}"
-        return "asset", f"makes an HTTP request to {url}"
+        return "request", f"makes an HTTP request to {url}"
     if module in {"apt_key", "apt_repository"}:
         if str(task_arg(args, "state", "present")).lower() != "absent":
             return "metadata", f"fetches {module} metadata"
@@ -1361,16 +1361,27 @@ def lifecycle_warnings(role: str) -> list[Warning]:
                 continue
             for module, args in task_modules(task):
                 network = network_action(module, args, task)
-                if network and phase in OFFLINE_PHASES:
-                    _, action = network
-                    warnings.append(
-                        format_lifecycle_warning(
-                            path,
-                            line,
-                            task,
-                            f"{module} {action}; {LIFECYCLE_HINTS[phase]}",
+                if network:
+                    kind, action = network
+                    if phase in OFFLINE_PHASES:
+                        warnings.append(
+                            format_lifecycle_warning(
+                                path,
+                                line,
+                                task,
+                                f"{module} {action}; {LIFECYCLE_HINTS[phase]}",
+                            )
                         )
-                    )
+                    elif phase == "configure" and kind != "asset":
+                        warnings.append(
+                            format_lifecycle_warning(
+                                path,
+                                line,
+                                task,
+                                f"{module} {action}; configure.yml may only "
+                                "fetch a missing immutable asset",
+                            )
+                        )
 
                 included = included_phase(module, args)
                 if not included or included == phase:
@@ -1943,7 +1954,9 @@ def operation_result(
         [(name, values, expect_marker)],
         # ./runrole leaves markers in place during --reinstall and --upgrade,
         # so start the same way and prove the role does not remove them.
-        seed_marker=name in {"reinstall", "upgrade"},
+        # apply-installed and uninstall also start from a recorded installation.
+        seed_marker=name
+        in {"apply-installed", "reinstall", "upgrade", "uninstall"},
         initial_installed=values["installed"],
         user_settings=user_settings,
     )
@@ -1982,12 +1995,24 @@ def run_role(role: str, vars_file: str, quiet: bool = False, strict: bool = Fals
     operations: list[tuple[str, dict]] = [
         ("apply", {"installed": False, "enabled": True}),
         ("disabled-apply", {"installed": False, "enabled": False}),
+        # Applying to an already-installed role must skip install.yml and
+        # preserve user settings.
+        ("apply-installed", {"installed": True, "enabled": True}),
     ]
     skipped: list[str] = []
     if role_supports(role, "reinstall"):
         operations.append(
             ("reinstall", {"installed": True, "enabled": True, "reinstall": True})
         )
+        if has_task_phase(role, "uninstall"):
+            # --reinstall on a role that is not installed must not run
+            # uninstall.yml and reset existing user settings.
+            operations.append(
+                (
+                    "reinstall-not-installed",
+                    {"installed": False, "enabled": True, "reinstall": True},
+                )
+            )
     else:
         skipped.append("reinstall")
     if role_supports(role, "upgrade"):

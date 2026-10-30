@@ -4,6 +4,7 @@ CWD=$(pwd)
 UNINSTALL=false
 REINSTALL=false
 UPGRADE=false
+APPLY=false
 ASSUME_YES=false
 ADD=false
 CHECK_LOCAL_VARS=false
@@ -49,7 +50,8 @@ Options:
       --apply           Apply settings (the default)
       --reinstall       Uninstall each role, then install it again. Roles
                         without uninstall.yml warn and keep their previous
-                        install behavior
+                        install behavior. User settings declared by
+                        uninstall.yml are reset
       --upgrade         Upgrade where the role ships upgrade.yml
       --uninstall       Uninstall the programs and their settings, never deleting user data
       --skip-never-installed
@@ -85,7 +87,8 @@ EOF
 while [[ $# -gt 0 ]]; do
     case $1 in
         --apply)
-            ;;    # Explicit apply is the default behavior
+            APPLY=true    # Explicit apply is the default behavior
+            ;;
         --reinstall)
             REINSTALL=true
             ;;
@@ -152,7 +155,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if $LIST; then
-    if [[ ${#ROLES[@]} -gt 0 ]] || $UNINSTALL || $REINSTALL || $UPGRADE || $CHECK_LOCAL_VARS || $STATUS || $ADD || $ASSUME_YES || $VERBOSE || $SKIP_NEVER_INSTALLED || $CONTINUE_ON_ERROR || [ -n "$LOG_FILE" ]; then
+    if [[ ${#ROLES[@]} -gt 0 ]] || $UNINSTALL || $REINSTALL || $UPGRADE || $APPLY || $CHECK_LOCAL_VARS || $STATUS || $ADD || $ASSUME_YES || $VERBOSE || $SKIP_NEVER_INSTALLED || $CONTINUE_ON_ERROR || [ -n "$LOG_FILE" ]; then
         echo "--list is read-only and does not accept roles or other options."
         exit 1
     fi
@@ -251,6 +254,11 @@ if $CHECK_LOCAL_VARS; then
             continue
         fi
         prefix=$(checklist_install_var "$role")
+        if ! is_checklist_prefix "$prefix"; then
+            echo "ERROR: no validation checklist entry for '$role' (prefix '$prefix')." >&2
+            echo "Add '${prefix}' to vars_checklist_all in roles/0-init/tasks/validate_vars.yml." >&2
+            exit 1
+        fi
         CHECK_LOCAL_VARS_ROLES="${CHECK_LOCAL_VARS_ROLES}\"${prefix}\","
     done
     if [[ ${#ROLES[@]} -gt 0 ]]; then
@@ -285,6 +293,33 @@ write_playbook() {
 
 APPLY_ROLES=("${ROLES[@]}")
 MISSING_ROLES=()
+
+# Apply/reinstall phases act on roles the configuration says should be
+# installed. Refuse before anything runs -- including before a legacy role's
+# markers are forgotten -- instead of letting the role's tasks install
+# something that local_vars.yml disables.
+if ! $UNINSTALL; then
+    missing_install=false
+    for role in "${APPLY_ROLES[@]}"; do
+        if ! role_install_enabled "$role"; then
+            var=$(role_install_var "$role")
+            if $ADD; then
+                echo "WARNING: --add sets '${var}_install: True' for $role, for this run only."
+            else
+                echo -e "\e[1mERROR: '${var}_install: True' MUST BE SET for $role!\e[0m" >&2
+                echo "Set it in: $LOCAL_VARS_FILE, or pass --add to run it once." >&2
+                if state_has_prefix "$(role_var "$role")" && role_supports "$role" uninstall; then
+                    echo "Or remove the existing installation with: sudo ./runrole --uninstall $role" >&2
+                fi
+                missing_install=true
+            fi
+        fi
+    done
+    if $missing_install; then
+        exit 1
+    fi
+fi
+
 if $UNINSTALL; then
     UNINSTALL_ROLES=()
     for role in "${ROLES[@]}"; do
@@ -333,7 +368,8 @@ elif $REINSTALL; then
             fi
             if role_uses_runner "$role"; then
                 if role_has_phase "$role" uninstall; then
-                    echo "Reinstalling $role (uninstall, then install). Its markers will be recreated when the install succeeds:"
+                    echo "Reinstalling $role (uninstall, then install). Its markers will be recreated when the install succeeds."
+                    echo "User settings declared by its uninstall.yml will be reset."
                 else
                     echo "Reinstalling $role by rerunning install.yml. Its markers stay in place:"
                 fi
@@ -385,31 +421,6 @@ else
     fi
 fi
 
-# Apply/reinstall phases act on roles the configuration says should be
-# installed. Refuse before anything runs, instead of letting the role's tasks
-# install something that local_vars.yml disables.
-if ! $UNINSTALL; then
-    missing_install=false
-    for role in "${APPLY_ROLES[@]}"; do
-        if ! role_install_enabled "$role"; then
-            var=$(role_install_var "$role")
-            if $ADD; then
-                echo "WARNING: --add sets '${var}_install: True' for $role, for this run only."
-            else
-                echo -e "\e[1mERROR: '${var}_install: True' MUST BE SET for $role!\e[0m" >&2
-                echo "Set it in: $LOCAL_VARS_FILE, or pass --add to run it once." >&2
-                if state_has_prefix "$(role_var "$role")" && role_supports "$role" uninstall; then
-                    echo "Or remove the existing installation with: sudo ./runrole --uninstall $role" >&2
-                fi
-                missing_install=true
-            fi
-        fi
-    done
-    if $missing_install; then
-        exit 1
-    fi
-fi
-
 extra_vars() {
     local phase=$1
     local json='{"skip_role_on_error":false'
@@ -438,7 +449,11 @@ extra_vars() {
     for role in "${PLAYBOOK_ROLES[@]}"; do
         install_var=$(role_install_var "$role")
         if [ -n "$install_var" ]; then
-            validate_roles="${validate_roles}\"${install_var}\","
+            if is_checklist_prefix "$install_var"; then
+                validate_roles="${validate_roles}\"${install_var}\","
+            else
+                echo "WARNING: no validation checklist entry for ${role} (${install_var}); skipping install/enabled validation." >&2
+            fi
         fi
     done
     printf '%s,"validate_roles":[%s]}' "$json" "${validate_roles%,}"

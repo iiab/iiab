@@ -322,7 +322,7 @@ validate_options() {
     if [ -n "${LOG_FILE:-}" ]; then
         log=true
     fi
-    if $CHECK_LOCAL_VARS && ($log || $UNINSTALL || $REINSTALL || $UPGRADE || $ADD || $STATUS || $ASSUME_YES || $VERBOSE || $CONTINUE_ON_ERROR); then
+    if $CHECK_LOCAL_VARS && ($log || $UNINSTALL || $REINSTALL || $UPGRADE || $APPLY || $ADD || $STATUS || $ASSUME_YES || $VERBOSE || $CONTINUE_ON_ERROR); then
         echo "--check-local-vars is read-only and cannot be combined with other options."
         exit 1
     fi
@@ -338,7 +338,7 @@ validate_options() {
         echo "--skip-never-installed only applies to --uninstall."
         exit 1
     fi
-    if $STATUS && ($log || $UNINSTALL || $REINSTALL || $UPGRADE || $ADD || $ASSUME_YES || $VERBOSE || $SKIP_NEVER_INSTALLED || $CONTINUE_ON_ERROR); then
+    if $STATUS && ($log || $UNINSTALL || $REINSTALL || $UPGRADE || $APPLY || $ADD || $ASSUME_YES || $VERBOSE || $SKIP_NEVER_INSTALLED || $CONTINUE_ON_ERROR); then
         echo "--status is read-only and cannot be combined with other options."
         exit 1
     fi
