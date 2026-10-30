@@ -1,0 +1,151 @@
+---
+# Always runs. Configuration, model files, and the service definition are
+# reconciled on every apply, so local_vars.yml changes take effect without a
+# reinstall. Fetching a missing model is allowed here because it is an
+# immutable asset, not a program version; nothing is deleted or re-downloaded
+# when the file and checksum already match.
+
+# An apply to an installed role skips install.yml, so validate here too.
+- name: Validate Zimantic settings
+  include_tasks: validate.yml
+
+- name: Create Linux user {{ zimantic_user }}
+  user:
+    name: "{{ zimantic_user }}"
+    state: present
+    shell: /usr/sbin/nologin
+    system: yes
+    create_home: no
+
+- name: Create Zimantic directories
+  file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner | default(zimantic_user) }}"
+    group: "{{ item.group | default(zimantic_user) }}"
+    mode: "0755"
+  loop:
+    - path: "{{ zimantic_source_dir }}"
+      owner: root
+      group: root
+    - path: "{{ zimantic_data_dir }}"
+    - path: "{{ zimantic_index_dir }}"
+    - path: "{{ zimantic_model_dir }}"
+    - path: "{{ zimantic_zim_dir }}"
+      owner: root
+      group: root
+
+# Both tokenizers in one model directory would make Zimantic choose
+# SentencePiece, which is wrong for the English model.
+- name: Remove the tokenizer left by a different embedding model
+  file:
+    path: "{{ zimantic_model_dir }}/{{ item }}"
+    state: absent
+  loop: "{{ zimantic_unused_tokenizer_files }}"
+  notify: Restart Zimantic
+  when: zimantic_mode == 'semantic'
+
+- name: Download Zimantic embedding model
+  get_curl:
+    url: "{{ zimantic_model_url }}"
+    dest: "{{ zimantic_model_dir }}/model.onnx"
+    checksum: "{{ zimantic_model_checksum }}"
+    timeout: "{{ download_timeout }}"
+  notify: Restart Zimantic
+  when: zimantic_mode == 'semantic'
+
+- name: Download Zimantic tokenizer
+  get_curl:
+    url: "{{ zimantic_tokenizer_url }}"
+    dest: "{{ zimantic_model_dir }}/{{ zimantic_tokenizer_file }}"
+    checksum: "{{ zimantic_tokenizer_checksum }}"
+    timeout: "{{ download_timeout }}"
+  notify: Restart Zimantic
+  when: zimantic_mode == 'semantic'
+
+- name: Check for the Zimantic embedding model
+  stat:
+    path: "{{ zimantic_model_dir }}/model.onnx"
+  register: zimantic_model_file
+  when: zimantic_mode == 'semantic'
+
+- name: Check for the Zimantic tokenizer
+  stat:
+    path: "{{ zimantic_model_dir }}/{{ zimantic_tokenizer_file }}"
+  register: zimantic_tokenizer_stat
+  when: zimantic_mode == 'semantic'
+
+- name: Fail if semantic mode has no embedding model
+  fail:
+    msg: "Semantic mode needs model.onnx and {{ zimantic_tokenizer_file }} in {{ zimantic_model_dir }}; the download failed or the files were removed"
+  when:
+    - zimantic_mode == 'semantic'
+    # get_curl only reports what it would download in check mode, so the files
+    # are still absent here. Do not turn a dry run into a failure.
+    - not ansible_check_mode
+    - not zimantic_model_file.stat.exists or
+      not zimantic_tokenizer_stat.stat.exists
+
+- name: Install Zimantic configuration
+  template:
+    src: config.toml.j2
+    dest: "{{ zimantic_config_file }}"
+    owner: "{{ zimantic_user }}"
+    group: "{{ zimantic_user }}"
+    mode: "0644"
+  notify: Restart Zimantic
+
+- name: Install zimantic.service
+  template:
+    src: zimantic.service.j2
+    dest: /etc/systemd/system/zimantic.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Restart Zimantic
+
+# Enable or disable the service and its NGINX shortcut after the unit and
+# configuration have been reconciled above.
+- name: Enable and start zimantic.service
+  systemd:
+    name: zimantic
+    enabled: yes
+    state: started
+    daemon_reload: yes
+  when: zimantic_enabled
+
+# The installed marker is in iiab_state.yml, so only a service this role
+# installed is touched. On a first apply that installs with _enabled False the
+# marker is written by state.yml after configure; the new unit is not enabled
+# or started by default, so there is nothing to stop.
+- name: Disable and stop zimantic.service
+  systemd:
+    name: zimantic
+    enabled: no
+    state: stopped
+  when:
+    - not zimantic_enabled
+    - lookup('installed', 'zimantic')
+
+- name: Configure Zimantic indexing units
+  include_tasks: indexing.yml
+
+- name: Disable http://box{{ zimantic_url }} shortcut via NGINX
+  file:
+    path: "{{ nginx_conf_dir }}/zimantic-nginx.conf"
+    state: absent
+  notify:
+    - Restart nginx
+    - Restart nginx via pdsm
+  when: not zimantic_enabled
+
+- name: Enable http://box{{ zimantic_url }} shortcut via NGINX
+  template:
+    src: zimantic-nginx.conf.j2
+    dest: "{{ nginx_conf_dir }}/zimantic-nginx.conf"
+  notify:
+    - Restart nginx
+    - Restart nginx via pdsm
+  when: zimantic_enabled

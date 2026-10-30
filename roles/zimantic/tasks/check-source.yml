@@ -1,0 +1,43 @@
+---
+# Offline-safe inspection of the source checkout. main.yml uses the result to
+# decide whether update.yml (and dependency resolution) is needed, so a plain
+# apply only touches the network when the checkout is missing or stale.
+
+- name: Check whether the Zimantic source checkout exists
+  stat:
+    path: "{{ zimantic_source_dir }}/.git"
+  register: zimantic_source_git
+
+- name: Read the current Zimantic source revision, tag, and remote
+  when: zimantic_source_git.stat.exists
+  block:
+
+    - name: Read the current Zimantic source revision
+      command: "git -C {{ zimantic_source_dir }} rev-parse HEAD"
+      register: zimantic_source_head
+      changed_when: false
+      failed_when: false
+      check_mode: no
+
+    - name: Read the current Zimantic source tag
+      command: "git -C {{ zimantic_source_dir }} describe --tags --exact-match"
+      register: zimantic_source_tag
+      changed_when: false
+      failed_when: false
+      check_mode: no
+
+    - name: Read the current Zimantic source remote
+      command: "git -C {{ zimantic_source_dir }} remote get-url origin"
+      register: zimantic_source_remote
+      changed_when: false
+      failed_when: false
+      check_mode: no
+
+- name: Decide whether the Zimantic source matches zimantic_version
+  set_fact:
+    zimantic_source_matches_version: >-
+      {{ (zimantic_source_git.stat.exists | bool) and
+         (((zimantic_source_tag.stdout | default('')) == zimantic_version or
+           ((zimantic_version_is_commit | bool) and
+            (zimantic_source_head.stdout | default('')).startswith(zimantic_version | string))) and
+          ((zimantic_source_remote.stdout | default('')) == zimantic_repo)) }}

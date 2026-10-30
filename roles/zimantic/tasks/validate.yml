@@ -1,0 +1,79 @@
+---
+# Input validation. install.yml and configure.yml include this file, so an
+# apply checks the settings both before a build and when only configuration
+# changes. The uninstall phase does not need these settings.
+
+- name: Assert that "zimantic_install is sameas true" (boolean not string etc)
+  assert:
+    that: zimantic_install is sameas true
+    fail_msg: "PLEASE SET 'zimantic_install: True' e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+
+- name: Assert that "zimantic_enabled | type_debug == 'bool'" (boolean not string etc)
+  assert:
+    that: zimantic_enabled | type_debug == 'bool'
+    fail_msg: "PLEASE GIVE VARIABLE 'zimantic_enabled' A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+
+- name: Assert that "zimantic_mode" is supported
+  assert:
+    that: zimantic_mode in ['fast', 'semantic']
+    fail_msg: "zimantic_mode must be either 'fast' or 'semantic'"
+    quiet: yes
+
+- name: Fail on unsupported PRoot/Android environment
+  fail:
+    msg: "The Zimantic role currently requires regular systemd; PRoot/Android is not supported"
+  when: is_proot
+
+- name: Validate zimantic_use_system_packages
+  assert:
+    that: zimantic_use_system_packages in ['auto', 'always', 'never']
+    fail_msg: "zimantic_use_system_packages must be 'auto', 'always', or 'never'"
+    quiet: yes
+
+- name: Fail if distribution packages are requested on an unsupported Debian release
+  fail:
+    msg: >-
+      zimantic_use_system_packages needs Debian 13/trixie or newer because the
+      native dependencies are not packaged in this release. Use PyPI wheels on
+      a 64-bit host (zimantic_use_system_packages: never), or upgrade to
+      Debian 13+.
+  when:
+    - zimantic_system_packages_enabled | bool
+    - (ansible_facts.distribution | default('')) == 'Debian'
+    - (ansible_facts.distribution_major_version | default('0') | int) < 13
+
+- name: Validate zimantic_embedding_model
+  assert:
+    that: zimantic_embedding_model in ['multilingual-e5-small', 'e5-small-v2']
+    fail_msg: "zimantic_embedding_model must be 'multilingual-e5-small' or 'e5-small-v2'"
+    quiet: yes
+
+- name: Validate the selected embedding model block
+  assert:
+    that:
+      - zimantic_model_url is defined
+      - zimantic_model_checksum is defined
+      - zimantic_tokenizer_file is defined
+      - zimantic_tokenizer_url is defined
+      - zimantic_tokenizer_checksum is defined
+    fail_msg: >-
+      Uncomment one complete embedding model block in
+      roles/zimantic/defaults/main.yml, or copy it into
+      /etc/iiab/local_vars.yml
+    quiet: yes
+
+- name: Check for a supported Python version
+  command: "{{ zimantic_python }} --version"
+  register: zimantic_python_check
+  changed_when: false
+  failed_when: false
+  check_mode: no
+
+- name: Fail if a supported Python version is unavailable
+  fail:
+    msg: "Zimantic currently requires Python 3.11-3.14; install a compatible {{ zimantic_python }} before enabling the zimantic role"
+  when:
+    - zimantic_python_check.rc != 0 or
+      ((zimantic_python_check.stdout ~ zimantic_python_check.stderr) is not search('Python 3\\.(1[1-4])\\.'))

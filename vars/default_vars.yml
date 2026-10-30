@@ -4,8 +4,10 @@
 
 # Internet-in-a-Box (IIAB) uses True/False to indicate boolean values.
 
-# IIAB does NOT currently support uninstalling apps!  So: if any IIAB app is
-# installed with 'APP_XYZ_install: True' below, do NOT later change that.
+# IIAB installs apps and normally keeps them installed. To remove an app, use a
+# role that implements --uninstall (./runrole --uninstall <role>). If an IIAB
+# app is installed with 'APP_XYZ_install: True' below, do NOT later change that
+# unless you are uninstalling the app.
 
 # WARNING: IF YOU CONNECT YOUR IIAB'S INTERNAL WIFI TO THE INTERNET OVER 5 GHz,
 # YOU'LL PREVENT OLDER LAPTOPS/PHONES/TABLETS (WHICH REQUIRE 2.4 GHz) FROM
@@ -31,7 +33,7 @@ iiab_local_vars_file: "{{ iiab_etc_path }}/local_vars.yml"
 # Installation status files
 iiab_env_file: "{{ iiab_etc_path }}/iiab.env"
 iiab_ini_file: "{{ iiab_etc_path }}/iiab.ini"
-iiab_state_file: "{{ iiab_etc_path }}/iiab_state.yml"
+iiab_state_file: "{{ lookup('env', 'IIAB_STATE_FILE') or (iiab_etc_path ~ '/iiab_state.yml') }}"
 
 iiab_base: /opt/iiab
 iiab_dir: "{{ iiab_base }}/iiab"
@@ -503,6 +505,11 @@ kiwix_incl_apk: False
 kiwix_apk_url: /software/kiwix
 kiwix_apk_src: https://download.kiwix.org/release/kiwix-android/kiwix.apk
 
+# Zimantic is an optional alternative search and local ZIM server.
+zimantic_install: False
+zimantic_enabled: False
+zimantic_port: 8090
+
 # 2020-09-24: BOTH VALUES BELOW ARE IGNORED as PostgreSQL is installed on
 # demand as a dependency -- by Moodle &/or Pathagar
 postgresql_install: False
@@ -791,6 +798,18 @@ pbx_http_port: 83
 kalite_server_port: 8008
 kalite_root: "{{ content_base }}/ka-lite"    # /library/ka-lite
 
+# Internal flags passed by ./runrole. Do not set them in local_vars.yml. The
+# iiab_role_ prefix prevents an accidental role operation from a local_vars.yml
+# entry. A role accepts --uninstall only when it implements the uninstall
+# phase. On --reinstall, a role with uninstall.yml is removed and installed
+# again. Without it, --reinstall runs install.yml again and ./runrole warns
+# that the result is ambiguous. A role accepts --upgrade only when it ships
+# upgrade.yml. (./iiab-install --reinstall is different: it resets only the
+# stage counter.)
+iiab_role_uninstall: False
+iiab_role_reinstall: False
+iiab_role_upgrade: False
+
 # =============================================================================
 
 
@@ -861,7 +880,7 @@ is_debuntu: True    # 2025-09-16: OBSOLETE VARIABLE, BUT ADMIN CONSOLE STILL
 #    various high-level scripts in /opt/iiab/iiab for IIAB implementers:
 #       ./iiab-install (uses iiab-stages.yml)
 #       ./iiab-network (uses iiab-network.yml)
-#       ./runrole (uses run-one-role.yml)
+#       ./runrole (uses runrole-base.yml)
 # 4. Likewise behind the scenes:
 #       ./iiab-configure (uses iiab-from-cmdline.yml)
 #       Admin Console (uses iiab-from-console.yml)

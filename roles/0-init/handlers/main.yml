@@ -1,0 +1,51 @@
+---
+# Shared NGINX handlers, available to every role because 0-init is included by
+# all entry points (runrole-base.yml, iiab-stages.yml, iiab-from-*.yml).
+#
+# A role that adds or removes a file in {{ nginx_conf_dir }} or a symlink in
+# sites-enabled must notify "Reload nginx". NGINX re-reads its configuration
+# and drains the old workers without dropping connections. Ansible runs each
+# handler once, even when many roles notify it.
+#
+# Use "Restart nginx" only when the role replaces the daemon itself, not only
+# its configuration. nginx/tasks/enable-or-disable.yml keeps its own enable,
+# start, and restart logic because that role installs the daemon.
+#
+# The systemd and pdsm (proot) variants listen to the same topic, so a role
+# notifies one name and only the applicable task runs.
+
+- name: Reload nginx via systemd
+  systemd:
+    name: nginx
+    state: reloaded
+  when:
+    - nginx_enabled | default(true)
+    - lookup('installed', 'nginx') | bool
+    - not is_proot
+  listen: Reload nginx
+
+- name: Reload nginx via pdsm
+  command: pdsm restart nginx
+  when:
+    - nginx_enabled | default(true)
+    - lookup('installed', 'nginx') | bool
+    - is_proot
+  listen: Reload nginx
+
+- name: Restart nginx via systemd
+  systemd:
+    name: nginx
+    state: restarted
+  when:
+    - nginx_enabled | default(true)
+    - lookup('installed', 'nginx') | bool
+    - not is_proot
+  listen: Restart nginx
+
+- name: Restart nginx via pdsm
+  command: pdsm restart nginx
+  when:
+    - nginx_enabled | default(true)
+    - lookup('installed', 'nginx') | bool
+    - is_proot
+  listen: Restart nginx

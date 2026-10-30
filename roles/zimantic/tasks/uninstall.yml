@@ -1,0 +1,121 @@
+---
+# The runner includes this file for --uninstall and for the remove half of
+# --reinstall.
+#
+# Remove the service, NGINX shortcut, source checkout, runtime data, and the
+# role's user. The source tree and runtime data are disposable: a later install
+# recreates them, and indexes and models must be rebuilt in any case. The ZIM
+# files under zimantic_zim_dir are user data and are never removed.
+
+- name: Check whether zimantic.service is installed
+  stat:
+    path: /etc/systemd/system/zimantic.service
+  register: zimantic_uninstall_unit
+
+- name: Stop and disable Zimantic before uninstalling
+  systemd:
+    name: zimantic
+    state: stopped
+    enabled: no
+  when: zimantic_uninstall_unit.stat.exists
+
+- name: Remove zimantic.service
+  file:
+    path: /etc/systemd/system/zimantic.service
+    state: absent
+  when: zimantic_uninstall_unit.stat.exists
+
+- name: Check for installed Zimantic indexing units
+  stat:
+    path: "{{ item }}"
+  loop:
+    - /usr/local/sbin/zimantic-indexing
+    - /etc/systemd/system/zimantic-indexing-fast.path
+    - /etc/systemd/system/zimantic-indexing-fast.service
+    - /etc/systemd/system/zimantic-indexing.timer
+    - /etc/systemd/system/zimantic-indexing.service
+  register: zimantic_uninstall_indexing_units
+
+- name: Stop and disable Zimantic indexing units
+  systemd:
+    name: "{{ item.item | basename }}"
+    state: stopped
+    enabled: no
+  loop: "{{ zimantic_uninstall_indexing_units.results }}"
+  when:
+    - item.stat.exists
+    - item.item is not search('/usr/local/sbin/zimantic-indexing')
+
+- name: Remove Zimantic indexing units
+  file:
+    path: "{{ item.item }}"
+    state: absent
+  loop: "{{ zimantic_uninstall_indexing_units.results }}"
+  register: zimantic_removed_indexing_units
+
+- name: Reload systemd after removing Zimantic units
+  systemd:
+    daemon_reload: yes
+  when:
+    - zimantic_uninstall_unit.stat.exists or
+      (zimantic_removed_indexing_units.results
+       | selectattr('changed', 'equalto', true) | list | length > 0)
+
+- name: Remove the Zimantic NGINX shortcut
+  file:
+    path: "{{ nginx_conf_dir }}/zimantic-nginx.conf"
+    state: absent
+  register: zimantic_uninstall_nginx
+
+- name: Restart 'nginx' after removing the Zimantic shortcut
+  systemd:
+    name: nginx
+    state: restarted
+  when:
+    - not is_proot
+    - zimantic_uninstall_nginx.changed
+
+- name: Restart 'nginx' via pdsm after removing the Zimantic shortcut
+  command: pdsm restart nginx
+  when:
+    - is_proot
+    - zimantic_uninstall_nginx.changed
+
+- name: Remove the Zimantic source checkout and virtual environment
+  file:
+    path: "{{ zimantic_source_dir }}"
+    state: absent
+
+- name: Remove Zimantic data, indexes, model, and settings
+  file:
+    path: "{{ zimantic_data_dir }}"
+    state: absent
+
+- name: Remove the Zimantic user
+  user:
+    name: "{{ zimantic_user }}"
+    state: absent
+    remove: yes
+
+- name: Record that Zimantic is uninstalled in {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"
+    section: zimantic
+    option: zimantic_install
+    value: "False"
+
+- name: Record that Zimantic is disabled in {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"
+    section: zimantic
+    option: zimantic_enabled
+    value: "False"
+
+# Remove the markers last, after every cleanup task has succeeded.
+- name: Remove Zimantic markers from {{ iiab_state_file }}
+  iiab_state:
+    key: "{{ item }}"
+    state: absent
+  loop:
+    - zimantic_installed
+    - zimantic_installed_version

@@ -1,0 +1,96 @@
+# zimantic_install: False
+# zimantic_enabled: False
+
+# Zimantic's semantic mode provides meaning-based, title-word, and native ZIM
+# full-text search, but loads an embedding model and needs more memory. Fast
+# mode omits the embedding model and provides title-word and native ZIM
+# full-text search.
+zimantic_mode: semantic
+# 8090 may collide with AzuraCast's container port range or the deprecated
+# httpd role's Apache port. Override it here or in local_vars.yml if needed.
+zimantic_port: 8090
+zimantic_url_without_slash: /zimantic
+zimantic_url: "{{ zimantic_url_without_slash }}/"
+
+# Zimantic currently supports Python 3.11-3.14. libzim and other native
+# dependencies publish wheels only for selected Python versions and
+# architectures; by default, armhf uses distribution packages instead.
+zimantic_python: python3
+
+# Native dependencies for architectures without PyPI wheels. Debian 13/trixie
+# and newer provide these for armhf. They are installed system-wide and the
+# virtual environment is created with --system-site-packages, so on these hosts
+# keep zimantic_python pointed at the distribution interpreter.
+zimantic_system_packages:
+  - python3-numpy
+  - python3-tqdm
+  - python3-onnxruntime
+  - python3-sentencepiece
+  - python3-faiss
+  - python3-libzim
+  - python3-pymupdf
+  - python3-fastapi
+  - python3-uvicorn
+  # Needed to rebuild the local project without pip's network-fetching build
+  - python3-setuptools
+# "auto" uses distribution packages only where PyPI wheels are unavailable
+# (32-bit arm); "always" uses them on every architecture; "never" always
+# installs the native dependencies from PyPI wheels.
+zimantic_use_system_packages: auto
+
+zimantic_repo: https://github.com/chapmanjacobd/zimantic.git
+zimantic_version: v0.1.6
+zimantic_source_dir: "{{ iiab_base }}/zimantic"
+zimantic_venv: "{{ zimantic_source_dir }}/.venv"
+zimantic_user: zimantic
+
+zimantic_data_dir: "{{ content_base }}/zimantic"
+zimantic_zim_dir: "{{ iiab_zim_path }}/content"
+zimantic_index_dir: "{{ zimantic_data_dir }}/indexes"
+zimantic_model_dir: "{{ zimantic_data_dir }}/model"
+zimantic_config_file: "{{ zimantic_data_dir }}/config.toml"
+
+# Select one embedding model by uncommenting its block (or copy the block into
+# /etc/iiab/local_vars.yml). Leave a blank line between the blocks so it stays
+# obvious where one option ends and the next begins. Indexes are specific to
+# the model that built them, so rebuild them after switching (zimantic build
+# --force).
+
+# multilingual-e5-small: 100+ languages, approximately 123 MB.
+zimantic_embedding_model: multilingual-e5-small
+zimantic_model_url: https://huggingface.co/Xenova/multilingual-e5-small/resolve/main/onnx/model_quantized.onnx
+zimantic_model_checksum: sha256:f80102d3f2a1229f387d3c81909990d8945513e347b0eab049f7de3c6f98c193
+zimantic_tokenizer_file: sentencepiece.bpe.model
+zimantic_tokenizer_url: https://huggingface.co/intfloat/multilingual-e5-small/resolve/main/sentencepiece.bpe.model
+zimantic_tokenizer_checksum: sha256:cfc8146abe2a0488e9e2a0c56de7952f7c11ab059eca145a0a727afce0db2865
+
+# e5-small-v2: English only, approximately 34 MB. Uses less memory, which
+# helps on hosts with 1 GB RAM or less.
+# zimantic_embedding_model: e5-small-v2
+# zimantic_model_url: https://huggingface.co/Xenova/e5-small-v2/resolve/main/onnx/model_quantized.onnx
+# zimantic_model_checksum: sha256:7d9092cb25f2bd1c023b7e8d2aa459044a02030ac880e5a59fdaf27af69f1ded
+# zimantic_tokenizer_file: vocab.txt
+# zimantic_tokenizer_url: https://huggingface.co/Xenova/e5-small-v2/resolve/main/vocab.txt
+# zimantic_tokenizer_checksum: sha256:07eced375cec144d27c900241f3e339478dec958f92fddbc551f295c992038a3
+
+# Memory limits for the systemd cgroup. MemoryHigh makes the kernel reclaim and
+# throttle under pressure; MemoryMax is the hard limit that OOM-kills only
+# Zimantic, not the rest of the device. Keep MemoryHigh below MemoryMax.
+# On a 512 MB host, 80% leaves roughly 100 MB for the kernel, NGINX, Kiwix and
+# SSH. Lower both percentages (or point zimantic_zim_dir at fewer ZIMs) if other
+# services are starved. Override with fixed limits if needed, for example:
+zimantic_memory_high: "70%"
+zimantic_memory_max: "80%"
+# zimantic_memory_high: "768M"
+# zimantic_memory_max: "1G"
+
+# OOMScoreAdjust only breaks ties when the whole device is out of memory; it
+# does not cap Zimantic's memory. The cgroup limits above do that.
+zimantic_oom_score_adjust: 200
+
+# If Zimantic is OOM-killed, systemd retries after RestartSec. It stops
+# restarting after StartLimitBurst starts in StartLimitIntervalSec, leaving the
+# unit failed instead of looping through another OOM.
+zimantic_restart_sec: 10
+zimantic_start_limit_interval: 600
+zimantic_start_limit_burst: 3

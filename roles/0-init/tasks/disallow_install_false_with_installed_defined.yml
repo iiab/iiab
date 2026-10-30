@@ -1,17 +1,55 @@
-# 2025-09-15: These ~47 asserts were temporarily spelled out exhaustively, as
-# ansible-core 2.19 banned var names derived from {{ }} string templating
-# inside 'that:' conditionals -- see: https://github.com/iiab/iiab/issues/4030
+# 2026-10-27: State markers are read with the 'installed' lookup, so this no
+# longer depends on iiab_state.yml being loaded through vars_files.
 #
-# 2026-10-17: RESTORED to 1 loop task!  The 'vars' + 'varnames' lookups below
-# never build var names via templating (they're pure Jinja expressions), so
-# they work fine on ansible-core 2.19/2.20+.
-# https://docs.ansible.com/ansible/latest/collections/ansible/builtin/varnames_lookup.html
-# https://docs.ansible.com/ansible/latest/collections/ansible/builtin/vars_lookup.html
+# 2026-10-28: Report EVERY conflict in one message, and explain the supported
+# ways out.  This used to say "IIAB DOES NOT SUPPORT UNINSTALLS", which is no
+# longer true for roles that implement './runrole --uninstall', and gave the
+# user no next step.
 
-- name: 'DISALLOW "XYZ_install: False" WHEN "XYZ_installed is defined" IN /etc/iiab/iiab_state.yml ...for up-to-{{ vars_checklist | length }} var pairs'
-  assert:
-    that: "lookup('vars', item + '_install') or lookup('varnames', '^' + item + '_installed$') | length == 0"
-    fail_msg: "DISALLOWED: '{{ item }}_install: False' (e.g. in /etc/iiab/local_vars.yml) WHEN '{{ item }}_installed' is defined (e.g. in /etc/iiab/iiab_state.yml) -- IIAB DOES NOT SUPPORT UNINSTALLS -- please verify those 2 files especially, and other places variables are defined?"
-    quiet: yes
-  when: item != 'mysql' and item != 'postgresql' and item != 'mongodb' and item != 'nodejs'    # Exclude auto-installed dependencies
-  loop: "{{ vars_checklist }}"
+- name: Start with an empty installed/install conflict list
+  set_fact:
+    installed_conflicts: []
+
+- name: 'Find installed apps that "*_install: False" would disable'
+  set_fact:
+    installed_conflicts: >-
+      {{ installed_conflicts | default([]) + [item] }}
+  # hostapd and dnsmasq have install vars but no state markers. nginx is a
+  # shared dependency that is always installed and has no standalone uninstall,
+  # so the nginx role performs that check.
+  loop: "{{ vars_checklist | difference(['hostapd', 'dnsmasq', 'nginx']) }}"
+  when:
+    - not (iiab_role_uninstall | bool)    # During --uninstall the marker must stay until cleanup finishes.
+    - item != 'mysql' and item != 'postgresql' and item != 'mongodb' and item != 'nodejs'    # Exclude auto-installed dependencies
+    - not lookup('vars', item + '_install')
+    # admin_console is recorded by iiab-admin as iiab_admin_installed.
+    - lookup('installed', ('iiab_admin_installed' if item == 'admin_console' else item))
+
+- name: 'DISALLOW "XYZ_install: False" WHEN "XYZ_installed" IS TRUE IN /etc/iiab/iiab_state.yml ...for up-to-{{ vars_checklist | length }} var pairs'
+  fail:
+    msg: |
+      DISALLOWED: installed apps with '<app>_install: False' in /etc/iiab/local_vars.yml:
+
+      {% for item in installed_conflicts %}
+        - {{ var_role_names.get(item, item) }}  ({{ item }}_install: False, {{ 'iiab_admin_installed' if item == 'admin_console' else item ~ '_installed' }}: True)
+      {% endfor %}
+
+      Choose one:
+      1. Keep it: set '<app>_install: True' in local_vars.yml and re-run.
+      2. Uninstall it (roles that support this):
+           ./runrole --list
+           sudo ./runrole --uninstall <role>
+         Prefixes managed by a larger role (squid -> network, admin_console ->
+         iiab-admin) have no standalone uninstall.
+      3. If the program and its settings are already gone, clear the stale
+         marker with the state-file prefix (admin_console -> iiab_admin,
+         calibre-web -> calibreweb):
+           sudo ./scripts/iiab-state forget <state-prefix>
+
+      Inspect without changing anything:
+        ./runrole --status <role>
+        ./runrole --list
+
+      More help: http://FAQ.IIAB.IO
+      https://github.com/iiab/iiab/wiki/IIAB-Installation#do-everything-from-scratch
+  when: installed_conflicts | default([]) | length > 0

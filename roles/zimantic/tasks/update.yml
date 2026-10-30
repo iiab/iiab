@@ -1,0 +1,50 @@
+---
+# Network phase. Fetches the requested program version and installs missing
+# system packages. install.yml includes it when the source checkout is missing
+# or does not match zimantic_version (on a first install, after --reinstall, or
+# for --upgrade). It never removes runtime data or user settings.
+# check-source.yml has already computed zimantic_source_matches_version.
+
+# Checking first keeps offline reruns from touching the network: apt would
+# otherwise run 'apt-get update' on every run, even when nothing is missing.
+- name: Check which Zimantic system packages are missing
+  command: "dpkg-query -W -f='${db:Status-Status}' {{ item }}"
+  register: zimantic_system_package_status
+  changed_when: false
+  failed_when: false
+  check_mode: no
+  loop: "{{ zimantic_system_packages }}"
+  when: zimantic_system_packages_enabled | bool
+
+- name: Install native dependencies from the distribution
+  apt:
+    name: "{{ zimantic_system_packages }}"
+    state: present
+    update_cache: yes
+    cache_valid_time: 3600
+  when:
+    - zimantic_system_packages_enabled | bool
+    - zimantic_system_package_status.results | default([]) |
+      rejectattr('stdout', 'equalto', 'installed') | list | length > 0
+
+- name: Reconcile the Zimantic source checkout
+  block:
+
+    # The source directory is documented as disposable: discard local tracked
+    # changes before deciding whether a fetch is necessary. 'git: update: no'
+    # returns before resetting anything, so this cannot be left to the module.
+    - name: Discard local changes in the matching Zimantic source
+      command: "git -C {{ zimantic_source_dir }} reset --hard HEAD"
+      changed_when: false
+      when: zimantic_source_matches_version | bool
+
+    - name: Check out Zimantic {{ zimantic_version }}
+      git:
+        repo: "{{ zimantic_repo }}"
+        dest: "{{ zimantic_source_dir }}"
+        version: "{{ zimantic_version }}"
+        # A commit hash may not be a branch tip, so clone the full history for
+        # hashes and keep the shallow clone for tags and branches.
+        depth: "{{ 0 if zimantic_version_is_commit | bool else 1 }}"
+        update: "{{ not (zimantic_source_matches_version | bool) }}"
+        force: yes

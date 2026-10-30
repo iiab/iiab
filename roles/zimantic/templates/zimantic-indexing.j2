@@ -1,0 +1,44 @@
+#!/bin/sh
+set -eu
+
+case "${1:-}" in
+    "")
+        build_mode=
+        ;;
+    --fast)
+        build_mode=--fast
+        ;;
+    *)
+        echo "usage: zimantic-indexing [--fast]" >&2
+        exit 2
+        ;;
+esac
+
+if [ "$#" -gt 1 ]; then
+    echo "usage: zimantic-indexing [--fast]" >&2
+    exit 2
+fi
+
+if ! exec 9>"{{ zimantic_data_dir }}/.build.lock"; then
+    echo "zimantic: unable to open build lock" >&2
+    exit 1
+fi
+if ! /usr/bin/flock -n 9; then
+    echo "zimantic: another build is running, indexing skipped" >&2
+    exit 0
+fi
+
+build_status=0
+if [ "$build_mode" = "--fast" ]; then
+    "{{ zimantic_venv }}/bin/zimantic" build --fast --wait-stable || build_status=$?
+else
+    "{{ zimantic_venv }}/bin/zimantic" build --wait-stable || build_status=$?
+fi
+
+reload_status=0
+"{{ zimantic_venv }}/bin/zimantic" reload || reload_status=$?
+
+if [ "$build_status" -ne 0 ]; then
+    exit "$build_status"
+fi
+exit "$reload_status"

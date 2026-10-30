@@ -4,10 +4,12 @@
 # (2) have type boolean (Ansible often inverts logic when boolean vars are
 # accidentally declared as strings, see below!) and (3) have plausible values.
 
-# 2020-01-23: *_installed variables (incrementally saved to
-# /etc/iiab/iiab_state.yml) are not required to be boolean (or even defined!)
-# for now.  However if any of these are defined, the corresponding value of
-# *_install must be True, as IIAB does not currently support uninstalling!
+# 2020-01-23: *_installed markers (in /etc/iiab/iiab_state.yml) are read with
+# the 'installed' lookup and are not required to be boolean (or even defined!).
+# However if any marker is true, the corresponding value of *_install must be
+# True unless the role is being uninstalled (which removes the marker only
+# after cleanup succeeds).  Only roles that implement --uninstall can do that;
+# see './runrole --list'.
 
 # Stricter validation is needed later, when roles/playbooks/tasks are invoked
 # by various scripts, possibly bypassing 0-init?  Either way, risks abound :/
@@ -80,13 +82,13 @@
 # https://docs.ansible.com/ansible/latest/collections/ansible/builtin/vars_lookup.html
 #
 # Each of the 6 validation subtasks below is again just 1 task, looping over
-# the 47 vars in vars_checklist below!  (As before 2025-09-15 -- and FYI,
+# the vars in vars_checklist below!  (As before 2025-09-15 -- and FYI,
 # 'loop' also sidesteps the 2023-12-04 'with_items' breakage caused by the
 # CVE-2023-5764 mitigation in ansible-core 2.16.1.)
 
-- name: Set vars_checklist for 47 + 47 vars ("XYZ_install" + "XYZ_enabled") to be checked
+- name: Set vars_checklist_all for all vars ("XYZ_install" + "XYZ_enabled") to be checked
   set_fact:
-    vars_checklist:
+    vars_checklist_all:
       - hostapd
       - dnsmasq
       - bluetooth
@@ -113,6 +115,7 @@
       - wordpress
       - kolibri
       - kiwix
+      - zimantic
       - postgresql
       - moodle
       - mongodb
@@ -134,6 +137,7 @@
       - code
       - pbx
       - network
+      - nginx
 
 - name: Set vars_deprecated_list for 4 deprecated vars ("XYZ_install") to be checked
   set_fact:
@@ -144,20 +148,50 @@
       - dansguardian        # Deprecated
       #- kalite             # 2026-03-25 ADVISE: KA Lite is *completely going away* within 90 days -- UNCOMMENT kalite right here, when ready!
 
-- name: VERIFY that all ~47 APP_install vars are DEFINED
+# Error messages name the role as well as its variable prefix, so the user can
+# copy the './runrole --uninstall <role>' command without translating, for
+# example, 'calibreweb' to 'calibre-web'. Keep this aligned with
+# ROLE_VAR_OVERRIDES in scripts/role_lifecycle.py.
+- name: Map variable prefixes to role names for error messages
+  set_fact:
+    var_role_names:
+      calibreweb: calibre-web
+      osm_vector_maps: osm-vector-maps
+      admin_console: iiab-admin
+
+# ./runrole passes 'validate_roles' (a list of variable prefixes), so a
+# debugging run checks only the roles it was asked to run. Full plays leave the
+# variable undefined, which keeps the complete check.
+- name: Narrow vars_checklist to the roles being run
+  set_fact:
+    vars_checklist: >-
+      {{ vars_checklist_all
+         if validate_roles is not defined
+         else (vars_checklist_all | intersect(validate_roles)) }}
+
+- name: VERIFY that all ~48 APP_install vars are DEFINED
   include_tasks: validate_install_vars_defined.yml
-- name: VERIFY that all ~47 APP_enabled vars are DEFINED
+  when: not (iiab_role_uninstall | bool)
+- name: VERIFY that all ~48 APP_enabled vars are DEFINED
   include_tasks: validate_enabled_vars_defined.yml
+  when: not (iiab_role_uninstall | bool)
 
-- name: VERIFY that all ~47 APP_install vars are BOOLEAN
+- name: VERIFY that all ~48 APP_install vars are BOOLEAN
   include_tasks: validate_install_vars_boolean.yml
-- name: VERIFY that all ~47 APP_enabled vars are BOOLEAN
+  when: not (iiab_role_uninstall | bool)
+- name: VERIFY that all ~48 APP_enabled vars are BOOLEAN
   include_tasks: validate_enabled_vars_boolean.yml
+  when: not (iiab_role_uninstall | bool)
 
-- name: VERIFY that all ~47 APP_install vars DON'T CONTRADICT THEIR APP_enabled vars
+- name: VERIFY that all ~48 APP_install vars DON'T CONTRADICT THEIR APP_enabled vars
   include_tasks: disallow_install_false_with_enabled_true.yml
-- name: VERIFY that all ~47 APP_install vars DON'T CONTRADICT THEIR APP_installed vars
+  when: not (iiab_role_uninstall | bool)
+- name: VERIFY that all ~48 APP_install vars DON'T CONTRADICT THEIR APP_installed vars
   include_tasks: disallow_install_false_with_installed_defined.yml
+  when: not (iiab_role_uninstall | bool)
 
 - name: VERIFY that 4 deprecated APP_install vars are NO LONGER IN USE
   include_tasks: disallow_deprecated_install_vars.yml
+  when:
+    - validate_roles is not defined
+    - not (iiab_role_uninstall | bool)

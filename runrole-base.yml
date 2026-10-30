@@ -1,14 +1,25 @@
 ---
+# Base playbook for ./runrole. ./runrole appends the requested roles to a
+# temporary copy, so one base serves both single-role and multi-role runs.
 - hosts: all
   become: yes
   gather_facts: false
 
+  vars:
+    default_vars_file: "{{ lookup('env', 'DEFAULT_VARS_FILE') or 'vars/default_vars.yml' }}"
+    local_vars_file: "{{ lookup('env', 'LOCAL_VARS_FILE') or '/etc/iiab/local_vars.yml' }}"
+    state_file: "{{ lookup('env', 'IIAB_STATE_FILE') or '/etc/iiab/iiab_state.yml' }}"
+
   vars_files:
-    - vars/default_vars.yml
+    - "{{ default_vars_file }}"
     # ansible-core 2.19 disallows (thankfully not needed!)
     #- vars/{{ ansible_local.local_facts.os_ver }}.yml
-    - /etc/iiab/local_vars.yml
-    - /etc/iiab/iiab_state.yml
+    - "{{ local_vars_file }}"
+    - "{{ state_file }}"
+
+  module_defaults:
+    iiab_state:
+      path: "{{ iiab_state_file }}"
 
   pre_tasks:
     - name: Gather facts -- when not is_proot (not Android)
@@ -46,4 +57,3 @@
 
   roles:
     - { role: 0-init }
-    - { role: "{{ role_to_run }}" }
