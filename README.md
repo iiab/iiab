@@ -55,7 +55,9 @@ repeatable: each role is installed if missing and otherwise reconfigured.
   is unsafe can opt out with `reinstall: false` in
   `roles/<role>/meta/runrole.yml`; `kolibri`, `wordpress`, and `azuracast` do.
   Legacy roles have their state markers removed before the reinstall starts, so
-  a failed reinstall leaves them looking uninstalled.
+  a failed reinstall leaves them looking uninstalled. `./iiab-install
+  --reinstall` is different: it only resets the stage counter and reruns the
+  stages; use `./runrole --reinstall <role>` to rebuild a role.
 - `--upgrade` upgrades an installed role through the application's own
   mechanism. It is accepted only when the role ships `upgrade.yml` (or, for a
   legacy role, implements `when: upgrade`). No role ships `upgrade.yml` in 1.0;

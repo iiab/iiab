@@ -1657,7 +1657,7 @@ def make_playbook(
                     install_name: True,
                     enabled_name: enabled,
                     "uninstall": bool(lifecycle.get("uninstall", False)),
-                    "reinstall": bool(lifecycle.get("reinstall", False)),
+                    "iiab_role_reinstall": bool(lifecycle.get("reinstall", False)),
                     "upgrade": bool(lifecycle.get("upgrade", False)),
                 }
             },
@@ -1891,7 +1891,7 @@ def run_scenario(
                 install_name: True,
                 enabled_name: values["enabled"],
                 "uninstall": values.get("uninstall", False),
-                "reinstall": values.get("reinstall", False),
+                "iiab_role_reinstall": values.get("reinstall", False),
                 "upgrade": values.get("upgrade", False),
             },
         )
