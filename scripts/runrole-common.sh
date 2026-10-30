@@ -105,7 +105,7 @@ role_require_capability() {
     fi
     case $feature in
         reinstall)
-            echo "This role opts out; remove 'reinstall: false' from roles/${role}/meta/runrole.yml only if a rebuild is safe." >&2
+            echo "Remove 'reinstall: false' from roles/${role}/meta/runrole.yml only if a rebuild is safe." >&2
             ;;
         uninstall)
             echo "Ship tasks/uninstall.yml, add a 'when: uninstall' condition to the entrypoint, or declare 'uninstall: true' in roles/${role}/meta/runrole.yml (legacy roles)." >&2

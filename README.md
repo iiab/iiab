@@ -57,7 +57,9 @@ repeatable: each role is installed if missing and otherwise reconfigured.
   Legacy roles have their state markers removed before the reinstall starts, so
   a failed reinstall leaves them looking uninstalled. `./iiab-install
   --reinstall` is different: it only resets the stage counter and reruns the
-  stages; use `./runrole --reinstall <role>` to rebuild a role.
+  stages; use `./runrole --reinstall <role>` to rebuild a role. `--reinstall`
+  asks for confirmation before resetting user settings; pass `-y` in
+  automation.
 - `--upgrade` upgrades an installed role through the application's own
   mechanism. It is accepted only when the role ships `upgrade.yml` (or, for a
   legacy role, implements `when: upgrade`). No role ships `upgrade.yml` in 1.0;
