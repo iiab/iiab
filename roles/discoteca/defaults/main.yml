@@ -5,7 +5,7 @@
 # If nec, change them by editing /etc/iiab/local_vars.yml prior to installing!
 
 # discoteca is a single Go binary with an embedded web client. It serves one or
-# more SQLite media databases, which live in discoteca_data_dir. Media files
+# more SQLite media databases, which live in discoteca_database_dir. Media files
 # themselves stay wherever they are; a database only records their paths.
 #
 # Upstream: https://github.com/chapmanjacobd/discoteca
@@ -59,11 +59,16 @@ discoteca_source_packages:
   - libc6-dev
   - ca-certificates
 
-# Runtime user and filesystem layout
+# Runtime user and filesystem layout. Like Kolibri, the service runs as an
+# unprivileged user, but its files belong to the IIAB web group (www-data) so
+# media and databases follow the usual /library conventions.
 discoteca_user: discoteca
-discoteca_group: discoteca
+discoteca_primary_group: discoteca
+discoteca_group: "{{ apache_user }}"    # www-data on Debian/Ubuntu/Raspbian
 discoteca_home: /var/lib/discoteca
-discoteca_data_dir: "{{ content_base }}/discoteca"    # /library/discoteca
+discoteca_database_dir: "{{ content_base }}/discoteca"    # /library/discoteca
+# Optional example: reuse Calibre-Web's content (discoteca indexes it in place).
+# discoteca_media_dir: "{{ calibreweb_home }}"
 discoteca_install_dir: /usr/local/lib/discoteca
 discoteca_binary_path: "{{ discoteca_install_dir }}/disco-{{ discoteca_binary_version }}"
 discoteca_binary_version: "{{ discoteca_resolved_version }}"
@@ -93,10 +98,10 @@ discoteca_port: 5555
 # Databases to serve. The install creates each missing file as an empty SQLite
 # database. Add more with e.g.:
 #   discoteca_databases:
-#     - "{{ discoteca_data_dir }}/library.db"
-#     - "{{ discoteca_data_dir }}/audio.db"
+#     - "{{ discoteca_database_dir }}/library.db"
+#     - "{{ discoteca_database_dir }}/audio.db"
 discoteca_databases:
-  - "{{ discoteca_data_dir }}/library.db"
+  - "{{ discoteca_database_dir }}/library.db"
 
 # Optional upstream dependencies. ffmpeg enables transcoding, HLS, and media
 # inspection; discoteca still serves an existing database without it.
@@ -120,8 +125,9 @@ discoteca_kiwix_port: 0
 discoteca_read_only: false
 
 # Ownership declarations. See "Data ownership" in the top-level README.md.
-# The databases and media files in discoteca_data_dir are user data and are
-# never deleted. The service home holds caches, generated state, and the pdsm
+# The databases in discoteca_database_dir are user data and are never deleted.
+# Media files indexed by those databases may live anywhere; the role never
+# touches them. The service home holds caches, generated state, and the pdsm
 # log. The pdsm configuration is generated from local_vars.yml.
 discoteca_user_settings: []
 discoteca_program_data:
@@ -130,4 +136,4 @@ discoteca_program_data:
   - /etc/systemd/system/{{ discoteca_service }}.service
   - "{{ discoteca_nginx_conf }}"
 discoteca_user_data:
-  - "{{ discoteca_data_dir }}/"
+  - "{{ discoteca_database_dir }}/"

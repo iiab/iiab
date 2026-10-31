@@ -19,6 +19,8 @@ SERVICE_CONFIG="${DISCO_CONFIG:-/etc/discoteca/serve.conf}"
 [ -r "$SERVICE_CONFIG" ] && . "$SERVICE_CONFIG"
 
 : "${DISCO_BIN:=/usr/local/bin/disco}"
+: "${DISCO_USER:=discoteca}"
+: "${DISCO_GROUP:=www-data}"
 : "${DISCO_HOME:=/var/lib/discoteca}"
 : "${DISCO_WORKDIR:=/library/discoteca}"
 : "${DISCO_LOG:=${DISCO_HOME}/discoteca.log}"
@@ -80,14 +82,23 @@ start() {
   [ "${DISCO_READ_ONLY:-0}" = "1" ] && set -- "$@" --read-only
 
   echo "[pdsm:$SERVICE_NAME] starting..."
-  # Under proot the service runs as root (the pdsm session user). Keep HOME and
-  # the working directory in the role's directories so caches do not land in
-  # the Android home.
+  # Under proot the pdsm session user is root. Drop to the unprivileged
+  # discoteca user (effective group www-data), matching the systemd unit.
+  # runuser (util-linux) execs the command directly, so paths with spaces pass
+  # through unchanged. cd before runuser keeps the working directory.
+  RUNUSER="$(command -v runuser 2>/dev/null || true)"
+  [ -x "$RUNUSER" ] || RUNUSER=/usr/sbin/runuser
+  if [ ! -x "$RUNUSER" ]; then
+    echo "[pdsm:$SERVICE_NAME] runuser (util-linux) is required to drop privileges" >&2
+    return 1
+  fi
+
   cd "$DISCO_WORKDIR" || {
     echo "[pdsm:$SERVICE_NAME] cannot enter $DISCO_WORKDIR" >&2
     return 1
   }
-  HOME="$DISCO_HOME" setsid "$DISCO_BIN" serve "$@" >>"$DISCO_LOG" 2>&1 &
+  setsid "$RUNUSER" -u "$DISCO_USER" -g "$DISCO_GROUP" -- \
+    env HOME="$DISCO_HOME" "$DISCO_BIN" serve "$@" >>"$DISCO_LOG" 2>&1 &
 
   for i in $(seq 1 "${PDSM_START_TIMEOUT:-15}"); do
     if running; then
