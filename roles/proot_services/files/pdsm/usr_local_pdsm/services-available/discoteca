@@ -1,0 +1,154 @@
+#!/bin/sh
+# /usr/local/pdsm/services-available/discoteca
+# pdsm service wrapper for discoteca (Android / proot).
+#
+# Installed by roles/proot_services (listed in pdsm_installed_services) and
+# configured by roles/discoteca, which writes /etc/discoteca/serve.conf and
+# /etc/discoteca/databases. Under proot there is no systemd, so this wrapper
+# replaces /etc/systemd/system/discoteca.service.
+
+PDSM_COMMON="/usr/local/pdsm/lib/pdsm-common.sh"
+[ -r "$PDSM_COMMON" ] && . "$PDSM_COMMON"
+
+SERVICE_NAME="discoteca"
+SERVICE_CONFIG="${DISCO_CONFIG:-/etc/discoteca/serve.conf}"
+
+# Stop/status must work even when the role has not written its configuration
+# yet (for example on a first install, or before an uninstall). Start requires
+# the full configuration below.
+[ -r "$SERVICE_CONFIG" ] && . "$SERVICE_CONFIG"
+
+: "${DISCO_BIN:=/usr/local/bin/disco}"
+: "${DISCO_HOME:=/var/lib/discoteca}"
+: "${DISCO_WORKDIR:=/library/discoteca}"
+: "${DISCO_LOG:=${DISCO_HOME}/discoteca.log}"
+: "${DISCO_DATABASES_FILE:=/etc/discoteca/databases}"
+: "${DISCO_HOST:=127.0.0.1}"
+: "${DISCO_PORT:=5555}"
+: "${DISCO_BASE_PATH:=/disco}"
+: "${DISCO_DB_CACHE_MB:=64}"
+: "${DISCO_MAX_CONCURRENT_SEARCHES:=2}"
+: "${DISCO_KIWIX_HOST:=127.0.0.1}"
+: "${DISCO_KIWIX_PORT:=0}"
+: "${DISCO_READ_ONLY:=0}"
+
+running() {
+  pgrep -f "$DISCO_BIN serve" >/dev/null 2>&1
+}
+
+start() {
+  if running; then
+    echo "[pdsm:$SERVICE_NAME] already running"
+    return 0
+  fi
+
+  if [ ! -r "$SERVICE_CONFIG" ]; then
+    echo "[pdsm:$SERVICE_NAME] missing $SERVICE_CONFIG; apply the IIAB discoteca role first" >&2
+    return 1
+  fi
+
+  if ! require_service "nginx"; then
+    echo "[pdsm:$SERVICE_NAME] required service 'nginx' is unavailable; aborting" >&2
+    return 1
+  fi
+
+  if [ ! -r "$DISCO_DATABASES_FILE" ]; then
+    echo "[pdsm:$SERVICE_NAME] missing $DISCO_DATABASES_FILE; apply the IIAB discoteca role first" >&2
+    return 1
+  fi
+
+  # Read one database path per line. set -- keeps paths with spaces intact.
+  set --
+  while IFS= read -r db; do
+    [ -n "$db" ] && set -- "$@" "$db"
+  done < "$DISCO_DATABASES_FILE"
+
+  if [ "$#" -eq 0 ]; then
+    echo "[pdsm:$SERVICE_NAME] no databases configured in $DISCO_DATABASES_FILE" >&2
+    return 1
+  fi
+
+  set -- "$@" --host "$DISCO_HOST" --port "$DISCO_PORT" --no-browser
+  [ -n "$DISCO_BASE_PATH" ] && set -- "$@" --base-path "$DISCO_BASE_PATH"
+  set -- "$@" --db-cache-mb "$DISCO_DB_CACHE_MB" \
+    --max-concurrent-searches "$DISCO_MAX_CONCURRENT_SEARCHES"
+
+  if [ "${DISCO_KIWIX_PORT:-0}" -gt 0 ] 2>/dev/null; then
+    set -- "$@" --kiwix-host "$DISCO_KIWIX_HOST" --kiwix-port "$DISCO_KIWIX_PORT"
+  fi
+
+  [ "${DISCO_READ_ONLY:-0}" = "1" ] && set -- "$@" --read-only
+
+  echo "[pdsm:$SERVICE_NAME] starting..."
+  # Under proot the service runs as root (the pdsm session user). Keep HOME and
+  # the working directory in the role's directories so caches do not land in
+  # the Android home.
+  cd "$DISCO_WORKDIR" || {
+    echo "[pdsm:$SERVICE_NAME] cannot enter $DISCO_WORKDIR" >&2
+    return 1
+  }
+  HOME="$DISCO_HOME" setsid "$DISCO_BIN" serve "$@" >>"$DISCO_LOG" 2>&1 &
+
+  for i in $(seq 1 "${PDSM_START_TIMEOUT:-15}"); do
+    if running; then
+      echo "[pdsm:$SERVICE_NAME] started"
+      return 0
+    fi
+    sleep 1
+  done
+
+  echo "[pdsm:$SERVICE_NAME] failed to start (check $DISCO_LOG)" >&2
+  return 1
+}
+
+stop() {
+  if ! running; then
+    echo "[pdsm:$SERVICE_NAME] already stopped"
+    return 0
+  fi
+
+  echo "[pdsm:$SERVICE_NAME] stopping..."
+  pkill -TERM -f "$DISCO_BIN serve" >/dev/null 2>&1 || true
+
+  for i in $(seq 1 "${PDSM_START_TIMEOUT:-15}"); do
+    if ! running; then
+      echo "[pdsm:$SERVICE_NAME] stopped"
+      return 0
+    fi
+    sleep 1
+  done
+
+  pkill -KILL -f "$DISCO_BIN serve" >/dev/null 2>&1 || true
+  sleep 1
+
+  if ! running; then
+    echo "[pdsm:$SERVICE_NAME] forcefully stopped"
+    return 0
+  fi
+
+  echo "[pdsm:$SERVICE_NAME] did not fully stop" >&2
+  return 1
+}
+
+status() {
+  if running; then
+    echo "[pdsm:$SERVICE_NAME] running"
+    return 0
+  fi
+  echo "[pdsm:$SERVICE_NAME] not running"
+  return 3
+}
+
+case "$1" in
+  start|stop|status)
+    "$1"
+    ;;
+  restart)
+    stop
+    start
+    ;;
+  *)
+    echo "Usage: $0 {start|stop|restart|status}" >&2
+    exit 1
+    ;;
+esac

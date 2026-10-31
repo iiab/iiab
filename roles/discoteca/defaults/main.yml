@@ -11,23 +11,53 @@
 # Upstream: https://github.com/chapmanjacobd/discoteca
 
 # Version. "latest" resolves the newest GitHub release during install. Pin a
-# release (for example "0.1.0") for an offline-reproducible image.
+# release (for example "0.0.37") for reproducibility. A pinned release that
+# predates the flags this role needs is refused (see discoteca_build_from_source).
 discoteca_version: latest
-discoteca_releases_api: "https://api.github.com/repos/chapmanjacobd/discoteca/releases/latest"
+discoteca_releases_api: "https://api.github.com/repos/chapmanjacobd/discoteca/releases"
+discoteca_release_url: >-
+  {{ (discoteca_releases_api ~ '/latest') if discoteca_version == 'latest'
+     else (discoteca_releases_api ~ '/tags/v' ~ discoteca_version) }}
 discoteca_resolved_version: "{{ discoteca_version }}"
 
-# uname -m -> upstream release asset suffix. Upstream publishes linux-amd64
-# and linux-arm64 binaries. armv7 (Raspberry Pi 2/3 in 32-bit mode) is not
-# built yet, so the install fails clearly instead of guessing.
-iset_suffixes:
+# uname -m -> upstream release asset suffix (disco-linux-<suffix>). Upstream
+# currently publishes only linux-amd64. A platform with no matching asset, for
+# example arm64 under Android/proot, builds from source instead (see
+# discoteca_source_ref below).
+discoteca_platform_suffixes:
   x86_64: amd64
   aarch64: arm64
-discoteca_iset_suffix: "{{ iset_suffixes[ansible_facts.machine] | default('') }}"
+  armv7l: armv7
+  armv6l: armv6
+  armv8l: armv7
+discoteca_platform_suffix: "{{ discoteca_platform_suffixes[ansible_facts.machine] | default('') }}"
+discoteca_binary_name: "disco-linux-{{ discoteca_platform_suffix }}"
 
 discoteca_release_base: "https://github.com/chapmanjacobd/discoteca/releases/download/v{{ discoteca_resolved_version }}"
-discoteca_binary_name: "disco-linux-{{ discoteca_iset_suffix }}"
-discoteca_download_url: "{{ discoteca_release_base }}/{{ discoteca_binary_name }}"
-discoteca_checksum_url: "{{ discoteca_download_url }}.sha256"
+discoteca_fallback_url: "{{ discoteca_release_base }}/{{ discoteca_binary_name }}"
+
+# Source build. install.yml decides automatically when no prebuilt asset exists
+# for this CPU, or when the newest release predates the --host/--base-path flags
+# this role configures (as v0.0.37 does). Set discoteca_build_from_source: true
+# to force a source build even when a compatible prebuilt binary is published.
+discoteca_build_from_source: false
+# A branch, tag, or commit accepted by 'go install pkg@REF'. Pin a commit for a
+# reproducible image; 'main' tracks upstream until a compatible release ships.
+discoteca_source_ref: main
+discoteca_build_tags: fts5
+discoteca_goarch_suffixes:
+  x86_64: amd64
+  aarch64: arm64
+  armv7l: arm
+  armv6l: arm
+  armv8l: arm
+discoteca_goarch: "{{ discoteca_goarch_suffixes[ansible_facts.machine] | default('') }}"
+discoteca_goarm: "{{ '7' if ansible_facts.machine in ['armv7l', 'armv8l'] else ('6' if ansible_facts.machine == 'armv6l' else '') }}"
+discoteca_source_packages:
+  - golang-go
+  - gcc
+  - libc6-dev
+  - ca-certificates
 
 # Runtime user and filesystem layout
 discoteca_user: discoteca
@@ -35,8 +65,20 @@ discoteca_group: discoteca
 discoteca_home: /var/lib/discoteca
 discoteca_data_dir: "{{ content_base }}/discoteca"    # /library/discoteca
 discoteca_install_dir: /usr/local/lib/discoteca
-discoteca_binary_path: "{{ discoteca_install_dir }}/disco-{{ discoteca_resolved_version }}"
+discoteca_binary_path: "{{ discoteca_install_dir }}/disco-{{ discoteca_binary_version }}"
+discoteca_binary_version: "{{ discoteca_resolved_version }}"
+discoteca_prebuilt_compatible: false
 discoteca_bin: /usr/local/bin/disco
+discoteca_build_dir: "{{ discoteca_install_dir }}/build"
+discoteca_build_gopath: "{{ discoteca_build_dir }}/go"
+discoteca_build_gocache: "{{ discoteca_build_dir }}/go-cache"
+
+# proot (Android) service configuration. The pdsm wrapper installed by the
+# proot_services role reads these two files instead of a systemd unit.
+discoteca_config_dir: /etc/discoteca
+discoteca_pdsm_config: "{{ discoteca_config_dir }}/serve.conf"
+discoteca_databases_file: "{{ discoteca_config_dir }}/databases"
+discoteca_log_file: "{{ discoteca_home }}/discoteca.log"
 
 discoteca_service: discoteca
 discoteca_nginx_conf: "{{ nginx_conf_dir }}/discoteca-nginx.conf"
@@ -44,6 +86,7 @@ discoteca_nginx_conf: "{{ nginx_conf_dir }}/discoteca-nginx.conf"
 # Network. The application listens on loopback; NGINX proxies it at
 # http://box{{ discoteca_url }}. Keep the bind address at 127.0.0.1, because
 # discoteca refuses a non-loopback bind without DISCO_API_TOKEN.
+discoteca_host: 127.0.0.1
 discoteca_url: /disco
 discoteca_port: 5555
 
@@ -60,8 +103,9 @@ discoteca_databases:
 discoteca_packages:
   - ffmpeg
 
-# Memory tuning for small IIAB devices. The service cgroup caps memory instead
-# of letting one transcode take down the whole box.
+# Memory tuning for small IIAB devices. The systemd unit caps memory instead of
+# letting one transcode take down the whole box. pdsm has no cgroup, so these
+# values only apply to the systemd service.
 discoteca_db_cache_mb: 64
 discoteca_max_concurrent_searches: 2
 discoteca_memory_high: 70%
@@ -77,10 +121,12 @@ discoteca_read_only: false
 
 # Ownership declarations. See "Data ownership" in the top-level README.md.
 # The databases and media files in discoteca_data_dir are user data and are
-# never deleted. The service home holds caches and generated state.
+# never deleted. The service home holds caches, generated state, and the pdsm
+# log. The pdsm configuration is generated from local_vars.yml.
 discoteca_user_settings: []
 discoteca_program_data:
   - "{{ discoteca_home }}"
+  - "{{ discoteca_config_dir }}"
   - /etc/systemd/system/{{ discoteca_service }}.service
   - "{{ discoteca_nginx_conf }}"
 discoteca_user_data:

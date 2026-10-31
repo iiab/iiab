@@ -22,6 +22,46 @@ Then run:
 The web UI is at `http://box/disco/`. The service listens on `127.0.0.1:5555`
 and NGINX proxies it.
 
+## Android / proot
+
+The role runs under Android's proot-distro with `proot_services` (pdsm), which
+replaces systemd. Start from an Android local_vars file (`is_proot: True`), set:
+
+    proot_services_install: True
+    discoteca_install: True
+    discoteca_enabled: True
+
+then apply the roles:
+
+    sudo ./runrole proot_services discoteca
+
+The pdsm wrapper is shipped by `proot_services`
+(`pdsm_installed_services`), and `discoteca` reads
+`/etc/discoteca/serve.conf` and `/etc/discoteca/databases`. Manage it with:
+
+    pdsm enable discoteca
+    pdsm start discoteca
+    pdsm status discoteca
+    pdsm restart discoteca
+    pdsm stop discoteca
+    pdsm disable discoteca
+
+pdsm logs to `/var/lib/discoteca/discoteca.log`. Under proot the service runs
+as root (the pdsm session user), so use `sudo disco add ...` when managing
+databases from the CLI.
+
+Upstream publishes only a `linux-amd64` binary, and the newest release
+(`v0.0.37`) predates the `--host`/`--base-path` flags this role needs. On arm64
+Android (the usual case) the install builds from source with the Go toolchain
+(`CGO_ENABLED=1`, tag `fts5`); when the latest release is too old it also builds
+from source on amd64. This needs network access during install and takes a few
+minutes on a phone.
+
+`discoteca_source_ref` selects the source revision (`main` by default). Pin a
+commit or a release tag for a reproducible image. Set
+`discoteca_build_from_source: true` to force a source build on any
+architecture.
+
 ## Databases and media
 
 Databases live in `{{ discoteca_data_dir }}` (`/library/discoteca` by default),
@@ -51,6 +91,8 @@ unit keeps the filesystem read-only except the home and database directories.
 | Variable | Default | Purpose |
 |---|---|---|
 | `discoteca_version` | `latest` | Release to install; pin an X.Y.Z value for reproducibility. |
+| `discoteca_build_from_source` | `false` | Force a Go source build even when a prebuilt binary exists. |
+| `discoteca_source_ref` | `main` | Branch, tag, or commit built when using source. |
 | `discoteca_url` | `/disco` | NGINX URL prefix. |
 | `discoteca_port` | `5555` | Loopback port. |
 | `discoteca_databases` | `/library/discoteca/library.db` | Databases to serve. |
@@ -58,10 +100,12 @@ unit keeps the filesystem read-only except the home and database directories.
 | `discoteca_max_concurrent_searches` | `2` | Concurrent `/api/query` searches. |
 | `discoteca_read_only` | `false` | Refuse progress updates, playlists, and deletions. |
 | `discoteca_packages` | `[ffmpeg]` | Optional runtime packages (transcoding, HLS). |
-| `discoteca_memory_high` / `discoteca_memory_max` | `70%` / `80%` | Service cgroup memory limits. |
+| `discoteca_memory_high` / `discoteca_memory_max` | `70%` / `80%` | systemd cgroup memory limits (ignored under proot). |
 
-Upstream publishes `linux-amd64` and `linux-arm64` binaries. 32-bit ARM
-(armv7/armv6) is not released yet, so the install fails clearly on those hosts.
+The install uses the SHA-256 digest that GitHub reports for the release asset.
+When no prebuilt asset exists for the host CPU (today: arm64), it builds
+`discoteca_source_ref` from source. 32-bit x86 has no upstream build and no Go
+mapping, so the install fails clearly instead of guessing.
 
 ## Lifecycle behavior
 

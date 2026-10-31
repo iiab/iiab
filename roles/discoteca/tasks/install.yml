@@ -1,21 +1,29 @@
 ---
 # Install phase. The runner runs this on a first install and on --reinstall.
 # This is the only phase that installs or refreshes the program, so an apply to
-# an installed role never downloads anything.
+# an installed role never downloads or builds anything.
 
-- name: Read the latest discoteca release from GitHub
+- name: Read the discoteca release metadata from GitHub
   uri:
-    url: "{{ discoteca_releases_api }}"
+    url: "{{ discoteca_release_url }}"
     headers:
       Accept: application/vnd.github+json
+    status_code: [200, 404]
     return_content: true
-  register: discoteca_latest_release
-  when: discoteca_version == 'latest'
+  register: discoteca_release
+
+- name: Fail when the requested discoteca release does not exist
+  fail:
+    msg: >-
+      discoteca_version='{{ discoteca_version }}' does not exist:
+      {{ discoteca_release_url }} returned HTTP {{ discoteca_release.status }}.
+      Set discoteca_version to an existing release tag, or "latest".
+  when: discoteca_release.status != 200
 
 - name: Resolve the discoteca version
   set_fact:
     discoteca_resolved_version: >-
-      {{ ((discoteca_latest_release.json.tag_name | regex_replace('^v', ''))
+      {{ ((discoteca_release.json.tag_name | regex_replace('^v', ''))
           if discoteca_version == 'latest'
           else discoteca_version | string) | trim }}
 
@@ -24,22 +32,59 @@
     that: discoteca_resolved_version is match('^[0-9]+\.[0-9]+\.[0-9]+$')
     fail_msg: >-
       discoteca_version='{{ discoteca_resolved_version }}' is not a valid X.Y.Z
-      release. Set discoteca_version to a release tag such as "0.1.0", or
+      release. Set discoteca_version to a release tag such as "0.0.37", or
       "latest" to resolve it from {{ discoteca_releases_api }}.
     quiet: true
 
-- name: Fail if there is no prebuilt binary for this CPU architecture
+- name: Select the prebuilt release asset for this CPU architecture
+  set_fact:
+    discoteca_release_assets: "{{ discoteca_release.json.assets | default([]) }}"
+    discoteca_prebuilt_asset: >-
+      {{ (discoteca_release.json.assets | default([]))
+         | selectattr('name', 'equalto', discoteca_binary_name)
+         | list | first | default({}) }}
+
+# The GitHub API lists every release asset, so an empty asset list means the
+# lookup returned no metadata (for example a test fixture). Only then fall back
+# to the conventional download URL.
+- name: Decide whether to use a prebuilt binary or build from source
+  set_fact:
+    discoteca_use_prebuilt: >-
+      {{ ((discoteca_prebuilt_asset | length > 0)
+          or ((discoteca_release_assets | length == 0) and discoteca_platform_suffix != ''))
+         and not (discoteca_build_from_source | bool) }}
+
+- name: Fail if no prebuilt binary exists and this CPU has no Go source build
   fail:
     msg: >-
-      discoteca publishes linux-amd64 and linux-arm64 binaries, but this host
-      reports ansible_facts.machine='{{ ansible_facts.machine }}'. 32-bit ARM
-      (armv7/armv6) is not built yet.
-  when: discoteca_iset_suffix == ''
+      discoteca publishes no prebuilt binary for ansible_facts.machine='{{ ansible_facts.machine }}',
+      and no source build is defined for it. Supported architectures are
+      {{ discoteca_goarch_suffixes.keys() | join(', ') }}.
+  when:
+    - not discoteca_use_prebuilt | bool
+    - discoteca_goarch == ''
 
-- name: Stop an existing discoteca service (if reinstalling)
+- name: Assert that the prebuilt asset has a SHA-256 digest from GitHub
+  assert:
+    that: discoteca_prebuilt_asset.digest is match('^sha256:[0-9a-f]{64}$')
+    fail_msg: >-
+      GitHub reports no SHA-256 digest for {{ discoteca_prebuilt_asset.name }}.
+      Refusing to install an unverifiable binary.
+    quiet: true
+  when:
+    - discoteca_use_prebuilt | bool
+    - discoteca_prebuilt_asset | length > 0
+
+- name: Stop an existing discoteca service (if reinstalling, not proot)
   systemd:
     name: "{{ discoteca_service }}"
     state: stopped
+  when: not is_proot
+  failed_when: false
+
+- name: Stop an existing discoteca service via pdsm (if reinstalling, proot)
+  command: pdsm stop discoteca
+  when: is_proot
   failed_when: false
 
 - name: Ensure the discoteca group exists
@@ -84,15 +129,121 @@
     state: present
   when: discoteca_packages | length > 0
 
-- name: Download discoteca {{ discoteca_resolved_version }} and verify its SHA-256 checksum
+- name: Download discoteca {{ discoteca_resolved_version }} and verify its SHA-256 digest
   get_url:
-    url: "{{ discoteca_download_url }}"
+    url: "{{ discoteca_prebuilt_asset.browser_download_url | default(discoteca_fallback_url) }}"
     dest: "{{ discoteca_binary_path }}"
-    checksum: "sha256:{{ discoteca_checksum_url }}"
+    checksum: "{{ discoteca_prebuilt_asset.digest | default(omit) }}"
     owner: root
     group: root
     mode: "0755"
     timeout: "{{ download_timeout }}"
+  when: discoteca_use_prebuilt | bool
+
+# The role needs --host and --base-path. v0.0.37 and older releases predate
+# them, so a "latest" release that lacks them is built from source instead.
+- name: Read the serve flags supported by the prebuilt binary
+  command:
+    argv:
+      - "{{ discoteca_binary_path }}"
+      - serve
+      - --help
+  register: discoteca_prebuilt_help
+  changed_when: false
+  failed_when: false
+  when: discoteca_use_prebuilt | bool
+
+- name: Mark whether the prebuilt binary supports the required serve flags
+  set_fact:
+    discoteca_prebuilt_compatible: >-
+      {{ (discoteca_prebuilt_help.rc | default(1) == 0)
+         and ('--host' in (discoteca_prebuilt_help.stdout | default('')))
+         and ('--base-path' in (discoteca_prebuilt_help.stdout | default(''))) }}
+  when: discoteca_use_prebuilt | bool
+
+- name: Fall back to a source build for a latest release that predates the required flags
+  set_fact:
+    discoteca_use_prebuilt: false
+  when:
+    - discoteca_use_prebuilt | bool
+    - not discoteca_prebuilt_compatible | bool
+    - discoteca_version == 'latest'
+
+- name: Fail when a pinned release predates the required flags
+  fail:
+    msg: >-
+      discoteca {{ discoteca_resolved_version }} does not accept the --host and
+      --base-path flags this role configures. Use discoteca_version: latest to
+      build a compatible source revision, or set discoteca_build_from_source:
+      true and pin discoteca_source_ref.
+  when:
+    - discoteca_use_prebuilt | bool
+    - not discoteca_prebuilt_compatible | bool
+    - discoteca_version != 'latest'
+
+- name: Remove the incompatible prebuilt binary before a source build
+  file:
+    path: "{{ discoteca_binary_path }}"
+    state: absent
+  when:
+    - not discoteca_use_prebuilt | bool
+    - discoteca_prebuilt_help is defined
+
+- name: Name a source-built binary after its git ref
+  set_fact:
+    discoteca_binary_version: >-
+      source-{{ discoteca_source_ref | regex_replace('[^A-Za-z0-9._-]', '-') }}
+  when: not discoteca_use_prebuilt | bool
+
+- name: Install the Go toolchain and C compiler for a source build
+  package:
+    name: "{{ discoteca_source_packages }}"
+    state: present
+  when: not discoteca_use_prebuilt | bool
+
+- name: Create the discoteca build directory
+  file:
+    path: "{{ discoteca_build_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: not discoteca_use_prebuilt | bool
+
+- name: Build discoteca from source at {{ discoteca_source_ref }}
+  command:
+    argv:
+      - go
+      - install
+      - -tags
+      - "{{ discoteca_build_tags }}"
+      - "github.com/chapmanjacobd/discoteca/cmd/disco@{{ discoteca_source_ref }}"
+  environment:
+    CGO_ENABLED: "1"
+    GOOS: linux
+    GOARCH: "{{ discoteca_goarch }}"
+    GOARM: "{{ discoteca_goarm }}"
+    GOTOOLCHAIN: auto
+    GOBIN: "{{ discoteca_build_dir }}"
+    GOPATH: "{{ discoteca_build_gopath }}"
+    GOCACHE: "{{ discoteca_build_gocache }}"
+  when: not discoteca_use_prebuilt | bool
+
+- name: Install the source-built discoteca binary
+  copy:
+    src: "{{ discoteca_build_dir }}/disco"
+    dest: "{{ discoteca_binary_path }}"
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0755"
+  when: not discoteca_use_prebuilt | bool
+
+- name: Remove the discoteca build directory
+  file:
+    path: "{{ discoteca_build_dir }}"
+    state: absent
+  when: not discoteca_use_prebuilt | bool
 
 - name: Symlink {{ discoteca_bin }} -> {{ discoteca_binary_path }}
   file:
@@ -103,23 +254,23 @@
     state: link
     force: true
 
-# An update (runrole --reinstall discoteca) downloads a new versioned binary.
-# Keep only the active version so each update does not leave another ~25 MB
-# binary behind.
+# An update (runrole --reinstall discoteca) downloads or builds a new versioned
+# binary. Keep only the active version so each update does not leave another
+# ~25 MB binary behind.
 - name: Find installed discoteca binaries in {{ discoteca_install_dir }}
   find:
     paths: "{{ discoteca_install_dir }}"
     patterns: "disco-*"
   register: discoteca_bin_files
 
-- name: Remove superseded discoteca binaries (keep only {{ discoteca_resolved_version }})
+- name: Remove superseded discoteca binaries (keep only {{ discoteca_binary_version }})
   file:
     path: "{{ item.path }}"
     state: absent
   loop: "{{ discoteca_bin_files.files }}"
   loop_control:
     label: "{{ item.path | basename }}"
-  when: (item.path | basename) != ('disco-' ~ discoteca_resolved_version)
+  when: (item.path | basename) != ('disco-' ~ discoteca_binary_version)
 
 # discoteca initializes a zero-byte file when it opens it, so this creates a
 # valid empty database without needing sqlite3 on the host. Existing databases

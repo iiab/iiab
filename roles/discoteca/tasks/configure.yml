@@ -42,13 +42,63 @@
   loop_control:
     label: "{{ item }}"
 
-- name: Install /etc/systemd/system/{{ discoteca_service }}.service from template
+# pdsm (proot) has no systemd unit. The proot_services role installs the
+# service wrapper; this role writes the configuration it reads on start.
+- name: Check for the pdsm service manager (proot)
+  stat:
+    path: /usr/local/bin/pdsm
+  register: discoteca_pdsm_bin
+  when: is_proot
+
+- name: Fail when the proot_services role is missing (proot)
+  assert:
+    that: discoteca_pdsm_bin.stat.exists
+    fail_msg: >-
+      discoteca runs under pdsm on Android/proot, but /usr/local/bin/pdsm is
+      missing. Set 'proot_services_install: True' and run
+      'sudo ./runrole proot_services discoteca'.
+    quiet: true
+  when: is_proot
+
+- name: Create the discoteca configuration directory (proot)
+  file:
+    path: "{{ discoteca_config_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: is_proot
+
+- name: Install {{ discoteca_pdsm_config }} from template (proot)
+  template:
+    src: discoteca-pdsm.conf.j2
+    dest: "{{ discoteca_pdsm_config }}"
+    owner: root
+    group: root
+    mode: "0644"
+  when: is_proot
+  notify:
+    - Restart discoteca
+
+- name: Install {{ discoteca_databases_file }} from template (proot)
+  template:
+    src: discoteca-databases.j2
+    dest: "{{ discoteca_databases_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+  when: is_proot
+  notify:
+    - Restart discoteca
+
+- name: Install /etc/systemd/system/{{ discoteca_service }}.service from template (not proot)
   template:
     src: discoteca.service.j2
     dest: /etc/systemd/system/{{ discoteca_service }}.service
     owner: root
     group: root
     mode: "0644"
+  when: not is_proot
   notify:
     - Restart discoteca
 
@@ -71,18 +121,52 @@
     - Reload nginx
   when: not (discoteca_enabled | bool)
 
-- name: Enable and start the discoteca service
+- name: Enable and start the discoteca service (not proot)
   systemd:
     name: "{{ discoteca_service }}"
     enabled: true
     state: started
     daemon_reload: true
-  when: discoteca_enabled | bool
+  when:
+    - discoteca_enabled | bool
+    - not is_proot
 
-- name: Disable and stop the discoteca service
+- name: Disable and stop the discoteca service (not proot)
   systemd:
     name: "{{ discoteca_service }}"
     enabled: false
     state: stopped
     daemon_reload: true
-  when: not (discoteca_enabled | bool)
+  when:
+    - not (discoteca_enabled | bool)
+    - not is_proot
+
+- name: Enable and start discoteca via pdsm (proot)
+  when:
+    - discoteca_enabled | bool
+    - is_proot
+  block:
+    - name: Enable 'discoteca' via pdsm (proot)
+      command: pdsm enable discoteca
+      register: discoteca_pdsm_enable
+      changed_when: "'already enabled' not in discoteca_pdsm_enable.stdout"
+
+    - name: Restart 'discoteca' via pdsm (proot)
+      command: pdsm restart discoteca
+
+- name: Disable and stop discoteca via pdsm (proot)
+  when:
+    - not (discoteca_enabled | bool)
+    - is_proot
+  block:
+    - name: Stop 'discoteca' via pdsm (proot)
+      command: pdsm stop discoteca
+      register: discoteca_pdsm_stop
+      changed_when: "'already stopped' not in discoteca_pdsm_stop.stdout"
+      failed_when: false
+
+    - name: Disable 'discoteca' via pdsm (proot)
+      command: pdsm disable discoteca
+      register: discoteca_pdsm_disable
+      changed_when: "'not enabled' not in discoteca_pdsm_disable.stdout"
+      failed_when: false
