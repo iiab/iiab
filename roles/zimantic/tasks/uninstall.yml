@@ -12,12 +12,36 @@
     path: /etc/systemd/system/zimantic.service
   register: zimantic_uninstall_unit
 
+- name: Check whether the Zimantic pdsm service is installed (PRoot)
+  stat:
+    path: /usr/local/pdsm/services-available/zimantic
+  register: zimantic_uninstall_pdsm_service
+  when: is_proot
+
 - name: Stop and disable Zimantic before uninstalling
   systemd:
     name: zimantic
     state: stopped
     enabled: no
-  when: zimantic_uninstall_unit.stat.exists
+  when:
+    - not is_proot
+    - zimantic_uninstall_unit.stat.exists
+
+- name: Stop and disable Zimantic via pdsm before uninstalling (PRoot)
+  when:
+    - is_proot
+    - zimantic_uninstall_pdsm_service.stat.exists
+  block:
+
+    - name: Stop 'zimantic' via pdsm (PRoot)
+      command: pdsm stop zimantic
+      register: zimantic_uninstall_pdsm_stop
+      changed_when: "'already stopped' not in zimantic_uninstall_pdsm_stop.stdout"
+
+    - name: Disable 'zimantic' via pdsm (PRoot)
+      command: pdsm disable zimantic
+      register: zimantic_uninstall_pdsm_disable
+      changed_when: "'is not enabled' not in zimantic_uninstall_pdsm_disable.stdout"
 
 - name: Remove zimantic.service
   file:
@@ -41,7 +65,9 @@
     state: stopped
     enabled: no
   loop: "{{ zimantic_uninstall_indexing_units.results }}"
-  when: item.stat.exists
+  when:
+    - not is_proot
+    - item.stat.exists
 
 - name: Remove the Zimantic indexing helper
   file:
@@ -59,6 +85,7 @@
   systemd:
     daemon_reload: yes
   when:
+    - not is_proot
     - zimantic_uninstall_unit.stat.exists or
       (zimantic_removed_indexing_units.results
        | selectattr('changed', 'equalto', true) | list | length > 0)
@@ -93,11 +120,18 @@
     path: "{{ zimantic_data_dir }}"
     state: absent
 
+- name: Remove the Zimantic pdsm environment (PRoot)
+  file:
+    path: "{{ zimantic_pdsm_env_file }}"
+    state: absent
+  when: is_proot
+
 - name: Remove the Zimantic user
   user:
     name: "{{ zimantic_user }}"
     state: absent
     remove: yes
+  when: not is_proot
 
 - name: Record that Zimantic is uninstalled in {{ iiab_ini_file }}
   ini_file:

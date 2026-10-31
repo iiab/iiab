@@ -14,6 +14,9 @@ published, the role installs the native dependencies from Debian 13/trixie or
 newer instead. Existing IIAB Kiwix URLs and the Kiwix Android APK remain
 unchanged by default.
 
+Android/PRoot hosts use ``proot_services``' pdsm instead of systemd; see
+"Android / PRoot" below.
+
 Configuration
 -------------
 
@@ -98,6 +101,9 @@ In fast mode, only the fast path trigger is installed; no semantic build or
 embedding model is run overnight. The indexing units reload the running server
 after each build.
 
+Those triggers are systemd units. PRoot/Android has no timer or path units, so
+indexes there are built by running the helper manually; see "Android / PRoot".
+
 Builds take a lock beside the indexes (``/library/zimantic/.build.lock``), so
 the path trigger, the nightly timer, and a manual build cannot write the same
 indexes at once. A direct ``zimantic build`` takes the same lock; the helper
@@ -114,6 +120,14 @@ build lock /library/zimantic/.build.lock``, inspect ``ls -l`` there and either
 remove the file or ``chown zimantic:zimantic`` it. Removing it is safe while no
 build is running: the lock is advisory and is released when the process exits.
 
+On PRoot/Android the service runs as root and the ``zimantic`` account is not
+created, so run the helper directly from the data directory::
+
+    cd /library/zimantic && /usr/local/sbin/zimantic-indexing
+
+The helper changes to ``zimantic_data_dir`` itself, so the ``cd`` is only for
+clarity.
+
 Build semantic indexes on a faster compatible machine when memory or overnight
 load is a concern, then copy the files into ``/library/zimantic/indexes`` and
 restart the service. When memory is limited, set ``zimantic_zim_dir`` to a
@@ -123,7 +137,7 @@ complete ``/library/zims/content``.
 Memory and restart limits
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The systemd unit puts Zimantic in its own cgroup. ``zimantic_memory_high``
+With systemd, the unit puts Zimantic in its own cgroup. ``zimantic_memory_high``
 (default ``70%``) makes the kernel reclaim and throttle under pressure, and
 ``zimantic_memory_max`` (default ``80%``) is the hard limit: exceeding it
 OOM-kills Zimantic inside its cgroup instead of letting the whole device run
@@ -140,6 +154,40 @@ unit failed instead of restarting into another OOM. Check ``systemctl status
 zimantic`` and ``journalctl -u zimantic``; after fixing the cause,
 ``systemctl reset-failed zimantic`` clears the rate limit so the service can be
 started again before the interval expires.
+
+These limits are systemd-only. PRoot/Android has no cgroup or automatic
+restart, and Android may reclaim background processes on its own. Prefer
+``zimantic_mode: fast`` and a small ``zimantic_zim_dir`` there.
+
+Android / PRoot
+---------------
+
+The role runs inside a ``proot-distro`` Debian container on Android through
+``proot_services``' pdsm. It requires ``proot_services_install: True``; the
+Android ``local_vars_android_*.yml`` files already set that. On PRoot:
+
+- The role does not create the ``zimantic`` account. pdsm services run as
+  root, so the virtual environment, configuration, and data stay root-owned.
+- ``zimantic`` is a pdsm service. An apply enables and starts it; manage it
+  with ``pdsm start|stop|restart|status zimantic``. Enabling affects future
+  PRoot login sessions, not Android boot: pdsm starts enabled services when
+  the login shell runs.
+- systemd memory limits, sandboxing, and automatic restarts do not apply.
+- There are no timer or path units, so indexes are not rebuilt automatically.
+  After adding ZIMs, run::
+
+      /usr/local/sbin/zimantic-indexing --fast
+
+  Omit ``--fast`` for a semantic build. The helper reloads a running server
+  when the build finishes.
+- aarch64 Debian 13 uses PyPI wheels, so leave
+  ``zimantic_use_system_packages`` at ``auto`` or ``never``.
+
+A typical Android configuration in ``/etc/iiab/local_vars.yml``::
+
+    zimantic_install: True
+    zimantic_enabled: True
+    zimantic_mode: fast
 
 Task layout
 -----------
@@ -159,7 +207,8 @@ The role follows the shared role lifecycle described in the top-level
   packages. ``build.yml`` includes it only when the checkout is missing or
   stale, so an offline rebuild can still use an existing checkout.
 - ``configure.yml`` runs on every apply and reconciles the user, directories,
-  model files, ``config.toml``, and the systemd unit.
+  model files, ``config.toml``, and the service definition (a systemd unit, or
+  the pdsm environment file on PRoot).
 - ``uninstall.yml`` removes the service, NGINX shortcut, source checkout,
   runtime data, and the role's user. It also supplies the remove half of
   ``--reinstall``.
@@ -174,9 +223,10 @@ Upgrading
 ---------
 
 ``./runrole zimantic`` is the normal command. It re-templates the
-configuration and systemd unit, reconciles the model files, and restarts the
-service only when something changed. It does not change an installed program
-version; use ``--upgrade`` for that. After pulling a newer IIAB revision, run::
+configuration and service definition, reconciles the model files, and restarts
+the service only when something changed. It does not change an installed
+program version; use ``--upgrade`` for that. After pulling a newer IIAB
+revision, run::
 
     cd /opt/iiab/iiab
     git pull
@@ -205,9 +255,10 @@ role's settings, then rebuilds everything from scratch. In ``semantic`` mode it
 downloads the model again, so it requires network access. The ZIM files under
 ``zimantic_zim_dir`` are user data and are never removed.
 
-``--uninstall`` stops and disables the service, removes its systemd unit and
-NGINX shortcut, deletes ``zimantic_source_dir`` and ``zimantic_data_dir``, and
-removes the ``zimantic`` user. Set ``zimantic_install: False`` (and
+``--uninstall`` stops and disables the service, removes its systemd unit (or
+its pdsm enablement on PRoot) and NGINX shortcut, deletes
+``zimantic_source_dir`` and ``zimantic_data_dir``, and removes the ``zimantic``
+user on systemd hosts. Set ``zimantic_install: False`` (and
 ``zimantic_enabled: False``) in ``local_vars.yml`` to keep it uninstalled.
 
 ``--reinstall`` and ``--uninstall`` require an existing ``zimantic`` entry in
@@ -225,14 +276,14 @@ so the flags fail before an unsupported role can change anything.
 The source checkout under ``zimantic_source_dir`` is disposable: the role
 discards local tracked changes when checking out the requested version. Runtime
 data, indexes, and models live under ``zimantic_data_dir``. Changing
-``zimantic_mode`` rewrites the configuration and systemd unit and restarts the
-service. Switching to ``semantic`` downloads the model if it is missing, and a
-semantic build upgrades a ``fast`` index in place.
+``zimantic_mode`` rewrites the configuration and service definition and
+restarts the service. Switching to ``semantic`` downloads the model if it is
+missing, and a semantic build upgrades a ``fast`` index in place.
 
 To reset manually instead, stop the service, remove both directories, and rerun
 the role::
 
-    sudo systemctl stop zimantic
+    sudo systemctl stop zimantic          # PRoot/Android: pdsm stop zimantic
     sudo rm -rf /library/zimantic /opt/iiab/zimantic
 
 ``zimantic_version`` may be a git tag or a commit hash. pip reports the

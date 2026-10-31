@@ -1,0 +1,117 @@
+#!/bin/sh
+# /usr/local/pdsm/services-available/zimantic
+# Simple PDSM service wrapper for Zimantic (IIAB, proot).
+# Installed by roles/proot_services (listed in pdsm_installed_services);
+# the zimantic role writes /etc/default/zimantic and enables/starts this service.
+
+PDSM_COMMON="/usr/local/pdsm/lib/pdsm-common.sh"
+# shellcheck disable=SC1090
+[ -r "$PDSM_COMMON" ] && . "$PDSM_COMMON"
+
+SERVICE_NAME="zimantic"
+
+# Defaults. /etc/default/zimantic, written by the zimantic role, overrides them.
+ZIMANTIC_BIN="/opt/iiab/zimantic/.venv/bin/zimantic"
+ZIMANTIC_DATA_DIR="/library/zimantic"
+ZIMANTIC_SERVE_FLAGS=""
+ZIMANTIC_LOG="/var/log/zimantic.log"
+if [ -r /etc/default/zimantic ]; then
+  # shellcheck disable=SC1091
+  . /etc/default/zimantic
+fi
+
+running() {
+  # The venv invokes the console script as ".../zimantic serve", so the
+  # pattern covers both the script and its Python interpreter.
+  pgrep -f "$ZIMANTIC_BIN serve" >/dev/null 2>&1
+}
+
+start() {
+  if running; then
+    echo "[pdsm:$SERVICE_NAME] already running"
+    return 0
+  fi
+
+  if [ ! -x "$ZIMANTIC_BIN" ]; then
+    echo "[pdsm:$SERVICE_NAME] not installed: $ZIMANTIC_BIN" >&2
+    return 1
+  fi
+
+  if [ ! -d "$ZIMANTIC_DATA_DIR" ]; then
+    echo "[pdsm:$SERVICE_NAME] data directory missing: $ZIMANTIC_DATA_DIR" >&2
+    return 1
+  fi
+
+  echo "[pdsm:$SERVICE_NAME] starting..."
+  # Zimantic reads config.toml, its PID file, and relative paths from its
+  # working directory, which systemd units set with WorkingDirectory.
+  # shellcheck disable=SC2086
+  ( cd "$ZIMANTIC_DATA_DIR" &&
+    nohup "$ZIMANTIC_BIN" serve $ZIMANTIC_SERVE_FLAGS \
+      </dev/null >>"$ZIMANTIC_LOG" 2>&1 & )
+
+  # Small wait loop so 'start' only returns when it's actually alive
+  for _ in $(seq 1 "${PDSM_START_TIMEOUT:-15}"); do
+    if running; then
+      echo "[pdsm:$SERVICE_NAME] started"
+      return 0
+    fi
+    sleep 1
+  done
+
+  echo "[pdsm:$SERVICE_NAME] failed to start (check $ZIMANTIC_LOG)" >&2
+  return 1
+}
+
+stop() {
+  if ! running; then
+    echo "[pdsm:$SERVICE_NAME] already stopped"
+    return 0
+  fi
+
+  echo "[pdsm:$SERVICE_NAME] stopping..."
+  pkill -TERM -f "$ZIMANTIC_BIN serve" >/dev/null 2>&1 || true
+
+  # Wait a little to ensure everything stopped
+  for _ in $(seq 1 "${PDSM_START_TIMEOUT:-15}"); do
+    if ! running; then
+      echo "[pdsm:$SERVICE_NAME] stopped"
+      return 0
+    fi
+    sleep 1
+  done
+
+  pkill -KILL -f "$ZIMANTIC_BIN serve" >/dev/null 2>&1 || true
+  sleep 1
+
+  if ! running; then
+    echo "[pdsm:$SERVICE_NAME] forcefully stopped"
+    return 0
+  fi
+
+  echo "[pdsm:$SERVICE_NAME] did not fully stop" >&2
+  return 1
+}
+
+status() {
+  if running; then
+    echo "[pdsm:$SERVICE_NAME] running"
+    return 0
+  fi
+  echo "[pdsm:$SERVICE_NAME] not running"
+  return 3
+}
+
+case "$1" in
+  start|stop|status)
+    "$1"
+    ;;
+  restart)
+    stop
+    start
+    ;;
+  *)
+    echo "Usage: $0 {start|stop|restart|status}" >&2
+    exit 1
+    ;;
+esac

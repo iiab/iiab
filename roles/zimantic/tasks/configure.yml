@@ -16,13 +16,14 @@
     shell: /usr/sbin/nologin
     system: yes
     create_home: no
+  when: not is_proot
 
 - name: Create Zimantic directories
   file:
     path: "{{ item.path }}"
     state: directory
-    owner: "{{ item.owner | default(zimantic_user) }}"
-    group: "{{ item.group | default(zimantic_user) }}"
+    owner: "{{ item.owner | default(zimantic_service_user) }}"
+    group: "{{ item.group | default(zimantic_service_user) }}"
     mode: "0755"
   loop:
     - path: "{{ zimantic_source_dir }}"
@@ -90,8 +91,8 @@
   template:
     src: config.toml.j2
     dest: "{{ zimantic_config_file }}"
-    owner: "{{ zimantic_user }}"
-    group: "{{ zimantic_user }}"
+    owner: "{{ zimantic_service_user }}"
+    group: "{{ zimantic_service_user }}"
     mode: "0644"
   notify: Restart Zimantic
 
@@ -105,6 +106,38 @@
   notify:
     - Reload systemd
     - Restart Zimantic
+  when: not is_proot
+
+# pdsm reads paths and serve flags from this file; a pdsm service script is
+# shared by all IIAB roles and cannot use a systemd unit file.
+- name: Install the Zimantic pdsm environment (PRoot)
+  template:
+    src: zimantic-pdsm-env.j2
+    dest: "{{ zimantic_pdsm_env_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart Zimantic
+  when: is_proot
+
+# proot_services owns this wrapper, but it only installs on a first run. Copy
+# it again so an IIAB upgrade followed by './runrole zimantic' also picks up
+# wrapper changes instead of requiring a proot_services reinstall.
+- name: Ensure the pdsm services directory exists (PRoot)
+  file:
+    path: /usr/local/pdsm/services-available
+    state: directory
+    mode: "0755"
+  when: is_proot
+
+- name: Install the Zimantic pdsm service wrapper (PRoot)
+  copy:
+    src: "{{ role_path }}/../proot_services/files/pdsm/usr_local_pdsm/services-available/zimantic"
+    dest: /usr/local/pdsm/services-available/zimantic
+    owner: root
+    group: root
+    mode: "0755"
+  when: is_proot
 
 # Enable or disable the service and its NGINX shortcut after the unit and
 # configuration have been reconciled above.
@@ -114,7 +147,31 @@
     enabled: yes
     state: started
     daemon_reload: yes
-  when: zimantic_enabled
+  when:
+    - zimantic_enabled
+    - not is_proot
+
+- name: Enable and start Zimantic via pdsm (PRoot)
+  when:
+    - zimantic_enabled
+    - is_proot
+  block:
+
+    - name: Check whether the Zimantic pdsm service is enabled (PRoot)
+      stat:
+        path: /usr/local/pdsm/services-enabled/zimantic
+      register: zimantic_pdsm_enabled
+
+    - name: Enable 'zimantic' via pdsm (PRoot)
+      command: pdsm enable zimantic
+      register: zimantic_pdsm_enable
+      changed_when: "'enabled' in zimantic_pdsm_enable.stdout"
+      when: not zimantic_pdsm_enabled.stat.exists
+
+    - name: Start 'zimantic' via pdsm (PRoot)
+      command: pdsm start zimantic
+      register: zimantic_pdsm_start
+      changed_when: "'already running' not in zimantic_pdsm_start.stdout"
 
 # The installed marker is in iiab_state.yml, so only a service this role
 # installed is touched. On a first apply that installs with _enabled False the
@@ -127,7 +184,25 @@
     state: stopped
   when:
     - not zimantic_enabled
+    - not is_proot
     - lookup('installed', 'zimantic')
+
+- name: Stop and disable Zimantic via pdsm (PRoot)
+  when:
+    - not zimantic_enabled
+    - is_proot
+    - lookup('installed', 'zimantic')
+  block:
+
+    - name: Stop 'zimantic' via pdsm (PRoot)
+      command: pdsm stop zimantic
+      register: zimantic_pdsm_stop
+      changed_when: "'already stopped' not in zimantic_pdsm_stop.stdout"
+
+    - name: Disable 'zimantic' via pdsm (PRoot)
+      command: pdsm disable zimantic
+      register: zimantic_pdsm_disable
+      changed_when: "'is not enabled' not in zimantic_pdsm_disable.stdout"
 
 - name: Configure Zimantic indexing units
   include_tasks: indexing.yml

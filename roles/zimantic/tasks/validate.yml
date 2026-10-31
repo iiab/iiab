@@ -21,10 +21,25 @@
     fail_msg: "zimantic_mode must be either 'fast' or 'semantic'"
     quiet: yes
 
-- name: Fail on unsupported PRoot/Android environment
-  fail:
-    msg: "The Zimantic role currently requires regular systemd; PRoot/Android is not supported"
+# PRoot/Android has no systemd. The role uses proot_services' pdsm there
+# instead, for the server only: pdsm has no timer or path units, so index
+# builds stay manual (see README.rst).
+- name: Check for the pdsm service manager (PRoot)
+  stat:
+    path: /usr/local/bin/pdsm
+  register: zimantic_pdsm_binary
   when: is_proot
+
+- name: Fail when PRoot has no pdsm service manager
+  fail:
+    msg: >-
+      PRoot/Android service management uses pdsm. Set
+      'proot_services_install: True' and 'proot_services_enabled: True' in
+      /etc/iiab/local_vars.yml, install the proot_services role, then rerun
+      the zimantic role.
+  when:
+    - is_proot
+    - not zimantic_pdsm_binary.stat.exists
 
 - name: Validate zimantic_use_system_packages
   assert:

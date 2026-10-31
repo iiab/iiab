@@ -109,11 +109,13 @@ pdsm/
     │   └── pdsm-common.sh
     └── services-available
         ├── calibre-web
+        ├── forgejo
         ├── kiwix
         ├── kolibri
         ├── mariadb
         ├── nginx
-        └── php-fpm
+        ├── php-fpm
+        └── zimantic
 
 6 directories, 10 files
 ```
