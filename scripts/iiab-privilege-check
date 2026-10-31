@@ -1,0 +1,246 @@
+#!/usr/bin/env python3
+"""Report privileged patterns in IIAB Ansible content.
+
+This is a ratchet, not a clean-up tool.  The baseline in
+``scripts/iiab-privilege-baseline.txt`` records the patterns that already
+exist, so CI fails only when a change adds a new one.  Regenerate the
+baseline deliberately, with ``--update-baseline``, when an existing pattern is
+removed or an intentional exception is added.
+
+Rules:
+
+  task-sudo          a shell/command task invokes sudo
+  world-writable     a file mode is 0777 or 0666
+  chmod-777          a shell/command task runs chmod 777
+  state-latest       a package task uses state: latest
+  validate-certs-no  a download task disables certificate validation
+  service-user-root  a systemd unit runs a service as root
+  sudoers-all        a sudoers template grants unrestricted sudo
+  legacy-password    a vars file still carries the published password
+
+Run ``./scripts/iiab-privilege-check`` from the repository root.
+"""
+
+from __future__ import annotations
+
+import argparse
+import re
+import sys
+from collections import Counter
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parent.parent
+BASELINE = Path(__file__).resolve().parent / "iiab-privilege-baseline.txt"
+
+SKIP_DIRS = {".git", "__pycache__", "0-DEPRECATED-ROLES"}
+SKIP_SUFFIXES = (".unused", ".deprecated", ".wip", ".paused")
+
+TASK_KEY = re.compile(
+    r"^\s*(?:-\s+)?(?:ansible\.builtin\.)?(?:shell|command)\s*:\s*(.*)$"
+)
+MODE_KEY = re.compile(r"^\s*mode\s*:\s*['\"]?([0-7]{3,4})\b")
+STATE_LATEST = re.compile(r"^\s*state\s*:\s*latest\b")
+VALIDATE_CERTS = re.compile(r"^\s*validate_certs\s*:\s*(?:false|no)\b")
+CHMOD_777 = re.compile(r"\bchmod\s+(?:-R\s+)?0?777\b")
+SUDO_LIST_ITEM = re.compile(r"^\s*-\s+sudo\s+\S")
+SUDOERS_ALL = re.compile(r"\bNOPASSWD\s*:\s*ALL\b|\bALL\s*=\s*\(\s*ALL\s*\)")
+LEGACY_PASSWORD = re.compile(r"\bg0adm1n\b")
+
+BLOCK_MARKERS = {"|", ">", "|-", ">-", "|+", ">+"}
+
+
+def strip_comment(line: str) -> str:
+    """Remove a trailing YAML/shell comment without parsing quotes."""
+    if line.lstrip().startswith("#"):
+        return ""
+    index = line.find(" #")
+    if index != -1:
+        line = line[:index]
+    return line.rstrip()
+
+
+def normalise(text: str) -> str:
+    return " ".join(text.split())
+
+
+def tracked_files():
+    for path in sorted(REPO.rglob("*")):
+        if not path.is_file():
+            continue
+        rel = path.relative_to(REPO)
+        if any(part in SKIP_DIRS for part in rel.parts):
+            continue
+        if path.name.endswith(SKIP_SUFFIXES):
+            continue
+        yield path, rel
+
+
+def is_task_file(rel: Path) -> bool:
+    return (
+        rel.parts[0] == "roles"
+        and "tasks" in rel.parts
+        and rel.suffix in {".yml", ".yaml"}
+    )
+
+
+def is_template_file(rel: Path) -> bool:
+    return rel.parts[0] == "roles" and "templates" in rel.parts
+
+
+def is_vars_file(rel: Path) -> bool:
+    return rel.parts[0] == "vars" and rel.suffix in {".yml", ".yaml"}
+
+
+def findings():
+    """Yield (rule, relative path, match, line number)."""
+    for path, rel in tracked_files():
+        try:
+            lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError as error:
+            print(f"warning: cannot read {rel}: {error}", file=sys.stderr)
+            continue
+
+        if is_task_file(rel):
+            block_indent = None
+            for number, raw in enumerate(lines, 1):
+                line = raw.rstrip("\n")
+                code = strip_comment(line)
+                if not code.strip():
+                    continue
+
+                if block_indent is not None:
+                    indent = len(line) - len(line.lstrip())
+                    if indent > block_indent:
+                        if "sudo " in code:
+                            yield "task-sudo", rel, normalise(code), number
+                        if CHMOD_777.search(code):
+                            yield "chmod-777", rel, normalise(code), number
+                        continue
+                    block_indent = None
+
+                task = TASK_KEY.match(code)
+                if task:
+                    value = task.group(1).strip()
+                    if value in BLOCK_MARKERS:
+                        block_indent = len(line) - len(line.lstrip())
+                    elif "sudo " in value:
+                        yield "task-sudo", rel, normalise(code), number
+
+                if SUDO_LIST_ITEM.match(code):
+                    yield "task-sudo", rel, normalise(code), number
+
+                if CHMOD_777.search(code):
+                    yield "chmod-777", rel, normalise(code), number
+
+                mode = MODE_KEY.match(code)
+                if mode and mode.group(1) in {"777", "0777", "666", "0666"}:
+                    yield "world-writable", rel, normalise(code), number
+
+                if STATE_LATEST.match(code):
+                    yield "state-latest", rel, normalise(code), number
+
+                if VALIDATE_CERTS.match(code):
+                    yield "validate-certs-no", rel, normalise(code), number
+
+        if is_template_file(rel):
+            for number, raw in enumerate(lines, 1):
+                code = strip_comment(raw)
+                if not code:
+                    continue
+                if "User=root" in code:
+                    yield "service-user-root", rel, normalise(code), number
+                if SUDOERS_ALL.search(code):
+                    yield "sudoers-all", rel, normalise(code), number
+
+        if is_vars_file(rel):
+            for number, raw in enumerate(lines, 1):
+                code = strip_comment(raw)
+                if code and LEGACY_PASSWORD.search(code):
+                    yield "legacy-password", rel, normalise(code), number
+
+
+def key(rule: str, rel: Path, match: str) -> str:
+    return f"{rule}\t{rel.as_posix()}\t{match}"
+
+
+def load_baseline() -> Counter:
+    if not BASELINE.exists():
+        return Counter()
+    baseline = Counter()
+    for raw in BASELINE.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        baseline[line] += 1
+    return baseline
+
+
+def write_baseline(entries: Counter) -> None:
+    lines = [
+        "# Patterns accepted today.  CI fails when a change adds a new one.",
+        "# Regenerate deliberately with: ./scripts/iiab-privilege-check --update-baseline",
+    ]
+    for entry in sorted(entries):
+        lines.extend([entry] * entries[entry])
+    BASELINE.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--update-baseline",
+        action="store_true",
+        help="replace the baseline with the patterns found now",
+    )
+    parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="ignore the baseline and report every pattern",
+    )
+    parser.add_argument(
+        "--github",
+        action="store_true",
+        help="emit GitHub Actions workflow annotations",
+    )
+    args = parser.parse_args()
+
+    current = Counter()
+    locations = {}
+    for rule, rel, match, number in findings():
+        entry = key(rule, rel, match)
+        current[entry] += 1
+        locations.setdefault(entry, []).append((rel, number))
+
+    if args.update_baseline:
+        write_baseline(current)
+        print(f"wrote {sum(current.values())} patterns to {BASELINE.relative_to(REPO)}")
+        return 0
+
+    baseline = Counter() if args.strict else load_baseline()
+    new = current - baseline
+    if not new:
+        print(f"no new privileged patterns ({sum(current.values())} accepted)")
+        return 0
+
+    print("New privileged patterns (not in the baseline):", file=sys.stderr)
+    for entry in sorted(new):
+        rule, rel, match = entry.split("\t", 2)
+        for path, number in locations[entry][: new[entry]]:
+            if args.github:
+                print(
+                    f"::error file={path.as_posix()},line={number}::"
+                    f"{rule}: {match}",
+                    file=sys.stderr,
+                )
+            else:
+                print(f"  {path.as_posix()}:{number}: {rule}: {match}", file=sys.stderr)
+    print(
+        "\nIf a pattern is intentional, add it to "
+        f"{BASELINE.relative_to(REPO)} with --update-baseline.",
+        file=sys.stderr,
+    )
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

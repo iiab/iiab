@@ -1,5 +1,24 @@
 # Initialize
 
+# IIAB does not own the admin password, so the default administrator is the
+# account that invoked 'sudo iiab'.  On later runs (for example from the Admin
+# Console, which runs as root) reuse the account recorded in iiab.ini instead
+# of falling back to root.  This reuses the operator's existing OS account
+# instead of creating a separate 'iiab-admin' login.
+- name: Default the admin user to the operator who invoked sudo
+  set_fact:
+    iiab_admin_user: >-
+      {{ (lookup('ini', 'iiab_admin_user section=iiab-admin file=' ~ iiab_ini_file, errors='ignore') | default('', true))
+         or lookup('env', 'SUDO_USER')
+         or lookup('env', 'USER')
+         or 'iiab-admin' }}
+  when: iiab_admin_user | default('') | length == 0
+
+- name: Never use root as the Admin Console login
+  set_fact:
+    iiab_admin_user: iiab-admin
+  when: iiab_admin_user == 'root'
+
 - name: ...IS BEGINNING ============================================
   stat:
     path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
