@@ -15,94 +15,31 @@
     name: "{{ admin_console_group }}"
     state: present
 
-- name: Configure user '{{ iiab_admin_user }}' with group '{{ admin_console_group }}' for login to IIAB's Admin Console (http://box.lan/admin) AND for IIAB community support commands (/usr/bin/iiab-*) at the command-line
+# IIAB does not own the admin password.  On a normal install the account and
+# password come from the OS installer, Raspberry Pi Imager, cloud-init, or an
+# explicit 'passwd' run before IIAB.  Only group membership is managed here.
+- name: Create the admin user locked, when it does not already exist
   user:
     name: "{{ iiab_admin_user }}"
-    #group: "{{ iiab_admin_user }}"    # Not nec.  Anyway this happens during account creation b/c 'USERGROUPS_ENAB yes' is set in any modern /etc/login.defs
-    groups: "{{ admin_console_group }}"    # What guarantees any user's ability to login to Admin Console.
+    groups: "{{ admin_console_group }}"
     append: yes
     shell: /bin/bash
-
-# A new account gets an explicit password, a generated one, or (only when
-# password generation is disabled) the old published fallback.  Existing
-# accounts are never rewritten, so upgrades keep the password the operator
-# already chose.
-- name: Use the password supplied by the operator for the newly created admin user
-  set_fact:
-    iiab_admin_password_effective: "{{ iiab_admin_password }}"
-    iiab_admin_password_generated: false
-  when:
-    - user_info.rc != 0
-    - iiab_admin_password is defined
-    - iiab_admin_password | length > 0
-  no_log: true
-
-- name: Generate a password for the newly created admin user
-  set_fact:
-    iiab_admin_password_effective: "{{ lookup('password', '/dev/null length=24 chars=ascii_letters,digits') }}"
-    iiab_admin_password_generated: true
-  when:
-    - user_info.rc != 0
-    - iiab_admin_password is not defined or iiab_admin_password | length == 0
-    - iiab_admin_generate_password | bool
-  no_log: true
-
-- name: Fall back to the legacy published password when generation is disabled
-  set_fact:
-    iiab_admin_password_effective: "{{ iiab_admin_legacy_pwd }}"
-    iiab_admin_password_generated: false
-  when:
-    - user_info.rc != 0
-    - iiab_admin_password is not defined or iiab_admin_password | length == 0
-    - not (iiab_admin_generate_password | bool)
-  no_log: true
-
-- name: Set the newly created admin user's password
-  command: chpasswd
-  args:
-    stdin: "{{ iiab_admin_user }}:{{ iiab_admin_password_effective }}"
+    password_lock: yes
   when: user_info.rc != 0
-  no_log: true
 
-- name: Ensure /etc/iiab exists for the generated password record
-  file:
-    path: /etc/iiab
-    state: directory
-    owner: root
-    group: root
-    mode: '0755'
-  when:
-    - user_info.rc != 0
-    - iiab_admin_password_generated | bool
+- name: Add an existing admin user to the Admin Console group, without changing its password or shell
+  user:
+    name: "{{ iiab_admin_user }}"
+    groups: "{{ admin_console_group }}"
+    append: yes
+  when: user_info.rc == 0
 
-- name: Record the generated admin password for first login
-  copy:
-    content: "{{ iiab_admin_password_effective }}\n"
-    dest: /etc/iiab/iiab-admin-password
-    owner: root
-    group: root
-    mode: '0600'
-  when:
-    - user_info.rc != 0
-    - iiab_admin_password_generated | bool
-  no_log: true
-
-- name: Require the generated password to be changed at first console or shell login
-  command: "chage -d 0 {{ iiab_admin_user | quote }}"
-  when:
-    - user_info.rc != 0
-    - iiab_admin_password_generated | bool
-
-- name: Tell the operator where the generated password is
+- name: Tell the operator to set a password for the newly created account
   debug:
     msg:
-      - "A random password was generated for '{{ iiab_admin_user }}'."
-      - "Read it with: sudo cat /etc/iiab/iiab-admin-password"
-      - "Change it with: sudo passwd {{ iiab_admin_user }}"
-      - "The file is removed automatically when the password is changed in the Admin Console."
-  when:
-    - user_info.rc != 0
-    - iiab_admin_password_generated | bool
+      - "User '{{ iiab_admin_user }}' did not exist, so IIAB created it without a password."
+      - "Set one before logging in to the Admin Console: sudo passwd {{ iiab_admin_user }}"
+  when: user_info.rc != 0
 
 - name: Add user {{ iiab_admin_user }} to group sudo, only when full sudo is explicitly requested
   user:

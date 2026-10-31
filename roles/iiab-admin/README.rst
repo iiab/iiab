@@ -21,14 +21,11 @@ Configure user 'iiab-admin'
 ---------------------------
 
 * `admin-user.yml <tasks/admin-user.yml>`_ configures a Linux user that will give you access to IIAB's Admin Console (http://box.lan/admin) after IIAB is installed — and can also help you at the command-line with IIAB community support commands like {iiab-diagnostics, iiab-hotspot-on, iiab-check-firmware, etc}.
-   * If initial creation of the user and password was somehow not already taken care of by IIAB's 1-line installer (https://download.iiab.io) or by your underlying OS, that too will be taken care of here.
-* By default this user is ``iiab-admin``.  New accounts receive a random password, stored root-only in ``/etc/iiab/iiab-admin-password`` and expired so it must be changed at first login.
-   * Read the generated password with: **sudo cat /etc/iiab/iiab-admin-password**
-   * Change it with: **sudo passwd iiab-admin**
-   * After IIAB is installed, you can also change the password by logging into Admin Console (http://box.lan/admin) > Utilities > Change Password.  Doing so removes the generated-password file automatically.
-* If you prefer to use a pre-existing user like ``pi`` or ``ubuntu`` (or any other username) customize the variable ``iiab_admin_user`` in your `/etc/iiab/local_vars.yml <https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it%3F>`_ (preferably do this prior to installing IIAB!)
+   * **IIAB does not set or generate the password.**  The account and password are expected to exist before IIAB runs: use the OS installer, Raspberry Pi Imager, cloud-init, or run **passwd** yourself.  This keeps the credential under the operator's control and avoids a password that is known to anyone who reads the source.
+   * If the account does not exist, IIAB creates it locked (no password) and adds it to the Admin Console group.  Set a password with **sudo passwd iiab-admin** before logging in.
+   * Existing accounts are reused as-is.  IIAB only adds the Admin Console group membership; it does not change the password or shell.
+* By default this user is ``iiab-admin``.  If you prefer to use a pre-existing user like ``pi`` or ``ubuntu`` (or any other username), customize the variable ``iiab_admin_user`` in your `/etc/iiab/local_vars.yml <https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it%3F>`_ (preferably do this prior to installing IIAB!)
    * You can set ``iiab_admin_user_install: False`` if you're sure you know how to do all this `account configuration <tasks/admin-user.yml>`_ manually.
-* To choose the password yourself, set ``iiab_admin_password`` in ``local_vars.yml``.  It applies only when the account is first created.  Alternatively, set ``iiab_admin_generate_password: False`` to restore the legacy published fallback (not recommended).
 
 Sudo and support commands
 -------------------------
@@ -63,7 +60,7 @@ Example
 Historical Notes
 ================
 
-* Before October 2026, ``iiab-admin`` was added to the ``sudo`` group by default and new accounts received the published password ``g0adm1n``.  Both defaults have been retired.  The string remains only so upgrades can warn about accounts that still use it (``iiab_admin_legacy_pwd``).
+* Before October 2026, ``iiab-admin`` was added to the ``sudo`` group by default and IIAB set new accounts to the published password ``g0adm1n``.  Both defaults have been retired: IIAB no longer sets a password at all, and the string remains only so upgrades can warn about accounts that still use it (``iiab_admin_legacy_pwd``).
 * We no longer support setting your password using a hash e.g. ``python -c 'import crypt; print crypt.crypt("<plaintext>", "$6$<salt>")'`` (or the Python < 3.13 equivalent, ``python3 -c 'import crypt; print(crypt.crypt("<plaintext>", crypt.mksalt(crypt.METHOD_SHA512)))'`` or the CLI equivalent, ``openssl passwd -6 -salt $(openssl rand -base64 12) "plaintext"``) as these are very cumbersome — and worse, exposing your "salt" opens up your password to `possible attack <https://stackoverflow.com/questions/6776050/how-long-to-brute-force-a-salted-sha-512-hash-salt-provided>`_.  [October 2020]
 * The sudo flag ``NOPASSWORD:`` and the ``wheel`` group are similarly no longer recommended, so that your IIAB faces fewer security risks.  [October 2020]
 
