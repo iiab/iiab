@@ -24,7 +24,7 @@ Configure user 'iiab-admin'
    * **IIAB does not set or generate the password.**  The account and password are expected to exist before IIAB runs: use the OS installer, Raspberry Pi Imager, cloud-init, or run **passwd** yourself.  This keeps the credential under the operator's control and avoids a password that is known to anyone who reads the source.
    * If the account does not exist, IIAB creates it locked (no password) and adds it to the Admin Console group.  Set a password with **sudo passwd iiab-admin** before logging in.
    * Existing accounts are reused as-is.  IIAB only adds the Admin Console group membership; it does not change the password or shell.
-* By default this user is ``iiab-admin``.  If you prefer to use a pre-existing user like ``pi`` or ``ubuntu`` (or any other username), customize the variable ``iiab_admin_user`` in your `/etc/iiab/local_vars.yml <https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it%3F>`_ (preferably do this prior to installing IIAB!)
+* By default this is the account that ran **sudo iiab** (``SUDO_USER``), falling back to the current user.  That reuses the operator's existing OS account and password instead of creating a separate ``iiab-admin`` login.  If you prefer a dedicated account such as ``iiab-admin``, ``pi``, or ``ubuntu``, set ``iiab_admin_user`` in your `/etc/iiab/local_vars.yml <https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it%3F>`_ (preferably before installing IIAB!).
    * You can set ``iiab_admin_user_install: False`` if you're sure you know how to do all this `account configuration <tasks/admin-user.yml>`_ manually.
 
 Sudo and support commands
@@ -43,6 +43,7 @@ Security
 * A user MUST be a member of at least one of these 2 Linux groups, in order to log in to IIAB's Admin Console: (http://box.lan/admin)
    #. ``iiab-admin`` (specified by ``admin_console_group`` in `/opt/iiab/iiab/vars/default_vars.yml <../../vars/default_vars.yml>`_ and `/opt/iiab/iiab-admin-console/vars/default_vars.yml <https://github.com/iiab/iiab-admin-console/blob/master/vars/default_vars.yml>`_)
    #. ``sudo``
+* By default IIAB adds the invoking operator (``SUDO_USER``) to ``iiab-admin``, so the Console login uses the same OS account and password the operator already has.  The Console does not check the ``wheel`` group.
 * Please read much more about what escalated (root) actions are authorized when you log into IIAB's Admin Console, and how this works: https://github.com/iiab/iiab-admin-console/blob/master/Authentication.md
 * Root SSH login is not enabled by IIAB.  ``iiab-root-login`` is an explicit, separately invoked opt-in for installs that need it; see that script's warning before using it.
 * If your IIAB includes Tailscale (VPN), ``/root/.ssh/authorized_keys`` should be installed by `roles/tailscale/tasks/install.yml <../tailscale/tasks/install.yml>`_ to facilitate remote community support.  Feel free to remove this as mentioned here: https://wiki.iiab.io/go/Security
