@@ -9,6 +9,7 @@
   template:
     src: captiveportal.ini.j2
     dest: /etc/uwsgi/apps-available/captiveportal.ini
+  register: captiveportal_ini
   when: captiveportal_enabled
 
 - name: Delete Captive Portal configuration when not captiveportal_enabled
@@ -17,36 +18,68 @@
     state: absent
   when: not captiveportal_enabled
 
-- name: Symlink /etc/nginx/sites-enabled/capture.conf -> /etc/nginx/sites-available/capture.conf to enable NGINX to service the sites in checkurls list (if captiveportal_enabled)
+- name: Remove the obsolete Captive Portal dnsmasq helper
+  file:
+    path: /usr/sbin/iiab-divert-to-nginx
+    state: absent
+
+- name: Remove the obsolete Captive Portal NGINX and dnsmasq generator
+  file:
+    path: /usr/sbin/iiab-make-cp-servers.py
+    state: absent
+
+# Render capture.conf before linking it into sites-enabled: Ansible's file
+# module refuses to create a symlink whose source does not exist yet.
+- name: Install and update Captive Portal generated files
+  include_tasks: update-files.yml
+  when: captiveportal_enabled
+
+- name: Enable the Captive Portal NGINX default server (if captiveportal_enabled)
   file:
     src: /etc/nginx/sites-available/capture.conf
     path: /etc/nginx/sites-enabled/capture.conf
     state: link
   when: captiveportal_enabled
 
-- name: Delete symlink /etc/nginx/sites-enabled/capture.conf to disable NGINX to location definitions for checkurls (if not captiveportal_enabled)
+- name: Disable the Captive Portal NGINX default server (if not captiveportal_enabled)
   file:
     path: /etc/nginx/sites-enabled/capture.conf
     state: absent
   when: not captiveportal_enabled
 
-- name: Run /usr/sbin/iiab-divert-to-nginx to generate diversion lists for NGINX
-  command: /usr/sbin/iiab-divert-to-nginx
-  when: captiveportal_enabled
+# /etc/dnsmasq.d/capture is activated or removed by iiab-gen-iptables, which
+# reads IIAB_LAN_DEVICE and IIAB_GATEWAY_ENABLED from /etc/iiab/iiab.env. This
+# role runs the generator below when it is already installed; on a fresh
+# install, the network role runs it after the LAN interface is configured.
+# Keeping the decision in one place makes the DNS diversion and port-80 DNAT
+# change together, and avoids depending on 'iiab_lan_iface', which the network
+# role defines and which is not in scope here.
 
-- name: Delete /etc/dnsmasq.d/capture to make sure dnsmasq is not diverting (if not captiveportal_enabled)
-  file:
-    path: /etc/dnsmasq.d/capture
-    state: absent
+- name: Update NGINX files and restart NGINX
+  include_role:
+    name: nginx
+    tasks_from: enable-or-disable
+
+# Stop the service before its socket, matching the Admin Console's uWSGI
+# ordering. This avoids stopping a socket while its service is still running.
+- name: Stop and disable Captive Portal uWSGI service when not captiveportal_enabled
+  systemd_service:
+    name: uwsgi-app@captiveportal.service
+    enabled: false
+    state: stopped
   when: not captiveportal_enabled
 
-- name: Restart 'nginx' to pick up Captive Portal configuration
+- name: Stop and disable Captive Portal uWSGI socket when not captiveportal_enabled
   systemd_service:
-    name: nginx
-    state: restarted
-  when: nginx_enabled
+    name: uwsgi-app@captiveportal.socket
+    enabled: false
+    state: stopped
+  when: not captiveportal_enabled
 
-- name: Enable and start Captive Portal uWSGI socket
+# This is an idempotent start, not a restart, so the running service can stay
+# up. If a socket restart is ever needed (e.g. its drop-in changed), stop
+# uwsgi-app@captiveportal.service first, as the Admin Console role does.
+- name: Enable and start Captive Portal uWSGI socket when captiveportal_enabled
   systemd_service:
     name: uwsgi-app@captiveportal.socket
     daemon_reload: yes
@@ -54,27 +87,40 @@
     state: started
   when: captiveportal_enabled
 
-- name: Start Captive Portal uWSGI service
+- name: Enable and start Captive Portal uWSGI service when captiveportal_enabled
   systemd_service:
     name: uwsgi-app@captiveportal.service
+    enabled: true
     state: started
   when: captiveportal_enabled
 
-- name: Stop and disable Captive Portal uWSGI socket
-  systemd_service:
-    name: uwsgi-app@captiveportal.socket
-    enabled: false
-    state: stopped
-  when: not captiveportal_enabled
-
-- name: Stop Captive Portal uWSGI service
+- name: Restart Captive Portal uWSGI service when its application changes
   systemd_service:
     name: uwsgi-app@captiveportal.service
-    state: stopped
-  when: not captiveportal_enabled
-
-- name: Restart 'dnsmasq' systemd service (if dnsmasq_enabled)
-  systemd_service:
-    name: dnsmasq
     state: restarted
-  when: dnsmasq_enabled
+  when:
+    - captiveportal_enabled
+    - (captiveportal_wsgi is defined and captiveportal_wsgi is changed) or (captiveportal_ini is defined and captiveportal_ini is changed)
+
+# The network role normally regenerates the firewall and activates or removes
+# the Captive Portal dnsmasq diversion by running /usr/bin/iiab-gen-iptables.
+# A standalone './runrole captiveportal' does not run it, so regenerate them
+# here as well. The generator is deployed before execution so the probe DNS and
+# port-80 DNAT use matching conditions. During installation, the network role
+# runs last and the generator may be absent, so the stat guards below skip
+# cleanly.
+- name: Record whether /usr/bin/iiab-gen-iptables exists (installed by the network role)
+  stat:
+    path: /usr/bin/iiab-gen-iptables
+  register: gen_iptables
+
+- name: Install the current Captive Portal firewall generator before running it (full path needed)
+  template:
+    src: roles/network/templates/gateway/iiab-gen-iptables
+    dest: /usr/bin/iiab-gen-iptables
+    mode: "0755"
+  when: gen_iptables.stat.exists
+
+- name: Regenerate iptables and the Captive Portal dnsmasq diversion to match 'captiveportal_enabled' and 'iiab_gateway_enabled'
+  command: /usr/bin/iiab-gen-iptables
+  when: gen_iptables.stat.exists
