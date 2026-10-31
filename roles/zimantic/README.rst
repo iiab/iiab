@@ -89,19 +89,30 @@ Indexes
 The role does not build indexes during installation. To run a fast (title and
 full-text) index manually during a maintenance window::
 
-    cd /library/zimantic && sudo -u zimantic /opt/iiab/zimantic/.venv/bin/zimantic build --fast
+    cd /library/zimantic && sudo -u zimantic /usr/local/sbin/zimantic-indexing --fast
 
 A full semantic index build can be expensive on small devices. In semantic mode,
 the role installs a nightly full indexing timer for the local time window
 01:00-06:00, plus a path trigger that creates fast indexes as new ZIMs arrive.
 In fast mode, only the fast path trigger is installed; no semantic build or
 embedding model is run overnight. The indexing units reload the running server
-after each build and serialize fast and full builds so they cannot write the
-same index concurrently.
+after each build.
+
+Builds take a lock beside the indexes (``/library/zimantic/.build.lock``), so
+the path trigger, the nightly timer, and a manual build cannot write the same
+indexes at once. A direct ``zimantic build`` takes the same lock; the helper
+script only adds ``--no-wait-lock`` (skip instead of queue) and the server reload.
 
 To run a semantic build manually::
 
-    cd /library/zimantic && sudo -u zimantic /opt/iiab/zimantic/.venv/bin/zimantic build --wait-stable
+    cd /library/zimantic && sudo -u zimantic /usr/local/sbin/zimantic-indexing
+
+Run manual builds as ``zimantic`` (the ``sudo -u zimantic`` above). A build
+started as root creates indexes and the lock file owned by root, and the service
+user then cannot update or lock them. If a build reports ``cannot open the
+build lock /library/zimantic/.build.lock``, inspect ``ls -l`` there and either
+remove the file or ``chown zimantic:zimantic`` it. Removing it is safe while no
+build is running: the lock is advisory and is released when the process exits.
 
 Build semantic indexes on a faster compatible machine when memory or overnight
 load is a concern, then copy the files into ``/library/zimantic/indexes`` and

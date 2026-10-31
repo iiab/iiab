@@ -19,20 +19,20 @@ if [ "$#" -gt 1 ]; then
     exit 2
 fi
 
-if ! exec 9>"{{ zimantic_data_dir }}/.build.lock"; then
-    echo "zimantic: unable to open build lock" >&2
-    exit 1
-fi
-if ! /usr/bin/flock -n 9; then
-    echo "zimantic: another build is running, indexing skipped" >&2
-    exit 0
-fi
-
+# The build itself takes the index lock, so a manual `zimantic build` and the
+# systemd units cannot write the same indexes at once. --no-wait-lock makes a
+# skipped trigger cheap instead of queuing behind a long semantic build.
 build_status=0
 if [ "$build_mode" = "--fast" ]; then
-    "{{ zimantic_venv }}/bin/zimantic" build --fast --wait-stable || build_status=$?
+    "{{ zimantic_venv }}/bin/zimantic" build --no-wait-lock --fast --wait-stable || build_status=$?
 else
-    "{{ zimantic_venv }}/bin/zimantic" build --wait-stable || build_status=$?
+    "{{ zimantic_venv }}/bin/zimantic" build --no-wait-lock --wait-stable || build_status=$?
+fi
+
+# 75 is EX_TEMPFAIL: another build holds the lock. Skipping a path or timer
+# trigger is not a failure, and reload must wait for that other build.
+if [ "$build_status" -eq 75 ]; then
+    exit 0
 fi
 
 reload_status=0
