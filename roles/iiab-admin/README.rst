@@ -22,12 +22,23 @@ Configure user 'iiab-admin'
 
 * `admin-user.yml <tasks/admin-user.yml>`_ configures a Linux user that will give you access to IIAB's Admin Console (http://box.lan/admin) after IIAB is installed — and can also help you at the command-line with IIAB community support commands like {iiab-diagnostics, iiab-hotspot-on, iiab-check-firmware, etc}.
    * If initial creation of the user and password was somehow not already taken care of by IIAB's 1-line installer (https://download.iiab.io) or by your underlying OS, that too will be taken care of here.
-* By default this user is ``iiab-admin`` with password ``g0adm1n``
-   * *Do change the default password if you haven't yet, by running:* **sudo passwd iiab-admin**
-   * After IIAB is installed, you can also change the password by logging into Admin Console (http://box.lan/admin) > Utilities > Change Password.
+* By default this user is ``iiab-admin``.  New accounts receive a random password, stored root-only in ``/etc/iiab/iiab-admin-password`` and expired so it must be changed at first login.
+   * Read the generated password with: **sudo cat /etc/iiab/iiab-admin-password**
+   * Change it with: **sudo passwd iiab-admin**
+   * After IIAB is installed, you can also change the password by logging into Admin Console (http://box.lan/admin) > Utilities > Change Password.  Doing so removes the generated-password file automatically.
 * If you prefer to use a pre-existing user like ``pi`` or ``ubuntu`` (or any other username) customize the variable ``iiab_admin_user`` in your `/etc/iiab/local_vars.yml <https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it%3F>`_ (preferably do this prior to installing IIAB!)
-   * You can set ``iiab_admin_can_sudo: False`` if you want a strict security lockdown (if you're really sure you won't need IIAB community support commands like `/usr/bin/iiab-diagnostics <../../scripts/iiab-diagnostics.README.md>`_, `/usr/bin/iiab-hotspot-on <../network/templates/network/iiab-hotspot-on>`_, `iiab-check-firmware <../firmware/templates/iiab-check-firmware>`_, etc!)
-   * You can also set ``iiab_admin_user_install: False`` if you're sure you know how to do all this `account and sudo configuration <tasks/admin-user.yml>`_ manually.
+   * You can set ``iiab_admin_user_install: False`` if you're sure you know how to do all this `account configuration <tasks/admin-user.yml>`_ manually.
+* To choose the password yourself, set ``iiab_admin_password`` in ``local_vars.yml``.  It applies only when the account is first created.  Alternatively, set ``iiab_admin_generate_password: False`` to restore the legacy published fallback (not recommended).
+
+Sudo and support commands
+-------------------------
+
+* The admin user is **not** added to the ``sudo`` group by default.  General root access is opt-in with ``iiab_admin_can_sudo: True``.
+* IIAB's own support commands are covered by a narrow sudoers file, ``/etc/sudoers.d/iiab-support``.  It grants the ``iiab-admin`` group only the commands in ``iiab_admin_support_commands`` (``iiab-diagnostics``, ``iiab-check-firmware``, ``iiab-hotspot-on``, ``iiab-hotspot-off``, ``iiab-internet-on``, ``iiab-internet-off``, ``iiab-summary``, and ``iiab-network``).
+   * Add or remove commands in ``/etc/iiab/local_vars.yml`` and re-run ``cd /opt/iiab/iiab`` followed by ``sudo ./runrole iiab-admin``.
+   * Set ``iiab_admin_support_sudo: False`` to remove the file entirely.
+* Upgrades do not remove an existing user from the ``sudo`` group, because that would break installs that rely on it.  Set ``iiab_admin_revoke_sudo: True`` if you want to remove it deliberately.
+* A command that can run arbitrary playbooks or open a shell (for example ``iiab-update``) is intentionally **not** in the scoped list.  Give the account full sudo if you need that.
 
 Security
 --------
@@ -36,8 +47,9 @@ Security
    #. ``iiab-admin`` (specified by ``admin_console_group`` in `/opt/iiab/iiab/vars/default_vars.yml <../../vars/default_vars.yml>`_ and `/opt/iiab/iiab-admin-console/vars/default_vars.yml <https://github.com/iiab/iiab-admin-console/blob/master/vars/default_vars.yml>`_)
    #. ``sudo``
 * Please read much more about what escalated (root) actions are authorized when you log into IIAB's Admin Console, and how this works: https://github.com/iiab/iiab-admin-console/blob/master/Authentication.md
+* Root SSH login is not enabled by IIAB.  ``iiab-root-login`` is an explicit, separately invoked opt-in for installs that need it; see that script's warning before using it.
 * If your IIAB includes Tailscale (VPN), ``/root/.ssh/authorized_keys`` should be installed by `roles/tailscale/tasks/install.yml <../tailscale/tasks/install.yml>`_ to facilitate remote community support.  Feel free to remove this as mentioned here: https://wiki.iiab.io/go/Security
-* Auto-checking for the default/published password (as specified by ``iiab_admin_published_pwd`` in `/opt/iiab/iiab/vars/default_vars.yml <../../vars/default_vars.yml>`_) is implemented in `/etc/profile.d/iiab-pwdwarn-profile.sh <templates/iiab-pwdwarn-profile.sh.j2>`_ (and `/usr/local/sbin/iiab-pwdwarn-labwc <templates/iiab-pwdwarn-labwc.j2>`_ when ``/home/iiab-admin/.config/labwc/`` exists, i.e. on Raspberry Pi OS with desktop).
+* Upgrade warnings for the old published password are implemented in `/etc/profile.d/iiab-pwdwarn-profile.sh <templates/iiab-pwdwarn-profile.sh.j2>`_.  New accounts do not use that password.
 
 Example
 =======
@@ -46,10 +58,12 @@ Example
    #. Go ahead and change the value of ``iiab_admin_can_sudo`` (to either True or False) in `/etc/iiab/local_vars.yml <https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it%3F>`_
    #. Make sure that ``iiab_admin_user_install: True`` is also set.
    #. Then re-run this Ansible playbook, by running ``cd /opt/iiab/iiab`` followed by ``sudo ./runrole --reinstall iiab-admin``
+   #. If you also want to remove an existing ``sudo`` membership, set ``iiab_admin_revoke_sudo: True`` for that run.
 
 Historical Notes
 ================
 
+* Before October 2026, ``iiab-admin`` was added to the ``sudo`` group by default and new accounts received the published password ``g0adm1n``.  Both defaults have been retired.  The string remains only so upgrades can warn about accounts that still use it (``iiab_admin_legacy_pwd``).
 * We no longer support setting your password using a hash e.g. ``python -c 'import crypt; print crypt.crypt("<plaintext>", "$6$<salt>")'`` (or the Python < 3.13 equivalent, ``python3 -c 'import crypt; print(crypt.crypt("<plaintext>", crypt.mksalt(crypt.METHOD_SHA512)))'`` or the CLI equivalent, ``openssl passwd -6 -salt $(openssl rand -base64 12) "plaintext"``) as these are very cumbersome — and worse, exposing your "salt" opens up your password to `possible attack <https://stackoverflow.com/questions/6776050/how-long-to-brute-force-a-salted-sha-512-hash-salt-provided>`_.  [October 2020]
 * The sudo flag ``NOPASSWORD:`` and the ``wheel`` group are similarly no longer recommended, so that your IIAB faces fewer security risks.  [October 2020]
 

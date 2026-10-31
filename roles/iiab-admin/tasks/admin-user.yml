@@ -6,6 +6,7 @@
 - name: Does user '{{ iiab_admin_user }}' (iiab_admin_user) exist?    # iiab-admin BY DEFAULT
   command: "id {{ iiab_admin_user | quote }}"    # quote to avoid ';' exploits
   register: user_info
+  changed_when: false
   failed_when: False    # Hides red errors (stronger than 'ignore_errors: yes')
 
 # admin_console_group: iiab-admin   # PER default_vars.yml, SHOULD NEVER CHANGE
@@ -18,39 +19,106 @@
   user:
     name: "{{ iiab_admin_user }}"
     #group: "{{ iiab_admin_user }}"    # Not nec.  Anyway this happens during account creation b/c 'USERGROUPS_ENAB yes' is set in any modern /etc/login.defs
-    groups: "{{ admin_console_group }}"    # What guarantees any user's ability to login to Admin Console, just in case the user is not a member of sudo in future.  FWIW Ansible adds the user to this group in /etc/group even in cases where that's not nec -- i.e. user iiab-admin's primary group is normally sufficient if it (the correct GID, corresponding to group iiab-admin) is in the 4th column of /etc/passwd.
+    groups: "{{ admin_console_group }}"    # What guarantees any user's ability to login to Admin Console.
     append: yes
     shell: /bin/bash
-    #password: "{{ iiab_admin_pwd_hash }}"    # 2020-10-14: DEPRECATED in favor
-    #update_password: on_create               # of 'command: chpasswd' below.
 
-- name: If user didn't exist, set password to '{{ iiab_admin_published_pwd }}'    # g0adm1n
-  #shell: "echo {{ iiab_admin_user }}:{{ iiab_admin_published_pwd }} | chpasswd"
-  command: chpasswd    # Equiv to line above, but safer
+# A new account gets an explicit password, a generated one, or (only when
+# password generation is disabled) the old published fallback.  Existing
+# accounts are never rewritten, so upgrades keep the password the operator
+# already chose.
+- name: Use the password supplied by the operator for the newly created admin user
+  set_fact:
+    iiab_admin_password_effective: "{{ iiab_admin_password }}"
+    iiab_admin_password_generated: false
+  when:
+    - user_info.rc != 0
+    - iiab_admin_password is defined
+    - iiab_admin_password | length > 0
+  no_log: true
+
+- name: Generate a password for the newly created admin user
+  set_fact:
+    iiab_admin_password_effective: "{{ lookup('password', '/dev/null length=24 chars=ascii_letters,digits') }}"
+    iiab_admin_password_generated: true
+  when:
+    - user_info.rc != 0
+    - iiab_admin_password is not defined or iiab_admin_password | length == 0
+    - iiab_admin_generate_password | bool
+  no_log: true
+
+- name: Fall back to the legacy published password when generation is disabled
+  set_fact:
+    iiab_admin_password_effective: "{{ iiab_admin_legacy_pwd }}"
+    iiab_admin_password_generated: false
+  when:
+    - user_info.rc != 0
+    - iiab_admin_password is not defined or iiab_admin_password | length == 0
+    - not (iiab_admin_generate_password | bool)
+  no_log: true
+
+- name: Set the newly created admin user's password
+  command: chpasswd
   args:
-    stdin: "{{ iiab_admin_user | quote }}:{{ iiab_admin_published_pwd | quote }}"
+    stdin: "{{ iiab_admin_user }}:{{ iiab_admin_password_effective }}"
   when: user_info.rc != 0
+  no_log: true
 
+- name: Ensure /etc/iiab exists for the generated password record
+  file:
+    path: /etc/iiab
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  when:
+    - user_info.rc != 0
+    - iiab_admin_password_generated | bool
 
-# sudo-prereqs.yml needs to have been run!
+- name: Record the generated admin password for first login
+  copy:
+    content: "{{ iiab_admin_password_effective }}\n"
+    dest: /etc/iiab/iiab-admin-password
+    owner: root
+    group: root
+    mode: '0600'
+  when:
+    - user_info.rc != 0
+    - iiab_admin_password_generated | bool
+  no_log: true
 
-- name: Add user {{ iiab_admin_user }} to group sudo, for IIAB community support commands in /usr/bin like {iiab-diagnostics, iiab-hotspot-on, iiab-check-firmware}, if iiab_admin_can_sudo
-  #command: "gpasswd -a {{ iiab_admin_user | quote }} sudo"
+- name: Require the generated password to be changed at first console or shell login
+  command: "chage -d 0 {{ iiab_admin_user | quote }}"
+  when:
+    - user_info.rc != 0
+    - iiab_admin_password_generated | bool
+
+- name: Tell the operator where the generated password is
+  debug:
+    msg:
+      - "A random password was generated for '{{ iiab_admin_user }}'."
+      - "Read it with: sudo cat /etc/iiab/iiab-admin-password"
+      - "Change it with: sudo passwd {{ iiab_admin_user }}"
+      - "The file is removed automatically when the password is changed in the Admin Console."
+  when:
+    - user_info.rc != 0
+    - iiab_admin_password_generated | bool
+
+- name: Add user {{ iiab_admin_user }} to group sudo, only when full sudo is explicitly requested
   user:
     name: "{{ iiab_admin_user }}"
     groups: sudo
     append: yes
-  when: iiab_admin_can_sudo
+  when: iiab_admin_can_sudo | bool
 
-- name: Remove user {{ iiab_admin_user }} from group sudo, if not iiab_admin_can_sudo
+- name: Remove user {{ iiab_admin_user }} from group sudo, only when the operator opts in
   command: "gpasswd -d {{ iiab_admin_user | quote }} sudo"
-  when: not iiab_admin_can_sudo
+  when:
+    - not (iiab_admin_can_sudo | bool)
+    - iiab_admin_revoke_sudo | bool
   failed_when: False    # Hides red errors (stronger than 'ignore_errors: yes')
 
-
-#- name: Lets {{ iiab_admin_user }} sudo without password
-##- name: Lets wheel sudo without password
-#  lineinfile:
-#    path: /etc/sudoers
-#    line: "{{ iiab_admin_user }} ALL=(ALL) NOPASSWD: ALL"
-##    line: "%wheel ALL= NOPASSWD: ALL"
+# The commands in /usr/bin/iiab-* are installed by other roles.  The scoped
+# rules are installed here so this role owns the account that uses them.
+- name: Install scoped sudo rules for IIAB support commands
+  include_tasks: support-sudo.yml

@@ -1,12 +1,67 @@
 #!/bin/bash -e
 # "-e" tries to exit right away on error.
 
-# Enable (and set!) root login password for ssh and sftp.
+# Enable (and set!) a root login password for ssh and sftp.
 # To help everyday IIAB implementers upload content with FileZilla:
 # https://wiki.iiab.io/go/FAQ#How_do_I_add_my_own_content%3F
 
-# AT YOUR OWN RISK.  If this absolutely must be run non-interactively, use:
-# sudo iiab-root-login <PASSWORD>
+# AT YOUR OWN RISK.  Root SSH is disabled unless you pass --allow-root-login
+# (or set IIAB_ALLOW_ROOT_LOGIN=1).  Prefer a non-root account with SFTP.
+#
+# If this absolutely must be run non-interactively, use:
+#   sudo iiab-root-login --allow-root-login <PASSWORD>
+
+usage() {
+    cat <<'EOF'
+Usage: sudo iiab-root-login [--allow-root-login] [PASSWORD]
+
+Enables password login for the root account over SSH.  This is a deliberate
+security trade-off: it gives anyone who knows the password full control of the
+machine.  Prefer uploading content as a non-root user.
+
+Options:
+  --allow-root-login   Confirm that you want to enable root SSH login.
+  -h, --help           Show this help.
+
+If PASSWORD is omitted, you will be prompted.
+EOF
+}
+
+ALLOW=0
+ARGS=()
+for arg in "$@"; do
+    case "$arg" in
+        --allow-root-login)
+            ALLOW=1
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        *)
+            ARGS+=("$arg")
+            ;;
+    esac
+done
+
+if [[ "${IIAB_ALLOW_ROOT_LOGIN:-0}" == "1" ]]; then
+    ALLOW=1
+fi
+
+if [[ "$ALLOW" != "1" ]]; then
+    cat >&2 <<'EOF'
+
+REFUSING TO ENABLE ROOT SSH LOGIN.
+
+Root SSH is disabled by default.  It is rarely the right way to upload
+content: use a non-root account with SFTP or rsync instead.
+
+If you accept the risk, run:
+    sudo iiab-root-login --allow-root-login
+
+EOF
+    exit 1
+fi
 
 if [ ! -f /etc/ssh/sshd_config ]; then
     echo -e '\n\e[41;1mERROR: /etc/ssh/sshd_config is missing (is openssh-server installed?)\e[0m\n'
@@ -18,12 +73,12 @@ if ! systemctl is-active ssh > /dev/null; then
     exit 1
 fi
 
-if [ $# -eq 0 ]; then
+if [ ${#ARGS[@]} -eq 0 ]; then
     echo -e '\n\e[1;33mPICK A STRONG PASSWORD TO PROTECT YOUR IIAB!\e[0m'
     echo -en '\nWhat ssh and sftp password do you want for user "root" ? '
-    read ans < /dev/tty
+    read -r ans < /dev/tty
 else
-    ans=$1
+    ans="${ARGS[0]}"
     echo
 fi
 
@@ -35,26 +90,31 @@ else
     echo -e 'Password changed, for user "root".\n'
 fi
 
-# Comment out problematic line(s) in file(s) like...
-# /etc/ssh/sshd_config.d/60-cloudimg-settings.conf
-# ...that appear in Multipass VMs, etc:
-sed -i 's/^PermitRootLogin[[:blank:]].*/# &/' /etc/ssh/sshd_config.d/* || true
-sed -i 's/^PasswordAuthentication[[:blank:]].*/# &/' /etc/ssh/sshd_config.d/* || true
+# Keep the setting in a drop-in dedicated to root.  The 00- prefix makes it
+# take precedence over distro drop-ins, and Match keeps the password setting
+# from weakening authentication for every other account.
+SSHD_DROPIN_DIR=/etc/ssh/sshd_config.d
+SSHD_DROPIN="$SSHD_DROPIN_DIR/00-iiab-root-login.conf"
+mkdir -p "$SSHD_DROPIN_DIR"
+cat > "$SSHD_DROPIN" <<'EOF'
+# Installed by IIAB's iiab-root-login.  Remove this file to disable root SSH.
+Match User root
+    PermitRootLogin yes
+    PasswordAuthentication yes
+EOF
+chmod 0644 "$SSHD_DROPIN"
 
-if grep -q '^PermitRootLogin[[:blank:]]' /etc/ssh/sshd_config; then
-    sed -i 's/^PermitRootLogin[[:blank:]].*/PermitRootLogin yes/' /etc/ssh/sshd_config
-else
-    echo 'PermitRootLogin yes' >> /etc/ssh/sshd_config
-fi
-
-if grep -q '^PasswordAuthentication[[:blank:]]' /etc/ssh/sshd_config; then
-    sed -i 's/^PasswordAuthentication[[:blank:]].*/PasswordAuthentication yes/' /etc/ssh/sshd_config
-else
-    echo 'PasswordAuthentication yes' >> /etc/ssh/sshd_config
+if ! sshd -t; then
+    rm -f "$SSHD_DROPIN"
+    echo -e '\e[41;1mERROR: sshd rejected the configuration; the change was rolled back.\e[0m\n' >&2
+    exit 1
 fi
 
 if systemctl reload ssh; then
-    echo -e '\e[44;1mUser "root" can now upload to IIAB using FileZilla!\e[0m\n'
+    echo -e '\e[44;1mUser "root" can now log in over SSH.\e[0m\n'
+    echo -e '\e[41;1mSECURITY WARNING: root SSH login is enabled.  Disable it with:\e[0m'
+    echo -e '    sudo rm /etc/ssh/sshd_config.d/00-iiab-root-login.conf && sudo systemctl reload ssh\n'
 else
     echo -e '\e[41;1mERROR: Unable to reload ssh service.\e[0m\n'
+    exit 1
 fi

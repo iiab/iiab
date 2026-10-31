@@ -9,7 +9,7 @@
 #export TEXTDOMAIN=Linux-PAM
 #. gettext.sh
 # https://github.com/raspberrypi-ui/pam/blob/master/etc/profile.d/sshpwd.sh
-# https://github.com/raspberrypi-ui/pprompt/blob/master/sshpwd.sh
+# https://github.com/raspberrypi-ui/pprompt/blob/master/etc/profile.d/sshpwd.sh
 
 # bash syntax "function check_user_pwd() {" was removed, as it prevented all
 # lightdm/graphical logins (incl autologin) on Raspbian: #1252 -> PR #1253
@@ -29,11 +29,18 @@ check_user_pwd() {
 
     # 2022-09-21 #3368: Sets field2 to "" if sudo -n fails to read /etc/shadow
     # 2022-10-18 #3404: Redirect stderr to /dev/null, to avoid Mint pop-up
-    field2=$(sudo -n grep "^$1:" {{ etc_path }}/shadow 2> /dev/null | cut -d: -f2)
+    # 2026-10-31: Fall back to reading /etc/shadow directly for root, so this
+    # warning also works when the admin user has scoped sudo rather than a
+    # general sudo grant.
+    if [ -r {{ etc_path }}/shadow ]; then
+        field2=$(grep "^$1:" {{ etc_path }}/shadow | cut -d: -f2)
+    else
+        field2=$(sudo -n grep "^$1:" {{ etc_path }}/shadow 2> /dev/null | cut -d: -f2)
+    fi
     [[ $(perl -e "print crypt('$2', '$field2')") == $field2 ]]
 
     # # $meth (hashing method) is typically '6' which implies 5000 rounds
-    # # of SHA-512 per /etc/login.defs -> /etc/pam.d/common-password
+    # of SHA-512 per /etc/login.defs -> /etc/pam.d/common-password
     # meth=$(grep "^$1:" /etc/shadow | cut -d: -f2 | cut -d$ -f2)
     # salt=$(grep "^$1:" /etc/shadow | cut -d: -f2 | cut -d$ -f3)
     # hash=$(grep "^$1:" /etc/shadow | cut -d: -f2 | cut -d$ -f4)
@@ -56,15 +63,23 @@ check_user_pwd() {
 
 echo
 
-if check_user_pwd "{{ uid_1000_username.stdout }}" "{{ iiab_admin_published_pwd }}" ; then    # [OS's presumed primary login] / g0adm1n
-    echo -e "\e[41;1mPublished password in use by user '{{ uid_1000_username.stdout }}'.\e[0m"
+# A generated password is written root-only at install time.  Its presence
+# means the account still uses the installation password.
+if [ -e {{ etc_path }}/iiab/iiab-admin-password ]; then
+    echo -e "\e[41;1mThe installation password for user '{{ iiab_admin_user }}' has not been changed.\e[0m"
+    echo -e "\e[100;1mChange it with 'sudo passwd {{ iiab_admin_user }}' or Admin Console > Utilities > Change Password.\e[0m"
+    echo
+fi
+
+if check_user_pwd "{{ uid_1000_username.stdout }}" "{{ iiab_admin_legacy_pwd }}" ; then    # [OS's presumed primary login]
+    echo -e "\e[41;1mLegacy published password in use by user '{{ uid_1000_username.stdout }}'.\e[0m"
     echo -e "\e[100;1mTHIS IS A SECURITY RISK - please run 'sudo passwd {{ uid_1000_username.stdout }}' to change it.\e[0m"
     echo
 fi
 {% if uid_1000_username.stdout != iiab_admin_user %}
 
-if check_user_pwd "{{ iiab_admin_user }}" "{{ iiab_admin_published_pwd }}" ; then    # If username different from above, also check: iiab-admin / g0adm1n
-    echo -e "\e[41;1mPublished password in use by user '{{ iiab_admin_user }}'.\e[0m"
+if check_user_pwd "{{ iiab_admin_user }}" "{{ iiab_admin_legacy_pwd }}" ; then    # If username different from above, also check iiab-admin
+    echo -e "\e[41;1mLegacy published password in use by user '{{ iiab_admin_user }}'.\e[0m"
     echo -e "\e[100;1mTHIS IS A SECURITY RISK - please run 'sudo passwd {{ iiab_admin_user }}' to change it.\e[0m"
     echo
 fi
