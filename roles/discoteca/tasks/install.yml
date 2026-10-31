@@ -1,0 +1,137 @@
+---
+# Install phase. The runner runs this on a first install and on --reinstall.
+# This is the only phase that installs or refreshes the program, so an apply to
+# an installed role never downloads anything.
+
+- name: Read the latest discoteca release from GitHub
+  uri:
+    url: "{{ discoteca_releases_api }}"
+    headers:
+      Accept: application/vnd.github+json
+    return_content: true
+  register: discoteca_latest_release
+  when: discoteca_version == 'latest'
+
+- name: Resolve the discoteca version
+  set_fact:
+    discoteca_resolved_version: >-
+      {{ ((discoteca_latest_release.json.tag_name | regex_replace('^v', ''))
+          if discoteca_version == 'latest'
+          else discoteca_version | string) | trim }}
+
+- name: Assert that discoteca_resolved_version is an X.Y.Z release
+  assert:
+    that: discoteca_resolved_version is match('^[0-9]+\.[0-9]+\.[0-9]+$')
+    fail_msg: >-
+      discoteca_version='{{ discoteca_resolved_version }}' is not a valid X.Y.Z
+      release. Set discoteca_version to a release tag such as "0.1.0", or
+      "latest" to resolve it from {{ discoteca_releases_api }}.
+    quiet: true
+
+- name: Fail if there is no prebuilt binary for this CPU architecture
+  fail:
+    msg: >-
+      discoteca publishes linux-amd64 and linux-arm64 binaries, but this host
+      reports ansible_facts.machine='{{ ansible_facts.machine }}'. 32-bit ARM
+      (armv7/armv6) is not built yet.
+  when: discoteca_iset_suffix == ''
+
+- name: Stop an existing discoteca service (if reinstalling)
+  systemd:
+    name: "{{ discoteca_service }}"
+    state: stopped
+  failed_when: false
+
+- name: Ensure the discoteca group exists
+  group:
+    name: "{{ discoteca_group }}"
+    system: true
+    state: present
+
+- name: Create the discoteca system user
+  user:
+    name: "{{ discoteca_user }}"
+    group: "{{ discoteca_group }}"
+    comment: discoteca media library server
+    home: "{{ discoteca_home }}"
+    create_home: false
+    shell: /usr/sbin/nologin
+    system: true
+    state: present
+
+- name: Create the discoteca home and database directories
+  file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ discoteca_user }}"
+    group: "{{ discoteca_group }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ discoteca_home }}", mode: "0750" }
+    - { path: "{{ discoteca_data_dir }}", mode: "0750" }
+
+- name: Create the versioned binary directory
+  file:
+    path: "{{ discoteca_install_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install discoteca runtime packages
+  package:
+    name: "{{ discoteca_packages }}"
+    state: present
+  when: discoteca_packages | length > 0
+
+- name: Download discoteca {{ discoteca_resolved_version }} and verify its SHA-256 checksum
+  get_url:
+    url: "{{ discoteca_download_url }}"
+    dest: "{{ discoteca_binary_path }}"
+    checksum: "sha256:{{ discoteca_checksum_url }}"
+    owner: root
+    group: root
+    mode: "0755"
+    timeout: "{{ download_timeout }}"
+
+- name: Symlink {{ discoteca_bin }} -> {{ discoteca_binary_path }}
+  file:
+    src: "{{ discoteca_binary_path }}"
+    path: "{{ discoteca_bin }}"
+    owner: root
+    group: root
+    state: link
+    force: true
+
+# An update (runrole --reinstall discoteca) downloads a new versioned binary.
+# Keep only the active version so each update does not leave another ~25 MB
+# binary behind.
+- name: Find installed discoteca binaries in {{ discoteca_install_dir }}
+  find:
+    paths: "{{ discoteca_install_dir }}"
+    patterns: "disco-*"
+  register: discoteca_bin_files
+
+- name: Remove superseded discoteca binaries (keep only {{ discoteca_resolved_version }})
+  file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ discoteca_bin_files.files }}"
+  loop_control:
+    label: "{{ item.path | basename }}"
+  when: (item.path | basename) != ('disco-' ~ discoteca_resolved_version)
+
+# discoteca initializes a zero-byte file when it opens it, so this creates a
+# valid empty database without needing sqlite3 on the host. Existing databases
+# are user data and are left untouched.
+- name: Create any missing discoteca databases
+  copy:
+    content: ""
+    dest: "{{ item }}"
+    force: false
+    owner: "{{ discoteca_user }}"
+    group: "{{ discoteca_group }}"
+    mode: "0640"
+  loop: "{{ discoteca_databases }}"
+  loop_control:
+    label: "{{ item }}"

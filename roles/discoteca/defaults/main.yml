@@ -1,0 +1,87 @@
+# discoteca_install: False
+# discoteca_enabled: False
+
+# All above are set in: github.com/iiab/iiab/blob/master/vars/default_vars.yml
+# If nec, change them by editing /etc/iiab/local_vars.yml prior to installing!
+
+# discoteca is a single Go binary with an embedded web client. It serves one or
+# more SQLite media databases, which live in discoteca_data_dir. Media files
+# themselves stay wherever they are; a database only records their paths.
+#
+# Upstream: https://github.com/chapmanjacobd/discoteca
+
+# Version. "latest" resolves the newest GitHub release during install. Pin a
+# release (for example "0.1.0") for an offline-reproducible image.
+discoteca_version: latest
+discoteca_releases_api: "https://api.github.com/repos/chapmanjacobd/discoteca/releases/latest"
+discoteca_resolved_version: "{{ discoteca_version }}"
+
+# uname -m -> upstream release asset suffix. Upstream publishes linux-amd64
+# and linux-arm64 binaries. armv7 (Raspberry Pi 2/3 in 32-bit mode) is not
+# built yet, so the install fails clearly instead of guessing.
+iset_suffixes:
+  x86_64: amd64
+  aarch64: arm64
+discoteca_iset_suffix: "{{ iset_suffixes[ansible_facts.machine] | default('') }}"
+
+discoteca_release_base: "https://github.com/chapmanjacobd/discoteca/releases/download/v{{ discoteca_resolved_version }}"
+discoteca_binary_name: "disco-linux-{{ discoteca_iset_suffix }}"
+discoteca_download_url: "{{ discoteca_release_base }}/{{ discoteca_binary_name }}"
+discoteca_checksum_url: "{{ discoteca_download_url }}.sha256"
+
+# Runtime user and filesystem layout
+discoteca_user: discoteca
+discoteca_group: discoteca
+discoteca_home: /var/lib/discoteca
+discoteca_data_dir: "{{ content_base }}/discoteca"    # /library/discoteca
+discoteca_install_dir: /usr/local/lib/discoteca
+discoteca_binary_path: "{{ discoteca_install_dir }}/disco-{{ discoteca_resolved_version }}"
+discoteca_bin: /usr/local/bin/disco
+
+discoteca_service: discoteca
+discoteca_nginx_conf: "{{ nginx_conf_dir }}/discoteca-nginx.conf"
+
+# Network. The application listens on loopback; NGINX proxies it at
+# http://box{{ discoteca_url }}. Keep the bind address at 127.0.0.1, because
+# discoteca refuses a non-loopback bind without DISCO_API_TOKEN.
+discoteca_url: /disco
+discoteca_port: 5555
+
+# Databases to serve. The install creates each missing file as an empty SQLite
+# database. Add more with e.g.:
+#   discoteca_databases:
+#     - "{{ discoteca_data_dir }}/library.db"
+#     - "{{ discoteca_data_dir }}/audio.db"
+discoteca_databases:
+  - "{{ discoteca_data_dir }}/library.db"
+
+# Optional upstream dependencies. ffmpeg enables transcoding, HLS, and media
+# inspection; discoteca still serves an existing database without it.
+discoteca_packages:
+  - ffmpeg
+
+# Memory tuning for small IIAB devices. The service cgroup caps memory instead
+# of letting one transcode take down the whole box.
+discoteca_db_cache_mb: 64
+discoteca_max_concurrent_searches: 2
+discoteca_memory_high: 70%
+discoteca_memory_max: 80%
+
+# ZIM support is off by default: it needs kiwix-serve started with
+# --urlRootLocation matching the proxy path, which this role does not manage.
+discoteca_kiwix_host: 127.0.0.1
+discoteca_kiwix_port: 0
+
+# Refuse progress updates, playlist changes, and deletions when true.
+discoteca_read_only: false
+
+# Ownership declarations. See "Data ownership" in the top-level README.md.
+# The databases and media files in discoteca_data_dir are user data and are
+# never deleted. The service home holds caches and generated state.
+discoteca_user_settings: []
+discoteca_program_data:
+  - "{{ discoteca_home }}"
+  - /etc/systemd/system/{{ discoteca_service }}.service
+  - "{{ discoteca_nginx_conf }}"
+discoteca_user_data:
+  - "{{ discoteca_data_dir }}/"

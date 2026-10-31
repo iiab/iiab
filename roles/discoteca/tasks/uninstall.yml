@@ -1,0 +1,55 @@
+---
+# The runner includes this file for --uninstall and for the remove half of
+# --reinstall. Everything here is local; --uninstall must work without a
+# network.
+#
+# Remove the program, its program data, and its settings. User data in
+# {{ discoteca_data_dir }} (databases and media) is never deleted.
+
+- name: Stop and disable the discoteca service
+  systemd:
+    name: "{{ discoteca_service }}"
+    enabled: false
+    state: stopped
+  failed_when: false
+
+- name: Remove discoteca program data and user settings
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop: "{{ discoteca_program_data }}"
+  loop_control:
+    label: "{{ item }}"
+  notify:
+    - Reload nginx
+
+- name: Reload systemd after removing the discoteca unit
+  systemd:
+    daemon_reload: true
+
+- name: Remove the versioned discoteca binaries and the stable symlink
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "{{ discoteca_install_dir }}"
+    - "{{ discoteca_bin }}"
+
+- name: Record that discoteca is uninstalled in {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"
+    section: discoteca
+    option: discoteca_install
+    value: "False"
+
+- name: Record that discoteca is disabled in {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"
+    section: discoteca
+    option: discoteca_enabled
+    value: "False"
+
+- name: Remove discoteca markers from {{ iiab_state_file }}
+  iiab_state:
+    key: discoteca_installed
+    state: absent

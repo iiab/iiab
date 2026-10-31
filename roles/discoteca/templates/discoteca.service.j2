@@ -1,0 +1,49 @@
+[Unit]
+Description=discoteca media library server
+Documentation=https://github.com/chapmanjacobd/discoteca
+After=network-online.target local-fs.target
+Wants=network-online.target
+# Stop retrying when the service cannot stay up (for example when it is
+# OOM-killed on a small device).
+StartLimitIntervalSec=600
+StartLimitBurst=3
+
+[Service]
+Type=simple
+User={{ discoteca_user }}
+Group={{ discoteca_group }}
+WorkingDirectory={{ discoteca_data_dir }}
+Environment=HOME={{ discoteca_home }}
+{% set kiwix = (' --kiwix-host ' ~ discoteca_kiwix_host ~ ' --kiwix-port ' ~ discoteca_kiwix_port) if discoteca_kiwix_port | int > 0 else '' %}
+{% set read_only = ' --read-only' if discoteca_read_only | bool else '' %}
+ExecStart={{ discoteca_bin }} serve {{ discoteca_databases | map('quote') | join(' ') }} --host 127.0.0.1 --port {{ discoteca_port }} --no-browser --base-path {{ discoteca_url }} --db-cache-mb {{ discoteca_db_cache_mb }} --max-concurrent-searches {{ discoteca_max_concurrent_searches }}{{ kiwix }}{{ read_only }}
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=20
+
+# Cap memory per service (including ffmpeg children) instead of letting the
+# whole device run out of memory.
+MemoryHigh={{ discoteca_memory_high }}
+MemoryMax={{ discoteca_memory_max }}
+OOMPolicy=stop
+LimitNOFILE=8192
+
+# Hardening. ReadWritePaths must contain every directory that holds a database
+# (including its -wal and -shm files). Media libraries only need read access
+# and can stay read-only.
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths={{ discoteca_home }} {{ discoteca_data_dir }}
+ProtectControlGroups=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+
+[Install]
+WantedBy=multi-user.target

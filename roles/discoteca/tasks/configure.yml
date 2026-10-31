@@ -1,0 +1,88 @@
+---
+# Apply phase. Runs on every apply, including an apply to an installed role.
+# Everything here is local; nothing is downloaded.
+
+- name: Assert that discoteca_databases lists at least one database
+  assert:
+    that: discoteca_databases | length > 0
+    fail_msg: "Set 'discoteca_databases' to at least one SQLite database path."
+    quiet: true
+
+- name: Assert that discoteca_url is a plain URL prefix such as /disco
+  assert:
+    that:
+      - discoteca_url is match('^/[^/]')
+      - not discoteca_url.endswith('/')
+    fail_msg: >-
+      discoteca_url='{{ discoteca_url }}' must start with one slash, must not
+      end with a slash, and cannot be '/'. Use a prefix such as '/disco'.
+    quiet: true
+
+- name: Ensure the discoteca home and database directories exist
+  file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ discoteca_user }}"
+    group: "{{ discoteca_group }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ discoteca_home }}", mode: "0750" }
+    - { path: "{{ discoteca_data_dir }}", mode: "0750" }
+
+# Existing databases are user data; only a missing file is created.
+- name: Create any missing discoteca databases
+  copy:
+    content: ""
+    dest: "{{ item }}"
+    force: false
+    owner: "{{ discoteca_user }}"
+    group: "{{ discoteca_group }}"
+    mode: "0640"
+  loop: "{{ discoteca_databases }}"
+  loop_control:
+    label: "{{ item }}"
+
+- name: Install /etc/systemd/system/{{ discoteca_service }}.service from template
+  template:
+    src: discoteca.service.j2
+    dest: /etc/systemd/system/{{ discoteca_service }}.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Restart discoteca
+
+- name: Enable http://box{{ discoteca_url }} via NGINX
+  template:
+    src: discoteca-nginx.conf.j2
+    dest: "{{ discoteca_nginx_conf }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Reload nginx
+  when: discoteca_enabled | bool
+
+- name: Disable http://box{{ discoteca_url }} via NGINX
+  file:
+    path: "{{ discoteca_nginx_conf }}"
+    state: absent
+  notify:
+    - Reload nginx
+  when: not (discoteca_enabled | bool)
+
+- name: Enable and start the discoteca service
+  systemd:
+    name: "{{ discoteca_service }}"
+    enabled: true
+    state: started
+    daemon_reload: true
+  when: discoteca_enabled | bool
+
+- name: Disable and stop the discoteca service
+  systemd:
+    name: "{{ discoteca_service }}"
+    enabled: false
+    state: stopped
+    daemon_reload: true
+  when: not (discoteca_enabled | bool)
