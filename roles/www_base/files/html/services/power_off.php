@@ -1,5 +1,5 @@
 <?php
 
-echo exec ( "sudo /usr/local/sbin/iiab-poweroff");
+echo exec ( "sudo poweroff");
 
 ?>
