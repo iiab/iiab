@@ -98,6 +98,26 @@ def get_mirror(path):
 
     raise Exception(f"Failed to download {path} from any of the available mirrors.")
 
+def resolve_source(source, download_path):
+    # An interrupted download leaves a <download_path>.resume journal, and pmtiles
+    # only resumes from the same mirror it started on. get_mirror() picks a random
+    # mirror, so on a retry reuse the one recorded in the journal.
+    journal = download_path.with_name(download_path.name + ".resume")
+    if journal.exists():
+        try:
+            j = json.loads(journal.read_text())
+            # The source URL as pmtiles splits it: "bucket" is the URL up to the
+            # last "/" (e.g. https://iiab.switnet.org/maps/2) and "key" is the
+            # file name (e.g. openstreetmap-openmaptiles.2026-10-01.z00-z14.pmtiles).
+            bucket, key = j.get("bucket"), j.get("key")
+            if bucket and key:
+                pinned = bucket + "/" + key
+                if requests.head(pinned).status_code == 200:
+                    return pinned
+        except (json.JSONDecodeError, OSError, requests.RequestException):
+            pass
+    return get_mirror(source)
+
 def get_extract_dir(extract_name):
     """
     Make sure this matches makeFqrSourceId in index.html
@@ -143,14 +163,15 @@ def get_new_extract_paths(extract_name):
     def get_paths(source):
         match (source.split('/')[-1].split('.')):
             case [region_extract_type, date, _zoom_range, "pmtiles"]:
+                download_path = (TMP_DIR /
+                        f"{region_extract_type}.{date}.full-region.{extract_name}.pmtiles")
                 return {
                     "source":
-                        get_mirror(source),
+                        resolve_source(source, download_path),
                     "extract":
                         get_extract_dir(extract_name) / f"{region_extract_type}.{date}.pmtiles",
-                    "tmp":
-                        (TMP_DIR /
-                            f"{region_extract_type}.{date}.full-region.{extract_name}.pmtiles"),
+                    "download":
+                        download_path,
                 }
             case _:
                 raise Exception("Oops got unexpected pmtiles file name:", source)
@@ -296,12 +317,28 @@ def delete_extract(extract_name):
 
     print(f"Full Quality Region data for {extract_name} has been deleted.")
 
-def create_extract(new_fqr, extract_name, extract_paths):
+def get_download_threads():
+    """
+    Number of download threads from IIAB_PMTILES_DOWNLOAD_THREADS, or None to
+    keep the pmtiles default (4). 8 was the fastest setting in the benchmarks on
+    https://github.com/iiab/iiab/pull/4565 (16 was no faster).
+    """
+    download_threads = os.environ.get("IIAB_PMTILES_DOWNLOAD_THREADS", "")
+    if download_threads.isdigit() and int(download_threads) >= 1:
+        return download_threads
+    return None
+
+def create_extract(new_fqr, extract_name, extract_paths, progress_json, download_threads):
     # Extract them all successfully before moving them.
     # Assumes it doesn't exist yet
     for paths in extract_paths.values():
+        cmd = [PMTILES, "extract", paths["source"], paths["download"], "--bbox=" + new_fqr.to_bbox_str()]
+        if progress_json:
+            cmd.append("--progress=json")
+        if download_threads:
+            cmd.append("--download-threads=" + download_threads)
         result = subprocess.run(
-            [PMTILES, "extract", paths["source"], paths["tmp"], "--bbox=" + new_fqr.to_bbox_str()],
+            cmd,
             check=False, # default, but pylint recommends it be explicit
         )
         if result.returncode != 0:
@@ -325,7 +362,7 @@ def create_extract(new_fqr, extract_name, extract_paths):
     with get_meta_file_path(fqr_dir).open("w") as f:
         json.dump({"bbox": new_fqr.to_bbox()}, f)
     for paths in extract_paths.values():
-        shutil.move(paths["tmp"], paths["extract"])
+        shutil.move(paths["download"], paths["extract"])
 
 
 UNIT_MULT = {
@@ -345,7 +382,7 @@ def get_estimates(new_fqr, extract_paths):
                 PMTILES,
                 "extract",
                 paths["source"],
-                paths["tmp"],
+                paths["download"],
                 "--bbox=" + new_fqr.to_bbox_str(),
                 "--dry-run"
             ],
@@ -534,6 +571,11 @@ def main():
             extract_box_str = sys.argv[3]
             noninteractive = sys.argv[4] if len(sys.argv) > 4 else ""
 
+            # Optional download settings (see README.md); unset, pmtiles shows
+            # its progress bar and uses 4 threads
+            progress_json = os.environ.get("IIAB_PMTILES_PROGRESS") == "json"
+            download_threads = get_download_threads()
+
             validate_extract_name(extract_name)
             try:
                 new_fqr = FQR.from_bbox_str(extract_box_str)
@@ -563,7 +605,7 @@ def main():
                 sys.exit(1)
 
             # Do the extracts
-            create_extract(new_fqr, extract_name, extract_paths)
+            create_extract(new_fqr, extract_name, extract_paths, progress_json, download_threads)
             debug_extracts_json()
 
         case unknown:
