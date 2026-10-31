@@ -7,7 +7,7 @@ _Please Also See: http://FAQ.IIAB.IO > ["Captive Portal Administration: What tip
 * The IIAB captive portal uses a list of these OS supported web sites, and diverts these requests to the IIAB server, which in turn forwards to the IIAB home page.
 * While the portal is active -- `captiveportal_enabled: True`, a LAN interface is present, and `iiab_gateway_enabled` is not True (i.e. IIAB is not providing Internet to client devices) -- probe hostnames resolve to `198.51.100.1` by default (`captiveportal_probe_ip`), an unroutable TEST-NET-2 address reserved by RFC 5737. External LAN TCP port 80 traffic is redirected to the IIAB server, including traffic from devices such as Samsung clients that resolve probes using their own DNS; destinations within the configured LAN subnet are excluded so local HTTP services remain reachable. The role renders `capture-dnsmasq.j2` to `/etc/iiab/captiveportal-dnsmasq`, and `iiab-gen-iptables` copies it to `/etc/dnsmasq.d/capture` (and removes it again) under the same condition as the port-80 redirect, so the DNS diversion and the redirect always change together.
 * Other hostnames fall back to the IIAB LAN address while the portal is active, so URLs such as `http://a` and unrecognized OEM probes also reach the portal. Names in `/etc/hosts.dnsmasq` or DHCP leases keep their real addresses, `localhost` stays on `127.0.0.1`, and names in the configured IIAB domain (`.lan` by default) are resolved locally only. The fallback is removed with the rest of the generated dnsmasq fragment when the portal is inactive.
-* The normal IIAB NGINX server explicitly handles the configured LAN IP, any IPv4 address literal (including the host's WAN address and loopback), and local aliases (`box.lan` and `box.local`) before the portal's default server. This preserves the captive portal for unmatched probe traffic while allowing `http://<lan-ip>/`, `http://<wan-ip>/`, and mDNS clients to reach IIAB without resolving the canonical FQDN. `box.lan` is IIAB's canonical DNS name; `box.local` is offered by mDNS/Avahi, and the portal's dnsmasq catch-all also resolves it while the portal is active.
+* The normal IIAB NGINX server explicitly handles the configured LAN IP, any IPv4 address literal (including the host's WAN address and loopback), and local aliases (`box.lan` and `box.local`) before the portal's default server. This preserves the captive portal for unmatched probe traffic while allowing `http://<lan-ip>/`, `http://<wan-ip>/`, and mDNS clients to reach IIAB without resolving the canonical FQDN. `box.lan` is IIAB's canonical DNS name; `box.local` is offered by mDNS/Avahi, and the portal's dnsmasq catch-all also resolves it while the portal is active. When the portal is enabled, the normal server also proxies `/captive_splash` and `/iiab_banner6.png` to the portal, so the splash has a non-HSTS URL on the LAN address and canonical names (for example `http://10.10.10.10/captive_splash` and `http://box.lan/captive_splash`).
 
 ## Components of the IIAB Captive Portal
 
@@ -85,6 +85,15 @@ pre-authentication request keeps that client in the splash flow, while
 completion changes only that client's subsequent probe responses. Web pages
 cannot reliably close the operating system's sign-in window.
 
+Probe redirects point to `http://<lan-ip>/captive_splash`, not to a relative
+path on the probe hostname. Several probe hostnames are HSTS-preloaded (for
+example `fedoraproject.org`), so a browser that upgrades
+`http://<probe-host>/captive_splash` to HTTPS would otherwise never see the
+portal. The LAN address is reachable from every AP client and is not HSTS, and
+the normal NGINX server proxies `/captive_splash` and `/iiab_banner6.png` to
+the portal. `http://box.lan/captive_splash` and
+`http://<lan-ip>/captive_splash` are therefore reliable manual splash URLs.
+
 macOS Safari handles `captive.apple.com` silently even when the URL is typed
 by hand, and may therefore not surface a sign-in window. A macOS user should
 open `http://box.local` (mDNS) or `http://box` directly in a regular browser.
@@ -107,7 +116,15 @@ the other `CAPTIVE_PORTAL_TEST_*` variables when testing a different
 configuration. `CAPTIVE_PORTAL_TEST_LOCAL_IP` (default: the host's first
 address from `hostname -I`, or `127.0.0.1`) verifies that requesting IIAB by
 one of the host's own addresses reaches the normal homepage instead of the
-Captive Portal default_server.
+Captive Portal default_server. `CAPTIVE_PORTAL_TEST_LAN_IP` (default:
+`LAN_IP` from `/etc/iiab/iiab.env`) and `CAPTIVE_PORTAL_TEST_SPLASH_URL`
+override the expected splash address; the portal redirects probes to
+`http://<lan-ip>/captive_splash`.
+
+The portal keeps client state in memory. Restart
+`uwsgi-app@captiveportal.service` before rerunning the test if you need to
+exercise the pre-authentication splash flow again; otherwise a client that
+completed within the last 15 minutes is still treated as authenticated.
 
 For a client with a completed portal session, every recognized connectivity
 probe receives the success answer its operating system expects, rather than a
@@ -169,3 +186,12 @@ either uWSGI instance.
      captive portal flow. IIAB does not intercept HTTPS, so that check requires
      a trusted certificate and may continue to report limited connectivity even
      after the HTTP portal session completes.
+  2. Browsers with HSTS or HTTPS-First may upgrade a probe URL such as
+     `http://fedoraproject.org/static/hotspot.txt` to HTTPS before the portal
+     can answer it; the browser then fails with a connection error instead of
+     showing the splash. This is a browser policy, not a portal redirect.
+     Probe redirects use the LAN address (`http://<lan-ip>/captive_splash`) to
+     avoid this for clients that follow the redirect, but a URL typed directly
+     into a browser is still upgraded. Use `http://box.lan`,
+     `http://box.local`, or `http://<lan-ip>/captive_splash` explicitly when
+     testing from a browser on an HSTS probe host.

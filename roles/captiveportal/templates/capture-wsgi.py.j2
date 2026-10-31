@@ -49,6 +49,12 @@ doc_root = get_iiab_env("WWWROOT")
 fully_qualified_domain_name = get_iiab_env("FQDN")
 CAPTIVE_PORTAL_HOME = "http://" + fully_qualified_domain_name + "{{ captiveportal_splash_page }}"
 CAPTIVE_SPLASH = "/captive_splash"
+# Redirect probes to the splash by LAN address, not by a relative path on the
+# probe hostname. Several probe hostnames are HSTS-preloaded (for example
+# fedoraproject.org), so a browser upgrades http://probe-host/captive_splash to
+# HTTPS before the portal can answer. The normal NGINX server proxies this path
+# (and the banner asset) to the portal, giving browsers a non-HSTS URL.
+CAPTIVE_SPLASH_URL = "http://{{ lan_ip }}" + CAPTIVE_SPLASH
 INFORMATIONAL_SPLASH_PATHS = (
     CAPTIVE_SPLASH,
     "/mac_splash",
@@ -59,7 +65,6 @@ APPLE_SUCCESS_BODY = "<HTML><HEAD><TITLE>Success</TITLE></HEAD><BODY>Success</BO
 APPLE_PROBE_RESPONSES = {
     "captive.apple.com": APPLE_SUCCESS_BODY,
     "appleiphonecell.com": APPLE_SUCCESS_BODY,
-    "*.apple.com.edgekey.net": APPLE_SUCCESS_BODY,
     "gsp1.apple.com": APPLE_SUCCESS_BODY,
     "apple.com": APPLE_SUCCESS_BODY,
     "www.apple.com": APPLE_SUCCESS_BODY,
@@ -160,7 +165,7 @@ PORT = args.port
 logger.debug("")
 logger.debug('##########################################')
 # what language are we speaking?
-lang = os.environ['LANG'][0:2]
+lang = (os.environ.get('LANG') or 'en')[0:2]
 logger.debug('speaking: {}'.format(lang))
 
 # ########## transient client state ##############
@@ -327,7 +332,7 @@ def generic_probe(environ, start_response):
     if is_android_flow(environ):
         logger.debug("sending captive portal instructions for Android")
         return informational_splash(environ, start_response)
-    return put_302(environ, start_response, CAPTIVE_SPLASH)
+    return put_302(environ, start_response, CAPTIVE_SPLASH_URL)
 
 def informational_splash(environ, start_response):
     ip = client_ip(environ)
@@ -348,7 +353,7 @@ def informational_splash(environ, start_response):
         'HOME_URL': CAPTIVE_PORTAL_HOME,
         'auto_refresh': redirect_home_after_timeout,
         'auto_refresh_seconds': SPLASH_DISPLAY_TO,
-        'auto_refresh_url': CAPTIVE_SPLASH,
+        'auto_refresh_url': CAPTIVE_SPLASH_URL,
         'manual_home_prompt': "Open a regular browser and enter one of these:",
         'manual_addresses': manual_addresses,
         'doc_root': get_iiab_env("WWWROOT"),
@@ -359,7 +364,7 @@ def informational_splash(environ, start_response):
         'HOME_URL': CAPTIVE_PORTAL_HOME,
         'auto_refresh': redirect_home_after_timeout,
         'auto_refresh_seconds': SPLASH_DISPLAY_TO,
-        'auto_refresh_url': CAPTIVE_SPLASH,
+        'auto_refresh_url': CAPTIVE_SPLASH_URL,
         'manual_home_prompt': "Abra un navegador normal e introduzca una de estas:",
         'manual_addresses': manual_addresses,
         'doc_root': get_iiab_env("WWWROOT"),
@@ -371,6 +376,8 @@ def informational_splash(environ, start_response):
     response_headers = [
         ('Content-type', 'text/html; charset=utf-8'),
         ('Content-Length', str(len(response_body))),
+        ('Cache-Control', 'no-store'),
+        ('Pragma', 'no-cache'),
     ]
     start_response(status, response_headers)
     return [response_body]
@@ -380,7 +387,7 @@ def android(environ, start_response):
     finish_portal_if_expired(ip)
     if portal_session_active(ip):
         return put_204(environ, start_response)
-    return put_302(environ, start_response, CAPTIVE_SPLASH)
+    return put_302(environ, start_response, CAPTIVE_SPLASH_URL)
 
 def macintosh(environ, start_response):
     logger.debug('in macintosh')
@@ -395,12 +402,12 @@ def macintosh(environ, start_response):
     # follows the same flow as iPhone OS.
     system, _ = parse_agent(environ.get('HTTP_USER_AGENT', ''))
     if system in ("Windows NT", "Microsoft NCSI"):
-        return put_302(environ, start_response, CAPTIVE_SPLASH)
+        return put_302(environ, start_response, CAPTIVE_SPLASH_URL)
     # Nodogsplash keeps a pre-authenticated client on the splash page until
     # that client authenticates. Do not infer completion from a repeated
     # connectivity probe; redirect the probe to the splash page first so
     # Apple clients invoke their captive-network assistant.
-    return put_302(environ, start_response, CAPTIVE_SPLASH)
+    return put_302(environ, start_response, CAPTIVE_SPLASH_URL)
 
 # =============  Return html pages  ============================
 @lru_cache(maxsize=4)
@@ -432,14 +439,17 @@ def bootstrap_css(environ, start_response):
 
 def null(environ, start_response):
     status = '404 Not Found'
-    headers = [('Content-type', 'text/html')]
+    headers = [('Content-type', 'text/html'),
+               ('Cache-Control', 'no-store')]
     start_response(status, headers)
     return [b""]
 
 def success(environ, start_response, body=APPLE_SUCCESS_BODY):
     status = '200 ok'
     html = body.encode()
-    headers = [('Content-type', 'text/html')]
+    headers = [('Content-type', 'text/html'),
+               ('Cache-Control', 'no-store'),
+               ('Pragma', 'no-cache')]
     start_response(status, headers)
     return [html]
 
@@ -447,7 +457,9 @@ def put_204(environ, start_response):
     status = '204 No Content'
     response_body = b''
     response_headers = [('Content-type','text/html'),
-            ('Content-Length',str(len(response_body)))]
+            ('Content-Length',str(len(response_body))),
+            ('Cache-Control', 'no-store'),
+            ('Pragma', 'no-cache')]
     start_response(status, response_headers)
     logger.debug("in function  put_204: sending 204 html response")
     return [response_body]
@@ -459,7 +471,9 @@ def put_302(environ, start_response, location=CAPTIVE_PORTAL_HOME):
         location = CAPTIVE_PORTAL_HOME
     response_headers = [('Content-type','text/html'),
             ('Location',location), 
-            ('Content-Length',str(len(response_body)))]
+            ('Content-Length',str(len(response_body))),
+            ('Cache-Control', 'no-store'),
+            ('Pragma', 'no-cache')]
     start_response(status, response_headers)
     logger.debug("in function  put_302: sending 302 html response")
     return [response_body]
@@ -470,6 +484,7 @@ def plain_200(environ, start_response, body):
         ('Content-type', 'text/plain; charset=utf-8'),
         ('Content-Length', str(len(payload))),
         ('Cache-Control', 'no-store'),
+        ('Pragma', 'no-cache'),
     ])
     return [payload]
 
@@ -562,9 +577,24 @@ def requested_url(environ):
         path += "?" + query
     return "http://{}{}".format(host, path)
 
+def normalize_host(value):
+    '''Canonicalize an HTTP Host value for routing: lower-case, strip a :port
+    suffix, and remove a trailing root dot. IPv6 literals keep their brackets.
+    HTTP hostnames are case-insensitive and a default port is not part of the
+    hostname, so "NetworkCheck.KDE.org:80." must match the same probe table
+    entry as "networkcheck.kde.org".'''
+    host = (value or "").strip().lower()
+    if host.startswith("["):
+        host = host.split("]", 1)[0] + "]"
+    elif ":" in host:
+        host = host.rsplit(":", 1)[0]
+    return host.rstrip(".")
+
 #
 # ================== Start serving the wsgi application  =================
 def application (environ, start_response):
+   host = normalize_host(environ.get('HTTP_HOST') or environ.get('SERVER_NAME', ''))
+   environ['HTTP_HOST'] = host
    if args.log_probes:
       logger.info(
           "probe URL requested: %s (server name: %s)",
@@ -622,8 +652,6 @@ def application (environ, start_response):
    if path in INFORMATIONAL_SPLASH_PATHS:
       return informational_splash(environ, start_response)
 
-   host = environ['HTTP_HOST']
-
    #### parse OS platform based upon URL  ##################
    if host in APPLE_PROBE_RESPONSES:
       return macintosh(environ, start_response)
@@ -642,7 +670,7 @@ def application (environ, start_response):
       # Non-Android /generate_204 gets a redirect for the Chromium "Open in
       # browser" fallback.
       if path == "/generate_204" and not is_android_flow(environ):
-          return put_302(environ, start_response, CAPTIVE_SPLASH)
+          return put_302(environ, start_response, CAPTIVE_SPLASH_URL)
       return android(environ, start_response)
 
    # desktop connectivity probes

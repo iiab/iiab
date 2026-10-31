@@ -20,6 +20,12 @@ first_host_ipv4() {
 LOCAL_IP="${CAPTIVE_PORTAL_TEST_LOCAL_IP:-$(first_host_ipv4 || true)}"
 LOCAL_IP="${LOCAL_IP:-127.0.0.1}"
 CAPTIVE_SPLASH="${CAPTIVE_PORTAL_TEST_SPLASH_PATH:-/captive_splash}"
+IIAB_ENV="${CAPTIVE_PORTAL_TEST_IIAB_ENV:-/etc/iiab/iiab.env}"
+LAN_IP="${CAPTIVE_PORTAL_TEST_LAN_IP:-$(sed -n 's/^LAN_IP=//p' "$IIAB_ENV" 2>/dev/null | head -n 1)}"
+LAN_IP="${LAN_IP:-$LOCAL_IP}"
+# The portal redirects probes to the LAN address, not to a relative path on
+# the probe hostname (several probe hostnames are HSTS-preloaded).
+CAPTIVE_SPLASH_URL="${CAPTIVE_PORTAL_TEST_SPLASH_URL:-http://${LAN_IP}${CAPTIVE_SPLASH}}"
 TIMEOUT="${CAPTIVE_PORTAL_TEST_TIMEOUT:-10}"
 CLIENT_BASE="${CAPTIVE_PORTAL_TEST_CLIENT_BASE:-$((20 + RANDOM % 180))}"
 
@@ -138,7 +144,7 @@ request \
     macos-precompletion-probe "$(client_ip 0)" "$PORTAL_HOST" \
     /hotspot-detect.html "$MACOS_UA"
 assert_status 302
-assert_location "$CAPTIVE_SPLASH"
+assert_location "$CAPTIVE_SPLASH_URL"
 
 request \
     macos-precompletion-splash "$(client_ip 0)" "$PORTAL_HOST" \
@@ -148,12 +154,13 @@ assert_body_contains 'Welcome to IIAB'
 assert_body_not_contains '/home_selected'
 assert_body_not_contains 'SIGN IN'
 assert_body_contains 'You may close this window.'
+assert_header_contains 'Cache-Control: no-store'
 
 request \
     macos-precompletion-repeat "$(client_ip 0)" "$PORTAL_HOST" \
     /hotspot-detect.html "$MACOS_UA"
 assert_status 302
-assert_location "$CAPTIVE_SPLASH"
+assert_location "$CAPTIVE_SPLASH_URL"
 
 sleep 11
 
@@ -175,7 +182,7 @@ request \
     android-precompletion-probe "$(client_ip 1)" "$ANDROID_HOST" \
     /generate_204 "$ANDROID_UA"
 assert_status 302
-assert_location "$CAPTIVE_SPLASH"
+assert_location "$CAPTIVE_SPLASH_URL"
 
 request \
     android-precompletion-splash "$(client_ip 1)" "$ANDROID_HOST" \
@@ -190,7 +197,7 @@ request \
     android-precompletion-repeat "$(client_ip 1)" "$ANDROID_HOST" \
     /generate_204 "$ANDROID_UA"
 assert_status 302
-assert_location "$CAPTIVE_SPLASH"
+assert_location "$CAPTIVE_SPLASH_URL"
 
 sleep 11
 
@@ -211,7 +218,7 @@ request \
     iphone-precompletion-probe "$(client_ip 2)" "$PORTAL_HOST" \
     /hotspot-detect.html "$IPHONE_UA"
 assert_status 302
-assert_location "$CAPTIVE_SPLASH"
+assert_location "$CAPTIVE_SPLASH_URL"
 
 request \
     iphone-precompletion-splash "$(client_ip 2)" "$PORTAL_HOST" \
@@ -226,7 +233,7 @@ request \
     iphone-precompletion-repeat "$(client_ip 2)" "$PORTAL_HOST" \
     /hotspot-detect.html "$IPHONE_UA"
 assert_status 302
-assert_location "$CAPTIVE_SPLASH"
+assert_location "$CAPTIVE_SPLASH_URL"
 
 sleep 11
 
@@ -246,7 +253,7 @@ request \
     windows-probe "$(client_ip 3)" "$WINDOWS_HOST" \
     /connecttest.txt "$WINDOWS_UA"
 assert_status 302
-assert_location "$CAPTIVE_SPLASH"
+assert_location "$CAPTIVE_SPLASH_URL"
 
 request \
     windows-splash "$(client_ip 3)" "$WINDOWS_HOST" \
@@ -255,7 +262,7 @@ assert_status 200
 assert_body_contains 'Welcome to IIAB'
 assert_body_contains 'You may close this page.'
 assert_body_contains 'http-equiv="refresh"'
-assert_body_contains 'url=/captive_splash'
+assert_body_contains "url=$CAPTIVE_SPLASH_URL"
 
 sleep 11
 
@@ -275,7 +282,7 @@ request \
     fedora-probe "$(client_ip 4)" "$FEDORA_HOST" \
     /static/hotspot.txt "$BROWSER_UA"
 assert_status 302
-assert_location "$CAPTIVE_SPLASH"
+assert_location "$CAPTIVE_SPLASH_URL"
 
 request \
     fedora-splash "$(client_ip 4)" "$FEDORA_HOST" \
@@ -299,6 +306,65 @@ request \
 assert_status 200
 assert_body_equals 'OK'
 
+# Host header normalization: a port, different case, or a trailing root dot
+# must not bypass probe routing or change the success body.
+request \
+    kde-host-port-pre "$(client_ip 7)" "networkcheck.kde.org:80" / "$BROWSER_UA"
+assert_status 302
+assert_location "$CAPTIVE_SPLASH_URL"
+
+request \
+    kde-host-uppercase-pre "$(client_ip 7)" "NETWORKCHECK.KDE.ORG" / "$BROWSER_UA"
+assert_status 302
+assert_location "$CAPTIVE_SPLASH_URL"
+
+request \
+    kde-host-trailing-dot-pre "$(client_ip 7)" "networkcheck.kde.org." / "$BROWSER_UA"
+assert_status 302
+assert_location "$CAPTIVE_SPLASH_URL"
+
+request \
+    fedora-host-port-pre "$(client_ip 7)" "fedoraproject.org:80" /static/hotspot.txt "$BROWSER_UA"
+assert_status 302
+assert_location "$CAPTIVE_SPLASH_URL"
+
+# The allow timer starts on the first request; no splash was served here, so
+# wait for the 12 s unconditional timer rather than the 8 s splash timer.
+sleep 13
+
+request \
+    kde-host-port-post "$(client_ip 7)" "networkcheck.kde.org:80" / "$BROWSER_UA"
+assert_status 200
+assert_body_equals 'OK'
+
+request \
+    kde-host-uppercase-post "$(client_ip 7)" "NETWORKCHECK.KDE.ORG" / "$BROWSER_UA"
+assert_status 200
+assert_body_equals 'OK'
+
+request \
+    kde-host-trailing-dot-post "$(client_ip 7)" "networkcheck.kde.org." / "$BROWSER_UA"
+assert_status 200
+assert_body_equals 'OK'
+
+request \
+    fedora-host-port-post "$(client_ip 7)" "fedoraproject.org:80" /static/hotspot.txt "$BROWSER_UA"
+assert_status 200
+assert_body_equals 'OK'
+
+# The splash must also be reachable through the normal server, using the LAN
+# address, so browsers that HSTS-upgrade probe URLs still have a usable page.
+request \
+    lan-ip-splash "$(client_ip 8)" "$LAN_IP" "$CAPTIVE_SPLASH" "$BROWSER_UA"
+assert_status 200
+assert_body_contains 'Welcome to IIAB'
+assert_header_contains 'Cache-Control: no-store'
+
+request \
+    lan-ip-banner "$(client_ip 8)" "$LAN_IP" /iiab_banner6.png "$BROWSER_UA"
+assert_status 200
+assert_header_contains 'image/png'
+
 request \
     homepage-root "$(client_ip 5)" "$HOME_HOST" / "$BROWSER_UA"
 if [[ "$REQUEST_STATUS" == 3* ]] && [[ "$(response_location)" == "$HOME_URL" ]]; then
@@ -314,7 +380,7 @@ if [[ "$REQUEST_STATUS" == 3* ]]; then
     local_ip_location="$(response_location)"
     [[ "$local_ip_location" != "$HOME_URL" ]] ||
         fail "local IP $LOCAL_IP redirects to $HOME_URL"
-    [[ "$local_ip_location" != "$CAPTIVE_SPLASH" ]] ||
+    [[ "$local_ip_location" != "$CAPTIVE_SPLASH" && "$local_ip_location" != "$CAPTIVE_SPLASH_URL" ]] ||
         fail "local IP $LOCAL_IP redirects to the captive splash"
 fi
 

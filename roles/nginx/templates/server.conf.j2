@@ -25,6 +25,36 @@ server {
     # let individual services drop location blocks in conf.d
     include {{ nginx_conf_dir }}/*;
 
+{% if captiveportal_enabled | default(false) %}
+    # The Captive Portal splash is normally served by the probe-host default
+    # server. Serve it through the normal server too, so the LAN address and
+    # canonical names provide a non-HSTS splash URL for browsers (for example
+    # fedoraproject.org is HSTS-preloaded). The banner is referenced relative
+    # to /captive_splash, hence the matching location.
+    location = /captive_splash {
+        include uwsgi_params;
+        uwsgi_param HTTP_HOST $http_host;
+        uwsgi_param SERVER_NAME $host;
+        uwsgi_param HTTP_X_FORWARDED_FOR $remote_addr;
+        uwsgi_pass unix:///run/uwsgi/captiveportal.socket;
+        error_page 502 503 504 =302 http://{{ iiab_fqdn }}/;
+    }
+    location = /iiab_banner6.png {
+        include uwsgi_params;
+        uwsgi_param HTTP_HOST $http_host;
+        uwsgi_param SERVER_NAME $host;
+        uwsgi_param HTTP_X_FORWARDED_FOR $remote_addr;
+        uwsgi_pass unix:///run/uwsgi/captiveportal.socket;
+    }
+    location = /home_selected {
+        include uwsgi_params;
+        uwsgi_param HTTP_HOST $http_host;
+        uwsgi_param SERVER_NAME $host;
+        uwsgi_param HTTP_X_FORWARDED_FOR $remote_addr;
+        uwsgi_pass unix:///run/uwsgi/captiveportal.socket;
+    }
+{% endif %}
+
     location ~ .*\.php$ {
         proxy_set_header X-Real-IP  $remote_addr;
         proxy_set_header X-Forwarded-For $remote_addr;
