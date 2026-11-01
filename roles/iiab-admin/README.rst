@@ -23,7 +23,7 @@ Configure user 'iiab-admin'
 * IIAB does not configure a Linux user by default.  The Admin Console accepts any member of the ``sudo`` group, and the account created by the OS installer is normally a sudoer.
    * On systems that use ``wheel`` instead of ``sudo``, the Console will not accept the operator automatically.  Enable the option below, or add that account to ``admin_console_group`` yourself.
 * To have IIAB create/add a dedicated account to ``admin_console_group``, set ``iiab_admin_user_install: True`` in your `/etc/iiab/local_vars.yml <https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it%3F>`_ (preferably before installing IIAB!)
-   * The account defaults to the one that ran **sudo iiab** (``SUDO_USER``), falling back to the current user.  Set ``iiab_admin_user`` to use a pre-existing account like ``iiab-admin``, ``pi`` or ``ubuntu``.
+   * The account defaults to ``iiab-admin``.  Set ``iiab_admin_user`` to reuse a pre-existing account like ``pi`` or ``ubuntu``.
    * `admin-user.yml <tasks/admin-user.yml>`_ then creates the account if it is missing (with password ``g0adm1n``) and adds it to ``admin_console_group``.  An existing account keeps its password.
    * *Do change the default password if IIAB created the account:* **sudo passwd iiab-admin**
    * You can set ``iiab_admin_can_sudo: False`` if you want a strict security lockdown (if you're really sure you won't need IIAB community support commands like `/usr/bin/iiab-diagnostics <../../scripts/iiab-diagnostics.README.md>`_, `/usr/bin/iiab-hotspot-on <../network/templates/network/iiab-hotspot-on>`_, `iiab-check-firmware <../firmware/templates/iiab-check-firmware>`_, etc!)
