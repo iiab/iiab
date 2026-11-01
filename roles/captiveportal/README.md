@@ -14,6 +14,7 @@ _Please Also See: http://FAQ.IIAB.IO > ["Captive Portal Administration: What tip
 * Files used
     1. checkurls -- the source list of URLs used by at least one operating system.
     1. capture.conf.j2 -- the NGINX default server for unmatched probe requests.
+    1. captiveportal-nginx.conf.j2 -- the splash locations installed in nginx conf.d so the normal server serves them on the LAN address and canonical names.
     1. capture-dnsmasq.j2 -- the dnsmasq diversion rendered from the checkurls list to `/etc/iiab/captiveportal-dnsmasq` and activated as `/etc/dnsmasq.d/capture` by `iiab-gen-iptables`.
     1. capture-wsgi.py -- determines the client agent, stores short-lived client state in memory, and responds with redirects as appropriate for each OS.
     1. captiveportal.ini.j2 -- configuration file for the `uwsgi-app@captiveportal.service` instance, which runs the capture-wsgi.py script.
