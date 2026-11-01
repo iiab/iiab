@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-import json, os, random, re, requests, shutil, string, subprocess, sys, xml, xmltodict
+import json, os, random, re, requests, shutil, signal, string, subprocess, sys, xml, xmltodict
 from pathlib import Path
 from collections import defaultdict
 from fqr import FQR
@@ -238,7 +238,11 @@ def yes_no(prompt, noninteractive=False, noninteractive_response=None):
     if noninteractive:
         return noninteractive_response
     while True:
-        response = input(f'{prompt} y/n ')
+        # The prompt goes to stderr like the other messages (input() would
+        # write it to stdout)
+        sys.stderr.write(f'{prompt} y/n ')
+        sys.stderr.flush()
+        response = input()
         if response == "y":
             return True
         if response == "n":
@@ -340,6 +344,20 @@ def get_download_threads():
         return download_threads
     return None
 
+def run_pmtiles(cmd):
+    # Forward Ctrl-C and SIGTERM to pmtiles and wait for it, so that it can
+    # pause and save its .resume journal before we exit. subprocess.run()
+    # does not forward SIGTERM, and kills pmtiles 0.25 s after a Ctrl-C.
+    proc = subprocess.Popen(cmd)
+    def forward(signum, _frame):
+        proc.send_signal(signum)
+    handlers = {sig: signal.signal(sig, forward) for sig in (signal.SIGINT, signal.SIGTERM)}
+    try:
+        return proc.wait()
+    finally:
+        for sig, handler in handlers.items():
+            signal.signal(sig, handler)
+
 def create_extract(new_fqr, extract_name, extract_paths, progress_json, download_threads):
     # Extract them all successfully before moving them.
     # Assumes it doesn't exist yet
@@ -349,14 +367,11 @@ def create_extract(new_fqr, extract_name, extract_paths, progress_json, download
             cmd.append("--progress=json")
         if download_threads:
             cmd.append("--download-threads=" + download_threads)
-        result = subprocess.run(
-            cmd,
-            check=False, # default, but pylint recommends it be explicit
-        )
-        if result.returncode != 0:
+        returncode = run_pmtiles(cmd)
+        if returncode != 0:
             raise Exception(
                 "Region download failed. Double-check your Internet connection. "
-                f"(error code {result.returncode})"
+                f"(error code {returncode})"
             )
 
     # I considered putting the fqr into a directory and moving it over
