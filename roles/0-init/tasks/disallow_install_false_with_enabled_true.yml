@@ -2,14 +2,41 @@
 # ansible-core 2.19 banned var names derived from {{ }} string templating
 # inside 'that:' conditionals -- see: https://github.com/iiab/iiab/issues/4030
 #
-# 2026-10-17: RESTORED to 1 loop task!  The 'vars' lookups below never build
-# var names via templating (they're pure Jinja expressions), so they work fine
-# on ansible-core 2.19/2.20+.
+# 2026-10-17: The 'vars' lookups below never build var names inside a
+# conditional (they're pure Jinja expressions), so they work fine on
+# ansible-core 2.19/2.20+.
 # https://docs.ansible.com/ansible/latest/collections/ansible/builtin/vars_lookup.html
 
-- name: 'DISALLOW "XYZ_install: False" WITH "XYZ_enabled: True" ...for all {{ vars_checklist | length }} var pairs'
+- name: Read install/enabled values for all checklist entries
+  set_fact:
+    install_values: "{{ query('vars', *(vars_checklist | map('regex_replace', '$', '_install') | list)) }}"
+    enabled_values: "{{ query('vars', *(vars_checklist | map('regex_replace', '$', '_enabled') | list)) }}"
+
+- name: Find install/enabled conflicts
+  set_fact:
+    install_enabled_conflicts: >-
+      {{
+        vars_checklist
+        | zip(install_values, enabled_values)
+        | selectattr('1', 'equalto', false)
+        | selectattr('2', 'equalto', true)
+        | map('first')
+        | list
+      }}
+
+- name: Verify that no install/enabled conflicts were found
   assert:
-    that: "lookup('vars', item + '_install') or not lookup('vars', item + '_enabled')"
-    fail_msg: "DISALLOWED: '{{ item }}_install: False' WITH '{{ item }}_enabled: True' -- IIAB DOES NOT SUPPORT UNINSTALLS -- please verify those 2 variable values e.g. in /etc/iiab/local_vars.yml, and other places variables are defined?"
-    quiet: yes
-  loop: "{{ vars_checklist }}"
+    that:
+      - install_enabled_conflicts | length == 0
+    fail_msg: |
+      DISALLOWED: {{ install_enabled_conflicts | length }} app(s) have
+      '<app>_install: False' with '<app>_enabled: True':
+
+      {% for item in install_enabled_conflicts %}
+        - {{ item }}_install: False with {{ item }}_enabled: True
+      {% endfor %}
+
+      Set '<app>_install: True' to install it, or set '<app>_enabled: False'
+      to leave it disabled.
+    success_msg: "OK: all {{ vars_checklist | length }} install/enabled variable pairs are consistent; no conflicts found."
+    quiet: no
