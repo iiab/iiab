@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-import json, os, random, re, requests, shutil, string, subprocess, sys, xml, xmltodict
+import json, os, random, re, requests, shutil, signal, string, subprocess, sys, xml, xmltodict
 from pathlib import Path
 from collections import defaultdict
 from fqr import FQR
@@ -18,6 +18,11 @@ os.chdir(HOSTING_DIR)
 
 # Helpers
 
+def log(*args):
+    # Messages for people go to stderr, so that in JSON mode stdout has only
+    # the pmtiles progress lines
+    print(*args, file=sys.stderr)
+
 def delete_command(extract_name):
     """
     Helper function that returns the text for the delete command, which we use in a few places.
@@ -34,12 +39,7 @@ def get_fqr(extract_name, fqr_dir):
         with get_meta_file_path(fqr_dir).open("r") as f:
             bbox = json.load(f)["bbox"]
     except FileNotFoundError:
-        # TODO nov 2026 or so we can remove "updated your IIAB recently". This
-        # refers to the transition of adding the meta.json file to the fqr directory.
-        return None, (
-            "meta.json not found. This might be because of an incomplete download, "
-            "or a recent IIAB update."
-        )
+        return None, ("meta.json not found. This might be because of an incomplete download.")
     except (json.decoder.JSONDecodeError, KeyError):
         return None, "malformed meta.json"
     else:
@@ -86,14 +86,14 @@ def get_mirror(path):
         meta4 = xmltodict.parse(requests.get(path + ".meta4").content, force_list=('url',))
     except (xml.parsers.expat.ExpatError, requests.RequestException):
         # If something goes wrong just return the path we put in
-        print("error finding mirror (xml parse error), defaulting to", path)
+        log("error finding mirror (xml parse error), defaulting to", path)
         return path
 
     try:
         urls = [url['#text'] for url in meta4['metalink']['file']['url']]
     except (KeyError, TypeError):
         # If something goes wrong just return the path we put in
-        print("error finding mirror (xml schema error), defaulting to", path)
+        log("error finding mirror (xml schema error), defaulting to", path)
         return path
 
     random.shuffle(urls)
@@ -102,6 +102,28 @@ def get_mirror(path):
             return mirror
 
     raise Exception(f"Failed to download {path} from any of the available mirrors.")
+
+def resolve_source(source, download_path):
+    # An interrupted download leaves a <download_path>.resume journal, and pmtiles
+    # only resumes from the same mirror it started on. get_mirror() picks a random
+    # mirror, so on a retry reuse the one recorded in the journal. Only for the
+    # same file: the download path has no zoom range, so a journal can be from
+    # another zoom level (e.g. z11 vs z14).
+    journal = download_path.with_name(download_path.name + ".resume")
+    if journal.exists():
+        try:
+            j = json.loads(journal.read_text())
+            # The source URL as pmtiles splits it: "bucket" is the URL up to the
+            # last "/" (e.g. https://iiab.switnet.org/maps/2) and "key" is the
+            # file name (e.g. openstreetmap-openmaptiles.2026-10-01.z00-z14.pmtiles).
+            bucket, key = j.get("bucket"), j.get("key")
+            if bucket and key == source.split('/')[-1]:
+                pinned = bucket + "/" + key
+                if requests.head(pinned).status_code == 200:
+                    return pinned
+        except (json.JSONDecodeError, OSError, requests.RequestException):
+            pass
+    return get_mirror(source)
 
 def get_extract_dir(extract_name):
     """
@@ -148,14 +170,15 @@ def get_new_extract_paths(extract_name):
     def get_paths(source):
         match (source.split('/')[-1].split('.')):
             case [region_extract_type, date, _zoom_range, "pmtiles"]:
+                download_path = (TMP_DIR /
+                        f"{region_extract_type}.{date}.full-region.{extract_name}.pmtiles")
                 return {
                     "source":
-                        get_mirror(source),
+                        resolve_source(source, download_path),
                     "extract":
                         get_extract_dir(extract_name) / f"{region_extract_type}.{date}.pmtiles",
-                    "tmp":
-                        (TMP_DIR /
-                            f"{region_extract_type}.{date}.full-region.{extract_name}.pmtiles"),
+                    "download":
+                        download_path,
                 }
             case _:
                 raise Exception("Oops got unexpected pmtiles file name:", source)
@@ -177,9 +200,9 @@ def get_all_fqr_dirs():
         extract_name = fqr_dir.name.rsplit('.')[0]
         error = check_extract_name_error(extract_name)
         if error:
-            print(f"Warning: Can't parse possible FQR dir name ({fqr_dir}) - {error}")
+            log(f"Warning: Can't parse possible FQR dir name ({fqr_dir}) - {error}")
         elif not fqr_dir.is_dir():
-            print(f"Warning: not a directory - {fqr_dir}")
+            log(f"Warning: not a directory - {fqr_dir}")
         else:
             fqr_dirs[extract_name] = fqr_dir
     return fqr_dirs
@@ -196,13 +219,13 @@ def get_region_files_for_fqr(fqr_dir):
             case [region_extract_type, date, "pmtiles"]:
                 error = check_date_error(date)
                 if error:
-                    print(f"Warning: invalid date in existing file ({full_path}): {error}")
+                    log(f"Warning: invalid date in existing file ({full_path}): {error}")
                     continue
                 if region_extract_type not in VALID_REGION_EXTRACT_TYPES:
-                    print(f"Warning: invalid region extract type in existing file: {full_path}")
+                    log(f"Warning: invalid region extract type in existing file: {full_path}")
                     continue
             case _:
-                print(f"Warning: can't parse possible pmtiles name in existing file: {full_path}")
+                log(f"Warning: can't parse possible pmtiles name in existing file: {full_path}")
                 continue
         yield full_path, region_extract_type, date
 
@@ -210,12 +233,16 @@ def yes_no(prompt, noninteractive=False, noninteractive_response=None):
     if noninteractive:
         return noninteractive_response
     while True:
-        response = input(f'{prompt} y/n ')
+        # The prompt goes to stderr like the other messages (input() would
+        # write it to stdout)
+        sys.stderr.write(f'{prompt} y/n ')
+        sys.stderr.flush()
+        response = input()
         if response == "y":
             return True
         if response == "n":
             return False
-        print ("Invalid response.")
+        log("Invalid response.")
 
 def list_files(root):
     """
@@ -230,12 +257,12 @@ def list_files(root):
             listing.append(f"* {directory}/{file}")
 
     MAX_LEN = 20
-    print('\n'.join(listing[:MAX_LEN]))
+    log('\n'.join(listing[:MAX_LEN]))
     unlisted = listing[MAX_LEN:]
 
     if unlisted:
-        print('...')
-        print(f'(and {len(unlisted)} more)')
+        log('...')
+        log(f'(and {len(unlisted)} more)')
 
 # Main functions
 
@@ -252,7 +279,7 @@ def delete_extract(extract_name):
 
     fqr_dirs = get_all_fqr_dirs()
     if extract_name not in fqr_dirs:
-        print (f"Found no Full Quality Regions with the name '{extract_name}'")
+        log(f"Found no Full Quality Regions with the name '{extract_name}'")
         return
 
     fqr_dir = fqr_dirs[extract_name]
@@ -277,18 +304,18 @@ def delete_extract(extract_name):
     # than one of satellite, terrain, or vector, or there are other unknown
     # files.
     if has_region_extract_type_dupes or has_extra_files or has_missing_files:
-        print (
+        log(
             "Warning: there are unexpected or missing files for the region "
             f"'{extract_name}'. Expected:"
         )
-        print ("  * meta.json")
-        print ("  * at most one 'openstreetmap-openmaptiles' file")
-        print ("  * at most one 's2maps-sentinel2-2023' file")
-        print ("  * at most one 'terrarium' file")
-        print ()
-    print ("Files and directories to be deleted:")
+        log("  * meta.json")
+        log("  * at most one 'openstreetmap-openmaptiles' file")
+        log("  * at most one 's2maps-sentinel2-2023' file")
+        log("  * at most one 'terrarium' file")
+        log()
+    log("Files and directories to be deleted:")
     list_files(fqr_dir)
-    print()
+    log()
 
     if not yes_no("Confirm delete?"):
         return
@@ -299,20 +326,47 @@ def delete_extract(extract_name):
         raise Exception("Unknown error. Stopping before we delete the wrong directory!", fqr_dir)
     shutil.rmtree(fqr_dir)
 
-    print(f"Full Quality Region data for {extract_name} has been deleted.")
+    log(f"Full Quality Region data for {extract_name} has been deleted.")
 
-def create_extract(new_fqr, extract_name, extract_paths):
+def get_download_threads():
+    """
+    Number of download threads from IIAB_PMTILES_DOWNLOAD_THREADS, or None to
+    keep the pmtiles default (4). 8 was the fastest setting in the benchmarks on
+    https://github.com/iiab/iiab/pull/4565 (16 was no faster).
+    """
+    download_threads = os.environ.get("IIAB_PMTILES_DOWNLOAD_THREADS", "")
+    if download_threads.isdigit() and int(download_threads) >= 1:
+        return download_threads
+    return None
+
+def run_with_signals(cmd):
+    # Forward Ctrl-C and SIGTERM to pmtiles and wait for it, so that it can
+    # pause and save its .resume journal before we exit. subprocess.run()
+    # does not forward SIGTERM, and kills pmtiles 0.25 s after a Ctrl-C.
+    proc = subprocess.Popen(cmd)
+    def forward(signum, _frame):
+        proc.send_signal(signum)
+    handlers = {sig: signal.signal(sig, forward) for sig in (signal.SIGINT, signal.SIGTERM)}
+    try:
+        return proc.wait()
+    finally:
+        for sig, handler in handlers.items():
+            signal.signal(sig, handler)
+
+def create_extract(new_fqr, extract_name, extract_paths, progress_json, download_threads):
     # Extract them all successfully before moving them.
     # Assumes it doesn't exist yet
     for paths in extract_paths.values():
-        result = subprocess.run(
-            [PMTILES, "extract", paths["source"], paths["tmp"], "--bbox=" + new_fqr.to_bbox_str()],
-            check=False, # default, but pylint recommends it be explicit
-        )
-        if result.returncode != 0:
+        cmd = [PMTILES, "extract", paths["source"], paths["download"], "--bbox=" + new_fqr.to_bbox_str()]
+        if progress_json:
+            cmd.append("--progress=json")
+        if download_threads:
+            cmd.append("--download-threads=" + download_threads)
+        returncode = run_with_signals(cmd)
+        if returncode != 0:
             raise Exception(
                 "Region download failed. Double-check your Internet connection. "
-                f"(error code {result.returncode})"
+                f"(error code {returncode})"
             )
 
     # I considered putting the fqr into a directory and moving it over
@@ -330,7 +384,7 @@ def create_extract(new_fqr, extract_name, extract_paths):
     with get_meta_file_path(fqr_dir).open("w") as f:
         json.dump({"bbox": new_fqr.to_bbox()}, f)
     for paths in extract_paths.values():
-        shutil.move(paths["tmp"], paths["extract"])
+        shutil.move(paths["download"], paths["extract"])
 
 
 UNIT_MULT = {
@@ -350,7 +404,7 @@ def get_estimates(new_fqr, extract_paths):
                 PMTILES,
                 "extract",
                 paths["source"],
-                paths["tmp"],
+                paths["download"],
                 "--bbox=" + new_fqr.to_bbox_str(),
                 "--dry-run"
             ],
@@ -397,7 +451,7 @@ def get_estimates(new_fqr, extract_paths):
 
 
 def approve_download_size(new_fqr, extract_paths):
-    print("Determining download size...")
+    log("Determining download size...")
 
     extract_sizes = get_estimates(new_fqr, extract_paths)
     if extract_sizes is None:
@@ -440,14 +494,14 @@ def check_for_existing_name(extract_name):
         # even if you have an invalid fqr, i.e. a directory without a meta.json
         # file. Such a directory would, all the same, block you from
         # downloading a new region with that name.
-        print(
+        log(
             f"It looks like you already have a Full Quality Region called \"{extract_name}\". "
             "To delete this region, run:"
         )
         # TODO - recommend an "update" (if they have a meta.json) in case that's
         #   what they want to do, when we implement that
-        print()
-        print(delete_command(extract_name))
+        log()
+        log(delete_command(extract_name))
         return False
     return True
 
@@ -469,8 +523,8 @@ def check_for_overlaps(new_fqr):
 # useful for CLI debugging. It shows helpful commands etc.
 # Perhaps when all of those things are moved to the front end we can delete this.
 def debug_extracts_json():
-    print () # Give space in case this is run after another command
-    print ("Checking FQRs...")
+    log() # Give space in case this is run after another command
+    log("Checking FQRs...")
     region_extracts = defaultdict(
         lambda: dict(region_categories=set()),
     )
@@ -478,14 +532,14 @@ def debug_extracts_json():
     for extract_name, fqr_dir in get_all_fqr_dirs().items():
         fqr, error = get_fqr(extract_name, fqr_dir)
         if error:
-            print() # Extra line because we may list multiple incomplete FQRs here
-            print (f"Warning: not displaying '{extract_name}' on the map - {error}")
-            print (
+            log() # Extra line because we may list multiple incomplete FQRs here
+            log(f"Warning: not displaying '{extract_name}' on the map - {error}")
+            log(
                 "You may need to delete this region and download it again. "
                 "The command to delete it is:"
             )
-            print()
-            print(delete_command(extract_name))
+            log()
+            log(delete_command(extract_name))
             continue # Something went really haywire. Skip this pmtiles file.
 
         for _, region_extract_type, _ in get_region_files_for_fqr(fqr_dir):
@@ -498,20 +552,20 @@ def debug_extracts_json():
         )
 
         if missing_region_categories:
-            print() # Extra line because we may list multiple incomplete FQRs here
-            print (f"Warning: don't have all three types of pmtiles files for '{extract_name}'.")
-            print (
+            log() # Extra line because we may list multiple incomplete FQRs here
+            log(f"Warning: don't have all three types of pmtiles files for '{extract_name}'.")
+            log(
                 "Have:",
                 region_extracts[extract_name]["region_categories"] or "(none)",
                 "Missing:",
                 missing_region_categories
             )
-            print (
+            log(
                 "To get the missing files, delete this region and download it again. "
                 "The command to delete it is:"
             )
-            print() # TODO - recommend an "update" instead of delete when we implement that
-            print(delete_command(extract_name))
+            log() # TODO - recommend an "update" instead of delete when we implement that
+            log(delete_command(extract_name))
 
 
 def main():
@@ -538,6 +592,11 @@ def main():
             extract_name = sys.argv[2]
             extract_box_str = sys.argv[3]
             noninteractive = sys.argv[4] if len(sys.argv) > 4 else ""
+
+            # Optional download settings (see README.md); unset, pmtiles shows
+            # its progress bar and uses 4 threads
+            progress_json = os.environ.get("IIAB_PMTILES_PROGRESS") == "json"
+            download_threads = get_download_threads()
 
             validate_extract_name(extract_name)
             try:
@@ -568,7 +627,7 @@ def main():
                 sys.exit(1)
 
             # Do the extracts
-            create_extract(new_fqr, extract_name, extract_paths)
+            create_extract(new_fqr, extract_name, extract_paths, progress_json, download_threads)
             debug_extracts_json()
 
         case unknown:

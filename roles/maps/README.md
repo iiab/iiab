@@ -292,6 +292,24 @@ sudo ./runrole maps --reinstall
 * IIAB integration thanks to [Dan Krol](https://github.com/orblivion)
 * [Details on data file specs and naming conventions](https://github.com/iiab/iiab/blob/master/roles/maps/FORMAT.md)
 
+### How to speed up or monitor Full Quality Region downloads
+
+IIAB Maps downloads Full Quality Regions with a [custom build of go-pmtiles](https://github.com/chapmanjacobd/go-pmtiles) (upstream `v1.31.2` plus [parallel range downloads](https://github.com/chapmanjacobd/go-pmtiles/pull/1) and [resumable downloads with JSON progress](https://github.com/chapmanjacobd/go-pmtiles/pull/2)). Compared with stock go-pmtiles:
+
+* Downloads are about 2x faster with the same 4 download threads ([benchmarks](https://github.com/iiab/iiab/pull/4565)).
+* If a download is interrupted, run the same command again and it continues where it stopped. If you choose a different rectangle instead, the download starts over.
+
+Two optional environment variables change how `tile-extract.py` runs the download. Since `sudo` drops environment variables, put them after `sudo`:
+
+```
+sudo IIAB_PMTILES_DOWNLOAD_THREADS=8 /opt/iiab/maps/tile-extract/tile-extract.py extract <name> <bbox>
+```
+
+* `IIAB_PMTILES_DOWNLOAD_THREADS`: number of parallel connections (default 4). 8 was the fastest in testing; more was not faster. Use fewer on a weak device or a slow link.
+* `IIAB_PMTILES_PROGRESS=json`: replace the progress bar with one JSON line per second on stdout (`phase`, `bytes_done`, `bytes_total`, `speed_bps`, `eta_s`, and `exit_code` on the last line). This is for a program that runs the download and shows its own progress.
+
+To go back to stock go-pmtiles, point `maps_tools.pmtiles.releases` in [defaults/main.yml](defaults/main.yml) at the [protomaps releases](https://github.com/protomaps/go-pmtiles/releases) and their checksums.
+
 ### How to hide or restyle Full Quality Region boundary rectangles
 
 Full Quality Regions are indicated by a bright green rectangle (see above). If this isn't the color scheme you're looking for, you can adjust it by looking for the following lines in `/library/www/maps/index.html` on your IIAB, (_after_ maps installation):
