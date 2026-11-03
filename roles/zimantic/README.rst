@@ -72,7 +72,9 @@ chosen block into ``/etc/iiab/local_vars.yml``:
 
 Each block sets ``zimantic_embedding_model``, the model URL and checksum, and
 the tokenizer file, URL, and checksum. Indexes are specific to the model that
-built them, so rebuild them after switching (``zimantic build --force``).
+built them, so rebuild them after switching (``zimantic build --force``). The
+role stores the downloaded int8 export under
+``/library/zimantic/model/int8``, matching Zimantic's default model layout.
 
 Native dependencies
 ~~~~~~~~~~~~~~~~~~~
