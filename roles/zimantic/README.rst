@@ -294,6 +294,21 @@ it, or point ``zimantic_repo`` at a local checkout). If pip reports an older
 package version, use a corrected Zimantic tag or release rather than editing
 ``pyproject.toml`` on the device.
 
+Home Page
+---------
+
+When the IIAB Admin Console is installed, ``./runrole zimantic`` asks
+``iiab-update-menus`` to add the ``en-zimantic`` menu definition to
+``/library/www/html/home/menu.json``. The menu item opens
+``http://box/zimantic``. Menu auto-update must be enabled in the Admin
+Console's Content Menus page; otherwise add the item there manually.
+
+The Admin Console's home page search bar uses Zimantic when available. If
+Zimantic is disabled or does not answer, the same search falls back to Kiwix.
+To finish adding the menu entry after an Admin Console upgrade, run::
+
+    sudo iiab-update-menus
+
 Relationship to Kiwix
 ---------------------
 
