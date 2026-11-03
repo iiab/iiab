@@ -1,5 +1,6 @@
 #!/bin/bash
 
+ZIMPATH="{{ iiab_zim_path }}"
 KIWIXLIB="{{ kiwix_library_xml }}"
 TMP="${KIWIXLIB}.tmp"
 
@@ -41,12 +42,9 @@ trap 'rmdir "$LOCK_DIR" 2>/dev/null || true' EXIT
 
 echo "Now starting iiab-make-kiwix-lib"
 
-# soft code where vars exist
+pushd "$ZIMPATH" > /dev/null
 /opt/iiab/kiwix/bin/kiwix-manage "$TMP" add content/*.zim
-
-if [ -f /usr/bin/iiab-proc-kiwix-lib.py ]; then
-  /usr/bin/iiab-proc-kiwix-lib.py
-fi
+popd > /dev/null
 
 # Promote tmp -> final (Kiwix reads library.xml, not library.xml.tmp)
 if [ -s "$TMP" ]; then
@@ -54,7 +52,15 @@ if [ -s "$TMP" ]; then
   mv -f "$TMP" "$KIWIXLIB"
   kiwix_start
 else
-  echo "WARNING: expected tmp not found or empty: $TMP" >&2
+  echo "ERROR: expected tmp file not found or empty: $TMP" >&2
+  exit 1
 fi
+
+echo "Now running iiab-proc-kiwix-lib.py"
+
+if [ -x /usr/bin/iiab-proc-kiwix-lib.py ]; then
+  /usr/bin/iiab-proc-kiwix-lib.py
+fi
+
 echo "Finished making Kiwix library.xml"
 exit 0
