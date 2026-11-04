@@ -58,6 +58,30 @@ The server is available at ``http://box/zimantic`` through NGINX. It also
 listens on ``http://box:8090/`` for troubleshooting and direct access from the
 LAN (see the firewall note under "Relationship to Kiwix").
 
+Tuning and concurrency
+~~~~~~~~~~~~~~~~~~~~~~
+
+The role writes only paths, the port and the URL prefix to ``config.toml``.
+Zimantic chooses the rest from a hardware profile: ``mobile`` on hosts with
+2 GB RAM or less, ``desktop`` on typical PCs, and ``supercomputer`` on very
+large hosts. This matters for concurrency: the mobile profile allows two
+simultaneous searches and two search workers, which suits a Pi Zero 2 W but
+would unnecessarily turn overlapping searches on a Pi 4/5 into ``server is
+busy`` responses. Do not copy the mobile values to every IIAB device.
+
+Override only the settings this host needs with ``zimantic_config`` in
+``/etc/iiab/local_vars.yml``::
+
+    zimantic_config:
+      max_concurrent_searches: 4
+      search_workers: 4
+      slot_wait_seconds: 15
+
+``slot_wait_seconds`` is how long a search waits for a free concurrency slot
+before reporting busy; keep it at least as long as a typical cold search on the
+host. Any key accepted by Zimantic's ``config.toml`` can be set this way. Omit
+the whole mapping to follow the hardware profile.
+
 Embedding model
 ~~~~~~~~~~~~~~~
 
