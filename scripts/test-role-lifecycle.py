@@ -515,6 +515,7 @@ def command_result(state, args):
 
     outputs = (
         ("dpkg-query", "installed"),
+        ("ls-remote", "0123456789abcdef0123456789abcdef01234567\tHEAD"),
         ("rev-parse", "mock-commit"),
         ("describe --tags", "v0.1.5"),
         ("remote get-url", "https://example.invalid/iiab-test-repo.git"),

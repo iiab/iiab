@@ -242,8 +242,9 @@ The role follows the shared role lifecycle described in the top-level
   and version markers after a successful apply.
 
 Derived values (the selected embedding model and whether ``zimantic_version``
-is a commit hash) live in ``vars/main.yml``. Service restarts are handlers, so
-the task files only signal what changed instead of carrying restart conditions.
+is ``latest`` or a commit hash) live in ``vars/main.yml``. Service restarts are
+handlers, so the task files only signal what changed instead of carrying restart
+conditions.
 
 Upgrading
 ---------
@@ -312,13 +313,15 @@ the role::
     sudo systemctl stop zimantic          # PRoot/Android: pdsm stop zimantic
     sudo rm -rf /library/zimantic /opt/iiab/zimantic
 
-``zimantic_version`` may be a git tag or a commit hash. pip reports the
-package version from Zimantic's ``pyproject.toml``, so the package version and
-the checked-out revision do not need to match. A commit hash is useful before
-a release is tagged; the commit must be reachable from ``zimantic_repo`` (push
-it, or point ``zimantic_repo`` at a local checkout). If pip reports an older
-package version, use a corrected Zimantic tag or release rather than editing
-``pyproject.toml`` on the device.
+``zimantic_version`` may be ``latest``, a git tag, or a commit hash. ``latest``
+resolves the current tip of ``zimantic_repo``'s default branch to a commit
+during install or ``--upgrade``; those operations therefore require repository
+access. A commit hash is useful before a release is tagged; the commit must be
+reachable from ``zimantic_repo`` (push it, or point ``zimantic_repo`` at a
+local checkout). pip reports the package version from Zimantic's
+``pyproject.toml``, so the package version and the checked-out revision do not
+need to match. If pip reports an older package version, use a corrected
+Zimantic tag or release rather than editing ``pyproject.toml`` on the device.
 
 Home Page
 ---------
