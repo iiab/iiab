@@ -1,0 +1,34 @@
+---
+# Read-only validation of /etc/iiab/local_vars.yml (layered over
+# vars/default_vars.yml).  ./runrole --check-local-vars runs this without
+# installing anything.
+#
+# 'validate_roles' is optional. When set, it is a list of variable prefixes
+# (for example, ["nextcloud"]) and the play checks only those roles. When
+# omitted, the play checks every role in 0-init's checklist.
+
+- hosts: all
+  become: yes
+  gather_facts: false
+
+  vars:
+    default_vars_file: "{{ lookup('env', 'DEFAULT_VARS_FILE') or 'vars/default_vars.yml' }}"
+    local_vars_file: "{{ lookup('env', 'LOCAL_VARS_FILE') or '/etc/iiab/local_vars.yml' }}"
+    state_file: "{{ lookup('env', 'IIAB_STATE_FILE') or '/etc/iiab/iiab_state.yml' }}"
+
+  vars_files:
+    - "{{ default_vars_file }}"
+    # ansible-core 2.19 disallows (thankfully not needed!)
+    #- vars/{{ ansible_local.local_facts.os_ver }}.yml
+    - "{{ local_vars_file }}"
+    - "{{ state_file }}"
+
+  module_defaults:
+    iiab_state:
+      path: "{{ iiab_state_file }}"
+
+  tasks:
+    - name: Check IIAB variables
+      include_role:
+        name: 0-init
+        tasks_from: validate_vars

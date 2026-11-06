@@ -16,6 +16,25 @@
     retries: 2
   register: recovered_result
 
+- name: Retry a checksum mismatch and download the verified file
+  get_curl:
+    url: "http://127.0.0.1:{{ retry_server_port }}/checksum-then-200"
+    dest: "{{ test_dir }}/checksum-recovered.txt"
+    tmp_dest: "{{ tmp_dir }}"
+    checksum: "sha256:81b2bd4ea98c8db66554fbc8d7637a1a69a130f331feb732b75caab4c4868fd5"
+    retries: 1
+  register: checksum_result
+
+- name: Exhaust retries after a checksum mismatch
+  get_curl:
+    url: "http://127.0.0.1:{{ retry_server_port }}/always-bad-checksum"
+    dest: "{{ test_dir }}/checksum-failed.txt"
+    tmp_dest: "{{ tmp_dir }}"
+    checksum: "sha256:81b2bd4ea98c8db66554fbc8d7637a1a69a130f331feb732b75caab4c4868fd5"
+    retries: 1
+  register: checksum_failed_result
+  failed_when: false
+
 - name: Exhaust retries for a persistent HTTP 500
   get_curl:
     url: "http://127.0.0.1:{{ retry_server_port }}/always-500"
@@ -35,9 +54,13 @@
     that:
       - not_found_result.rc != 0
       - recovered_result.changed
+      - checksum_result.changed
+      - checksum_failed_result.msg == "Checksum mismatch"
       - persistent_result.rc != 0
       - (retry_counts_file.content | b64decode | from_json)["/404"] == 1
       - (retry_counts_file.content | b64decode | from_json)["/500-then-200"] == 2
+      - (retry_counts_file.content | b64decode | from_json)["/checksum-then-200"] == 2
+      - (retry_counts_file.content | b64decode | from_json)["/always-bad-checksum"] == 2
       - (retry_counts_file.content | b64decode | from_json)["/always-500"] == 3
 
 - name: Read the recovered download
@@ -49,3 +72,13 @@
   assert:
     that:
       - recovered_content.content | b64decode == "success\n"
+
+- name: Read the checksum-verified download
+  slurp:
+    src: "{{ test_dir }}/checksum-recovered.txt"
+  register: checksum_content
+
+- name: Assert that the checksum-verified download is correct
+  assert:
+    that:
+      - checksum_content.content | b64decode == "success\n"

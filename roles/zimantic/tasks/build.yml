@@ -1,0 +1,70 @@
+---
+# Shared by install.yml and upgrade.yml. Fetches the requested version when the
+# checkout is missing or stale, then rebuilds the Python package from the local
+# checkout. configure.yml owns repeatable work, so an apply to an installed
+# role never reaches this file.
+
+- name: Inspect the Zimantic source checkout
+  include_tasks: check-source.yml
+
+# update.yml installs missing system packages and checks out the requested
+# version. It is this file's only network step.
+- name: Fetch Zimantic {{ zimantic_version }}
+  include_tasks: update.yml
+  when: >-
+    not (zimantic_source_git.stat.exists | bool) or
+    not (zimantic_source_matches_version | bool)
+
+- name: Create Zimantic Python virtual environment
+  command:
+    cmd: "{{ zimantic_python }} -m venv {{ '--system-site-packages ' if (zimantic_system_packages_enabled | bool) else '' }}{{ zimantic_venv }}"
+    creates: "{{ zimantic_venv }}/bin/python"
+
+- name: Rebuild Zimantic from the local checkout
+  vars:
+    # Resolve dependencies from PyPI only when wheels are in use. When
+    # distribution packages provide the native dependencies, pip must not
+    # fetch or replace them.
+    zimantic_install_deps: "{{ not (zimantic_system_packages_enabled | bool) }}"
+  block:
+
+    # pip's default build isolation creates a temporary environment and
+    # downloads setuptools, which fails offline. Keep setuptools in the venv so
+    # the project can be rebuilt from the local checkout.
+    - name: Check for setuptools in the Zimantic virtual environment
+      command: "{{ zimantic_venv }}/bin/python -c 'import setuptools'"
+      register: zimantic_setuptools
+      changed_when: false
+      failed_when: false
+
+    # lifecycle: allow-network (build prerequisite; the README permits this
+    # when setuptools is missing, and the check above limits it to that case)
+    - name: Install setuptools for build-isolation-free installs
+      command:
+        cmd: "{{ zimantic_venv }}/bin/python -m pip install --disable-pip-version-check setuptools"
+      register: zimantic_setuptools_install
+      failed_when: false
+      when: zimantic_setuptools.rc != 0
+
+    # The build needs setuptools, so a failed install means there is no usable
+    # offline path. Surface the pip error instead of failing later inside pip's
+    # build step.
+    - name: Fail if setuptools is unavailable or cannot be installed
+      fail:
+        msg: >-
+          setuptools is required to build Zimantic but is missing from
+          {{ zimantic_venv }} and could not be installed. If this host is
+          offline, install setuptools while online and rerun.
+          {{ zimantic_setuptools_install.stderr | default('') }}
+      when:
+        - zimantic_setuptools.rc != 0
+        - zimantic_setuptools_install.rc != 0
+
+    # lifecycle: allow-network (only when wheels are in use; distribution
+    # packages supply the native dependencies on other hosts)
+    - name: Install Zimantic and runtime dependencies
+      command:
+        cmd: "{{ zimantic_venv }}/bin/python -m pip install --disable-pip-version-check --no-cache-dir --no-build-isolation --upgrade --force-reinstall {{ '' if zimantic_install_deps | bool else '--no-deps ' }}{{ zimantic_source_dir }}"
+      register: zimantic_pip_install
+      changed_when: "'Successfully installed' in zimantic_pip_install.stdout"
+      notify: Restart Zimantic
