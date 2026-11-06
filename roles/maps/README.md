@@ -294,10 +294,10 @@ sudo ./runrole maps --reinstall
 
 ### How to speed up or monitor Full Quality Region downloads
 
-IIAB Maps downloads Full Quality Regions with a [custom build of go-pmtiles](https://github.com/chapmanjacobd/go-pmtiles) (upstream `v1.31.2` plus [parallel range downloads](https://github.com/chapmanjacobd/go-pmtiles/pull/1) and [resumable downloads with JSON progress](https://github.com/chapmanjacobd/go-pmtiles/pull/2)). Compared with stock go-pmtiles:
+IIAB Maps downloads Full Quality Regions with a [custom build of go-pmtiles](https://github.com/chapmanjacobd/go-pmtiles) (upstream `v1.31.2` plus [parallel range downloads](https://github.com/chapmanjacobd/go-pmtiles/pull/1), [resumable downloads with JSON progress](https://github.com/chapmanjacobd/go-pmtiles/pull/2) and a [skip of map files that are already complete](https://github.com/chapmanjacobd/go-pmtiles/pull/3)). Compared with stock go-pmtiles:
 
 * Downloads are about 2x faster with the same 4 download threads ([benchmarks](https://github.com/iiab/iiab/pull/4565)).
-* If a download is interrupted, run the same command again and it continues where it stopped. If you choose a different rectangle instead, the download starts over.
+* If a download is interrupted, run the same command again and it continues where it stopped. The map files that are already complete are not downloaded again. If you choose a different rectangle instead, the download starts over.
 
 Two optional environment variables change how `tile-extract.py` runs the download. Since `sudo` drops environment variables, put them after `sudo`:
 
