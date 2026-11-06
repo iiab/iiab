@@ -1,0 +1,165 @@
+---
+# Shared role lifecycle runner.  A role's tasks/main.yml includes this file:
+#
+#   - name: Run the <Role> lifecycle
+#     include_role:
+#       name: 0-init
+#       tasks_from: lifecycle
+#
+# Phases: install.yml (first install and --reinstall), upgrade.yml (--upgrade
+# only, instead of install.yml), configure.yml (every apply), state.yml (after a
+# successful apply), uninstall.yml (--uninstall, and the remove half of
+# --reinstall). enable-or-disable.yml is a legacy convention that still runs on
+# every apply. User settings are created with force: false, stay unchanged on an
+# apply, and are reset by uninstall.yml. See "Data ownership" in README.md.
+# lifecycle_context.yml re-reads the context after each phase, because a nested
+# include_role can clobber a fact.
+
+- name: Identify the role using the shared lifecycle runner
+  include_tasks: lifecycle_context.yml
+
+- name: Uninstall {{ lifecycle_role }}
+  include_role:
+    name: "{{ lifecycle_role }}"
+    tasks_from: uninstall
+  when:
+    - iiab_role_uninstall | bool
+    - "'uninstall' in lifecycle_phases"
+
+# Make the uninstall live before the play ends, as the Apply block does below.
+- name: Run pending handlers for {{ lifecycle_role }}
+  meta: flush_handlers
+  when:
+    - iiab_role_uninstall | bool
+    - "'uninstall' in lifecycle_phases"
+
+# The uninstall phase is deliberately outside this block: an explicit
+# --uninstall must fail loudly instead of being swallowed when
+# skip_role_on_error is True in a larger play.
+- name: Apply {{ lifecycle_role }}
+  when: not (iiab_role_uninstall | bool)
+  block:
+
+    # Every entry point gets this check, not only ./runrole.
+    - name: Assert that '{{ lifecycle_install_prefix }}_install' is True
+      assert:
+        that: lookup('vars', lifecycle_install_prefix ~ '_install', default=false) is sameas true
+        fail_msg: "Set '{{ lifecycle_install_prefix }}_install: True' in /etc/iiab/local_vars.yml before you apply {{ lifecycle_role }}."
+        quiet: yes
+      when: lifecycle_install_prefix != ''
+
+    # Snapshot before install.yml writes the marker.  A dict keyed by role
+    # keeps nested includes (for example, matomo -> mysql) from clobbering our
+    # state.
+    - name: Capture {{ lifecycle_role }} install state
+      set_fact:
+        lifecycle_state: >-
+          {{ (lifecycle_state | default({}))
+             | combine({lifecycle_role: {
+                  'installed': lookup('installed', lifecycle_prefix),
+                  'record_disk_usage': (not lookup('installed', lifecycle_prefix) or (iiab_role_reinstall | bool) or (iiab_role_upgrade | bool))
+                }}) }}
+
+    # uninstall.yml supplies the remove half of --reinstall. Roles without it
+    # rerun install.yml, and ./runrole warns that the result is ambiguous.
+    - name: Uninstall {{ lifecycle_role }} before reinstalling
+      include_role:
+        name: "{{ lifecycle_role }}"
+        tasks_from: uninstall
+      when:
+        - iiab_role_reinstall | bool
+        - lifecycle_state[lifecycle_role].installed | bool
+        - "'uninstall' in lifecycle_phases"
+
+    - name: Restore the {{ ansible_parent_role_names | first }} lifecycle context
+      include_tasks: lifecycle_context.yml
+
+    - name: Record initial disk space used for {{ lifecycle_role }}
+      include_role:
+        name: 0-init
+        tasks_from: disk_usage_start
+      vars:
+        disk_usage_role: "{{ lifecycle_role }}"
+      when: lifecycle_state[lifecycle_role].record_disk_usage | bool
+
+    # upgrade.yml replaces install.yml: the application's own mechanism owns
+    # the new version, and IIAB does not write schema migrations.
+    - name: Assert that '{{ lifecycle_role }}' supports --upgrade
+      assert:
+        that: "'upgrade' in lifecycle_phases"
+        fail_msg: "{{ lifecycle_role }} does not ship tasks/upgrade.yml, so it has no --upgrade path."
+        quiet: yes
+      when: iiab_role_upgrade | bool
+
+    - name: Upgrade {{ lifecycle_role }}
+      include_role:
+        name: "{{ lifecycle_role }}"
+        tasks_from: upgrade
+      when:
+        - iiab_role_upgrade | bool
+        - "'upgrade' in lifecycle_phases"
+
+    - name: Restore the {{ ansible_parent_role_names | first }} lifecycle context
+      include_tasks: lifecycle_context.yml
+
+    # Do not run install.yml on an apply to an installed role: it may download,
+    # clone, or reinstall. Put work that must run on every apply in
+    # configure.yml instead.
+    - name: Install or repair {{ lifecycle_role }}
+      include_role:
+        name: "{{ lifecycle_role }}"
+        tasks_from: install
+      when:
+        - "'install' in lifecycle_phases"
+        - not (iiab_role_upgrade | bool)
+        - not lifecycle_state[lifecycle_role].installed or (iiab_role_reinstall | bool)
+
+    - name: Restore the {{ ansible_parent_role_names | first }} lifecycle context
+      include_tasks: lifecycle_context.yml
+
+    - name: Apply {{ lifecycle_role }} configuration
+      include_role:
+        name: "{{ lifecycle_role }}"
+        tasks_from: configure
+      when: "'configure' in lifecycle_phases"
+
+    - name: Restore the {{ ansible_parent_role_names | first }} lifecycle context
+      include_tasks: lifecycle_context.yml
+
+    # Legacy convention: still honored, but new work belongs in configure.yml.
+    - name: Enable or disable {{ lifecycle_role }}
+      include_role:
+        name: "{{ lifecycle_role }}"
+        tasks_from: enable-or-disable
+      when: "'enable-or-disable' in lifecycle_phases"
+
+    - name: Restore the {{ ansible_parent_role_names | first }} lifecycle context
+      include_tasks: lifecycle_context.yml
+
+    - name: Record {{ lifecycle_role }} state
+      include_role:
+        name: "{{ lifecycle_role }}"
+        tasks_from: state
+      when: "'state' in lifecycle_phases"
+
+    - name: Restore the {{ ansible_parent_role_names | first }} lifecycle context
+      include_tasks: lifecycle_context.yml
+
+    - name: Record final disk space used for {{ lifecycle_role }}
+      include_role:
+        name: 0-init
+        tasks_from: disk_usage_finish
+      vars:
+        disk_usage_role: "{{ lifecycle_role }}"
+      when: lifecycle_state[lifecycle_role].record_disk_usage | bool
+
+    # Make the change live before the role reports success.
+    - name: Run pending handlers for {{ lifecycle_role }}
+      meta: flush_handlers
+
+  rescue:
+
+    - name: 'SEE ERROR ABOVE (skip_role_on_error: {{ skip_role_on_error }})'
+      fail:
+        msg: ""
+      when: not skip_role_on_error

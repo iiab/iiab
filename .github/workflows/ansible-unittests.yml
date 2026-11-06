@@ -4,9 +4,23 @@ on:
   push:
     paths:
       - 'modules/**'
+      - 'roles/**'
+      - 'vars/**'
+      - 'scripts/**'
+      - 'lookup_plugins/**'
+      - 'runrole'
+      - 'runrole-base.yml'
+      - 'runroles'
   pull_request:
     paths:
       - 'modules/**'
+      - 'roles/**'
+      - 'vars/**'
+      - 'scripts/**'
+      - 'lookup_plugins/**'
+      - 'runrole'
+      - 'runrole-base.yml'
+      - 'runroles'
   workflow_dispatch:
 
 jobs:
@@ -24,3 +38,40 @@ jobs:
 
       - name: Run Ansible integration tests
         run: ANSIBLE_LIBRARY=modules ansible-playbook -i localhost, modules/tests/get_curl.yml
+
+      - name: Run iiab_state integration tests
+        run: ANSIBLE_LIBRARY=modules ansible-playbook -i localhost, modules/tests/iiab_state.yml
+
+      - name: Run disk_usage integration tests
+        run: ANSIBLE_LIBRARY=modules ansible-playbook -i localhost, modules/tests/disk_usage.yml
+
+      - name: Run the awstats lifecycle test
+        run: python scripts/test-role-lifecycle.py awstats --strict
+
+  lint:
+    runs-on: ubuntu-slim
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v6
+
+      - name: Install shellcheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+
+      # scripts/iiab-state has a Python shebang, so shellcheck cannot parse it;
+      # it is covered by the py_compile step below instead.
+      - name: Lint shell scripts
+        run: shellcheck runrole runroles scripts/runrole-common.sh
+
+      - name: Check Python syntax
+        run: >-
+          python3 -m py_compile
+          scripts/iiab-state
+          scripts/iiab_state_lib.py
+          scripts/role_lifecycle.py
+          scripts/test-role-lifecycle.py
+          lookup_plugins/installed.py
+          lookup_plugins/role_var.py
+          modules/iiab_state.py
+          modules/disk_usage.py
