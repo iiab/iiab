@@ -69,6 +69,14 @@ simultaneous searches and two search workers, which suits a Pi Zero 2 W but
 would unnecessarily turn overlapping searches on a Pi 4/5 into ``server is
 busy`` responses. Do not copy the mobile values to every IIAB device.
 
+The role pins ``XDG_CONFIG_HOME`` and ``XDG_DATA_HOME`` to the parent of
+``zimantic_data_dir`` for the service and indexing helper. This makes upstream
+XDG configuration discovery resolve the existing
+``zimantic_data_dir/config.toml`` without moving IIAB's configuration, indexes,
+or models. It also leaves ``XDG_RUNTIME_DIR`` unset for managed processes, so
+the PID file remains beside ``config.toml`` and ``zimantic reload`` works from
+the helper on both systemd and PRoot hosts.
+
 Override only the settings this host needs with ``zimantic_config`` in
 ``/etc/iiab/local_vars.yml``::
 
