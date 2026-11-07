@@ -58,21 +58,9 @@ Tuning and concurrency
 ~~~~~~~~~~~~~~~~~~~~~~
 
 The role writes the local ZIM collection, paths, port and URL prefix to
-``config.toml``.
-Zimantic chooses the rest from a hardware profile: ``mobile`` on hosts with
-2 GB RAM or less, ``desktop`` on typical PCs, and ``supercomputer`` on very
-large hosts. This matters for concurrency: the mobile profile allows two
-simultaneous searches and two search workers, which suits a Pi Zero 2 W but
-would unnecessarily turn overlapping searches on a Pi 4/5 into ``server is
-busy`` responses. Do not copy the mobile values to every IIAB device.
-
-The role pins ``XDG_CONFIG_HOME`` and ``XDG_DATA_HOME`` to the parent of
-``zimantic_data_dir`` for the service and indexing helper. This makes upstream
-XDG configuration discovery resolve the existing
-``zimantic_data_dir/config.toml`` without moving IIAB's configuration, indexes,
-or models. It also leaves ``XDG_RUNTIME_DIR`` unset for managed processes, so
-the PID file remains beside ``config.toml`` and ``zimantic reload`` works from
-the helper on both systemd and PRoot hosts.
+``config.toml``. Zimantic chooses other settings from a hardware profile;
+avoid copying low-concurrency mobile settings to every IIAB device, since
+they can cause overlapping searches on a Pi 4/5 to report ``server is busy``.
 
 Override only the settings this host needs with ``zimantic_config`` in
 ``/etc/iiab/local_vars.yml``::
@@ -87,39 +75,16 @@ before reporting busy; keep it at least as long as a typical cold search on the
 host. Any key accepted by Zimantic's ``config.toml`` can be set this way. Omit
 the whole mapping to follow the hardware profile.
 
-Embedding model
-~~~~~~~~~~~~~~~
-
-Choose the model by uncommenting one block in
-``roles/zimantic/defaults/main.yml`` and commenting out the other, or copy the
-chosen block into ``/etc/iiab/local_vars.yml``:
-
-- ``multilingual-e5-small`` (default) is about 123 MiB and searches 100+
-  languages.
-- ``e5-small-v2`` is about 34 MiB, English only, and saves roughly 125 MiB of
-  resident memory. It is the better choice on hosts with 1 GB RAM or less.
-
-Each block sets ``zimantic_embedding_model``, the model URL and checksum, and
-the tokenizer file, URL, and checksum. Indexes are specific to the model that
-built them, so rebuild them after switching (``zimantic build --force``). The
-role stores the downloaded int8 export under
-``/library/zimantic/model/int8``, matching Zimantic's default model layout.
-
 Native dependencies
 ~~~~~~~~~~~~~~~~~~~
 
 On supported 64-bit platforms, Zimantic v1 installs its runtime dependencies
 from PyPI. On 32-bit ``armhf``/``armv7`` platforms, the default
 ``zimantic_use_system_packages: auto`` installs Debian's native dependencies
-and creates the virtual environment with ``--system-site-packages``; the
-stdlib ``HTMLParser`` replaces the optional ``selectolax`` accelerator.
-Distribution-package mode requires Debian 13 (``trixie``) or newer.
-The setting can be changed when needed:
-
-- ``auto`` (default) uses PyPI wheels on supported 64-bit hosts and Debian
-  packages on hosts without compatible native wheels.
-- ``always`` uses Debian packages on every architecture.
-- ``never`` always uses PyPI dependencies and is not suitable for armhf/armv7.
+and creates the virtual environment with ``--system-site-packages``.
+Distribution-package mode requires Debian 13 (``trixie``) or newer; see the
+``zimantic_use_system_packages`` comment in ``defaults/main.yml`` for
+overrides.
 
 Additional collections
 ~~~~~~~~~~~~~~~~~~~~~~~
@@ -254,33 +219,9 @@ A typical Android configuration in ``/etc/iiab/local_vars.yml``::
 Task layout
 -----------
 
-The role follows the shared role lifecycle described in the top-level
-``README.md``:
-
-- ``install.yml`` validates the settings and includes ``build.yml``. The runner
-  runs it on a first install and after ``--reinstall`` has removed the program.
-- ``upgrade.yml`` validates the settings and includes ``build.yml``. The runner
-  runs it instead of ``install.yml`` for ``--upgrade``.
-- ``build.yml`` inspects the source checkout, includes ``update.yml`` when the
-  checkout is missing or does not match ``zimantic_version``, creates the
-  virtual environment, and rebuilds the Python package from the local checkout.
-  This is the only place that fetches a program version.
-- ``update.yml`` fetches ``zimantic_version`` and installs missing system
-  packages. ``build.yml`` includes it only when the checkout is missing or
-  stale, so an offline rebuild can still use an existing checkout.
-- ``configure.yml`` runs on every apply and reconciles the user, directories,
-  model files, ``config.toml``, and the service definition (a systemd unit, or
-  the pdsm environment file on PRoot).
-- ``uninstall.yml`` removes the service, NGINX shortcut, source checkout,
-  runtime data, and the role's user. It also supplies the remove half of
-  ``--reinstall``.
-- ``state.yml`` reports the settings in ``iiab.ini`` and writes the installed
-  and version markers after a successful apply.
-
-Derived values (the selected embedding model and whether ``zimantic_version``
-is ``latest`` or a commit hash) live in ``vars/main.yml``. Service restarts are
-handlers, so the task files only signal what changed instead of carrying restart
-conditions.
+The role follows IIAB's shared lifecycle: install and upgrade build the
+application, configure reconciles its runtime settings and service, and
+uninstall removes it. See the role task files for implementation details.
 
 Upgrading
 ---------
