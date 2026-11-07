@@ -5,43 +5,130 @@
 from wsgiref.simple_server import make_server
 import argparse
 import subprocess
-from dateutil.tz import *
-import datetime
+import time
 import logging
 from logging.handlers import RotatingFileHandler
 import os
 import sys
+from functools import lru_cache
 from jinja2 import Environment, FileSystemLoader
-import sqlite3
 import re
 from iiab.iiab_lib import get_iiab_env
 
-# Notes on timeout strategy
-# every client timestamp is recorded into current_ts
-# When splash page is clicked , return 204 timeout starts (via ajax call),
-# Return 204 is android (may be different for different versions)
-# captive portal redirect is triggered after inactivity timeout, 
-# which needs to be longer than period of normal connecetivity checks by OS
-# 
+# portal_completed marks a client that has completed the automatic splash flow.
+# A completed client receives the success answer its OS expects -- 204 for
+# Android/Chromium, "success" for Firefox, "Microsoft NCSI" for Windows NCSI,
+# "Microsoft Connect Test" for Windows Connect Test, and Apple's Success page
+# for iOS/macOS -- so it reports a clean connected status. Incomplete clients
+# receive the shared informational splash or an OS-specific redirect.
 
 # Create the jinja2 environment.
 CAPTIVE_PORTAL_BASE = "/opt/iiab/captiveportal"
 j2_env = Environment(loader=FileSystemLoader(CAPTIVE_PORTAL_BASE),trim_blocks=True)
 
-# Define time outs
-INACTIVITY_TO = 30
-PORTAL_TO = 20 # delay after triggered by ajax upon click of link to home page
-# I had hoped that returning 204 status after some delay 
-#  would dispense with android's "sign-in to network" (no work)
+# How long a completed portal session (and its client state) survives without
+# any request from that client. Fifteen minutes: Windows/Android usually probe
+# at least every few minutes, so a brief gap does not send an active device back
+# through the splash page; fifteen minutes of silence expires the completion.
+PORTAL_SESSION_TO = 15 * 60
+# Clients are allowed through after the shared splash page has been displayed
+# for this long. The display timer starts only when the page is served.
+SPLASH_DISPLAY_TO = 8
+# Clients that never open the splash page are allowed through this long after
+# their first request, so they cannot be stranded on redirects.
+PORTAL_ALLOW_TO = 12
+CLIENT_STATE_TTL = PORTAL_SESSION_TO
+# Neighbor lookups are short-lived because a client's MAC address can change
+# while it keeps the same IP address.
+MAC_CACHE_TTL = 30
+NEIGHBOR_LOOKUP_TIMEOUT = 2 # seconds; a wedged netlink must not stall requests
 
 
 # Get the IIAB variables
 doc_root = get_iiab_env("WWWROOT")
 fully_qualified_domain_name = get_iiab_env("FQDN")
+CAPTIVE_PORTAL_HOME = "http://" + fully_qualified_domain_name + "{{ captiveportal_splash_page }}"
+CAPTIVE_SPLASH = "/captive_splash"
+# Redirect probes to the splash by LAN address, not by a relative path on the
+# probe hostname. Several probe hostnames are HSTS-preloaded (for example
+# fedoraproject.org), so a browser upgrades http://probe-host/captive_splash to
+# HTTPS before the portal can answer. The normal NGINX server proxies this path
+# (and the banner asset) to the portal, giving browsers a non-HSTS URL.
+CAPTIVE_SPLASH_URL = "http://{{ lan_ip }}" + CAPTIVE_SPLASH
+INFORMATIONAL_SPLASH_PATHS = (
+    CAPTIVE_SPLASH,
+    "/mac_splash",
+    "/android_splash",
+    "/android_https",
+)
+APPLE_SUCCESS_BODY = "<HTML><HEAD><TITLE>Success</TITLE></HEAD><BODY>Success</BODY></HTML>"
+APPLE_PROBE_RESPONSES = {
+    "captive.apple.com": APPLE_SUCCESS_BODY,
+    "appleiphonecell.com": APPLE_SUCCESS_BODY,
+    "gsp1.apple.com": APPLE_SUCCESS_BODY,
+    "apple.com": APPLE_SUCCESS_BODY,
+    "www.apple.com": APPLE_SUCCESS_BODY,
+}
+ANDROID_PROBE_RESPONSES = {
+    "mtalk.google.com": None,
+    "alt7-mtalk.google.com": None,
+    "alt6-mtalk.google.com": None,
+    "connectivitycheck.android.com": None,
+    "connectivitycheck.platform.hicloud.com": None,
+    "connectivitycheck.platform.hihonorcloud.com": None,
+    "connect.rom.miui.com": None,
+    "connectivitycheck.samsungwifi.com": None,
+    "connectivitycheck.samsung.com": None,
+}
+ANDROID_PROBE_PATHS = {"/gen_204", "/generate_204"}
+LINUX_PROBE_RESPONSES = {
+    "connectivity-check.ubuntu.com": None,
+    "conncheck.opensuse.org": None,
+    "fedoraproject.org": "OK",
+    "www.fedoraproject.org": "OK",
+    "fedoraproject.org.static": "OK",
+    "nmcheck.gnome.org": "NetworkManager is online",
+    "networkcheck.kde.org": "OK",
+}
+BROWSER_PROBE_RESPONSES = {
+    "clients3.google.com": None,
+    "clients4.google.com": None,
+    "connectivitycheck.gstatic.com": None,
+}
+WINDOWS_PROBE_RESPONSES = {
+    "ipv6.msftncsi.com": "Microsoft NCSI",
+    "ipv6.msftncsi.com.edgesuite.net": "Microsoft NCSI",
+    "www.msftncsi.com": "Microsoft NCSI",
+    "www.msftncsi.com.edgesuite.net": "Microsoft NCSI",
+    "www.msftconnecttest.com": "Microsoft Connect Test",
+    "www.msn.com": None,
+    "teredo.ipv6.microsoft.com": "Microsoft NCSI",
+    "teredo.ipv6.microsoft.com.nsatc.net": "Microsoft NCSI",
+}
+
+# Alternate addresses for the splash page, in case a client cannot resolve the
+# FQDN. captiveportal_alt_hostnames defaults to "box.local" (see
+# vars/default_vars.yml); any entry equal to the FQDN is dropped so the page
+# never shows the same address twice.
+manual_addresses = ["http://" + fully_qualified_domain_name]
+for _host in "{{ captiveportal_alt_hostnames | default('box.local') }}".split():
+    _addr = "http://" + _host
+    if _addr not in manual_addresses:
+        manual_addresses.append(_addr)
 
 def parse_args():
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument("-v", "--verbose", action="store_true")
+    parser.add_argument(
+        "--log-probes",
+        "--log-urls",
+        dest="log_probes",
+        action="store_true",
+        default=os.environ.get(
+            "CAPTIVE_PORTAL_LOG_PROBES",
+            "{{ captiveportal_log_probes | default(false) | string }}",
+        ).lower() in ("1", "true", "yes", "on"),
+    )
     parser.add_argument("--log-file", default=os.environ.get("CAPTIVE_PORTAL_LOG_FILE"))
     parser.add_argument(
         "--port",
@@ -78,298 +165,376 @@ PORT = args.port
 logger.debug("")
 logger.debug('##########################################')
 # what language are we speaking?
-lang = os.environ['LANG'][0:2]
+lang = (os.environ.get('LANG') or 'en')[0:2]
 logger.debug('speaking: {}'.format(lang))
 
-def tstamp(dtime):
-    '''return a UNIX style seconds since 1970 for datetime input'''
-    epoch = datetime.datetime(1970, 1, 1,tzinfo=tzutc())
-    newdtime = dtime.astimezone(tzutc())
-    since_epoch_delta = newdtime - epoch
-    return since_epoch_delta.total_seconds()
+# ########## transient client state ##############
+client_states = {}
 
-# ##########database operations ##############
-# Use a sqlite database to store per client information
-state_dir = os.environ.get("STATE_DIRECTORY") or CAPTIVE_PORTAL_BASE
-user_db = os.path.join(state_dir, "users.sqlite")
-conn = sqlite3.connect(user_db)
-if not os.path.exists(user_db):
-    conn.close()
-    conn = sqlite3.connect(user_db)
-c = conn.cursor()
-c.row_factory = sqlite3.Row
-c.execute( """create table IF NOT EXISTS users 
-            (ip text PRIMARY KEY, mac text, current_ts integer,
-            lasttimestamp integer, send204after integer,
-            os text, os_version text,
-            ymd text)""")
+def new_client_state():
+    return {
+        "mac": "",
+        "portal_completed": False,
+        "splash_until": 0,
+        "allow_until": 0,
+        "os": "",
+        "os_version": "",
+        "last_seen": time.monotonic(),
+    }
 
-def update_user(ip, mac, system, system_version, ymd):
-    sql = "SELECT * FROM users WHERE ip = ?"
-    c.execute(sql,(ip,))
-    row = c.fetchone()
-    if row == None:
-        sql = "INSERT INTO users (ip,mac,os,os_version,ymd) VALUES (?,?,?,?,?)" 
-        c.execute(sql,(ip, mac, system, system_version, ymd ))
+def prune_client_states():
+    now = time.monotonic()
+    expired = [
+        ip for ip, state in client_states.items()
+        if now - state["last_seen"] > CLIENT_STATE_TTL
+    ]
+    for ip in expired:
+        del client_states[ip]
+    # Expired mac_cache entries are removed so MACs do not outlive their
+    # usefulness in process memory.
+    stale = [
+        ip for ip, cached in mac_cache.items()
+        if now - cached[0] > MAC_CACHE_TTL
+    ]
+    for ip in stale:
+        del mac_cache[ip]
+
+def get_client_state(ip):
+    state = client_states.get(ip)
+    if state is None:
+        state = new_client_state()
+        client_states[ip] = state
+    return state
+
+mac_cache = {}
+
+def update_client_state(ip, mac, system, system_version):
+    state = get_client_state(ip)
+    # State resets only on a genuine device change: two known, differing MACs.
+    # An empty MAC means the lookup degraded (no neighbor entry yet,
+    # timeout) -- "unknown" must not be treated as "changed" or a single
+    # transient failure would wipe portal_completed mid-session.
+    if mac and state["mac"] and state["mac"] != mac:
+        state.update(
+            mac=mac,
+            os=system,
+            os_version=system_version,
+            portal_completed=False,
+            splash_until=0,
+            allow_until=0,
+        )
     else:
-        sql = "UPDATE users SET  (mac,os,os_version,ymd) = ( ?, ?, ?, ? ) WHERE ip = ?"
-        c.execute(sql,(mac, system, system_version, ymd, ip,))
-    conn.commit()
+        state.update(os=system, os_version=system_version)
+        if mac: # never overwrite a known MAC with an unknown one
+            state["mac"] = mac
 
-def platform_info(ip):
-    sql = "select * FROM users WHERE ip = ?"
-    c.execute(sql,(ip,))
-    row = c.fetchone()
-    if row is None: return ('','',)
-    return (row['os'],row['os_version'])
-        
-def timeout_info(ip):
-    sql = "select * FROM users WHERE ip = ?"
-    c.execute(sql,(ip,))
-    row = c.fetchone()
-    if row is None: return (0,0,0,)
-    return [row['current_ts'],row['lasttimestamp'],row['send204after']]
-        
-def is_inactive(ip):
-    ts=tstamp(datetime.datetime.now(tzutc()))
-    current_ts, last_ts, send204after = timeout_info(ip) 
-    logger.debug("In is_inactive. current_ts:{}. last_ts:{}. send204after:{}".format(current_ts,last_ts,send204after,))
-    if not last_ts:
-        return True
-    if ts - int(last_ts) > INACTIVITY_TO:
-        return True
-    else:
+def get_mac(ip):
+    now = time.monotonic()
+    cached = mac_cache.get(ip)
+    if cached and now - cached[0] < MAC_CACHE_TTL:
+        return cached[1]
+
+    # iproute2's `ip neigh` resolves IPv4 and IPv6 neighbors alike (net-tools'
+    # `arp` rejects IPv6 addresses with exit 255). Unexpected input, timeouts,
+    # and missing binaries yield "no MAC" and let the request continue. Failed
+    # lookups are not cached; subsequent requests retry, and successful
+    # lookups (including "no entry") are cached.
+    try:
+        output = subprocess.check_output(
+            ["ip", "neigh", "show", "to", ip],
+            text=True,
+            stderr=subprocess.PIPE,
+            timeout=NEIGHBOR_LOOKUP_TIMEOUT,
+        )
+    except subprocess.CalledProcessError as exc:
+        logger.debug("neighbor lookup rejected %r: %s", ip, (exc.stderr or "").strip())
+        return ""
+    except (subprocess.SubprocessError, OSError) as exc:
+        logger.warning("neighbor lookup failed for %r: %s", ip, exc)
+        return ""
+
+    match = re.search(r"(?:[0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}", output)
+    mac = match.group(0) if match else ""
+    mac_cache[ip] = (now, mac)
+    return mac
+
+def set_portal_completed(ip):
+    get_client_state(ip).update(
+        portal_completed=True,
+        splash_until=0,
+        allow_until=0,
+    )
+
+def clear_portal_completed(ip):
+    get_client_state(ip).update(
+        portal_completed=False,
+        splash_until=0,
+        allow_until=0,
+    )
+
+def is_portal_completed(ip):
+    state = client_states.get(ip)
+    return bool(state and state["portal_completed"])
+
+def portal_session_active(ip):
+    '''True while this client's portal completion remains active. Each request
+    refreshes last_seen, so the session survives while the device talks to the
+    portal. Silence lasting PORTAL_SESSION_TO expires the completion and its
+    state together, and a later connection must complete the portal again.'''
+    if not is_portal_completed(ip):
         return False
-
-def is_after204_timeout(ip):
-    ts=tstamp(datetime.datetime.now(tzutc()))
-    current_ts, last_ts, send204after = timeout_info(ip) 
-    if send204after == 0: return False
-    logger.debug("function: is_after204_timeout send204after:{} current: {}".format(send204after,ts,))
-    if not send204after:
-        return False
-    if ts - int(send204after) > 0:
+    state = client_states[ip]
+    if time.monotonic() - state["last_seen"] <= PORTAL_SESSION_TO:
         return True
-    else:
-        return False
+    logger.debug("portal completion expired for %s; starting a new session", ip)
+    clear_portal_completed(ip)
+    return False
 
-def set_204after(ip,value):
-    ts=tstamp(datetime.datetime.now(tzutc()))
-    sql = 'UPDATE users SET send204after = ?  where ip = ?'
-    c.execute(sql,(ts + value,ip,))
-    conn.commit()
+def splash_timer_running(ip):
+    '''True while the splash display period is still open. This never starts
+    the timer: only serving the splash page does.'''
+    deadline = get_client_state(ip)["splash_until"]
+    return bool(deadline) and time.monotonic() < deadline
 
-def set_lasttimestamp(ip):
-    ts=tstamp(datetime.datetime.now(tzutc()))
-    sql = 'UPDATE users SET lasttimestamp = ?  where ip = ?'
-    c.execute(sql,(ts,ip,))
-    conn.commit()
+def finish_portal_if_expired(ip):
+    '''Complete a client when either the splash display timer or the
+    unconditional allow timer has elapsed. Returns True if this call completed
+    it, so handlers can answer the current probe with a success response.'''
+    state = get_client_state(ip)
+    now = time.monotonic()
+    splash_expired = state["splash_until"] and now >= state["splash_until"]
+    allow_expired = state["allow_until"] and now >= state["allow_until"]
+    if splash_expired or allow_expired:
+        set_portal_completed(ip)
+        return True
+    return False
+
+def start_splash_timer(ip):
+    '''Start the display period only when the splash page is actually served.'''
+    get_client_state(ip)["splash_until"] = time.monotonic() + SPLASH_DISPLAY_TO
+
+def client_ip(environ):
+    '''The single source of the client address. nginx overrides X-Forwarded-For
+    with the real peer address (uwsgi_param HTTP_X_FORWARDED_FOR $remote_addr);
+    direct runs fall back to the peer address itself.'''
+    forwarded = environ.get('HTTP_X_FORWARDED_FOR')
+    if forwarded:
+        return forwarded.strip()
+    return environ['REMOTE_ADDR'].strip()
 
 #  ###################  Action routines based on OS  ################3
-def microsoft(environ,start_response):
-    logger.debug('in microsoft')
-    # firefox -- seems both mac and Windows use it
-    agent = environ.get('HTTP_USER_AGENT','default_agent')
-    if agent.startswith('Mozilla'):
-       logger.debug("sending microsoft redirect for agent Mozilla")
-       return home(environ, start_response) 
-    response_body = b""
-    status = '302 Moved Temporarily'
-    response_headers = [('Location','http://' + fully_qualified_domain_name + '{{ captiveportal_splash_page }}'),
-            ('Content-type','text/html'),
-            ('Content-Length',str(len(response_body)))]
-    start_response(status, response_headers)
-    logger.debug("redirect to home. Status: %s Headers: %s"%(status,repr(response_headers)))
-    return [response_body]
+def generic_probe(environ, start_response):
+    logger.debug('in generic_probe')
+    ip = client_ip(environ)
+    finish_portal_if_expired(ip)
+    if portal_session_active(ip):
+        return probe_success(environ, start_response)
+    if is_android_flow(environ):
+        logger.debug("sending captive portal instructions for Android")
+        return informational_splash(environ, start_response)
+    return put_302(environ, start_response, CAPTIVE_SPLASH_URL)
 
-def home(environ,start_response):
-    logger.debug("sending direct to home")
-    response_body = b""
-    status = '302 Moved Temporarily'
-    response_headers = [('Location','http://' + fully_qualified_domain_name + '{{ captiveportal_splash_page }}'),
-            ('Content-type','text/html'),
-            ('Content-Length',str(len(response_body)))]
+def informational_splash(environ, start_response):
+    ip = client_ip(environ)
+    system, _ = parse_agent(environ.get('HTTP_USER_AGENT', ''))
+    redirect_home_after_timeout = system not in ("Android", "OS X", "iPhone OS")
+    if portal_session_active(ip):
+        return probe_success(environ, start_response)
+    if finish_portal_if_expired(ip):
+        if redirect_home_after_timeout:
+            return put_302(environ, start_response)
+        return probe_success(environ, start_response)
+    if not splash_timer_running(ip):
+        start_splash_timer(ip)
+    close_hint = "You may close this window." if system == "OS X" else "You may close this page."
+    en_txt = {
+        'message': "This network provides offline access.",
+        'close_hint': close_hint,
+        'HOME_URL': CAPTIVE_PORTAL_HOME,
+        'auto_refresh': redirect_home_after_timeout,
+        'auto_refresh_seconds': SPLASH_DISPLAY_TO,
+        'auto_refresh_url': CAPTIVE_SPLASH_URL,
+        'manual_home_prompt': "Open a regular browser and enter one of these:",
+        'manual_addresses': manual_addresses,
+        'doc_root': get_iiab_env("WWWROOT"),
+    }
+    es_txt = {
+        'message': "Esta red ofrece acceso sin conexión.",
+        'close_hint': "Puede cerrar esta ventana." if system == "OS X" else "Puede cerrar esta página.",
+        'HOME_URL': CAPTIVE_PORTAL_HOME,
+        'auto_refresh': redirect_home_after_timeout,
+        'auto_refresh_seconds': SPLASH_DISPLAY_TO,
+        'auto_refresh_url': CAPTIVE_SPLASH_URL,
+        'manual_home_prompt': "Abra un navegador normal e introduzca una de estas:",
+        'manual_addresses': manual_addresses,
+        'doc_root': get_iiab_env("WWWROOT"),
+    }
+    txt = en_txt if lang == "en" else es_txt if lang == "es" else en_txt
+    response_body = str(j2_env.get_template("simple.template").render(**txt))
+    response_body = response_body.encode()
+    status = '200 OK'
+    response_headers = [
+        ('Content-type', 'text/html; charset=utf-8'),
+        ('Content-Length', str(len(response_body))),
+        ('Cache-Control', 'no-store'),
+        ('Pragma', 'no-cache'),
+    ]
     start_response(status, response_headers)
-    logger.debug("redirect to home. Status: %s Headers: %s"%(status,repr(response_headers)))
     return [response_body]
 
 def android(environ, start_response):
-    if  environ.get('HTTP_X_FORWARDED_FOR'):
-        ip = environ['HTTP_X_FORWARDED_FOR'].strip()
-    else: 
-        ip = environ['REMOTE_ADDR'].strip()
-    system,system_version = platform_info(ip)
-    if system_version is None:
-       return  put_302(environ, start_response)
-    if system_version[0:1] < '6':
-        logger.debug("system < 6:{}".format(system_version))
-        location = '/android_splash'
-        set_204after(ip,0)
-    elif system_version[:1] >= '7':
-        location = "http://" + fully_qualified_domain_name + '{{ captiveportal_splash_page }}'
-    else:
-        #set_204after(ip,20)
-        location = '/android_https'
-    agent = environ.get('HTTP_USER_AGENT','default_agent')
-    response_body = b"hello"
-    status = '302 Moved Temporarily'
-    response_headers = [('Location',location)]
-    start_response(status, response_headers)
-    return [response_body]
-
-def android_splash(environ, start_response):
-    en_txt={ 'message':"Click on the button to go to the IIAB home page",\
-            'btn1':"GO TO IIAB HOME PAGE", \
-            "FQDN": fully_qualified_domain_name + '{{ captiveportal_splash_page }}', \
-            'doc_root':get_iiab_env("WWWROOT") }
-    es_txt={ 'message':"Haga clic en el botón para ir a la página de inicio de IIAB",\
-            "FQDN": fully_qualified_domain_name + '{{ captiveportal_splash_page }}', \
-            'btn1':"IIAB",'doc_root':get_iiab_env("WWWROOT")}
-    txt = en_txt
-    if lang == "en":
-        txt = en_txt
-    elif lang == "es":
-        txt = es_txt
-    response_body = str(j2_env.get_template("simple.template").render(**txt))
-    response_body = response_body.encode()
-    status = '200 OK'
-    response_headers = [('Content-type','text/html'),
-            ('Content-Length',str(len(response_body)))]
-    start_response(status, response_headers)
-    return [response_body]
-
-def android_https(environ, start_response):
-    en_txt={ 'message':"""Please ignore the SECURITY warning which appears after clicking the first button""",\
-             'btn2':'Click this first Go to the browser we need',\
-             'btn1':'Then click this to go to IIAB home page',\
-             "FQDN": fully_qualified_domain_name + '{{ captiveportal_splash_page }}', \
-            'doc_root':get_iiab_env("WWWROOT") }
-    es_txt={ 'message':"Haga clic en el botón para ir a la página de inicio de IIAB",\
-            "FQDN": fully_qualified_domain_name + '{{ captiveportal_splash_page }}', \
-            'btn1':"IIAB",'doc_root':get_iiab_env("WWWROOT")}
-    txt = en_txt
-    if lang == "en":
-        txt = en_txt
-    elif lang == "es":
-        txt = es_txt
-    response_body = str(j2_env.get_template("simple.template").render(**txt))
-    response_body = response_body.encode()
-    status = '200 OK'
-    response_headers = [('Content-type','text/html'),
-            ('Content-Length',str(len(response_body)))]
-    start_response(status, response_headers)
-    return [response_body]
-
-def mac_splash(environ,start_response):
-    logger.debug('in mac_splash')
-    logger.debug("in function mac_splash")
-    en_txt={ 'message': "Click on the button to go to the IIAB home page",\
-            'btn1': "GO TO IIAB HOME PAGE",'success_token': 'Success',
-            "FQDN": fully_qualified_domain_name + '{{ captiveportal_splash_page }}', \
-            'doc_root':get_iiab_env("WWWROOT")}
-    es_txt={ 'message':"Haga clic en el botón para ir a la página de inicio de IIAB",\
-            "FQDN": fully_qualified_domain_name + '{{ captiveportal_splash_page }}', \
-            'btn1':"IIAB",'doc_root':get_iiab_env("WWWROOT")}
-    txt = en_txt
-    if lang == "en":
-        txt = en_txt
-    elif lang == "es":
-        txt = es_txt
-    set_lasttimestamp(ip)
-    response_body = str(j2_env.get_template("mac.template").render(**txt))
-    response_body = response_body.encode()
-    status = '200 Success'
-    response_headers = [('Content-type','text/html'),
-            ('Content-Length',str(len(response_body)))]
-    start_response(status, response_headers)
-    return [response_body]
+    ip = client_ip(environ)
+    finish_portal_if_expired(ip)
+    if portal_session_active(ip):
+        return put_204(environ, start_response)
+    return put_302(environ, start_response, CAPTIVE_SPLASH_URL)
 
 def macintosh(environ, start_response):
     logger.debug('in macintosh')
-    global ip
-    logger.debug("in function mcintosh")
-    #print >> sys.stderr , "Geo Print to stderr" + environ['HTTP_HOST']
-    if not is_inactive(ip):
-        set_lasttimestamp(ip)
-        return success(environ,start_response)
-    # determine if it is time to redirect again
-    if is_after204_timeout(ip):
-        set_204after(ip,10)
-        response_body = """<html><head><script>
-            window.location.reload(true)
-            </script></body></html>"""
-        response_body = response_body.encode()
-        status = '302 Moved Temporarily'
-        response_headers = [('content','text/html')]
-        start_response(status, response_headers)
-        return [response_body]
-    else:
-        return mac_splash(environ,start_response)
+    ip = client_ip(environ)
+    finish_portal_if_expired(ip)
+    if portal_session_active(ip):
+        return probe_success(environ, start_response)
+    if is_android_flow(environ):
+        return informational_splash(environ, start_response)
+    # Windows and NCSI clients use the desktop splash flow. iOS/macOS sign-in
+    # assistants and Safari need the sign-in splash page below, so macOS
+    # follows the same flow as iPhone OS.
+    system, _ = parse_agent(environ.get('HTTP_USER_AGENT', ''))
+    if system in ("Windows NT", "Microsoft NCSI"):
+        return put_302(environ, start_response, CAPTIVE_SPLASH_URL)
+    # Nodogsplash keeps a pre-authenticated client on the splash page until
+    # that client authenticates. Do not infer completion from a repeated
+    # connectivity probe; redirect the probe to the splash page first so
+    # Apple clients invoke their captive-network assistant.
+    return put_302(environ, start_response, CAPTIVE_SPLASH_URL)
 
 # =============  Return html pages  ============================
-def banner(environ, start_response):
-    status = '200 OK'
-    headers = [('Content-type', 'image/png')]
-    start_response(status, headers)
-    image = open("{}/js-menu/menu-files/images/iiab_banner6.png".format(doc_root), "rb").read()
-    return [image]
+@lru_cache(maxsize=4)
+def read_static_asset(relative_path):
+    with open(os.path.join(doc_root, relative_path), "rb") as asset:
+        return asset.read()
+
+def static_asset(environ, start_response, relative_path, content_type):
+    asset = read_static_asset(relative_path)
+    headers = [
+        ('Content-type', content_type),
+        ('Content-Length', str(len(asset))),
+        ('Cache-Control', 'public, max-age=86400'),
+    ]
+    start_response('200 OK', headers)
+    return [asset]
 
 def bootstrap(environ, start_response):
     logger.debug("in bootstrap")
-    status = '200 OK'
-    headers = [('Content-type', 'text/javascript')]
-    start_response(status, headers)
-    boot = open("{}/common/js/bootstrap.min.js".format(doc_root), "rb").read() 
-    return [boot]
+    return static_asset(environ, start_response, "common/js/bootstrap.min.js", "text/javascript")
 
 def jquery(environ, start_response):
     logger.debug("in jquery")
-    status = '200 OK'
-    headers = [('Content-type', 'text/javascript')]
-    start_response(status, headers)
-    boot = open("{}/common/js/jquery.min.js".format(doc_root), "rb").read() 
-    return [boot]
+    return static_asset(environ, start_response, "common/js/jquery.min.js", "text/javascript")
 
 def bootstrap_css(environ, start_response):
     logger.debug("in bootstrap_css")
-    status = '200 OK'
-    headers = [('Content-type', 'text/css')]
-    start_response(status, headers)
-    boot = open("{}/common/css/bootstrap.min.css".format(doc_root), "rb").read() 
-    return [boot]
+    return static_asset(environ, start_response, "common/css/bootstrap.min.css", "text/css")
 
 def null(environ, start_response):
     status = '404 Not Found'
-    headers = [('Content-type', 'text/html')]
+    headers = [('Content-type', 'text/html'),
+               ('Cache-Control', 'no-store')]
     start_response(status, headers)
     return [b""]
 
-def success(environ, start_response):
+def success(environ, start_response, body=APPLE_SUCCESS_BODY):
     status = '200 ok'
-    html = b'<html><head><title>Success</title></head><body>Success</body></html>'
-    headers = [('Content-type', 'text/html')]
+    html = body.encode()
+    headers = [('Content-type', 'text/html'),
+               ('Cache-Control', 'no-store'),
+               ('Pragma', 'no-cache')]
     start_response(status, headers)
     return [html]
 
 def put_204(environ, start_response):
-    status = '204 No Data'
+    status = '204 No Content'
     response_body = b''
     response_headers = [('Content-type','text/html'),
-            ('Content-Length',str(len(response_body)))]
+            ('Content-Length',str(len(response_body))),
+            ('Cache-Control', 'no-store'),
+            ('Pragma', 'no-cache')]
     start_response(status, response_headers)
     logger.debug("in function  put_204: sending 204 html response")
     return [response_body]
 
-def put_302(environ, start_response):
+def put_302(environ, start_response, location=CAPTIVE_PORTAL_HOME):
     status = '302 Moved Temporarily'
     response_body = b''
-    location = "http://" + fully_qualified_domain_name + '{{ captiveportal_splash_page }}'
+    if location is None:
+        location = CAPTIVE_PORTAL_HOME
     response_headers = [('Content-type','text/html'),
             ('Location',location), 
-            ('Content-Length',str(len(response_body)))]
+            ('Content-Length',str(len(response_body))),
+            ('Cache-Control', 'no-store'),
+            ('Pragma', 'no-cache')]
     start_response(status, response_headers)
     logger.debug("in function  put_302: sending 302 html response")
     return [response_body]
+
+def plain_200(environ, start_response, body):
+    payload = body.encode()
+    start_response('200 OK', [
+        ('Content-type', 'text/plain; charset=utf-8'),
+        ('Content-Length', str(len(payload))),
+        ('Cache-Control', 'no-store'),
+        ('Pragma', 'no-cache'),
+    ])
+    return [payload]
+
+# Path shapes of connectivity probes that reach us under an unrecognized
+# hostname (OEM forks, clients using their own DNS, and similar cases).
+# Regular browsing redirects to the IIAB homepage.
+PROBE_PATH_HINTS = ('generate_204', 'gen_204', 'connecttest', 'success.txt',
+                    'hotspot-detect', 'ncsi.txt', 'connectivitycheck')
+
+def looks_like_probe(path):
+    return any(hint in path for hint in PROBE_PATH_HINTS)
+
+def probe_success(environ, start_response):
+    '''Answer a connectivity probe with exactly what its OS expects for a
+    completed portal session. The client shows a clean "connected" verdict
+    rather than "Limited connection" / "No internet access" on an offline
+    IIAB box. Unrecognized probes receive the generic success answer,
+    204 No Content.'''
+    host = environ.get('HTTP_HOST', '')
+    path = environ.get('PATH_INFO', '')
+    logger.debug("probe_success host: {} path: {}".format(host, path))
+    if host in BROWSER_PROBE_RESPONSES:
+        response_body = BROWSER_PROBE_RESPONSES[host]
+        if response_body is None:
+            return put_204(environ, start_response)
+        return plain_200(environ, start_response, response_body)
+    if host in LINUX_PROBE_RESPONSES:
+        response_body = LINUX_PROBE_RESPONSES[host]
+        if response_body is None:
+            return put_204(environ, start_response)
+        return plain_200(environ, start_response, response_body)
+    if host in WINDOWS_PROBE_RESPONSES:
+        response_body = WINDOWS_PROBE_RESPONSES[host]
+        if response_body is None:
+            return put_204(environ, start_response)
+        return plain_200(environ, start_response, response_body)
+    if host in APPLE_PROBE_RESPONSES:
+        return success(environ, start_response, APPLE_PROBE_RESPONSES[host])
+    # Substring matches cover CDN, regional, and port-qualified hostnames not
+    # listed above. Keep the two Windows protocols distinct: NCSI expects
+    # "Microsoft NCSI", while Connect Test expects "Microsoft Connect Test".
+    if 'firefox' in host:
+        return plain_200(environ, start_response, 'success')
+    if path.endswith('ncsi.txt') or 'msftncsi' in host:
+        return plain_200(environ, start_response, 'Microsoft NCSI')
+    if path.endswith('connecttest.txt') or 'msftconnecttest' in host:
+        return plain_200(environ, start_response, 'Microsoft Connect Test')
+    if 'apple' in host:
+        return success(environ, start_response)
+    return put_204(environ, start_response)
 
 def parse_agent(agent):
     system = ''
@@ -396,135 +561,136 @@ def parse_agent(agent):
         system_version = "8"
     return (system, system_version)
 
+def is_android_flow(environ):
+    agent = environ.get('HTTP_USER_AGENT', '')
+    system, _ = parse_agent(agent)
+    return (
+        environ.get("PATH_INFO") == CAPTIVE_SPLASH
+        or system == "Android"
+    )
+
+def requested_url(environ):
+    host = environ.get("HTTP_HOST") or environ.get("SERVER_NAME", "")
+    path = environ.get("PATH_INFO", "")
+    query = environ.get("QUERY_STRING", "")
+    if query:
+        path += "?" + query
+    return "http://{}{}".format(host, path)
+
+def normalize_host(value):
+    '''Canonicalize an HTTP Host value for routing: lower-case, strip a :port
+    suffix, and remove a trailing root dot. IPv6 literals keep their brackets.
+    HTTP hostnames are case-insensitive and a default port is not part of the
+    hostname, so "NetworkCheck.KDE.org:80." must match the same probe table
+    entry as "networkcheck.kde.org".'''
+    host = (value or "").strip().lower()
+    if host.startswith("["):
+        host = host.split("]", 1)[0] + "]"
+    elif ":" in host:
+        host = host.rsplit(":", 1)[0]
+    return host.rstrip(".")
+
 #
 # ================== Start serving the wsgi application  =================
 def application (environ, start_response):
-   global ip
-   global CATCH
-   global LIST
-   global INACTIVITY_TO
+   host = normalize_host(environ.get('HTTP_HOST') or environ.get('SERVER_NAME', ''))
+   environ['HTTP_HOST'] = host
+   if args.log_probes:
+      logger.info(
+          "probe URL requested: %s (server name: %s)",
+          requested_url(environ),
+          environ.get("SERVER_NAME", ""),
+      )
 
-   if  'HTTP_X_FORWARDED_FOR' in environ:
-      ip = environ['HTTP_X_FORWARDED_FOR'].strip()
-   else:
-      data = ['{}: {}\n'.format(key, value) for key, value in sorted(environ.items()) ]
-      #logger.debug("need the correct ip:{}".format(data))
-      ip = environ['REMOTE_ADDR'].strip()
-   cmd="arp -an %s|gawk \'{print $4}\'"%(ip)
-   mac = subprocess.check_output(cmd, shell=True)
-   data = []
-   data.append("host: {}\n".format(environ['HTTP_HOST']))
-   data.append("path: {}\n".format(environ['PATH_INFO']))
-   data.append("query: {}\n".format(environ['QUERY_STRING']))
-   data.append("ip: {}\n".format(ip))
+   path = environ['PATH_INFO']
+
+   # These resources do not need client state or neighbor lookup.
+   if path == "/iiab_banner6.png":
+      return static_asset(
+          environ, start_response, "js-menu/menu-files/images/iiab_banner6.png", "image/png"
+      )
+   if path == "/bootstrap.min.js":
+      return bootstrap(environ, start_response)
+   if path == "/bootstrap.min.css":
+      return bootstrap_css(environ, start_response)
+   if path == "/jquery.min.js":
+      return jquery(environ, start_response)
+   if path == "/favicon.ico":
+      return null(environ, start_response)
+
+   ip = client_ip(environ)
+   prune_client_states()
+   mac = get_mac(ip)
    agent = environ.get('HTTP_USER_AGENT','default_agent')
-   data.append("AGENT: {}\n".format(agent))
-   logger.debug(data)
-   #print(data)
-   found = False
-   return_204_flag = "False"
 
-   # record the activity with this ip
-   ts=tstamp(datetime.datetime.now(tzutc()))
-   sql = "INSERT or IGNORE INTO users (current_ts,ip) VALUES (?,?)" 
-   c.execute(sql,(ts,ip,))
-   sql = "UPDATE users SET current_ts = ? where ip = ?" 
-   c.execute(sql,(ts,ip,))
-   if c.rowcount == 0:
-      logger.debug("failed UPDATE  users SET current_ts = {} WHERE ip = {}".format(ts,ip,)) 
-   conn.commit()
-   ymd=datetime.datetime.today().strftime("%y%m%d-%H%M")
+   # Client activity is recorded in transient in-memory state.
+   state = get_client_state(ip)
+   now = time.monotonic()
+   state["last_seen"] = now
 
    system,system_version = parse_agent(agent)
    if system != '':
-      update_user(ip, mac, system, system_version, ymd)
+      update_client_state(ip, mac, system, system_version)
+
+   # Start the unconditional allow timer on the first request so a client that
+   # never opens the splash page still gets through. Do this after
+   # update_client_state(), which resets the timers on a device change.
+   if not state["portal_completed"] and not state["allow_until"]:
+      state["allow_until"] = now + PORTAL_ALLOW_TO
 
    #######   Return pages based upon PATH   ###############
    # do more specific stuff first
-   if  environ['PATH_INFO'] == "/iiab_banner6.png":
-      return banner(environ, start_response) 
+   if path == "/home_selected":
+      # Keep this legacy endpoint idempotent for clients with a cached splash
+      # page; current splash pages complete clients automatically.
+      logger.debug("function: home_selected. Marking client portal complete")
+      set_portal_completed(ip)
+      if system in ("OS X", "iPhone OS"):
+         return put_302(environ, start_response, "/hotspot-detect.html")
+      return put_204(environ, start_response)
 
-   if  environ['PATH_INFO'] == "/bootstrap.min.js":
-      return bootstrap(environ, start_response) 
-
-   if  environ['PATH_INFO'] == "/bootstrap.min.css":
-      return bootstrap_css(environ, start_response) 
-
-   if  environ['PATH_INFO'] == "/jquery.min.js":
-      return jquery(environ, start_response) 
-
-   if  environ['PATH_INFO'] == "/favicon.ico":
-      return null(environ, start_response) 
-
-   if  environ['PATH_INFO'] == "/home_selected":
-      # the js link to home page triggers this ajax url 
-      # mark the sign-in conversation completed, return 204 or Success or Success
-      #data = ['{}: {}\n'.format(key, value) for key, value in sorted(environ.items()) ]
-      #logger.debug("need the correct ip:{}".format(data))
-      logger.debug("function: home_selected. Setting flag to return_204")
-      #print("setting flag to return_204")
-      set_204after(ip,PORTAL_TO)
-      set_lasttimestamp(ip)
-      status = '200 OK'
-      response_body = b''
-      response_headers = [('Content-type','text/html'),
-            ('Content-Length',str(len(response_body)))]
-      start_response(status, response_headers)
-      return [response_body]
+   if path in INFORMATIONAL_SPLASH_PATHS:
+      return informational_splash(environ, start_response)
 
    #### parse OS platform based upon URL  ##################
-   # mac
-   if  environ['PATH_INFO'] == "/mac_splash":
-      return mac_splash(environ, start_response) 
+   if host in APPLE_PROBE_RESPONSES:
+      return macintosh(environ, start_response)
 
-   if  environ['PATH_INFO'] == "/step2":
-      return step2(environ, start_response) 
+   if host in BROWSER_PROBE_RESPONSES:
+      if portal_session_active(ip):
+          return probe_success(environ, start_response)
+      if is_android_flow(environ):
+          return android(environ, start_response)
+      return generic_probe(environ, start_response)
 
-   if environ['HTTP_HOST'] == "captive.apple.com" or\
-     environ['HTTP_HOST'] == "appleiphonecell.com" or\
-     environ['HTTP_HOST'] == "*.apple.com.edgekey.net" or\
-     environ['HTTP_HOST'] == "gsp1.apple.com" or\
-     environ['HTTP_HOST'] == "apple.com" or\
-     environ['HTTP_HOST'] == "www.apple.com": 
-     current_ts, last_ts, send204after = timeout_info(ip) 
-     if not send204after:
-          # take care of uninitialized state
-          set_204after(ip,0)
-     return macintosh(environ, start_response) 
-
-   # android
-   if  environ['PATH_INFO'] == "/android_splash":
-     return android_splash(environ, start_response) 
-   if  environ['PATH_INFO'] == "/android_https":
-     return android_https(environ, start_response) 
-   if environ['HTTP_HOST'] == "clients3.google.com" or\
-      environ['HTTP_HOST'] == "mtalk.google.com" or\
-      environ['HTTP_HOST'] == "alt7-mtalk.google.com" or\
-      environ['HTTP_HOST'] == "alt6-mtalk.google.com" or\
-      environ['HTTP_HOST'] == "connectivitycheck.android.com" or\
-      environ['PATH_INFO'] == "/gen_204" or\
-      environ['HTTP_HOST'] == "connectivitycheck.gstatic.com":
-      current_ts, last_ts, send204after = timeout_info(ip) 
-      logger.debug("current_ts: {} last_ts: {} send204after: {}".format(current_ts, last_ts, send204after,))
-      if not last_ts or (ts - int(last_ts) > INACTIVITY_TO):
-          return android(environ, start_response) 
-      elif is_after204_timeout(ip):
+   if host in ANDROID_PROBE_RESPONSES or path in ANDROID_PROBE_PATHS:
+      finish_portal_if_expired(ip)
+      if portal_session_active(ip):
           return put_204(environ,start_response)
-      return android(environ, start_response) 
+      # Non-Android /generate_204 gets a redirect for the Chromium "Open in
+      # browser" fallback.
+      if path == "/generate_204" and not is_android_flow(environ):
+          return put_302(environ, start_response, CAPTIVE_SPLASH_URL)
+      return android(environ, start_response)
 
-   # microsoft
-   if environ['HTTP_HOST'] == "ipv6.msftncsi.com" or\
-     environ['HTTP_HOST'] == "detectportal.firefox.com" or\
-     environ['HTTP_HOST'] == "ipv6.msftncsi.com.edgesuite.net" or\
-     environ['HTTP_HOST'] == "www.msftncsi.com" or\
-     environ['HTTP_HOST'] == "www.msftncsi.com.edgesuite.net" or\
-     environ['HTTP_HOST'] == "www.msftconnecttest.com" or\
-     environ['HTTP_HOST'] == "www.msn.com" or\
-     environ['HTTP_HOST'] == "teredo.ipv6.microsoft.com" or\
-     environ['HTTP_HOST'] == "teredo.ipv6.microsoft.com.nsatc.net": 
-     return microsoft(environ, start_response) 
+   # desktop connectivity probes
+   if (
+      host in WINDOWS_PROBE_RESPONSES
+      or host in LINUX_PROBE_RESPONSES
+      or host == "detectportal.firefox.com"
+      or path == "/static/hotspot.txt"
+   ):
+      return generic_probe(environ, start_response)
 
-   logger.debug("executing the default 302 response. [{}".format(data))
+   # A path that any OS uses to probe for a portal, under an unrecognized
+   # hostname, receives the portal-probe response. This prevents homepage HTML
+   # from loading in a tab that can hang (e.g. GNOME's Fedora portal check).
+   if looks_like_probe(path):
+      return generic_probe(environ, start_response)
+
+   # Under an unknown hostname, a request that is not a probe gets the IIAB
+   # homepage.
+   logger.debug("executing the default 302 response")
    return put_302(environ,start_response)
 
 # Instantiate the server
