@@ -2,17 +2,14 @@
 Zimantic
 =============
 
-Zimantic provides meaning-based, title-word, and native ZIM full-text search,
-plus direct article serving from local ZIM archives.
+Zimantic v1 provides meaning-based, title-word, and native ZIM full-text
+search, plus direct article serving from local ZIM archives.
 
 This role is opt-in. It does not replace ``kiwix-serve`` by default because
 Zimantic needs Python 3.11-3.14, compatible native dependencies, and more disk
-space for its Python environment. ``libzim`` publishes wheels only for specific
-Python versions, so select ``zimantic_python`` only after confirming that a
-compatible wheel exists. On 32-bit ``armhf`` hosts, where no wheels are
-published, the role installs the native dependencies from Debian 13/trixie or
-newer instead. Existing IIAB Kiwix URLs and the Kiwix Android APK remain
-unchanged by default.
+space for its Python environment. On 32-bit ``armhf``/``armv7`` hosts the role
+uses Debian's native packages and Zimantic's stdlib ``HTMLParser`` fallback.
+Existing IIAB Kiwix URLs and the Kiwix Android APK remain unchanged by default.
 
 Android/PRoot hosts use ``proot_services``' pdsm instead of systemd; see
 "Android / PRoot" below.
@@ -34,11 +31,10 @@ the selected embedding model when it is missing. Set::
 
 The semantic server uses about 323 MiB RSS with ``multilingual-e5-small``;
 ``e5-small-v2`` uses less. 64-bit ``aarch64`` and ``x86_64`` hosts use the PyPI
-wheels. 32-bit ``armhf``/``armv7`` hosts have no wheels, so by default the role
-installs ``python3-onnxruntime``, ``python3-faiss``, ``python3-libzim``,
-``python3-sentencepiece``, and the other native dependencies as distribution
-packages, then creates the virtual environment with ``--system-site-packages``.
-This requires Debian 13/trixie or newer.
+wheels. On 32-bit ``armhf``/``armv7`` hosts, set
+``zimantic_use_system_packages: auto`` (the default) and use Debian 13
+(``trixie``) or newer; Zimantic falls back to the stdlib ``HTMLParser`` when
+``selectolax`` is unavailable.
 
 Fast mode
 ~~~~~~~~~
@@ -61,7 +57,8 @@ LAN (see the firewall note under "Relationship to Kiwix").
 Tuning and concurrency
 ~~~~~~~~~~~~~~~~~~~~~~
 
-The role writes only paths, the port and the URL prefix to ``config.toml``.
+The role writes the local ZIM collection, paths, port and URL prefix to
+``config.toml``.
 Zimantic chooses the rest from a hardware profile: ``mobile`` on hosts with
 2 GB RAM or less, ``desktop`` on typical PCs, and ``supercomputer`` on very
 large hosts. This matters for concurrency: the mobile profile allows two
@@ -111,14 +108,44 @@ role stores the downloaded int8 export under
 Native dependencies
 ~~~~~~~~~~~~~~~~~~~
 
-``zimantic_use_system_packages`` controls where native dependencies come from:
+On supported 64-bit platforms, Zimantic v1 installs its runtime dependencies
+from PyPI. On 32-bit ``armhf``/``armv7`` platforms, the default
+``zimantic_use_system_packages: auto`` installs Debian's native dependencies
+and creates the virtual environment with ``--system-site-packages``; the
+stdlib ``HTMLParser`` replaces the optional ``selectolax`` accelerator.
+Distribution-package mode requires Debian 13 (``trixie``) or newer.
+The setting can be changed when needed:
 
-- ``auto`` (default) uses PyPI wheels on 64-bit hosts and distribution
-  packages on ``armhf``/``armv7``.
-- ``always`` uses distribution packages on every architecture and therefore
-  requires Debian 13/trixie or newer.
-- ``never`` always uses PyPI wheels. This fails on ``armhf``/``armv7`` because
-  no wheels are published.
+- ``auto`` (default) uses PyPI wheels on supported 64-bit hosts and Debian
+  packages on hosts without compatible native wheels.
+- ``always`` uses Debian packages on every architecture.
+- ``never`` always uses PyPI dependencies and is not suitable for armhf/armv7.
+
+Additional collections
+~~~~~~~~~~~~~~~~~~~~~~~
+
+The ZIM collection is always configured. Kolibri and files collections are
+independent opt-ins and do not install or manage their source applications.
+Kolibri uses the existing IIAB installation at ``/library/kolibri`` by
+default; the files collection uses
+``/library/www/html/modules``. Enable either collection in
+``/etc/iiab/local_vars.yml``::
+
+    zimantic_kolibri_enabled: True
+    zimantic_files_enabled: True
+
+The default Kolibri granularity is ``children``, which exposes each
+top-level topic as a source. The default files granularity is ``collection``,
+which exposes the configured directory as one source. Use ``collection`` or
+``children`` to override either, and change the paths or display names when
+the standard IIAB locations are not used::
+
+    zimantic_kolibri_path: /library/kolibri
+    zimantic_kolibri_granularity: children
+    zimantic_files_path: /library/www/html/modules
+    zimantic_files_name: modules
+    zimantic_files_label: Modules
+    zimantic_files_granularity: collection
 
 Indexes
 ~~~~~~~
@@ -215,7 +242,8 @@ Android ``local_vars_android_*.yml`` files already set that. On PRoot:
   Omit ``--fast`` for a semantic build. The helper reloads a running server
   when the build finishes.
 - aarch64 Debian 13 uses PyPI wheels, so leave
-  ``zimantic_use_system_packages`` at ``auto`` or ``never``.
+  ``zimantic_use_system_packages`` at ``auto`` or ``never``. armhf/armv7
+  uses Debian packages with ``auto`` or ``always``.
 
 A typical Android configuration in ``/etc/iiab/local_vars.yml``::
 

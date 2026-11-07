@@ -4,7 +4,10 @@
 zimantic_repo: https://github.com/chapmanjacobd/zimantic.git
 # "latest" resolves to the current tip of the repository's default branch
 # during install or --upgrade.
-zimantic_version: "30bbb4a"
+# Zimantic v1 requires an explicit [[collections]] configuration and adds
+# selectolax and puremagic to its runtime dependencies. The current upstream
+# release uses the stdlib HTMLParser fallback on platforms without selectolax.
+zimantic_version: "c7b74acd68cafd73459c60143617ff50e6fbd144"
 zimantic_source_dir: "{{ iiab_base }}/zimantic"
 zimantic_venv: "{{ zimantic_source_dir }}/.venv"
 
@@ -25,15 +28,15 @@ zimantic_url: "{{ zimantic_url_without_slash }}/"
 zimantic_nginx_timeout: 600
 zimantic_nginx_connect_timeout: 10
 
-# Zimantic currently supports Python 3.11-3.14. libzim and other native
-# dependencies publish wheels only for selected Python versions and
-# architectures; by default, armhf uses distribution packages instead.
+# Zimantic v1 supports Python 3.11-3.14. Native wheels are used on supported
+# 64-bit platforms; 32-bit armhf/armv7 uses Debian's native packages and the
+# stdlib HTMLParser fallback.
+# Override only after confirming that the required native dependencies are
+# available for the selected interpreter.
 zimantic_python: python3
 
-# Native dependencies for architectures without PyPI wheels. Debian 13/trixie
-# and newer provide these for armhf. They are installed system-wide and the
-# virtual environment is created with --system-site-packages, so on these hosts
-# keep zimantic_python pointed at the distribution interpreter.
+# Native dependencies used when the host has no compatible wheels. Zimantic v1
+# uses the stdlib HTMLParser fallback when selectolax is unavailable.
 zimantic_system_packages:
   - python3-numpy
   - python3-tqdm
@@ -44,11 +47,11 @@ zimantic_system_packages:
   - python3-pymupdf
   - python3-fastapi
   - python3-uvicorn
+  - python3-venv
   # Needed to rebuild the local project without pip's network-fetching build
   - python3-setuptools
-# "auto" uses distribution packages only where PyPI wheels are unavailable
-# (32-bit arm); "always" uses them on every architecture; "never" always
-# installs the native dependencies from PyPI wheels.
+# "auto" uses distribution packages on platforms without compatible native
+# wheels (including armhf) and PyPI wheels on supported 64-bit platforms.
 zimantic_use_system_packages: auto
 
 zimantic_user: zimantic
@@ -61,6 +64,21 @@ zimantic_config_file: "{{ zimantic_data_dir }}/config.toml"
 # application now prefers XDG_CONFIG_HOME/XDG_DATA_HOME, while the role keeps
 # its established config.toml and runtime data locations.
 zimantic_xdg_home: "{{ zimantic_data_dir | dirname }}"
+
+# Optional Zimantic v1 collections. These do not install, enable, or manage
+# Kolibri or any file-serving role; they only add an existing source to the
+# Zimantic catalog when explicitly enabled.
+zimantic_kolibri_enabled: false
+zimantic_kolibri_name: kolibri
+zimantic_kolibri_path: "{{ kolibri_home | default(content_base ~ '/kolibri') }}"
+zimantic_kolibri_label: Kolibri
+zimantic_kolibri_granularity: children
+
+zimantic_files_enabled: false
+zimantic_files_name: modules
+zimantic_files_path: "{{ content_base }}/www/html/modules"
+zimantic_files_label: Modules
+zimantic_files_granularity: collection
 
 # Zimantic selects its tuning profile (mobile, desktop or supercomputer) from
 # the host's CPU and RAM. Do not pin those values for every IIAB device: a

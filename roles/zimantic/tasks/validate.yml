@@ -21,6 +21,22 @@
     fail_msg: "zimantic_mode must be either 'fast' or 'semantic'"
     quiet: yes
 
+- name: Validate optional Zimantic collections
+  assert:
+    that:
+      - zimantic_kolibri_enabled | type_debug == 'bool'
+      - zimantic_files_enabled | type_debug == 'bool'
+      - zimantic_kolibri_granularity in ['collection', 'children']
+      - zimantic_files_granularity in ['collection', 'children']
+      - zimantic_kolibri_name | length > 0
+      - zimantic_files_name | length > 0
+      - zimantic_kolibri_path | length > 0
+      - zimantic_files_path | length > 0
+    fail_msg: >-
+      Optional Zimantic collections need boolean enable flags, non-empty
+      names and paths, and granularity set to 'collection' or 'children'.
+    quiet: yes
+
 # PRoot/Android has no systemd. The role uses proot_services' pdsm there
 # instead, for the server only: pdsm has no timer or path units, so index
 # builds stay manual (see README.rst).
@@ -46,6 +62,16 @@
     that: zimantic_use_system_packages in ['auto', 'always', 'never']
     fail_msg: "zimantic_use_system_packages must be 'auto', 'always', or 'never'"
     quiet: yes
+
+- name: Require system packages on platforms without native wheels
+  assert:
+    that: zimantic_use_system_packages != 'never'
+    fail_msg: >-
+      This platform has no compatible native dependency wheels. Use
+      zimantic_use_system_packages: auto or always so Zimantic can use the
+      distribution packages and its stdlib HTMLParser fallback.
+    quiet: yes
+  when: (ansible_facts.machine | default('')) not in ['aarch64', 'x86_64']
 
 - name: Fail if distribution packages are requested on an unsupported Debian release
   fail:
