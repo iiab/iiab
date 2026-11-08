@@ -3,12 +3,21 @@
 # use gathered facts and values from /etc/iiab/local_vars.yml. Keep
 # user-overridable settings in defaults/main.yml instead of here.
 
-zimantic_version_is_latest: "{{ (zimantic_version | string) == 'latest' }}"
+zimantic_version_is_latest: "{{ (zimantic_version | string) in ['latest', 'HEAD'] }}"
 
 zimantic_system_packages_enabled: >-
   {{ zimantic_use_system_packages == 'always' or
      (zimantic_use_system_packages == 'auto' and
       (ansible_facts.machine | default('')) not in ['aarch64', 'x86_64']) }}
+
+# Puremagic's architecture-independent wheel is newer than Debian 13's
+# package. On 64-bit hosts, supplement distro packages with the required
+# libzim 4.1 APIs and Lexbor; armhf keeps libzim 3 and HTMLParser.
+zimantic_system_pip_packages: >-
+  {{ ['puremagic>=1.30'] +
+     (['libzim>=4.1.0', 'selectolax']
+      if (ansible_facts.machine | default('')) in ['aarch64', 'x86_64']
+      else []) }}
 
 # PRoot runs as root and pdsm has no user switching, so the role does not
 # create the 'zimantic' account there. Data and configuration stay owned by

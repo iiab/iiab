@@ -72,8 +72,32 @@ Override only the settings this host needs with ``zimantic_config`` in
 
 ``slot_wait_seconds`` is how long a search waits for a free concurrency slot
 before reporting busy; keep it at least as long as a typical cold search on the
-host. Any key accepted by Zimantic's ``config.toml`` can be set this way. Omit
-the whole mapping to follow the hardware profile.
+host. Global keys accepted by Zimantic's ``config.toml`` can be set this way,
+including nested ``derived_text`` defaults. Omit the whole mapping to follow
+the hardware profile. ``embed_threads`` controls query embedding only;
+``build_embed_threads`` controls index builds.
+
+Use ``zimantic_collection_config`` for additional collection settings. Settings
+inherit global -> collection -> exact source where supported. Traversal limits
+must be nested under ``traversal``; HEAD rejects legacy flat keys and unknown
+settings. For example::
+
+    zimantic_collection_config:
+      library:
+        traversal:
+          max_visited_entries: 1000000
+          traversal_timeout_seconds: 300
+      modules:
+        index_exclude: ["**/drafts/**"]
+        derived_text:
+          captions: index
+        sources:
+          - key: "files:modules:root"
+            max_body_text_bytes: 65536
+
+The keys are the configured collection names (``library`` and, when enabled,
+``zimantic_files_name`` or ``zimantic_kolibri_name``). Use the dedicated role
+variables for paths, names, labels and granularity.
 
 Native dependencies
 ~~~~~~~~~~~~~~~~~~~
@@ -84,7 +108,11 @@ from PyPI. On 32-bit ``armhf``/``armv7`` platforms, the default
 and creates the virtual environment with ``--system-site-packages``.
 Distribution-package mode requires Debian 13 (``trixie``) or newer; see the
 ``zimantic_use_system_packages`` comment in ``defaults/main.yml`` for
-overrides.
+overrides. armhf/armv7 can use Debian's libzim 3 bindings and HTMLParser.
+The role installs ``puremagic>=1.30`` from PyPI even in distribution-package
+mode: it is pure Python and Debian 13's version is too old. On 64-bit hosts
+using ``always``, it also installs the required libzim 4.1+ and selectolax
+wheels without replacing the other distribution packages.
 
 Additional collections
 ~~~~~~~~~~~~~~~~~~~~~~~
@@ -111,6 +139,12 @@ the standard IIAB locations are not used::
     zimantic_files_name: modules
     zimantic_files_label: Modules
     zimantic_files_granularity: collection
+
+Files collections explicitly include HTML, text, Markdown and PDF documents
+for indexing via ``zimantic_files_include``. Media files remain title-searchable
+by filename. Override the document globs with that variable or with ``include``
+under the collection's ``zimantic_collection_config`` entry; serving permissions
+are unchanged.
 
 Indexes
 ~~~~~~~
@@ -253,6 +287,15 @@ work::
 its dependencies. It keeps ``zimantic_source_dir`` data, indexes, models, and
 settings, so it normally requires network access.
 
+HEAD serves only current-schema indexes with canonical metadata. Upgrading
+preserves existing index files, but incompatible indexes are ignored until the
+next build; native ZIM full-text search remains available where the archive
+provides it. Run ``zimantic-indexing --fast`` to restore title search, or run
+``zimantic-indexing`` for a full semantic build. A full build can reuse vectors
+from recognized, complete v0 root-level SQLite/FAISS pairs when the model is
+compatible; other old layouts are rebuilt. No expensive rebuild is started
+during installation or upgrade.
+
 ``--reinstall`` runs ``uninstall.yml`` and then installs again. It removes the
 source checkout, runtime data (indexes, model, and ``config.toml``), and the
 role's settings, then rebuilds everything from scratch. In ``semantic`` mode it
@@ -290,7 +333,8 @@ the role::
     sudo systemctl stop zimantic          # PRoot/Android: pdsm stop zimantic
     sudo rm -rf /library/zimantic /opt/iiab/zimantic
 
-``zimantic_version`` may be ``latest``, a git tag, or a commit hash. ``latest``
+``zimantic_version`` may be ``latest``, ``HEAD``, a git tag, or a commit hash.
+``latest`` and ``HEAD``
 resolves the current tip of ``zimantic_repo``'s default branch to a commit
 during install or ``--upgrade``; those operations therefore require repository
 access. A commit hash is useful before a release is tagged; the commit must be

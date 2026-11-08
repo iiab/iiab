@@ -23,8 +23,8 @@
 - name: Rebuild Zimantic from the local checkout
   vars:
     # Resolve dependencies from PyPI only when wheels are in use. When
-    # distribution packages provide the native dependencies, pip must not
-    # fetch or replace them.
+    # distribution packages provide the native dependencies, resolve only the
+    # explicit supplements below instead of replacing all distro packages.
     zimantic_install_deps: "{{ not (zimantic_system_packages_enabled | bool) }}"
   block:
 
@@ -59,6 +59,17 @@
       when:
         - zimantic_setuptools.rc != 0
         - zimantic_setuptools_install.rc != 0
+
+    # lifecycle: allow-network (pure-Python wheels and 64-bit native supplements)
+    - name: Install Zimantic supplements for distribution-package mode
+      command:
+        cmd: >-
+          {{ zimantic_venv }}/bin/python -m pip install
+          --disable-pip-version-check --only-binary=:all: --no-deps --upgrade
+          {{ zimantic_system_pip_packages | map('quote') | join(' ') }}
+      register: zimantic_pip_supplements
+      changed_when: "'Successfully installed' in zimantic_pip_supplements.stdout"
+      when: zimantic_system_packages_enabled | bool
 
     # lifecycle: allow-network (only when wheels are in use; distribution
     # packages supply the native dependencies on other hosts)
