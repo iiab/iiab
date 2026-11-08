@@ -7,8 +7,8 @@
 # https://github.com/iiab/iiab/wiki/Technical-Contributors-Guide#female_detective-understanding-ansible
 
 APT_PATH=/usr/bin     # Avoids problematic /usr/local/bin/apt on Linux Mint
-CURR_VER=undefined    # Ansible version you have installed, e.g. [core 2.21.3]
-GOOD_VER=2.21.3       # Orig for 'yum install [rpm]' & XO laptops (pip install)
+CURR_VER=undefined    # Ansible version you have installed, e.g. [core 2.22.0]
+GOOD_VER=2.22.0       # Orig for 'yum install [rpm]' & XO laptops (pip install)
 
 # 2021-06-22: The apt approach (with PPA source in /etc/apt/sources.list.d/ and
 # .gpg key etc) are commented out with ### below.  Associated guidance/comments
@@ -319,7 +319,15 @@ EOF
     # - painstaking pinning of cryptography or cffi (etc) to older version #s
 
     ensure_pip /usr/local/ansible
-    /usr/local/ansible/bin/python3 -m pip install --retries 10 --resume-retries 150 --prefer-binary --upgrade ansible-core
+    # Site config: /usr/local/ansible/pip.conf is read only by this venv's pip.
+    # That scopes --resume-retries (pip >= 25.2, which ensure_pip just checked
+    # for) away from the system pip and from older role venvs.
+    # Portable --retries/--timeout for every other venv live in /etc/pip.conf,
+    # written by roles/2-common.
+    /usr/local/ansible/bin/python3 -m pip config --site set global.retries 5
+    /usr/local/ansible/bin/python3 -m pip config --site set global.timeout 60
+    /usr/local/ansible/bin/python3 -m pip config --site set global.resume-retries 150
+    /usr/local/ansible/bin/python3 -m pip install --prefer-binary --upgrade ansible-core
 
     echo -e "\nCreate symlinks /usr/local/bin/ansible* -> /usr/local/ansible/bin/ansible*"
     cd /usr/local/ansible/bin

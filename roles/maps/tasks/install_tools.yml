@@ -22,6 +22,9 @@
     fail_msg: "Error: unsupported architecture for pmtiles: "
     quiet: yes
 
+# NOTE: This will download every time despite the checksum because we clean up
+# this archive after installing the executable. We could find another way to
+# prevent repeated downloads but it's not worth the complexity.
 - name: Download pmtiles archive for {{ dpkg_arch.stdout }}
   get_url:
     url: "{{ maps_tools.pmtiles.releases[dpkg_arch.stdout].src_url }}"
@@ -40,16 +43,24 @@
   copy:
     src: "{{ maps_tools.pmtiles.archive_tmp_dir }}/pmtiles"
     dest: "{{ maps_tools.pmtiles.executable_path }}"
-    mode: "0744"
+    mode: "0755"
 
-# Getting the Python tool, which is not usually recommended over the Go tool,
-# so that we can write code with it that we don't need to build.
-- name: Get PMTiles (Python tool)
-  git:
-    repo: "{{ maps_tools.pmtiles_python.git_url }}"
-    dest: "{{ maps_tools.tile_extract.working_dir }}/{{ maps_tools.pmtiles_python.dir_name }}"
-    version: "{{ maps_tools.pmtiles_python.version }}"
-    depth: 1
+- name: Clean up pmtiles unarchiving dir
+  file:
+    state: absent
+    path: "{{ maps_tools.pmtiles.archive_tmp_dir }}"
+
+- name: "Make sure {{ maps_satellite_fqr_type }} has a valid value"
+  assert:
+    that: maps_satellite_fqr_type == "iiab" or maps_satellite_fqr_type == "s2maps"
+    fail_msg: "Error: maps_satellite_fqr_type is set to an invalid value (\"{{ maps_satellite_fqr_type }}\"). Please set it to \"s2maps\" or \"iiab\"."
+    quiet: yes
+
+- name: "Make sure {{ maps_catalog_debug }} has a valid value"
+  assert:
+    that: maps_catalog_debug == true or maps_catalog_debug == false
+    fail_msg: "Error: maps_catalog_debug is set to an invalid value (\"{{ maps_catalog_debug }}\"). Please set it to true or false."
+    quiet: yes
 
 - name: Install our tile extraction script
   template:
@@ -57,8 +68,19 @@
     dest: "{{ maps_tools.tile_extract.working_dir }}/tile-extract.py"
     mode: "0755"
 
-- name: Install maps-update.py
-  template:
-    src: "maps-update.py.j2"
-    dest: "{{ maps_tools.base_dir }}/maps-update.py"
-    mode: "0755"
+- name: Install fqr.py and fqr_test.py
+  copy:
+    src: "{{ item }}"
+    dest: "{{ maps_tools.tile_extract.working_dir }}/{{ item }}"
+    mode: "0644"
+  with_items:
+    - fqr.py
+    - fqr_test.py
+
+- name: "Run fqr_test.py"
+  when: is_github_ci
+  shell: |
+    set -euo pipefail
+    python3 {{ maps_tools.tile_extract.working_dir }}/fqr_test.py
+  args:
+    executable: /bin/bash

@@ -1,0 +1,83 @@
+; Managed by IIAB Ansible (roles/forgejo). Do not edit by hand.
+; Config reference: https://forgejo.org/docs/latest/admin/config-cheat-sheet/
+; This is a lean config on purpose (unlike gitea's full cheat-sheet template);
+; only the settings IIAB actually needs are set here.
+
+APP_NAME = {{ forgejo_display_name }}
+RUN_USER = {{ forgejo_user }}
+RUN_MODE = {{ forgejo_run_mode }}
+WORK_PATH = {{ forgejo_run_directory }}
+
+[repository]
+ROOT = {{ forgejo_repo_root }}
+
+[git.timeout]
+; forgejo default MIGRATE is 600s, too low for large repos.
+; See forgejo_migrate_timeout in defaults/main.yml.
+MIGRATE = {{ forgejo_migrate_timeout }}
+
+[server]
+PROTOCOL = http
+DOMAIN = {{ iiab_hostname }}.{{ iiab_domain }}
+; Served behind nginx on the {{ forgejo_url }} sub-path (see forgejo-nginx.conf).
+ROOT_URL = http://%(DOMAIN)s{{ forgejo_url }}/
+HTTP_ADDR = 127.0.0.1
+HTTP_PORT = {{ forgejo_port }}
+OFFLINE_MODE = true
+LFS_START_SERVER = {{ forgejo_lfs | lower }}
+{% if forgejo_lfs %}
+; Secret is generated once and referenced by file (see tasks/install.yml).
+; NOTE: confirm LFS_JWT_SECRET_URI is honored by the pinned Forgejo version.
+LFS_JWT_SECRET_URI = file:{{ forgejo_lfs_jwt_secret_path }}
+{% endif %}
+{% if forgejo_enable_ssh %}
+; Built-in SSH server on a high port (systemd platforms; not the host sshd).
+DISABLE_SSH = false
+START_SSH_SERVER = true
+SSH_DOMAIN = %(DOMAIN)s
+SSH_PORT = {{ forgejo_ssh_port }}
+SSH_LISTEN_PORT = {{ forgejo_ssh_port }}
+{% else %}
+; proot v1: HTTP-only, no SSH.
+DISABLE_SSH = true
+START_SSH_SERVER = false
+{% endif %}
+
+[lfs]
+{% if forgejo_lfs %}
+PATH = {{ forgejo_lfs_root }}
+{% endif %}
+
+[database]
+{% if forgejo_db_engine == 'mariadb' %}
+DB_TYPE = mysql
+HOST = 127.0.0.1:3306
+NAME = {{ forgejo_db_name }}
+USER = {{ forgejo_db_user }}
+PASSWD = {{ forgejo_db_password }}
+{% else %}
+DB_TYPE = sqlite3
+PATH = {{ forgejo_db_path }}
+{% endif %}
+
+[security]
+; First registered user becomes admin (same as the gitea role).
+INSTALL_LOCK = {{ forgejo_install_lock | lower }}
+SECRET_KEY_URI = file:{{ forgejo_secret_key_path }}
+INTERNAL_TOKEN_URI = file:{{ forgejo_internal_token_path }}
+
+[oauth2]
+JWT_SECRET_URI = file:{{ forgejo_jwt_secret_path }}
+
+[service]
+DISABLE_REGISTRATION = false
+REQUIRE_SIGNIN_VIEW = false
+REGISTER_EMAIL_CONFIRM = false
+
+[mailer]
+ENABLED = false
+
+[log]
+ROOT_PATH = {{ forgejo_log_root }}
+MODE = console
+LEVEL = Info

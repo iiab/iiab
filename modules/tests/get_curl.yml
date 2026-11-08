@@ -45,6 +45,52 @@
     - name: Test directory destinations
       include_tasks: get_curl/directory.yml
 
+    - name: Test retry behavior
+      block:
+        - name: Start local HTTP retry test server
+          command:
+            argv:
+              - "{{ ansible_python_interpreter }}"
+              - "{{ playbook_dir }}/get_curl/retry_server.py"
+              - --counts-file
+              - "{{ test_dir }}/retry-counts.json"
+              - --pid-file
+              - "{{ test_dir }}/retry-server.pid"
+              - --port-file
+              - "{{ test_dir }}/retry-server.port"
+          async: 1800
+          poll: 0
+
+        - name: Wait for the local HTTP retry test server
+          wait_for:
+            path: "{{ test_dir }}/retry-server.port"
+            timeout: 10
+
+        - name: Read the local HTTP retry test server details
+          slurp:
+            src: "{{ item }}"
+          loop:
+            - "{{ test_dir }}/retry-server.pid"
+            - "{{ test_dir }}/retry-server.port"
+          register: retry_server_details
+
+        - name: Set the local HTTP retry test server details
+          set_fact:
+            retry_server_pid: "{{ retry_server_details.results[0].content | b64decode | trim }}"
+            retry_server_port: "{{ retry_server_details.results[1].content | b64decode | trim }}"
+
+        - name: Test HTTP retry behavior
+          include_tasks: get_curl/retry.yml
+      always:
+        - name: Stop local HTTP retry test server
+          command:
+            argv:
+              - kill
+              - "{{ retry_server_pid }}"
+          when: retry_server_pid is defined
+          changed_when: false
+          failed_when: false
+
     - name: Remove integration-test artifacts
       file:
         path: "{{ test_dir }}"

@@ -25,6 +25,25 @@
   set_fact:
     postgresql_version: "{{ pg_config_version.stdout }}"
 
+- name: Check for stock PostgreSQL cluster startup configuration
+  stat:
+    path: "/etc/postgresql/{{ postgresql_version }}/main/start.conf"
+  register: postgresql_stock_start_conf
+
+- name: Stop stock PostgreSQL cluster
+  systemd:
+    name: "postgresql@{{ postgresql_version }}-main"
+    daemon_reload: yes
+    state: stopped
+  when: postgresql_stock_start_conf.stat.exists
+
+- name: Mask stock PostgreSQL cluster
+  systemd:
+    name: "postgresql@{{ postgresql_version }}-main"
+    daemon_reload: yes
+    masked: yes
+  when: postgresql_stock_start_conf.stat.exists
+
 - name: Install /etc/systemd/system/postgresql-iiab.service from template (0644 by default)
   template:
     src: postgresql-iiab.service.j2

@@ -85,7 +85,7 @@
 # 32-bit OS's [WERE] handled above: this should handle aarch32 including 32-bit
 # Ubuntu from https://ubuntu.com/download/raspberry-pi but Ubuntu 20.04+ and
 # 22.04+ 32-bit might fail untested, and 32-bit Intel might puke as this was
-# orginally deployed for Raspbian.  (Haven't seen bootable 32-bit Intel
+# originally deployed for Raspbian.  (Haven't seen bootable 32-bit Intel
 # installers for a while now.)  64-bit OS's proceed below.
 
 
@@ -199,32 +199,49 @@
 
 - block: # noqa: key-order[task]
 
-    - name: Install OLD source/repo "deb http://ports.ubuntu.com/ubuntu-ports focal-security main" at /etc/apt/sources.list.d/ports_ubuntu_com_ubuntu_ports.list if Ubuntu
-      apt_repository:
-        repo: deb http://ports.ubuntu.com/ubuntu-ports focal-security main
+    # Design discussion: https://github.com/iiab/iiab/pull/4553#issuecomment-6485475049
+    - name: Pip install python-debian into virtualenv /usr/local/ansible
+      pip:
+        name: python-debian
+        virtualenv: /usr/local/ansible
+
+    - name: Install source/repo "http://ports.ubuntu.com/ubuntu-ports focal-security main" at /etc/apt/sources.list.d/ports_ubuntu_com_ubuntu_ports.sources if Ubuntu
+      deb822_repository:
+        name: ports_ubuntu_com_ubuntu_ports
+        uris: http://ports.ubuntu.com/ubuntu-ports
+        suites: focal-security
+        components: main
+        #install_python_debian: true    # Runs 'apt install python3-debian' (only works w/ system Python)
       when: is_ubuntu
 
-    - name: Install OLD source/repo "deb http://security.debian.org/debian-security bullseye-security main" at /etc/apt/sources.list.d/security_debian_org_debian_security.list if Debian
-      apt_repository:
-        repo: deb http://security.debian.org/debian-security bullseye-security main
-        #repo: deb https://deb.debian.org/debian-security bullseye-security main    # New way, likely equivalent
+    - name: Install source/repo "https://snapshot.debian.org/archive/debian-security/{{ mongodb_debian_security_snapshot }}/ bullseye-security main" at /etc/apt/sources.list.d/iiab-bullseye-security-snapshot.sources if Debian
+      deb822_repository:
+        name: iiab-bullseye-security-snapshot
+        uris: "https://snapshot.debian.org/archive/debian-security/{{ mongodb_debian_security_snapshot }}/"
+        suites: bullseye-security
+        components: main
+        #install_python_debian: true    # Runs 'apt install python3-debian' (only works w/ system Python)
+        check_valid_until: false
       when: is_debian
+
+    - name: Update APT cache
+      apt:
+        update_cache: true
 
     - name: Force install libssl1.1
       package:
         name: libssl1.1
         state: present
 
-    - name: Remove OLD source/repo "deb http://security.debian.org/debian-security bullseye-security main" at /etc/apt/sources.list.d/security_debian_org_debian_security.list if Debian
-      apt_repository:
-        repo: deb http://security.debian.org/debian-security bullseye-security main
-        #repo: deb https://deb.debian.org/debian-security bullseye-security main    # New way, likely equivalent
+    - name: Remove /etc/apt/sources.list.d/iiab-bullseye-security-snapshot.sources if Debian
+      deb822_repository:
+        name: iiab-bullseye-security-snapshot
         state: absent
       when: is_debian
 
-    - name: Remove OLD source/repo "deb http://ports.ubuntu.com/ubuntu-ports focal-security main" at /etc/apt/sources.list.d/ports_ubuntu_com_ubuntu_ports.list if Ubuntu
-      apt_repository:
-        repo: deb http://ports.ubuntu.com/ubuntu-ports focal-security main
+    - name: Remove /etc/apt/sources.list.d/ports_ubuntu_com_ubuntu_ports.sources if Ubuntu
+      deb822_repository:
+        name: ports_ubuntu_com_ubuntu_ports
         state: absent
       when: is_ubuntu
 

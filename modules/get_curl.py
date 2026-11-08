@@ -3,6 +3,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+import time
 from contextlib import suppress
 
 from ansible.module_utils.basic import AnsibleModule
@@ -74,11 +75,6 @@ def run_module():
             "--location",
             "--connect-timeout",
             str(timeout),
-            "--retry",
-            str(retries),
-            "--retry-all-errors",
-            "--retry-max-time",
-            "1200",
         ]
         if headers:
             for key, value in headers.items():
@@ -87,16 +83,37 @@ def run_module():
             cmd.extend(["--output-dir", temp_path, "--remote-name", "--remote-header-name"])
         else:
             cmd.extend(["--output", temp_path])
+        cmd.extend(["--write-out", "%{http_code}"])
         cmd.append(url)
 
         try:
-            process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-            stdout, stderr = process.communicate()
+            retry_max_time = 1200
+            start_time = time.monotonic()
+            for attempt in range(retries + 1):
+                process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                stdout, stderr = process.communicate()
 
-            if process.returncode != 0:
-                module.fail_json(
-                    msg="curl failed", rc=process.returncode, stdout=stdout, stderr=stderr, dest=dest, url=url
-                )
+                if process.returncode == 0:
+                    break
+
+                if stdout.strip() == "404" or attempt == retries:
+                    module.fail_json(
+                        msg="curl failed", rc=process.returncode, stdout=stdout, stderr=stderr, dest=dest, url=url
+                    )
+
+                elapsed = time.monotonic() - start_time
+                if elapsed >= retry_max_time:
+                    module.fail_json(
+                        msg="curl retry time exceeded",
+                        rc=process.returncode,
+                        stdout=stdout,
+                        stderr=stderr,
+                        dest=dest,
+                        url=url,
+                    )
+
+                retry_delay = min(600, 2 ** min(attempt, 10), retry_max_time - elapsed)
+                time.sleep(retry_delay)
         except Exception as e:
             module.fail_json(msg=f"Failed to execute curl: {to_native(e)}", dest=dest, url=url)
 

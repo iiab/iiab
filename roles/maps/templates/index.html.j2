@@ -11,7 +11,7 @@
                 margin: 0px;
                 padding: 0px;
 
-                /* This preventns scrollbars if content overflows. It also has the side effect of
+                /* This prevents scrollbars if content overflows. It also has the side effect of
                    disabling "swipe down to reload" on mobile browsers. Maybe that's for the best
                    for users actually, even though it's annoying as a developer. This will be
                    especially useful when we switch to one finger scroll. */
@@ -37,16 +37,112 @@
             const STYLE_SATELLITE = "satellite"
             const STYLE_HYBRID = "hybrid"
 
+            const VALID_STYLES = [
+              STYLE_NATURAL,
+              STYLE_POLITICAL,
+              STYLE_SATELLITE,
+              STYLE_HYBRID,
+            ]
+
+            const noUndefinedKeys = obj => new Proxy(obj, {
+                // One point of these constants is to avoid mistakes, so let's
+                // make it throw an error if we access a nonexistent property.
+                get(target, property) {
+                    if (!(property in target)) throw new Error(`Invalid data key: ${property}`)
+                    return target[property]
+                }
+            })
+
+            // Appropriating maps.black's term, "dataKey", to refer to these identifiers and
+            // substrings that show up in various places. They are used to identify a file or a source.
+            //
+            // There's not a 1-1 (or even a clean 1-many) relationship between these things (HILLSHADE
+            // is a source but not a file. IIABSAT is a valid source file but not a valid world source
+            // ID. We could fix this last part but it would require hacking maps.black some more.) All
+            // the same, there is an overarching theme that is implied by these names so let's initially
+            // define them here.
+            const DATA_KEYS = noUndefinedKeys({
+              OSM: "openstreetmap-openmaptiles",
+              TERRARIUM: "terrarium",
+              HILLSHADE: "hillshade",
+              NE: "naturalearth-openmaptiles",
+              NE6: "naturalearth6-NE2_HR_SR_W_DR-WEBP",
+              S2: "s2maps-sentinel2-2023",
+              IIABSAT: 'iiab-sentinel2',
+            })
+
+            // Which data keys are used for world map file name segments,
+            // which the implementer can configure (other than CI and testing)?
+            const WORLD_FILE_CONFIGURABLE_DATA_KEYS = new Set([
+              DATA_KEYS.OSM,
+              DATA_KEYS.NE,
+              DATA_KEYS.TERRARIUM,
+              DATA_KEYS.S2,
+              DATA_KEYS.IIABSAT,
+            ])
+
+            // Which data keys are used for world map file name segments,
+            // which only CI and testing are meant to configure?
+            const WORLD_FILE_NONCONFIGURABLE_DATA_KEYS = new Set([
+              DATA_KEYS.NE6,
+            ])
+
+            // Which data keys are used for actual world map source IDs?
+            const WORLD_SOURCE_DATA_KEYS = new Set([
+              DATA_KEYS.OSM,
+              DATA_KEYS.TERRARIUM,
+              DATA_KEYS.S2,
+              DATA_KEYS.NE6,
+
+              // The only one not based on a dataKey from a file
+              DATA_KEYS.HILLSHADE,
+            ])
+
+            // Which data keys are used for FQR file name segments?
+            const FQR_FILE_DATA_KEYS = new Set([
+              DATA_KEYS.OSM,
+              DATA_KEYS.TERRARIUM,
+              DATA_KEYS.S2,
+              DATA_KEYS.IIABSAT,
+            ])
+
+            const FQR_SOURCE_DATA_KEYS = new Set([
+              DATA_KEYS.OSM,
+              DATA_KEYS.TERRARIUM,
+              DATA_KEYS.S2,
+              DATA_KEYS.IIABSAT,
+
+              // The only one not based on a dataKey from a file
+              DATA_KEYS.HILLSHADE,
+            ])
+
+            // Since we have multiple dataKeys that perform the same function
+            // (ex: IIAB Satellite and s2maps), and since have no reason to use
+            // both at the same time in the same region or world map, for
+            // convenience we will organize region pmtiles files by "category"
+            const DATA_KEY_CATEGORIES = noUndefinedKeys({
+              SATELLITE: "satellite",
+              VECTOR: "vector",
+              TERRAIN: "terrain",
+            })
+
+            const CATEGORY_FOR_DATA_KEY = {
+              [DATA_KEYS.IIABSAT]: DATA_KEY_CATEGORIES.SATELLITE,
+              [DATA_KEYS.S2]: DATA_KEY_CATEGORIES.SATELLITE,
+              [DATA_KEYS.OSM]: DATA_KEY_CATEGORIES.VECTOR,
+              [DATA_KEYS.NE]: DATA_KEY_CATEGORIES.VECTOR,
+              [DATA_KEYS.TERRARIUM]: DATA_KEY_CATEGORIES.TERRAIN,
+            }
+
+            const BACKGROUND_LAYER_ID = "background";
+            const TERRARIUM_NONE_PMTILES = "terrarium-none.pmtiles"
+
             /****************
              *    configs   *
              ****************/
 
             const MAP_SEARCH_ENGINE = "{{ maps_search_engine }}"
             const REGION_DOWNLOADER_ENABLED = "{{ maps_region_downloader }}" === "True"
-
-        </script>
-        <script src='maps-config.js'>
-            // Various MAX_ZOOM and other configs are found in this file
         </script>
         <script type="module">
             import { AddressTextualIndex } from "./{{ maps_static_search_dir }}/static_search.js"
@@ -79,6 +175,12 @@
 
         <script src="maps.black-component.js" type="module"></script>
         <script>
+            // MapLibre sources have IDs and URLs. For FQRs we use the ID to generate the URL,
+            // which is why it looks sort of like a URL path.
+            // Make sure this matches get_extract_dir and get_new_extract_paths in tile-extract.py
+            const makeFqrSourceId = (fqrName, dataKey) => `iiab-fqr:${fqrName}.${dataKey}`
+            const makeFqrLayerId = (fqrName, worldLayerId) => `iiab-fqr:${fqrName}.${worldLayerId}`
+
             // we want style choice to survive the map reset that happens when a maps.black
             // feature or style changes, so we rely on this instead of the select tag value
             let mapStyleChoice
@@ -90,17 +192,37 @@
             let mb = null
             let shouldSetDefaultView = false
 
+            // We could add this stuff to `downloadedFQRegions` instead. It will require
+            // reworking how that object is constructed so I'll put it off.
+            const dataFileAlerts = {}
+            const newDataFileAlert = dfAlert => {
+                // FQR names cannot have spaces so "World Map" should be distinct.
+                const regionName = dfAlert.fqrName || "World Map"
+                if (!(regionName in dataFileAlerts)) {
+                    dataFileAlerts[regionName] = []
+                }
+                dataFileAlerts[regionName].push(dfAlert)
+            }
+
+            let setPMTiles = null
+            let PMTilesPromise = new Promise(resolve => {setPMTiles = resolve})
+
             // One namespace for all changes
             iiabMapsDotBlackPatch = {
+                getPMTilesClass: async _PMTiles => {
+                    // https://www.npmjs.com/package/pmtiles
+                    setPMTiles(_PMTiles)
+                },
                 patchResource: async handlerResult => {
                     const style = handlerResult && handlerResult.data
                     if (style && style.sources && !style.iiabPatched) {
-                        await until(fqrLoaded, 100)
+                        const fqrs = await downloadedFQRegions
 
                         // Grab the sources and layers as they are so we can replicate them in FQRs
                         const worldMapLayers = [...style.layers]
                         worldMapOSMLayers = new Set()
-                        const worldMapSourceIds = Object.keys(style.sources)
+                        const activeWorldMapSourceIds = Object.keys(style.sources)
+                        worldPmtilesFiles = await worldMap.pmtilesFiles
 
                         // Create FQR sources and layers by copying the same from the world map.
                         // Order of layers matters. We want the FQR layers to be after the world map layers
@@ -110,86 +232,83 @@
                         // There's one exception though, which is that we want all satellite, world or FQR,
                         // to be the bottom layers. This is because the world vector may in some cases be
                         // on top of an FQR satellite in hybrid mode.
-                        Object.keys(downloadedFQRegions.regions).forEach(fqrName => {
-                            const pmtilesDates = downloadedFQRegions.regions[fqrName].dates
+                        Object.keys(fqrs.regions).forEach(fqrName => {
+                            const region = fqrs.regions[fqrName]
 
-                            const s2Id = "s2maps-sentinel2-2023"
-                            const s2FqrId = `${s2Id}.${pmtilesDates.satellite}.full-region.${fqrName}`
-                            const osmId = "openstreetmap-openmaptiles"
-                            const osmFqrId = `${osmId}.${pmtilesDates.vector}.full-region.${fqrName}`
-                            const terrariumId = "terrarium"
-                            const terrariumFqrId = `${terrariumId}.${pmtilesDates.terrain}.full-region.${fqrName}`
-                            const hillshadeId = "hillshade"
-                            const hillshadeFqrId = `${hillshadeId}.${pmtilesDates.terrain}.full-region.${fqrName}`
-                            const naturalEarth6Id = "naturalearth6-NE2_HR_SR_W_DR-WEBP"
-                            const backgroundLayerId = "background"
+                            const hillshadeFqrId = makeFqrSourceId(fqrName, DATA_KEYS.HILLSHADE);
 
-                            // Make an FQR version of each source
-                            worldMapSourceIds.forEach(worldSourceId => {
-                                if (worldSourceId === s2Id) {
-                                    style.sources[s2FqrId] = {
-                                        ...style.sources[s2Id],
-                                        url: style.sources[s2Id].url.replace(s2Id, s2FqrId),
-                                        bounds: downloadedFQRegions.regions[fqrName].render_bounds,
-                                        minzoom: WORLD_MAP_SATELLITE_MAX_ZOOM + 1
-                                    }
-                                } else if (worldSourceId === osmId) {
-                                    style.sources[osmFqrId] = {
-                                        ...style.sources[osmId],
-                                        url: style.sources[osmId].url.replace(osmId, osmFqrId),
-                                        bounds: downloadedFQRegions.regions[fqrName].render_bounds,
-                                        minzoom: WORLD_MAP_VECTOR_MAX_ZOOM + 1
-                                    }
-                                } else if (worldSourceId === terrariumId) {
-                                    style.sources[terrariumFqrId] = {
-                                        ...style.sources[terrariumId],
-                                        url: style.sources[terrariumId].url
-                                            .replace(terrariumId, terrariumFqrId)
-                                            .replace(/\-z0\-z10\.pmtiles$/, '.pmtiles'),
-                                        bounds: downloadedFQRegions.regions[fqrName].render_bounds,
-                                        minzoom: WORLD_MAP_TERRAIN_MAX_ZOOM + 1
-                                    }
-                                } else if (worldSourceId === naturalEarth6Id) {
-                                    // pass, only world map
-                                } else {
-                                    console.warn("Unhandled world map source:", worldSourceId)
+                            // For each currently active world map source, make a corresponding FQR source
+                            activeWorldMapSourceIds.forEach(dataKey => {
+                                // If there's no category it's not a dataKey that we need to copy
+                                const category = CATEGORY_FOR_DATA_KEY[dataKey]
+                                if (!category) return
+
+                                // If there's no fqrPmtilesFile for this category, there's nothing to copy
+                                const fqrPmtilesFile = region.pmtilesFiles[category]
+                                if (!fqrPmtilesFile) return
+
+                                // FRQs should handle zoom levels just after the world map stops handling it.
+                                // If there's no world map, FQR should handle all zoom levels.
+                                const worldPmtilesFile = worldPmtilesFiles[category]
+                                const minzoom = worldPmtilesFile ? (worldPmtilesFile.maxzoom + 1) : 0
+
+                                // Copy the source, but with our new url, bounds, and minzoom
+                                style.sources[fqrPmtilesFile.sourceId] = {
+                                    ...style.sources[dataKey],
+                                    url: pmtilesUrl(fqrPmtilesFile.url),
+                                    bounds: region.render_bounds,
+                                    minzoom,
                                 }
                             })
 
-                            // Special case hillshade source only because we want the hillshade and terrarium to be pointing
-                            // to the same object (as is the case in the world map style), and we want to make sure terrarium
-                            // got set first.
-                            if (terrariumFqrId in style.sources) {
-                                style.sources[hillshadeFqrId] = style.sources[terrariumFqrId]
+                            // For world map, Hillshade isn't a copy of the struct, it's another pointer to the
+                            // same struct. So, we'll do the same for FQRs.
+                            if (region.pmtilesFiles.terrain && activeWorldMapSourceIds.includes(DATA_KEYS.HILLSHADE)) {
+                                style.sources[hillshadeFqrId] = style.sources[region.pmtilesFiles.terrain.sourceId]
                             }
+
+                            // In case of updating maps.black or something, make sure we didn't miss any new sources.
+                            activeWorldMapSourceIds.forEach(worldSourceId => {
+                                if (!WORLD_SOURCE_DATA_KEYS.has(worldSourceId)) {
+                                    console.warn(`Unhandled world map source for ${fqrName}: ${worldSourceId}`)
+                                }
+                            })
 
                             // Make an FQR version of each layer
                             worldMapLayers.map(worldLayer => {
-                                if (worldLayer.source === s2Id) {
-                                    return {
-                                        ...worldLayer,
-                                        id: s2FqrId + '.' + worldLayer.id,
-                                        source: s2FqrId,
+                                if (worldLayer.source === DATA_KEYS.S2) {
+                                    if (region.pmtilesFiles.satellite) {
+                                        return {
+                                          ...worldLayer,
+                                          id: makeFqrLayerId(fqrName, worldLayer.id),
+                                          source: region.pmtilesFiles.satellite.sourceId,
+                                        }
                                     }
-                                } else if (worldLayer.source === osmId) {
+                                } else if (worldLayer.source === DATA_KEYS.OSM) {
+                                    // This is unrelated to copying FQR layers. It could be in a different loop.
                                     worldMapOSMLayers.add(worldLayer.id)
-                                    return {
-                                        ...worldLayer,
-                                        id: osmFqrId + '.' + worldLayer.id,
-                                        source: osmFqrId,
+
+                                    if (region.pmtilesFiles.vector) {
+                                        return {
+                                          ...worldLayer,
+                                          id: makeFqrLayerId(fqrName, worldLayer.id),
+                                          source: region.pmtilesFiles.vector.sourceId,
+                                        }
                                     }
-                                } else if (worldLayer.source === hillshadeId) {
-                                    return {
-                                        ...worldLayer,
-                                      id: hillshadeFqrId + '.' + worldLayer.id,
-                                      source: hillshadeFqrId,
+                                } else if (worldLayer.source === DATA_KEYS.HILLSHADE) {
+                                    if (region.pmtilesFiles.terrain) {
+                                        return {
+                                          ...worldLayer,
+                                          id: makeFqrLayerId(fqrName, worldLayer.id),
+                                          source: hillshadeFqrId,
+                                        }
                                     }
-                                } else if (worldLayer.source === naturalEarth6Id) {
+                                } else if (worldLayer.source === DATA_KEYS.NE6) {
                                     // pass, only world map
-                                } else if (worldLayer.id === backgroundLayerId) {
+                                } else if (worldLayer.id === BACKGROUND_LAYER_ID) {
                                     // pass, only world map (note that we're testing the *layer id* here; there is no source used)
                                 } else {
-                                    console.warn("Unhandled world map layer:", worldLayer)
+                                    console.warn(`Unhandled world map layer for ${fqrName}: ${worldLayer}`)
                                 }
                             })
                             .filter(Boolean) // In case we fail to create some layers, we don't want to break everything.
@@ -205,8 +324,8 @@
                             layer.__sortOrder = index
                         }
                         style.layers.sort((a, b) => {
-                            const a_s2maps = a.id.startsWith('s2maps-sentinel2-2023')
-                            const b_s2maps = b.id.startsWith('s2maps-sentinel2-2023')
+                            const a_s2maps = a.id.startsWith(DATA_KEYS.S2) || a.id.startsWith(DATA_KEYS.IIABSAT)
+                            const b_s2maps = b.id.startsWith(DATA_KEYS.S2) || b.id.startsWith(DATA_KEYS.IIABSAT)
                             if (a_s2maps !== b_s2maps) {
                                 return b_s2maps - a_s2maps
                             } else {
@@ -214,25 +333,32 @@
                             }
                         })
 
-                        // set max zooms of world maps
-                        const setMaxZoom = (field, maxzoom) => {
-                            if (style.sources[field]) {
-                                style.sources[field].maxzoom = maxzoom
+                        // For each currently active world map source, set the maxzoom and url for the
+                        // worldPmtilesFile that we detected (if it exists) rather than what maps.black
+                        // expects.
+                        //
+                        // `style.sources[DATA_KEYS.TERRARIUM]` and `style.sources[DATA_KEYS.HILLSHADE`]
+                        // refer to the same object so we only have to set it once.
+                        //
+                        // We could `setMaxZoom` for DATA_KEYS.NE6 as well in case of the tiny CI variant,
+                        // (4-ci) but it looks good enough for CI without adjusting.
+                        activeWorldMapSourceIds.forEach(dataKey => {
+                            // If there's no category, it's not part of worldPmtilesFiles and thus not a
+                            // world map file we're trying to override here (i.e. NE6 or HILLSHADE).
+                            const category = CATEGORY_FOR_DATA_KEY[dataKey]
+                            if (!category) return
+                            const worldPmtilesFile = worldPmtilesFiles[category]
+
+                            // If there's no `worldPmtilesFile`, there's nothing to display regardless so
+                            // don't bother overriding.
+                            if (worldPmtilesFile) {
+                                style.sources[dataKey].url = pmtilesUrl(worldPmtilesFile.url)
+                                style.sources[dataKey].maxzoom = worldPmtilesFile.maxzoom
                             }
-                        }
-                        setMaxZoom('openstreetmap-openmaptiles', WORLD_MAP_VECTOR_MAX_ZOOM)
-                        setMaxZoom('s2maps-sentinel2-2023', WORLD_MAP_SATELLITE_MAX_ZOOM)
+                        })
 
-                        // Sources that use the terrarium file. We don't necessarily even use all of them
-                        // but we'll change them here in case we do.
-                        setMaxZoom('terrarium', WORLD_MAP_TERRAIN_MAX_ZOOM)
-                        setMaxZoom('hillshade', WORLD_MAP_TERRAIN_MAX_ZOOM)
-                        setMaxZoom('contours',  WORLD_MAP_TERRAIN_MAX_ZOOM)
-
-                        // We could `setMaxZoom` for 'naturalearth6-NE2_HR_SR_W_DR-WEBP' as well, but it looks
-                        // okay without adjusting, and we should stress that this only changes for CI so
-                        // we won't bother for now.
-
+                        // NOTE: This handler needs to run every time the style changes, so this flag has to
+                        // be set per-`style`, not as a one-time global variable.
                         style.iiabPatched = true
                     }
                     return handlerResult
@@ -261,7 +387,12 @@
             function readHash() {
                 const [lat, lon, pitch, bearing, zoom, globe, terrain, _mapStyleChoice] = window.location.hash.slice(1).split('/')
 
-                mapStyleChoice = tryAvailableStyle(_mapStyleChoice)
+                // If someone puts in a junk value, default to hybrid.
+                //
+                // We don't want to deal with valid-but-unavailable styles here because we want to load
+                // ASAP and hope for the best (the expected 99% case). For the cases where the style is
+                // unavailable, it will be handled by `fixStyleOnStartup`.
+                mapStyleChoice = VALID_STYLES.includes(_mapStyleChoice) ? _mapStyleChoice : STYLE_HYBRID
 
                 if (window.location.hash) {
                     return {
@@ -284,28 +415,6 @@
                     return {
                       "mapstyle": getMdbMapStyle(),
                     }
-                }
-            }
-
-            // If the user sets terrain to true via the hash, make sure terrain
-            // is actually available. If it's not, unset it. This is a slightly
-            // bumpy experience for the user but it's a rare case (either the
-            // user is messing around, someone sent them a link from another
-            // box, or the implementer changed the map setup). The hash should
-            // be corrected along with this, so the next page load won't have
-            // this problem.
-            //
-            // We take this "set first, check later" approach to terrain because
-            // we'd rather have the map set up quickly in the usual case, and
-            // let it correct itself in the rare case.
-            async function correctTerrainSetting() {
-                // it would be faster with mapStylePresent but that doesn't seem
-                // to avoid an error
-                await until(mapStyleLoaded)
-
-                if (mb.terrain && !(await terrainAvailable())) {
-                    mb.terrain = false
-                    setUpMap() // set it up again after this change
                 }
             }
 
@@ -352,12 +461,12 @@
             async function drawFQRegionOutlines() {
 
                 await until(mapStyleLoaded)
-                await until(fqrLoaded)
+                const fqrs = await downloadedFQRegions
 
-                for (regionName_ in downloadedFQRegions.regions) {
+                for (regionName_ in fqrs.regions) {
                     const regionName = regionName_ // fix variable capturing in callbacks below
                     const regionId = "region-" + regionName
-                    const [min_lon, min_lat, max_lon, max_lat] = downloadedFQRegions.regions[regionName].ui_bounds
+                    const [min_lon, min_lat, max_lon, max_lat] = fqrs.regions[regionName].ui_bounds
 
                     if (mb.map.getSource(regionId)) {
                         // Looks like we already ran this. Quit without setting a timeout.
@@ -416,7 +525,7 @@
                             }),
                         }
                     })
-                    // Make the region clickable via the above invisbile area.
+                    // Make the region clickable via the above invisible area.
                     // This brings the user from the full world map to a view of just the region.
                     // TODO - try one handler for multiple layers: https://github.com/maplibre/maplibre-gl-js/pull/4570
                     mb.map.on('click', regionId + "~click", e => {
@@ -483,9 +592,11 @@
             // the screen when zoomed in
             async function setFQRegionOutlinesVisibility() {
                 await until(() => mb.map && mb.map.fqRegionsShown)
+                const fqrs = await downloadedFQRegions
+
                 // Hide the lines if you zoom in enough
                 const lineVisibility = mb.map.getZoom() > 10 ? "none" : "visible"
-                for(regionName in downloadedFQRegions.regions) {
+                for(regionName in fqrs.regions) {
                     // TODO - fade instead? or in addition?
                     const regionId = "region-" + regionName
                     mb.map.setLayoutProperty(regionId + "~line", "visibility", lineVisibility)
@@ -511,7 +622,9 @@
             }
 
             // Are we (roughly) so much looking at a region (any region) that it obscures the world map?
-            function isWorldMapObscuredByFQR(regionsOnScreen) {
+            async function isWorldMapObscuredByFQR(regionsOnScreen) {
+                const fqrs = await downloadedFQRegions
+
                 const mapBounds = mb.map.getBounds()
                 const mapCorners = [
                   mapBounds.getSouthWest(),
@@ -522,8 +635,28 @@
 
                 // Does SOME region contain EVERY corner of the map bounds?
                 return regionsOnScreen
-                .map(regionName => new maplibregl.LngLatBounds(downloadedFQRegions.regions[regionName].ui_bounds))
-                .some(regionBounds => mapCorners.every(lngLat => regionBounds.contains(lngLat)))
+                .map(regionName => new maplibregl.LngLatBounds(fqrs.regions[regionName].ui_bounds))
+                .some(regionBounds =>
+                    // region.ui_bounds, like region.bbox, has its western coordinate "wrapped" (i.e. -180 to 180).
+                    // However unlike bbox, if it crosses the antimeridian, the eastern coordinate does not wrap:
+                    //
+                    // * west < 180 < east
+                    //
+                    // mapCorners is the same. It "wraps" its western coordinate but not its eastern coordinate.
+                    // As you scroll around the antimeridian, mapCorners switches between:
+                    //
+                    // * west < 180 < east
+                    // * west < -180 < east
+                    //
+                    // So, we should just need to try as-is (for the first case), or adding 360 to the longitudes
+                    // (for the second case). We could reduce the number of checks by doing more complicated logic,
+                    // but I would rather keep it simple for now.
+                    mapCorners
+                      .every(lngLat => regionBounds.contains(lngLat)) ||
+                    mapCorners
+                      .map(({lng, lat}) => ({lng: lng + 360, lat}))
+                      .every(lngLat => regionBounds.contains(lngLat))
+                )
             }
 
             async function setBestTerrainSource(regionsOnScreen) {
@@ -531,6 +664,9 @@
                 // terrain turned on.
 
                 await until(mapStyleLoaded)
+                const fqrs = await downloadedFQRegions
+
+                worldMapTerrain = (await worldMap.pmtilesFiles).terrain
 
                 if (!mb.terrain) {
                     return
@@ -542,19 +678,19 @@
                 // Pick a terrain source. Basically: if we're looking at a region, pick that.
                 // If not, pick the world map terrain. There are many edge cases though.
                 const newTerrainSource = (() => {
-                    if (WORLD_MAP_TERRAIN_MAX_ZOOM === 10) {
+                    if (worldMapTerrain && worldMapTerrain.maxzoom === 10) {
                         // If the world map is maximum zoom, don't bother with FQR terrain
-                        return 'terrarium'
+                        return DATA_KEYS.TERRARIUM
                     }
                     if (regionsOnScreen.length) {
                         // awkward situation to be looking at multiple regions,
                         // so take the first one (which is the closest to the
                         // map center, see sorting above)
-                        return `terrarium.${downloadedFQRegions.regions[regionsOnScreen[0]].dates.terrain}.full-region.${regionsOnScreen[0]}`
+                        return fqrs.regions[regionsOnScreen[0]].pmtilesFiles.terrain.sourceId
                     }
-                    if (WORLD_MAP_TERRAIN_MAX_ZOOM > 0) {
+                    if (worldMapTerrain && worldMapTerrain.maxzoom > 0) {
                         // If no FQRs are on screen and we have a world map terrain, return to it
-                        return 'terrarium'
+                        return DATA_KEYS.TERRARIUM
                     }
                     if (curTerrainSource) {
                         // If no FQRs are on screen and we have no world map terrain, but we have some terrain
@@ -562,19 +698,19 @@
                         // Even if we're not looking at it now, decent chance we'll look at it again soon.
                         return curTerrainSource
                     }
-                    if (fqRegionsExist()) {
+                    if (fqrs.count) {
                         // If no FQRs are on screen, and we have no world map terrain, and no terrain is
                         // currently loaded, (probably initializing) just pick an arbitrary FQR to start with.
-                        return Object.keys(downloadedFQRegions.regions)[0]
+                        return Object.values(fqrs.regions)[0].pmtilesFiles.terrain.sourceId
                     }
                     // If we have no FQRs at all, and we have no world map terrain, report a bug because
-                    // terrain should never be turned on in this case. And then, pick "terrarium" anyway,
-                    // I think it would just use the dummy terrain file.
+                    // terrain should never be turned on in this case. And then, pick
+                    // DATA_KEYS.TERRARIUM anyway, I think it would just use the dummy terrain file.
                     console.warn("Trying to choose a terrain source when we have none!")
-                    return 'terrarium'
+                    return DATA_KEYS.TERRARIUM
                 })()
 
-                // Set the new terrain if there is no currently set terrain, or if the new one is diffferent
+                // Set the new terrain if there is no currently set terrain, or if the new one is different
                 if (curTerrainSource !== newTerrainSource) {
                     // console.log("setting terrain source:", newTerrainSource)
                     mb.map.setTerrain(
@@ -584,6 +720,7 @@
             }
 
             // Hide FQRs that we aren't looking at, and hide the world map if we're looking at an FQR.
+            /*
             async function hideUnseenFQRs(regionsOnScreen) {
                 // THIS FUNCTION IS UNUSED for now (also commented out at the function call)
                 //
@@ -614,33 +751,36 @@
                 // current version) instead of looking to see if the `...~click` layer is being rendered.
                 // This was my initial guess before I considered `setBestTerrainSource`. Still, maybe
                 // `hideUnseenFQRs` would compound it? And maybe a better `regionsOnScreen` would fix it.
-                return
 
                 await until(mapStyleLoaded)
+                const fqrs = await downloadedFQRegions
 
-                const regionsSet = new Set(Object.keys(downloadedFQRegions.regions))
+                const regionsSet = new Set(Object.keys(fqrs.regions))
                 const regionsOnScreenSet = new Set(regionsOnScreen)
                 const regionsOffScreenSet = regionsSet.difference(regionsOnScreenSet)
 
-                // TODO optimization ideas:
-                //   Just use `worldMapOSMLayers` and determine the region layer names
-                //   Keep track of which regions are hidden or visible so I only update the necessary ones.
-                mb.map.getLayersOrder().forEach(layerName => {
-                    [_, _, fullRegion, regionName] = layerName.split('.')
-                    if (fullRegion !== "full-region") return
-                    if (regionsOnScreenSet.has(regionName)) {
-                        mb.map.setLayoutProperty(layerName, "visibility", "visible")
-                    }
-                    if (regionsOffScreenSet.has(regionName)) {
-                        mb.map.setLayoutProperty(layerName, "visibility", "none")
-                    }
-                })
+                // TODO
+                //   regions(On/Off)ScreenSet.forEach(regionName => {
+                //     worldMapOSMLayers.forEach(worldLayerId => {
+                //       mb.map.setLayoutProperty(
+                //         makeFqrLayerId(regionName, worldLayerId), "visibility", "visible" / "none"
+                //       )
+                //     }
+                //   }
+                //
+                //   But for optimization, keep track of which regions are already hidden or visible so I only update the necessary ones.
             }
+            */
 
             async function hideWorldMapIfObscured(regionsOnScreen) {
                 await until(mapStyleLoaded)
+                worldMapVector = (await worldMap.pmtilesFiles).vector
 
-                const shouldHideWorldMap = (mb.map.getZoom() >= WORLD_MAP_VECTOR_MAX_ZOOM + 1) && isWorldMapObscuredByFQR(regionsOnScreen)
+                const shouldHideWorldMap = (
+                  worldMapVector &&
+                  (mb.map.getZoom() >= worldMapVector.maxzoom + 1) &&
+                  (await isWorldMapObscuredByFQR(regionsOnScreen))
+                )
                 const worldLayerVisibility = shouldHideWorldMap ? "none" : "visible"
                 if (mb.terrain) {
                     mb.map.setLayoutProperty("hillshade", "visibility", worldLayerVisibility)
@@ -675,38 +815,533 @@
                 }
             }
 
+            IIAB_SATELLITE_LICENSE = "CC-BY-NC-SA: IIAB Satellite (Contains modified Copernicus Sentinel data 2025)"
+
+            // NE itself does not require attribution but upon closer examination some parts of this license may be necessary.
+            // Using maps.black's LICENSE.txt retrieval system would be more of a pain than just pasting this text here.
+            //
+            // https://github.com/maps-black/maps.black/blob/main/tilejson/naturalearth-openmaptiles.LICENSE.txt
+            NE_OMT_LICENSE = `
+              Public domain, made with Natural Earth.
+              Free vector and raster map data @ https://naturalearthdata.com/.
+              Additional data from Wikidata.org, CC0.
+              Processing done by https://maps.black/.
+              Released under https://creativecommons.org/public-domain/cc0/ public domain license.
+
+              Schema:
+
+              Copyright (c) 2024, MapTiler.com & OpenMapTiles contributors.
+              All rights reserved.
+
+              The vector tile schema has been developed by Klokan Technologies GmbH and
+              was initially modelled after the cartography of the CARTO's Positron basemap
+              with permission from CartoDB Inc.
+              The vector tile schema has been refined and improved in cooperation with
+              the Wikimedia Foundation and is heavily influenced by years of
+              Paul Norman's experience of creating maps from OpenStreetMap data.
+
+              The cartography and visual design features of the map tile schema (also known as
+              the "look and feel" of the map) are licensed under the Creative Commons
+              Attribution 4.0 license.
+              To view a copy of the license, visit http://creativecommons.org/licenses/by/4.0/.
+
+              Products or services using maps derived from OpenMapTiles schema need to visibly
+              credit "OpenMapTiles.org" or reference "OpenMapTiles" with a link to
+              http://openmaptiles.org/.
+
+              For a browsable electronic map based on OpenMapTiles and OpenStreetMap data, the
+              credit should appear in the corner of the map. For example:
+
+              [© OpenMapTiles](http://openmaptiles.org/) [© OpenStreetMap contributors](http://www.openstreetmap.org/copyright)
+
+              For printed and static maps a similar attribution should be made in a textual
+              description near the image, in the same fashion as if you cite a photograph.
+
+              Exceptions to OpenMapTiles attribution requirement can be in a written form granted
+              by MapTiler (info@maptiler.com).
+              The project contributors grant MapTiler AG the license to give such
+              exceptions on a commercial basis.`.trim().split('\n').map(line => line.trim()).join('\n')
+
+
+            async function fixLicenses() {
+                // Given the multi step process between setting mapStyleChoice and the map displaying, this might have race conditions if users
+                // change styles really quickly. Not sure what else to do but also not sure if that's a high priority. But also, maybe this is
+                // the least bad, since `mapStyleChoice` is early in the chain of events, and perhaps the race condition would thus be in favor
+                // of acting on the newest user change early and repeatedly which would get us the right answer in the end. But in case that's
+                // wrong and we decide we want to go based on the end of the chain of events, we should look at mb.map.getStyle().sources
+
+                const fqrs = await downloadedFQRegions
+                const worldDataKeys = await worldMap.dataKeys
+
+                // Probably enough for maps.black to set all of the licenses after a style switch or first page load
+                await until(mapStyleLoaded)
+
+                // Probably not needed given mapStyleLoaded but if mb.licenses.data isn't there nothing here will work.
+                await until(() => mb.licenses && mb.licenses.data)
+
+                if (geocoderAlternatives[MAP_SEARCH_ENGINE]) {
+                    mb.licenses.search = geocoderAlternatives[MAP_SEARCH_ENGINE].licenses
+                }
+
+                // Does *any* FQR use the given dataKey?
+                const fqrHasSource = dataKey => Object.values(fqrs.regions).some(r => r.dataKeys.includes(dataKey))
+
+                // maps.black.js adds the s2maps and osm licenses based on whether the mapstyle requires it, irrespective of whether the pmtiles
+                // file is altogether missing.
+                const satelliteShowing = [STYLE_SATELLITE, STYLE_HYBRID].includes(mapStyleChoice)
+                const vectorShowing = [STYLE_POLITICAL, STYLE_NATURAL, STYLE_HYBRID].includes(mapStyleChoice)
+
+                if (satelliteShowing) {
+                    // If neither FQRs nor world map are using s2maps, remove the attribution
+                    if (!fqrHasSource(DATA_KEYS.S2) && !worldDataKeys.includes(DATA_KEYS.S2)) {
+                        delete mb.licenses.data[DATA_KEYS.S2]
+                    }
+
+                    // If world map is using Natural Earth vector, add the attribution (FQRs don't use it)
+                    if (fqrHasSource(DATA_KEYS.IIABSAT) || worldDataKeys.includes(DATA_KEYS.IIABSAT)) {
+                        mb.licenses.data[DATA_KEYS.IIABSAT] = IIAB_SATELLITE_LICENSE
+                    }
+                }
+
+                if (vectorShowing) {
+                    // If neither FQRs nor world map are using osm, remove the attribution
+                    if (!fqrHasSource(DATA_KEYS.OSM) && !worldDataKeys.includes(DATA_KEYS.OSM)) {
+                        delete mb.licenses.data[DATA_KEYS.OSM]
+                    }
+
+                    // If either FQRs or world map are using Natural Earth vector, add the attribution
+                    if (worldDataKeys.includes(DATA_KEYS.NE)) {
+                        mb.licenses.data[DATA_KEYS.NE] = NE_OMT_LICENSE
+                    }
+                }
+            }
+
+            async function getJson(url, skipCache) {
+                let response
+                try {
+                    response = await fetch(url, skipCache ? { cache: 'no-store' } : undefined)
+                    if (response.status === 404) {
+                        return [null, {isNotFound: true}]
+                    } else if (response.status >= 400) {
+                        return [null, `${response.status}: ${response.statusText}`]
+                    }
+                } catch (error) {
+                    return [null, error]
+                }
+                try {
+                    return [await response.json(), null]
+                } catch (error) {
+                    if (error.name === "SyntaxError") {
+                        return [null, {isJsonParse: true}]
+                    }
+                    return [null, error]
+                }
+            }
+
+            const homeDirListPromise = getJson('/maps/data/', true)
+
+            // For normal requests
+            const mapsUrl = path => `/maps/${path}`
+            const regionUrl = (regionName, fileName) => mapsUrl(`${regionName}.fqr/${fileName}`)
+            const regionMetaUrl = regionName => regionUrl(regionName, "meta.json")
+            const regionListingUrl = regionName => mapsUrl(`/data/${regionName}.fqr`) // listing needs the /data/ part
+
+            const worldMapFallbackUrl = path => `/maps/fallback/${path}`
+
+            // For maps.black's sources setup. Formatted in the same way that maps.black does it.
+            const pmtilesUrl = path => `pmtiles://${window.location.origin}/${path}`
+
+            // parseFileName is passed in as a function, so that this can be used for pmtiles file names
+            // that are formatted in different ways.
+            function parsePmtilesFileNames(listing, validDataKeys, parseFileName) {
+                return listing.map(entry => {
+                    if (entry.type !== "file") {
+                            return
+                    }
+
+                    // A special case (which perhaps we should rename to conform with everything else)
+                    if (entry.name === TERRARIUM_NONE_PMTILES) {
+                        return {
+                            dataKey: DATA_KEYS.TERRARIUM,
+                            maxzoom: 0,
+                            date: "1970-01-01",
+                            fileName: entry.name,
+                            fallback: entry.fallback,
+                        }
+                    }
+
+                    // parse the file name according to the passed-in parsing function
+                    // (FQR and world map have slightly different file name formats)
+                    const {dataKey, date, zoomRange, extension, rest} = parseFileName(entry.name)
+
+                    if (
+                      dataKey    && validDataKeys.has(dataKey)                                  &&
+                      date       && date.match(/^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]$/)  &&
+
+                      // zoomRange only applies for world map
+                      (!zoomRange || zoomRange.match(/^z[0-9][0-9]-z[0-9][0-9]$/))              &&
+
+                      extension === "pmtiles"                                                   &&
+                      rest.length === 0
+                    ) {
+                        // `undefined` is for FQRs
+                        const maxzoom = zoomRange ? Number(zoomRange.split("-")[1].split("z")[1]) : undefined
+
+                        return {
+                          dataKey,
+                          maxzoom,
+                          date,
+                          fileName: entry.name,
+                          fallback: entry.fallback,
+                        }
+                    }
+                })
+                .filter(Boolean)      // remove anything that isn't a properly formatted pmtiles file name
+            }
+
+            // Preferred files first (more recent date, etc). So if an implementer puts multiple in a directory
+            // (world or FQR) for whatever reason, we make the best choice. This also accounts for fallbacks.
+            function pmtilesPreferenceSort(a, b) {
+                // If the implementer chooses a CI value that is lower zoom than the fallback, we still want that
+                // CI value, so we first make sure that fallback is picked last.
+                const cmpFallback = !!a.fallback - !!b.fallback
+
+                const cmpNewest = b.date.localeCompare(a.date)
+
+                // maxzoom is optional, but if it is undefined (as is the case for FQRs) this will still return zero
+                const cmpHighZoom = (b.maxzoom > a.maxzoom) - (a.maxzoom > b.maxzoom)
+
+                // We prefer DATA_KEYS.IIABSAT to come before DATA_KEYS.S2 so we just sort it before everything else
+                const cmpIIAB = (b.dataKey === DATA_KEYS.IIABSAT) - (a.dataKey === DATA_KEYS.IIABSAT)
+
+                // We prefer DATA_KEYS.OSM to come before DATA_KEYS.NE so we just sort it before everything else
+                const cmpOSM = (b.dataKey === DATA_KEYS.OSM) - (a.dataKey === DATA_KEYS.OSM)
+
+                // Each comparison returns 1, 0, or -1. -1 still counts as non-zero for
+                // the || operator. The first non-zero comparison is the one we go with.
+                // This implements our preference.
+                return (cmpFallback || cmpNewest || cmpHighZoom || cmpIIAB || cmpOSM)
+            }
+
+            function validateMeta(regionName, meta) {
+                // some basic checks
+                if (!meta.bbox || meta.bbox.length != 4) {
+                    newDataFileAlert({
+                      fqrName: regionName,
+                      error: "Can't display this region",
+                      message: "Formatting error in meta.json: expecting bbox to be an array of four numbers.",
+                    })
+                    return false
+                }
+                if (meta.bbox[0] > 180 || meta.bbox[0] < -180 || meta.bbox[2] > 180 || meta.bbox[2] < -180) {
+                    newDataFileAlert({
+                      fqrName: regionName,
+                      error: "Can't display this region",
+                      message: "Error in meta.json: expecting bbox latitudes to be between -180 and 180.",
+                    })
+                    return false
+                }
+                if (meta.bbox[1] > 90 || meta.bbox[1] < -90 || meta.bbox[3] > 90 || meta.bbox[3] < -90) {
+                    newDataFileAlert({
+                      fqrName: regionName,
+                      error: "Can't display this region",
+                      message: "Error in meta.json: expecting bbox longitudes to be between -90 and 90.",
+                    })
+                    return false
+                }
+                if (meta.bbox[1] > meta.bbox[3]) {
+                    newDataFileAlert({
+                      fqrName: regionName,
+                      error: "Can't display this region",
+                      message: "Error in meta.json: bbox latitudes are out of order.",
+                    })
+                    return false
+                }
+                return true
+            }
+
+            function warnIncompleteRegion(pmtilesFiles, fqrName) {
+                const warning = "Missing data file"
+                if (!pmtilesFiles.satellite) {
+                    newDataFileAlert({
+                      fqrName,
+                      warning,
+                      message: "No valid satellite pmtiles file ('s2maps-sentinel2-2023' or 'iiab-sentinel2') found",
+                    })
+                }
+                if (!pmtilesFiles.vector) {
+                    newDataFileAlert({
+                      fqrName,
+                      warning,
+                      message: "No valid vector pmtiles file ('openstreetmap-openmaptiles') found",
+                    })
+                }
+                if (!pmtilesFiles.terrain) {
+                    newDataFileAlert({
+                      fqrName,
+                      warning,
+                      message: "No valid terrain pmtiles file ('terrarium') found",
+                    })
+                }
+            }
+
             let fqRegionsControl
-            let downloadedFQRegions = null;
+            let worldMap = {}
+            worldMap.pmtilesFiles = (async () => {
+                const [mainDirList, mainError] = await homeDirListPromise
+                if (mainError) {
+                    console.error("Failed to load world map:", mainError)
+                    return {}
+                }
+                const [fallbackDirList, fallbackError] = await getJson('/maps/data/fallback/', false)
+                if (fallbackError) {
+                    console.error("Failed to load fallback pmtiles files:", fallbackError)
+                    // Don't bail out just yet. We might not be using fallbacks anyway, in which case why break
+                    // everything deliberately? If we are using them, it'll probably break naturally.
+                }
 
-            const fqrLoaded = () => !!downloadedFQRegions
+                // Mark fallbacks so we can sort them properly (after normal files)
+                // and set the url correctly.
+                const combinedDirList = mainDirList.concat((fallbackDirList || []).map(entry => ({...entry, fallback: true})))
 
-            function setFQRegions() {
-                return fetch('{{ maps_tools.tile_extract.info_file }}', { cache: 'no-store' })
-                    .then((response) => {
-                        if (response.status < 400) {
-                            return response.json()
-                        } else {
-                            console.error("Failed to load Full Quality Regions:", response.status, response.statusText)
+                const pmtilesFiles = {}
+
+                parsePmtilesFileNames(combinedDirList, WORLD_FILE_CONFIGURABLE_DATA_KEYS, fileName => {
+                    // Each valid pmtiles file for the world map has the format:
+                    //
+                    // [dataKey].[date].[zoomRange].pmtiles
+                    //
+                    const [dataKey, date, zoomRange, extension, ...rest] = fileName.split(".")
+                    return {dataKey, date, zoomRange, extension, rest}
+                })
+                .filter(Boolean)      // remove anything that isn't a properly formatted pmtiles file name
+                .sort(pmtilesPreferenceSort)
+                .map(({dataKey, maxzoom, date, fileName, fallback}) => ({
+                    dataKey,
+                    date,
+                    fileName,
+                    maxzoom,
+                    fallback,
+                    url: fallback ? worldMapFallbackUrl(fileName) : mapsUrl(fileName),
+                }))
+                .forEach(({dataKey, date, maxzoom, fallback, fileName, url, sourceId}) => {
+                    // Note that the "category" makes sure that the world map has only has one satellite
+                    // source, even if both DATA_KEYS.IIABSAT and DATA_KEYS.S2 are found in the directory.
+                    // "vector", "satellite", or "terrain"
+                    const category = CATEGORY_FOR_DATA_KEY[dataKey]
+
+                    if (category in pmtilesFiles) {
+                        if (!fallback) {
+                            // pmtilesPreferenceSort puts our preferred files (newer, higher zoom, IIABSAT > S2)
+                            // first, so if there's already something added for this dataKey it has higher priority.
+                            newDataFileAlert({
+                              warning: `Extra pmtiles file for ${category}`,
+                              message: `The world map contains an unused pmtiles file: ${fileName}`,
+                            })
+                        }
+                    } else {
+                        pmtilesFiles[category] = {dataKey, url, maxzoom, sourceId}
+                    }
+                })
+
+                // Don't bother with `warnIncompleteRegion` for world map because the users were warned against
+                // messing with the /fallback directory. If we do decide to do it, make sure that missing terrain
+                // is an *error* rather than a warning because it breaks terrain for FQRs. Also if the user
+                // explicitly says no satellite, that shouldn't be a reported issue.
+
+                return pmtilesFiles
+            })()
+
+            // Query for the pmtiles file headers to get the "real" maxZoom. If any of the files
+            // don't match, resolve to `true` so that we know to reload the page.
+            worldMap.pmtilesFilesCorrected = (async () => {
+                const PMTiles = await PMTilesPromise
+                worldPmtilesFiles = await worldMap.pmtilesFiles
+                const headers = {}
+                let corrected = false
+
+                // Start all the header requests
+                for (category in worldPmtilesFiles) {
+                    headers[category] = (new PMTiles(worldPmtilesFiles[category].url))
+                      .getHeader()
+                      .catch(e => {
+                          // If there's a 404 or a bad pmtiles file we'll forget about
+                          // fixing it. This is a last ditch effort for bad data anyway.
+                          console.warn("Error getting pmtiles header to correct zoom levels", e)
+                          return null
+                      })
+                }
+
+                // Collect all the maxzooms from the headers as they resolve
+                for (category in worldPmtilesFiles) {
+                    // This function should only be run once, after the file names are parsed, and it should be the
+                    // only thing correcting the zoom levels, so we assume that the zoom level here came from the fname.
+                    const fnameMaxZoom = worldPmtilesFiles[category].maxzoom
+                    const header = await headers[category]
+
+                    if (header && header.maxZoom !== fnameMaxZoom) {
+                        worldPmtilesFiles[category].maxzoom = header.maxZoom
+
+                        corrected = true
+                        const fname = worldPmtilesFiles[category].url.split("/").slice(-1)[0]
+
+                        const correctedFname = fname.replace(
+                            /z[0-9]{2}\.pmtiles$/,
+                            "z" + header.maxZoom.toString().padStart(2, "0") + ".pmtiles"
+                        )
+                        newDataFileAlert({
+                          warning: "Incorrect zoom level in file name",
+                          message: `The file ${fname} has max zoom level ${header.maxZoom}, even though the file name implies max zoom level ${fnameMaxZoom}. You can correct this by renaming the file to match: ${correctedFname}`,
+                        })
+                    }
+                }
+
+                return corrected
+            })()
+
+            worldMap.dataKeys = (async () =>
+                // For convenience if we want an array of all dataKeys used in the world map
+                Object.values(await worldMap.pmtilesFiles).map(({dataKey}) => dataKey)
+            )()
+
+            const downloadedFQRegions = (async () => {
+                const [dirList, error] = await homeDirListPromise
+                if (error) {
+                    console.error("Failed to load Full Quality Regions:", error)
+                    return {regions: {}, count: 0}
+                }
+                regionNames = dirList
+                    .filter(entry => entry.type === "directory" && entry.name.endsWith('.fqr'))
+                    .map(entry => entry.name.slice(0, -4))
+                const regionInfo = await Promise.allSettled(
+                    regionNames.map(async regionName => {
+                        const metaPromise = (async () => {
+                            // Should we cache this? It will change less often, presumably, than a given FQR's bbox. Not impossible though.
+                            const [meta, error] = await getJson(`${regionMetaUrl(regionName)}`, false)
+                            if (error) {
+                                if (error.isNotFound) {
+                                    // TODO nov 2026 or so we can remove "recent IIAB update". This
+                                    // refers to the transition of adding the meta.json file to the fqr directory.
+                                    newDataFileAlert({
+                                      fqrName: regionName,
+                                      error: "Can't display this region",
+                                      message: `meta.json not found in ${regionName}.fqr. This might be because of an incomplete download.`,
+                                    })
+                                } else if (error.isJsonParse) {
+                                    newDataFileAlert({
+                                      fqrName: regionName,
+                                      error: "Can't display this region",
+                                      message: "There is a formatting error in meta.json.",
+                                    })
+                                } else {
+                                    newDataFileAlert({
+                                      fqrName: regionName,
+                                      error: "Can't display this region",
+                                      message: "There was an unknown error.",
+                                    })
+                                    console.error(`Failed to load meta.json for Full Quality Region ${regionName}:`, error)
+                                }
+                                return
+                            }
+                            return meta
+                        })()
+
+                        const listingPromise = (async () => {
+                            // Not going to cache because updating FQR data we hope is not so uncommon.
+                            const [listing, error] = await getJson(regionListingUrl(regionName), true)
+                            if (error) {
+                                console.error(`Failed to load Full Quality Region file listing: ${regionName}:`, error)
+                                return
+                            }
+                            return listing
+                        })()
+
+                        const [meta, listing] = await Promise.all([metaPromise, listingPromise])
+                        if (meta && listing) {
+                            return [regionName, {meta, listing}]
                         }
                     })
-                    .catch((error) => {
-                        downloadedFQRegions = {error: true, regions: {}}
-                        console.error("Failed to load Full Quality Regions:", error)
-                    })
-                    .then((json) => {
-                        if (json && json.regions) {
-                            downloadedFQRegions = {regions: json.regions};
-                        } else {
-                            downloadedFQRegions = {error: true, regions: {}}
-                        }
-                    });
-            }
-            setFQRegions()
+                )
 
-            // Assumes calling function has already done `await until(fqrLoaded)`
-            function fqRegionsExist() {
-                return !!(Object.keys(downloadedFQRegions.regions).length)
-            }
+                // At this point we're done making requests. We should have all of the data we need to set up our FQRs here.
+                //
+                // regions = {regionName: {meta, listing}, ...}
+                const regions = Object.fromEntries(
+                      regionInfo
+                      .map(res=>res.value)  // [regionName, {meta, listing}] (see above)
+                      .filter(Boolean)      // remove errors in getting meta or listing
+                      .map(([regionName, {meta, listing}]) => {
+                          if (!validateMeta(regionName, meta)) {
+                              return
+                          }
+
+                          const pmtilesFiles = {}
+
+                          parsePmtilesFileNames(listing, FQR_FILE_DATA_KEYS, fileName => {
+                              // Each valid pmtiles file in an FQR has the format:
+                              //
+                              // [dataKey].[date].pmtiles
+                              const [dataKey, date, extension, ...rest] = fileName.split(".")
+                              return {dataKey, date, extension, rest}
+                          })
+                          .sort(pmtilesPreferenceSort)
+                          .map(({dataKey, date, fileName}) => ({
+                              dataKey,
+                              date,
+                              fileName,
+                              url: regionUrl(regionName, fileName),
+                              sourceId: makeFqrSourceId(regionName, dataKey),
+                          }))
+                          .forEach(({dataKey, date, fileName, url, sourceId}) => {
+                              // Note that the "category" makes sure that the FQR only has one satellite source, even
+                              // if both DATA_KEYS.IIABSAT and DATA_KEYS.S2 are found in the directory.
+                              // "vector", "satellite", or "terrain"
+                              const category = CATEGORY_FOR_DATA_KEY[dataKey]
+
+                              if (category in pmtilesFiles) {
+                                  // pmtilesPreferenceSort puts our preferred files (newer, IIABSAT > S2) first, so if
+                                  // there's already something added for this dataKey it has higher priority.
+                                  newDataFileAlert({
+                                    fqrName: regionName,
+                                    warning: `Extra pmtiles file for ${category}`,
+                                    message: `This Full Quality Region contains an unused pmtiles file: ${fileName}`,
+                                  })
+                              } else {
+                                  pmtilesFiles[category] = {dataKey, url, sourceId}
+                              }
+                          })
+
+                          // For convenience if we want an array of all dataKeys used in this FQR
+                          const dataKeys = Object.values(pmtilesFiles).map(({dataKey}) => dataKey)
+
+                          const fqrData = meta.bbox[0] <= meta.bbox[2] ? {
+                            // if we're not crossing the antimeridian, `ui_bounds` and `render_bounds` are the same as `bbox`
+                            pmtilesFiles,
+                            dataKeys,
+                            bbox: meta.bbox,
+                            ui_bounds: meta.bbox,
+                            render_bounds: meta.bbox,
+                          } : {
+                            // if we are crossing the antimeridian, `ui_bounds` should add 360 to the east so that
+                            // east > west, and `render_bounds` should be the entire width of the world because
+                            // it's actually two partial regions on opposite sides of the map
+                            pmtilesFiles,
+                            dataKeys,
+                            bbox: meta.bbox,
+                            ui_bounds: [meta.bbox[0], meta.bbox[1], meta.bbox[2] + 360, meta.bbox[3]],
+                            render_bounds: [-179.99999999, meta.bbox[1], 180, meta.bbox[3]],
+                          }
+                          return [regionName, fqrData]
+                      })
+                      .filter(Boolean)      // remove errors in finishing setting up the region
+                )
+                for (regionName in regions) {
+                    const pmtilesFiles = regions[regionName].pmtilesFiles
+                    warnIncompleteRegion(pmtilesFiles, regionName)
+                }
+                // `count` is for succinctness later
+                return {regions, count: Object.keys(regions).length}
+            })()
 
             // Here's the deal:
             //
@@ -721,52 +1356,96 @@
             // not worth the extra complications (making a bunch of things async,
             // etc).
             //
-            // As such, we will simply say that satellite is not avaialble if
+            // As such, we will simply say that satellite is not available if
             // the user does not download it globally.
-            function satelliteAvailable() {
-                if (WORLD_MAP_SATELLITE_MAX_ZOOM) {
-                    return true
-                }
+
+            async function satelliteAvailable() {
+                // As of now, satellite is the one world map thing that an implementer can legitimately
+                // and explicitly skip. And (until we figure something out) if there is no world map
+                // satellite, we avoid showing the patches of FQR satellite.
+                const pmtilesFiles = await worldMap.pmtilesFiles;
+                return !!pmtilesFiles.satellite
             }
 
             async function terrainAvailable() {
-                // Check this first to return faster
-                if (WORLD_MAP_TERRAIN_MAX_ZOOM > 0) {
+                // A user can choose "0-none" for terrain which gives them effectively no world terrain.
+                // However they can still have FQR terrain. So we return true if there is either a real
+                // world map terrain file or any FQRs. (TODO - check for missing terrain files in FQRs)
+                const worldPmtilesFiles = await worldMap.pmtilesFiles
+
+                // Check this first to return faster if world map loads first
+                if (worldPmtilesFiles.terrain.maxzoom > 0) {
                     return true
                 }
 
+                const fqrs = await downloadedFQRegions
+
                 // Full Quality Regions always have terrain
-                await until(fqrLoaded)
-                return fqRegionsExist()
+                return !!fqrs.count
             }
 
-            function getAvailableStyles() {
+            async function getAvailableStyles() {
+                const _satelliteAvailable = await satelliteAvailable()
                 return [
                     STYLE_NATURAL,
                     STYLE_POLITICAL,
 
                     // Requires satellite tiles
-                    satelliteAvailable() ? STYLE_SATELLITE : null,
-                    satelliteAvailable() ? STYLE_HYBRID    : null,
+                    _satelliteAvailable ? STYLE_SATELLITE : null,
+                    _satelliteAvailable ? STYLE_HYBRID    : null,
                 ].filter(Boolean)
             }
 
-            function tryAvailableStyle(requestedStyle) {
-                const availableStyles = getAvailableStyles()
+            // If the user is on an invalid style or terrain status due to readHash, send them to a
+            // valid one instead. We don't want to do this in readHash (anymore) because (now that
+            // our setup process involves waiting for file listings to be read) it risks slowing
+            // down the page load process for the happy path. At worst a user should experience this
+            // correction only one time because it will correct the hash. After this, reload the
+            // page.
+            //
+            // Also, wait for the pmtiles file headers to be read and correct their maxZooms. Again, if
+            // any changes were made, reload the page. Unlike the above, this correction won't show up
+            // in the hash so it will happen every page load, which isn't great, but it will also
+            // instruct the implementer to fix this by renaming the files with the correct zoom levels.
+            //
+            // The reason we couple these two things together is that we only want to reload the
+            // page one time after checking everything.
+            //
+            // Also note that this only applies to the *page* load (not subsequent "map refreshes").
+            // After the page load, the user will not be able to switch to an invalid style or turn on
+            // terrain if it's unavailable. The zoom levels will also have been corrected so it will
+            // set up the map correctly next time a style is changed.
+            //
+            async function fixStyleOnStartup() {
+                const availableStyles = await getAvailableStyles()
+                let styleChanged = false
 
-                // See if the one we want is available
-                if (availableStyles.includes(requestedStyle)) {
-                    return requestedStyle
+                if (!availableStyles.includes(mapStyleChoice)) {
+                    // If the one we want is unavailable, go to a default:
+                    // STYLE_HYBRID if we have satellite, STYLE_NATURAL if we do not.
+                    if (availableStyles.includes(STYLE_HYBRID)) {
+                        mapStyleChoice = STYLE_HYBRID
+                    } else {
+                        mapStyleChoice = STYLE_NATURAL
+                    }
+                    styleChanged = true
                 }
 
-                // If the one we want is unavailable (or just a junk value someone
-                // typed into the hash), default to hybrid if we have satellite.
-                if (availableStyles.includes(STYLE_HYBRID)) {
-                    return STYLE_HYBRID
+                // If the user sets terrain to true via the hash, make sure terrain is actually available.
+                if (mb.terrain && !(await terrainAvailable())) {
+                    mb.terrain = mb.hillshade = false
+                    styleChanged = true
                 }
 
-                // Failing everything else, default to natural.
-                return STYLE_NATURAL
+                // If a pmtiles file was corrected via reading the header, we need to refresh the map with applyMapStyle
+                // so that it can be rebuilt with the correct maxzoom values.
+                if (await worldMap.pmtilesFilesCorrected) {
+                    styleChanged = true
+                }
+
+                if (styleChanged) {
+                    applyMapStyle()
+                }
             }
 
             function getMdbMapStyle() {
@@ -788,9 +1467,12 @@
             }
 
             async function applyMapStyle() {
+                // Prevent too many reloads in quick succession that shows errors on the console
+                await until(mapStyleLoaded)
+
                 mb.mapstyle = getMdbMapStyle()
 
-                console.log("setting to", mapStyleChoice, "i.e.", mb.mapstyle)
+                console.log("setting to", mapStyleChoice, "i.e.", mb.mapstyle, "and reloading the page")
 
                 setUpMap() // The above will reset the map so we have to add controls and other things again.
             }
@@ -1001,6 +1683,65 @@
                     this.drawButton.style['background-color'] = this.INACTIVE_COLOR
                 }
 
+                // Given the bbox, give a file size estimate. We will start with something
+                // very crude, and we can refine it over time if it is requested.
+                getEstimates(wrappedBounds) {
+                    const EARTH_CIRCUMFERENCE = 40_000
+
+                    const latDiffToKm = latDiff => Math.abs((latDiff / 360) * EARTH_CIRCUMFERENCE)
+                    const lngDiffToKm = (lngDiff, north, south) => {
+                        const kmsAtEquator = (lngDiff / 360) * EARTH_CIRCUMFERENCE
+
+                        // in reality this is more of a calculus problem but hopefully a simple
+                        // halfway point between north and south boundaries works for an estimate.
+                        const latFactor = Math.cos(Math.PI * (((south + north) / 2) / 180))
+
+                        return Math.abs(kmsAtEquator * latFactor)
+                    }
+
+                    const latDiff = wrappedBounds.getSouth() - wrappedBounds.getNorth()
+                    const lngDiff = wrappedBounds.getEast() < wrappedBounds.getWest() ?
+                        wrappedBounds.getEast() - wrappedBounds.getWest() + 360 :
+                        wrappedBounds.getEast() - wrappedBounds.getWest()
+
+                    const kmHeight = latDiffToKm(latDiff)
+                    const kmWidth = lngDiffToKm(
+                        lngDiff, wrappedBounds.getNorth(), wrappedBounds.getSouth(),
+                    )
+                    // areaEstimate is named thus because it uses a rough equation to calculate.
+                    // Good enough for file size estimates.
+                    const areaEstimate = kmWidth * kmHeight
+
+                    // The following is my vibes-oriented estimate. I put in fractional exponents because
+                    // I thought there would be curve to the numbers, particularly with urban centers being
+                    // smaller percentage as areas grow. From there I tweaked numbers until it seemed to
+                    // fit. That's as deep as this analysis goes. Even with all of this, it gives some bad
+                    // estimates.
+
+                    // A convenient figure to play with. The minimum is 10km x 10km because that seems
+                    // to be roughly the smallest bit of map that you can download.
+                    const areaPer100sqkm = Math.max(areaEstimate, 10 * 10) / (10 * 10)
+
+                    const water = (areaPer100sqkm ** 1) * 0.023 + 2
+                    const ruralLo = (areaPer100sqkm ** .9) * 0.2 + 3.4
+                    const ruralHi = ruralLo * 3
+
+                    const urbanLo = (areaPer100sqkm ** .55) * 8.4
+                    const urbanHi = urbanLo * 1.5
+
+                    // Rural becomes less relevant at big distances. Seems like urban areas within the
+                    // land do have an effect, but we'll dampen it.
+                    const landLo = ruralLo
+                    const landHi = (ruralHi + urbanHi) / 2
+
+                    // Probably even if it's just one dimension, it will inevitably contain some rural areas
+                    if (kmWidth < 500 && kmHeight < 500) {
+                        return {water, ruralLo, ruralHi, urbanLo, urbanHi}
+                    } else {
+                        return {water, landLo, landHi}
+                    }
+                }
+
                 setupDownloaderUI() {
                     const thisControl = this
                     let downloadPopup = null
@@ -1058,18 +1799,55 @@
                         //
                         // Therefore, the min/max sorting should work as intended even if the bounding box straddles the
                         // 180/-180 line. Furthermore, a lot of the downstream headaches with displaying regions go away.
+                        //
+                        // That said, when we pass these coordinates to the downloader tool, we "wrap" the numbers at
+                        // -180/180. We avoid my initial concern (above) by preserving the order of the coordinates.
                         const lats = shape.map( ([lon, lat]) => lat)
                         const lons = shape.map( ([lon, lat]) => lon)
 
-                        const min_lon = Math.min.apply(null, lons)
-                        const min_lat = Math.min.apply(null, lats)
-                        const max_lon = Math.max.apply(null, lons)
-                        const max_lat = Math.max.apply(null, lats)
+                        // As returned by the drawing tool. Useful for finding coordinates in the UI.
+                        const drawnBounds = new maplibregl.LngLatBounds([
+                          [Math.min.apply(null, lons), Math.min.apply(null, lats)],
+                          [Math.max.apply(null, lons), Math.max.apply(null, lats)],
+                        ])
 
-                        const center = [
-                            min_lon + (max_lon - min_lon) / 2,
-                            min_lat + (max_lat - min_lat) / 2,
-                        ]
+                        // With longitude within (-180 + epsilon, 180). Useful for passing to the downloader tool.
+                        const wrappedBounds = (() => {
+                            // Convert from the UI's coordinate system to our standard -180 to 180 longitude.
+                            if (drawnBounds.getEast() - drawnBounds.getWest() >= 360) {
+                                // If we naively wrap() after the user draws a region that covers *more* than the
+                                // width of the world, we would lose information and get the wrong region. Instead, if
+                                // the user does this, we'll more deliberately select the whole width of the world.
+                                return new maplibregl.LngLatBounds([
+                                  [-179.99999999, drawnBounds.getSouth()],
+                                  [180, drawnBounds.getNorth()],
+                                ])
+                            } else {
+                                return new maplibregl.LngLatBounds([
+                                  drawnBounds.getSouthWest().wrap(),
+                                  drawnBounds.getNorthEast().wrap(),
+                                ])
+                            }
+                        })()
+
+                        const downloadNameInput = document.createElement('input');
+                        downloadNameInput.style = "display: block; margin-bottom: 1em;"
+
+                        function updateName () {
+                            const cleanedName = downloadNameInput.value.slice(0, 35).toLowerCase().replace(/[^a-z0-9]+/g, "_")
+                            downloadNameInput.value = cleanedName
+                            downloadCommand.set(cleanedName)
+                            nameNextButton.set()
+                        }
+                        // be as annoying and cover as many bases as I can
+                        downloadNameInput.onkeydown = downloadNameInput.onpaste = downloadNameInput.onchange = updateName
+
+                        downloadNameInput.onkeyup = e => {
+                            updateName() // because onkeydown happens before the new value is actually set
+                            if (e.key === "Enter") {
+                                trySubmitRegionName()
+                            }
+                        }
 
                         function popupButton(textContent, onclick) {
                             const button = document.createElement('button')
@@ -1080,23 +1858,51 @@
                             return button
                         }
 
-                        const backButton = popupButton("Back", () => {
-                            // show popupStart, hide popupFinish
-                            popupStart.style = ""
-                            popupFinish.style = "display: none;"
+                        const nameBackButton = popupButton("Back", () => {
+                            // show popupRegionFileSize, hide popupRegionName
+                            popupRegionName.style = "display: none;"
+                            popupRegionFileSize.style = ""
+                        })
+
+                        const commandBackButton = popupButton("Back", () => {
+                            // show popupRegionName, hide popupRegionCommand
+                            popupRegionCommand.style = "display: none;"
+                            popupRegionName.style = ""
                         })
 
                         const doneButton = popupButton("Done", () => {
                             this.setOffMode();
                             removePopup();
                         })
-                        const cancelButton = popupButton("Cancel", () => {
+                        const nameCancelButton = popupButton("Cancel", () => {
+                            this.setOffMode();
+                            removePopup();
+                        })
+                        const fileSizeCancelButton = popupButton("Cancel", () => {
                             this.setOffMode();
                             removePopup();
                         })
 
+                        const fileSizeNextButton = popupButton("Next", () => {
+                            // show popupRegionName, hide popupRegionFileSize
+                            popupRegionFileSize.style = "display: none;"
+                            popupRegionName.style = ""
+                        })
+
+                        const nameNextButton = popupButton("", trySubmitRegionName)
+
+                        nameNextButton.set = function() {
+                            if (downloadNameInput.value.length > 0) {
+                                this.innerHTML = "Next"
+                            } else {
+                                this.innerHTML = "<span style='color: #888'>Next</span>"
+                            }
+                        }
+                        nameNextButton.set()
+
                         const downloadCommand = document.createElement('div');
                         downloadCommand.set = function(downloadName) {
+                            const [[min_lon, min_lat], [max_lon, max_lat]] = wrappedBounds.toArray()
                             const downloadCommandString = `sudo {{ maps_tools.tile_extract.working_dir }}/tile-extract.py extract ${downloadName} ${min_lon},${min_lat},${max_lon},${max_lat}`
                             this.innerHTML = `<pre
                                 style="font-size:0.8em; background-color:#DDD; padding:1em; border-style:dashed; border-color:#FFF; border-width:2px; white-space: pre-wrap; word-wrap: break-word; line-height:1em;"
@@ -1104,56 +1910,96 @@
                             >${downloadCommandString}</pre>`
                         }
 
-                        const downloadNameInput = document.createElement('input');
-                        downloadNameInput.style = "display: block; margin-bottom: 1em;"
+                        const estimates = this.getEstimates(wrappedBounds)
 
-                        function updateName () {
-                            const cleanedName = downloadNameInput.value.slice(0, 35).toLowerCase().replace(/[^a-z0-9]+/g, "_")
-                            downloadNameInput.value = cleanedName
-                            downloadCommand.set(cleanedName)
-                            nextButton.set()
-                        }
-                        // be as annoying and cover as many bases as I can
-                        downloadNameInput.onkeydown = downloadNameInput.onpaste = downloadNameInput.onchange = updateName
+                        // Display a number of MB in a nice way (as GB if > 1000). Since it's
+                        // such a rough estimate, only give one significant figure.
+                        const dispMB = num => {
+                            const extraDigits = Math.floor(Math.log10(num))
+                            const rounded = Math.round(num / (10 ** extraDigits)) * 10 ** extraDigits
 
-                        downloadNameInput.onkeyup = e => {
-                            updateName() // because onkeydown happens before the new value is actually set
-                            if (e.key === "Enter") {
-                                tryGoToNext()
+                            if (rounded < 1000) {
+                                return `${rounded}MB`
                             }
+                            return `${rounded / 1000}GB`
                         }
 
-                        const popupStart = document.createElement('div');
-                        popupStart.innerHTML = `
-                            <h1>Download region</h1>
-                            <p>Choose a name for this <b>Full Quality Region</b> <i>(lower case letters, numbers, and _ only)</i>
+                        // In case the range ends up being the same string representation of a
+                        // file size twice, just show the one number. Otherwise display as a range
+                        const dispMBRange = (num1, num2) => {
+                            const disp1 = dispMB(num1)
+                            const disp2 = dispMB(num2)
+                            if (disp1 === disp2) {
+                                return disp1
+                            }
+                            return `${disp1} - ${disp2}`
+                        }
+
+                        let estimateList = `
+                              <li>Water: <b>${dispMB(estimates.water)}</b></li>
+                        `
+                        if (estimates.ruralLo) {
+                            estimateList += `
+                                  <li>Rural areas: <b>${dispMBRange(estimates.ruralLo, estimates.ruralHi)}</b></li>
+                            `
+                        }
+                        if (estimates.urbanLo) {
+                            estimateList += `
+                                  <li>Urban areas: <b>${dispMBRange(estimates.urbanLo, estimates.urbanHi)}</b></li>
+                            `
+                        }
+                        if (estimates.landLo) {
+                            estimateList += `
+                                  <li>Land: <b>${dispMBRange(estimates.landLo, estimates.landHi)}</b></li>
+                            `
+                        }
+
+                        const popupRegionFileSize = document.createElement('div');
+                        popupRegionFileSize.innerHTML = `
+                            <h1>Download Region</h1>
+                            <h2>Estimated File Size</h2>
+                            <p>
+                              A <i>rough estimate</i> of the download size of this region depends on what it contains:
+                            </p>
+
+                            <ul>
+                              ${estimateList}
+                            </ul>
+
+                            <p>
+                              You will see an accurate file size before download begins.
                             </p>
                         `
-                        function tryGoToNext() {
+                        popupRegionFileSize.appendChild(fileSizeNextButton)
+                        popupRegionFileSize.appendChild(fileSizeCancelButton)
+
+                        const popupRegionName = document.createElement('div');
+                        popupRegionName.style = "display: none;"
+                        popupRegionName.innerHTML = `
+                            <h1>Download Region</h1>
+                            <h2>Pick A Name</h2>
+                            <p>
+                              Choose a name for this region <i>(lower case letters, numbers, and _ only)</i>
+                            </p>
+                        `
+                        function trySubmitRegionName() {
                             if (downloadNameInput.value.length > 0) {
-                                popupFinish.style = "" // show popupFinish
-                                popupStart.style = "display: none;"
+                                popupRegionCommand.style = "" // show popupRegionCommand
+                                popupRegionName.style = "display: none;"
                                 updateName() // for good measure. we want to avoid them inputting a destructive command!
                             }
                         }
-                        const nextButton = popupButton("", tryGoToNext)
-                        nextButton.set = function() {
-                            if (downloadNameInput.value.length > 0) {
-                                this.innerHTML = "Next"
-                            } else {
-                                this.innerHTML = "<span style='color: #888'>Next</span>"
-                            }
-                        }
-                        nextButton.set()
 
-                        popupStart.appendChild(downloadNameInput)
-                        popupStart.appendChild(nextButton)
-                        popupStart.appendChild(cancelButton)
+                        popupRegionName.appendChild(downloadNameInput)
+                        popupRegionName.appendChild(nameNextButton)
+                        popupRegionName.appendChild(nameBackButton)
+                        popupRegionName.appendChild(nameCancelButton)
 
-                        const popupFinish = document.createElement('div');
-                        popupFinish.style = "display: none;"
-                        popupFinish.innerHTML = `
-                            <h1>Download region</h1>
+                        const popupRegionCommand = document.createElement('div');
+                        popupRegionCommand.style = "display: none;"
+                        popupRegionCommand.innerHTML = `
+                            <h1>Download Region</h1>
+                            <h2>Final Step</h2>
                             <ul>
                               <li>Click below to select text</li>
                               <li>Copy text</li>
@@ -1161,22 +2007,24 @@
                               <li>When it is done downloading, reload this page</li>
                             </ul>
                         `
-                        popupFinish.appendChild(downloadCommand)
-                        popupFinish.appendChild(backButton)
-                        popupFinish.appendChild(doneButton)
+                        popupRegionCommand.appendChild(downloadCommand)
+                        popupRegionCommand.appendChild(doneButton)
+                        popupRegionCommand.appendChild(commandBackButton)
 
                         const popupContainer = document.createElement('div');
-                        popupContainer.appendChild(popupStart)
-                        popupContainer.appendChild(popupFinish)
+                        popupContainer.appendChild(popupRegionFileSize)
+                        popupContainer.appendChild(popupRegionName)
+                        popupContainer.appendChild(popupRegionCommand)
 
                         downloadPopup = new maplibregl.Popup({closeOnClick: false, closeButton: false})
-                            .setLngLat(center)
+                            .setLngLat(drawnBounds.getCenter())
                             .setDOMContent(popupContainer)
                             .addTo(mb.map);
                     })
                 }
-                onClickDeleteRegion(regionName) {
-                    const [min_lon, min_lat, max_lon, max_lat] = downloadedFQRegions.regions[regionName].ui_bounds
+                async onClickDeleteRegion(regionName) {
+                    const fqrs = await downloadedFQRegions
+                    const [min_lon, min_lat, max_lon, max_lat] = fqrs.regions[regionName].ui_bounds
 
                     // Zoom out to view the region so that the delete popup is well placed
                     const fqrWidth = max_lon - min_lon
@@ -1224,6 +2072,90 @@
                         .setLngLat(center)
                         .setDOMContent(popupContainer)
                         .addTo(mb.map);
+                }
+            }
+
+            class DataAlertsControl {
+                onAdd(map) {
+                    this._map = map;
+                    this._container = document.createElement('div');
+                    this._container.className = 'maplibregl-ctrl maplibregl-ctrl-group';
+
+                    this.alertsButton = document.createElement('button');
+                    this.alertsButton.type = "button"
+                    this.alertsButton.title = "List FQR alerts"
+                    this.alertsButton.innerHTML = "&#10071;" // exclamation
+                    this.alertsButton.onclick = this.toggleAlerts.bind(this)
+                    this._container.appendChild(this.alertsButton)
+
+                    this.alerts = document.createElement('div');
+                    this.alerts.style['display'] = 'none'
+                    this.alerts.onclick = this.toggleAlerts.bind(this)
+
+                    this._container.appendChild(this.alerts)
+
+                    this.handleDisplay()
+
+                    return this._container
+                }
+                onRemove() {
+                    this._container.parentNode.removeChild(this._container);
+                    this._map = undefined;
+                }
+                toggleAlerts() {
+                    if (this.alerts.style['display'] === 'none') {
+                        this.alerts.style['display'] = ''
+                        this.alertsButton.style['display'] = 'none'
+                    } else {
+                        this.alerts.style['display'] = 'none'
+                        this.alertsButton.style['display'] = ''
+                    }
+                }
+                setupAlerts() {
+                    this.alerts.style['overflow-y'] = 'scroll';
+                    this.alerts.style['max-height'] = '50vh';
+                    this.alerts.style['padding'] = '20px';
+
+                    this.alerts.innerHTML = "<h1>Map Data File Issues</h1>"
+
+                    for (let [fqrName, fqrAlerts] of Object.entries(dataFileAlerts)) {
+                        this.alerts.innerHTML += `<h2>${fqrName}</h2>`
+                        this.alerts.innerHTML += `<ul>`
+                        for (let dfAlert of fqrAlerts) {
+                            let alertHeader
+                            if (dfAlert.warning) {
+                                alertHeader = `Warning: ${dfAlert.warning}`
+                            } else if (dfAlert.error) {
+                                alertHeader = `Error: ${dfAlert.error}`
+                            } else {
+                                alertHeader = "Alert"
+                                console.warn("Invalid fqr alert type")
+                            }
+                            this.alerts.innerHTML += `<li><b>${alertHeader}</b><br>${dfAlert.message}<br></li>`
+                        }
+                        this.alerts.innerHTML += `</ul>`
+                    }
+                }
+
+                handleDisplay() {
+                    if (!REGION_DOWNLOADER_ENABLED) {
+                        return
+                    }
+
+                    this.alertsButton.style['display'] = 'none';
+                    (async () => {
+                        // After FQRs are loaded, show the button if there are errors
+
+                        // In the future we may want to rebuild this every time we add a new alert but this will be fine so
+                        // long as we add the data warninsg within these two parts of the code:
+                        await downloadedFQRegions
+                        await worldMap.pmtilesFilesCorrected
+
+                        if (Object.keys(dataFileAlerts).length) {
+                            this.alertsButton.style['display'] = ''
+                            this.setupAlerts()
+                        }
+                    })()
                 }
             }
 
@@ -1383,7 +2315,7 @@
                 maplibregl,
                 zoom: MAX_SEARCH_RESULT_ZOOM,
                 flyTo: {
-                    maxZoom: MAX_SEARCH_RESULT_ZOOM,
+                    maxZoom: MAX_SEARCH_RESULT_ZOOM, // TODO what is maxZoom? should it be maxzoom? or zoom?
                 },
                 popup: true,
                 limit: getMaxSearchResults(),
@@ -1582,39 +2514,28 @@
                 if (geocoder) {
                     mb.map.addControl(geocoder, 'top-left');
 
-                    // Initialize the same way as maps.black
-                    // https://github.com/maps-black/maps.black/blob/12205728ceb0672682381088c6c1e7ad05fdc4f5/client/maps.black.js#L120
-                    mb.licenses = mb.licenses || { data: {}, styles: {}, fonts: {} }
-                    mb.licenses.search = geocoderAlternatives[MAP_SEARCH_ENGINE].licenses
-
                     geocoderAlternatives[MAP_SEARCH_ENGINE].onMapRefresh()
                 }
                 mb.map.addControl(scaleControl);
 
-                // in case of nat-z8 and no FQRs, get rid of OSM attribution.
-                (async () => {
-                    await until(fqrLoaded)
-                    if (WORLD_MAP_IS_NATURAL_EARTH && !fqRegionsExist()) {
-                        await until(() =>
-                          mb.licenses &&
-                          mb.licenses.data &&
-                          mb.licenses.data['openstreetmap-openmaptiles']
-                        )
-                        delete mb.licenses.data['openstreetmap-openmaptiles']
-                    }
-                })()
-
                 fqRegionsControl = new FQRegionsControl(startFQRegionsControlWithDrawMode)
                 mb.map.addControl(fqRegionsControl, 'top-left');
 
-                // Add all the right-side controls at once after we determine whether terrain is among them
-                terrainAvailable().then(showTerrainControl => {
+                mb.map.addControl(new DataAlertsControl(), 'top-left');
+
+                // Add all the right-side controls at once after we determine whether terrain is
+                // among them and what the available styles are
+                (async () => {
+                    const showTerrainControl = await terrainAvailable()
+                    const availableStyles = await getAvailableStyles()
+
                     mb.map.addControl(new MapsDotBlackGlobeControl(), 'top-right');
                     if (showTerrainControl) {
                         mb.map.addControl(new MapsDotBlackTerrainControl(), 'top-right');
                     }
-                    mb.map.addControl(new MapsDotBlackStyleControl(getAvailableStyles()), 'top-right');
-                })
+                    mb.map.addControl(new MapsDotBlackStyleControl(availableStyles), 'top-right');
+                })()
+
                 // NOTE Navigation control is added via `navigationcontrol` attribute on the maps-black tag
 
                 mb.map.off('moveend', onMoveEnd) // unsetting first, in case it's already there from a previous refresh
@@ -1627,10 +2548,11 @@
                 drawFQRegionOutlines()
 
                 setDefaultView()
+
+                fixLicenses()
             }
 
             window.addEventListener("load", async () => {
-                correctTerrainSetting()
                 setUpMap()
             });
 
@@ -1653,6 +2575,7 @@
           })
 
           console.log("setting to", mapStyleChoice, "i.e.", mbAttributes.mapstyle)
+          fixStyleOnStartup()
           document.body.prepend(mb)
         </script>
     </body>

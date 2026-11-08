@@ -1,0 +1,74 @@
+# --- systemd platforms (x86_64/arm64) ---
+
+- name: Enable & Restart 'forgejo' systemd service, if forgejo_enabled (not proot)
+  systemd:
+    name: forgejo
+    daemon_reload: yes
+    enabled: yes
+    state: restarted
+  when:
+    - forgejo_enabled
+    - not is_proot
+
+- name: Disable & Stop 'forgejo' systemd service, if not forgejo_enabled (not proot)
+  systemd:
+    name: forgejo
+    enabled: no
+    state: stopped
+  when:
+    - not forgejo_enabled
+    - not is_proot
+
+
+# --- proot platform (pdsm) ---
+
+- name: Enable & Start 'forgejo' via pdsm (proot), if forgejo_enabled
+  when:
+    - forgejo_enabled
+    - is_proot
+  block:
+    - name: Enable 'forgejo' via pdsm (proot)
+      command: pdsm enable forgejo
+      register: pdsm_enable
+      changed_when: "'already enabled' not in pdsm_enable.stdout"
+
+    - name: Restart 'forgejo' via pdsm (proot)
+      command: pdsm restart forgejo
+
+- name: Disable & Stop 'forgejo' via pdsm (proot), if not forgejo_enabled
+  when:
+    - not forgejo_enabled
+    - is_proot
+  block:
+    - name: Stop 'forgejo' via pdsm (proot)
+      command: pdsm stop forgejo
+      register: pdsm_stop
+      changed_when: "'already stopped' not in pdsm_stop.stdout"
+
+    - name: Disable 'forgejo' via pdsm (proot)
+      command: pdsm disable forgejo
+
+
+# --- NGINX reverse proxy (both platforms) ---
+
+- name: Enable http://box{{ forgejo_url }} via NGINX, by installing {{ nginx_conf_dir }}/forgejo-nginx.conf from template
+  template:
+    src: forgejo-nginx.conf.j2
+    dest: "{{ nginx_conf_dir }}/forgejo-nginx.conf"    # /etc/nginx/conf.d
+  when: forgejo_enabled
+
+- name: Disable http://box{{ forgejo_url }} via NGINX, by removing {{ nginx_conf_dir }}/forgejo-nginx.conf
+  file:
+    path: "{{ nginx_conf_dir }}/forgejo-nginx.conf"    # /etc/nginx/conf.d
+    state: absent
+  when: not forgejo_enabled
+
+- name: Reload 'nginx' systemd service (not proot)
+  systemd:
+    name: nginx
+    state: restarted
+  when: not is_proot
+
+- name: Restart 'nginx' via pdsm (proot)
+  command: pdsm restart nginx
+  when: is_proot

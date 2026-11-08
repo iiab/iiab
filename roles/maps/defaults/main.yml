@@ -5,11 +5,7 @@ unpkg_url: https://unpkg.com
 
 maps_serve_path: "{{ content_base }}/www/maps"        # /library/www/maps
 maps_data_root: "{{ content_base }}/maps"             # /library/maps
-
-# For now use the same directory as maps_serve_path. Eventually we could
-# put it under a /fallback directory, but then we'd want to make sure
-# we're not downloading duplicates of these fallback files.
-maps_fallback_path: "{{ maps_serve_path }}"           # /library/www/maps
+maps_fallback_path: "{{ maps_serve_path }}/fallback"  # /library/www/maps/fallback
 
 nominatim_user: nominatim
 nominatim_home: /srv/nominatim
@@ -19,29 +15,36 @@ nominatim_venv: "{{ nominatim_home }}/nominatim-venv"
 maps_static_search_dir: "static-search"
 maps_static_search_root: "{{ maps_serve_path }}/{{ maps_static_search_dir }}"
 
+# URL where we can find a catalog of all map data files available to download.
+maps_catalog_url: "https://raw.githubusercontent.com/iiab/iiab/refs/heads/master/roles/maps/maps-catalog.json"
+
+# This is where the catalog is kept static to avoid unwanted updates when
+# running ansible. This does not apply to FQRs hence the "global". FQRs will
+# always download the latest catalog.
+maps_orig_global_catalog: "{{ maps_serve_path }}/maps-catalog-global-orig.json"
+
 maps_tools:
   base_dir: "/opt/iiab/maps"
   pmtiles:
+    # Custom build: upstream v1.31.2 + parallel range downloads and resumable
+    # downloads with JSON progress. Source: https://github.com/chapmanjacobd/go-pmtiles
+    # (PRs #1 and #2). See "How to speed up or monitor Full Quality Region downloads"
+    # in README.md.
     releases:
       armhf:
-        src_url: https://iiab.switnet.org/binaries/pmtiles-32b/go-pmtiles_1.30.1_Linux_armv7.tar.gz
-        sha256sum: 9948f518efa87163d0587ce7b95dd1a98d1ddecdf11131e4286cd331fd63b04a
+        src_url: https://iiab.switnet.org/binaries/pmtiles-1.31.2-m16/go-pmtiles_1.31.2-m16_Linux_armv7.tar.gz
+        sha256sum: 3ca57c093c915906546bff251b02627682c134385f7cde2ff101b2aa360efaf3
       arm64:
-        src_url: https://github.com/protomaps/go-pmtiles/releases/download/v1.29.1/go-pmtiles_1.29.1_Linux_arm64.tar.gz
-        sha256sum: e44823cff328c2ea354096ccbfd7e7ef6c8f05b11553ad28fcaa33989123a57f
+        src_url: https://iiab.switnet.org/binaries/pmtiles-1.31.2-m16/go-pmtiles_1.31.2-m16_Linux_arm64.tar.gz
+        sha256sum: c43bcdf275ac6eaf63504c36a9e0c674ff7b22396d6affa9bc76e84432c6a757
       amd64:
-        src_url: https://github.com/protomaps/go-pmtiles/releases/download/v1.29.1/go-pmtiles_1.29.1_Linux_x86_64.tar.gz
-        sha256sum: 870c3aa968a75430ca1772351c3a6a6d30103b466d6df5837351bfb340640f54
+        src_url: https://iiab.switnet.org/binaries/pmtiles-1.31.2-m16/go-pmtiles_1.31.2-m16_Linux_x86_64.tar.gz
+        sha256sum: b2f2e522e624d7ffc4a1079398635e323a41332c4b8124bdd1b243eb76cf2c55
     archive_tmp_dir: "/opt/iiab/downloads/maps/pmtiles"
     archive_tmp_file: "/opt/iiab/downloads/maps/pmtiles/pmtiles.tar.gz"
     executable_path: "{{ maps_tools.base_dir }}/pmtiles"
-  pmtiles_python:
-    git_url: https://github.com/protomaps/PMTiles
-    dir_name: pmtiles-python
-    version: 8b8ddea4dbff1b0104cf2bebf2f7ff35c91b41d5
   tile_extract:
     working_dir: "{{ maps_tools.base_dir }}/tile-extract"
-    info_file: "extracts.json"
 
 # Basic maps.black javascript and styles
 maps_dot_black_js_and_styles_host: https://iiab.switnet.org/maps/2
@@ -91,16 +94,9 @@ maplibre_js_and_styles:
 
 maps_dot_black_naturalearth6_symlink_name: "naturalearth6-NE2_HR_SR_W_DR-WEBP.pmtiles"
 
-maps_dot_black_osm_symlink_name: openstreetmap-openmaptiles.pmtiles
-maps_dot_black_satellite_symlink_name: s2maps-sentinel2-2023.pmtiles
-
-# NOTE: This symlink's name matches what maps.black is explicitly querying for.
-# However the fact that it includes "z0-z10" is not ideal, as it may point to an
-# extract that we made ourselves that only goes to a lower zoom level. In the
-# near future, we may be able to change what maps.black queries for, and we
-# should change this.
-maps_dot_black_terrain_symlink_name: terrarium-z0-z10.pmtiles
-
+# "Minimal" maps that we want to give everybody regardless of their choice so that they
+# have something to fall back to in case they choose a large file and decide to manually
+# delete it.
 maps_fallback_vector_zoom: nat-z8
 maps_fallback_satellite_zoom: 7
 maps_fallback_terrain_zoom: 0-none
@@ -115,13 +111,15 @@ maps_terrain_fqr_max_zoom: 10
 #
 #   {search-engine}.{date}.full
 #   {search-engine}.{date}.{subset}
-#   {search-engine}.{date}.full-region.region-name
+#   {region-name}.fqr/{search-engine}.{date} (when we have search data in FQRs)
 #
 # Though:
 #
 # * backend databases such as nominatim will be in /library/maps while static will be under the serve directory
-# * "full" might not ever happen, it's a moving target. we could append "-region" regardless
 # * {subset} would be something like "pop-1k-cities"
+# * "full" might not ever happen because it's a moving target and because there might not be an interest in
+#   having all available subsets together (all cities + all lakes + all 7-11s etc)
+#   * thus, we might end up with {subset} in FQRs
 
 nominatim_db_symlink_name: nominatim.sqlite
 

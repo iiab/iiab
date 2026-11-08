@@ -13,12 +13,12 @@ with open('checkurls','r') as urls:
       outstr += '    listen 80;\n'
       outstr += '    server_name {};\n'.format(line.strip())
       outstr += '    location / {\n'
-      outstr += '        proxy_set_header   X-Forwarded-For $remote_addr;\n'
-      outstr += '        proxy_set_header   Host $http_host;\n'
-      outstr += '        proxy_pass         "http://127.0.0.1:9090";\n'
+      outstr += '        include uwsgi_params;\n'
+      outstr += '        uwsgi_param HTTP_HOST $http_host;\n'
+      outstr += '        uwsgi_param HTTP_X_FORWARDED_FOR $remote_addr;\n'
+      outstr += '        uwsgi_pass unix:///run/uwsgi/captiveportal.socket;\n'
       outstr += '    }\n' 
       outstr += '}\n'
 #print(outstr)
 with open('/etc/nginx/sites-available/capture.conf','w') as config:
    config.write(outstr)
-

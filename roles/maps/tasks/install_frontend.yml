@@ -1,9 +1,3 @@
-- name: Make serving directory (0755 by default)
-  file:
-    path: "{{ maps_serve_path }}"
-    state: directory
-    # mode: 0755
-
 - name: Make index file
   template:
     src: index.html.j2
@@ -23,127 +17,84 @@
     dest_base_path: "{{ maps_serve_path }}"
   with_items: "{{ maps_dot_black_js_and_styles }}"
 
-- name: Download naturalearth6 tiles
-  include_tasks: download_large_file.yml
+- name: Get naturalearth6 from catalog
+  include_tasks: download_from_catalog.yml
   vars:
+    catalog_item: naturalearth6
+    catalog_item_config_var: maps_ne6_zoom
+    symlink_name: "{{ maps_dot_black_naturalearth6_symlink_name }}"
     dest_base_path: "{{ maps_serve_path }}"
-    item: "{{ maps_catalog.naturalearth6[maps_ne6_zoom | string] }}"
 
-- name: Select naturalearth6 tiles
-  file:
-    src: "{{ maps_serve_path }}/{{ maps_catalog.naturalearth6[maps_ne6_zoom | string] | split('/') | last }}"
-    dest: "{{ maps_serve_path }}/{{ maps_dot_black_naturalearth6_symlink_name }}"
-    state: link
+# Put this in a file because there's a lot of repeat code
+- name: Install handle-unused-pmtiles.py
+  template:
+    src: "handle-unused-pmtiles.py.j2"
+    dest: "{{ maps_tools.base_dir }}/handle-unused-pmtiles.py"
+    mode: "0755"
 
-# This helps avoid silent errors transitioning between variable names. It can be deleted 2026/09/04.
-- name: Error on deprecated maps_vector_quality
-  assert:
-    that: maps_vector_quality is not defined
-    msg:
-      - "'maps_vector_quality' has been renamed to 'maps_vector_zoom' with new valid values. Please update your"
-      - "/etc/iiab/local_vars.yml and see https://github.com/iiab/iiab/blob/master/roles/maps/defaults/main.yml for valid values."
-
-- name: "Make sure maps_vector_zoom has a valid value"
-  assert:
-    that: maps_catalog.vector[maps_vector_zoom | string] is defined
-    fail_msg: "Error: maps_vector_zoom is set to an invalid value. See `vector` in https://github.com/iiab/iiab/blob/master/roles/maps/maps-catalog.json for valid values."
-    quiet: yes
-
-- name: Download vector tiles
-  include_tasks: download_large_file.yml
-  vars:
-    dest_base_path: "{{ maps_serve_path }}"
-    item: "{{ maps_catalog.vector[maps_vector_zoom | string] }}"
-
-- name: Select vector tiles
-  file:
-    src: "{{ maps_serve_path }}/{{ maps_catalog.vector[maps_vector_zoom | string] | split('/') | last }}"
-    dest: "{{ maps_serve_path }}/{{ maps_dot_black_osm_symlink_name }}"
-    state: link
-
-- name: Download fallback vector tiles
-  include_tasks: download_large_file.yml
-  when: maps_vector_zoom != maps_fallback_vector_zoom
-  vars:
-    dest_base_path: "{{ maps_serve_path }}"
-    item: "{{ maps_catalog.vector[maps_fallback_vector_zoom | string] }}"
-
-- when: maps_satellite_zoom != "none"
-  block:
-    - name: "Make sure maps_satellite_zoom has a valid value"
-      assert:
-        that: maps_catalog.satellite[maps_satellite_zoom | string] is defined
-        fail_msg: "Error: maps_satellite_zoom is set to an invalid value. See `satellite` in https://github.com/iiab/iiab/blob/master/roles/maps/maps-catalog.json for valid values."
-        quiet: yes
-
-    - name: Download satellite tiles
-      include_tasks: download_large_file.yml
-      vars:
-        dest_base_path: "{{ maps_serve_path }}"
-        item: "{{ maps_catalog.satellite[maps_satellite_zoom | string] }}"
-
-    - name: Select satellite tiles
-      file:
-        src: "{{ maps_serve_path }}/{{ maps_catalog.satellite[maps_satellite_zoom | string] | split('/') | last }}"
-        dest: "{{ maps_serve_path }}/{{ maps_dot_black_satellite_symlink_name }}"
-        state: link
-
-    - name: Download fallback satellite tiles
-      include_tasks: download_large_file.yml
-      when: maps_satellite_zoom != maps_fallback_satellite_zoom
-      vars:
-        dest_base_path: "{{ maps_serve_path }}"
-        item: "{{ maps_catalog.satellite[maps_fallback_satellite_zoom | string] }}"
-
-- name: Remove unused satellite symlink
-  when: maps_satellite_zoom == "none"
-  file:
-    path: "{{ maps_serve_path }}/{{ maps_dot_black_satellite_symlink_name }}"
-    state: absent
-
-- name: "Make sure maps_terrain_zoom has a valid value"
-  assert:
-    that: maps_catalog.terrain[maps_terrain_zoom | string] is defined
-    fail_msg: "Error: maps_terrain_zoom is set to an invalid value. See `terrain` in https://github.com/iiab/iiab/blob/master/roles/maps/maps-catalog.json for valid values."
-    quiet: yes
-
-- name: Download terrain tiles
-  include_tasks: download_large_file.yml
-  vars:
-    dest_base_path: "{{ maps_serve_path }}"
-    item: "{{ maps_catalog.terrain[maps_terrain_zoom | string] }}"
-
-# If the user selects "none", we download a dummy file
-- name: Select terrain tiles
-  file:
-    src: "{{ maps_serve_path }}/{{ maps_catalog.terrain[maps_terrain_zoom | string] | split('/') | last }}"
-    dest: "{{ maps_serve_path }}/{{ maps_dot_black_terrain_symlink_name }}"
-    state: link
-
-- name: Download fallback terrain tiles
-  include_tasks: download_large_file.yml
-  when: maps_terrain_zoom != maps_fallback_terrain_zoom
-  vars:
-    dest_base_path: "{{ maps_serve_path }}"
-    item: "{{ maps_catalog.terrain[maps_fallback_terrain_zoom | string] }}"
-
-# maps-update.py is used here but it can also be run independently. As we use
-# it here, we take advantage of its handling of pmtiles zoom levels. It only
-# partially handles symlink repairs for now so we still need to set symlinks
-# by other means.
-- name: "Final map configuration"
+- name: "Rename any selected pmtiles from .old.pmtiles to .pmtiles"
   shell: |
     set -euo pipefail
-    {{ maps_tools.base_dir }}/maps-update.py
+    {{ maps_tools.base_dir }}/handle-unused-pmtiles.py selected
   args:
     executable: /bin/bash
 
-- name: Initiate the extracts json
-  copy:
-    content: '{"regions": {}}'
-    dest: "{{ maps_serve_path }}/{{ maps_tools.tile_extract.info_file }}"
-    mode: "0644"
-    force: false
+- name: Get vector from catalog
+  include_tasks: download_from_catalog.yml
+  when: maps_vector_zoom != maps_fallback_vector_zoom
+  vars:
+    catalog_item: vector
+    catalog_item_config_var: maps_vector_zoom
+    dest_base_path: "{{ maps_serve_path }}"
+
+- name: Download fallback vector tiles
+  include_tasks: download_from_catalog.yml
+  # Don't get the small fallback when we just want a super-small CI
+  when: not is_github_ci
+  vars:
+    catalog_item: vector
+    catalog_item_config_var: maps_fallback_vector_zoom
+    dest_base_path: "{{ maps_fallback_path }}"
+
+- name: Get satellite from catalog
+  include_tasks: download_from_catalog.yml
+  when: (maps_satellite_zoom != "none") and (maps_satellite_zoom != maps_fallback_satellite_zoom)
+  vars:
+    catalog_item: satellite
+    catalog_item_config_var: maps_satellite_zoom
+    dest_base_path: "{{ maps_serve_path }}"
+
+- name: Download fallback satellite tiles
+  include_tasks: download_from_catalog.yml
+  # Don't get the small fallback when we just want a super-small CI
+  when: (not is_github_ci) and (maps_satellite_zoom != "none")
+  vars:
+    catalog_item: satellite
+    catalog_item_config_var: maps_fallback_satellite_zoom
+    dest_base_path: "{{ maps_fallback_path }}"
+
+# Unlike with satellite, if the user selects "none" for terrain, we download a dummy file
+- name: Get terrain from catalog
+  include_tasks: download_from_catalog.yml
+  when: maps_terrain_zoom != maps_fallback_terrain_zoom
+  vars:
+    catalog_item: terrain
+    catalog_item_config_var: maps_terrain_zoom
+    dest_base_path: "{{ maps_serve_path }}"
+
+- name: Download fallback terrain tiles
+  include_tasks: download_from_catalog.yml
+  vars:
+    catalog_item: terrain
+    catalog_item_config_var: maps_fallback_terrain_zoom
+    dest_base_path: "{{ maps_fallback_path }}"
+
+- name: "Rename any previously selected pmtiles from .pmtiles to .old.pmtiles"
+  shell: |
+    set -euo pipefail
+    {{ maps_tools.base_dir }}/handle-unused-pmtiles.py unselected
+  args:
+    executable: /bin/bash
 
 - name: "Download preset full quality regions"
   # TODO - Is there a safer way to pass in item.name and item.bbox?

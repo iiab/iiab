@@ -55,7 +55,7 @@ Here are 3 examples below, to help you decide what you'll put in [/etc/iiab/loca
 ![Vector OSM Full Zoom](README-assets/vector/vector-osm-z14.png)
 ![Satellite Full Zoom](README-assets/satellite/satellite-z12.png)
 
-See `vector` and `satellite` [here](https://github.com/iiab/iiab/blob/master/roles/maps/generate-catalog.py) for all valid values.
+See `vector` and `satellite` [here](https://github.com/iiab/iiab/blob/master/roles/maps/MAPS_CATALOG_DETAILS.md) for all valid values.
 
 *NOTE: The satellite data is licensed "NonCommercial" under [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/).  To skip worldwide satellite imagery, set:*
 
@@ -99,7 +99,7 @@ PREREQ: Confirm that at least a [minimum IIAB Maps](#whats-a-minimum-iiab-maps-i
 
 ![Terrain Full Zoom](README-assets/terrain/terrain-z10.png)
 
-See `terrain` [here](https://github.com/iiab/iiab/blob/master/roles/maps/generate-catalog.py) for all valid values.
+See `terrain` [here](https://github.com/iiab/iiab/blob/master/roles/maps/MAPS_CATALOG_DETAILS.md) for all valid values.
 
 ### How do I view 3D Terrain?
 
@@ -263,16 +263,22 @@ For large file downloads:
 
 ## How to change or upgrade your IIAB Maps
 
-If your IIAB was installed many months ago (or many years ago), it's far better to start from scratch [installing a completely new version of IIAB](https://wiki.iiab.io/go/FAQ#Is_a_quick_installation_possible?).
+Your IIAB Maps **software**, **data**, and **settings** can be updated separately or together.
 
-If your IIAB was installed quite recently, it's usually safe to update your IIAB software: (at your own risk, if your IIAB is online, and has enough disk space!)
+If your IIAB was installed many months ago (or many years ago), it's far better to start from scratch than to update your **software**. See: [installing a completely new version of IIAB](https://wiki.iiab.io/go/FAQ#Is_a_quick_installation_possible?).
+
+If your IIAB was installed quite recently, it's usually safe to update your IIAB **software**: (at your own risk, if your IIAB is online, and has enough disk space!)
 
 ```
 cd /opt/iiab/iiab
 sudo git pull
 ```
 
-After [changing any IIAB Maps variables](#whats-a-minimum-iiab-maps-install) in `/etc/iiab/local_vars.yml`, you can now "reinstall" IIAB Maps to enact your new settings, by running:
+To update your **settings**, you can [change any IIAB Maps variables](#whats-a-minimum-iiab-maps-install) in `/etc/iiab/local_vars.yml`.
+
+To have access to newer map **data** for your __global basemaps__, simply delete `/library/www/maps/maps-catalog-global-orig.json`. (Full Quality Region updates always download the latest available data)
+
+You can now "reinstall" IIAB Maps to enact any of the above changes, by running:
 
 ```
 sudo ./runrole maps --reinstall
@@ -280,11 +286,47 @@ sudo ./runrole maps --reinstall
 
 ## Further options & detail:
 
-* [Values for `*_zoom` variables](https://github.com/iiab/iiab/blob/master/roles/maps/generate-catalog.py)
+* [Values for `*_zoom` variables](https://github.com/iiab/iiab/blob/master/roles/maps/MAPS_CATALOG_DETAILS.md)
 * [Other map variables](https://github.com/iiab/iiab/blob/master/roles/maps/defaults/main.yml) originally based on [PR #4120](https://github.com/iiab/iiab/pull/4120) from Oct/Nov 2025
 * Map data files are updated quasi-monthly here, since 2026-04-14: https://iiab.switnet.org/maps/2/
 * IIAB integration thanks to [Dan Krol](https://github.com/orblivion)
-* [Details on data file naming conventions](https://github.com/iiab/iiab/blob/master/roles/maps/NAMING_CONVENTION.md)
+* [Details on data file specs and naming conventions](https://github.com/iiab/iiab/blob/master/roles/maps/FORMAT.md)
+
+### How to speed up or monitor Full Quality Region downloads
+
+IIAB Maps downloads Full Quality Regions with a [custom build of go-pmtiles](https://github.com/chapmanjacobd/go-pmtiles) (upstream `v1.31.2` plus [parallel range downloads](https://github.com/chapmanjacobd/go-pmtiles/pull/1) and [resumable downloads with JSON progress](https://github.com/chapmanjacobd/go-pmtiles/pull/2)). Compared with stock go-pmtiles:
+
+* Downloads are about 2x faster with the same 4 download threads ([benchmarks](https://github.com/iiab/iiab/pull/4565)).
+* If a download is interrupted, run the same command again and it continues where it stopped. If you choose a different rectangle instead, the download starts over.
+
+Two optional environment variables change how `tile-extract.py` runs the download. Since `sudo` drops environment variables, put them after `sudo`:
+
+```
+sudo IIAB_PMTILES_DOWNLOAD_THREADS=8 /opt/iiab/maps/tile-extract/tile-extract.py extract <name> <bbox>
+```
+
+* `IIAB_PMTILES_DOWNLOAD_THREADS`: number of parallel connections (default 4). 8 was the fastest in testing; more was not faster. Use fewer on a weak device or a slow link.
+* `IIAB_PMTILES_PROGRESS=json`: replace the progress bar with one JSON line per second on stdout (`phase`, `bytes_done`, `bytes_total`, `speed_bps`, `eta_s`, and `exit_code` on the last line). This is for a program that runs the download and shows its own progress.
+
+To go back to stock go-pmtiles, point `maps_tools.pmtiles.releases` in [defaults/main.yml](defaults/main.yml) at the [protomaps releases](https://github.com/protomaps/go-pmtiles/releases) and their checksums.
+
+### How to hide or restyle Full Quality Region boundary rectangles
+
+Full Quality Regions are indicated by a bright green rectangle (see above). If this isn't the color scheme you're looking for, you can adjust it by looking for the following lines in `/library/www/maps/index.html` on your IIAB, (_after_ maps installation):
+
+https://github.com/iiab/iiab/blob/1eb38ad417f4e0c28062fdc4e47e3b2e5cdcadaf/roles/maps/templates/index.html.j2#L479-L493
+
+(hint: search for `~`, there's not much of that in this file)
+
+The first `addLayer` command describes the main colored rectangle. The second `addLayer` is a slightly thinner black strip on top of the colored rectangle, just to make sure there's enough contrast to see it. You can adjust `line-color` (hex colors, just like HTML), `line-width`, and even `line-opacity` (on a scale from 0 - 1) to make it more faded out or altogether invisible.
+
+Examples:
+
+* Set `'line-color': '#FF0000'` on the first `addLayer` to make the rectangles red.
+* Set `'line-opacity': 0` on the second `addLayer` to get rid of the black strip.
+* Set `'line-opacity': 0` on both `addLayer`s to get rid of the rectangle entirely.
+
+NOTE: If you `sudo runrole --reinstall maps` afterwards, you will lose your changes.
 
 ## Next Steps
 
@@ -332,7 +374,9 @@ What I hope to be working on in the next few months
 * Search (for now):
   * https://github.com/osm-search/Nominatim?tab=GPL-3.0-1-ov-file#readme
   * https://github.com/jacopofar/static-osm-indexer/?tab=readme-ov-file#licensing-anc-crediting (some pieces and inspiration taken from this project)
+* Tiles:
+  * Maps.black tiles: See [here](https://maps.black/#data) and [here](https://maps.black/#licenses)
+  * IIAB Satellite tiles: [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/)
 * Tile processing:
-  * https://github.com/protomaps/PMTiles
   * https://github.com/protomaps/go-pmtiles
 * Other credits: https://github.com/iiab/iiab/blob/master/roles/www_base/files/html/html/credits.html

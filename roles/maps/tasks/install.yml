@@ -1,4 +1,22 @@
-- name: Make maps directory (0755 by default)
+- name: Make maps serving directory (0755 by default)
+  file:
+    path: "{{ maps_serve_path }}"
+    state: directory
+
+- name: Make maps fallback serving directory (0755 by default)
+  file:
+    path: "{{ maps_fallback_path }}"
+    state: directory
+
+- name: Add warning to maps fallback serving directory
+  copy:
+    dest: "{{ maps_fallback_path }}/README.md"
+    content: |
+      Warning:
+
+      Do not edit the contents of this directory (`/library/www/maps/fallback/`). It is a "last resort" in case of missing files in the parent directory (`/library/www/maps/`).
+
+- name: Make maps data directory (0755 by default)
   file:
     path: "{{ maps_data_root }}"
     state: directory
@@ -11,12 +29,26 @@
       - python3-xmltodict
       - python3-requests
 
-# NOTE - Our intention is to (very) soon read the latest version of this file
-# from github.com rather than within the repository. This is an intermediary
-# step.
+# NOTE: This file will not apply to FQRs. FQRs will always download the latest catalog.
+- name: "Download {{ maps_orig_global_catalog }}"
+  get_curl:
+    url: "{{ maps_catalog_url }}"
+    dest: "{{ maps_orig_global_catalog }}"
+    mode: "0644"
+    timeout: "{{ download_timeout }}"
+
 - name: Load maps catalog
+  when: not maps_catalog_debug
   include_vars:
-    file: /opt/iiab/iiab/roles/maps/maps-catalog.json
+    file: "{{ maps_orig_global_catalog }}"
+    name: maps_catalog
+
+# In debug mode we take whatever is in the repo since it may include
+# stuff related to what we're currently working on.
+- name: Load maps catalog (debug)
+  when: maps_catalog_debug
+  include_vars:
+    file: "/opt/iiab/iiab/roles/maps/maps-catalog.json"
     name: maps_catalog
 
 - include_tasks: install_tools.yml
