@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-import json, os, random, re, requests, shutil, signal, string, subprocess, sys, xml, xmltodict
+import fcntl, json, os, random, re, requests, shutil, signal, string, subprocess, sys, xml, xmltodict
 from pathlib import Path
 from collections import defaultdict
 from fqr import FQR
@@ -389,6 +389,14 @@ def run_pmtiles(paths, new_fqr, *options, capture=False):
     return proc.returncode, stdout
 
 def create_extract(new_fqr, extract_name, extract_paths, progress_json, download_threads):
+    # One download at a time: two pmtiles must not write the same file. The
+    # lock is on TMP_DIR and ends when this script exits.
+    lock = os.open(TMP_DIR, os.O_RDONLY)
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        sys.exit("Error: another Full Quality Region download is running.")
+
     # Extract them all successfully before moving them.
     # Assumes it doesn't exist yet
     for paths in extract_paths.values():
