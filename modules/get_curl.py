@@ -10,6 +10,33 @@ from ansible.module_utils.basic import AnsibleModule
 from ansible.module_utils.common.text.converters import to_native
 
 
+HTTP2_ERROR_CODES = (16, 92)    # CURLE_HTTP2, CURLE_HTTP2_STREAM
+
+
+def curl_command(url, temp_path, dest_is_dir, timeout, headers, http_version=None):
+    cmd = [
+        "curl",
+        "--fail",
+        "--location",
+        "--silent",
+        "--show-error",
+        "--connect-timeout",
+        str(timeout),
+    ]
+    if http_version:
+        cmd.append(f"--http{http_version}")
+    if headers:
+        for key, value in headers.items():
+            cmd.extend(["-H", f"{key}: {value}"])
+    if dest_is_dir:
+        cmd.extend(["--output-dir", temp_path, "--remote-name", "--remote-header-name"])
+    else:
+        cmd.extend(["--output", temp_path])
+    cmd.extend(["--write-out", "%{http_code}"])
+    cmd.append(url)
+    return cmd
+
+
 def run_module():
     argument_spec = dict(
         url=dict(type='str', required=True),
@@ -69,27 +96,13 @@ def run_module():
         module.fail_json(msg=f"Failed to create temporary location: {to_native(e)}", dest=dest, url=url)
 
     try:
-        cmd = [
-            "curl",
-            "--fail",
-            "--location",
-            "--connect-timeout",
-            str(timeout),
-        ]
-        if headers:
-            for key, value in headers.items():
-                cmd.extend(["-H", f"{key}: {value}"])
-        if dest_is_dir:
-            cmd.extend(["--output-dir", temp_path, "--remote-name", "--remote-header-name"])
-        else:
-            cmd.extend(["--output", temp_path])
-        cmd.extend(["--write-out", "%{http_code}"])
-        cmd.append(url)
+        retry_max_time = 1200
+        retry_start_time = None    # starts with the first retry, not the first attempt
+        http_version = None    # internal only: fall back to HTTP/1.1 after an HTTP/2 error
 
         try:
-            retry_max_time = 1200
-            start_time = time.monotonic()
             for attempt in range(retries + 1):
+                cmd = curl_command(url, temp_path, dest_is_dir, timeout, headers, http_version)
                 process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
                 stdout, stderr = process.communicate()
 
@@ -98,22 +111,40 @@ def run_module():
 
                 if stdout.strip() == "404" or attempt == retries:
                     module.fail_json(
-                        msg="curl failed", rc=process.returncode, stdout=stdout, stderr=stderr, dest=dest, url=url
+                        msg="curl failed",
+                        rc=process.returncode,
+                        stdout=stdout,
+                        stderr=stderr,
+                        attempts=attempt + 1,
+                        dest=dest,
+                        url=url,
                     )
 
-                elapsed = time.monotonic() - start_time
+                if process.returncode in HTTP2_ERROR_CODES and not http_version:
+                    # HTTP/2 stream failures are often caused by a proxy or
+                    # server bug.  Retry over HTTP/1.1 instead of repeating
+                    # the same failure.
+                    http_version = "1.1"
+
+                # Always allow at least one retry, even if the first (possibly
+                # very slow) attempt used up the retry time budget.
+                now = time.monotonic()
+                if retry_start_time is None:
+                    retry_start_time = now
+                elapsed = now - retry_start_time
                 if elapsed >= retry_max_time:
                     module.fail_json(
                         msg="curl retry time exceeded",
                         rc=process.returncode,
                         stdout=stdout,
                         stderr=stderr,
+                        attempts=attempt + 1,
                         dest=dest,
                         url=url,
                     )
 
                 retry_delay = min(600, 2 ** min(attempt, 10), retry_max_time - elapsed)
-                time.sleep(retry_delay)
+                time.sleep(max(0, retry_delay))
         except Exception as e:
             module.fail_json(msg=f"Failed to execute curl: {to_native(e)}", dest=dest, url=url)
 
