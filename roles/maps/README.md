@@ -298,6 +298,7 @@ IIAB Maps downloads Full Quality Regions with a [custom build of go-pmtiles](htt
 
 * Downloads are about 2x faster with the same 4 download threads ([benchmarks](https://github.com/iiab/iiab/pull/4565)).
 * If a download is interrupted, run the same command again and it continues where it stopped. The map files that are already complete are not downloaded again. If you choose a different rectangle instead, the download starts over.
+* To delete an unfinished download, run `sudo /opt/iiab/maps/tile-extract/tile-extract.py delete <name>` (add `noninteractive` to delete without a question).
 
 Two optional environment variables change how `tile-extract.py` runs the download. Since `sudo` drops environment variables, put them after `sudo`:
 

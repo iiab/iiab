@@ -277,9 +277,10 @@ def list_files(root):
 
 # Main functions
 
-def delete_extract(extract_name):
+def delete_extract(extract_name, noninteractive=False):
     """
-    Delete the Full Quality Region named `extract_name` if it exists.
+    Delete the Full Quality Region named `extract_name` if it exists, and the
+    files of an unfinished download of it.
 
     In the normal case, we will have one of each type (vector, terrain,
     satellite). If we are missing one, or if we have multiple of a given type
@@ -287,6 +288,16 @@ def delete_extract(extract_name):
 
     Also confirm with them if there are unexpected files in the directory.
     """
+
+    partials = sorted(TMP_DIR.glob(f"*.full-region.{extract_name}.pmtiles*"))
+    if partials:
+        log("Files of an unfinished download to be deleted:")
+        for path in partials:
+            log(f"* {path}")
+        log()
+        if yes_no("Confirm delete?", noninteractive, True):
+            for path in partials:
+                path.unlink(missing_ok=True)
 
     fqr_dirs = get_all_fqr_dirs()
     if extract_name not in fqr_dirs:
@@ -328,7 +339,7 @@ def delete_extract(extract_name):
     list_files(fqr_dir)
     log()
 
-    if not yes_no("Confirm delete?"):
+    if not yes_no("Confirm delete?", noninteractive, True):
         return
 
     if fqr_dir.parent != HOSTING_DIR or fqr_dir.name != f"{extract_name}.fqr":
@@ -592,11 +603,15 @@ def main():
             debug_extracts_json()
 
         case "delete":
-            assert len(sys.argv) == 3, "delete takes one argument: extract_name"
+            assert len(sys.argv) in (3, 4), (
+                "delete arguments are: `extract_name` and (optional) `noninteractive`"
+            )
             extract_name = sys.argv[2]
+            noninteractive = sys.argv[3] if len(sys.argv) > 3 else ""
             validate_extract_name(extract_name)
+            validate_noninteractive(noninteractive)
 
-            delete_extract(extract_name)
+            delete_extract(extract_name, bool(noninteractive))
             debug_extracts_json()
 
         case "extract":
