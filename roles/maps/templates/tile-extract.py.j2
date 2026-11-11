@@ -172,7 +172,15 @@ def get_new_extract_paths(extract_name):
 
     def get_paths(source):
         match (source.split('/')[-1].split('.')):
-            case [region_extract_type, date, _zoom_range, "pmtiles"]:
+            case [region_extract_type, date, zoom_range, "pmtiles"]:
+                # An unfinished download keeps its date, so that a newer catalog
+                # does not start it again (if the server still has that date)
+                for partial in sorted(TMP_DIR.glob(f"{region_extract_type}.*.full-region.{extract_name}.pmtiles"), reverse=True):
+                    old_date = partial.name.split('.')[1]
+                    old_source = f"{source.rsplit('/', 1)[0]}/{region_extract_type}.{old_date}.{zoom_range}.pmtiles"
+                    if old_date != date and requests.head(old_source, timeout=HTTP_TIMEOUT).status_code == 200:
+                        source, date = old_source, old_date
+                        break
                 download_path = (TMP_DIR /
                         f"{region_extract_type}.{date}.full-region.{extract_name}.pmtiles")
                 return {
