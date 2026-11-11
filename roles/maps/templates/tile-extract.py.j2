@@ -342,35 +342,53 @@ def get_download_threads():
         return download_threads
     return None
 
-def run_with_signals(cmd):
+def run_pmtiles(paths, new_fqr, *options, capture=False):
+    """
+    Run `pmtiles extract` for one map file (the estimate or the download).
+    Return the exit code, and stdout if `capture`.
+    """
+    cmd = [PMTILES, "extract", paths["source"], paths["download"], "--bbox=" + new_fqr.to_bbox_str(), *options]
     # Forward Ctrl-C and SIGTERM to pmtiles and wait for it, so that it can
     # pause and save its .resume journal before we exit. subprocess.run()
     # does not forward SIGTERM, and kills pmtiles 0.25 s after a Ctrl-C.
-    proc = subprocess.Popen(cmd)
+    pipe = subprocess.PIPE if capture else None
+    proc = subprocess.Popen(cmd, stdout=pipe, stderr=pipe, text=True)
+    signals = []
     def forward(signum, _frame):
+        signals.append(signum)
         proc.send_signal(signum)
     handlers = {sig: signal.signal(sig, forward) for sig in (signal.SIGINT, signal.SIGTERM)}
     try:
-        return proc.wait()
+        stdout, _ = proc.communicate()
     finally:
         for sig, handler in handlers.items():
             signal.signal(sig, handler)
+    # pmtiles can complete the file after a signal (in its last step). Report a
+    # pause (exit code 3) anyway, so that the next map file does not start.
+    if signals and proc.returncode == 0:
+        return 3, stdout
+    return proc.returncode, stdout
 
 def create_extract(new_fqr, extract_name, extract_paths, progress_json, download_threads):
     # Extract them all successfully before moving them.
     # Assumes it doesn't exist yet
     for paths in extract_paths.values():
-        cmd = [PMTILES, "extract", paths["source"], paths["download"], "--bbox=" + new_fqr.to_bbox_str()]
+        options = []
         if progress_json:
-            cmd.append("--progress=json")
+            options.append("--progress=json")
         if download_threads:
-            cmd.append("--download-threads=" + download_threads)
-        returncode = run_with_signals(cmd)
+            options.append("--download-threads=" + download_threads)
+        returncode, _ = run_pmtiles(paths, new_fqr, *options)
         if returncode != 0:
-            raise Exception(
-                "Region download failed. Double-check your Internet connection. "
-                f"(error code {returncode})"
-            )
+            if returncode == 3:
+                log("Download paused. Run the same command again to resume.")
+            else:
+                log(
+                    "Region download failed. Double-check your Internet connection. "
+                    f"(error code {returncode})"
+                )
+            # The exit code of pmtiles: 2 network, 3 paused, 4 source changed
+            sys.exit(returncode if returncode > 0 else 1)
 
     # I considered putting the fqr into a directory and moving it over
     # atomically. However, later we will deal in "updates" which will be harder
@@ -402,23 +420,11 @@ def get_estimates(new_fqr, extract_paths):
     extract_sizes = {}
 
     for paths in extract_paths.values():
-        result = subprocess.run(
-            [
-                PMTILES,
-                "extract",
-                paths["source"],
-                paths["download"],
-                "--bbox=" + new_fqr.to_bbox_str(),
-                "--dry-run"
-            ],
-            capture_output=True,
-            text=True,
-            check=False, # default, but pylint recommends it be explicit
-        )
-        if result.returncode != 0:
+        returncode, stdout = run_pmtiles(paths, new_fqr, "--dry-run", capture=True)
+        if returncode != 0:
             raise Exception(
                 "Download size check failed. Double-check your Internet connection. "
-                f"(error code {result.returncode})"
+                f"(error code {returncode})"
             )
 
         # Parse transfer and archive sizes from the last line of --dry-run output.
@@ -434,7 +440,7 @@ def get_estimates(new_fqr, extract_paths):
             r'\(overfetch \d*\.?\d*\) '
             r'for an archive size of (\d*\.?\d*) (kB|MB|GB|TB)'
         )
-        for line in result.stdout.split('\n'):
+        for line in stdout.split('\n'):
             re_match = re.match(pattern, line, re.ASCII)
             if re_match is not None:
                 break
