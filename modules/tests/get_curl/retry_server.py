@@ -29,14 +29,16 @@ class RetryHandler(BaseHTTPRequestHandler):
             json.dump(counts, counts_file)
         os.replace(args.counts_file + ".tmp", args.counts_file)
 
-        if path == "/404":
+        if path == "/403":
+            status, body = 403, b"forbidden"
+        elif path == "/404":
             status, body = 404, b"not found"
         elif path == "/500-then-200" and counts[path] == 1:
             status, body = 500, b"try again"
         elif path == "/always-500":
             status, body = 500, b"still broken"
         elif path == "/partial-then-full" and counts[path] == 1:
-            # Drop the connection halfway through, as a flaky HTTP/2 stream
+            # Drop the connection halfway through, as a flaky connection
             # or proxy might do.
             self.send_response(200)
             self.send_header("Content-Length", str(len(PARTIAL_BODY)))

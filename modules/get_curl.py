@@ -17,6 +17,7 @@ def curl_command(url, temp_path, dest_is_dir, timeout, headers, http_version=Non
     cmd = [
         "curl",
         "--fail",
+        "--globoff",
         "--location",
         "--silent",
         "--show-error",
@@ -33,7 +34,7 @@ def curl_command(url, temp_path, dest_is_dir, timeout, headers, http_version=Non
     else:
         cmd.extend(["--output", temp_path])
     cmd.extend(["--write-out", "%{http_code}"])
-    cmd.append(url)
+    cmd.extend(["--url", url])
     return cmd
 
 
@@ -58,9 +59,15 @@ def run_module():
     retries = module.params['retries']
     force = module.params['force']
 
+    if not dest:
+        module.fail_json(msg="dest must not be empty", dest=dest, url=url)
+    if retries < 0:
+        module.fail_json(msg="retries must be >= 0", dest=dest, url=url)
+
     if dest.endswith('/'):
         try:
-            os.makedirs(dest, exist_ok=True)
+            if not module.check_mode:
+                os.makedirs(dest, exist_ok=True)
         except OSError as e:
             module.fail_json(msg=f"Failed to create final destination directory: {e}", dest=dest, url=url)
 
@@ -101,7 +108,8 @@ def run_module():
         http_version = None    # internal only: fall back to HTTP/1.1 after an HTTP/2 error
 
         try:
-            for attempt in range(retries + 1):
+            # The extra iteration is reserved for the HTTP/1.1 fallback attempt.
+            for attempt in range(retries + 2):
                 cmd = curl_command(url, temp_path, dest_is_dir, timeout, headers, http_version)
                 process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
                 stdout, stderr = process.communicate()
@@ -109,22 +117,25 @@ def run_module():
                 if process.returncode == 0:
                     break
 
-                if stdout.strip() == "404" or attempt == retries:
-                    module.fail_json(
-                        msg="curl failed",
-                        rc=process.returncode,
-                        stdout=stdout,
-                        stderr=stderr,
-                        attempts=attempt + 1,
-                        dest=dest,
-                        url=url,
-                    )
+                status = int(stdout) if stdout.strip().isdigit() else 0
+                failure = {
+                    "rc": process.returncode,
+                    "stdout": stdout,
+                    "stderr": stderr,
+                    "attempts": attempt + 1,
+                    "dest": dest,
+                    "url": url,
+                }
+                if 400 <= status < 500 and status not in (408, 429):
+                    # Permanent client errors must not be retried.
+                    module.fail_json(msg="curl failed", **failure)
 
                 if process.returncode in HTTP2_ERROR_CODES and not http_version:
                     # HTTP/2 stream failures are often caused by a proxy or
-                    # server bug.  Retry over HTTP/1.1 instead of repeating
-                    # the same failure.
+                    # server bug.  Retry immediately over HTTP/1.1, even if
+                    # the retry budget is already exhausted.
                     http_version = "1.1"
+                    continue
 
                 # Always allow at least one retry, even if the first (possibly
                 # very slow) attempt used up the retry time budget.
@@ -132,16 +143,11 @@ def run_module():
                 if retry_start_time is None:
                     retry_start_time = now
                 elapsed = now - retry_start_time
+
+                if attempt >= retries:
+                    module.fail_json(msg="curl failed", **failure)
                 if elapsed >= retry_max_time:
-                    module.fail_json(
-                        msg="curl retry time exceeded",
-                        rc=process.returncode,
-                        stdout=stdout,
-                        stderr=stderr,
-                        attempts=attempt + 1,
-                        dest=dest,
-                        url=url,
-                    )
+                    module.fail_json(msg="curl retry time exceeded", **failure)
 
                 retry_delay = min(600, 2 ** min(attempt, 10), retry_max_time - elapsed)
                 time.sleep(max(0, retry_delay))

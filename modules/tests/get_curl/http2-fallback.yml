@@ -1,0 +1,27 @@
+---
+- name: Force the first curl attempt to use HTTP/2
+  copy:
+    content: "http2-prior-knowledge\n"
+    dest: "{{ test_dir }}/.curlrc"
+    mode: "0644"
+
+- name: Download with HTTP/2 forced by curl config
+  get_curl:
+    url: "http://127.0.0.1:{{ retry_server_port }}/http2-fallback"
+    dest: "{{ test_dir }}/http2-fallback.txt"
+    tmp_dest: "{{ tmp_dir }}"
+    retries: 0
+  environment:
+    CURL_HOME: "{{ test_dir }}"
+  register: fallback_result
+
+- name: Read the fallback download
+  slurp:
+    src: "{{ test_dir }}/http2-fallback.txt"
+  register: fallback_content
+
+- name: Assert that the module retried over HTTP/1.1
+  assert:
+    that:
+      - fallback_result.changed
+      - fallback_content.content | b64decode == "success\n"
