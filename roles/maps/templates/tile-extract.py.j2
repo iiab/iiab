@@ -14,6 +14,9 @@ TMP_DIR = Path("/library/downloads/maps")
 # Seconds to wait for the catalog and the mirrors; without a timeout, a
 # connection that stops answering waits forever
 HTTP_TIMEOUT = {{ download_timeout }}
+# Other map downloads also use TMP_DIR, so the lock for Full Quality Regions
+# is a file of its own
+LOCK_FILE = TMP_DIR / ".full-region.lock"
 
 # If you delete an fqr directory while you're inside that same
 # directory, you end up with weird errors
@@ -77,6 +80,19 @@ def validate_extract_name(extract_name):
     error = check_extract_name_error(extract_name)
     if error:
         raise ValueError(f"Invalid FQR name ({extract_name}): {error}")
+
+def lock_full_regions():
+    """
+    One Full Quality Region download or delete at a time: two pmtiles must not
+    write the same file, and a delete must not remove the files of a running
+    download. The lock ends when this script exits.
+    """
+    TMP_DIR.mkdir(parents=True, exist_ok=True)
+    lock = os.open(LOCK_FILE, os.O_RDWR | os.O_CREAT, 0o644)
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        sys.exit("Error: another Full Quality Region download or delete is running.")
 
 def validate_noninteractive(noninteractive):
     assert noninteractive in ("", "noninteractive"), (
@@ -288,6 +304,7 @@ def delete_extract(extract_name, noninteractive=False):
 
     Also confirm with them if there are unexpected files in the directory.
     """
+    lock_full_regions()
 
     partials = sorted(TMP_DIR.glob(f"*.full-region.{extract_name}.pmtiles*"))
     if partials:
@@ -389,13 +406,7 @@ def run_pmtiles(paths, new_fqr, *options, capture=False):
     return proc.returncode, stdout
 
 def create_extract(new_fqr, extract_name, extract_paths, progress_json, download_threads):
-    # One download at a time: two pmtiles must not write the same file. The
-    # lock is on TMP_DIR and ends when this script exits.
-    lock = os.open(TMP_DIR, os.O_RDONLY)
-    try:
-        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except BlockingIOError:
-        sys.exit("Error: another Full Quality Region download is running.")
+    lock_full_regions()
 
     # Extract them all successfully before moving them.
     # Assumes it doesn't exist yet
