@@ -306,7 +306,7 @@ Two optional environment variables change how `tile-extract.py` runs the downloa
 sudo IIAB_PMTILES_DOWNLOAD_THREADS=8 /opt/iiab/maps/tile-extract/tile-extract.py extract <name> <bbox>
 ```
 
-* `IIAB_PMTILES_DOWNLOAD_THREADS`: number of parallel connections (default 4). 8 was the fastest in testing; more was not faster. Use fewer on a weak device or a slow link.
+* `IIAB_PMTILES_DOWNLOAD_THREADS`: number of parallel connections. The default is 4, which is safe on most devices and links. On a good link, try 8: it was the fastest in our tests ([benchmarks](https://github.com/iiab/iiab/pull/4565)), and more was not faster. Use fewer on a weak device or a slow link. If you try 8, please report your device, link and speed in an [IIAB issue](https://github.com/iiab/iiab/issues), so that the default can come from tests outside a lab.
 * `IIAB_PMTILES_PROGRESS=json`: replace the progress bar with one JSON line per second on stdout (`phase`, `bytes_done`, `bytes_total`, `speed_bps`, `eta_s`, and `exit_code` on the last line). This is for a program that runs the download and shows its own progress.
 
 To go back to stock go-pmtiles, point `maps_tools.pmtiles.releases` in [defaults/main.yml](defaults/main.yml) at the [protomaps releases](https://github.com/protomaps/go-pmtiles/releases) and their checksums.
