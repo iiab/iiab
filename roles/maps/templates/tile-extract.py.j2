@@ -378,16 +378,35 @@ def get_download_threads():
         return download_threads
     return None
 
-def run_pmtiles(paths, new_fqr, *options, capture=False):
+def run_pmtiles(paths, new_fqr, dry_run=False, progress_json=False, download_threads=None):
     """
-    Run `pmtiles extract` for one map file (the estimate or the download).
-    Return the exit code, and stdout if `capture`.
+    Run `pmtiles extract` for one map file. The dry run (the size estimate)
+    returns its output. The download shows its progress live, so its output
+    is not captured.
+
+    Return (stop_signal, returncode, stdout):
+    * stop_signal: the signal number if we got Ctrl-C (SIGINT) or SIGTERM,
+      else None.
+    * returncode: the exit code of pmtiles. Our custom build of pmtiles
+      (https://github.com/chapmanjacobd/go-pmtiles/pull/2) uses 0 done,
+      1 error, 2 the network failed, 3 paused after SIGINT or SIGTERM (its
+      .resume journal is saved), 4 the file on the server changed. A negative
+      code means that a signal stopped pmtiles (for example -9 when the
+      system is out of memory).
+    * stdout: the output of the dry run, else None.
     """
+    options = []
+    if dry_run:
+        options.append("--dry-run")
+    if progress_json:
+        options.append("--progress=json")
+    if download_threads:
+        options.append(f"--download-threads={download_threads}")
     cmd = [PMTILES, "extract", paths["source"], paths["download"], "--bbox=" + new_fqr.to_bbox_str(), *options]
     # Forward Ctrl-C and SIGTERM to pmtiles and wait for it, so that it can
     # pause and save its .resume journal before we exit. subprocess.run()
     # does not forward SIGTERM, and kills pmtiles 0.25 s after a Ctrl-C.
-    pipe = subprocess.PIPE if capture else None
+    pipe = subprocess.PIPE if dry_run else None
     proc = subprocess.Popen(cmd, stdout=pipe, stderr=pipe, text=True)
     signals = []
     def forward(signum, _frame):
@@ -399,11 +418,7 @@ def run_pmtiles(paths, new_fqr, *options, capture=False):
     finally:
         for sig, handler in handlers.items():
             signal.signal(sig, handler)
-    # pmtiles can complete the file after a signal (in its last step). Report a
-    # pause (exit code 3) anyway, so that the next map file does not start.
-    if signals and proc.returncode == 0:
-        return 3, stdout
-    return proc.returncode, stdout
+    return (signals[0] if signals else None), proc.returncode, stdout
 
 def create_extract(new_fqr, extract_name, extract_paths, progress_json, download_threads):
     lock_full_regions()
@@ -411,22 +426,25 @@ def create_extract(new_fqr, extract_name, extract_paths, progress_json, download
     # Extract them all successfully before moving them.
     # Assumes it doesn't exist yet
     for paths in extract_paths.values():
-        options = []
-        if progress_json:
-            options.append("--progress=json")
-        if download_threads:
-            options.append("--download-threads=" + download_threads)
-        returncode, _ = run_pmtiles(paths, new_fqr, *options)
+        stop_signal, returncode, _ = run_pmtiles(
+            paths, new_fqr, progress_json=progress_json, download_threads=download_threads
+        )
+        # pmtiles can complete the file after a signal (in its last step).
+        # Report a pause anyway, so that the next map file does not start.
+        if returncode == 3 or (stop_signal and returncode == 0):
+            log("Download paused. Run the same command again to resume.")
+            sys.exit(3)
+        if returncode < 0:
+            log(f"Region download failed: signal {-returncode} stopped pmtiles.")
+            sys.exit(1)
         if returncode != 0:
-            if returncode == 3:
-                log("Download paused. Run the same command again to resume.")
-            else:
-                log(
-                    "Region download failed. Double-check your Internet connection. "
-                    f"(error code {returncode})"
-                )
-            # The exit code of pmtiles: 2 network, 3 paused, 4 source changed
-            sys.exit(returncode if returncode > 0 else 1)
+            log(
+                "Region download failed. Double-check your Internet connection. "
+                f"(error code {returncode})"
+            )
+            # The exit code of pmtiles (see run_pmtiles), so that a program
+            # can see the cause
+            sys.exit(returncode)
 
     # I considered putting the fqr into a directory and moving it over
     # atomically. However, later we will deal in "updates" which will be harder
@@ -458,7 +476,12 @@ def get_estimates(new_fqr, extract_paths):
     extract_sizes = {}
 
     for paths in extract_paths.values():
-        returncode, stdout = run_pmtiles(paths, new_fqr, "--dry-run", capture=True)
+        stop_signal, returncode, stdout = run_pmtiles(paths, new_fqr, dry_run=True)
+        if stop_signal:
+            # Nothing was downloaded, so there is nothing to resume. Use the
+            # usual exit code after a signal (130 after Ctrl-C, 143 after SIGTERM).
+            log("Stopped.")
+            sys.exit(128 + stop_signal)
         if returncode != 0:
             raise Exception(
                 "Download size check failed. Double-check your Internet connection. "
