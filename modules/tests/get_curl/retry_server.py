@@ -35,6 +35,8 @@ class RetryHandler(BaseHTTPRequestHandler):
             status, body = 404, b"not found"
         elif path == "/500-then-200" and counts[path] == 1:
             status, body = 500, b"try again"
+        elif path == "/http2-then-500-then-200" and counts[path] == 1:
+            status, body = 500, b"try again"
         elif path == "/always-500":
             status, body = 500, b"still broken"
         elif path == "/partial-then-full" and counts[path] == 1:

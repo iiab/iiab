@@ -106,6 +106,7 @@ def run_module():
         retry_max_time = 1200
         retry_start_time = None    # starts with the first retry, not the first attempt
         http_version = None    # internal only: fall back to HTTP/1.1 after an HTTP/2 error
+        retries_used = 0       # the HTTP/1.1 fallback must not consume a retry
 
         try:
             # The extra iteration is reserved for the HTTP/1.1 fallback attempt.
@@ -149,12 +150,13 @@ def run_module():
                     retry_start_time = now
                 elapsed = now - retry_start_time
 
-                if attempt >= retries:
+                if retries_used >= retries:
                     module.fail_json(msg="curl failed", **failure)
                 if elapsed >= retry_max_time:
                     module.fail_json(msg="curl retry time exceeded", **failure)
 
-                retry_delay = min(600, 2 ** min(attempt, 10), retry_max_time - elapsed)
+                retry_delay = min(600, 2 ** min(retries_used, 10), retry_max_time - elapsed)
+                retries_used += 1
                 time.sleep(max(0, retry_delay))
         except Exception as e:
             module.fail_json(msg=f"Failed to execute curl: {to_native(e)}", dest=dest, url=url)
