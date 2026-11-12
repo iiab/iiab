@@ -130,7 +130,12 @@ def run_module():
                     # Permanent client errors must not be retried.
                     module.fail_json(msg="curl failed", **failure)
 
-                if process.returncode in HTTP2_ERROR_CODES and not http_version:
+                # Some libcurl versions report an HTTP/2 negotiation failure as
+                # a generic send error (CURLE_SEND_ERROR, 55), so also check
+                # the error text.
+                if not http_version and (
+                    process.returncode in HTTP2_ERROR_CODES or "http/2" in stderr.lower()
+                ):
                     # HTTP/2 stream failures are often caused by a proxy or
                     # server bug.  Retry immediately over HTTP/1.1, even if
                     # the retry budget is already exhausted.
