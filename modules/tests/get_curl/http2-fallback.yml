@@ -1,0 +1,56 @@
+---
+- name: Force the first curl attempt to use HTTP/2
+  copy:
+    content: "http2-prior-knowledge\n"
+    dest: "{{ test_dir }}/.curlrc"
+    mode: "0644"
+
+- name: Download with HTTP/2 forced by curl config
+  get_curl:
+    url: "http://127.0.0.1:{{ retry_server_port }}/http2-fallback"
+    dest: "{{ test_dir }}/http2-fallback.txt"
+    tmp_dest: "{{ tmp_dir }}"
+    retries: 0
+  environment:
+    CURL_HOME: "{{ test_dir }}"
+  register: fallback_result
+
+- name: Read the fallback download
+  slurp:
+    src: "{{ test_dir }}/http2-fallback.txt"
+  register: fallback_content
+
+- name: Assert that the module retried over HTTP/1.1
+  assert:
+    that:
+      - fallback_result.changed
+      - fallback_content.content | b64decode == "success\n"
+
+# The fallback attempt must not consume the configured retry budget: one
+# HTTP/2 error plus one HTTP/1.1 500 still leaves a retry for the successes.
+- name: Download after an HTTP/2 error and a transient HTTP/1.1 500
+  get_curl:
+    url: "http://127.0.0.1:{{ retry_server_port }}/http2-then-500-then-200"
+    dest: "{{ test_dir }}/http2-then-500-then-200.txt"
+    tmp_dest: "{{ tmp_dir }}"
+    retries: 1
+  environment:
+    CURL_HOME: "{{ test_dir }}"
+  register: fallback_retry_result
+
+- name: Read the fallback retry download
+  slurp:
+    src: "{{ test_dir }}/http2-then-500-then-200.txt"
+  register: fallback_retry_content
+
+- name: Read HTTP request counts for the fallback retry
+  slurp:
+    src: "{{ test_dir }}/retry-counts.json"
+  register: fallback_retry_counts
+
+- name: Assert that the fallback did not consume the retry budget
+  assert:
+    that:
+      - fallback_retry_result.changed
+      - fallback_retry_content.content | b64decode == "success\n"
+      - (fallback_retry_counts.content | b64decode | from_json)["/http2-then-500-then-200"] == 2
