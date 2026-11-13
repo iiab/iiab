@@ -70,7 +70,7 @@
 - name: '2023-11-05 / TEMPORARY UNTIL ADMIN CONSOLE DECLARES ITS DEPENDENCY: Install MySQL (MariaDB) if admin_console_install (for setup-feedback and record_feedback.php)'
   fail:
     msg: "Admin Console install cannot proceed, as MySQL / MariaDB is not installed."
-  when: admin_console_install and mysql_installed is undefined
+  when: admin_console_install and not lookup('installed', 'mysql_installed')
 
 
 # 2023-11-05: Moved from Stage 8, as it acts on mysql_installed (that might be set just above!)
@@ -85,15 +85,16 @@
     df1: "{{ lookup('ansible.builtin.ini', 'disk_used_a_priori', section='summary', file=iiab_ini_file) }}"
 
 - name: Record currently used disk space, to compare with original 'disk_used_a_priori'
-  shell: df -B1 --output=used / | tail -1
+  disk_usage:
+    path: /
   register: df2
 
-- name: Add ESTIMATED 'iiab_software_disk_usage = {{ df2.stdout | int - df1 | int }}' to {{ iiab_ini_file }}
+- name: Add ESTIMATED 'iiab_software_disk_usage = {{ df2.used | int - df1 | int }}' to {{ iiab_ini_file }}
   ini_file:
     path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
     section: summary
     option: iiab_software_disk_usage
-    value: "{{ df2.stdout | int - df1 | int }}"
+    value: "{{ df2.used | int - df1 | int }}"
 
 - name: Recording STAGE 9 HAS COMPLETED ====================
   lineinfile:
