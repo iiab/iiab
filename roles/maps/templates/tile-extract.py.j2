@@ -504,16 +504,30 @@ def get_estimates(new_fqr, extract_paths):
 
     for paths in extract_paths.values():
         stop_signal, returncode, stdout = run_pmtiles(paths, new_fqr, dry_run=True)
+        if returncode < 0:
+            if -returncode == stop_signal:
+                # Ctrl-C or SIGTERM stopped pmtiles before it handled signals
+                # itself. Nothing was downloaded, so there is nothing to resume.
+                log("Stopped.")
+                sys.exit(128 + stop_signal)
+            # The stop signal that we forwarded did not stop pmtiles: another
+            # signal did (for example 9, SIGKILL, which the kernel also sends
+            # when the system is out of memory). Nothing was downloaded.
+            log(f"Download size check failed: signal {-returncode} stopped pmtiles.")
+            sys.exit(1)
         if stop_signal:
-            # Nothing was downloaded, so there is nothing to resume. Use the
-            # usual exit code after a signal (130 after Ctrl-C, 143 after SIGTERM).
+            # pmtiles exited after our Ctrl-C or SIGTERM: nothing was
+            # downloaded, so there is nothing to resume. Use the usual exit
+            # code after a signal (130 after Ctrl-C, 143 after SIGTERM).
             log("Stopped.")
             sys.exit(128 + stop_signal)
         if returncode != 0:
-            raise Exception(
+            log(
                 "Download size check failed. Double-check your Internet connection. "
                 f"(error code {returncode})"
             )
+            # The exit code of pmtiles (see run_pmtiles), as for a download
+            sys.exit(returncode)
 
         # Parse transfer and archive sizes from the last line of --dry-run output.
         # (Though we'll check every line to make it a bit more robust)
