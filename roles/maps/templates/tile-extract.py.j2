@@ -173,16 +173,19 @@ def get_new_extract_paths(extract_name):
             # Unlike the global data, FQRs always stay up to date, so it downloads
             # the latest catalog.
             catalog_response = requests.get(CATALOG_URL, timeout=HTTP_TIMEOUT)
-            if catalog_response.status_code != 200:
-                raise Exception("Cannot find map data catalog")
+            catalog_response.raise_for_status()
 
             catalog = catalog_response.json()["data"]
         else:
             # In debug mode we take whatever is in the repo since it may include
             # stuff related to what we're currently working on.
             catalog = json.loads(open("/opt/iiab/iiab/roles/maps/maps-catalog.json").read())["data"]
-    except json.decoder.JSONDecodeError:
+    # requests reports a JSON error with its own class (based on simplejson,
+    # if it is installed), which is also a RequestException, so this comes first
+    except (json.decoder.JSONDecodeError, requests.exceptions.JSONDecodeError):
         raise Exception("Error reading map data catalog")
+    except requests.RequestException as e:
+        raise Exception(f"Cannot download the map data catalog: {e}")
 
     VECTOR_CATALOG_KEY = "{{ maps_vector_fqr_max_zoom }}"
     if "{{ maps_satellite_fqr_type }}" == "iiab":
