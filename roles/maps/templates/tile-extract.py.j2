@@ -423,13 +423,19 @@ def run_pmtiles(paths, new_fqr, dry_run=False, progress_json=False, download_thr
     # pause and save its .resume journal before we exit. subprocess.run()
     # does not forward SIGTERM, and kills pmtiles 0.25 s after a Ctrl-C.
     pipe = subprocess.PIPE if dry_run else None
-    proc = subprocess.Popen(cmd, stdout=pipe, stderr=pipe, text=True)
+    proc = None
     signals = []
     def forward(signum, _frame):
         signals.append(signum)
-        proc.send_signal(signum)
+        if proc is not None:
+            proc.send_signal(signum)
+    # The handlers come first, so that no signal is lost while pmtiles starts
     handlers = {sig: signal.signal(sig, forward) for sig in (signal.SIGINT, signal.SIGTERM)}
     try:
+        proc = subprocess.Popen(cmd, stdout=pipe, stderr=pipe, text=True)
+        # A signal that came before pmtiles started (pmtiles ignores a second one)
+        if signals:
+            proc.send_signal(signals[0])
         stdout, _ = proc.communicate()
     finally:
         for sig, handler in handlers.items():
@@ -449,9 +455,10 @@ def create_extract(new_fqr, extract_name, extract_paths, progress_json, download
         stop_signal, returncode, _ = run_pmtiles(
             paths, new_fqr, progress_json=progress_json, download_threads=download_threads
         )
-        # pmtiles can complete the file after a signal (in its last step).
-        # Report a pause anyway, so that the next map file does not start.
-        if returncode == 3 or (stop_signal and returncode == 0):
+        # pmtiles can complete the file after a signal (in its last step), or
+        # the signal can stop pmtiles while it starts (-stop_signal), before it
+        # handles signals. Report a pause, so that the next map file does not start.
+        if returncode == 3 or (stop_signal and returncode in (0, -stop_signal)):
             log("Download paused. Run the same command again to resume.")
             sys.exit(3)
         if returncode < 0:
