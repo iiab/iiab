@@ -1,0 +1,76 @@
+---
+# Inspection of the source checkout. main.yml uses the result to decide whether
+# update.yml (and dependency resolution) is needed. "latest" is resolved from
+# the remote during install or --upgrade so it can be compared by commit hash.
+
+- name: Check whether the Zimantic source checkout exists
+  stat:
+    path: "{{ zimantic_source_dir }}/.git"
+  register: zimantic_source_git
+
+- name: Resolve the latest Zimantic revision
+  command:
+    # lifecycle: allow-network (latest revision lookup)
+    cmd: "git ls-remote {{ zimantic_repo }} HEAD"
+  register: zimantic_latest_remote
+  changed_when: false
+  failed_when: false
+  check_mode: no
+  when: zimantic_version_is_latest | bool
+
+- name: Validate the latest Zimantic revision
+  assert:
+    that:
+      - zimantic_latest_remote.rc == 0
+      - (zimantic_latest_remote.stdout | trim) is match('^[0-9a-f]{40}\s+HEAD$')
+    fail_msg: >-
+      Could not resolve zimantic_version: {{ zimantic_version }} from {{ zimantic_repo }}.
+      Check repository access and try again.
+  when: zimantic_version_is_latest | bool
+
+- name: Select the Zimantic checkout revision
+  set_fact:
+    zimantic_checkout_version: >-
+      {{ (zimantic_latest_remote.stdout | trim).split()[0]
+         if (zimantic_version_is_latest | bool)
+         else (zimantic_version | string) }}
+
+- name: Read the current Zimantic source revision, tag, and remote
+  when: zimantic_source_git.stat.exists
+  block:
+
+    - name: Read the current Zimantic source revision
+      command: "git -C {{ zimantic_source_dir }} rev-parse HEAD"
+      register: zimantic_source_head
+      changed_when: false
+      failed_when: false
+      check_mode: no
+
+    - name: Read the current Zimantic source tag
+      command: "git -C {{ zimantic_source_dir }} describe --tags --exact-match"
+      register: zimantic_source_tag
+      changed_when: false
+      failed_when: false
+      check_mode: no
+
+    - name: Read the current Zimantic source remote
+      command: "git -C {{ zimantic_source_dir }} remote get-url origin"
+      register: zimantic_source_remote
+      changed_when: false
+      failed_when: false
+      check_mode: no
+
+- name: Decide whether the Zimantic source matches zimantic_version
+  set_fact:
+    zimantic_source_matches_version: >-
+      {{ (zimantic_source_git.stat.exists | bool)
+         and ((zimantic_source_remote.stdout | default('')) == zimantic_repo)
+         and (
+           ((zimantic_version_is_latest | bool) and
+            (zimantic_source_head.stdout | default('')) == zimantic_checkout_version)
+           or
+           ((not (zimantic_version_is_latest | bool)) and
+            ((zimantic_source_tag.stdout | default('')) == zimantic_version or
+             ((zimantic_version_is_commit | bool) and
+              (zimantic_source_head.stdout | default('')).startswith(zimantic_version | string))))
+         ) }}

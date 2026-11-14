@@ -1,0 +1,243 @@
+---
+# Always runs. Configuration, model files, and the service definition are
+# reconciled on every apply, so local_vars.yml changes take effect without a
+# reinstall. Fetching a missing model is allowed here because it is an
+# immutable asset, not a program version; Zimantic verifies pinned checksums
+# and skips files that already match.
+
+# An apply to an installed role skips install.yml, so validate here too.
+- name: Validate Zimantic settings
+  include_tasks: validate.yml
+
+- name: Create Linux user {{ zimantic_user }}
+  user:
+    name: "{{ zimantic_user }}"
+    state: present
+    shell: /usr/sbin/nologin
+    system: yes
+    create_home: no
+  when: not is_proot
+
+- name: Create Zimantic directories
+  file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner | default(zimantic_service_user) }}"
+    group: "{{ item.group | default(zimantic_service_user) }}"
+    mode: "0755"
+  loop:
+    - path: "{{ zimantic_source_dir }}"
+      owner: root
+      group: root
+    - path: "{{ zimantic_data_dir }}"
+    - path: "{{ zimantic_index_dir }}"
+    - path: "{{ zimantic_model_dir }}"
+    - path: "{{ zimantic_zim_dir }}"
+      owner: root
+      group: root
+
+# Install the configuration before the model command: `zimantic model` loads
+# config.toml and uses its model_dir when --dir is not supplied.
+- name: Install Zimantic configuration
+  template:
+    src: config.toml.j2
+    dest: "{{ zimantic_config_file }}"
+    owner: "{{ zimantic_service_user }}"
+    group: "{{ zimantic_service_user }}"
+    mode: "0644"
+  notify: Restart Zimantic
+
+- name: List the models supported by the installed Zimantic
+  command: "{{ zimantic_venv }}/bin/zimantic model --list"
+  register: zimantic_model_list
+  changed_when: false
+  check_mode: no
+  when: zimantic_mode == 'semantic'
+
+- name: Fail if the installed Zimantic does not support the selected model
+  assert:
+    that: zimantic_embedding_model in zimantic_model_list.stdout
+    fail_msg: >-
+      The installed Zimantic does not support
+      '{{ zimantic_embedding_model }}'. Run './runrole --upgrade zimantic' to
+      install a current revision, or choose a model from:
+      {{ zimantic_model_list.stdout }}
+    quiet: yes
+  when: zimantic_mode == 'semantic'
+
+# `zimantic model` downloads the graph, tokenizer, derived vocabulary, and
+# model configuration, verifies pinned checksums, removes stale tokenizer
+# files, and skips files that already match. It refuses to replace a graph that
+# belongs to a different model or precision, so retry once with --force when
+# the normal run fails. Matching local files are never downloaded again.
+- name: Ensure the selected Zimantic embedding model is installed
+  shell:
+    cmd: >-
+      "{{ zimantic_venv }}/bin/zimantic" model -v
+      {{ zimantic_model_precision }}
+      --model {{ zimantic_embedding_model | quote }}
+      --dir {{ (zimantic_model_dir | dirname) | quote }}
+      ||
+      "{{ zimantic_venv }}/bin/zimantic" model -v
+      {{ zimantic_model_precision }}
+      --model {{ zimantic_embedding_model | quote }}
+      --dir {{ (zimantic_model_dir | dirname) | quote }}
+      --force
+  register: zimantic_model_install
+  changed_when: >-
+    'downloading' in (zimantic_model_install.stderr | default('')) or
+    'removing stale' in (zimantic_model_install.stderr | default(''))
+  notify: Restart Zimantic
+  when: zimantic_mode == 'semantic'
+
+- name: Set ownership of the Zimantic model files
+  file:
+    path: "{{ zimantic_data_dir }}/model"
+    state: directory
+    recurse: yes
+    owner: "{{ zimantic_service_user }}"
+    group: "{{ zimantic_service_user }}"
+  when: zimantic_mode == 'semantic'
+
+- name: Check for the Zimantic embedding model
+  stat:
+    path: "{{ zimantic_model_dir }}/model.onnx"
+  register: zimantic_model_file
+  when: zimantic_mode == 'semantic'
+
+- name: Fail if semantic mode has no embedding model
+  fail:
+    msg: "Semantic mode needs model.onnx in {{ zimantic_model_dir }}; the download failed or the files were removed"
+  when:
+    - zimantic_mode == 'semantic'
+    - not ansible_check_mode
+    - not zimantic_model_file.stat.exists
+
+- name: Install zimantic.service
+  template:
+    src: zimantic.service.j2
+    dest: /etc/systemd/system/zimantic.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Restart Zimantic
+  when: not is_proot
+
+# pdsm reads paths and serve flags from this file; a pdsm service script is
+# shared by all IIAB roles and cannot use a systemd unit file.
+- name: Install the Zimantic pdsm environment (PRoot)
+  template:
+    src: zimantic-pdsm-env.j2
+    dest: "{{ zimantic_pdsm_env_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart Zimantic
+  when: is_proot
+
+# proot_services owns this wrapper, but it only installs on a first run. Copy
+# it again so an IIAB upgrade followed by './runrole zimantic' also picks up
+# wrapper changes instead of requiring a proot_services reinstall.
+- name: Ensure the pdsm services directory exists (PRoot)
+  file:
+    path: /usr/local/pdsm/services-available
+    state: directory
+    mode: "0755"
+  when: is_proot
+
+- name: Install the Zimantic pdsm service wrapper (PRoot)
+  copy:
+    src: "{{ role_path }}/../proot_services/files/pdsm/usr_local_pdsm/services-available/zimantic"
+    dest: /usr/local/pdsm/services-available/zimantic
+    owner: root
+    group: root
+    mode: "0755"
+  when: is_proot
+
+# Enable or disable the service and its NGINX shortcut after the unit and
+# configuration have been reconciled above.
+- name: Enable and start zimantic.service
+  systemd:
+    name: zimantic
+    enabled: yes
+    state: started
+    daemon_reload: yes
+  when:
+    - zimantic_enabled
+    - not is_proot
+
+- name: Enable and start Zimantic via pdsm (PRoot)
+  when:
+    - zimantic_enabled
+    - is_proot
+  block:
+
+    - name: Check whether the Zimantic pdsm service is enabled (PRoot)
+      stat:
+        path: /usr/local/pdsm/services-enabled/zimantic
+      register: zimantic_pdsm_enabled
+
+    - name: Enable 'zimantic' via pdsm (PRoot)
+      command: pdsm enable zimantic
+      register: zimantic_pdsm_enable
+      changed_when: "'enabled' in zimantic_pdsm_enable.stdout"
+      when: not zimantic_pdsm_enabled.stat.exists
+
+    - name: Start 'zimantic' via pdsm (PRoot)
+      command: pdsm start zimantic
+      register: zimantic_pdsm_start
+      changed_when: "'already running' not in zimantic_pdsm_start.stdout"
+
+# The installed marker is in iiab_state.yml, so only a service this role
+# installed is touched. On a first apply that installs with _enabled False the
+# marker is written by state.yml after configure; the new unit is not enabled
+# or started by default, so there is nothing to stop.
+- name: Disable and stop zimantic.service
+  systemd:
+    name: zimantic
+    enabled: no
+    state: stopped
+  when:
+    - not zimantic_enabled
+    - not is_proot
+    - lookup('installed', 'zimantic')
+
+- name: Stop and disable Zimantic via pdsm (PRoot)
+  when:
+    - not zimantic_enabled
+    - is_proot
+    - lookup('installed', 'zimantic')
+  block:
+
+    - name: Stop 'zimantic' via pdsm (PRoot)
+      command: pdsm stop zimantic
+      register: zimantic_pdsm_stop
+      changed_when: "'already stopped' not in zimantic_pdsm_stop.stdout"
+
+    - name: Disable 'zimantic' via pdsm (PRoot)
+      command: pdsm disable zimantic
+      register: zimantic_pdsm_disable
+      changed_when: "'is not enabled' not in zimantic_pdsm_disable.stdout"
+
+- name: Configure Zimantic indexing units
+  include_tasks: indexing.yml
+
+- name: Disable http://box{{ zimantic_url }} shortcut via NGINX
+  file:
+    path: "{{ nginx_conf_dir }}/zimantic-nginx.conf"
+    state: absent
+  notify:
+    - Restart nginx
+    - Restart nginx via pdsm
+  when: not zimantic_enabled
+
+- name: Enable http://box{{ zimantic_url }} shortcut via NGINX
+  template:
+    src: zimantic-nginx.conf.j2
+    dest: "{{ nginx_conf_dir }}/zimantic-nginx.conf"
+  notify:
+    - Restart nginx
+    - Restart nginx via pdsm
+  when: zimantic_enabled

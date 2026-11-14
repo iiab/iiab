@@ -6,10 +6,39 @@
 # var names via templating (they're pure Jinja expressions), so they work fine
 # on ansible-core 2.19/2.20+.
 # https://docs.ansible.com/ansible/latest/collections/ansible/builtin/vars_lookup.html
+#
+# 2026-10-28: Report EVERY conflict in one message, instead of stopping at the
+# first one and making the user re-run after each fix.
+
+- name: Start with an empty install/enabled conflict list
+  set_fact:
+    install_enabled_conflicts: []
+
+- name: 'Find "XYZ_install: False" WITH "XYZ_enabled: True" conflicts'
+  set_fact:
+    install_enabled_conflicts: >-
+      {{ install_enabled_conflicts | default([]) + [item] }}
+  loop: "{{ vars_checklist }}"
+  when:
+    - not (iiab_role_uninstall | bool)
+    - not lookup('vars', item + '_install')
+    - lookup('vars', item + '_enabled')
 
 - name: 'DISALLOW "XYZ_install: False" WITH "XYZ_enabled: True" ...for all {{ vars_checklist | length }} var pairs'
-  assert:
-    that: "lookup('vars', item + '_install') or not lookup('vars', item + '_enabled')"
-    fail_msg: "DISALLOWED: '{{ item }}_install: False' WITH '{{ item }}_enabled: True' -- IIAB DOES NOT SUPPORT UNINSTALLS -- please verify those 2 variable values e.g. in /etc/iiab/local_vars.yml, and other places variables are defined?"
-    quiet: yes
-  loop: "{{ vars_checklist }}"
+  fail:
+    msg: |
+      DISALLOWED: install/enabled conflicts:
+
+      {% for item in install_enabled_conflicts %}
+        - {{ var_role_names.get(item, item) }}  ({{ item }}_install: False, {{ item }}_enabled: True)
+      {% endfor %}
+
+      For each app, set '<app>_install: True' in /etc/iiab/local_vars.yml to
+      install it, or '<app>_enabled: False' to leave it alone.
+
+      Inspect without changing anything:
+        ./runrole --status <role>
+        ./runrole --check-local-vars
+
+      More help: http://FAQ.IIAB.IO
+  when: install_enabled_conflicts | default([]) | length > 0
