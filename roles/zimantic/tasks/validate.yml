@@ -21,6 +21,18 @@
     fail_msg: "zimantic_mode must be either 'fast' or 'semantic'"
     quiet: yes
 
+# python-libzim 4.1 is required on every platform now. PyPI publishes 4.1
+# wheels for x86_64 and aarch64 only, and Debian 13 still ships libzim 3.6.
+- name: Require a supported 64-bit platform
+  assert:
+    that: (ansible_facts.machine | default('')) in zimantic_supported_machines
+    fail_msg: >-
+      Zimantic requires python-libzim 4.1 or newer and is supported only on
+      64-bit x86_64 and aarch64. This host reports
+      '{{ ansible_facts.machine | default('unknown') }}'; 32-bit armhf/armv7 is
+      no longer supported.
+    quiet: yes
+
 - name: Validate Zimantic configuration mappings
   assert:
     that:
@@ -32,6 +44,17 @@
     fail_msg: >-
       zimantic_config must be a mapping of global settings.
       zimantic_collection_config must map collection names to settings mappings.
+    quiet: yes
+
+# ZIM and Kiwix collections reject derived_text. This role configures a ZIM
+# collection named 'library'; derived text belongs on files or Kolibri
+# collections instead.
+- name: Reject derived_text on the ZIM collection
+  assert:
+    that: "'derived_text' not in zimantic_collection_config.get('library', {})"
+    fail_msg: >-
+      Zimantic does not support derived_text on ZIM collections. Put
+      derived_text under zimantic_files_name or zimantic_kolibri_name instead.
     quiet: yes
 
 - name: Validate optional Zimantic collections
@@ -70,52 +93,15 @@
     - is_proot
     - not zimantic_pdsm_binary.stat.exists
 
-- name: Validate zimantic_use_system_packages
-  assert:
-    that: zimantic_use_system_packages in ['auto', 'always', 'never']
-    fail_msg: "zimantic_use_system_packages must be 'auto', 'always', or 'never'"
-    quiet: yes
-
-- name: Require system packages on platforms without native wheels
-  assert:
-    that: zimantic_use_system_packages != 'never'
-    fail_msg: >-
-      This platform has no compatible native dependency wheels. Use
-      zimantic_use_system_packages: auto or always so Zimantic can use the
-      distribution packages and its stdlib HTMLParser fallback.
-    quiet: yes
-  when: (ansible_facts.machine | default('')) not in ['aarch64', 'x86_64']
-
-- name: Fail if distribution packages are requested on an unsupported Debian release
-  fail:
-    msg: >-
-      zimantic_use_system_packages needs Debian 13/trixie or newer because the
-      native dependencies are not packaged in this release. Use PyPI wheels on
-      a 64-bit host (zimantic_use_system_packages: never), or upgrade to
-      Debian 13+.
-  when:
-    - zimantic_system_packages_enabled | bool
-    - (ansible_facts.distribution | default('')) == 'Debian'
-    - (ansible_facts.distribution_major_version | default('0') | int) < 13
-
-- name: Validate zimantic_embedding_model
-  assert:
-    that: zimantic_embedding_model in ['multilingual-e5-small', 'e5-small-v2']
-    fail_msg: "zimantic_embedding_model must be 'multilingual-e5-small' or 'e5-small-v2'"
-    quiet: yes
-
-- name: Validate the selected embedding model block
+- name: Validate the selected embedding model
   assert:
     that:
-      - zimantic_model_url is defined
-      - zimantic_model_checksum is defined
-      - zimantic_tokenizer_file is defined
-      - zimantic_tokenizer_url is defined
-      - zimantic_tokenizer_checksum is defined
+      - zimantic_embedding_model in zimantic_supported_models
+      - zimantic_model_precision in ['fp32', 'fp16', 'int8']
     fail_msg: >-
-      Uncomment one complete embedding model block in
-      roles/zimantic/defaults/main.yml, or copy it into
-      /etc/iiab/local_vars.yml
+      zimantic_embedding_model must be one of
+      {{ zimantic_supported_models | join(', ') }}, and
+      zimantic_model_precision must be fp32, fp16, or int8.
     quiet: yes
 
 - name: Check for a supported Python version

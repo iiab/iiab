@@ -6,10 +6,11 @@ Zimantic v1 provides meaning-based, title-word, and native ZIM full-text
 search, plus direct article serving from local ZIM archives.
 
 This role is opt-in. It does not replace ``kiwix-serve`` by default because
-Zimantic needs Python 3.11-3.14, compatible native dependencies, and more disk
-space for its Python environment. On 32-bit ``armhf``/``armv7`` hosts the role
-uses Debian's native packages and Zimantic's stdlib ``HTMLParser`` fallback.
-Existing IIAB Kiwix URLs and the Kiwix Android APK remain unchanged by default.
+Zimantic needs Python 3.11-3.14, native dependency wheels, and more disk space
+for its Python environment. Zimantic requires ``python-libzim`` 4.1 or newer
+and is supported only on 64-bit ``x86_64`` and ``aarch64``; 32-bit
+``armhf``/``armv7`` is not supported. Existing IIAB Kiwix URLs and the Kiwix
+Android APK remain unchanged by default.
 
 Android/PRoot hosts use ``proot_services``' pdsm instead of systemd; see
 "Android / PRoot" below.
@@ -22,19 +23,30 @@ Set these variables in ``/etc/iiab/local_vars.yml`` and run the role.
 Semantic mode
 ~~~~~~~~~~~~~
 
-``semantic`` is the default and adds meaning-based search. The role downloads
-the selected embedding model when it is missing. Set::
+``semantic`` is the default and adds meaning-based search. The role asks
+Zimantic's ``model`` command to download the selected embedding model when it
+is missing or when ``zimantic_embedding_model`` or ``zimantic_model_precision``
+changes. Set::
 
     zimantic_install: True
     zimantic_enabled: True
     zimantic_mode: semantic
 
-The semantic server uses about 323 MiB RSS with ``multilingual-e5-small``;
-``e5-small-v2`` uses less. 64-bit ``aarch64`` and ``x86_64`` hosts use the PyPI
-wheels. On 32-bit ``armhf``/``armv7`` hosts, set
-``zimantic_use_system_packages: auto`` (the default) and use Debian 13
-(``trixie``) or newer; Zimantic falls back to the stdlib ``HTMLParser`` when
-``selectolax`` is unavailable.
+The default ``static-similarity-mrl-multilingual-v1`` model is an int8 graph
+of about 108 MB with 256-dimensional embeddings. It is much faster to build
+than the transformer alternatives but covers 50 languages and has lower
+semantic quality. Set ``zimantic_embedding_model`` to ``multilingual-e5-small``
+for 100+ languages and better ranking, at the cost of a larger, slower model.
+``zimantic_model_precision`` is ``int8`` by default; use ``fp16`` or ``fp32``
+only when the extra model memory is acceptable. For example::
+
+    zimantic_embedding_model: multilingual-e5-small
+    zimantic_model_precision: int8
+
+Indexes belong to the model and precision that built them. After changing
+either value, run ``/usr/local/sbin/zimantic-indexing --fast`` or wait for the
+next scheduled build; semantic vectors from the old model are ignored until a
+full rebuild.
 
 Fast mode
 ~~~~~~~~~
@@ -67,15 +79,14 @@ Override only the settings this host needs with ``zimantic_config`` in
 
     zimantic_config:
       max_concurrent_searches: 4
-      search_workers: 4
+      source_query_threads: 4
       slot_wait_seconds: 15
 
 ``slot_wait_seconds`` is how long a search waits for a free concurrency slot
 before reporting busy; keep it at least as long as a typical cold search on the
 host. Global keys accepted by Zimantic's ``config.toml`` can be set this way,
 including nested ``derived_text`` defaults. Omit the whole mapping to follow
-the hardware profile. ``embed_threads`` controls query embedding only;
-``build_embed_threads`` controls index builds.
+the hardware profile.
 
 Use ``zimantic_collection_config`` for additional collection settings. Settings
 inherit global -> collection -> exact source where supported. Traversal limits
@@ -102,17 +113,15 @@ variables for paths, names, labels and granularity.
 Native dependencies
 ~~~~~~~~~~~~~~~~~~~
 
-On supported 64-bit platforms, Zimantic v1 installs its runtime dependencies
-from PyPI. On 32-bit ``armhf``/``armv7`` platforms, the default
-``zimantic_use_system_packages: auto`` installs Debian's native dependencies
-and creates the virtual environment with ``--system-site-packages``.
-Distribution-package mode requires Debian 13 (``trixie``) or newer; see the
-``zimantic_use_system_packages`` comment in ``defaults/main.yml`` for
-overrides. armhf/armv7 can use Debian's libzim 3 bindings and HTMLParser.
-The role installs ``puremagic>=1.30`` from PyPI even in distribution-package
-mode: it is pure Python and Debian 13's version is too old. On 64-bit hosts
-using ``always``, it also installs the required libzim 4.1+ and selectolax
-wheels without replacing the other distribution packages.
+Zimantic v1 requires Python 3.11-3.14 and installs all runtime dependencies
+from PyPI into its virtual environment. The role supports 64-bit ``x86_64``
+and ``aarch64`` only. Debian 13 ships ``python-libzim`` 3.6, which is older
+than the 4.1 API Zimantic now requires, and PyPI has no libzim 4.1 wheel for
+32-bit ``armhf``/``armv7``; those hosts are rejected during validation. Ensure
+that ``python3-venv`` and network access to PyPI are available on the host.
+The role uses the current ``zimantic model`` command and config key names, so
+``zimantic_version`` must point at a current revision or a release that
+includes them; the default ``latest`` follows the default branch tip.
 
 Additional collections
 ~~~~~~~~~~~~~~~~~~~~~~~
@@ -240,9 +249,8 @@ Android ``local_vars_android_*.yml`` files already set that. On PRoot:
 
   Omit ``--fast`` for a semantic build. The helper reloads a running server
   when the build finishes.
-- aarch64 Debian 13 uses PyPI wheels, so leave
-  ``zimantic_use_system_packages`` at ``auto`` or ``never``. armhf/armv7
-  uses Debian packages with ``auto`` or ``always``.
+- The container must report ``aarch64`` (or ``x86_64``). The role installs
+  everything from PyPI wheels; 32-bit ``armhf``/``armv7`` is not supported.
 
 A typical Android configuration in ``/etc/iiab/local_vars.yml``::
 
@@ -290,11 +298,17 @@ settings, so it normally requires network access.
 HEAD serves only current-schema indexes with canonical metadata. Upgrading
 preserves existing index files, but incompatible indexes are ignored until the
 next build; native ZIM full-text search remains available where the archive
-provides it. Run ``zimantic-indexing --fast`` to restore title search, or run
+provides it. Change ``zimantic_embedding_model`` or
+``zimantic_model_precision`` only with a rebuild; switching the model replaces
+the files in ``zimantic_model_dir`` and index vectors from the old model are
+ignored. Run ``zimantic-indexing --fast`` to restore title search, or run
 ``zimantic-indexing`` for a full semantic build. A full build can reuse vectors
 from recognized, complete v0 root-level SQLite/FAISS pairs when the model is
 compatible; other old layouts are rebuilt. No expensive rebuild is started
-during installation or upgrade.
+during installation or upgrade by default. Set
+``zimantic_rebuild_indexes_on_upgrade: True`` to run the fast build
+automatically after ``--upgrade``; the nightly full build still adds semantic
+vectors.
 
 ``--reinstall`` runs ``uninstall.yml`` and then installs again. It removes the
 source checkout, runtime data (indexes, model, and ``config.toml``), and the

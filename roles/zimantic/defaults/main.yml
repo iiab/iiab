@@ -23,41 +23,20 @@ zimantic_url: "{{ zimantic_url_without_slash }}/"
 zimantic_nginx_timeout: 600
 zimantic_nginx_connect_timeout: 10
 
-# Zimantic v1 supports Python 3.11-3.14. Native wheels are used on supported
-# 64-bit platforms; 32-bit armhf/armv7 uses Debian's native packages and the
-# stdlib HTMLParser fallback.
-# Override only after confirming that the required native dependencies are
-# available for the selected interpreter.
+# Zimantic v1 supports Python 3.11-3.14 on 64-bit x86_64 and aarch64. It needs
+# python-libzim 4.1 or newer; 32-bit armhf/armv7 is not supported because Debian
+# 13 ships libzim 3.6 and PyPI has no 4.1 wheel for it.
 zimantic_python: python3
-
-# Native dependencies used when the host has no compatible wheels. Zimantic v1
-# accepts libzim 3 on armhf/armv7 and uses the stdlib HTMLParser fallback.
-# build.yml installs puremagic from PyPI on these hosts. In "always" mode on
-# 64-bit hosts it also installs libzim 4.1+ and selectolax wheels.
-zimantic_system_packages:
-  - python3-numpy
-  - python3-tqdm
-  - python3-onnxruntime
-  - python3-sentencepiece
-  - python3-faiss
-  - python3-libzim
-  - python3-pymupdf
-  - python3-fastapi
-  - python3-uvicorn
-  - python3-venv
-  # Needed to rebuild the local project without pip's network-fetching build
-  - python3-setuptools
-# "auto" uses distribution packages where compatible native wheels are
-# unavailable and PyPI wheels otherwise. "always" uses distribution packages
-# on every architecture; "never" always uses PyPI and is not suitable for
-# armhf/armv7. Distribution packages require Debian 13 or newer.
-zimantic_use_system_packages: auto
 
 zimantic_user: zimantic
 zimantic_data_dir: "{{ content_base }}/zimantic"
 zimantic_zim_dir: "{{ iiab_zim_path }}/content"
 zimantic_index_dir: "{{ zimantic_data_dir }}/indexes"
-zimantic_model_dir: "{{ zimantic_data_dir }}/model/int8"
+
+# int8 is the CPU profile. Use fp16 or fp32 only on hosts where the extra model
+# memory is acceptable; the model directory and indexes are precision-specific.
+zimantic_model_precision: int8
+zimantic_model_dir: "{{ zimantic_data_dir }}/model/{{ zimantic_model_precision }}"
 zimantic_config_file: "{{ zimantic_data_dir }}/config.toml"
 # Keep Zimantic's XDG paths inside IIAB's existing data tree. The upstream
 # application now prefers XDG_CONFIG_HOME/XDG_DATA_HOME, while the role keeps
@@ -94,7 +73,8 @@ zimantic_files_include:
 # Example:
 # zimantic_config:
 #   max_concurrent_searches: 4
-#   search_workers: 4
+#   source_query_threads: 4
+#   slot_wait_seconds: 15
 zimantic_config: {}
 
 # Additional settings keyed by the configured collection name: library,
@@ -103,28 +83,20 @@ zimantic_config: {}
 # Paths, names, labels and granularity use the dedicated variables above.
 zimantic_collection_config: {}
 
-# Select one embedding model by uncommenting its block (or copy the block into
-# /etc/iiab/local_vars.yml). Leave a blank line between the blocks so it stays
-# obvious where one option ends and the next begins. Indexes are specific to
-# the model that built them, so rebuild them after switching (zimantic build
-# --force).
+# The upstream default is a fast static multilingual model: about 108 MB int8,
+# 256-dimensional embeddings, and 50 languages. Zimantic downloads the model,
+# tokenizer, derived vocabulary, and zimantic_model.json itself and verifies
+# pinned checksums. Indexes are specific to the model that built them, so
+# rebuild them after switching (zimantic build --force).
+zimantic_embedding_model: static-similarity-mrl-multilingual-v1
 
-# multilingual-e5-small: 100+ languages, approximately 123 MB.
-zimantic_embedding_model: multilingual-e5-small
-zimantic_model_url: https://huggingface.co/Xenova/multilingual-e5-small/resolve/main/onnx/model_quantized.onnx
-zimantic_model_checksum: sha256:f80102d3f2a1229f387d3c81909990d8945513e347b0eab049f7de3c6f98c193
-zimantic_tokenizer_file: sentencepiece.bpe.model
-zimantic_tokenizer_url: https://huggingface.co/intfloat/multilingual-e5-small/resolve/main/sentencepiece.bpe.model
-zimantic_tokenizer_checksum: sha256:cfc8146abe2a0488e9e2a0c56de7952f7c11ab059eca145a0a727afce0db2865
-
-# e5-small-v2: English only, approximately 34 MB. Uses less memory, which
-# helps on hosts with 1 GB RAM or less.
-# zimantic_embedding_model: e5-small-v2
-# zimantic_model_url: https://huggingface.co/Xenova/e5-small-v2/resolve/main/onnx/model_quantized.onnx
-# zimantic_model_checksum: sha256:7d9092cb25f2bd1c023b7e8d2aa459044a02030ac880e5a59fdaf27af69f1ded
-# zimantic_tokenizer_file: vocab.txt
-# zimantic_tokenizer_url: https://huggingface.co/Xenova/e5-small-v2/resolve/main/vocab.txt
-# zimantic_tokenizer_checksum: sha256:07eced375cec144d27c900241f3e339478dec958f92fddbc551f295c992038a3
+# Alternatives, for example in /etc/iiab/local_vars.yml:
+#   multilingual-e5-small  100+ languages, larger transformer, better quality
+#   multilingual-e5-base
+#   multilingual-e5-large
+#   e5-small-v2            English only, small transformer
+#   e5-base-v2
+#   e5-large-v2
 
 # Memory limits for the systemd cgroup. MemoryHigh makes the kernel reclaim and
 # throttle under pressure; MemoryMax is the hard limit that OOM-kills only
@@ -147,3 +119,9 @@ zimantic_oom_score_adjust: 200
 zimantic_restart_sec: 10
 zimantic_start_limit_interval: 600
 zimantic_start_limit_burst: 3
+
+# An upgrade preserves existing indexes. Zimantic ignores indexes from an older
+# schema or model until they are rebuilt. Set this to True to run the fast
+# title/full-text build automatically after an --upgrade; a full semantic build
+# still happens on the normal indexing schedule.
+zimantic_rebuild_indexes_on_upgrade: false

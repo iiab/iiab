@@ -5,19 +5,21 @@
 
 zimantic_version_is_latest: "{{ (zimantic_version | string) in ['latest', 'HEAD'] }}"
 
-zimantic_system_packages_enabled: >-
-  {{ zimantic_use_system_packages == 'always' or
-     (zimantic_use_system_packages == 'auto' and
-      (ansible_facts.machine | default('')) not in ['aarch64', 'x86_64']) }}
+# Zimantic's native dependencies publish wheels for 64-bit x86_64 and aarch64
+# only. Debian 13 carries python-libzim 3.6, which is older than the 4.1 Python
+# API Zimantic now requires, and PyPI has no libzim 4.1 wheel for armhf/armv7.
+zimantic_supported_machines:
+  - aarch64
+  - x86_64
 
-# Puremagic's architecture-independent wheel is newer than Debian 13's
-# package. On 64-bit hosts, supplement distro packages with the required
-# libzim 4.1 APIs and Lexbor; armhf keeps libzim 3 and HTMLParser.
-zimantic_system_pip_packages: >-
-  {{ ['puremagic>=1.30'] +
-     (['libzim>=4.1.0', 'selectolax']
-      if (ansible_facts.machine | default('')) in ['aarch64', 'x86_64']
-      else []) }}
+zimantic_supported_models:
+  - static-similarity-mrl-multilingual-v1
+  - multilingual-e5-small
+  - multilingual-e5-base
+  - multilingual-e5-large
+  - e5-small-v2
+  - e5-base-v2
+  - e5-large-v2
 
 # PRoot runs as root and pdsm has no user switching, so the role does not
 # create the 'zimantic' account there. Data and configuration stay owned by
@@ -27,13 +29,6 @@ zimantic_service_user: "{{ 'root' if is_proot else zimantic_user }}"
 # Sourced by proot_services' pdsm wrapper (/usr/local/pdsm/services-available/
 # zimantic). It carries the paths and mode, which pdsm cannot take from a unit.
 zimantic_pdsm_env_file: /etc/default/zimantic
-
-# Zimantic chooses SentencePiece when both tokenizer files are present, which
-# is wrong for the English model. Remove whichever tokenizer the selected model
-# does not use.
-zimantic_unused_tokenizer_files: >-
-  {{ ['sentencepiece.bpe.model', 'vocab.txt']
-     | reject('equalto', zimantic_tokenizer_file) | list }}
 
 # A full 40-character (or abbreviated) commit hash may not be the tip of a
 # branch, so a depth-1 clone cannot always check it out.

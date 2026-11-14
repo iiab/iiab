@@ -2,8 +2,8 @@
 # Always runs. Configuration, model files, and the service definition are
 # reconciled on every apply, so local_vars.yml changes take effect without a
 # reinstall. Fetching a missing model is allowed here because it is an
-# immutable asset, not a program version; nothing is deleted or re-downloaded
-# when the file and checksum already match.
+# immutable asset, not a program version; Zimantic verifies pinned checksums
+# and skips files that already match.
 
 # An apply to an installed role skips install.yml, so validate here too.
 - name: Validate Zimantic settings
@@ -36,57 +36,8 @@
       owner: root
       group: root
 
-# Both tokenizers in one model directory would make Zimantic choose
-# SentencePiece, which is wrong for the English model.
-- name: Remove the tokenizer left by a different embedding model
-  file:
-    path: "{{ zimantic_model_dir }}/{{ item }}"
-    state: absent
-  loop: "{{ zimantic_unused_tokenizer_files }}"
-  notify: Restart Zimantic
-  when: zimantic_mode == 'semantic'
-
-- name: Download Zimantic embedding model
-  get_curl:
-    url: "{{ zimantic_model_url }}"
-    dest: "{{ zimantic_model_dir }}/model.onnx"
-    checksum: "{{ zimantic_model_checksum }}"
-    timeout: "{{ download_timeout }}"
-  notify: Restart Zimantic
-  when: zimantic_mode == 'semantic'
-
-- name: Download Zimantic tokenizer
-  get_curl:
-    url: "{{ zimantic_tokenizer_url }}"
-    dest: "{{ zimantic_model_dir }}/{{ zimantic_tokenizer_file }}"
-    checksum: "{{ zimantic_tokenizer_checksum }}"
-    timeout: "{{ download_timeout }}"
-  notify: Restart Zimantic
-  when: zimantic_mode == 'semantic'
-
-- name: Check for the Zimantic embedding model
-  stat:
-    path: "{{ zimantic_model_dir }}/model.onnx"
-  register: zimantic_model_file
-  when: zimantic_mode == 'semantic'
-
-- name: Check for the Zimantic tokenizer
-  stat:
-    path: "{{ zimantic_model_dir }}/{{ zimantic_tokenizer_file }}"
-  register: zimantic_tokenizer_stat
-  when: zimantic_mode == 'semantic'
-
-- name: Fail if semantic mode has no embedding model
-  fail:
-    msg: "Semantic mode needs model.onnx and {{ zimantic_tokenizer_file }} in {{ zimantic_model_dir }}; the download failed or the files were removed"
-  when:
-    - zimantic_mode == 'semantic'
-    # get_curl only reports what it would download in check mode, so the files
-    # are still absent here. Do not turn a dry run into a failure.
-    - not ansible_check_mode
-    - not zimantic_model_file.stat.exists or
-      not zimantic_tokenizer_stat.stat.exists
-
+# Install the configuration before the model command: `zimantic model` loads
+# config.toml and uses its model_dir when --dir is not supplied.
 - name: Install Zimantic configuration
   template:
     src: config.toml.j2
@@ -95,6 +46,72 @@
     group: "{{ zimantic_service_user }}"
     mode: "0644"
   notify: Restart Zimantic
+
+- name: List the models supported by the installed Zimantic
+  command: "{{ zimantic_venv }}/bin/zimantic model --list"
+  register: zimantic_model_list
+  changed_when: false
+  check_mode: no
+  when: zimantic_mode == 'semantic'
+
+- name: Fail if the installed Zimantic does not support the selected model
+  assert:
+    that: zimantic_embedding_model in zimantic_model_list.stdout
+    fail_msg: >-
+      The installed Zimantic does not support
+      '{{ zimantic_embedding_model }}'. Run './runrole --upgrade zimantic' to
+      install a current revision, or choose a model from:
+      {{ zimantic_model_list.stdout }}
+    quiet: yes
+  when: zimantic_mode == 'semantic'
+
+# `zimantic model` downloads the graph, tokenizer, derived vocabulary, and
+# model configuration, verifies pinned checksums, removes stale tokenizer
+# files, and skips files that already match. It refuses to replace a graph that
+# belongs to a different model or precision, so retry once with --force when
+# the normal run fails. Matching local files are never downloaded again.
+- name: Ensure the selected Zimantic embedding model is installed
+  shell:
+    cmd: >-
+      "{{ zimantic_venv }}/bin/zimantic" model -v
+      {{ zimantic_model_precision }}
+      --model {{ zimantic_embedding_model | quote }}
+      --dir {{ (zimantic_model_dir | dirname) | quote }}
+      ||
+      "{{ zimantic_venv }}/bin/zimantic" model -v
+      {{ zimantic_model_precision }}
+      --model {{ zimantic_embedding_model | quote }}
+      --dir {{ (zimantic_model_dir | dirname) | quote }}
+      --force
+  register: zimantic_model_install
+  changed_when: >-
+    'downloading' in (zimantic_model_install.stderr | default('')) or
+    'removing stale' in (zimantic_model_install.stderr | default(''))
+  notify: Restart Zimantic
+  when: zimantic_mode == 'semantic'
+
+- name: Set ownership of the Zimantic model files
+  file:
+    path: "{{ zimantic_data_dir }}/model"
+    state: directory
+    recurse: yes
+    owner: "{{ zimantic_service_user }}"
+    group: "{{ zimantic_service_user }}"
+  when: zimantic_mode == 'semantic'
+
+- name: Check for the Zimantic embedding model
+  stat:
+    path: "{{ zimantic_model_dir }}/model.onnx"
+  register: zimantic_model_file
+  when: zimantic_mode == 'semantic'
+
+- name: Fail if semantic mode has no embedding model
+  fail:
+    msg: "Semantic mode needs model.onnx in {{ zimantic_model_dir }}; the download failed or the files were removed"
+  when:
+    - zimantic_mode == 'semantic'
+    - not ansible_check_mode
+    - not zimantic_model_file.stat.exists
 
 - name: Install zimantic.service
   template:
