@@ -20,10 +20,11 @@ discoteca_release_url: >-
      else (discoteca_releases_api ~ '/tags/v' ~ discoteca_version) }}
 discoteca_resolved_version: "{{ discoteca_version }}"
 
-# uname -m -> upstream release asset suffix (disco-linux-<suffix>). Upstream
-# currently publishes only linux-amd64. A platform with no matching asset, for
-# example arm64 under Android/proot, builds from source instead (see
-# discoteca_source_ref below).
+# uname -m -> upstream release asset suffix (disco-linux-<suffix>). The newest
+# published release (v0.0.37) ships only linux-amd64, but upstream's release
+# workflow now also builds linux-arm64 and linux-armv7. A platform with no
+# matching asset, for example arm64 under Android/proot today, builds from
+# source instead (see discoteca_source_ref below).
 discoteca_platform_suffixes:
   x86_64: amd64
   aarch64: arm64
@@ -103,10 +104,20 @@ discoteca_port: 5555
 discoteca_databases:
   - "{{ discoteca_database_dir }}/library.db"
 
-# Optional upstream dependencies. ffmpeg enables transcoding, HLS, and media
-# inspection; discoteca still serves an existing database without it.
+# Optional upstream dependencies. ffmpeg enables transcoding, HLS, media
+# inspection, and the calibre-import metadata probe; discoteca still serves an
+# existing database without it.
 discoteca_packages:
   - ffmpeg
+
+# URL downloads from the web UI. Upstream uses lb or lb-wrapper, or any command
+# that accepts its downloader arguments. IIAB installs those only through
+# Calibre-Web's optional audio/video support, so a stock install keeps
+# downloads disabled until a usable command is in PATH. Downloaded files land
+# in discoteca_download_dir and are imported into the selected database.
+# discoteca_read_only disables downloads.
+discoteca_download_command: auto
+discoteca_download_dir: "{{ content_base }}/downloads/discoteca"
 
 # Memory tuning for small IIAB devices. The systemd unit caps memory instead of
 # letting one transcode take down the whole box. pdsm has no cgroup, so these
@@ -116,19 +127,24 @@ discoteca_max_concurrent_searches: 2
 discoteca_memory_high: 70%
 discoteca_memory_max: 80%
 
-# ZIM support is off by default: it needs kiwix-serve started with
-# --urlRootLocation matching the proxy path, which this role does not manage.
+# ZIM support is off by default because discoteca only proxies an externally
+# managed server: kiwix-serve needs --urlRootLocation matching
+# <discoteca_url>/api/zim/proxy/, which this role does not manage. A positive
+# discoteca_zimantic_port selects zimantic and overrides kiwix-serve.
 discoteca_kiwix_host: 127.0.0.1
 discoteca_kiwix_port: 0
+discoteca_zimantic_host: 127.0.0.1
+discoteca_zimantic_port: 0
 
-# Refuse progress updates, playlist changes, and deletions when true.
+# Refuse progress updates, playlist changes, downloads, and deletions when true.
 discoteca_read_only: false
 
 # Ownership declarations. See "Data ownership" in the top-level README.md.
-# The databases in discoteca_database_dir are user data and are never deleted.
-# Media files indexed by those databases may live anywhere; the role never
-# touches them. The service home holds caches, generated state, and the pdsm
-# log. The pdsm configuration is generated from local_vars.yml.
+# The databases in discoteca_database_dir and any URL downloads are user data
+# and are never deleted. Media files indexed by those databases may live
+# anywhere; the role never touches them. The service home holds caches,
+# generated state, and the pdsm log. The pdsm configuration is generated from
+# local_vars.yml.
 discoteca_user_settings: []
 discoteca_program_data:
   - "{{ discoteca_home }}"
@@ -137,3 +153,4 @@ discoteca_program_data:
   - "{{ discoteca_nginx_conf }}"
 discoteca_user_data:
   - "{{ discoteca_database_dir }}/"
+  - "{{ discoteca_download_dir }}/"

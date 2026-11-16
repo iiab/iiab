@@ -18,6 +18,17 @@
       end with a slash, and cannot be '/'. Use a prefix such as '/disco'.
     quiet: true
 
+- name: Assert that the discoteca download path is usable
+  assert:
+    that:
+      - discoteca_download_dir is match('^/')
+    fail_msg: >-
+      discoteca_download_dir='{{ discoteca_download_dir }}' must be an
+      absolute path. Upstream downloads URL media into this directory and the
+      systemd unit grants write access only to it.
+    quiet: true
+  when: discoteca_download_dir | length > 0
+
 - name: Ensure the discoteca home and database directories exist
   file:
     path: "{{ item.path }}"
@@ -28,6 +39,17 @@
   loop:
     - { path: "{{ discoteca_home }}", mode: "0750" }
     - { path: "{{ discoteca_database_dir }}", mode: "0755" }
+
+# URL downloads are user data and live outside discoteca_home so --uninstall
+# and --reinstall never remove them.
+- name: Create the discoteca download directory
+  file:
+    path: "{{ discoteca_download_dir }}"
+    state: directory
+    owner: "{{ discoteca_user }}"
+    group: "{{ discoteca_group }}"
+    mode: "0755"
+  when: discoteca_download_dir | length > 0
 
 # Existing databases are user data; only a missing file is created.
 - name: Create any missing discoteca databases
