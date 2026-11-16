@@ -8,15 +8,16 @@ Single source of truth for the role -> state-marker prefix mapping
 before Ansible is installed.
 
 ``--uninstall`` is supported when the role entry point hands off to
-``tasks/uninstall.yml`` (or guards work with ``when: uninstall`` inline);
-for a role using the shared runner the phase file is required.  ``--upgrade``
-works the same way with ``tasks/upgrade.yml`` / ``when: upgrade``.  For legacy
-roles, ``meta/runrole.yml`` can declare ``uninstall: true`` / ``upgrade: true``
-when detection cannot see the inline guard.  ``--reinstall`` is available to
-every role unless ``meta/runrole.yml`` sets ``reinstall: false``.  When the role
-ships ``tasks/uninstall.yml``, reinstall runs that and then installs again.
-Without it, reinstall falls back to ``install.yml``, but ``./runrole`` warns
-that the behavior is ambiguous.
+``tasks/uninstall.yml`` (or guards work with ``when: uninstall`` inline); for a
+role that uses the shared lifecycle runner, the phase file is required.
+``--upgrade`` works the same way with ``tasks/upgrade.yml`` / ``when: upgrade``.
+Some older roles do not have full support for ``--uninstall`` or ``--upgrade``;
+for these roles, ``meta/runrole.yml`` can declare ``uninstall: true`` /
+``upgrade: true`` when detection cannot see the inline guard.  ``--reinstall``
+is available to every role unless ``meta/runrole.yml`` sets
+``reinstall: false``.  When the role ships ``tasks/uninstall.yml``, reinstall
+runs that and then installs again.  Without it, reinstall falls back to
+``install.yml``, but ``./runrole`` warns that the behavior is ambiguous.
 """
 
 from __future__ import annotations
@@ -256,7 +257,7 @@ def _supports_phase(role: str, phase: str) -> bool:
         # The runner only calls tasks/<phase>.yml.  A manifest flag cannot
         # invent a phase, so a converted role must ship the file.
         return has_phase(role, phase)
-    # Legacy roles can implement the phase inline and use the manifest when
+    # Older roles can implement the phase inline and use the manifest when
     # detection cannot see it.
     if _manifest_says(role, phase):
         return True

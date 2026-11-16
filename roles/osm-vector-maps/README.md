@@ -43,7 +43,7 @@ Or, if you absolutely must attempt an upgrade (ENTIRELY AT YOUR OWN RISK) run th
 
 Where `<CONTINENT-or-REGION>.mbtiles` is one of the [major region files](https://github.com/iiab/iiab/wiki/IIAB-Maps#where-are-iiab-maps-stored) (for example, a file with "2020" in its name) that you choose from IIAB's [map catalog](https://github.com/iiab/iiab/wiki/IIAB-Maps#how-do-i-upgrade-an-iiab-map-pack).
 
-To use the older maps7.3 branch instead:
+To use the older `maps7.3` branch instead:
 
    cd /library/www<br>
    rm -rf osm-vector-maps/<br>

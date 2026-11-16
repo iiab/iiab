@@ -78,7 +78,7 @@ SHARED_ROLES = {
 }
 
 # Task files executed by the lifecycle runner. Only these need phase-aware
-# checks; helper files are reached through them. enable-or-disable is a legacy
+# checks; helper files are reached through them. enable-or-disable is an older
 # convention outside the formal lifecycle, but the runner still executes it, so
 # it is checked too.
 LIFECYCLE_FILES = {
