@@ -25,12 +25,12 @@ FOR TESTING OR FALLBACK ONLY
 
 ---
 
-## `maps_vector_zoom: 11` (9.1 GB)
+## `maps_vector_zoom: 11` (9.2 GB)
 'medium res' osm, up to zoom level 11
 
 ---
 
-## `maps_vector_zoom: 14` (88.6 GB)
+## `maps_vector_zoom: 14` (89.2 GB)
 'high res' aka 'full quality' osm, including 3d buildings.
 
 ---

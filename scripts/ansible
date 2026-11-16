@@ -7,8 +7,8 @@
 # https://github.com/iiab/iiab/wiki/Technical-Contributors-Guide#female_detective-understanding-ansible
 
 APT_PATH=/usr/bin     # Avoids problematic /usr/local/bin/apt on Linux Mint
-CURR_VER=undefined    # Ansible version you have installed, e.g. [core 2.21.5]
-GOOD_VER=2.21.5       # Orig for 'yum install [rpm]' & XO laptops (pip install)
+CURR_VER=undefined    # Ansible version you have installed, e.g. [core 2.22.0]
+GOOD_VER=2.22.0       # Orig for 'yum install [rpm]' & XO laptops (pip install)
 
 # 2021-06-22: The apt approach (with PPA source in /etc/apt/sources.list.d/ and
 # .gpg key etc) are commented out with ### below.  Associated guidance/comments
@@ -282,7 +282,7 @@ else
     # 'Package issue: cryptography 41.0.3 leads to cffi 1.15.1 failure on
     # "32-bit" Raspberry Pi OS [REASON: /etc/pip.conf missing on some Bookworm
     # pre-releases' == https://github.com/piwheels/packages/issues/390
-    if ! [ -f /etc/pip.conf ] && [ -f /etc/rpi-issue ]; then
+    if ! [ -f /etc/pip.conf ] && [ -f /etc/rpi-issue ] && [[ $(dpkg --print-architecture) == armhf ]]; then
         cat > /etc/pip.conf << EOF
 [global]
 extra-index-url=https://www.piwheels.org/simple
@@ -341,9 +341,31 @@ fi
 # explicit upgrading of collections (--upgrade / -U flag) in version "2.11"
 # with PR ansible/ansible#73336.  See also IIAB PRs #2647 #2652 #2653 #2655.
 echo -e "\n\nIIAB requires these ~4 Ansible Collections: (we upgrade them here if possible!)\n"
-ansible-galaxy collection install --force-with-deps \
-               -r /opt/iiab/iiab/collections.yml \
-               -p /usr/share/ansible/collections
+
+# 2026-11-12: Ansible Galaxy (galaxy.ansible.com) served HTTP 502 Bad Gateway
+# for a few seconds, killing 15-35 min image builds here, e.g. "Failed to
+# download collection tar from 'default': HTTP Error 502: Bad Gateway".
+# Galaxy has no retry of its own (unlike the pip settings above), so retry
+# with backoff.
+# `--force-with-deps` makes each attempt idempotent, i.e. a half-installed
+# collection from a failed attempt is simply reinstalled.
+GALAXY_RETRIES=4
+for attempt in $(seq 1 $GALAXY_RETRIES); do
+    if ansible-galaxy collection install --force-with-deps \
+                   -r /opt/iiab/iiab/collections.yml \
+                   -p /usr/share/ansible/collections; then
+        break
+    fi
+
+    if [ "$attempt" -eq "$GALAXY_RETRIES" ]; then
+        echo -e "\nERROR: 'ansible-galaxy collection install' failed $GALAXY_RETRIES times, giving up." >&2
+        exit 1
+    fi
+
+    delay=$((10 * 2 ** (attempt - 1)))    # 10s, 20s, 40s
+    echo -e "\nWARNING: 'ansible-galaxy collection install' attempt $attempt/$GALAXY_RETRIES failed (e.g. transient HTTP 502 from galaxy.ansible.com). Retrying in ${delay}s...\n"
+    sleep "$delay"
+done
 # 2021-02-24: 'ansible-galaxy collection list' lists those installed. (#2659)
 # 2020-11-28: The ~3 Ansible Collections used by IIAB (~37MB) once lived here:
 #    /root/.ansible/collections/ansible_collections
