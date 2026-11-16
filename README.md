@@ -60,13 +60,16 @@ installed role.
   `--reinstall` with `reinstall: false` in `roles/<role>/meta/runrole.yml`;
   `kolibri`, `wordpress`, and `azuracast` do.
 - Some older roles do not have full support for `--uninstall`. For these roles,
-  `./runrole` removes the state markers before the reinstall starts. A failed
-  reinstall then leaves the role marked as uninstalled. `./iiab-install
+  `./runrole` removes the state markers immediately before that role starts. A
+  failed reinstall then leaves only that role marked as uninstalled; the other
+  roles in the same command keep their markers. With several roles, each role
+  runs in its own playbook for this reason. `./iiab-install
   --reinstall` is different: it resets only the stage counter and reruns the
   stages. To reinstall one role, use `./runrole --reinstall <role>`.
 - `--upgrade` upgrades an installed role through the program's own upgrade
-  method. The role must ship `upgrade.yml` or use an inline `when: upgrade`
-  path. No role ships `upgrade.yml` in 1.0. See "Upgrades" below.
+  method. The role must ship `upgrade.yml` or use an inline `when: upgrade` or
+  `when: iiab_role_upgrade` path. No role ships `upgrade.yml` in 1.0. See
+  "Upgrades" below.
 - `--uninstall` removes the program, its program data, managed settings, and
   user settings. It never deletes user data. Only leaf roles support it; shared
   infrastructure roles do not. With several roles, `./runrole` refuses to start
@@ -82,12 +85,16 @@ installed role.
 - `--status` and `--list` are read-only. `--check-local-vars` is also read-only;
   it validates only the listed roles or prefixes, or the full checklist when
   none are given. A listed prefix with no 0-init checklist entry is an error.
+  If the list contains only always-on helper roles, there is nothing to
+  validate.
 - `--log FILE` writes the Ansible log to FILE instead of `./iiab-debug.log`.
 - `LOCAL_VARS_FILE`, `DEFAULT_VARS_FILE`, and `IIAB_STATE_FILE` override the
   local-vars, defaults, and state-file paths for the shell checks and the entry
   playbooks.
-- Role lifecycle operations use internal `iiab_role_*` flags. Do not set them
-  in `local_vars.yml`; use the CLI options.
+- Role lifecycle operations use internal `iiab_role_*` flags. `./runrole` also
+  passes the bare `uninstall` and `upgrade` variables for older roles that
+  predate those names. Do not set any of them in `local_vars.yml`; use the CLI
+  options.
 - `./runroles` is a deprecated alias for `./runrole`; it accepts the same
   arguments.
 
@@ -96,9 +103,11 @@ programs or reset settings. Pass `-y` in automation.
 
 Capability detection uses one rule per operation. Some older roles do not have
 full support for `--uninstall` or `--upgrade`. For these roles, detection
-accepts a phase file included from the entry point, an inline `when: uninstall`
-or `when: upgrade` path, or `uninstall: true` or `upgrade: true` in
-`meta/runrole.yml`. A converted role must ship `tasks/uninstall.yml` or
+accepts a phase file included from the entry point, an inline `when: uninstall`,
+`when: upgrade`, `when: iiab_role_uninstall`, or `when: iiab_role_upgrade` path,
+or `uninstall: true` or `upgrade: true` in `meta/runrole.yml`. `./runrole`
+passes both the bare variable and the internal `iiab_role_*` flag, so older
+roles can use either name. A converted role must ship `tasks/uninstall.yml` or
 `tasks/upgrade.yml`; a manifest flag cannot add a phase. Every role supports
 `--reinstall` unless `meta/runrole.yml` sets `reinstall: false`.
 
