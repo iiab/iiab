@@ -443,6 +443,29 @@ def remove(state, path):
     return bool(paths)
 
 
+def move(state, source, target):
+    """Move *source* to *target* (or into *target* when it is a directory)."""
+    source = source.rstrip("/")
+    if not exists(state, source):
+        return False
+    target_is_dir = target.endswith("/") or state["paths"].get(target) == "directory"
+    if target_is_dir:
+        target = posixpath.join(target, posixpath.basename(source))
+    prefix = source + "/"
+    moved = False
+    for path in list(state["paths"]):
+        if path != source and not path.startswith(prefix):
+            continue
+        new_path = target + path[len(source) :]
+        state["paths"][new_path] = state["paths"].pop(path)
+        if path in state.setdefault("contents", {}):
+            state["contents"][new_path] = state["contents"].pop(path)
+        if path in state.setdefault("downloads", {}):
+            state["downloads"][new_path] = state["downloads"].pop(path)
+        moved = True
+    return moved
+
+
 def record_service(state, name, enabled=None, service_state=None):
     service = state["services"].setdefault(
         name, {"enabled": False, "state": "stopped"}
@@ -490,6 +513,16 @@ def command_result(state, args):
         for flag in ("-O", "--output-document", "-o", "--output"):
             if flag in words and words.index(flag) + 1 < len(words):
                 create(state, words[words.index(flag) + 1])
+
+    # A task like "mv awstats.conf awstats.conf.dist" can move a declared user
+    # setting. Model it so the ownership test sees the result.
+    if words and words[0] == "mv":
+        operands = [word for word in words[1:] if not word.startswith("-")]
+        if len(operands) >= 2:
+            *sources, target = operands
+            for source in sources:
+                move(state, source, target)
+        finish(state, changed=True, rc=0, stdout="", stderr="")
 
     # Source builds normally install their unit from the source directory.
     if words and words[0] == "make" and {"install", "config"} & set(words[1:]):
