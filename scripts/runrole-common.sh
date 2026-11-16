@@ -345,8 +345,10 @@ validate_options() {
 }
 
 # Copy local facts once, so roles can read ansible_local.local_facts.
+# Tests set IIAB_SKIP_LOCAL_FACTS to avoid writing to /etc.
 install_local_facts() {
     $CHECK_LOCAL_VARS && return 0
+    [ -n "${IIAB_SKIP_LOCAL_FACTS:-}" ] && return 0
     mkdir -p /etc/ansible/facts.d
     cp "$IIAB_REPO/scripts/local_facts.fact" /etc/ansible/facts.d/local_facts.fact
 }
