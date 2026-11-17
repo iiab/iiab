@@ -8,15 +8,19 @@ Single source of truth for the role -> state-marker prefix mapping
 before Ansible is installed.
 
 ``--uninstall`` is supported when the role entry point hands off to
-``tasks/uninstall.yml`` (or guards work with ``when: uninstall`` inline);
-for a role using the shared runner the phase file is required.  ``--upgrade``
-works the same way with ``tasks/upgrade.yml`` / ``when: upgrade``.  For legacy
-roles, ``meta/runrole.yml`` can declare ``uninstall: true`` / ``upgrade: true``
-when detection cannot see the inline guard.  ``--reinstall`` is available to
-every role unless ``meta/runrole.yml`` sets ``reinstall: false``.  When the role
-ships ``tasks/uninstall.yml``, reinstall runs that and then installs again.
-Without it, reinstall falls back to ``install.yml``, but ``./runrole`` warns
-that the behavior is ambiguous.
+``tasks/uninstall.yml`` (or guards work with ``when: uninstall`` or
+``when: iiab_role_uninstall`` inline); for a role that uses the shared lifecycle
+runner, the phase file is required.  ``--upgrade`` works the same way with
+``tasks/upgrade.yml`` / ``when: upgrade`` / ``when: iiab_role_upgrade``.
+``./runrole`` passes both the internal flag and the bare variable when it
+requests these operations, so older roles can use either name.  Some older roles
+do not have full support for ``--uninstall`` or ``--upgrade``; for these roles,
+``meta/runrole.yml`` can declare ``uninstall: true`` / ``upgrade: true`` when
+detection cannot see the inline guard.  ``--reinstall``
+is available to every role unless ``meta/runrole.yml`` sets
+``reinstall: false``.  When the role ships ``tasks/uninstall.yml``, reinstall
+runs that and then installs again.  Without it, reinstall falls back to
+``install.yml``, but ``./runrole`` warns that the behavior is ambiguous.
 """
 
 from __future__ import annotations
@@ -178,6 +182,15 @@ def table_rows() -> list[str]:
     return rows
 
 
+def _uncommented(text: str) -> str:
+    """Drop YAML comments before looking for includes, guards, or manifest values.
+
+    A commented-out include or guard must not make a role advertise an
+    operation it does not implement.
+    """
+    return "\n".join(line.split("#", 1)[0] for line in text.splitlines())
+
+
 def _manifest_value(role: str, feature: str) -> bool | None:
     """Return a meta/runrole.yml boolean, or None when it is not declared."""
     path = ROLES_DIR / role / "meta" / "runrole.yml"
@@ -187,6 +200,8 @@ def _manifest_value(role: str, feature: str) -> bool | None:
         text = path.read_text(encoding="utf-8")
     except OSError:
         return None
+    # A trailing comment ("reinstall: false  # reason") must not hide the value.
+    text = _uncommented(text)
     match = re.search(
         rf"^{re.escape(feature)}:\s*(true|false|yes|no|on|off)\s*$",
         text,
@@ -199,15 +214,6 @@ def _manifest_value(role: str, feature: str) -> bool | None:
 
 def _manifest_says(role: str, feature: str) -> bool:
     return _manifest_value(role, feature) is True
-
-
-def _uncommented(text: str) -> str:
-    """Drop YAML comments before looking for includes or ``when:`` guards.
-
-    A commented-out include or guard must not make a role advertise an
-    operation it does not implement.
-    """
-    return "\n".join(line.split("#", 1)[0] for line in text.splitlines())
 
 
 def _entrypoint_implements(role: str, feature: str) -> bool:
@@ -225,14 +231,23 @@ def _entrypoint_implements(role: str, feature: str) -> bool:
         stripped = line.strip()
         if re.match(rf"^-\s+not\s+{re.escape(feature)}\s*$", stripped):
             continue
+        if re.match(rf"^-\s+not\s+iiab_role_{re.escape(feature)}\s*$", stripped):
+            continue
         if re.match(rf"^-\s+{re.escape(feature)}\s*$", stripped):
+            return True
+        if re.match(rf"^-\s+iiab_role_{re.escape(feature)}\s*$", stripped):
             return True
         if re.match(rf"^{re.escape(feature)}(?:\s+(?:or|and))?\s*(#.*)?$", stripped):
             return True
         if "when:" in line:
+            condition = line.split("when:", 1)[1]
+            if re.search(rf"\bnot\s+iiab_role_{re.escape(feature)}\b", condition):
+                continue
+            if re.search(rf"\biiab_role_{re.escape(feature)}\b", condition):
+                return True
             if re.search(rf"\bnot\s+{re.escape(feature)}\b", line):
                 continue
-            if re.search(rf"\b{re.escape(feature)}\b", line.split("when:", 1)[1]):
+            if re.search(rf"\b{re.escape(feature)}\b", condition):
                 return True
     return False
 
@@ -256,7 +271,7 @@ def _supports_phase(role: str, phase: str) -> bool:
         # The runner only calls tasks/<phase>.yml.  A manifest flag cannot
         # invent a phase, so a converted role must ship the file.
         return has_phase(role, phase)
-    # Legacy roles can implement the phase inline and use the manifest when
+    # Older roles can implement the phase inline and use the manifest when
     # detection cannot see it.
     if _manifest_says(role, phase):
         return True

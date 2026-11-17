@@ -263,6 +263,10 @@ if $CHECK_LOCAL_VARS; then
         fi
         CHECK_LOCAL_VARS_ROLES="${CHECK_LOCAL_VARS_ROLES}\"${prefix}\","
     done
+    if [[ ${#ROLES[@]} -gt 0 && -z "$CHECK_LOCAL_VARS_ROLES" ]]; then
+        echo "Nothing to validate: none of the listed roles have install/enabled vars."
+        exit 0
+    fi
     if [[ ${#ROLES[@]} -gt 0 ]]; then
         CHECK_LOCAL_VARS_EXTRA="{\"iiab_role_uninstall\":false,\"iiab_role_reinstall\":false,\"iiab_role_upgrade\":false,\"validate_roles\":[${CHECK_LOCAL_VARS_ROLES%,}]}"
     else
@@ -297,8 +301,8 @@ APPLY_ROLES=("${ROLES[@]}")
 MISSING_ROLES=()
 
 # Apply and reinstall operate only on roles that local_vars.yml says must be
-# installed. Refuse before anything runs, including before runrole removes a
-# legacy role's markers. This prevents a role from installing a program that
+# installed. Refuse before anything runs, including before runrole removes an
+# older role's markers. This prevents a role from installing a program that
 # local_vars.yml disables.
 if ! $UNINSTALL; then
     missing_install=false
@@ -387,12 +391,8 @@ elif $REINSTALL; then
                 fi
                 state_show_prefix "$var" | sed 's/^/  /'
             else
-                echo "Reinstalling $role. Legacy role: removing its markers before the reinstall:"
+                echo "Reinstalling $role. Older role: its markers are removed just before it starts:"
                 state_show_prefix "$var" | sed 's/^/  /'
-                state_cmd forget "$var" >/dev/null || {
-                    echo -e "\e[1mERROR: could not remove ${var}_* markers from $IIAB_STATE_FILE.\e[0m" >&2
-                    exit 2
-                }
             fi
         else
             echo "$role is not installed; it will be installed normally."
@@ -456,6 +456,10 @@ extra_vars() {
     # Always pass all three flags, so a value in local_vars.yml cannot turn an
     # apply into an uninstall (or the reverse).
     json="$json,\"iiab_role_uninstall\":${role_uninstall},\"iiab_role_reinstall\":${role_reinstall},\"iiab_role_upgrade\":${role_upgrade}"
+    # Older roles predate the iiab_role_* names and guard their uninstall or
+    # upgrade work with the bare variable. Pass both so either style works.
+    # Detection in scripts/role_lifecycle.py accepts both.
+    json="$json,\"uninstall\":${role_uninstall},\"upgrade\":${role_upgrade}"
     if [ "$phase" != uninstall ] && $ADD; then
         for role in "${PLAYBOOK_ROLES[@]}"; do
             install_var=$(role_install_var "$role")
@@ -477,14 +481,38 @@ extra_vars() {
     printf '%s,"validate_roles":[%s]}' "$json" "${validate_roles%,}"
 }
 
-# Run one role in its own playbook. --continue-on-error uses this so a failure
-# in one role does not stop the roles after it.
+# Run one role in its own playbook. --continue-on-error and --reinstall use
+# this so a failure in one role does not stop (or damage) the roles after it.
 run_one_phase() {
     local phase=$1
     local role=$2
     PLAYBOOK_ROLES=("$role")
     write_playbook "$role"
     run_playbook "$(extra_vars "$phase")"
+}
+
+# Older roles gate on '<role>_installed' through vars_files, so their markers
+# must be gone before the playbook starts. Remove them immediately before that
+# role's own playbook so a failure cannot erase another role's markers.
+forget_old_role_markers() {
+    local role=$1
+    local var
+    $REINSTALL || return 0
+    role_uses_runner "$role" && return 0
+    var=$(role_var "$role")
+    state_has_prefix "$var" || return 0
+    state_cmd forget "$var" >/dev/null || {
+        echo -e "\e[1mERROR: could not remove ${var}_* markers from $IIAB_STATE_FILE.\e[0m" >&2
+        exit 2
+    }
+}
+
+report_continue_failures() {
+    if [ "$STATUS_CODE" -ne 0 ]; then
+        echo -e "\e[1mERROR: these roles failed:\e[0m" >&2
+        printf '  %s\n' "${CONTINUE_FAILED[@]}" >&2
+        echo "The other listed roles were still processed." >&2
+    fi
 }
 
 if $VERBOSE; then
@@ -495,11 +523,12 @@ fi
 
 install_local_facts
 
-if $CONTINUE_ON_ERROR; then
-    STATUS_CODE=0
-    CONTINUE_FAILED=()
+STATUS_CODE=0
+CONTINUE_FAILED=()
 
-    if $UNINSTALL; then
+if $UNINSTALL; then
+    PLAYBOOK_ROLES=("${UNINSTALL_ROLES[@]}")
+    if $CONTINUE_ON_ERROR; then
         for role in "${UNINSTALL_ROLES[@]}"; do
             run_one_phase uninstall "$role"
             role_status=$?
@@ -511,33 +540,42 @@ if $CONTINUE_ON_ERROR; then
                 CONTINUE_FAILED+=("$role")
             fi
         done
+        report_continue_failures
     else
-        for role in "${APPLY_ROLES[@]}"; do
-            run_one_phase apply "$role"
-            role_status=$?
-            if [ "$role_status" -ne 0 ]; then
-                STATUS_CODE=1
-                CONTINUE_FAILED+=("$role")
+        write_playbook "${PLAYBOOK_ROLES[@]}"
+        run_playbook "$(extra_vars uninstall)"
+        STATUS_CODE=$?
+    fi
+elif $REINSTALL; then
+    # One playbook per role: an older role's markers are removed only when its
+    # turn comes. A failed reinstall therefore cannot uninstall another role.
+    for role in "${APPLY_ROLES[@]}"; do
+        forget_old_role_markers "$role"
+        run_one_phase apply "$role"
+        role_status=$?
+        if [ "$role_status" -ne 0 ]; then
+            STATUS_CODE=1
+            CONTINUE_FAILED+=("$role")
+            if ! $CONTINUE_ON_ERROR; then
+                break
             fi
-        done
+        fi
+    done
+    PLAYBOOK_ROLES=("${APPLY_ROLES[@]}")
+    if $CONTINUE_ON_ERROR; then
+        report_continue_failures
     fi
-
-    if [ "$STATUS_CODE" -ne 0 ]; then
-        echo -e "\e[1mERROR: these roles failed:\e[0m" >&2
-        printf '  %s\n' "${CONTINUE_FAILED[@]}" >&2
-        echo "The other listed roles were still processed." >&2
-    fi
-
-    if $UNINSTALL; then
-        PLAYBOOK_ROLES=("${UNINSTALL_ROLES[@]}")
-    else
-        PLAYBOOK_ROLES=("${APPLY_ROLES[@]}")
-    fi
-elif $UNINSTALL; then
-    PLAYBOOK_ROLES=("${UNINSTALL_ROLES[@]}")
-    write_playbook "${PLAYBOOK_ROLES[@]}"
-    run_playbook "$(extra_vars uninstall)"
-    STATUS_CODE=$?
+elif $CONTINUE_ON_ERROR; then
+    PLAYBOOK_ROLES=("${APPLY_ROLES[@]}")
+    for role in "${APPLY_ROLES[@]}"; do
+        run_one_phase apply "$role"
+        role_status=$?
+        if [ "$role_status" -ne 0 ]; then
+            STATUS_CODE=1
+            CONTINUE_FAILED+=("$role")
+        fi
+    done
+    report_continue_failures
 else
     PLAYBOOK_ROLES=("${APPLY_ROLES[@]}")
     write_playbook "${PLAYBOOK_ROLES[@]}"
