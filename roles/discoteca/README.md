@@ -51,15 +51,12 @@ as the unprivileged `discoteca` user with effective group `www-data` on both
 systemd and proot, so the same `sudo -u discoteca disco add ...` command works
 everywhere.
 
-Upstream's release workflow builds `linux-amd64`, `linux-arm64`, and
-`linux-armv7` binaries, but the newest published release (`v0.0.37`) predates
-those assets and the `--host`/`--base-path` flags this role needs. The role
-therefore builds `latest` from source; once a release with the required flags
-is published, the same role installs its matching prebuilt binary and verifies
-the SHA-256 digest GitHub reports. On arm64 Android (the usual case) the install
-builds from source with the Go toolchain (`CGO_ENABLED=1`, tag `fts5`); it also
-builds from source on amd64 until such a release ships. This needs network
-access during install and takes a few minutes on a phone.
+Release `v0.1.1` and newer ship `linux-amd64` and `linux-arm64` binaries with
+GitHub-reported SHA-256 digests. The role installs the matching asset, so arm64
+Android (the usual case) and amd64 use a prebuilt binary. CPUs without a release
+asset, currently armv7 and armv6, build from source with the Go toolchain
+(`CGO_ENABLED=1`, tag `fts5`); that needs network access during install and takes
+a few minutes on a phone. Releases older than `v0.1.1` are refused.
 
 `discoteca_source_ref` selects the source revision (`main` by default). Pin a
 commit or a release tag for a reproducible image. Set
@@ -174,7 +171,7 @@ return `503`.
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `discoteca_version` | `latest` | Release to install; pin an X.Y.Z value for reproducibility. |
+| `discoteca_version` | `latest` | Release to install; must be `0.1.1` or newer. Pin an X.Y.Z value for reproducibility. |
 | `discoteca_build_from_source` | `false` | Force a Go source build even when a prebuilt binary exists. |
 | `discoteca_source_ref` | `main` | Branch, tag, or commit built when using source. |
 | `discoteca_url` | `/disco` | NGINX URL prefix. |
@@ -192,8 +189,7 @@ return `503`.
 | `discoteca_memory_high` / `discoteca_memory_max` | `70%` / `80%` | systemd cgroup memory limits (ignored under proot). |
 
 The install uses the SHA-256 digest that GitHub reports for the release asset.
-When no compatible prebuilt asset exists (today: arm64 has no asset, and amd64's
-newest published release predates the required flags), it builds
+When this CPU has no release asset (currently armv7 and armv6), it builds
 `discoteca_source_ref` from source. 32-bit x86 has no upstream build and no Go
 mapping, so the install fails clearly instead of guessing.
 

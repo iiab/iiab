@@ -27,31 +27,28 @@
           if discoteca_version == 'latest'
           else discoteca_version | string) | trim }}
 
-- name: Assert that discoteca_resolved_version is an X.Y.Z release
+- name: Assert that discoteca_resolved_version is a supported release
   assert:
-    that: discoteca_resolved_version is match('^[0-9]+\.[0-9]+\.[0-9]+$')
+    that:
+      - discoteca_resolved_version is match('^[0-9]+\.[0-9]+\.[0-9]+$')
+      - discoteca_resolved_version is version('0.1.1', '>=')
     fail_msg: >-
-      discoteca_version='{{ discoteca_resolved_version }}' is not a valid X.Y.Z
-      release. Set discoteca_version to a release tag such as "0.0.37", or
-      "latest" to resolve it from {{ discoteca_releases_api }}.
+      discoteca_version='{{ discoteca_resolved_version }}' is not a supported
+      release. Set discoteca_version to "0.1.1" or newer, or "latest" to
+      resolve it from {{ discoteca_releases_api }}.
     quiet: true
 
 - name: Select the prebuilt release asset for this CPU architecture
   set_fact:
-    discoteca_release_assets: "{{ discoteca_release.json.assets | default([]) }}"
     discoteca_prebuilt_asset: >-
       {{ (discoteca_release.json.assets | default([]))
          | selectattr('name', 'equalto', discoteca_binary_name)
          | list | first | default({}) }}
 
-# The GitHub API lists every release asset, so an empty asset list means the
-# lookup returned no metadata (for example a test fixture). Only then fall back
-# to the conventional download URL.
 - name: Decide whether to use a prebuilt binary or build from source
   set_fact:
     discoteca_use_prebuilt: >-
-      {{ ((discoteca_prebuilt_asset | length > 0)
-          or ((discoteca_release_assets | length == 0) and discoteca_platform_suffix != ''))
+      {{ (discoteca_prebuilt_asset | length > 0)
          and not (discoteca_build_from_source | bool) }}
 
 - name: Fail if no prebuilt binary exists and this CPU has no Go source build
@@ -71,9 +68,7 @@
       GitHub reports no SHA-256 digest for {{ discoteca_prebuilt_asset.name }}.
       Refusing to install an unverifiable binary.
     quiet: true
-  when:
-    - discoteca_use_prebuilt | bool
-    - discoteca_prebuilt_asset | length > 0
+  when: discoteca_use_prebuilt | bool
 
 - name: Stop an existing discoteca service (if reinstalling, not proot)
   systemd:
@@ -133,67 +128,14 @@
 
 - name: Download discoteca {{ discoteca_resolved_version }} and verify its SHA-256 digest
   get_url:
-    url: "{{ discoteca_prebuilt_asset.browser_download_url | default(discoteca_fallback_url) }}"
+    url: "{{ discoteca_prebuilt_asset.browser_download_url }}"
     dest: "{{ discoteca_binary_path }}"
-    checksum: "{{ discoteca_prebuilt_asset.digest | default(omit) }}"
+    checksum: "{{ discoteca_prebuilt_asset.digest }}"
     owner: root
     group: root
     mode: "0755"
     timeout: "{{ download_timeout }}"
   when: discoteca_use_prebuilt | bool
-
-# The role needs --host, --base-path, --download-command, and --download-dir.
-# v0.0.37 and older releases predate them, so a "latest" release that lacks
-# them is built from source instead.
-- name: Read the serve flags supported by the prebuilt binary
-  command:
-    argv:
-      - "{{ discoteca_binary_path }}"
-      - serve
-      - --help
-  register: discoteca_prebuilt_help
-  changed_when: false
-  failed_when: false
-  when: discoteca_use_prebuilt | bool
-
-- name: Mark whether the prebuilt binary supports the required serve flags
-  set_fact:
-    discoteca_prebuilt_compatible: >-
-      {{ (discoteca_prebuilt_help.rc | default(1) == 0)
-         and ('--host' in (discoteca_prebuilt_help.stdout | default('')))
-         and ('--base-path' in (discoteca_prebuilt_help.stdout | default('')))
-         and ('--download-command' in (discoteca_prebuilt_help.stdout | default('')))
-         and ('--download-dir' in (discoteca_prebuilt_help.stdout | default(''))) }}
-  when: discoteca_use_prebuilt | bool
-
-- name: Fall back to a source build for a latest release that predates the required flags
-  set_fact:
-    discoteca_use_prebuilt: false
-  when:
-    - discoteca_use_prebuilt | bool
-    - not discoteca_prebuilt_compatible | bool
-    - discoteca_version == 'latest'
-
-- name: Fail when a pinned release predates the required flags
-  fail:
-    msg: >-
-      discoteca {{ discoteca_resolved_version }} does not accept every serve
-      flag this role configures (--host, --base-path, --download-command,
-      --download-dir). Use discoteca_version: latest to build a compatible
-      source revision, or set discoteca_build_from_source: true and pin
-      discoteca_source_ref.
-  when:
-    - discoteca_use_prebuilt | bool
-    - not discoteca_prebuilt_compatible | bool
-    - discoteca_version != 'latest'
-
-- name: Remove the incompatible prebuilt binary before a source build
-  file:
-    path: "{{ discoteca_binary_path }}"
-    state: absent
-  when:
-    - not discoteca_use_prebuilt | bool
-    - discoteca_prebuilt_help is defined
 
 - name: Name a source-built binary after its git ref
   set_fact:
