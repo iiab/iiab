@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-import json, humanize, requests, os, xml, xmltodict
+import json, humanize, requests, os, xmltodict
 
 os.chdir(os.path.dirname(__file__))
 
@@ -14,7 +14,7 @@ iiab_map_host_url = "https://iiab.switnet.org/maps/2"
 
 # "data dates" refer to how recent a certain type of data is
 
-maps_vector_data_date = "2026-10-01"
+maps_vector_data_date = "2026-11-01"
 maps_satellite_data_date = "2025-12-10"
 maps_static_search_data_date = "2026-04-22"
 
@@ -58,6 +58,12 @@ def confirm_meta4(content_url):
 
     meta4 = xmltodict.parse(requests.get(content_url + ".meta4").content, force_list=('url',))
     urls = [url['#text'] for url in meta4['metalink']['file']['url']]
+
+    # Check that the mirror files work
+    for url in urls:
+        status_code = requests.head(url).status_code
+        assert status_code == 200, f"Bad response from mirror file {url}: {status_code}"
+
     assert content_url in urls, f"meta4 does not contain main url for {content_url}"
 
 def confirm_torrent(content_url):
