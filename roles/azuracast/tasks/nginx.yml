@@ -1,0 +1,48 @@
+---
+# Clean listener URLs: http://box.lan/radio/listen/<channel>
+#
+# AzuraCast's "radio proxy" setting already serves streams at
+# /listen/<short_name> on the web port, so IIAB only has to forward that
+# prefix.  Listeners never see AzuraCast's 5-digit station ports.
+
+- name: Create {{ doc_root }}/radio for the listener page
+  file:
+    path: "{{ doc_root }}/radio"
+    state: directory
+    owner: "{{ apache_user }}"
+    group: "{{ apache_user }}"
+    mode: '0755'
+
+- name: Install the /radio listener page
+  template:
+    src: radio-index.html.j2
+    dest: "{{ doc_root }}/radio/index.html"
+    owner: "{{ apache_user }}"
+    group: "{{ apache_user }}"
+    mode: '0644'
+
+- name: Install one .m3u playlist per channel
+  template:
+    src: radio-channel.m3u.j2
+    dest: "{{ doc_root }}/radio/{{ item.short_name }}.m3u"
+    owner: "{{ apache_user }}"
+    group: "{{ apache_user }}"
+    mode: '0644'
+  loop: "{{ azuracast_stations }}"
+  loop_control:
+    label: "{{ item.short_name }}"
+
+- name: Install NGINX config for clean /radio URLs
+  template:
+    src: radio-nginx.conf.j2
+    dest: "{{ nginx_conf_dir }}/azuracast-radio.conf"
+    owner: root
+    group: root
+    mode: '0644'
+  register: _ac_nginx_conf
+
+- name: Reload 'nginx' to pick up the /radio URLs
+  systemd:
+    name: nginx
+    state: reloaded
+  when: _ac_nginx_conf.changed

@@ -1,0 +1,97 @@
+#!/bin/sh
+# Managed by IIAB role "azuracast".
+#
+# Checks AzuraCast, restarts it if needed, and publishes /radio/status.json so
+# the listener page can show a green/red line.  Exits 0 either way: the JSON
+# and the journal are the signal, not systemd's failed state.
+set -u
+
+PORT="{{ azuracast_http_port }}"
+STATUS_FILE="{{ doc_root }}/radio/status.json"
+WEBHOOK="{{ azuracast_health_webhook_url }}"
+LOG_TAG="iiab-radio"
+
+OK=1
+RESTARTED=0
+DETAIL=""
+
+status_ok() {
+    curl -fsS -m 15 "http://127.0.0.1:${PORT}/api/status" 2>/dev/null \
+        | grep -q '"online":true'
+}
+
+if ! cd /opt/azuracast 2>/dev/null; then
+    DETAIL="missing /opt/azuracast"
+else
+    if docker compose version >/dev/null 2>&1; then
+        DC="docker compose"
+    else
+        DC="docker-compose"
+    fi
+
+    if ! docker info >/dev/null 2>&1; then
+        RESTARTED=1
+        DETAIL="docker daemon was not running"
+        systemctl start docker >/dev/null 2>&1 || true
+        sleep 10
+    fi
+
+    if [ -z "$(docker ps --filter 'name=azuracast' --filter 'status=running' --quiet 2>/dev/null)" ]; then
+        RESTARTED=1
+        DETAIL="${DETAIL:+$DETAIL; }web container was not running"
+        $DC up -d >/dev/null 2>&1 || true
+        sleep 20
+    fi
+
+    if status_ok; then
+        OK=0
+    else
+        RESTARTED=1
+        DETAIL="${DETAIL:+$DETAIL; }web not responding"
+        /usr/local/bin/iiab-azuracast-cli azuracast:radio:restart >/dev/null 2>&1 || true
+        sleep 15
+        if status_ok; then
+            OK=0
+        else
+            DETAIL="$DETAIL; still down"
+        fi
+    fi
+fi
+
+NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+DETAIL=$(printf '%s' "$DETAIL" | tr -d '"\\' | tr '\n' ' ')
+
+if [ "$OK" = 0 ]; then
+    OK_JSON=true
+else
+    OK_JSON=false
+fi
+
+if [ "$RESTARTED" = 1 ]; then
+    RESTARTED_JSON=true
+else
+    RESTARTED_JSON=false
+fi
+
+JSON=$(printf '{"ok": %s, "checked": "%s", "restarted": %s, "detail": "%s"}' \
+    "$OK_JSON" "$NOW" "$RESTARTED_JSON" "$DETAIL")
+
+if [ -d "$(dirname "$STATUS_FILE")" ]; then
+    TMP="${STATUS_FILE}.tmp"
+    if printf '%s\n' "$JSON" > "$TMP"; then
+        chmod 0644 "$TMP" 2>/dev/null || true
+        mv "$TMP" "$STATUS_FILE"
+    fi
+fi
+
+if [ "$OK" = 0 ]; then
+    logger -t "$LOG_TAG" "ok${DETAIL:+ ($DETAIL)}"
+else
+    logger -t "$LOG_TAG" "FAILED: ${DETAIL:-unknown}"
+    if [ -n "$WEBHOOK" ]; then
+        curl -fsS -m 10 -X POST -H 'Content-Type: application/json' \
+            -d "$JSON" "$WEBHOOK" >/dev/null 2>&1 || true
+    fi
+fi
+
+exit 0
