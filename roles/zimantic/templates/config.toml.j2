@@ -1,0 +1,70 @@
+# Managed by IIAB's zimantic role. Zimantic v1 requires every local source to
+# be declared as an explicit collection.
+{% macro toml_value(value) -%}
+{% if value is mapping -%}
+{ {% for key, item in value | dictsort %}{{ key | to_json }} = {{ toml_value(item) }}{{ ', ' if not loop.last else '' }}{% endfor %} }
+{%- elif value is sequence and value is not string -%}
+[{% for item in value %}{{ toml_value(item) }}{{ ', ' if not loop.last else '' }}{% endfor %}]
+{%- else -%}
+{{ value | to_json }}
+{%- endif %}
+{%- endmacro %}
+model_dir = {{ zimantic_model_dir | to_json }}
+index_dir = {{ zimantic_index_dir | to_json }}
+
+port = {{ zimantic_port }}
+web_base_path = {{ zimantic_url_without_slash | to_json }}
+
+# Tuning is intentionally left to Zimantic's hardware profile: it selects
+# mobile, desktop or supercomputer from this host's CPU and RAM. Pinning the
+# Raspberry Pi Zero 2 W values here used to cap every IIAB device (including a
+# Pi 4/5 or a PC) at two search workers and two concurrent searches, which
+# turned ordinary overlapping searches into "server is busy" responses.
+#
+# Override only what this host needs, in /etc/iiab/local_vars.yml:
+#   zimantic_config:
+#     max_concurrent_searches: 4
+#     source_query_threads: 4
+#     slot_wait_seconds: 15
+#
+{% if zimantic_config %}
+{% for key, value in zimantic_config | dictsort %}
+{{ key | to_json }} = {{ toml_value(value) }}
+{% endfor %}
+{% endif %}
+
+[[collections]]
+type = "zim"
+name = "library"
+path = {{ zimantic_zim_dir | to_json }}
+label = "ZIM files"
+{% for key, value in zimantic_collection_config.get('library', {}) | dictsort %}
+{{ key | to_json }} = {{ toml_value(value) }}
+{% endfor %}
+
+{% if zimantic_kolibri_enabled %}
+[[collections]]
+type = "kolibri"
+name = {{ zimantic_kolibri_name | to_json }}
+path = {{ zimantic_kolibri_path | to_json }}
+label = {{ zimantic_kolibri_label | to_json }}
+granularity = {{ zimantic_kolibri_granularity | to_json }}
+{% for key, value in zimantic_collection_config.get(zimantic_kolibri_name, {}) | dictsort %}
+{{ key | to_json }} = {{ toml_value(value) }}
+{% endfor %}
+{% endif %}
+
+{% if zimantic_files_enabled %}
+[[collections]]
+type = "files"
+name = {{ zimantic_files_name | to_json }}
+path = {{ zimantic_files_path | to_json }}
+label = {{ zimantic_files_label | to_json }}
+granularity = {{ zimantic_files_granularity | to_json }}
+{% if 'include' not in zimantic_collection_config.get(zimantic_files_name, {}) %}
+include = {{ toml_value(zimantic_files_include) }}
+{% endif %}
+{% for key, value in zimantic_collection_config.get(zimantic_files_name, {}) | dictsort %}
+{{ key | to_json }} = {{ toml_value(value) }}
+{% endfor %}
+{% endif %}

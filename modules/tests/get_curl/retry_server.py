@@ -39,6 +39,10 @@ class RetryHandler(BaseHTTPRequestHandler):
             status, body = 500, b"try again"
         elif path == "/always-500":
             status, body = 500, b"still broken"
+        elif path == "/checksum-then-200" and counts[path] == 1:
+            status, body = 200, b"bad checksum\n"
+        elif path == "/always-bad-checksum":
+            status, body = 200, b"bad checksum\n"
         elif path == "/partial-then-full" and counts[path] == 1:
             # Drop the connection halfway through, as a flaky connection
             # or proxy might do.

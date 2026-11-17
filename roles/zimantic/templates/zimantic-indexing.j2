@@ -1,0 +1,52 @@
+#!/bin/sh
+set -eu
+
+case "${1:-}" in
+    "")
+        build_mode=
+        ;;
+    --fast)
+        build_mode=--fast
+        ;;
+    *)
+        echo "usage: zimantic-indexing [--fast]" >&2
+        exit 2
+        ;;
+esac
+
+if [ "$#" -gt 1 ]; then
+    echo "usage: zimantic-indexing [--fast]" >&2
+    exit 2
+fi
+
+# Configuration is found only through XDG on Linux. Pin the same homes as the
+# server, and keep its fallback PID file in the data directory. pdsm has no
+# WorkingDirectory setting, so manual runs change directory here too.
+export XDG_CONFIG_HOME="{{ zimantic_xdg_home }}"
+export XDG_DATA_HOME="{{ zimantic_xdg_home }}"
+unset XDG_RUNTIME_DIR
+cd "{{ zimantic_data_dir }}"
+
+# The build itself takes the index lock, so a manual `zimantic build` and the
+# systemd units cannot write the same indexes at once. --no-wait-lock makes a
+# skipped trigger cheap instead of queuing behind a long semantic build.
+build_status=0
+if [ "$build_mode" = "--fast" ]; then
+    "{{ zimantic_venv }}/bin/zimantic" build --no-wait-lock --fast --wait-stable || build_status=$?
+else
+    "{{ zimantic_venv }}/bin/zimantic" build --no-wait-lock --wait-stable || build_status=$?
+fi
+
+# 75 is EX_TEMPFAIL: another build holds the lock. Skipping a path or timer
+# trigger is not a failure, and reload must wait for that other build.
+if [ "$build_status" -eq 75 ]; then
+    exit 0
+fi
+
+reload_status=0
+"{{ zimantic_venv }}/bin/zimantic" reload || reload_status=$?
+
+if [ "$build_status" -ne 0 ]; then
+    exit "$build_status"
+fi
+exit "$reload_status"

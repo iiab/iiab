@@ -1,0 +1,28 @@
+---
+# Upgrade phase. The runner runs this instead of install.yml for --upgrade.
+# build.yml fetches the requested version and re-resolves dependencies without
+# removing runtime data or user settings.
+- name: Validate Zimantic settings
+  include_tasks: validate.yml
+
+- name: Rebuild Zimantic for --upgrade
+  include_tasks: build.yml
+
+# Current Zimantic ignores indexes from an older schema or model until they are
+# rebuilt. This optional fast build restores title and full-text search right
+# after an upgrade; the normal nightly build still adds semantic vectors.
+- name: Check for the Zimantic indexing helper
+  stat:
+    path: /usr/local/sbin/zimantic-indexing
+  register: zimantic_upgrade_indexing_helper
+  when: zimantic_rebuild_indexes_on_upgrade | bool
+
+- name: Rebuild fast Zimantic indexes after upgrade
+  command: >-
+    {{ '/usr/local/sbin/zimantic-indexing --fast'
+       if is_proot
+       else 'sudo -u ' ~ zimantic_user ~ ' /usr/local/sbin/zimantic-indexing --fast' }}
+  when:
+    - zimantic_enabled | bool
+    - zimantic_rebuild_indexes_on_upgrade | bool
+    - zimantic_upgrade_indexing_helper.stat.exists | default(false)

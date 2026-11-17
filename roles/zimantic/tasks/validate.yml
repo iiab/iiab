@@ -1,0 +1,119 @@
+---
+# Input validation. install.yml and configure.yml include this file, so an
+# apply checks the settings both before a build and when only configuration
+# changes. The uninstall phase does not need these settings.
+
+- name: Assert that "zimantic_install is sameas true" (boolean not string etc)
+  assert:
+    that: zimantic_install is sameas true
+    fail_msg: "PLEASE SET 'zimantic_install: True' e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+
+- name: Assert that "zimantic_enabled | type_debug == 'bool'" (boolean not string etc)
+  assert:
+    that: zimantic_enabled | type_debug == 'bool'
+    fail_msg: "PLEASE GIVE VARIABLE 'zimantic_enabled' A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+
+- name: Assert that "zimantic_mode" is supported
+  assert:
+    that: zimantic_mode in ['fast', 'semantic']
+    fail_msg: "zimantic_mode must be either 'fast' or 'semantic'"
+    quiet: yes
+
+# python-libzim 4.1 is required on every platform now. PyPI publishes 4.1
+# wheels for x86_64 and aarch64 only, and Debian 13 still ships libzim 3.6.
+- name: Require a supported 64-bit platform
+  assert:
+    that: (ansible_facts.machine | default('')) in zimantic_supported_machines
+    fail_msg: >-
+      Zimantic requires python-libzim 4.1 or newer and is supported only on
+      64-bit x86_64 and aarch64. This host reports
+      '{{ ansible_facts.machine | default('unknown') }}'; 32-bit armhf/armv7 is
+      no longer supported.
+    quiet: yes
+
+- name: Validate Zimantic configuration mappings
+  assert:
+    that:
+      - zimantic_config is mapping
+      - zimantic_collection_config is mapping
+      - >-
+        zimantic_collection_config | dict2items | map(attribute='value') |
+        select('mapping') | list | length == zimantic_collection_config | length
+    fail_msg: >-
+      zimantic_config must be a mapping of global settings.
+      zimantic_collection_config must map collection names to settings mappings.
+    quiet: yes
+
+# ZIM and Kiwix collections reject derived_text. This role configures a ZIM
+# collection named 'library'; derived text belongs on files or Kolibri
+# collections instead.
+- name: Reject derived_text on the ZIM collection
+  assert:
+    that: "'derived_text' not in zimantic_collection_config.get('library', {})"
+    fail_msg: >-
+      Zimantic does not support derived_text on ZIM collections. Put
+      derived_text under zimantic_files_name or zimantic_kolibri_name instead.
+    quiet: yes
+
+- name: Validate optional Zimantic collections
+  assert:
+    that:
+      - zimantic_kolibri_enabled | type_debug == 'bool'
+      - zimantic_files_enabled | type_debug == 'bool'
+      - zimantic_kolibri_granularity in ['collection', 'children']
+      - zimantic_files_granularity in ['collection', 'children']
+      - zimantic_kolibri_name | length > 0
+      - zimantic_files_name | length > 0
+      - zimantic_kolibri_path | length > 0
+      - zimantic_files_path | length > 0
+    fail_msg: >-
+      Optional Zimantic collections need boolean enable flags, non-empty
+      names and paths, and granularity set to 'collection' or 'children'.
+    quiet: yes
+
+# PRoot/Android has no systemd. The role uses proot_services' pdsm there
+# instead, for the server only: pdsm has no timer or path units, so index
+# builds stay manual (see README.rst).
+- name: Check for the pdsm service manager (PRoot)
+  stat:
+    path: /usr/local/bin/pdsm
+  register: zimantic_pdsm_binary
+  when: is_proot
+
+- name: Fail when PRoot has no pdsm service manager
+  fail:
+    msg: >-
+      PRoot/Android service management uses pdsm. Set
+      'proot_services_install: True' and 'proot_services_enabled: True' in
+      /etc/iiab/local_vars.yml, install the proot_services role, then rerun
+      the zimantic role.
+  when:
+    - is_proot
+    - not zimantic_pdsm_binary.stat.exists
+
+- name: Validate the selected embedding model
+  assert:
+    that:
+      - zimantic_embedding_model in zimantic_supported_models
+      - zimantic_model_precision in ['fp32', 'fp16', 'int8']
+    fail_msg: >-
+      zimantic_embedding_model must be one of
+      {{ zimantic_supported_models | join(', ') }}, and
+      zimantic_model_precision must be fp32, fp16, or int8.
+    quiet: yes
+
+- name: Check for a supported Python version
+  command: "{{ zimantic_python }} --version"
+  register: zimantic_python_check
+  changed_when: false
+  failed_when: false
+  check_mode: no
+
+- name: Fail if a supported Python version is unavailable
+  fail:
+    msg: "Zimantic currently requires Python 3.11-3.14; install a compatible {{ zimantic_python }} before enabling the zimantic role"
+  when:
+    - zimantic_python_check.rc != 0 or
+      ((zimantic_python_check.stdout ~ zimantic_python_check.stderr) is not search('Python 3\\.(1[1-4])\\.'))
