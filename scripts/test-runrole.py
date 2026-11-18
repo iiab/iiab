@@ -282,7 +282,7 @@ def test_runrole(results: list[str], harness: Harness) -> None:
         harness.is_installed("sshd"),
     )
 
-    # --add must pass the install var and the generic/internal operation flags.
+    # --add is permanent by default: it writes the install var to local_vars.yml.
     local_vars = harness.local_vars.read_text(encoding="utf-8")
     harness.set_local_vars(
         local_vars.replace("awstats_install: True", "awstats_install: False")
@@ -298,8 +298,31 @@ def test_runrole(results: list[str], harness: Harness) -> None:
         "uninstall" in calls and "upgrade" in calls,
         calls,
     )
+    updated = harness.local_vars.read_text(encoding="utf-8")
+    check(
+        results,
+        "--add persists the install var",
+        "awstats_install: True" in updated,
+        updated,
+    )
 
-    # --enable is an independent one-run override for '*_enabled'.
+    # --temporary keeps --add out of local_vars.yml.
+    harness.set_local_vars(
+        harness.local_vars.read_text(encoding="utf-8").replace(
+            "awstats_install: True", "awstats_install: False"
+        )
+    )
+    result = harness.run("--add", "--temporary", "awstats")
+    check(results, "--add --temporary exits 0", result.returncode == 0, result.stderr)
+    updated = harness.local_vars.read_text(encoding="utf-8")
+    check(
+        results,
+        "--temporary leaves the install var alone",
+        "awstats_install: False" in updated,
+        updated,
+    )
+
+    # --enable is also permanent by default and does not imply --add.
     harness.set_local_vars(
         harness.local_vars.read_text(encoding="utf-8")
         .replace("awstats_install: False", "awstats_install: True")
@@ -321,6 +344,66 @@ def test_runrole(results: list[str], harness: Harness) -> None:
         "awstats_install" not in calls,
         calls,
     )
+    updated = harness.local_vars.read_text(encoding="utf-8")
+    check(
+        results,
+        "--enable persists the enabled var",
+        "awstats_enabled: True" in updated,
+        updated,
+    )
+
+    # --temporary keeps --enable out of local_vars.yml.
+    harness.set_local_vars(
+        harness.local_vars.read_text(encoding="utf-8").replace(
+            "awstats_enabled: True", "awstats_enabled: False"
+        )
+    )
+    result = harness.run("--enable", "--temporary", "awstats")
+    check(
+        results,
+        "--enable --temporary exits 0",
+        result.returncode == 0,
+        result.stderr,
+    )
+    updated = harness.local_vars.read_text(encoding="utf-8")
+    check(
+        results,
+        "--temporary leaves the enabled var alone",
+        "awstats_enabled: False" in updated,
+        updated,
+    )
+
+    # The default keeps the rest of the file intact and appends missing keys.
+    harness.set_local_vars("# keep this comment\n")
+    result = harness.run("--add", "--enable", "awstats")
+    updated = harness.local_vars.read_text(encoding="utf-8")
+    check(
+        results,
+        "persistent overrides exit 0",
+        result.returncode == 0,
+        result.stderr,
+    )
+    check(
+        results,
+        "persistent overrides keep comments",
+        "# keep this comment" in updated,
+        updated,
+    )
+    check(
+        results,
+        "persistent overrides append missing keys",
+        "awstats_install: True" in updated and "awstats_enabled: True" in updated,
+        updated,
+    )
+    result = harness.run("--temporary", "awstats")
+    check(
+        results,
+        "--temporary requires --add or --enable",
+        result.returncode == 1
+        and "requires --add" in (result.stdout + result.stderr),
+        result.stdout + result.stderr,
+    )
+
     result = harness.run("--uninstall", "--enable", "awstats")
     check(
         results,

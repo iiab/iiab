@@ -8,6 +8,7 @@ APPLY=false
 ASSUME_YES=false
 ADD=false
 ENABLE=false
+TEMPORARY=false
 CHECK_LOCAL_VARS=false
 STATUS=false
 LIST=false
@@ -46,8 +47,12 @@ for the lifecycle rules.
 
 Options:
   -y, --yes             Do not ask for confirmation
-  -a, --add             Apply the roles even if '*_install: False'
-  -e, --enable          Apply the roles with '*_enabled: True'
+  -a, --add             Apply the roles even if '*_install: False'. Writes
+                        '<prefix>_install: True' to local_vars.yml
+  -e, --enable          Apply the roles with '*_enabled: True'. Writes
+                        '<prefix>_enabled: True' to local_vars.yml
+  -t, --temporary       Apply --add/--enable for this run only instead of
+                        writing the override to local_vars.yml
   -v, --verbose         Show the Python interpreter and pass -v to Ansible
       --log FILE        Write the Ansible log to FILE (default: ./iiab-debug.log)
       --apply           Apply the roles (the default)
@@ -75,6 +80,7 @@ Examples:
   ./runrole captiveportal
   ./runrole transmission kiwix
   ./runrole --add --enable captiveportal
+  ./runrole --add --enable --temporary captiveportal
   ./runrole --reinstall transmission calibre-web
   ./runrole --upgrade <role>
   ./runrole --uninstall awstats --skip-never-installed
@@ -83,8 +89,9 @@ Examples:
   ./runrole --log /tmp/iiab.log captiveportal
 
 No option deletes user data. --status, --list, and --check-local-vars are
-read-only. Set '<prefix>_install: True' (or pass -a) and
-'<prefix>_enabled: True' (or pass -e) before you apply or reinstall the roles.
+read-only. --add and --enable write '<prefix>_install: True' and
+'<prefix>_enabled: True' to local_vars.yml. Add -t to apply those overrides
+for this run only.
 EOF
 }
 
@@ -117,6 +124,9 @@ while [[ $# -gt 0 ]]; do
             ;;
         -e|--enable)
             ENABLE=true
+            ;;
+        -t|--temporary)
+            TEMPORARY=true
             ;;
         -v|--verbose)
             VERBOSE=true
@@ -163,7 +173,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if $LIST; then
-    if [[ ${#ROLES[@]} -gt 0 ]] || $UNINSTALL || $REINSTALL || $UPGRADE || $APPLY || $CHECK_LOCAL_VARS || $STATUS || $ADD || $ENABLE || $ASSUME_YES || $VERBOSE || $SKIP_NEVER_INSTALLED || $CONTINUE_ON_ERROR || [ -n "$LOG_FILE" ]; then
+    if [[ ${#ROLES[@]} -gt 0 ]] || $UNINSTALL || $REINSTALL || $UPGRADE || $APPLY || $CHECK_LOCAL_VARS || $STATUS || $ADD || $ENABLE || $TEMPORARY || $ASSUME_YES || $VERBOSE || $SKIP_NEVER_INSTALLED || $CONTINUE_ON_ERROR || [ -n "$LOG_FILE" ]; then
         echo "--list is read-only and does not accept roles or other options."
         exit 1
     fi
@@ -248,6 +258,36 @@ if [ ! -f "$LOCAL_VARS_FILE" ]; then
     exit 1
 fi
 
+if ! $TEMPORARY && ($ADD || $ENABLE); then
+    for role in "${ROLES[@]}"; do
+        case "$role" in
+            [0-9]-*)
+                echo "NOTE: ${role} is a stage role; it has no install/enabled vars to persist."
+                continue
+                ;;
+        esac
+        install_var=$(role_install_var "$role")
+        if [ -z "$install_var" ]; then
+            echo "NOTE: ${role} is an always-on helper role; nothing to persist."
+            continue
+        fi
+        if $ADD; then
+            if ! set_local_var "${install_var}_install" True; then
+                echo -e "\e[1mERROR: could not write ${install_var}_install to $LOCAL_VARS_FILE.\e[0m" >&2
+                exit 1
+            fi
+            echo "Persisted '${install_var}_install: True' in $LOCAL_VARS_FILE."
+        fi
+        if $ENABLE; then
+            if ! set_local_var "${install_var}_enabled" True; then
+                echo -e "\e[1mERROR: could not write ${install_var}_enabled to $LOCAL_VARS_FILE.\e[0m" >&2
+                exit 1
+            fi
+            echo "Persisted '${install_var}_enabled: True' in $LOCAL_VARS_FILE."
+        fi
+    done
+fi
+
 if ! command -v ansible > /dev/null; then
     echo -e "\n\e[1mPlease install Ansible, by running:\n\nsudo /opt/iiab/iiab/scripts/ansible\e[0m\n"
     exit 1
@@ -316,10 +356,14 @@ if ! $UNINSTALL; then
         if ! role_install_enabled "$role"; then
             var=$(role_install_var "$role")
             if $ADD; then
-                echo "WARNING: --add sets '${var}_install: True' for $role, for this run only."
+                if $TEMPORARY; then
+                    echo "WARNING: --add --temporary sets '${var}_install: True' for $role, for this run only."
+                else
+                    echo "WARNING: --add forces '${var}_install: True' for $role."
+                fi
             else
                 echo -e "\e[1mERROR: '${var}_install: True' MUST BE SET for $role!\e[0m" >&2
-                echo "Set it in: $LOCAL_VARS_FILE, or pass --add to run it once." >&2
+                echo "Set it in: $LOCAL_VARS_FILE, or pass --add to write it there and run." >&2
                 if state_has_prefix "$(role_var "$role")" && role_supports "$role" uninstall; then
                     echo "Or remove the existing installation with: sudo ./runrole --uninstall $role" >&2
                 fi
@@ -618,17 +662,17 @@ if $UNINSTALL; then
     echo
 fi
 
-# --add forces '<prefix>_install: True' for this run only. If it installed
-# something, local_vars.yml still says False, and the next apply will refuse.
-# Report the two ways out now.
-if $ADD && ! $UNINSTALL; then
+# --temporary leaves local_vars.yml alone. If it installed something, the next
+# apply will refuse until '<prefix>_install: True' is saved. Report the ways out.
+if $ADD && $TEMPORARY && ! $UNINSTALL; then
     for role in "${PLAYBOOK_ROLES[@]}"; do
         var=$(role_var "$role")
         install_var=$(role_install_var "$role")
         if [ -n "$install_var" ] && state_has_prefix "$var" && ! role_install_enabled "$role"; then
-            echo -e "\e[1;33mNOTE: --add did not change $LOCAL_VARS_FILE.\e[0m"
+            echo -e "\e[1;33mNOTE: --add --temporary did not change $LOCAL_VARS_FILE.\e[0m"
             echo "'${install_var}_install' is still False there, but ${role} is installed."
-            echo "Set '${install_var}_install: True' to keep it, or remove it with:"
+            echo "Set '${install_var}_install: True' in $LOCAL_VARS_FILE, or rerun without --temporary, to keep it."
+            echo "Or remove it with:"
             if role_supports "$role" uninstall; then
                 echo "  sudo ./runrole --uninstall ${role}"
             else
@@ -640,18 +684,18 @@ if $ADD && ! $UNINSTALL; then
     done
 fi
 
-# --enable forces '<prefix>_enabled: True' for this run only. If local_vars.yml
-# still says otherwise, the next apply will disable the service again.
-if $ENABLE && ! $UNINSTALL; then
+# --temporary leaves the enabled override out of local_vars.yml. The next apply
+# will disable the service again unless the setting is saved.
+if $ENABLE && $TEMPORARY && ! $UNINSTALL; then
     for role in "${PLAYBOOK_ROLES[@]}"; do
         install_var=$(role_install_var "$role")
         [ -n "$install_var" ] || continue
         case $(var_value "${install_var}_enabled") in
             True|true|TRUE|Yes|yes|YES|On|on|ON|1) ;;
             *)
-                echo -e "\e[1;33mNOTE: --enable did not change $LOCAL_VARS_FILE.\e[0m"
+                echo -e "\e[1;33mNOTE: --enable --temporary did not change $LOCAL_VARS_FILE.\e[0m"
                 echo "'${install_var}_enabled' is not True there; the next apply will disable ${role}."
-                echo "Set '${install_var}_enabled: True' to keep it enabled."
+                echo "Set '${install_var}_enabled: True' in $LOCAL_VARS_FILE, or rerun without --temporary, to keep it enabled."
                 echo
                 ;;
         esac

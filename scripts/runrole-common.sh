@@ -146,6 +146,22 @@ var_value() {
     printf '%s' "$value"
 }
 
+# Set one top-level boolean in local_vars.yml without rewriting the file.
+# Keeps comments and unrelated settings intact.
+set_local_var() {
+    local key=$1
+    local value=$2
+    [ -f "$LOCAL_VARS_FILE" ] || return 1
+    if grep -qE "^${key}:" "$LOCAL_VARS_FILE"; then
+        sed -i -E "s|^${key}:.*|${key}: ${value}|" "$LOCAL_VARS_FILE" || return 1
+    else
+        if [ -s "$LOCAL_VARS_FILE" ] && [ "$(tail -c 1 "$LOCAL_VARS_FILE")" != $'\n' ]; then
+            printf '\n' >> "$LOCAL_VARS_FILE" || return 1
+        fi
+        printf '%s: %s\n' "$key" "$value" >> "$LOCAL_VARS_FILE" || return 1
+    fi
+}
+
 var_source() {
     if [ -f "$LOCAL_VARS_FILE" ] && yaml_value "$LOCAL_VARS_FILE" "$1" > /dev/null; then
         echo desired
@@ -322,12 +338,16 @@ validate_options() {
     if [ -n "${LOG_FILE:-}" ]; then
         log=true
     fi
-    if $CHECK_LOCAL_VARS && ($log || $UNINSTALL || $REINSTALL || $UPGRADE || $APPLY || $ADD || $ENABLE || $STATUS || $ASSUME_YES || $VERBOSE || $CONTINUE_ON_ERROR); then
+    if $CHECK_LOCAL_VARS && ($log || $UNINSTALL || $REINSTALL || $UPGRADE || $APPLY || $ADD || $ENABLE || $TEMPORARY || $STATUS || $ASSUME_YES || $VERBOSE || $CONTINUE_ON_ERROR); then
         echo "--check-local-vars is read-only and cannot be combined with other options."
         exit 1
     fi
-    if $UNINSTALL && ($REINSTALL || $UPGRADE || $ADD || $ENABLE); then
-        echo "--uninstall cannot be combined with --add, --enable, --reinstall, or --upgrade."
+    if $TEMPORARY && ! ($ADD || $ENABLE); then
+        echo "--temporary requires --add and/or --enable."
+        exit 1
+    fi
+    if $UNINSTALL && ($REINSTALL || $UPGRADE || $ADD || $ENABLE || $TEMPORARY); then
+        echo "--uninstall cannot be combined with --add, --enable, --temporary, --reinstall, or --upgrade."
         exit 1
     fi
     if $REINSTALL && $UPGRADE; then
@@ -338,7 +358,7 @@ validate_options() {
         echo "--skip-never-installed only applies to --uninstall."
         exit 1
     fi
-    if $STATUS && ($log || $UNINSTALL || $REINSTALL || $UPGRADE || $APPLY || $ADD || $ENABLE || $ASSUME_YES || $VERBOSE || $SKIP_NEVER_INSTALLED || $CONTINUE_ON_ERROR); then
+    if $STATUS && ($log || $UNINSTALL || $REINSTALL || $UPGRADE || $APPLY || $ADD || $ENABLE || $TEMPORARY || $ASSUME_YES || $VERBOSE || $SKIP_NEVER_INSTALLED || $CONTINUE_ON_ERROR); then
         echo "--status is read-only and cannot be combined with other options."
         exit 1
     fi
