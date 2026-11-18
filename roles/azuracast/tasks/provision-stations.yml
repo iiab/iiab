@@ -149,3 +149,30 @@
   loop_control:
     loop_var: ac_station
     label: "{{ ac_station.short_name }}"
+
+# A station created through the API starts out stopped (has_started=false), so
+# AzuraCast writes no supervisor config and /listen/<channel> returns 404.
+# Starting it also happens to be required before AzuraCast will stream at all.
+- name: Check whether each AzuraCast station's services are running
+  uri:
+    url: "{{ azuracast_api_url }}/station/{{ _ac_station_ids[item.short_name] }}/status"
+    headers:
+      Authorization: "Bearer {{ azuracast_api_key }}"
+    return_content: yes
+  register: _ac_station_status
+  loop: "{{ azuracast_stations }}"
+  loop_control:
+    label: "{{ item.short_name }}"
+  changed_when: false
+
+- name: Start AzuraCast stations whose services are not running
+  uri:
+    url: "{{ azuracast_api_url }}/station/{{ _ac_station_ids[item.item.short_name] }}/restart"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ azuracast_api_key }}"
+    status_code: [200, 204]
+  loop: "{{ _ac_station_status.results }}"
+  loop_control:
+    label: "{{ item.item.short_name }}"
+  when: not (item.json.backendRunning | bool and item.json.frontendRunning | bool)
