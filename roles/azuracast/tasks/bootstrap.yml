@@ -11,15 +11,20 @@
     port: "{{ azuracast_http_port }}"
     timeout: 900
 
+# The web port answers before the container's startup script has brought up
+# Redis and MariaDB, so retry (e.g. on a slow Raspberry Pi) instead of racing.
 - name: List AzuraCast accounts
   command: /usr/local/bin/iiab-azuracast-cli azuracast:account:list
   register: _ac_accounts
+  until: _ac_accounts.rc == 0
+  retries: 120
+  delay: 5
   changed_when: false
   failed_when: false
 
 - name: Fail if AzuraCast's CLI is unreachable
   fail:
-    msg: "Could not run AzuraCast's CLI (rc={{ _ac_accounts.rc }}):\n{{ _ac_accounts.stderr | default('') }}"
+    msg: "Could not run AzuraCast's CLI after 10 minutes (rc={{ _ac_accounts.rc }}):\n{{ _ac_accounts.stderr | default('') }}"
   when: _ac_accounts.rc != 0
 
 - name: Create AzuraCast's first administrator if the instance is empty
