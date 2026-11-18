@@ -90,6 +90,7 @@ class Harness:
             [str(RUNROLE), *args],
             cwd=ROOT_DIR,
             env=env,
+            stdin=subprocess.DEVNULL,
             text=True,
             capture_output=True,
             check=False,
@@ -171,6 +172,10 @@ def test_role_lifecycle_detection(results: list[str]) -> None:
                 "---\n- name: Run the lifecycle\n  include_role:\n    name: 0-init\n    tasks_from: lifecycle\n",
                 "uninstall: true\n",
             )
+            add_role(
+                "name-mentions-uninstall",
+                "---\n- name: Do not uninstall when it is already gone\n  debug:\n    msg: keep\n  when: ansible_os_family == 'Debian'\n",
+            )
 
             check(
                 results,
@@ -210,6 +215,11 @@ def test_role_lifecycle_detection(results: list[str]) -> None:
                 results,
                 "manifest cannot add a phase to a converted role",
                 not role_lifecycle.supports_uninstall("converted-without-phase"),
+            )
+            check(
+                results,
+                "task names are not condition guards",
+                not role_lifecycle.supports_uninstall("name-mentions-uninstall"),
             )
         finally:
             role_lifecycle.ROLES_DIR = original
@@ -352,11 +362,30 @@ def test_runrole(results: list[str], harness: Harness) -> None:
         updated,
     )
 
+    # --enable alone must not write '*_enabled: True' beside '*_install: False':
+    # 0-init rejects that pair, so the write would break every later full run.
+    harness.set_local_vars(
+        local_vars.replace("awstats_install: True", "awstats_install: False")
+        .replace("awstats_enabled: True", "awstats_enabled: False")
+    )
+    result = harness.run("--enable", "awstats")
+    updated = harness.local_vars.read_text(encoding="utf-8")
+    check(
+        results,
+        "--enable without --add fails the preflight",
+        result.returncode == 1 and "MUST BE SET" in result.stderr,
+        result.stderr,
+    )
+    check(
+        results,
+        "--enable without --add writes nothing",
+        "awstats_enabled: False" in updated,
+        updated,
+    )
+
     # --temporary keeps --enable out of local_vars.yml.
     harness.set_local_vars(
-        harness.local_vars.read_text(encoding="utf-8").replace(
-            "awstats_enabled: True", "awstats_enabled: False"
-        )
+        local_vars.replace("awstats_enabled: True", "awstats_enabled: False")
     )
     result = harness.run("--enable", "--temporary", "awstats")
     check(
@@ -395,6 +424,74 @@ def test_runrole(results: list[str], harness: Harness) -> None:
         "awstats_install: True" in updated and "awstats_enabled: True" in updated,
         updated,
     )
+    check(
+        results,
+        "appending does not add a blank line",
+        "\n\n" not in updated,
+        updated,
+    )
+
+    # Updating a key keeps its trailing comment.
+    harness.set_local_vars(
+        local_vars.replace(
+            "awstats_install: True", "awstats_install: True    # keep this note"
+        )
+    )
+    result = harness.run("--add", "awstats")
+    updated = harness.local_vars.read_text(encoding="utf-8")
+    check(
+        results,
+        "--add keeps the key's trailing comment",
+        "# keep this note" in updated,
+        updated,
+    )
+
+    # Ansible reads only top-level keys, so an indented lookalike must not be
+    # reported as the desired value, and --add must add the top-level key.
+    harness.set_local_vars("group:\n  awstats_install: False\nawstats_enabled: True\n")
+    result = harness.run("--status", "awstats")
+    check(
+        results,
+        "indented keys are not read as top-level keys",
+        "awstats_install: True" in result.stdout,
+        result.stdout,
+    )
+    result = harness.run("--add", "awstats")
+    updated = harness.local_vars.read_text(encoding="utf-8")
+    check(
+        results,
+        "--add writes the top-level key beside an indented one",
+        "\nawstats_install: True\n" in updated
+        and "\n  awstats_install: False\n" in updated,
+        updated,
+    )
+
+    # A refused confirmation must not rewrite local_vars.yml either.
+    harness.set_state("awstats_installed: True\n")
+    harness.set_local_vars(
+        local_vars.replace("awstats_install: True", "awstats_install: False")
+    )
+    result = harness.run("--add", "--reinstall", "awstats")
+    updated = harness.local_vars.read_text(encoding="utf-8")
+    check(
+        results,
+        "--reinstall refusal exits 1",
+        result.returncode == 1,
+        result.stderr,
+    )
+    check(
+        results,
+        "--reinstall refusal runs no playbook",
+        not harness.playbook_calls(),
+        str(harness.playbook_calls()),
+    )
+    check(
+        results,
+        "--reinstall refusal leaves local_vars alone",
+        "awstats_install: False" in updated,
+        updated,
+    )
+
     result = harness.run("--temporary", "awstats")
     check(
         results,
@@ -428,6 +525,32 @@ def test_runrole(results: list[str], harness: Harness) -> None:
         "--uninstall verifies the marker",
         result.returncode == 1 and "markers are still" in result.stderr,
         result.stderr,
+    )
+
+    # A symlinked local_vars.yml must be written through, not replaced.
+    target = harness.root / "local_vars_target.yml"
+    link = harness.root / "local_vars_link.yml"
+    target.write_text(
+        local_vars.replace("awstats_install: True", "awstats_install: False"),
+        encoding="utf-8",
+    )
+    link.symlink_to(target.name)
+    harness.env["LOCAL_VARS_FILE"] = str(link)
+    harness.set_state("")
+    result = harness.run("--add", "awstats")
+    updated = target.read_text(encoding="utf-8")
+    check(
+        results,
+        "--add through a symlink exits 0",
+        result.returncode == 0,
+        result.stderr,
+    )
+    check(results, "--add keeps local_vars a symlink", link.is_symlink(), str(link))
+    check(
+        results,
+        "--add updates the symlink target",
+        "awstats_install: True" in updated,
+        updated,
     )
 
 

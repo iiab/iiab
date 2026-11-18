@@ -518,11 +518,12 @@ def command_result(state, args):
     # setting. Model it so the ownership test sees the result.
     if words and words[0] == "mv":
         operands = [word for word in words[1:] if not word.startswith("-")]
+        moved = False
         if len(operands) >= 2:
             *sources, target = operands
             for source in sources:
-                move(state, source, target)
-        finish(state, changed=True, rc=0, stdout="", stderr="")
+                moved = move(state, source, target) or moved
+        finish(state, changed=moved, rc=0, stdout="", stderr="")
 
     # Source builds normally install their unit from the source directory.
     if words and words[0] == "make" and {"install", "config"} & set(words[1:]):
