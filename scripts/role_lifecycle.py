@@ -245,7 +245,7 @@ def _entrypoint_implements(role: str, feature: str) -> bool:
                 continue
             if re.search(rf"\biiab_role_{re.escape(feature)}\b", condition):
                 return True
-            if re.search(rf"\bnot\s+{re.escape(feature)}\b", line):
+            if re.search(rf"\bnot\s+{re.escape(feature)}\b", condition):
                 continue
             if re.search(rf"\b{re.escape(feature)}\b", condition):
                 return True
