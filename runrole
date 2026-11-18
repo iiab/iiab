@@ -258,36 +258,6 @@ if [ ! -f "$LOCAL_VARS_FILE" ]; then
     exit 1
 fi
 
-if ! $TEMPORARY && ($ADD || $ENABLE); then
-    for role in "${ROLES[@]}"; do
-        case "$role" in
-            [0-9]-*)
-                echo "NOTE: ${role} is a stage role; it has no install/enabled vars to persist."
-                continue
-                ;;
-        esac
-        install_var=$(role_install_var "$role")
-        if [ -z "$install_var" ]; then
-            echo "NOTE: ${role} is an always-on helper role; nothing to persist."
-            continue
-        fi
-        if $ADD; then
-            if ! set_local_var "${install_var}_install" True; then
-                echo -e "\e[1mERROR: could not write ${install_var}_install to $LOCAL_VARS_FILE.\e[0m" >&2
-                exit 1
-            fi
-            echo "Persisted '${install_var}_install: True' in $LOCAL_VARS_FILE."
-        fi
-        if $ENABLE; then
-            if ! set_local_var "${install_var}_enabled" True; then
-                echo -e "\e[1mERROR: could not write ${install_var}_enabled to $LOCAL_VARS_FILE.\e[0m" >&2
-                exit 1
-            fi
-            echo "Persisted '${install_var}_enabled: True' in $LOCAL_VARS_FILE."
-        fi
-    done
-fi
-
 if ! command -v ansible > /dev/null; then
     echo -e "\n\e[1mPlease install Ansible, by running:\n\nsudo /opt/iiab/iiab/scripts/ansible\e[0m\n"
     exit 1
@@ -359,11 +329,12 @@ if ! $UNINSTALL; then
                 if $TEMPORARY; then
                     echo "WARNING: --add --temporary sets '${var}_install: True' for $role, for this run only."
                 else
-                    echo "WARNING: --add forces '${var}_install: True' for $role."
+                    echo "WARNING: --add writes '${var}_install: True' to $LOCAL_VARS_FILE for $role."
                 fi
             else
                 echo -e "\e[1mERROR: '${var}_install: True' MUST BE SET for $role!\e[0m" >&2
                 echo "Set it in: $LOCAL_VARS_FILE, or pass --add to write it there and run." >&2
+                echo "Pass --add --temporary instead to apply the override without writing the file." >&2
                 if state_has_prefix "$(role_var "$role")" && role_supports "$role" uninstall; then
                     echo "Or remove the existing installation with: sudo ./runrole --uninstall $role" >&2
                 fi
@@ -482,6 +453,48 @@ else
         fi
     fi
 fi
+
+# --add and --enable write their overrides to local_vars.yml. This runs after
+# every preflight check and confirmation above: a refused or invalid run must
+# not edit the file. It still runs before the roles start, so a failed install
+# leaves the desired state for the next apply.
+persist_overrides() {
+    local role
+    local install_var
+    $TEMPORARY && return 0
+    $ADD || $ENABLE || return 0
+    for role in "${ROLES[@]}"; do
+        case "$role" in
+            [0-9]-*)
+                echo "NOTE: ${role} is a stage role; it has no install/enabled vars to persist."
+                continue
+                ;;
+        esac
+        install_var=$(role_install_var "$role")
+        if [ -z "$install_var" ]; then
+            echo "NOTE: ${role} is an always-on helper role; nothing to persist."
+            continue
+        fi
+        if $ADD; then
+            set_local_var "${install_var}_install" True || {
+                echo -e "\e[1mERROR: could not write ${install_var}_install to $LOCAL_VARS_FILE.\e[0m" >&2
+                exit 1
+            }
+            echo "Persisted '${install_var}_install: True' in $LOCAL_VARS_FILE."
+        fi
+        if $ENABLE; then
+            set_local_var "${install_var}_enabled" True || {
+                echo -e "\e[1mERROR: could not write ${install_var}_enabled to $LOCAL_VARS_FILE.\e[0m" >&2
+                exit 1
+            }
+            echo "Persisted '${install_var}_enabled: True' in $LOCAL_VARS_FILE."
+        fi
+    done
+}
+
+# Every preflight check and confirmation above has passed. Write the --add and
+# --enable overrides now, before the roles start.
+persist_overrides
 
 extra_vars() {
     local phase=$1
@@ -619,12 +632,10 @@ elif $REINSTALL; then
             fi
         fi
     done
-    PLAYBOOK_ROLES=("${APPLY_ROLES[@]}")
     if $CONTINUE_ON_ERROR; then
         report_continue_failures
     fi
 elif $CONTINUE_ON_ERROR; then
-    PLAYBOOK_ROLES=("${APPLY_ROLES[@]}")
     for role in "${APPLY_ROLES[@]}"; do
         run_one_phase apply "$role"
         role_status=$?
@@ -640,6 +651,10 @@ else
     run_playbook "$(extra_vars apply)"
     STATUS_CODE=$?
 fi
+
+# run_one_phase narrows PLAYBOOK_ROLES to the role it just ran. Restore the
+# full list for the per-role notes below.
+PLAYBOOK_ROLES=("${APPLY_ROLES[@]}")
 
 if [ "$STATUS_CODE" -ne 0 ]; then
     exit "$STATUS_CODE"
