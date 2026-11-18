@@ -125,16 +125,18 @@ confirm_destructive() {
     [ "$ans" = "yes" ]
 }
 
-# Print one <key>: <value> from a vars file; 1 when the key is absent.
+# Print one top-level <key>: <value> from a vars file; 1 when the key is absent.
+# Ansible only reads top-level keys, so an indented lookalike is ignored, here
+# and in set_local_var().
 yaml_value() {
     local file=$1
     local key=$2
     local line
     [ -f "$file" ] || return 1
-    line=$(grep -E "^[[:space:]]*${key}:[[:space:]]*[^#[:space:]]" "$file" | tail -n 1)
+    line=$(grep -E "^${key}:[[:space:]]*[^#[:space:]]" "$file" | tail -n 1)
     [ -n "$line" ] || return 1
     printf '%s\n' "$line" |
-        sed -E "s/^[[:space:]]*${key}:[[:space:]]*//; s/[[:space:]]+#.*$//; s/[[:space:]]+$//; s/^[\"']//; s/[\"']$//"
+        sed -E "s/^${key}:[[:space:]]*//; s/[[:space:]]+#.*$//; s/[[:space:]]+$//; s/^[\"']//; s/[\"']$//"
 }
 
 var_value() {
@@ -146,20 +148,48 @@ var_value() {
     printf '%s' "$value"
 }
 
-# Set one top-level boolean in local_vars.yml without rewriting the file.
-# Keeps comments and unrelated settings intact.
+# Set one top-level boolean in local_vars.yml, leaving unrelated lines alone.
+# A trailing comment on the key's line is preserved, an indented lookalike is
+# ignored (Ansible does not read nested keys), and a missing key is appended.
+# The file is written through its own path, so a symlinked local_vars.yml stays
+# a symlink and keeps its owner and permissions.
 set_local_var() {
     local key=$1
     local value=$2
+    local tmp
+    local line
+    local rest
+    local comment
+    local found=false
     [ -f "$LOCAL_VARS_FILE" ] || return 1
-    if grep -qE "^${key}:" "$LOCAL_VARS_FILE"; then
-        sed -i -E "s|^${key}:.*|${key}: ${value}|" "$LOCAL_VARS_FILE" || return 1
-    else
-        if [ -s "$LOCAL_VARS_FILE" ] && [ "$(tail -c 1 "$LOCAL_VARS_FILE")" != $'\n' ]; then
-            printf '\n' >> "$LOCAL_VARS_FILE" || return 1
+
+    tmp=$(mktemp "${LOCAL_VARS_FILE}.XXXXXX") || return 1
+    while IFS= read -r line || [ -n "$line" ]; do
+        if [[ $line == "${key}:"* ]]; then
+            rest=${line#"${key}:"}
+            comment=${rest#"${rest%%#*}"}    # '# note', or empty
+            if [ -n "$comment" ]; then
+                printf '%s: %s %s\n' "$key" "$value" "$comment"
+            else
+                printf '%s: %s\n' "$key" "$value"
+            fi
+            found=true
+        else
+            printf '%s\n' "$line"
         fi
-        printf '%s: %s\n' "$key" "$value" >> "$LOCAL_VARS_FILE" || return 1
+    done < "$LOCAL_VARS_FILE" > "$tmp" || { rm -f "$tmp"; return 1; }
+
+    if ! $found; then
+        # $() strips the newline, so a non-empty last byte means the file needs
+        # one before the new key.
+        if [ -s "$tmp" ] && [ -n "$(tail -c 1 "$tmp")" ]; then
+            printf '\n' >> "$tmp" || { rm -f "$tmp"; return 1; }
+        fi
+        printf '%s: %s\n' "$key" "$value" >> "$tmp" || { rm -f "$tmp"; return 1; }
     fi
+
+    cat "$tmp" > "$LOCAL_VARS_FILE" || { rm -f "$tmp"; return 1; }
+    rm -f "$tmp"
 }
 
 var_source() {

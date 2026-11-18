@@ -133,8 +133,9 @@ Then do one of these actions:
 role. `--enable` does the same for `<app>_enabled`. They are independent:
 `--add` alone installs a role but leaves it disabled when `local_vars.yml` says
 so, and `--enable` alone cannot install a role whose `*_install` is False. Use
-both to install and enable. The matching top-level key is updated in place, so
-unrelated settings and comments stay intact.
+both to install and enable. The matching top-level key is updated in place,
+keeping its trailing comment, and all unrelated lines stay intact. An indented
+key is not read as a setting, because Ansible only reads top-level keys.
 
 For a one-run override without changing `local_vars.yml`, add `--temporary`
 (or `-t`):
@@ -142,9 +143,9 @@ For a one-run override without changing `local_vars.yml`, add `--temporary`
     sudo ./runrole --add --enable --temporary zimantic
 
 `--temporary` requires at least one of `--add` or `--enable`; it does not
-change the install or enabled state by itself. The file is updated before the
-role runs, so a failed install still leaves the desired state for the next
-apply.
+change the install or enabled state by itself. The file is written only after
+the preflight checks and any confirmation pass, and before the roles start, so
+a failed install still leaves the desired state for the next apply.
 
 ## Role task lifecycle
 
