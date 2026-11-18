@@ -299,6 +299,36 @@ def test_runrole(results: list[str], harness: Harness) -> None:
         calls,
     )
 
+    # --enable is an independent one-run override for '*_enabled'.
+    harness.set_local_vars(
+        harness.local_vars.read_text(encoding="utf-8")
+        .replace("awstats_install: False", "awstats_install: True")
+        .replace("awstats_enabled: True", "awstats_enabled: False")
+    )
+    harness.set_state("")
+    result = harness.run("--enable", "awstats")
+    check(results, "--enable exits 0", result.returncode == 0, result.stderr)
+    calls = " ".join(harness.playbook_calls())
+    check(
+        results,
+        "--enable passes the enabled override",
+        "awstats_enabled" in calls,
+        calls,
+    )
+    check(
+        results,
+        "--enable does not pass the install override",
+        "awstats_install" not in calls,
+        calls,
+    )
+    result = harness.run("--uninstall", "--enable", "awstats")
+    check(
+        results,
+        "--uninstall rejects --enable",
+        result.returncode == 1 and "cannot be combined" in (result.stdout + result.stderr),
+        result.stdout + result.stderr,
+    )
+
     # --uninstall must pass the bare and internal flags.  The stub leaves the
     # marker, so the driver reports the mismatch and exits 1.
     harness.set_state("awstats_installed: True\n")

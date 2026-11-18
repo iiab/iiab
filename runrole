@@ -7,6 +7,7 @@ UPGRADE=false
 APPLY=false
 ASSUME_YES=false
 ADD=false
+ENABLE=false
 CHECK_LOCAL_VARS=false
 STATUS=false
 LIST=false
@@ -46,6 +47,7 @@ for the lifecycle rules.
 Options:
   -y, --yes             Do not ask for confirmation
   -a, --add             Apply the roles even if '*_install: False'
+  -e, --enable          Apply the roles with '*_enabled: True'
   -v, --verbose         Show the Python interpreter and pass -v to Ansible
       --log FILE        Write the Ansible log to FILE (default: ./iiab-debug.log)
       --apply           Apply the roles (the default)
@@ -72,6 +74,7 @@ Options:
 Examples:
   ./runrole captiveportal
   ./runrole transmission kiwix
+  ./runrole --add --enable captiveportal
   ./runrole --reinstall transmission calibre-web
   ./runrole --upgrade <role>
   ./runrole --uninstall awstats --skip-never-installed
@@ -80,8 +83,8 @@ Examples:
   ./runrole --log /tmp/iiab.log captiveportal
 
 No option deletes user data. --status, --list, and --check-local-vars are
-read-only. Set '<prefix>_install: True' (or pass -a) before you apply or
-reinstall the roles.
+read-only. Set '<prefix>_install: True' (or pass -a) and
+'<prefix>_enabled: True' (or pass -e) before you apply or reinstall the roles.
 EOF
 }
 
@@ -111,6 +114,9 @@ while [[ $# -gt 0 ]]; do
             ;;
         -a|--add)
             ADD=true
+            ;;
+        -e|--enable)
+            ENABLE=true
             ;;
         -v|--verbose)
             VERBOSE=true
@@ -157,7 +163,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if $LIST; then
-    if [[ ${#ROLES[@]} -gt 0 ]] || $UNINSTALL || $REINSTALL || $UPGRADE || $APPLY || $CHECK_LOCAL_VARS || $STATUS || $ADD || $ASSUME_YES || $VERBOSE || $SKIP_NEVER_INSTALLED || $CONTINUE_ON_ERROR || [ -n "$LOG_FILE" ]; then
+    if [[ ${#ROLES[@]} -gt 0 ]] || $UNINSTALL || $REINSTALL || $UPGRADE || $APPLY || $CHECK_LOCAL_VARS || $STATUS || $ADD || $ENABLE || $ASSUME_YES || $VERBOSE || $SKIP_NEVER_INSTALLED || $CONTINUE_ON_ERROR || [ -n "$LOG_FILE" ]; then
         echo "--list is read-only and does not accept roles or other options."
         exit 1
     fi
@@ -468,6 +474,14 @@ extra_vars() {
             fi
         done
     fi
+    if [ "$phase" != uninstall ] && $ENABLE; then
+        for role in "${PLAYBOOK_ROLES[@]}"; do
+            install_var=$(role_install_var "$role")
+            if [ -n "$install_var" ]; then
+                json="$json,\"${install_var}_enabled\":true"
+            fi
+        done
+    fi
     for role in "${PLAYBOOK_ROLES[@]}"; do
         install_var=$(role_install_var "$role")
         if [ -n "$install_var" ]; then
@@ -623,5 +637,23 @@ if $ADD && ! $UNINSTALL; then
             fi
             echo
         fi
+    done
+fi
+
+# --enable forces '<prefix>_enabled: True' for this run only. If local_vars.yml
+# still says otherwise, the next apply will disable the service again.
+if $ENABLE && ! $UNINSTALL; then
+    for role in "${PLAYBOOK_ROLES[@]}"; do
+        install_var=$(role_install_var "$role")
+        [ -n "$install_var" ] || continue
+        case $(var_value "${install_var}_enabled") in
+            True|true|TRUE|Yes|yes|YES|On|on|ON|1) ;;
+            *)
+                echo -e "\e[1;33mNOTE: --enable did not change $LOCAL_VARS_FILE.\e[0m"
+                echo "'${install_var}_enabled' is not True there; the next apply will disable ${role}."
+                echo "Set '${install_var}_enabled: True' to keep it enabled."
+                echo
+                ;;
+        esac
     done
 fi

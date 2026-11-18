@@ -42,6 +42,7 @@ installed role.
     sudo ./runrole captiveportal                    # apply one role
     sudo ./runrole transmission kiwix               # apply several roles
     sudo ./runrole --add captiveportal              # apply despite captiveportal_install: False
+    sudo ./runrole --add --enable captiveportal     # apply and enable despite local_vars.yml
     sudo ./runrole --reinstall awstats              # remove, then install again
     sudo ./runrole --upgrade <role>                 # upgrade, once the role ships upgrade.yml
     sudo ./runrole --uninstall awstats              # uninstall, never deleting user data
@@ -128,7 +129,11 @@ Then do one of these actions:
   this only after the program, its program data, and its settings are gone.
 
 `--add` forces `<app>_install: True` for one run without an edit to
-`local_vars.yml`.
+`local_vars.yml`. `--enable` does the same for `<app>_enabled`. They are
+independent: `--add` alone installs a role but leaves it disabled when
+`local_vars.yml` says so, and `--enable` alone cannot install a role whose
+`*_install` is False. Use both to install and enable for one run. Neither
+option changes `local_vars.yml`.
 
 ## Role task lifecycle
 
