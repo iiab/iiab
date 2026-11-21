@@ -1,0 +1,574 @@
+#!/usr/bin/env python3
+"""Smoke-test ./runrole without running Ansible or touching /etc.
+
+The lifecycle test covers a role's phases.  This test covers the command-line
+driver around them: read-only commands, preflight failures, the extra variables
+that select an operation, and the requirement that a failed multi-role
+reinstall only affects the role that ran.
+
+Ansible and ansible-playbook are replaced with stubs on PATH.  The state file
+and local_vars.yml live in a temporary directory, and IIAB_SKIP_LOCAL_FACTS
+keeps the driver from copying facts into /etc/ansible.
+"""
+
+from __future__ import annotations
+
+import importlib.util
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+ROOT_DIR = Path(__file__).resolve().parents[1]
+RUNROLE = ROOT_DIR / "runrole"
+IIAB_STATE = ROOT_DIR / "scripts" / "iiab-state"
+
+FAKE_ANSIBLE = """#!/bin/bash
+exit 0
+"""
+
+FAKE_ANSIBLE_PLAYBOOK = """#!/bin/bash
+printf '%s\\n' "$*" >> "$FAKE_ANSIBLE_LOG"
+exit "${FAKE_ANSIBLE_EXIT:-0}"
+"""
+
+
+def load_role_lifecycle():
+    spec = importlib.util.spec_from_file_location(
+        "iiab_role_lifecycle_test", ROOT_DIR / "scripts" / "role_lifecycle.py"
+    )
+    if spec is None or spec.loader is None:
+        raise SystemExit("could not load scripts/role_lifecycle.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+class Harness:
+    def __init__(self, root: Path):
+        self.root = root
+        self.bin_dir = root / "bin"
+        self.bin_dir.mkdir()
+        self.fake_log = root / "ansible-playbook.log"
+        self.state = root / "iiab_state.yml"
+        self.local_vars = root / "local_vars.yml"
+        self.env = os.environ.copy()
+        self.env.update(
+            {
+                "PATH": f"{self.bin_dir}{os.pathsep}{self.env['PATH']}",
+                "IIAB_STATE_FILE": str(self.state),
+                "LOCAL_VARS_FILE": str(self.local_vars),
+                "IIAB_SKIP_LOCAL_FACTS": "1",
+                "FAKE_ANSIBLE_LOG": str(self.fake_log),
+                "ANSIBLE_LOG_PATH": str(root / "iiab-debug.log"),
+            }
+        )
+        (self.bin_dir / "ansible").write_text(FAKE_ANSIBLE, encoding="utf-8")
+        (self.bin_dir / "ansible-playbook").write_text(
+            FAKE_ANSIBLE_PLAYBOOK, encoding="utf-8"
+        )
+        for name in ("ansible", "ansible-playbook"):
+            (self.bin_dir / name).chmod(0o755)
+        shutil.copyfile(ROOT_DIR / "vars" / "default_vars.yml", self.local_vars)
+
+    def set_local_vars(self, text: str) -> None:
+        self.local_vars.write_text(text, encoding="utf-8")
+
+    def set_state(self, text: str) -> None:
+        self.state.write_text(text, encoding="utf-8")
+
+    def reset_log(self) -> None:
+        self.fake_log.write_text("", encoding="utf-8")
+
+    def run(self, *args: str, exit_code: int = 0):
+        env = self.env.copy()
+        env["FAKE_ANSIBLE_EXIT"] = str(exit_code)
+        self.reset_log()
+        return subprocess.run(
+            [str(RUNROLE), *args],
+            cwd=ROOT_DIR,
+            env=env,
+            stdin=subprocess.DEVNULL,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+
+    def playbook_calls(self) -> list[str]:
+        if not self.fake_log.is_file():
+            return []
+        return [line for line in self.fake_log.read_text().splitlines() if line]
+
+    def is_installed(self, prefix: str) -> bool:
+        return (
+            subprocess.run(
+                [str(IIAB_STATE), "--file", str(self.state), "is-installed", prefix],
+                text=True,
+                capture_output=True,
+                check=False,
+            ).returncode
+            == 0
+        )
+
+
+def check(results: list[str], name: str, condition: bool, detail: str = "") -> None:
+    results.append(name)
+    if condition:
+        print(f"  {name:<44} PASS")
+        return
+    print(f"  {name:<44} FAIL")
+    if detail:
+        print(detail)
+    raise SystemExit(1)
+
+
+def test_role_lifecycle_detection(results: list[str]) -> None:
+    role_lifecycle = load_role_lifecycle()
+    with tempfile.TemporaryDirectory() as directory:
+        roles = Path(directory) / "roles"
+        original = role_lifecycle.ROLES_DIR
+        role_lifecycle.ROLES_DIR = roles
+        try:
+            def add_role(name: str, main: str, manifest: str = "") -> None:
+                tasks = roles / name / "tasks"
+                tasks.mkdir(parents=True)
+                (tasks / "main.yml").write_text(main, encoding="utf-8")
+                if manifest:
+                    meta = roles / name / "meta"
+                    meta.mkdir()
+                    (meta / "runrole.yml").write_text(manifest, encoding="utf-8")
+
+            add_role(
+                "bare-uninstall",
+                "---\n- name: Remove it\n  file:\n    path: /tmp/x\n    state: absent\n  when: uninstall\n",
+            )
+            add_role(
+                "internal-uninstall",
+                "---\n- name: Remove it\n  file:\n    path: /tmp/x\n    state: absent\n  when: iiab_role_uninstall | bool\n",
+            )
+            add_role(
+                "not-internal-uninstall",
+                "---\n- name: Keep it\n  debug:\n    msg: keep\n  when: not iiab_role_uninstall\n",
+            )
+            add_role(
+                "manifest-comment",
+                "---\n- debug:\n    msg: hello\n",
+                "reinstall: false  # documented opt-out\n",
+            )
+            add_role(
+                "manifest-commented-out",
+                "---\n- debug:\n    msg: hello\n",
+                "# reinstall: false\n",
+            )
+            add_role(
+                "manifest-uninstall",
+                "---\n- debug:\n    msg: hello\n",
+                "uninstall: true\n",
+            )
+            add_role(
+                "converted-without-phase",
+                "---\n- name: Run the lifecycle\n  include_role:\n    name: 0-init\n    tasks_from: lifecycle\n",
+                "uninstall: true\n",
+            )
+            add_role(
+                "name-mentions-uninstall",
+                "---\n- name: Do not uninstall when it is already gone\n  debug:\n    msg: keep\n  when: ansible_os_family == 'Debian'\n",
+            )
+
+            check(
+                results,
+                "detects when: uninstall",
+                role_lifecycle.supports_uninstall("bare-uninstall"),
+            )
+            check(
+                results,
+                "detects when: iiab_role_uninstall",
+                role_lifecycle.supports_uninstall("internal-uninstall"),
+            )
+            check(
+                results,
+                "ignores when: not iiab_role_uninstall",
+                not role_lifecycle.supports_uninstall("not-internal-uninstall"),
+            )
+            check(
+                results,
+                "manifest value with trailing comment",
+                role_lifecycle._manifest_value("manifest-comment", "reinstall")
+                is False,
+            )
+            check(
+                results,
+                "commented-out manifest value is ignored",
+                role_lifecycle._manifest_value(
+                    "manifest-commented-out", "reinstall"
+                )
+                is None,
+            )
+            check(
+                results,
+                "manifest uninstall flag is honored",
+                role_lifecycle.supports_uninstall("manifest-uninstall"),
+            )
+            check(
+                results,
+                "manifest cannot add a phase to a converted role",
+                not role_lifecycle.supports_uninstall("converted-without-phase"),
+            )
+            check(
+                results,
+                "task names are not condition guards",
+                not role_lifecycle.supports_uninstall("name-mentions-uninstall"),
+            )
+        finally:
+            role_lifecycle.ROLES_DIR = original
+
+
+def test_runrole(results: list[str], harness: Harness) -> None:
+    harness.set_state("")
+
+    result = harness.run("--list")
+    check(results, "--list exits 0", result.returncode == 0, result.stderr)
+    check(results, "--list lists awstats", "awstats" in result.stdout)
+
+    result = harness.run("--status", "awstats")
+    check(results, "--status exits 0", result.returncode == 0, result.stderr)
+    check(results, "--status shows not installed", "not installed" in result.stdout)
+
+    result = harness.run("--check-local-vars", "firmware")
+    check(
+        results,
+        "--check-local-vars helper role exits 0",
+        result.returncode == 0,
+        result.stderr,
+    )
+    check(
+        results,
+        "--check-local-vars helper skips Ansible",
+        "Nothing to validate" in result.stdout and not harness.playbook_calls(),
+        result.stdout,
+    )
+
+    result = harness.run("--uninstall", "awstats")
+    check(
+        results,
+        "--uninstall without markers fails",
+        result.returncode == 1 and "no installed markers" in result.stderr,
+        result.stderr,
+    )
+    check(
+        results,
+        "--uninstall preflight runs no playbook",
+        not harness.playbook_calls(),
+        str(harness.playbook_calls()),
+    )
+
+    # A failed multi-role reinstall must not erase the next role's markers.
+    harness.set_state(
+        "bluetooth_installed: True\nsshd_installed: True\n"
+    )
+    result = harness.run("--reinstall", "bluetooth", "sshd", exit_code=1)
+    check(
+        results,
+        "--reinstall failure exits 1",
+        result.returncode == 1,
+        result.stderr,
+    )
+    check(
+        results,
+        "--reinstall ran only the first role",
+        len(harness.playbook_calls()) == 1,
+        str(harness.playbook_calls()),
+    )
+    check(
+        results,
+        "--reinstall removes the failed role's marker",
+        not harness.is_installed("bluetooth"),
+    )
+    check(
+        results,
+        "--reinstall keeps later roles' markers",
+        harness.is_installed("sshd"),
+    )
+
+    # --add is permanent by default: it writes the install var to local_vars.yml.
+    local_vars = harness.local_vars.read_text(encoding="utf-8")
+    harness.set_local_vars(
+        local_vars.replace("awstats_install: True", "awstats_install: False")
+    )
+    harness.set_state("")
+    result = harness.run("--add", "awstats")
+    check(results, "--add exits 0", result.returncode == 0, result.stderr)
+    calls = " ".join(harness.playbook_calls())
+    check(results, "--add passes the install override", "awstats_install" in calls)
+    check(
+        results,
+        "apply passes uninstall/upgrade=false",
+        "uninstall" in calls and "upgrade" in calls,
+        calls,
+    )
+    updated = harness.local_vars.read_text(encoding="utf-8")
+    check(
+        results,
+        "--add persists the install var",
+        "awstats_install: True" in updated,
+        updated,
+    )
+
+    # --temporary keeps --add out of local_vars.yml.
+    harness.set_local_vars(
+        harness.local_vars.read_text(encoding="utf-8").replace(
+            "awstats_install: True", "awstats_install: False"
+        )
+    )
+    result = harness.run("--add", "--temporary", "awstats")
+    check(results, "--add --temporary exits 0", result.returncode == 0, result.stderr)
+    updated = harness.local_vars.read_text(encoding="utf-8")
+    check(
+        results,
+        "--temporary leaves the install var alone",
+        "awstats_install: False" in updated,
+        updated,
+    )
+
+    # --enable is also permanent by default and does not imply --add.
+    harness.set_local_vars(
+        harness.local_vars.read_text(encoding="utf-8")
+        .replace("awstats_install: False", "awstats_install: True")
+        .replace("awstats_enabled: True", "awstats_enabled: False")
+    )
+    harness.set_state("")
+    result = harness.run("--enable", "awstats")
+    check(results, "--enable exits 0", result.returncode == 0, result.stderr)
+    calls = " ".join(harness.playbook_calls())
+    check(
+        results,
+        "--enable passes the enabled override",
+        "awstats_enabled" in calls,
+        calls,
+    )
+    check(
+        results,
+        "--enable does not pass the install override",
+        "awstats_install" not in calls,
+        calls,
+    )
+    updated = harness.local_vars.read_text(encoding="utf-8")
+    check(
+        results,
+        "--enable persists the enabled var",
+        "awstats_enabled: True" in updated,
+        updated,
+    )
+
+    # --enable alone must not write '*_enabled: True' beside '*_install: False':
+    # 0-init rejects that pair, so the write would break every later full run.
+    harness.set_local_vars(
+        local_vars.replace("awstats_install: True", "awstats_install: False")
+        .replace("awstats_enabled: True", "awstats_enabled: False")
+    )
+    result = harness.run("--enable", "awstats")
+    updated = harness.local_vars.read_text(encoding="utf-8")
+    check(
+        results,
+        "--enable without --add fails the preflight",
+        result.returncode == 1 and "MUST BE SET" in result.stderr,
+        result.stderr,
+    )
+    check(
+        results,
+        "--enable without --add writes nothing",
+        "awstats_enabled: False" in updated,
+        updated,
+    )
+
+    # --temporary keeps --enable out of local_vars.yml.
+    harness.set_local_vars(
+        local_vars.replace("awstats_enabled: True", "awstats_enabled: False")
+    )
+    result = harness.run("--enable", "--temporary", "awstats")
+    check(
+        results,
+        "--enable --temporary exits 0",
+        result.returncode == 0,
+        result.stderr,
+    )
+    updated = harness.local_vars.read_text(encoding="utf-8")
+    check(
+        results,
+        "--temporary leaves the enabled var alone",
+        "awstats_enabled: False" in updated,
+        updated,
+    )
+
+    # The default keeps the rest of the file intact and appends missing keys.
+    harness.set_local_vars("# keep this comment\n")
+    result = harness.run("--add", "--enable", "awstats")
+    updated = harness.local_vars.read_text(encoding="utf-8")
+    check(
+        results,
+        "persistent overrides exit 0",
+        result.returncode == 0,
+        result.stderr,
+    )
+    check(
+        results,
+        "persistent overrides keep comments",
+        "# keep this comment" in updated,
+        updated,
+    )
+    check(
+        results,
+        "persistent overrides append missing keys",
+        "awstats_install: True" in updated and "awstats_enabled: True" in updated,
+        updated,
+    )
+    check(
+        results,
+        "appending does not add a blank line",
+        "\n\n" not in updated,
+        updated,
+    )
+
+    # Updating a key keeps its trailing comment.
+    harness.set_local_vars(
+        local_vars.replace(
+            "awstats_install: True", "awstats_install: True    # keep this note"
+        )
+    )
+    result = harness.run("--add", "awstats")
+    updated = harness.local_vars.read_text(encoding="utf-8")
+    check(
+        results,
+        "--add keeps the key's trailing comment",
+        "# keep this note" in updated,
+        updated,
+    )
+
+    # Ansible reads only top-level keys, so an indented lookalike must not be
+    # reported as the desired value, and --add must add the top-level key.
+    harness.set_local_vars("group:\n  awstats_install: False\nawstats_enabled: True\n")
+    result = harness.run("--status", "awstats")
+    check(
+        results,
+        "indented keys are not read as top-level keys",
+        "awstats_install: True" in result.stdout,
+        result.stdout,
+    )
+    result = harness.run("--add", "awstats")
+    updated = harness.local_vars.read_text(encoding="utf-8")
+    check(
+        results,
+        "--add writes the top-level key beside an indented one",
+        "\nawstats_install: True\n" in updated
+        and "\n  awstats_install: False\n" in updated,
+        updated,
+    )
+
+    # A refused confirmation must not rewrite local_vars.yml either.
+    harness.set_state("awstats_installed: True\n")
+    harness.set_local_vars(
+        local_vars.replace("awstats_install: True", "awstats_install: False")
+    )
+    result = harness.run("--add", "--reinstall", "awstats")
+    updated = harness.local_vars.read_text(encoding="utf-8")
+    check(
+        results,
+        "--reinstall refusal exits 1",
+        result.returncode == 1,
+        result.stderr,
+    )
+    check(
+        results,
+        "--reinstall refusal runs no playbook",
+        not harness.playbook_calls(),
+        str(harness.playbook_calls()),
+    )
+    check(
+        results,
+        "--reinstall refusal leaves local_vars alone",
+        "awstats_install: False" in updated,
+        updated,
+    )
+
+    result = harness.run("--temporary", "awstats")
+    check(
+        results,
+        "--temporary requires --add or --enable",
+        result.returncode == 1
+        and "requires --add" in (result.stdout + result.stderr),
+        result.stdout + result.stderr,
+    )
+
+    result = harness.run("--uninstall", "--enable", "awstats")
+    check(
+        results,
+        "--uninstall rejects --enable",
+        result.returncode == 1 and "cannot be combined" in (result.stdout + result.stderr),
+        result.stdout + result.stderr,
+    )
+
+    # --uninstall must pass the bare and internal flags.  The stub leaves the
+    # marker, so the driver reports the mismatch and exits 1.
+    harness.set_state("awstats_installed: True\n")
+    result = harness.run("-y", "--uninstall", "awstats")
+    calls = " ".join(harness.playbook_calls())
+    check(
+        results,
+        "--uninstall passes uninstall=true",
+        "uninstall" in calls and "iiab_role_uninstall" in calls,
+        calls,
+    )
+    check(
+        results,
+        "--uninstall verifies the marker",
+        result.returncode == 1 and "markers are still" in result.stderr,
+        result.stderr,
+    )
+
+    # A symlinked local_vars.yml must be written through, not replaced.
+    target = harness.root / "local_vars_target.yml"
+    link = harness.root / "local_vars_link.yml"
+    target.write_text(
+        local_vars.replace("awstats_install: True", "awstats_install: False"),
+        encoding="utf-8",
+    )
+    link.symlink_to(target.name)
+    harness.env["LOCAL_VARS_FILE"] = str(link)
+    harness.set_state("")
+    result = harness.run("--add", "awstats")
+    updated = target.read_text(encoding="utf-8")
+    check(
+        results,
+        "--add through a symlink exits 0",
+        result.returncode == 0,
+        result.stderr,
+    )
+    check(results, "--add keeps local_vars a symlink", link.is_symlink(), str(link))
+    check(
+        results,
+        "--add updates the symlink target",
+        "awstats_install: True" in updated,
+        updated,
+    )
+
+
+def main() -> int:
+    results: list[str] = []
+    with tempfile.TemporaryDirectory() as directory:
+        harness = Harness(Path(directory))
+        print("Testing ./runrole command handling...")
+        test_runrole(results, harness)
+        print("Testing role lifecycle detection...")
+        test_role_lifecycle_detection(results)
+    print(f"\n{len(results)} checks passed.")
+    leftovers = list(ROOT_DIR.glob("runrole-tmp*.yml"))
+    if leftovers:
+        print("ERROR: temporary playbooks left behind:", leftovers)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
