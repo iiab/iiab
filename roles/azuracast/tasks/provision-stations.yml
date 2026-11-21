@@ -1,0 +1,178 @@
+---
+- name: Read AzuraCast API key
+  slurp:
+    src: "{{ azuracast_api_key_file }}"
+  register: _ac_api_key_raw
+  no_log: true
+
+- name: Set AzuraCast API key
+  set_fact:
+    azuracast_api_key: "{{ _ac_api_key_raw.content | b64decode | trim }}"
+  no_log: true
+
+# REMOVE DEMO OBJECTS CREATED BY 'azuracast:setup --load-fixtures'
+
+- name: List AzuraCast stations
+  uri:
+    url: "{{ azuracast_api_url }}/admin/stations"
+    headers:
+      Authorization: "Bearer {{ azuracast_api_key }}"
+    return_content: yes
+  register: _ac_stations_raw
+  changed_when: false
+
+- name: Set AzuraCast station list
+  set_fact:
+    _ac_stations: "{{ _ac_stations_raw.json.rows | default(_ac_stations_raw.json, true) }}"
+
+- name: Remove AzuraCast's demo station
+  uri:
+    url: "{{ azuracast_api_url }}/admin/station/{{ item.id }}"
+    method: DELETE
+    headers:
+      Authorization: "Bearer {{ azuracast_api_key }}"
+    status_code: [200, 204, 404]
+  loop: "{{ _ac_stations | selectattr('short_name', 'equalto', 'azuratest_radio') | list }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: List AzuraCast users
+  uri:
+    url: "{{ azuracast_api_url }}/admin/users"
+    headers:
+      Authorization: "Bearer {{ azuracast_api_key }}"
+    return_content: yes
+  register: _ac_users_raw
+  changed_when: false
+
+- name: Set AzuraCast user list
+  set_fact:
+    _ac_users: "{{ _ac_users_raw.json.rows | default(_ac_users_raw.json, true) }}"
+
+- name: Remove AzuraCast's demo user
+  uri:
+    url: "{{ azuracast_api_url }}/admin/user/{{ item.id }}"
+    method: DELETE
+    headers:
+      Authorization: "Bearer {{ azuracast_api_key }}"
+    status_code: [200, 204, 404]
+  loop: "{{ _ac_users | selectattr('email', 'equalto', 'demo@azuracast.com') | list }}"
+  loop_control:
+    label: "{{ item.email }}"
+
+# CREATE STATIONS
+
+- name: Re-list AzuraCast stations
+  uri:
+    url: "{{ azuracast_api_url }}/admin/stations"
+    headers:
+      Authorization: "Bearer {{ azuracast_api_key }}"
+    return_content: yes
+  register: _ac_stations_raw
+  changed_when: false
+
+- name: Set AzuraCast station list
+  set_fact:
+    _ac_stations: "{{ _ac_stations_raw.json.rows | default(_ac_stations_raw.json, true) }}"
+
+- name: Create missing AzuraCast stations
+  uri:
+    url: "{{ azuracast_api_url }}/admin/stations"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ azuracast_api_key }}"
+    body_format: json
+    body:
+      name: "{{ item.name }}"
+      short_name: "{{ item.short_name }}"
+      radio_base_dir: ""
+      description: "{{ item.description | default('') }}"
+      frontend_type: icecast
+      backend_type: liquidsoap
+      enable_public_page: true
+      enable_public_api: true
+      enable_on_demand: true
+      enable_on_demand_download: true
+      enable_requests: false
+      enable_streamers: false
+      is_enabled: true
+      timezone: "{{ azuracast_timezone }}"
+    status_code: [200, 201]
+  loop: "{{ azuracast_stations }}"
+  loop_control:
+    label: "{{ item.short_name }}"
+  when: item.short_name not in (_ac_stations | map(attribute='short_name') | list)
+
+# CREATE PLAYLISTS
+
+- name: Refresh AzuraCast station list after creation
+  uri:
+    url: "{{ azuracast_api_url }}/admin/stations"
+    headers:
+      Authorization: "Bearer {{ azuracast_api_key }}"
+    return_content: yes
+  register: _ac_stations_raw
+  changed_when: false
+
+- name: Map AzuraCast station short names to ids
+  set_fact:
+    _ac_station_ids: "{{ (_ac_stations_raw.json.rows | default(_ac_stations_raw.json, true)) | items2dict(key_name='short_name', value_name='id') }}"
+
+# The listener page and .m3u files need the station's real default mount
+# (AzuraCast's default is /radio.mp3, but it can be changed in the UI).
+- name: Read AzuraCast mount points
+  uri:
+    url: "{{ azuracast_api_url }}/station/{{ _ac_station_ids[item.short_name] }}/mounts"
+    headers:
+      Authorization: "Bearer {{ azuracast_api_key }}"
+    return_content: yes
+  register: _ac_mounts_raw
+  loop: "{{ azuracast_stations }}"
+  loop_control:
+    label: "{{ item.short_name }}"
+  changed_when: false
+
+- name: Start with an empty map of station mount points
+  set_fact:
+    _ac_station_mounts: {}
+
+- name: Map AzuraCast station short names to default mount points
+  set_fact:
+    _ac_station_mounts: "{{ _ac_station_mounts | combine({item.item.short_name: ((item.json | selectattr('is_default', 'equalto', true) | map(attribute='path') | first) | default(azuracast_stream_mount))}) }}"
+  loop: "{{ _ac_mounts_raw.results }}"
+  loop_control:
+    label: "{{ item.item.short_name }}"
+
+- name: Provision AzuraCast playlists
+  include_tasks: provision-playlists.yml
+  loop: "{{ azuracast_stations }}"
+  loop_control:
+    loop_var: ac_station
+    label: "{{ ac_station.short_name }}"
+
+# A station created through the API starts out stopped (has_started=false), so
+# AzuraCast writes no supervisor config and /listen/<channel> returns 404.
+# Starting it also happens to be required before AzuraCast will stream at all.
+- name: Check whether each AzuraCast station's services are running
+  uri:
+    url: "{{ azuracast_api_url }}/station/{{ _ac_station_ids[item.short_name] }}/status"
+    headers:
+      Authorization: "Bearer {{ azuracast_api_key }}"
+    return_content: yes
+  register: _ac_station_status
+  loop: "{{ azuracast_stations }}"
+  loop_control:
+    label: "{{ item.short_name }}"
+  changed_when: false
+
+- name: Start AzuraCast stations whose services are not running
+  uri:
+    url: "{{ azuracast_api_url }}/station/{{ _ac_station_ids[item.item.short_name] }}/restart"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ azuracast_api_key }}"
+    status_code: [200, 204]
+  loop: "{{ _ac_station_status.results }}"
+  loop_control:
+    label: "{{ item.item.short_name }}"
+  when: not (item.json.backendRunning | bool and item.json.frontendRunning | bool)

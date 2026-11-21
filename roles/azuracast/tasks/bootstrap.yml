@@ -1,0 +1,119 @@
+# Create AzuraCast's first administrator, a deterministic API key, and the
+# "setup complete" flag -- so nobody has to walk through the browser setup
+# wizard in the field.
+#
+# This uses AzuraCast's own fixtures, which PURGE THE DATABASE, so it only runs
+# when the instance has no user accounts at all (i.e. a fresh install).
+
+- name: Wait for AzuraCast's web interface
+  wait_for:
+    host: 127.0.0.1
+    port: "{{ azuracast_http_port }}"
+    timeout: 900
+
+# The web port answers before the container's startup script has brought up
+# Redis and MariaDB, so retry (e.g. on a slow Raspberry Pi) instead of racing.
+- name: List AzuraCast accounts
+  command: /usr/local/bin/iiab-azuracast-cli azuracast:account:list
+  register: _ac_accounts
+  until: _ac_accounts.rc == 0
+  retries: 120
+  delay: 5
+  changed_when: false
+  failed_when: false
+
+- name: Fail if AzuraCast's CLI is unreachable
+  fail:
+    msg: "Could not run AzuraCast's CLI after 10 minutes (rc={{ _ac_accounts.rc }}):\n{{ _ac_accounts.stderr | default('') }}"
+  when: _ac_accounts.rc != 0
+
+- name: Create AzuraCast's first administrator if the instance is empty
+  when: _ac_accounts.stdout is not search('@')
+  block:
+
+    # AzuraCast API keys are "identifier:verifier" (SplitToken), and the
+    # identifier must fit the api_keys.id column (16 chars).
+    - name: Create AzuraCast API key file
+      copy:
+        dest: "{{ azuracast_api_key_file }}"
+        content: "{{ lookup('password', '/dev/null length=16 chars=hexdigits') }}:{{ lookup('password', '/dev/null length=48 chars=hexdigits') }}\n"
+        force: no
+        owner: root
+        group: root
+        mode: '0600'
+
+    - name: Create AzuraCast admin password file
+      copy:
+        dest: "{{ azuracast_admin_password_file }}"
+        content: "{{ lookup('password', '/dev/null length=20 chars=ascii_letters,digits') }}\n"
+        force: no
+        owner: root
+        group: root
+        mode: '0600'
+
+    - name: Read AzuraCast API key
+      slurp:
+        src: "{{ azuracast_api_key_file }}"
+      register: _ac_api_key_raw
+      no_log: true
+
+    - name: Read AzuraCast admin password
+      slurp:
+        src: "{{ azuracast_admin_password_file }}"
+      register: _ac_admin_password_raw
+      no_log: true
+
+    - name: Set AzuraCast bootstrap secrets
+      set_fact:
+        azuracast_api_key: "{{ _ac_api_key_raw.content | b64decode | trim }}"
+        azuracast_admin_password: "{{ _ac_admin_password_raw.content | b64decode | trim }}"
+      no_log: true
+
+    - name: Write root-only file for the AzuraCast bootstrap
+      template:
+        src: azuracast-bootstrap.env.j2
+        dest: "{{ azuracast_bootstrap_env_file }}"
+        owner: root
+        group: root
+        mode: '0600'
+      no_log: true
+
+    - name: Create AzuraCast's first administrator and API key
+      shell: |
+        set -eu
+        set -a
+        . "{{ azuracast_bootstrap_env_file }}"
+        set +a
+        cd "{{ azuracast_host_dir }}"
+        if docker compose version >/dev/null 2>&1; then DC="docker compose"; else DC="docker-compose"; fi
+        exec $DC exec -T \
+          -e INIT_ADMIN_EMAIL="$INIT_ADMIN_EMAIL" \
+          -e INIT_ADMIN_PASSWORD="$INIT_ADMIN_PASSWORD" \
+          -e INIT_ADMIN_API_KEY="$INIT_ADMIN_API_KEY" \
+          -e INIT_BASE_URL="$INIT_BASE_URL" \
+          -e INIT_INSTANCE_NAME="$INIT_INSTANCE_NAME" \
+          --user=azuracast web azuracast_cli azuracast:setup --load-fixtures
+      args:
+        chdir: "{{ azuracast_host_dir }}"
+      changed_when: true
+
+    - name: Write AzuraCast admin credentials to a root-only file
+      template:
+        src: azuracast-admin.txt.j2
+        dest: "{{ azuracast_admin_credentials_file }}"
+        owner: root
+        group: root
+        mode: '0600'
+      no_log: true
+
+    - name: Report where AzuraCast's admin credentials are stored
+      debug:
+        msg: "AzuraCast admin credentials: {{ azuracast_admin_credentials_file }}"
+
+- name: Note that existing AzuraCast accounts were left alone
+  debug:
+    msg: >-
+      AzuraCast already has user accounts; IIAB did not run its
+      database-purging bootstrap.  Provisioning uses the API key in
+      {{ azuracast_api_key_file }}.
+  when: _ac_accounts.stdout is search('@')

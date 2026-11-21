@@ -1,0 +1,34 @@
+---
+- name: List playlists for AzuraCast station {{ ac_station.short_name }}
+  uri:
+    url: "{{ azuracast_api_url }}/station/{{ _ac_station_ids[ac_station.short_name] }}/playlists"
+    headers:
+      Authorization: "Bearer {{ azuracast_api_key }}"
+    return_content: yes
+  register: _ac_playlists_raw
+  changed_when: false
+
+- name: Create missing playlists for AzuraCast station {{ ac_station.short_name }}
+  uri:
+    url: "{{ azuracast_api_url }}/station/{{ _ac_station_ids[ac_station.short_name] }}/playlists"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ azuracast_api_key }}"
+    body_format: json
+    body:
+      name: "{{ item }}"
+      type: default
+      source: songs
+      order: shuffle
+      is_enabled: true
+      include_in_requests: false
+      include_in_on_demand: true
+      weight: 1
+      play_per_songs: 0
+      play_per_minutes: 0
+      play_per_hour_minute: 0
+      avoid_duplicates: true
+      backend_options: []
+    status_code: [200, 201]
+  loop: "{{ ac_station.playlists | default(['General']) }}"
+  when: item not in ((_ac_playlists_raw.json.rows | default(_ac_playlists_raw.json, true)) | map(attribute='name') | list)
