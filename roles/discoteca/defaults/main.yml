@@ -1,0 +1,145 @@
+# discoteca_install: False
+# discoteca_enabled: False
+
+# All above are set in: github.com/iiab/iiab/blob/master/vars/default_vars.yml
+# If nec, change them by editing /etc/iiab/local_vars.yml prior to installing!
+
+# discoteca is a single Go binary with an embedded web client. It serves one or
+# more SQLite media databases, which live in discoteca_database_dir. Media files
+# themselves stay wherever they are; a database only records their paths.
+#
+# Upstream: https://github.com/chapmanjacobd/discoteca
+
+# Version. "latest" resolves the newest GitHub release during install. Pin a
+# release (for example "0.1.1") for reproducibility. Releases older than 0.1.1
+# are refused because they lack the serve flags this role configures.
+discoteca_version: latest
+discoteca_releases_api: "https://api.github.com/repos/chapmanjacobd/discoteca/releases"
+discoteca_release_url: >-
+  {{ (discoteca_releases_api ~ '/latest') if discoteca_version == 'latest'
+     else (discoteca_releases_api ~ '/tags/v' ~ discoteca_version) }}
+discoteca_resolved_version: "{{ discoteca_version }}"
+
+# uname -m -> upstream release asset suffix (disco-linux-<suffix>). v0.1.1
+# publishes linux-amd64 and linux-arm64. Other CPUs build from source instead
+# (see discoteca_source_ref below).
+discoteca_platform_suffixes:
+  x86_64: amd64
+  aarch64: arm64
+discoteca_platform_suffix: "{{ discoteca_platform_suffixes[ansible_facts.machine] | default('') }}"
+discoteca_binary_name: "disco-linux-{{ discoteca_platform_suffix }}"
+
+# Source build. install.yml uses it automatically when this CPU has no release
+# asset, or when discoteca_build_from_source is true.
+discoteca_build_from_source: false
+# A branch, tag, or commit accepted by 'go install pkg@REF'. Pin a commit for a
+# reproducible image; 'main' tracks upstream.
+discoteca_source_ref: main
+discoteca_build_tags: fts5
+discoteca_goarch_suffixes:
+  x86_64: amd64
+  aarch64: arm64
+  armv7l: arm
+  armv6l: arm
+  armv8l: arm
+discoteca_goarch: "{{ discoteca_goarch_suffixes[ansible_facts.machine] | default('') }}"
+discoteca_goarm: "{{ '7' if ansible_facts.machine in ['armv7l', 'armv8l'] else ('6' if ansible_facts.machine == 'armv6l' else '') }}"
+discoteca_source_packages:
+  - golang-go
+  - gcc
+  - libc6-dev
+  - ca-certificates
+
+# Runtime user and filesystem layout. Like Kolibri, the service runs as an
+# unprivileged user, but its files belong to the IIAB web group (www-data) so
+# media and databases follow the usual /library conventions.
+discoteca_user: discoteca
+discoteca_primary_group: discoteca
+discoteca_group: "{{ apache_user }}"    # www-data on Debian/Ubuntu/Raspbian
+discoteca_home: /var/lib/discoteca
+discoteca_database_dir: "{{ content_base }}/discoteca"    # /library/discoteca
+# Optional example: reuse Calibre-Web's content (discoteca indexes it in place).
+# discoteca_media_dir: "{{ calibreweb_home }}"
+discoteca_install_dir: /usr/local/lib/discoteca
+discoteca_binary_path: "{{ discoteca_install_dir }}/disco-{{ discoteca_binary_version }}"
+discoteca_binary_version: "{{ discoteca_resolved_version }}"
+discoteca_bin: /usr/local/bin/disco
+discoteca_build_dir: "{{ discoteca_install_dir }}/build"
+discoteca_build_gopath: "{{ discoteca_build_dir }}/go"
+discoteca_build_gocache: "{{ discoteca_build_dir }}/go-cache"
+
+# proot (Android) service configuration. The pdsm wrapper installed by the
+# proot_services role reads these two files instead of a systemd unit.
+discoteca_config_dir: /etc/discoteca
+discoteca_pdsm_config: "{{ discoteca_config_dir }}/serve.conf"
+discoteca_databases_file: "{{ discoteca_config_dir }}/databases"
+discoteca_log_file: "{{ discoteca_home }}/discoteca.log"
+
+discoteca_service: discoteca
+discoteca_nginx_conf: "{{ nginx_conf_dir }}/discoteca-nginx.conf"
+
+# Network. The application listens on loopback; NGINX proxies it at
+# http://box{{ discoteca_url }}. Keep the bind address at 127.0.0.1, because
+# discoteca refuses a non-loopback bind without DISCO_API_TOKEN.
+discoteca_host: 127.0.0.1
+discoteca_url: /disco
+discoteca_port: 5555
+
+# Databases to serve. The install creates each missing file as an empty SQLite
+# database. Add more with e.g.:
+#   discoteca_databases:
+#     - "{{ discoteca_database_dir }}/library.db"
+#     - "{{ discoteca_database_dir }}/audio.db"
+discoteca_databases:
+  - "{{ discoteca_database_dir }}/library.db"
+
+# Optional upstream dependencies. ffmpeg enables transcoding, HLS, media
+# inspection, and the calibre-import metadata probe; discoteca still serves an
+# existing database without it.
+discoteca_packages:
+  - ffmpeg
+
+# URL downloads from the web UI. Upstream uses lb or lb-wrapper, or any command
+# that accepts its downloader arguments. IIAB installs those only through
+# Calibre-Web's optional audio/video support, so a stock install keeps
+# downloads disabled until a usable command is in PATH. Downloaded files land
+# in discoteca_download_dir and are imported into the selected database.
+# discoteca_read_only disables downloads.
+discoteca_download_command: auto
+discoteca_download_dir: "{{ content_base }}/downloads/discoteca"
+
+# Memory tuning for small IIAB devices. The systemd unit caps memory instead of
+# letting one transcode take down the whole box. pdsm has no cgroup, so these
+# values only apply to the systemd service.
+discoteca_db_cache_mb: 64
+discoteca_max_concurrent_searches: 2
+discoteca_memory_high: 70%
+discoteca_memory_max: 80%
+
+# ZIM support is off by default because discoteca only proxies an externally
+# managed server: kiwix-serve needs --urlRootLocation matching
+# <discoteca_url>/api/zim/proxy/, which this role does not manage. A positive
+# discoteca_zimantic_port selects zimantic and overrides kiwix-serve.
+discoteca_kiwix_host: 127.0.0.1
+discoteca_kiwix_port: 0
+discoteca_zimantic_host: 127.0.0.1
+discoteca_zimantic_port: 0
+
+# Refuse progress updates, playlist changes, downloads, and deletions when true.
+discoteca_read_only: false
+
+# Ownership declarations. See "Data ownership" in the top-level README.md.
+# The databases in discoteca_database_dir and any URL downloads are user data
+# and are never deleted. Media files indexed by those databases may live
+# anywhere; the role never touches them. The service home holds caches,
+# generated state, and the pdsm log. The pdsm configuration is generated from
+# local_vars.yml.
+discoteca_user_settings: []
+discoteca_program_data:
+  - "{{ discoteca_home }}"
+  - "{{ discoteca_config_dir }}"
+  - /etc/systemd/system/{{ discoteca_service }}.service
+  - "{{ discoteca_nginx_conf }}"
+discoteca_user_data:
+  - "{{ discoteca_database_dir }}/"
+  - "{{ discoteca_download_dir }}/"

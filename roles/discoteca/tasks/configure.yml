@@ -1,0 +1,204 @@
+---
+# Apply phase. Runs on every apply, including an apply to an installed role.
+# Everything here is local; nothing is downloaded.
+
+- name: Assert that discoteca_databases lists at least one database
+  assert:
+    that: discoteca_databases | length > 0
+    fail_msg: "Set 'discoteca_databases' to at least one SQLite database path."
+    quiet: true
+
+- name: Assert that discoteca_url is a plain URL prefix such as /disco
+  assert:
+    that:
+      - discoteca_url is match('^/[^/]')
+      - not discoteca_url.endswith('/')
+    fail_msg: >-
+      discoteca_url='{{ discoteca_url }}' must start with one slash, must not
+      end with a slash, and cannot be '/'. Use a prefix such as '/disco'.
+    quiet: true
+
+- name: Assert that the discoteca download path is usable
+  assert:
+    that:
+      - discoteca_download_dir is match('^/')
+    fail_msg: >-
+      discoteca_download_dir='{{ discoteca_download_dir }}' must be an
+      absolute path. Upstream downloads URL media into this directory and the
+      systemd unit grants write access only to it.
+    quiet: true
+  when: discoteca_download_dir | length > 0
+
+- name: Ensure the discoteca home and database directories exist
+  file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ discoteca_user }}"
+    group: "{{ discoteca_group }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ discoteca_home }}", mode: "0750" }
+    - { path: "{{ discoteca_database_dir }}", mode: "0755" }
+
+# URL downloads are user data and live outside discoteca_home so --uninstall
+# and --reinstall never remove them.
+- name: Create the discoteca download directory
+  file:
+    path: "{{ discoteca_download_dir }}"
+    state: directory
+    owner: "{{ discoteca_user }}"
+    group: "{{ discoteca_group }}"
+    mode: "0755"
+  when: discoteca_download_dir | length > 0
+
+# Existing databases are user data; only a missing file is created.
+- name: Create any missing discoteca databases
+  copy:
+    content: ""
+    dest: "{{ item }}"
+    force: false
+    owner: "{{ discoteca_user }}"
+    group: "{{ discoteca_group }}"
+    mode: "0640"
+  loop: "{{ discoteca_databases }}"
+  loop_control:
+    label: "{{ item }}"
+
+# pdsm (proot) has no systemd unit. The proot_services role installs the
+# service wrapper; this role writes the configuration it reads on start.
+- name: Check for the pdsm service manager (proot)
+  stat:
+    path: /usr/local/bin/pdsm
+  register: discoteca_pdsm_bin
+  when: is_proot
+
+- name: Fail when the proot_services role is missing (proot)
+  assert:
+    that: discoteca_pdsm_bin.stat.exists
+    fail_msg: >-
+      discoteca runs under pdsm on Android/proot, but /usr/local/bin/pdsm is
+      missing. Set 'proot_services_install: True' and run
+      'sudo ./runrole proot_services discoteca'.
+    quiet: true
+  when: is_proot
+
+- name: Create the discoteca configuration directory (proot)
+  file:
+    path: "{{ discoteca_config_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: is_proot
+
+- name: Ensure the discoteca pdsm log file exists (proot)
+  copy:
+    content: ""
+    dest: "{{ discoteca_log_file }}"
+    force: false
+    owner: "{{ discoteca_user }}"
+    group: "{{ discoteca_group }}"
+    mode: "0640"
+  when: is_proot
+
+- name: Install {{ discoteca_pdsm_config }} from template (proot)
+  template:
+    src: discoteca-pdsm.conf.j2
+    dest: "{{ discoteca_pdsm_config }}"
+    owner: root
+    group: root
+    mode: "0644"
+  when: is_proot
+  notify:
+    - Restart discoteca
+
+- name: Install {{ discoteca_databases_file }} from template (proot)
+  template:
+    src: discoteca-databases.j2
+    dest: "{{ discoteca_databases_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+  when: is_proot
+  notify:
+    - Restart discoteca
+
+- name: Install /etc/systemd/system/{{ discoteca_service }}.service from template (not proot)
+  template:
+    src: discoteca.service.j2
+    dest: /etc/systemd/system/{{ discoteca_service }}.service
+    owner: root
+    group: root
+    mode: "0644"
+  when: not is_proot
+  notify:
+    - Restart discoteca
+
+- name: Enable http://box{{ discoteca_url }} via NGINX
+  template:
+    src: discoteca-nginx.conf.j2
+    dest: "{{ discoteca_nginx_conf }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Reload nginx
+  when: discoteca_enabled | bool
+
+- name: Disable http://box{{ discoteca_url }} via NGINX
+  file:
+    path: "{{ discoteca_nginx_conf }}"
+    state: absent
+  notify:
+    - Reload nginx
+  when: not (discoteca_enabled | bool)
+
+- name: Enable and start the discoteca service (not proot)
+  systemd:
+    name: "{{ discoteca_service }}"
+    enabled: true
+    state: started
+    daemon_reload: true
+  when:
+    - discoteca_enabled | bool
+    - not is_proot
+
+- name: Disable and stop the discoteca service (not proot)
+  systemd:
+    name: "{{ discoteca_service }}"
+    enabled: false
+    state: stopped
+    daemon_reload: true
+  when:
+    - not (discoteca_enabled | bool)
+    - not is_proot
+
+- name: Enable and start discoteca via pdsm (proot)
+  when:
+    - discoteca_enabled | bool
+    - is_proot
+  block:
+    - name: Enable 'discoteca' via pdsm (proot)
+      command: pdsm enable discoteca
+      register: discoteca_pdsm_enable
+      changed_when: "'already enabled' not in discoteca_pdsm_enable.stdout"
+
+    - name: Restart 'discoteca' via pdsm (proot)
+      command: pdsm restart discoteca
+
+- name: Disable and stop discoteca via pdsm (proot)
+  when:
+    - not (discoteca_enabled | bool)
+    - is_proot
+  block:
+    - name: Stop 'discoteca' via pdsm (proot)
+      command: pdsm stop discoteca
+      register: discoteca_pdsm_stop
+      changed_when: "'already stopped' not in discoteca_pdsm_stop.stdout"
+      failed_when: false
+
+    - name: Disable 'discoteca' via pdsm (proot)
+      command: pdsm disable discoteca
+      register: discoteca_pdsm_disable
+      changed_when: "'not enabled' not in discoteca_pdsm_disable.stdout"
+      failed_when: false

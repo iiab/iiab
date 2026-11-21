@@ -1,0 +1,27 @@
+# Serve discoteca from http://box{{ discoteca_url }}/
+#
+# The application reads X-Forwarded-Prefix and strips the prefix itself, so
+# proxy_pass intentionally has no trailing slash here.
+location = {{ discoteca_url }} {
+    return 301 {{ discoteca_url }}/;
+}
+
+location ^~ {{ discoteca_url }}/ {
+    proxy_pass http://127.0.0.1:{{ discoteca_port }};
+    proxy_http_version 1.1;
+
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-Prefix {{ discoteca_url }};
+    proxy_set_header Connection "";
+
+    # Server-sent events (/api/events), HLS playlists, and media ranges stream
+    # through instead of being buffered on disk.
+    proxy_buffering off;
+    proxy_request_buffering off;
+    proxy_max_temp_file_size 0;
+    proxy_read_timeout 3600s;
+    proxy_send_timeout 3600s;
+}

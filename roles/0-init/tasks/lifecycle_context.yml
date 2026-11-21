@@ -1,0 +1,17 @@
+---
+# Shared by lifecycle.yml. A nested include_role can overwrite a plain fact
+# (for example, when matomo includes mysql), so re-read the calling role's
+# name, prefixes, and phase files after every phase. Only .yml and .yaml task
+# files count.
+- name: Identify the role using the shared lifecycle runner
+  set_fact:
+    lifecycle_role: "{{ ansible_parent_role_names | first }}"
+    lifecycle_prefix: "{{ lookup('role_var', ansible_parent_role_names | first) }}"
+    lifecycle_install_prefix: "{{ lookup('role_var', ansible_parent_role_names | first, kind='install') }}"
+    lifecycle_phases: >-
+      {{ (lookup('fileglob', (ansible_parent_role_paths | first) ~ '/tasks/*.yml', wantlist=True)
+          + lookup('fileglob', (ansible_parent_role_paths | first) ~ '/tasks/*.yaml', wantlist=True))
+         | map('basename')
+         | unique
+         | map('regex_replace', '\.ya?ml$', '')
+         | list }}
