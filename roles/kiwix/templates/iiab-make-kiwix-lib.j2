@@ -39,11 +39,29 @@ while ! mkdir "$LOCK_DIR" 2>/dev/null; do
 done
 trap 'rmdir "$LOCK_DIR" 2>/dev/null || true' EXIT
 
-echo "Now running iiab-make-kiwix-lib.py"
-if [ -f "$KIWIXLIB" ]; then
-  /usr/bin/iiab-make-kiwix-lib.py "$@"
-else
-  /usr/bin/iiab-make-kiwix-lib.py -f
+echo "Now running kiwix-manage"
+# paths are stored relative to library.xml
+cd "{{ iiab_zim_path }}" || exit 1
+rm -f "$TMP"
+shopt -s nullglob
+ZIMS=()
+for zim in content/*.zim; do
+  if [ -s "$zim" ]; then
+    ZIMS+=("$zim")
+  else
+    echo "WARNING: skipping empty $zim" >&2
+  fi
+done
+if [ -n "${ZIMS[*]}" ] && ! "{{ kiwix_path }}/bin/kiwix-manage" "$TMP" add "${ZIMS[@]}"; then
+  # one bad zim fails the whole add, so retry one at a time
+  rm -f "$TMP"
+  for zim in "${ZIMS[@]}"; do
+    "{{ kiwix_path }}/bin/kiwix-manage" "$TMP" add "$zim" || echo "WARNING: skipping $zim" >&2
+  done
+fi
+
+if [ -x /usr/bin/iiab-proc-kiwix-lib.py ]; then
+  /usr/bin/iiab-proc-kiwix-lib.py "$TMP"
 fi
 
 # Promote tmp -> final (Kiwix reads library.xml, not library.xml.tmp)
