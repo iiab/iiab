@@ -1,4 +1,5 @@
 #!/usr/bin/python
+import hashlib
 import os
 import shutil
 import subprocess
@@ -11,6 +12,48 @@ from ansible.module_utils.common.text.converters import to_native
 
 
 HTTP2_ERROR_CODES = (16, 92)    # CURLE_HTTP2, CURLE_HTTP2_STREAM
+
+
+def checksum_for_file(path, algorithm):
+    digest = hashlib.new(algorithm)
+    with open(path, 'rb') as file:
+        for chunk in iter(lambda: file.read(1024 * 1024), b''):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def find_downloaded_file(temp_path, dest_is_dir, module, dest, url):
+    if dest_is_dir:
+        try:
+            downloaded_file = [entry.path for entry in os.scandir(temp_path)]
+        except OSError as e:
+            module.fail_json(
+                msg=f"Failed to locate downloaded file (temporary directory disappeared??): {to_native(e)}",
+                dest=dest,
+                url=url,
+            )
+
+        if not downloaded_file:
+            module.fail_json(msg="No file was downloaded", dest=dest, url=url)
+        if len(downloaded_file) > 1:
+            module.fail_json(msg="More than one file was downloaded", dest=dest, url=url)
+        return downloaded_file[0]
+
+    if not os.path.exists(temp_path):
+        module.fail_json(msg="No file was downloaded", dest=dest, url=url)
+    return temp_path
+
+
+def clear_temp_path(temp_path, dest_is_dir):
+    if dest_is_dir:
+        for entry in os.scandir(temp_path):
+            if entry.is_dir(follow_symlinks=False):
+                shutil.rmtree(entry.path)
+            else:
+                os.unlink(entry.path)
+    else:
+        with suppress(FileNotFoundError):
+            os.remove(temp_path)
 
 
 def curl_command(url, temp_path, dest_is_dir, timeout, headers, http_version=None):
@@ -47,6 +90,7 @@ def run_module():
         timeout=dict(type='int', default=60),
         retries=dict(type='int', default=10),
         force=dict(type='bool', default=False),
+        checksum=dict(type='str'),
     )
 
     module = AnsibleModule(argument_spec=argument_spec, add_file_common_args=True, supports_check_mode=True)
@@ -58,6 +102,45 @@ def run_module():
     timeout = module.params['timeout']
     retries = module.params['retries']
     force = module.params['force']
+    checksum = module.params['checksum']
+
+    checksum_algorithm = None
+    expected_checksum = None
+    if checksum is not None and not checksum.strip():
+        module.warn(f"Empty checksum for {url}; the download will not be verified")
+        checksum = None
+    if checksum:
+        try:
+            checksum_algorithm, expected_checksum = checksum.split(':', 1)
+        except ValueError:
+            module.fail_json(
+                msg="checksum must use the '<algorithm>:<checksum>' format",
+                checksum=checksum,
+                dest=dest,
+                url=url,
+            )
+
+        checksum_algorithm = checksum_algorithm.lower()
+        expected_checksum = expected_checksum.lower()
+        try:
+            digest_size = hashlib.new(checksum_algorithm).digest_size
+        except ValueError:
+            module.fail_json(
+                msg=f"Unsupported checksum algorithm: {checksum_algorithm}",
+                checksum=checksum,
+                dest=dest,
+                url=url,
+            )
+        if (
+            len(expected_checksum) != digest_size * 2
+            or any(character not in '0123456789abcdef' for character in expected_checksum)
+        ):
+            module.fail_json(
+                msg=f"Invalid checksum for {checksum_algorithm}",
+                checksum=checksum,
+                dest=dest,
+                url=url,
+            )
 
     if not dest:
         module.fail_json(msg="dest must not be empty", dest=dest, url=url)
@@ -76,13 +159,15 @@ def run_module():
         dest_is_dir = os.path.isdir(dest)
 
     if not dest_is_dir and os.path.exists(dest) and not force:
-        # File exists and not forcing, just update attributes
-        file_args = module.load_file_common_arguments(module.params, path=dest)
-        changed = module.set_fs_attributes_if_different(file_args, changed=False)
-        msg = "File already exists"
-        if changed:
-            msg += ", updated attributes"
-        module.exit_json(msg=msg, dest=dest, url=url, changed=changed)
+        checksum_matches = not checksum or checksum_for_file(dest, checksum_algorithm).lower() == expected_checksum
+        if checksum_matches:
+            # File exists and not forcing, just update attributes
+            file_args = module.load_file_common_arguments(module.params, path=dest)
+            changed = module.set_fs_attributes_if_different(file_args, changed=False)
+            msg = "File already exists"
+            if changed:
+                msg += ", updated attributes"
+            module.exit_json(msg=msg, dest=dest, url=url, changed=changed)
 
     if module.check_mode:
         module.exit_json(changed=True, msg="Download would be attempted (check mode)", dest=dest, url=url)
@@ -115,72 +200,80 @@ def run_module():
                 process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
                 stdout, stderr = process.communicate()
 
-                if process.returncode == 0:
-                    break
+                if process.returncode != 0:
+                    status = int(stdout) if stdout.strip().isdigit() else 0
+                    failure = {
+                        "rc": process.returncode,
+                        "stdout": stdout,
+                        "stderr": stderr,
+                        "attempts": attempt + 1,
+                        "dest": dest,
+                        "url": url,
+                    }
+                    if 400 <= status < 500 and status not in (408, 429):
+                        # Permanent client errors must not be retried.
+                        module.fail_json(msg="curl failed", **failure)
 
-                status = int(stdout) if stdout.strip().isdigit() else 0
-                failure = {
-                    "rc": process.returncode,
-                    "stdout": stdout,
-                    "stderr": stderr,
-                    "attempts": attempt + 1,
-                    "dest": dest,
-                    "url": url,
-                }
-                if 400 <= status < 500 and status not in (408, 429):
-                    # Permanent client errors must not be retried.
-                    module.fail_json(msg="curl failed", **failure)
+                    # Some libcurl versions report an HTTP/2 negotiation failure as
+                    # a generic send error (CURLE_SEND_ERROR, 55), so also check
+                    # the error text.
+                    if not http_version and (
+                        process.returncode in HTTP2_ERROR_CODES or "http/2" in stderr.lower()
+                    ):
+                        # HTTP/2 stream failures are often caused by a proxy or
+                        # server bug.  Retry immediately over HTTP/1.1, even if
+                        # the retry budget is already exhausted.
+                        http_version = "1.1"
+                        continue
 
-                # Some libcurl versions report an HTTP/2 negotiation failure as
-                # a generic send error (CURLE_SEND_ERROR, 55), so also check
-                # the error text.
-                if not http_version and (
-                    process.returncode in HTTP2_ERROR_CODES or "http/2" in stderr.lower()
-                ):
-                    # HTTP/2 stream failures are often caused by a proxy or
-                    # server bug.  Retry immediately over HTTP/1.1, even if
-                    # the retry budget is already exhausted.
-                    http_version = "1.1"
+                    # Always allow at least one retry, even if the first (possibly
+                    # very slow) attempt used up the retry time budget.
+                    now = time.monotonic()
+                    if retry_start_time is None:
+                        retry_start_time = now
+                    elapsed = now - retry_start_time
+
+                    if retries_used >= retries:
+                        module.fail_json(msg="curl failed", **failure)
+                    if elapsed >= retry_max_time:
+                        module.fail_json(msg="curl retry time exceeded", **failure)
+
+                    retry_delay = min(600, 2 ** min(retries_used, 10), retry_max_time - elapsed)
+                    retries_used += 1
+                    time.sleep(max(0, retry_delay))
                     continue
 
-                # Always allow at least one retry, even if the first (possibly
-                # very slow) attempt used up the retry time budget.
-                now = time.monotonic()
-                if retry_start_time is None:
-                    retry_start_time = now
-                elapsed = now - retry_start_time
+                if checksum:
+                    downloaded_file = find_downloaded_file(temp_path, dest_is_dir, module, dest, url)
+                    actual_checksum = checksum_for_file(downloaded_file, checksum_algorithm).lower()
+                    if actual_checksum != expected_checksum:
+                        failure = {
+                            "checksum": checksum,
+                            "actual_checksum": f"{checksum_algorithm}:{actual_checksum}",
+                            "dest": dest,
+                            "url": url,
+                        }
+                        now = time.monotonic()
+                        if retry_start_time is None:
+                            retry_start_time = now
+                        elapsed = now - retry_start_time
 
-                if retries_used >= retries:
-                    module.fail_json(msg="curl failed", **failure)
-                if elapsed >= retry_max_time:
-                    module.fail_json(msg="curl retry time exceeded", **failure)
+                        if retries_used >= retries:
+                            module.fail_json(msg="Checksum mismatch", **failure)
+                        if elapsed >= retry_max_time:
+                            module.fail_json(msg="Checksum retry time exceeded", **failure)
 
-                retry_delay = min(600, 2 ** min(retries_used, 10), retry_max_time - elapsed)
-                retries_used += 1
-                time.sleep(max(0, retry_delay))
+                        clear_temp_path(temp_path, dest_is_dir)
+                        retry_delay = min(600, 2 ** min(retries_used, 10), retry_max_time - elapsed)
+                        retries_used += 1
+                        time.sleep(max(0, retry_delay))
+                        continue
+
+                break
         except Exception as e:
             module.fail_json(msg=f"Failed to execute curl: {to_native(e)}", dest=dest, url=url)
 
-        if dest_is_dir:
-            # Find the downloaded file(s) in temp directory
-            try:
-                downloaded_file = [entry.path for entry in os.scandir(temp_path)]
-            except Exception as e:
-                module.fail_json(
-                    msg=f"Failed to locate downloaded file (temporary directory disappeared??): {to_native(e)}",
-                    dest=dest,
-                    url=url,
-                )
-
-            if not downloaded_file:
-                module.fail_json(msg="No file was downloaded", dest=dest, url=url)
-            if len(downloaded_file) > 1:
-                module.fail_json(msg="More than one file was downloaded", dest=dest, url=url)
-            downloaded_file = downloaded_file[0]
-        else:
-            if not os.path.exists(temp_path):
-                module.fail_json(msg="No file was downloaded", dest=dest, url=url)
-            downloaded_file = temp_path
+        downloaded_file = find_downloaded_file(temp_path, dest_is_dir, module, dest, url)
 
         try:
             if dest_is_dir:

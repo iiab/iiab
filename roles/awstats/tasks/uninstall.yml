@@ -1,0 +1,39 @@
+---
+# The runner includes this file for --uninstall and for the remove half of
+# --reinstall.
+#
+# Remove the AWStats package, its program data, its declared user settings, and
+# the NGINX shortcut. User data ({{ awstats_data_dir }}) is never deleted. This
+# phase is local and does not need the network.
+
+- name: Remove AWStats program data and user settings
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop: "{{ awstats_program_data + awstats_user_settings }}"
+  notify:
+    - Reload nginx
+
+- name: Remove the awstats package
+  package:
+    name: awstats
+    state: absent
+
+- name: Record that AWStats is uninstalled in {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"
+    section: awstats
+    option: awstats_install
+    value: "False"
+
+- name: Record that AWStats is disabled in {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"
+    section: awstats
+    option: awstats_enabled
+    value: "False"
+
+- name: Remove AWStats markers from {{ iiab_state_file }}
+  iiab_state:
+    key: awstats_installed
+    state: absent

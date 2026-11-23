@@ -1,0 +1,118 @@
+---
+- name: Exercise Zimantic configuration rendering
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars_files:
+    - ../defaults/main.yml
+
+  vars:
+    ansible_python_interpreter: "{{ ansible_playbook_python }}"
+    zimantic_test_python: "{{ ansible_playbook_python }}"
+    zimantic_test_runtime: false
+    iiab_base: /opt/iiab
+    content_base: /library
+    iiab_zim_path: /library/zims
+    zimantic_test_cases:
+      - globals: {}
+        collections: {}
+        optional: false
+      - globals:
+          source_query_threads: 4
+          partial_cache_seconds: 30.0
+          slot_wait_seconds: 15.5
+          secure_browsing: true
+          derived_text:
+            cache: false
+            ocr_languages: [eng, fra]
+        collections:
+          library:
+            traversal:
+              max_visited_entries: 100000
+              traversal_timeout_seconds: 120
+          modules:
+            index_exclude: ["**/drafts/**"]
+            derived_text:
+              captions: index
+              asr_batched: false
+            sources:
+              - key: "files:modules:root"
+                max_body_text_bytes: 65536
+        optional: true
+      - globals: {}
+        collections:
+          modules:
+            include: ["**/*.txt"]
+        optional: true
+
+  tasks:
+    - name: Round-trip generated TOML and optionally load it with Zimantic HEAD
+      command:
+        argv:
+          - "{{ zimantic_test_python }}"
+          - -c
+          - |
+            import json
+            import os
+            import sys
+            import tempfile
+            import tomllib
+            from pathlib import Path
+
+            expected = json.loads(sys.argv[1])
+            text = sys.stdin.read()
+            document = tomllib.loads(text)
+            for key, value in expected["globals"].items():
+                assert document[key] == value, (key, document[key], value)
+            collections = {entry["name"]: entry for entry in document["collections"]}
+            assert len(collections) == (3 if expected["optional"] else 1)
+            assert collections["library"]["path"] == "/library/zims/content"
+            for name, settings in expected["collections"].items():
+                for key, value in settings.items():
+                    assert collections[name][key] == value, (name, key)
+            if expected["optional"]:
+                assert collections["modules"]["path"] == '/library/files "quoted"'
+                assert collections["modules"]["label"] == 'Modules "quoted"'
+                assert collections["kolibri"]["path"] == '/library/kolibri "quoted"'
+                assert collections["kolibri"]["label"] == 'Kolibri "quoted"'
+                include = expected["collections"].get("modules", {}).get("include")
+                if include is None:
+                    assert "**/*.html" in collections["modules"]["include"]
+                else:
+                    assert collections["modules"]["include"] == include
+
+            if sys.argv[2] == "true":
+                from zimantic.settings import load_config
+
+                with tempfile.TemporaryDirectory(prefix="iiab-zimantic-test-") as tmp:
+                    os.environ["XDG_CONFIG_HOME"] = tmp
+                    os.environ["XDG_DATA_HOME"] = tmp
+                    config = Path(tmp) / "zimantic" / "config.toml"
+                    config.parent.mkdir()
+                    config.write_text(text)
+                    cfg = load_config()
+                    assert cfg["config_present"]
+                    assert not cfg["config_issues"], cfg["config_issues"]
+                    assert len(cfg["collections"]) == len(collections)
+                    if expected["optional"]:
+                        modules = next(entry for entry in cfg["collections"] if entry.name == "modules")
+                        assert list(modules.include) == collections["modules"]["include"]
+                    for key in expected["globals"].keys() - {"derived_text"}:
+                        assert cfg[key] == document[key], key
+          - "{{ item | to_json }}"
+          - "{{ zimantic_test_runtime | ternary('true', 'false') }}"
+        stdin: "{{ lookup('template', '../templates/config.toml.j2') }}"
+      vars:
+        zimantic_config: "{{ item.globals }}"
+        zimantic_collection_config: "{{ item.collections }}"
+        zimantic_files_enabled: "{{ item.optional }}"
+        zimantic_kolibri_enabled: "{{ item.optional }}"
+        zimantic_files_label: 'Modules "quoted"'
+        zimantic_files_path: '/library/files "quoted"'
+        zimantic_kolibri_label: 'Kolibri "quoted"'
+        zimantic_kolibri_path: '/library/kolibri "quoted"'
+      loop: "{{ zimantic_test_cases }}"
+      loop_control:
+        label: "{{ 'scoped settings and optional collections' if item.optional else 'default collection' }}"
+      changed_when: false

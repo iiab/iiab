@@ -1,0 +1,127 @@
+# zimantic_install: False
+# zimantic_enabled: False
+
+zimantic_repo: https://github.com/chapmanjacobd/zimantic.git
+zimantic_version: latest  # latest and HEAD both resolve the default branch tip
+zimantic_source_dir: "{{ iiab_base }}/zimantic"
+zimantic_venv: "{{ zimantic_source_dir }}/.venv"
+
+# Zimantic's semantic mode provides meaning-based, title-word, and native ZIM
+# full-text search, but loads an embedding model and needs more memory. Fast
+# mode omits the embedding model and provides title-word and native ZIM
+# full-text search.
+zimantic_mode: semantic
+# 8090 may collide with AzuraCast's container port range or the deprecated
+# httpd role's Apache port. Override it here or in local_vars.yml if needed.
+zimantic_port: 8090
+zimantic_url_without_slash: /zimantic
+zimantic_url: "{{ zimantic_url_without_slash }}/"
+
+# Seconds NGINX waits for Zimantic before returning 504 Gateway Timeout.
+# A cold search can exceed NGINX's 60 s default on small hardware; the Kiwix
+# role uses 600 s for the same reason.
+zimantic_nginx_timeout: 600
+zimantic_nginx_connect_timeout: 10
+
+# Zimantic v1 supports Python 3.11-3.14 on 64-bit x86_64 and aarch64. It needs
+# python-libzim 4.1 or newer; 32-bit armhf/armv7 is not supported because Debian
+# 13 ships libzim 3.6 and PyPI has no 4.1 wheel for it.
+zimantic_python: python3
+
+zimantic_user: zimantic
+zimantic_data_dir: "{{ content_base }}/zimantic"
+zimantic_zim_dir: "{{ iiab_zim_path }}/content"
+zimantic_index_dir: "{{ zimantic_data_dir }}/indexes"
+
+# int8 is the CPU profile. Use fp16 or fp32 only on hosts where the extra model
+# memory is acceptable; the model directory and indexes are precision-specific.
+zimantic_model_precision: int8
+zimantic_model_dir: "{{ zimantic_data_dir }}/model/{{ zimantic_model_precision }}"
+zimantic_config_file: "{{ zimantic_data_dir }}/config.toml"
+# Keep Zimantic's XDG paths inside IIAB's existing data tree. The upstream
+# application now prefers XDG_CONFIG_HOME/XDG_DATA_HOME, while the role keeps
+# its established config.toml and runtime data locations.
+zimantic_xdg_home: "{{ zimantic_data_dir | dirname }}"
+
+# Optional Zimantic v1 collections. These do not install, enable, or manage
+# Kolibri or any file-serving role; they only add an existing source to the
+# Zimantic catalog when explicitly enabled.
+zimantic_kolibri_enabled: false
+zimantic_kolibri_name: kolibri
+zimantic_kolibri_path: "{{ kolibri_home | default(content_base ~ '/kolibri') }}"
+zimantic_kolibri_label: Kolibri
+zimantic_kolibri_granularity: children
+
+zimantic_files_enabled: false
+zimantic_files_name: modules
+zimantic_files_path: "{{ content_base }}/www/html/modules"
+zimantic_files_label: Modules
+zimantic_files_granularity: collection
+zimantic_files_include:
+  - "**/*.html"
+  - "**/*.htm"
+  - "**/*.xhtml"
+  - "**/*.txt"
+  - "**/*.md"
+  - "**/*.pdf"
+
+# Zimantic selects its tuning profile (mobile, desktop or supercomputer) from
+# the host's CPU and RAM. Do not pin those values for every IIAB device: a
+# Raspberry Pi Zero 2 W needs the mobile profile, while a Pi 4/5 or a PC needs
+# more search workers and concurrent searches. Add only the specific overrides
+# this host needs; anything omitted continues to follow the hardware profile.
+# Example:
+# zimantic_config:
+#   max_concurrent_searches: 4
+#   source_query_threads: 4
+#   slot_wait_seconds: 15
+zimantic_config: {}
+
+# Additional settings keyed by the configured collection name: library,
+# zimantic_kolibri_name, or zimantic_files_name. Use nested mappings for
+# traversal/derived_text and a list of mappings for exact-source overrides.
+# Paths, names, labels and granularity use the dedicated variables above.
+zimantic_collection_config: {}
+
+# The upstream default is a fast static multilingual model: about 108 MB int8,
+# 256-dimensional embeddings, and 50 languages. Zimantic downloads the model,
+# tokenizer, derived vocabulary, and zimantic_model.json itself and verifies
+# pinned checksums. Indexes are specific to the model that built them, so
+# rebuild them after switching (zimantic build --force).
+zimantic_embedding_model: static-similarity-mrl-multilingual-v1
+
+# Alternatives, for example in /etc/iiab/local_vars.yml:
+#   multilingual-e5-small  100+ languages, larger transformer, better quality
+#   multilingual-e5-base
+#   multilingual-e5-large
+#   e5-small-v2            English only, small transformer
+#   e5-base-v2
+#   e5-large-v2
+
+# Memory limits for the systemd cgroup. MemoryHigh makes the kernel reclaim and
+# throttle under pressure; MemoryMax is the hard limit that OOM-kills only
+# Zimantic, not the rest of the device. Keep MemoryHigh below MemoryMax.
+# On a 512 MB host, 80% leaves roughly 100 MB for the kernel, NGINX, Kiwix and
+# SSH. Lower both percentages (or point zimantic_zim_dir at fewer ZIMs) if other
+# services are starved. Override with fixed limits if needed, for example:
+zimantic_memory_high: "70%"
+zimantic_memory_max: "80%"
+# zimantic_memory_high: "768M"
+# zimantic_memory_max: "1G"
+
+# OOMScoreAdjust only breaks ties when the whole device is out of memory; it
+# does not cap Zimantic's memory. The cgroup limits above do that.
+zimantic_oom_score_adjust: 200
+
+# If Zimantic is OOM-killed, systemd retries after RestartSec. It stops
+# restarting after StartLimitBurst starts in StartLimitIntervalSec, leaving the
+# unit failed instead of looping through another OOM.
+zimantic_restart_sec: 10
+zimantic_start_limit_interval: 600
+zimantic_start_limit_burst: 3
+
+# An upgrade preserves existing indexes. Zimantic ignores indexes from an older
+# schema or model until they are rebuilt. Set this to True to run the fast
+# title/full-text build automatically after an --upgrade; a full semantic build
+# still happens on the normal indexing schedule.
+zimantic_rebuild_indexes_on_upgrade: false
