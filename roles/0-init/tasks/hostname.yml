@@ -3,22 +3,6 @@
     iiab_fqdn: "{{ iiab_hostname }}.{{ iiab_domain }}"
     FQDN_changed: False
 
-- name: 'Set /etc/hostname by running: hostnamectl set-hostname "{{ iiab_hostname }}"'
-  command: hostnamectl set-hostname "{{ iiab_hostname }}"
-  when: not ansible_facts.is_chroot
-  # 2021-08-31: Periods in /etc/hostname fail with some WiFi routers (#2904)
-  # command: hostnamectl set-hostname "{{ iiab_hostname }}.{{ iiab_domain }}"
-
-# 2022-07-11: Should the first entry match just hostname and domain move to
-# after localhost?  See PR's #1 & #8 -- with discussion on #3302 -- and also:
-# 1. /etc/hosts    -- #1815 solved by PR #1847
-# 2. /etc/hostname -- #2904 solved by PR #2973
-- name: 'Put FQDN & hostnames in /etc/hosts: "127.0.0.1 {{ iiab_fqdn }} localhost.localdomain localhost {{ iiab_hostname }} box box.lan"'
-  lineinfile:
-    path: "{{ etc_path }}/hosts"
-    regexp: '^127\.0\.0\.1'
-    line: '127.0.0.1 {{ iiab_fqdn }} localhost.localdomain localhost {{ iiab_hostname }} box box.lan'
-
 # 2021-07-30: FQDN_changed isn't used as in the past -- its remaining use is
 # for {named, dhcpd, squid} in roles/network/tasks/main.yml -- possibly it
 # should be reconsidered?  See PR #2876: roles/network might become optional?
@@ -27,10 +11,33 @@
     FQDN_changed: True
   when: iiab_fqdn != ansible_facts.fqdn
 
-#- name: Re-configuring httpd - not initial install
-#  include_tasks: roles/httpd/tasks/main.yml
-#  when: iiab_stage|int > 3
+- name: Adjusting for new hostname
+  when: FQDN_changed
+  block:
 
-#- name: Re-configuring rest of networking - not initial install
-#  include_tasks: roles/network/tasks/main.yml
-#  when: iiab_stage|int > 4
+    - name: 'Set /etc/hostname by running: hostnamectl set-hostname "{{ iiab_hostname }}"'
+      command: hostnamectl set-hostname "{{ iiab_hostname }}"
+      when: not ansible_facts.is_chroot
+      # 2021-08-31: Periods in /etc/hostname fail with some WiFi routers (#2904)
+      # command: hostnamectl set-hostname "{{ iiab_hostname }}.{{ iiab_domain }}"
+
+    # 2022-07-11: Should the first entry match just hostname and domain move to
+    # after localhost?  See PR's #1 & #8 -- with discussion on #3302 -- and also:
+    # 1. /etc/hosts    -- #1815 solved by PR #1847
+    # 2. /etc/hostname -- #2904 solved by PR #2973
+    - name: 'Put FQDN & hostnames in /etc/hosts: "127.0.0.1 {{ iiab_fqdn }} localhost.localdomain localhost {{ iiab_hostname }} box box.lan"'
+      lineinfile:
+        path: "{{ etc_path }}/hosts"
+        regexp: '^127\.0\.0\.1'
+        line: '127.0.0.1 {{ iiab_fqdn }} localhost.localdomain localhost {{ iiab_hostname }} box box.lan'
+
+    - name: Reconfigure nginx for the new hostname
+      include_tasks: roles/nginx/tasks/enable-or-disable.yml
+      when: iiab_stage | int > 3
+
+    - name: Restart Avahi service (avahi-daemon), if active
+      shell: systemctl is-active --quiet avahi-daemon && systemctl restart avahi-daemon
+      register: avahi_restart
+      changed_when: avahi_restart.rc == 0
+      failed_when: avahi_restart.rc not in [0, 3, 4]
+      when: not is_proot and not ansible_facts.is_chroot
