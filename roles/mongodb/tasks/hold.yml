@@ -1,0 +1,38 @@
+# An apt repository carries a single major version (e.g. .../mongodb-org/9.0)
+# and MongoDB only supports upgrading to the immediately previous major.  Once
+# apt-repo.yml points an existing deployment at the current default major,
+# `apt dist-upgrade` -- e.g. the one scripts/iiab-update runs -- would otherwise
+# jump straight from the installed major to the default one (6.0 -> 9.0), and
+# mongod then refuses to start against the older data files.
+#
+# So hold the installed packages while the installed major is behind the
+# repository's.  A planned migration releases the holds first:
+#   apt-mark unhold mongodb-org mongodb-org-server ... (every mongodb-org* hold)
+
+- name: Read the installed version of mongodb-org-server
+  command: dpkg-query -W -f='${Version}' mongodb-org-server
+  register: mongodb_installed_version
+  changed_when: false
+  failed_when: false
+
+- name: Hold MongoDB packages if the default major differs from the installed one
+  when:
+    - mongodb_installed_version.stdout | length > 0
+    - mongodb_installed_version.stdout is version(mongodb_version, '<')
+  block:
+
+    - name: Read the names of the installed MongoDB packages
+      command: dpkg-query -W -f='${binary:Package}\n' 'mongodb-org*'
+      register: mongodb_packages
+      changed_when: false
+      failed_when: false
+
+    - name: Read the packages apt currently holds
+      command: apt-mark showhold
+      register: mongodb_holds
+      changed_when: false
+
+    - name: Hold MongoDB packages so apt cannot upgrade across major versions
+      command: apt-mark hold {{ item }}
+      loop: "{{ mongodb_packages.stdout_lines }}"
+      when: item not in mongodb_holds.stdout_lines

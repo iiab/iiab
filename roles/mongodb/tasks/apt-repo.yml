@@ -5,14 +5,17 @@
 #
 # This deliberately refreshes only apt metadata.  It never installs or
 # upgrades MongoDB packages, so an existing major version is not migrated
-# implicitly.
+# implicitly (hold.yml keeps apt from crossing majors on its own).
+#
+# The key file is versioned (mongodb_keyring), so a key that is already present
+# is not downloaded again: re-running the role is idempotent, and works without
+# network once the key exists.
 
 - name: Add MongoDB {{ mongodb_version }} signing key
   get_url:
     url: "{{ mongodb_key_url }}"
-    dest: /etc/apt/keyrings/mongodb.asc
+    dest: "{{ mongodb_keyring }}"
     mode: '0644'
-    force: yes    # Replace an older key when mongodb_version changes.
 
 - name: Remove stale apt .list
   file:
@@ -23,3 +26,10 @@
   template:
     src: mongodb.sources.j2
     dest: /etc/apt/sources.list.d/mongodb_ubuntu.sources
+
+# Only referenced by the source written just above, so removing it cannot
+# leave apt pointing at a missing key.
+- name: Remove the unversioned MongoDB key written by earlier IIAB releases
+  file:
+    path: /etc/apt/keyrings/mongodb.asc
+    state: absent
