@@ -20,24 +20,58 @@
 # All above are set in: github.com/iiab/iiab/blob/master/vars/default_vars.yml
 # If nec, change them by editing /etc/iiab/local_vars.yml prior to installing!
 
-mongodb_arch_dict:
-  armv6l: unsupported    # WAS: 3.0
-  armv7l: unsupported    # WAS: 3.0
-  aarch64: 5.0
-  i386: unsupported
-  x86_64: 6.0
+# 9.0 is MongoDB's current LTS.  9.1/9.2/... are short-lived rapid releases,
+# so IIAB stays on the LTS and bumps this one line when the next LTS ships.
+mongodb_default_version: "9.0"
 
-mongodb_version: "{{ mongodb_arch_dict[ansible_facts.machine] | default('unknown') }}"    # A bit safer than ansible_architecture (see kiwix/defaults/main.yml)
+# MongoDB 5.0+ needs ARMv8.2-A.  Raspberry Pi 4 and older are ARMv8-A, so
+# IIAB keeps those boards on 5.0 (and overlays andyfelong.com's RPi binaries).
+# Raspberry Pi 5 (Cortex-A76) and other arm64 boards get the default.
+mongodb_version_rpi_old: "5.0"
+mongodb_board: "{{ rpi_model ~ ' ' ~ devicetree_model }}"
+mongodb_rpi_old: "{{ mongodb_board is search('Raspberry Pi (1|2|3|4|400|Zero)') or mongodb_board is search('Compute Module (1|2|3|4)') }}"
+mongodb_version: "{{ 'unsupported' if ansible_facts.machine not in ['x86_64', 'aarch64'] else mongodb_version_rpi_old if ansible_facts.machine == 'aarch64' and mongodb_rpi_old | bool else mongodb_default_version }}"
+
+# CAVEAT: image builds set rpi_model to 'fake' (roles/0-init/tasks/main.yml), so
+# mongodb_board cannot identify the target board while an image is built, and
+# every arm64 image gets mongodb_default_version.  Only tiny/small images are
+# published, and those disable Sugarizer, so no released image carries MongoDB
+# 9.0.  If medium/large images are published again, remember that Pi 4 and
+# older are ARMv8-A and cannot run MongoDB 5.0+ binaries.
+
+# MongoDB's official packages are not in the Ubuntu/Debian archives, so the
+# role adds MongoDB's own apt repository.  Debian 13 / Ubuntu 24.04 & 26.04
+# are supported by MongoDB 9.0.  (Ubuntu 26.10 uses MongoDB's 26.04 "resolute"
+# suite; interim Ubuntu releases use the previous LTS suite.)
+
+# MongoDB's Debian archive carries server packages for amd64 only (arm64 there
+# has client tools like mongosh/atlas-cli, but no mongodb-org).  Debian-family
+# arm64 boards -- notably Raspberry Pi 5 on Raspberry Pi OS 13 -- therefore use
+# MongoDB's Ubuntu archive, whose noble suite tracks Debian 13 closely enough
+# (both have libc6 >= 2.39 and the t64 libssl3t64/libcurl4t64).
+mongodb_use_debian_repo: "{{ is_debian and dpkg_arch.stdout == 'amd64' and mongodb_version is version('8.0', '>=') }}"
+
+# Debian-family major version, e.g. '13' for Debian 13 and Raspberry Pi OS 13.
+# This cannot come from os_ver: those strings start with a distribution name,
+# so comparing them compares the names first ('raspbian-12' > 'debian-13').
+mongodb_debian_major: "{{ ansible_facts.distribution_major_version }}"
+
+mongodb_repo_uri: "{{ 'https://repo.mongodb.org/apt/debian' if mongodb_use_debian_repo | bool else 'https://repo.mongodb.org/apt/ubuntu' }}"
+mongodb_repo_component: "{{ 'main' if mongodb_use_debian_repo | bool else 'multiverse' }}"
+mongodb_repo_suite_ubuntu: "{{ 'focal' if dpkg_arch.stdout == 'arm64' and mongodb_version is version('6.0', '<') else 'noble' if is_debian and mongodb_debian_major is version('13', '>=') else 'resolute' if os_ver is version('ubuntu-2604', '>=') else 'noble' if os_ver is version('ubuntu-2404', '>=') else 'jammy' }}"
+mongodb_repo_suite_debian: "{{ 'trixie' if mongodb_debian_major is version('13', '>=') else 'bookworm' }}"
+mongodb_repo_suite: "{{ mongodb_repo_suite_debian if mongodb_use_debian_repo | bool else mongodb_repo_suite_ubuntu }}"
+
+# MongoDB 9+ publishes its key as server-9.asc (not server-9.0.asc).
+mongodb_key_url: "https://pgp.mongodb.com/server-{{ mongodb_version.split('.')[0] if mongodb_version is version('9.0', '>=') else mongodb_version }}.asc"
 
 # Immutable Debian security snapshot used for MongoDB 5.0's libssl1.1 dependency.
 mongodb_debian_security_snapshot: "20260615T025018Z"
 
-#mongodb_arm64_version: 5.0    # 2023-02-24: MongoDB 6.0.4 fails to install on
-#                              # 64-bit RasPiOS 11, as it doesn't offer libssl3.
-#mongodb_amd64_version: 6.0    # 2022-10-23: 4.4 fails on Debian 12 x86_64:
-# "No package matching 'mongodb-org' is available".  5.0+ fail on "pre-2011"
-# CPU's w/o AVX, and on RPi due to MongoDB compiling these for v8.2-A (RPi 4 is
-# ARM v8-A).  SO IIAB ALWAYS OVERLAYS andyfelong.com's 5.0.5 IF 5.0+ SPECIFIED.
+# Raspberry Pi 4 and older stay on 5.0: MongoDB 5.0+ is compiled for ARMv8.2-A,
+# whereas those boards are ARMv8-A.  IIAB overlays andyfelong.com's 5.0.5
+# binaries on Raspberry Pi hardware.  Pi 5 and non-Raspberry arm64 use the
+# default LTS version above.
 #
 # VERIFY both X.Y versions exist (+ work!) below:
 #
