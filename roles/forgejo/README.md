@@ -38,12 +38,17 @@ account.
 
 ## Updating
 
-The version is pinned (`forgejo_version`). To update, bump `forgejo_version`
-(in `defaults/main.yml` or `local_vars.yml`) and run:
+By default the role tracks the **latest** Forgejo release: `forgejo_version:
+latest` is resolved at run time from the Codeberg releases API
+(`forgejo_releases_api`). To update, run:
 
 ```sh
 sudo ./runrole --reinstall forgejo
 ```
+
+To pin a specific version instead (useful for offline or reproducible installs),
+set `forgejo_version` in `/etc/iiab/local_vars.yml`, e.g. `forgejo_version:
+"17.0.1"`.
 
 `--reinstall` is the update path. The role takes a backup (`forgejo dump`)
 **before** swapping the binary, never touches your data (repositories + database),
