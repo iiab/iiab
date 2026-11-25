@@ -59,16 +59,24 @@
       when: not (mongodb_was_installed | bool)
       # when: mongodb_installed is undefined and not (ansible_architecture == "aarch64" and is_debian_10 and not is_raspbian)
 
-    # Refresh the key/suite of existing deployments too, e.g. an Ubuntu
-    # installation that still points at MongoDB 6.0's SHA-1-signed source
-    # (#4582).  hold.yml keeps an unrelated `apt dist-upgrade` (e.g. from
-    # scripts/iiab-update) from crossing MongoDB majors, since MongoDB only
-    # supports upgrading to the immediately previous major.  install.yml
-    # removes this key/source again on Debian < 8.0, so do not put it back
-    # there.  Packages are intentionally left untouched here: upgrading across
-    # major versions requires a separate, planned migration.
+    # MongoDB < 8.0 sources are SHA-1-signed, so remove them from existing
+    # deployments too (https://github.com/iiab/iiab/issues/4582), instead of
+    # refreshing a source apt cannot verify.  install.yml does the same after a
+    # fresh install.
+    - name: Remove the MongoDB < 8.0 apt source and key (existing installations only)
+      include_tasks: cleanup.yml
+      when:
+        - mongodb_was_installed | bool
+        - mongodb_version is version('8.0', '<')
+
+    # Refresh the key/suite of existing deployments that can keep using
+    # MongoDB's apt repository.  hold.yml keeps an unrelated `apt dist-upgrade`
+    # (e.g. from scripts/iiab-update) from crossing MongoDB majors, since
+    # MongoDB only supports upgrading to the immediately previous major.
+    # Packages are intentionally left untouched here: upgrading across major
+    # versions requires a separate, planned migration.
     - name: Refresh MongoDB's apt key/source and hold its installed major version (existing installations only)
-      when: mongodb_was_installed | bool and not (is_debian and mongodb_version is version('8.0', '<'))
+      when: mongodb_was_installed | bool and mongodb_version is version('8.0', '>=')
       block:
         - name: Hold MongoDB packages if the default major differs from the installed one
           include_tasks: hold.yml

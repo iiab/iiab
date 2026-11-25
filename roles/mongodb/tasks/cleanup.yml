@@ -1,0 +1,23 @@
+# MongoDB < 8.0 publishes SHA-1-signed apt repositories, which current
+# apt/sequoia rejects (https://github.com/iiab/iiab/issues/4582).  The packages
+# are installed by the time this runs, so remove the source and key instead of
+# leaving apt a repository it cannot verify.  install.yml runs this after a
+# fresh install; main.yml runs it for existing deployments.
+
+- name: Check for MongoDB's < 8.0 apt sources
+  stat:
+    path: "{{ item }}"
+  loop:
+    - /etc/apt/sources.list.d/mongodb_ubuntu.sources
+    - /etc/apt/sources.list.d/repo_mongodb_org_apt_ubuntu.list
+  register: mongodb_apt_sources
+
+- name: Remove the MongoDB < 8.0 apt source, key and workarounds
+  when: mongodb_apt_sources.results | selectattr('stat.exists') | list | length > 0
+  shell: |
+    rm -rf /etc/crypto-policies/back-ends
+    rm -f {{ mongodb_keyring }}
+    rm -f /etc/apt/keyrings/mongodb.asc
+    rm -f /etc/apt/sources.list.d/mongodb_ubuntu.sources
+    rm -f /etc/apt/sources.list.d/repo_mongodb_org_apt_ubuntu.list
+    apt update

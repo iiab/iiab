@@ -302,15 +302,12 @@
 #  command: apt-mark hold mongodb-org mongodb-org-server
 #  when: rpi_model != "none" and mongodb_version is version('5.0', '==')
 
-# MongoDB < 8.0 keys are SHA-1.  On Debian, remove the temporary apt policy
-# override and repository after installation (as IIAB did before).
-- name: Remove above workarounds https://github.com/iiab/iiab/pull/4260#issuecomment-3860830930 if is_debian and mongodb_version < 8.0
-  shell: |
-    rm -rf /etc/crypto-policies/back-ends
-    rm -rf {{ mongodb_keyring }}
-    rm -rf /etc/apt/sources.list.d/mongodb_ubuntu.sources
-    apt update
-  when: is_debian and mongodb_version is version('8.0', '<')
+# MongoDB < 8.0 keys are SHA-1, so apt/sequoia cannot verify their repository
+# on modern OSes.  Remove the source, key and the Debian-only crypto policy
+# override once the packages are installed.
+- name: Remove the MongoDB < 8.0 apt source and key after installation
+  include_tasks: cleanup.yml
+  when: mongodb_version is version('8.0', '<')
 
 - name: If hardware is Raspberry Pi and mongodb_version == 5.0, unarchive 76MB {{ iiab_download_url }}//packages/raspbian_mongodb_5.0.5.gz OVERWRITING 5.0.9+ {mongo, mongod, mongos} in /usr/bin
   get_curl:
