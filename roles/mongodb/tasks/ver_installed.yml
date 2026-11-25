@@ -1,0 +1,22 @@
+- name: Read the installed version of mongodb-org-server
+  command: dpkg-query -W -f='${Version}' mongodb-org-server
+  register: mongodb_installed_version
+  changed_when: false
+  failed_when: false
+
+- name: Remove MongoDB repo and key if the default major differs from the installed one
+  when:
+    - mongodb_installed_version.stdout | length > 0
+    - mongodb_installed_version.stdout is version(mongodb_version, '<')
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/apt/sources.list.d/mongodb_ubuntu.sources
+    - /etc/apt/keyrings/mongodb.gpg
+  register: mongodb_cleanup
+
+- name: Update the APT cache after removing the MongoDB < 9.0 source
+  apt:
+    update_cache: true
+  when: mongodb_cleanup is changed
