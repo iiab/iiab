@@ -93,13 +93,10 @@
 #     msg: 16-STANZA BLOCK BELOW, RUNS *IF* 64-BIT -- i.e. ansible_architecture == "aarch64" or ansible_architecture == "x86_64"
 
 # - block:
-# mongodb_repo_* prefer MongoDB's Debian archive for amd64, but fall back to the
-# Ubuntu archive on Debian-family arm64 (see defaults/main.yml).
 - name: Add MongoDB signing key and apt repository
   include_tasks: apt-repo.yml
 
-# MongoDB 5.0/6.0 keys use SHA-1, which apt/sequoia rejects on Debian 13+.
-# This workaround is removed again after installation (see below).
+# MongoDB < 8.0 keys use SHA-1, which apt/sequoia rejects on Debian 13+.
 - name: Workaround https://github.com/iiab/iiab/issues/4253
   shell: |
     mkdir -p /etc/crypto-policies/back-ends/
@@ -298,13 +295,11 @@
 # https://andyfelong.com/downloads/raspbian_mongodb_5.0.5.gz
 # https://andyfelong.com/2021/08/mongodb-4-4-under-raspberry-pi-os-64-bit-raspbian64/
 
-#- name: If hardware is Raspberry Pi and mongodb_version == 5.0, run 'apt-mark hold mongodb-org mongodb-org-server' -- so MongoDB 5.0.5 binaries {mongo, mongod, mongos} can be installed without apt interfering in future
+#- name: If hardware is Raspberry Pi and mongodb_version >= 5.0, run 'apt-mark hold mongodb-org mongodb-org-server' -- so MongoDB 5.0.5 binaries {mongo, mongod, mongos} can be installed without apt interfering in future
 #  command: apt-mark hold mongodb-org mongodb-org-server
-#  when: rpi_model != "none" and mongodb_version is version('5.0', '==')
+#  when: rpi_model != "none" and mongodb_version is version('5.0', '>=')
 
-# MongoDB < 8.0 keys are SHA-1, so apt/sequoia cannot verify their repository
-# on modern OSes.  Remove the source, key and the Debian-only crypto policy
-# override once the packages are installed.
+# MongoDB < 8.0 sources cannot be verified by modern apt (see cleanup.yml).
 - name: Remove the MongoDB < 8.0 apt source and key after installation
   include_tasks: cleanup.yml
   when: mongodb_version is version('8.0', '<')
