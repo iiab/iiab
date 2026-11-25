@@ -25,19 +25,26 @@
 # when the next LTS ships.
 mongodb_default_version: "9.0"
 
-# All arm64 keeps 5.0, the last MongoDB IIAB can run on every board: 5.0+
-# binaries are compiled for ARMv8.2-A, so 6.0+ fail on Raspberry Pi 4 and older
-# (ARMv8-A), whereas IIAB overlays andyfelong.com's 5.0.5 binaries on Raspberry
-# Pi hardware.  MongoDB 9.0 is opt-in on ARMv8.2-A hardware (e.g. Raspberry Pi
-# 5) by setting 'mongodb_arm_version: "9.0"' in /etc/iiab/local_vars.yml.
+# All arm64 currently stays on 5.0.  Bump this one line to 9.0 to give
+# ARMv8.2-A boards (e.g. Raspberry Pi 5) the LTS, while Raspberry Pi 4 and
+# older keep mongodb_arm_old_version below.
 mongodb_arm_version: "5.0"
-mongodb_version: "{{ 'unsupported' if ansible_facts.machine not in ['x86_64', 'aarch64'] else mongodb_arm_version if ansible_facts.machine == 'aarch64' else mongodb_default_version }}"
+
+# MongoDB 5.0+ needs ARMv8.2-A, so Raspberry Pi 4 and older (ARMv8-A) cannot
+# run it without help: IIAB overlays andyfelong.com's 5.0.5 binaries on
+# Raspberry Pi hardware.
+mongodb_arm_old_version: "5.0"
+mongodb_board: "{{ rpi_model ~ ' ' ~ devicetree_model }}"
+mongodb_rpi_old: "{{ mongodb_board is search('Raspberry Pi (1|2|3|4|400|Zero)') or mongodb_board is search('Compute Module (1|2|3|4)') }}"
+mongodb_version: "{{ 'unsupported' if ansible_facts.machine not in ['x86_64', 'aarch64'] else mongodb_arm_old_version if ansible_facts.machine == 'aarch64' and mongodb_rpi_old | bool else mongodb_arm_version if ansible_facts.machine == 'aarch64' else mongodb_default_version }}"
 
 # CAVEAT: image builds set rpi_model to 'fake' (roles/0-init/tasks/main.yml), so
-# the Raspberry Pi 5.0.5 overlay cannot identify the target board while an
-# image is built.  Any image that enables MongoDB therefore installs
-# mongodb.org's 5.0 packages, which need ARMv8.2-A.  Only tiny/small images are
-# published, and those disable Sugarizer, so no released image carries MongoDB.
+# mongodb_board cannot identify the target board while an image is built, and
+# every arm64 image gets mongodb_arm_version.  Only tiny/small images are
+# published, and those disable Sugarizer, so no released image carries MongoDB
+# 9.0.  If medium/large images are published after mongodb_arm_version is
+# bumped to 9.0, remember that Pi 4 and older are ARMv8-A and cannot run
+# MongoDB 5.0+ binaries.
 
 # MongoDB's official packages are not in the Ubuntu/Debian archives, so the
 # role adds MongoDB's own apt repository.  Debian 13 / Ubuntu 24.04 & 26.04
@@ -46,7 +53,7 @@ mongodb_version: "{{ 'unsupported' if ansible_facts.machine not in ['x86_64', 'a
 
 # MongoDB's Debian archive carries server packages for amd64 only (arm64 there
 # has client tools like mongosh/atlas-cli, but no mongodb-org).  Debian-family
-# arm64 boards that opt into 9.0 -- notably Raspberry Pi 5 on Raspberry Pi OS
+# arm64 boards that run 9.0 -- notably Raspberry Pi 5 on Raspberry Pi OS
 # 13 -- therefore use MongoDB's Ubuntu archive, whose noble suite tracks
 # Debian 13 closely enough (both have libc6 >= 2.39 and the t64
 # libssl3t64/libcurl4t64).
