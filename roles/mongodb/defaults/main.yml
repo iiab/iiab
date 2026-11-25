@@ -20,34 +20,31 @@
 # All above are set in: github.com/iiab/iiab/blob/master/vars/default_vars.yml
 # If nec, change them by editing /etc/iiab/local_vars.yml prior to installing!
 
-# Bump mongodb_default_version when MongoDB ships its next LTS.
-mongodb_default_version: "9.0"
+# MongoDB 6.0+ requires ARMv8.2-A, so arm64 stays on 5.0 -- whose 5.0.5 overlay
+# runs on Raspberry Pi 4 and older.  On ARMv8.2-A hardware (e.g. Pi 5), set
+# 'mongodb_version: "9.0"' in /etc/iiab/local_vars.yml.
+mongodb_arch_dict:
+  armv6l: unsupported    # WAS: 3.0
+  armv7l: unsupported    # WAS: 3.0
+  aarch64: "5.0"
+  i386: unsupported
+  x86_64: "9.0"
 
-# All arm64 stays on 5.0; bump mongodb_arm_version to 9.0 for ARMv8.2-A boards (e.g. Pi 5).
-mongodb_arm_version: "5.0"
-# Pi 4 and older (ARMv8-A) need andyfelong.com's 5.0.5 overlay.
-mongodb_arm_old_version: "5.0"
-mongodb_board: "{{ rpi_model ~ ' ' ~ devicetree_model }}"
-mongodb_rpi_old: "{{ mongodb_board is search('Raspberry Pi (1|2|3|4|400|Zero)') or mongodb_board is search('Compute Module (1|2|3|4)') }}"
-mongodb_version: "{{ 'unsupported' if ansible_facts.machine not in ['x86_64', 'aarch64'] else mongodb_arm_old_version if ansible_facts.machine == 'aarch64' and mongodb_rpi_old | bool else mongodb_arm_version if ansible_facts.machine == 'aarch64' else mongodb_default_version }}"
-
-# Ubuntu release behind an Ubuntu derivative, e.g. linuxmint-22 -> ubuntu-2404.
-mongodb_ubuntu_ver: "{{ os_ver if is_debian or os_ver.startswith('ubuntu-') else 'ubuntu-2404' if (is_linuxmint and os_ver is version('linuxmint-22', '>=') and os_ver is version('linuxmint-27', '<')) or (is_trisquel and os_ver is version('trisquel-12', '>=') and os_ver is version('trisquel-13', '<')) else 'ubuntu-2604' }}"
-
-# MongoDB's Debian archive has no arm64 server packages, so arm64 Debian uses the Ubuntu one.
-mongodb_use_debian_repo: "{{ is_debian and dpkg_arch.stdout == 'amd64' and mongodb_version is version('8.0', '>=') }}"
-mongodb_debian_major: "{{ ansible_facts.distribution_major_version }}"
-mongodb_repo_uri: "{{ 'https://repo.mongodb.org/apt/debian' if mongodb_use_debian_repo | bool else 'https://repo.mongodb.org/apt/ubuntu' }}"
-mongodb_repo_component: "{{ 'main' if mongodb_use_debian_repo | bool else 'multiverse' }}"
-mongodb_repo_suite_ubuntu: "{{ 'focal' if dpkg_arch.stdout == 'arm64' and mongodb_version is version('6.0', '<') else 'noble' if is_debian and mongodb_debian_major is version('13', '>=') else 'resolute' if mongodb_ubuntu_ver is version('ubuntu-2604', '>=') else 'noble' if mongodb_ubuntu_ver is version('ubuntu-2404', '>=') else 'jammy' }}"
-mongodb_repo_suite_debian: "{{ 'trixie' if mongodb_debian_major is version('13', '>=') else 'bookworm' }}"
-mongodb_repo_suite: "{{ mongodb_repo_suite_debian if mongodb_use_debian_repo | bool else mongodb_repo_suite_ubuntu }}"
+mongodb_version: "{{ mongodb_arch_dict[ansible_facts.machine] | default('unknown') }}"    # A bit safer than ansible_architecture (see kiwix/defaults/main.yml)
 
 # MongoDB 9+ publishes server-9.asc, the 8.x line (incl. 8.2/8.3) server-8.0.asc,
 # and earlier releases server-X.Y.asc.
-mongodb_key_series: "{{ mongodb_version.split('.')[0] if mongodb_version is version('9.0', '>=') else '8.0' if mongodb_version is version('8.0', '>=') else mongodb_version }}"
-mongodb_key_url: "https://pgp.mongodb.com/server-{{ mongodb_key_series }}.asc"
+mongodb_key_url: "https://pgp.mongodb.com/server-{{ '9' if mongodb_version is version('9.0', '>=') else '8.0' if mongodb_version is version('8.0', '>=') else mongodb_version }}.asc"
+# Versioned, so changing mongodb_version replaces the key (get_url keeps an existing file).
 mongodb_keyring: /etc/apt/keyrings/mongodb-{{ mongodb_version }}.asc
+
+# Ubuntu release to follow: Ubuntu derivatives resolve to their base, e.g.
+# linuxmint-22 -> ubuntu-2404 (os_ver alone sorts below every ubuntu-*).
+mongodb_ubuntu_ver: "{{ os_ver if is_debian or os_ver.startswith('ubuntu-') else 'ubuntu-2404' if (is_linuxmint and os_ver is version('linuxmint-22', '>=') and os_ver is version('linuxmint-27', '<')) or (is_trisquel and os_ver is version('trisquel-12', '>=') and os_ver is version('trisquel-13', '<')) else 'ubuntu-2604' }}"
+
+# Suite in MongoDB's Ubuntu repo.  mongodb.sources.j2 uses Debian's own suite
+# for Debian amd64 8.0+; all other Debian-family OSes use the Ubuntu archive.
+mongodb_suite: "{{ 'focal' if dpkg_arch.stdout == 'arm64' and mongodb_version is version('6.0', '<') else 'noble' if is_debian and ansible_facts.distribution_major_version is version('13', '>=') else 'resolute' if mongodb_ubuntu_ver is version('ubuntu-2604', '>=') else 'noble' if mongodb_ubuntu_ver is version('ubuntu-2404', '>=') else 'jammy' }}"
 
 # Immutable Debian security snapshot used for MongoDB 5.0's libssl1.1 dependency.
 mongodb_debian_security_snapshot: "20260615T025018Z"
