@@ -1,19 +1,18 @@
 # MongoDB < 8.0 publishes SHA-1-signed repositories, which modern apt rejects.
 
-- name: Check for MongoDB's < 8.0 apt sources
-  stat:
+- name: Remove the MongoDB < 8.0 apt source, key and SHA-1 workaround
+  file:
     path: "{{ item }}"
+    state: absent
   loop:
     - /etc/apt/sources.list.d/mongodb_ubuntu.sources
     - /etc/apt/sources.list.d/repo_mongodb_org_apt_ubuntu.list
-  register: mongodb_apt_sources
+    - "{{ mongodb_keyring }}"
+    - /etc/apt/keyrings/mongodb.asc
+    - /etc/crypto-policies/back-ends/apt-sequoia.config
+  register: mongodb_cleanup
 
-- name: Remove the MongoDB < 8.0 apt source, key and workarounds
-  when: mongodb_apt_sources.results | selectattr('stat.exists') | list | length > 0
-  shell: |
-    rm -rf /etc/crypto-policies/back-ends
-    rm -f {{ mongodb_keyring }}
-    rm -f /etc/apt/keyrings/mongodb.asc
-    rm -f /etc/apt/sources.list.d/mongodb_ubuntu.sources
-    rm -f /etc/apt/sources.list.d/repo_mongodb_org_apt_ubuntu.list
-    apt update
+- name: Update the APT cache after removing the MongoDB < 8.0 source
+  apt:
+    update_cache: true
+  when: mongodb_cleanup is changed
