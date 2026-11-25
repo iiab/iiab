@@ -20,24 +20,24 @@
 # All above are set in: github.com/iiab/iiab/blob/master/vars/default_vars.yml
 # If nec, change them by editing /etc/iiab/local_vars.yml prior to installing!
 
-# 9.0 is MongoDB's current LTS.  9.1/9.2/... are short-lived rapid releases,
-# so IIAB stays on the LTS and bumps this one line when the next LTS ships.
+# 9.0 is MongoDB's current LTS and the x86_64 default.  9.1/9.2/... are
+# short-lived rapid releases, so IIAB stays on the LTS and bumps this one line
+# when the next LTS ships.
 mongodb_default_version: "9.0"
 
-# MongoDB 5.0+ needs ARMv8.2-A.  Raspberry Pi 4 and older are ARMv8-A, so
-# IIAB keeps those boards on 5.0 (and overlays andyfelong.com's RPi binaries).
-# Raspberry Pi 5 (Cortex-A76) and other arm64 boards get the default.
-mongodb_version_rpi_old: "5.0"
-mongodb_board: "{{ rpi_model ~ ' ' ~ devicetree_model }}"
-mongodb_rpi_old: "{{ mongodb_board is search('Raspberry Pi (1|2|3|4|400|Zero)') or mongodb_board is search('Compute Module (1|2|3|4)') }}"
-mongodb_version: "{{ 'unsupported' if ansible_facts.machine not in ['x86_64', 'aarch64'] else mongodb_version_rpi_old if ansible_facts.machine == 'aarch64' and mongodb_rpi_old | bool else mongodb_default_version }}"
+# All arm64 keeps 5.0, the last MongoDB IIAB can run on every board: 5.0+
+# binaries are compiled for ARMv8.2-A, so 6.0+ fail on Raspberry Pi 4 and older
+# (ARMv8-A), whereas IIAB overlays andyfelong.com's 5.0.5 binaries on Raspberry
+# Pi hardware.  MongoDB 9.0 is opt-in on ARMv8.2-A hardware (e.g. Raspberry Pi
+# 5) by setting 'mongodb_arm_version: "9.0"' in /etc/iiab/local_vars.yml.
+mongodb_arm_version: "5.0"
+mongodb_version: "{{ 'unsupported' if ansible_facts.machine not in ['x86_64', 'aarch64'] else mongodb_arm_version if ansible_facts.machine == 'aarch64' else mongodb_default_version }}"
 
 # CAVEAT: image builds set rpi_model to 'fake' (roles/0-init/tasks/main.yml), so
-# mongodb_board cannot identify the target board while an image is built, and
-# every arm64 image gets mongodb_default_version.  Only tiny/small images are
-# published, and those disable Sugarizer, so no released image carries MongoDB
-# 9.0.  If medium/large images are published again, remember that Pi 4 and
-# older are ARMv8-A and cannot run MongoDB 5.0+ binaries.
+# the Raspberry Pi 5.0.5 overlay cannot identify the target board while an
+# image is built.  Any image that enables MongoDB therefore installs
+# mongodb.org's 5.0 packages, which need ARMv8.2-A.  Only tiny/small images are
+# published, and those disable Sugarizer, so no released image carries MongoDB.
 
 # MongoDB's official packages are not in the Ubuntu/Debian archives, so the
 # role adds MongoDB's own apt repository.  Debian 13 / Ubuntu 24.04 & 26.04
@@ -46,9 +46,10 @@ mongodb_version: "{{ 'unsupported' if ansible_facts.machine not in ['x86_64', 'a
 
 # MongoDB's Debian archive carries server packages for amd64 only (arm64 there
 # has client tools like mongosh/atlas-cli, but no mongodb-org).  Debian-family
-# arm64 boards -- notably Raspberry Pi 5 on Raspberry Pi OS 13 -- therefore use
-# MongoDB's Ubuntu archive, whose noble suite tracks Debian 13 closely enough
-# (both have libc6 >= 2.39 and the t64 libssl3t64/libcurl4t64).
+# arm64 boards that opt into 9.0 -- notably Raspberry Pi 5 on Raspberry Pi OS
+# 13 -- therefore use MongoDB's Ubuntu archive, whose noble suite tracks
+# Debian 13 closely enough (both have libc6 >= 2.39 and the t64
+# libssl3t64/libcurl4t64).
 mongodb_use_debian_repo: "{{ is_debian and dpkg_arch.stdout == 'amd64' and mongodb_version is version('8.0', '>=') }}"
 
 # Debian-family major version, e.g. '13' for Debian 13 and Raspberry Pi OS 13.
@@ -77,11 +78,6 @@ mongodb_keyring: /etc/apt/keyrings/mongodb-{{ mongodb_version }}.asc
 # Immutable Debian security snapshot used for MongoDB 5.0's libssl1.1 dependency.
 mongodb_debian_security_snapshot: "20260615T025018Z"
 
-# Raspberry Pi 4 and older stay on 5.0: MongoDB 5.0+ is compiled for ARMv8.2-A,
-# whereas those boards are ARMv8-A.  IIAB overlays andyfelong.com's 5.0.5
-# binaries on Raspberry Pi hardware.  Pi 5 and non-Raspberry arm64 use the
-# default LTS version above.
-#
 # VERIFY both X.Y versions exist (+ work!) below:
 #
 # 1) https://www.mongodb.org/static/pgp/server-X.Y.asc ~= https://pgp.mongodb.com
