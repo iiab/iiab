@@ -44,7 +44,10 @@ mongodb_ubuntu_ver: "{{ os_ver if is_debian or os_ver.startswith('ubuntu-') else
 
 # Suite in MongoDB's Ubuntu repo.  mongodb.sources.j2 uses Debian's own suite
 # for Debian amd64 8.0+; all other Debian-family OSes use the Ubuntu archive.
-mongodb_suite: "{{ 'focal' if dpkg_arch.stdout == 'arm64' and mongodb_version is version('6.0', '<') else 'noble' if is_debian and ansible_facts.distribution_major_version is version('13', '>=') else 'resolute' if mongodb_ubuntu_ver is version('ubuntu-2604', '>=') else 'noble' if mongodb_ubuntu_ver is version('ubuntu-2404', '>=') else 'jammy' }}"
+# MongoDB publishes 5.0-7.0 up to Jammy, 8.x up to Noble, and 9.0 for Jammy+,
+# so match the suite to the release instead of the OS alone.  Debian 13's
+# arm64 uses Noble, as its glibc is newer than Ubuntu 24.04's.
+mongodb_suite: "{{ 'focal' if dpkg_arch.stdout == 'arm64' and mongodb_version is version('6.0', '<') else 'jammy' if mongodb_version is version('8.0', '<') else 'resolute' if mongodb_version is version('9.0', '>=') and mongodb_ubuntu_ver is version('ubuntu-2604', '>=') else 'noble' if mongodb_ubuntu_ver is version('ubuntu-2404', '>=') or (is_debian and mongodb_debian_major is version('13', '>=')) else 'jammy' }}"
 
 # Immutable Debian security snapshot used for MongoDB 5.0's libssl1.1 dependency.
 mongodb_debian_security_snapshot: "20260615T025018Z"
