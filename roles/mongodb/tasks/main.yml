@@ -58,34 +58,34 @@
       set_fact:
         mongodb_suite: noble
 
-    - name: Install MongoDB if 'mongodb_installed' not defined, e.g. in {{ iiab_state_file }}    # /etc/iiab/iiab_state.yml
-      when: mongodb_installed is undefined
+    - name: Check if mongodb-org-server package is installed
+      command: dpkg-query -W -f='${Status} ${Version}' mongodb-org-server
+      register: mongodb_preinstall_package
+      changed_when: false
+      failed_when: mongodb_preinstall_package.rc not in [0, 1]
+
+    - name: Checking if mongodb's deb is installed
+      when:
+        - mongodb_preinstall_package.stdout is search('^[^ ]+ ok installed ')
       block:
-        - name: Read MongoDB package status before configuring its repository
-          command: dpkg-query -W -f='${Status} ${Version}' mongodb-org-server
-          register: mongodb_preinstall_package
-          changed_when: false
-          failed_when: mongodb_preinstall_package.rc not in [0, 1]
+        - name: Aha liar - mongodb is installed - Writing missing installed flag
+          lineinfile:
+            path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
+            regexp: '^mongodb_installed'
+            line: 'mongodb_installed: True'
 
-        - name: Checking if mongodb's deb is installed
-          when:
-            - mongodb_preinstall_package.stdout is search('^[^ ]+ ok installed ')
-          block:
-            - name: Aha liar - mongodb is installed - Writing missing installed flag
-              lineinfile:
-                path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
-                regexp: '^mongodb_installed'
-                line: 'mongodb_installed: True'
+        - name: "Set 'mongodb_installed: True'"
+          set_fact:
+            mongodb_installed: True
 
-            - name: Refuse an unsupported MongoDB major-version change
-              when: mongodb_preinstall_package.stdout.split()[-1].split('.')[0] != mongodb_version.split('.')[0]
-              fail:
-                msg: "MongoDB {{ mongodb_preinstall_package.stdout.split()[-1] }} is already installed. Refusing to configure MongoDB {{ mongodb_version }} without a supported staged migration."
+        - name: Refuse an unsupported MongoDB major-version change
+          when: mongodb_preinstall_package.stdout.split()[-1].split('.')[0] != mongodb_version.split('.')[0]
+          fail:
+            msg: "MongoDB {{ mongodb_preinstall_package.stdout.split()[-1] }} is already installed. Refusing to configure MongoDB {{ mongodb_version }} without a supported staged migration."
 
-        - name: Install MongoDB
-          when:
-            - mongodb_preinstall_package.stderr is search('no packages found matching mongodb-org-server')
-          include_tasks: install.yml
+    - name: Install MongoDB if 'mongodb_installed' not defined, e.g. in {{ iiab_state_file }}    # /etc/iiab/iiab_state.yml
+      include_tasks: install.yml
+      when: mongodb_installed is undefined
 
     - name: Check version installed
       include_tasks: ver_installed.yml
