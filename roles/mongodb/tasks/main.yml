@@ -50,6 +50,26 @@
       when: not dpkg_arch.stdout is search("64") or mongodb_version == "unsupported" or mongodb_version == "unknown"
       #when: dpkg_arch.stdout == "armhf" or mongodb_version == "unsupported" or mongodb_version == "unknown"
 
+    - name: Check if mongodb-org-server package is installed
+      command: dpkg-query -W -f='${Status} ${Version}' mongodb-org-server
+      register: mongodb_preinstall_package
+      changed_when: false
+      failed_when: mongodb_preinstall_package.rc not in [0, 1]
+
+    - name: Repair the mongodb_installed flag if the package is already installed
+      when:
+        - mongodb_preinstall_package.stdout is search('^[^ ]+ ok installed ')
+      block:
+        - name: Write the missing mongodb_installed flag to {{ iiab_state_file }}
+          lineinfile:
+            path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
+            regexp: '^mongodb_installed'
+            line: 'mongodb_installed: True'
+
+        - name: "Set 'mongodb_installed: True'"
+          set_fact:
+            mongodb_installed: True
+
     - name: Record whether MongoDB was installed before this run
       set_fact:
         mongodb_was_installed: "{{ mongodb_installed is defined }}"
