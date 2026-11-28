@@ -50,10 +50,44 @@
       when: not dpkg_arch.stdout is search("64") or mongodb_version == "unsupported" or mongodb_version == "unknown"
       #when: dpkg_arch.stdout == "armhf" or mongodb_version == "unsupported" or mongodb_version == "unknown"
 
+    # The below is only to determain if U2404 or related OSs are installed used in var_installed to see if 26.10
+    # needs to remove the old 6.0 repo defs to suppress apt warnings and .sources for a better match for dependencies
+    # like 'resolute 9.0 needs libc6 >= 2.43' @chapmanjacobd
+    - name: "Set mongodb_suite -- the Ubuntu release that an Ubuntu derivative's packages derived from for older OSs"
+      when: >-
+        (os_ver.split('-')[0] == 'ubuntu' and (os_ver.split('-')[1] | int) <= 2404) or
+        (os_ver.split('-')[0] == 'linuxmint' and (os_ver.split('-')[1] | int) <= 22) or
+        (os_ver.split('-')[0] == 'trisquel' and (os_ver.split('-')[1] | int) <= 12) or
+        (os_ver.split('-')[0] == 'debian' and (os_ver.split('-')[1] | int) <= 14) and dpkg_arch.stdout == "arm64"
+      set_fact:
+        mongodb_suite: noble
+
+    - name: Check if mongodb-org-server package is installed
+      command: dpkg-query -W -f='${Status} ${Version}' mongodb-org-server
+      register: mongodb_preinstall_package
+      changed_when: false
+      failed_when: mongodb_preinstall_package.rc not in [0, 1]
+
+    - name: Checking if mongodb's deb is installed
+      when:
+        - mongodb_preinstall_package.stdout is search('^[^ ]+ ok installed ')
+      block:
+        - name: Aha liar - mongodb is installed - Writing missing installed flag
+          lineinfile:
+            path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
+            regexp: '^mongodb_installed'
+            line: 'mongodb_installed: True'
+
+        - name: "Set 'mongodb_installed: True'"
+          set_fact:
+            mongodb_installed: True
+
     - name: Install MongoDB if 'mongodb_installed' not defined, e.g. in {{ iiab_state_file }}    # /etc/iiab/iiab_state.yml
       include_tasks: install.yml
       when: mongodb_installed is undefined
-      # when: mongodb_installed is undefined and not (ansible_architecture == "aarch64" and is_debian_10 and not is_raspbian)
+
+    - name: Check version installed
+      include_tasks: ver_installed.yml
 
     - name: Enable or Disable MongoDB (FYI sugarizer.service auto-starts MongoDB as nec, so doesn't need this or care what happens here!)
       include_tasks: enable-or-disable.yml
@@ -71,6 +105,8 @@
           value: '"MongoDB is an open-source document database that provides high performance, high availability, and automatic scaling."'
         - option: mongodb_install
           value: "{{ mongodb_install }}"
+        - option: mongodb_installed_version
+          value: "{{ mongodb_installed_version.stdout }}"
         - option: mongodb_enabled
           value: "{{ mongodb_enabled }}"
 
