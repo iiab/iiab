@@ -96,11 +96,11 @@
     path: /etc/apt/sources.list.d/repo_mongodb_org_apt_ubuntu.list
     state: absent
 
-- name: Add mongodb.org signing key (only 64-bit available) for MongoDB version {{ mongodb_version }} for arm64
+- name: Add mongodb.org signing key (only 64-bit available) for MongoDB version {{ mongodb_version }}
   # https://www.mongodb.com/community/forums/t/installing-mongodb-over-ubuntu-22-04/159931/90
   # 2025-07-16 far clean option, that we should consider in future: (as they also publish ready-to-go ".pub" keys)
   #shell: curl https://pgp.mongodb.com/server-{{ mongodb_version }}.pub > /usr/share/keyrings/mongodb.gpg
-  shell: wget -qO - https://www.mongodb.org/static/pgp/server-{{ mongodb_version }}.asc | gpg --dearmor > /etc/apt/keyrings/mongodb.gpg
+  shell: wget -qO - {{ mongodb_key_url }} | gpg --dearmor > /etc/apt/keyrings/mongodb.gpg
   #shell: wget -qO - https://www.mongodb.org/static/pgp/server-{{ mongodb_version }}.asc | apt-key add -
   #shell: wget -qO - https://pgp.mongodb.com/server-{{ mongodb_version }}.asc | apt-key add -
   #args:
@@ -109,7 +109,7 @@
   # "Unsupported parameters for (ansible.legacy.command) module: warn.
   # Supported parameters include: removes, strip_empty_ends, _raw_params,
   # _uses_shell, stdin_add_newline, creates, chdir, executable, argv, stdin."
-  when: rpi_model != "none"
+  when: mongodb_version is version('9.0', 'lt')
 
 - name: Workaround https://github.com/iiab/iiab/issues/4253
   shell: |
@@ -120,7 +120,7 @@
     EOF
   args:
     creates: /etc/crypto-policies/back-ends/apt-sequoia.config
-  when: rpi_model != "none"
+  when: is_debian and mongodb_version is version('8.0', '<')
 
 #- name: Add mongodb.org signing key (only 64-bit available) for MongoDB version {{ mongodb_version }} for Debian
 #  shell: |
@@ -128,12 +128,12 @@
 #    gpg --export --armor F5679A222C647C87527C2F8CB00A0BD1E2C63C11 > /etc/apt/keyrings/mongodb.gpg
 #  when: is_debian
 
-- name: Add MongoDB {{ mongodb_version }} signing key for x86_64
+- name: Add MongoDB {{ mongodb_version }} signing key
   get_url:
     url: "{{ mongodb_key_url }}"
     dest: /etc/apt/keyrings/mongodb.asc
     mode: '0644'
-  when: rpi_model == "none"
+  when: mongodb_version is version('9.0', 'ge')
 
 # 2023-01-19: MongoDB only offers x86_64 for Debian, AND IN ANY CASE all their
 # MongoDB 6.0's are ONLY COMPILED FOR ARM v8.2-A i.e. FAIL ON ARM v8-A RPi 4,
